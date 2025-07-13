@@ -380,7 +380,7 @@ class ClaudeOrchestrator {
         
         // Initialize terminal
         setTimeout(() => {
-          this.terminalManager.initializeTerminal(sessionId, session);
+          this.terminalManager.createTerminal(sessionId, session);
         }, 100);
       }
     });
@@ -588,6 +588,12 @@ class ClaudeOrchestrator {
   
   sendQuickResponse(sessionId, response) {
     this.sendTerminalInput(sessionId, response);
+  }
+  
+  resizeTerminal(sessionId, cols, rows) {
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('terminal-resize', { sessionId, cols, rows });
+    }
   }
   
   handleSessionExit(sessionId, exitCode) {
