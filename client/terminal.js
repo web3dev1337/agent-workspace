@@ -1,0 +1,463 @@
+// Terminal management with Xterm.js
+class TerminalManager {
+  constructor(orchestrator) {
+    this.orchestrator = orchestrator;
+    this.terminals = new Map();
+    this.fitAddons = new Map();
+    this.searchAddons = new Map();
+    this.webLinksAddons = new Map();
+    
+    // Terminal theme
+    this.theme = {
+      background: '#0d1117',
+      foreground: '#c9d1d9',
+      cursor: '#c9d1d9',
+      cursorAccent: '#0d1117',
+      selection: 'rgba(88, 166, 255, 0.3)',
+      black: '#484f58',
+      red: '#ff7b72',
+      green: '#3fb950',
+      yellow: '#d29922',
+      blue: '#58a6ff',
+      magenta: '#bc8cff',
+      cyan: '#39c5cf',
+      white: '#b1bac4',
+      brightBlack: '#6e7681',
+      brightRed: '#ffa198',
+      brightGreen: '#56d364',
+      brightYellow: '#e3b341',
+      brightBlue: '#79c0ff',
+      brightMagenta: '#d2a8ff',
+      brightCyan: '#56d4dd',
+      brightWhite: '#f0f6fc'
+    };
+    
+    // Light theme
+    this.lightTheme = {
+      background: '#ffffff',
+      foreground: '#24292f',
+      cursor: '#24292f',
+      cursorAccent: '#ffffff',
+      selection: 'rgba(9, 105, 218, 0.3)',
+      black: '#24292f',
+      red: '#cf222e',
+      green: '#1a7f37',
+      yellow: '#9a6700',
+      blue: '#0969da',
+      magenta: '#8250df',
+      cyan: '#1b7c83',
+      white: '#6e7781',
+      brightBlack: '#57606a',
+      brightRed: '#a40e26',
+      brightGreen: '#116329',
+      brightYellow: '#633c01',
+      brightBlue: '#218bff',
+      brightMagenta: '#a475f9',
+      brightCyan: '#3192aa',
+      brightWhite: '#8c959f'
+    };
+  }
+  
+  createTerminal(sessionId, sessionInfo) {
+    // Skip if already exists
+    if (this.terminals.has(sessionId)) {
+      return this.terminals.get(sessionId);
+    }
+    
+    const terminalElement = document.getElementById(`terminal-${sessionId}`);
+    if (!terminalElement) {
+      console.error(`Terminal element not found for ${sessionId}`);
+      return null;
+    }
+    
+    // Create Xterm instance
+    const terminal = new Terminal({
+      fontSize: 12,
+      fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+      theme: this.orchestrator.settings.theme === 'light' ? this.lightTheme : this.theme,
+      cursorBlink: true,
+      cursorStyle: 'bar',
+      scrollback: 5000,
+      tabStopWidth: 4,
+      bellStyle: 'none',
+      allowTransparency: false,
+      windowsMode: false,
+      wordSeparator: ' ()[]{}\'"',
+      rightClickSelectsWord: true,
+      rendererType: 'canvas',
+      experimentalCharAtlas: 'dynamic'
+    });
+    
+    // Load addons
+    const fitAddon = new FitAddon.FitAddon();
+    const searchAddon = new SearchAddon.SearchAddon();
+    const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+    
+    terminal.loadAddon(fitAddon);
+    terminal.loadAddon(searchAddon);
+    terminal.loadAddon(webLinksAddon);
+    
+    // Store addon references
+    this.fitAddons.set(sessionId, fitAddon);
+    this.searchAddons.set(sessionId, searchAddon);
+    this.webLinksAddons.set(sessionId, webLinksAddon);
+    
+    // Open terminal in DOM
+    terminal.open(terminalElement);
+    
+    // Initial fit
+    this.fitTerminal(sessionId);
+    
+    // Handle input
+    terminal.onData((data) => {
+      this.orchestrator.sendTerminalInput(sessionId, data);
+    });
+    
+    // Handle resize
+    terminal.onResize(({ cols, rows }) => {
+      this.orchestrator.resizeTerminal(sessionId, cols, rows);
+    });
+    
+    // Handle selection for copy
+    terminal.onSelectionChange(() => {
+      const selection = terminal.getSelection();
+      if (selection) {
+        // Copy to clipboard on selection
+        navigator.clipboard.writeText(selection).catch(err => {
+          console.error('Failed to copy selection:', err);
+        });
+      }
+    });
+    
+    // Custom key handlers
+    this.setupKeyHandlers(terminal, sessionId);
+    
+    // Store terminal reference
+    this.terminals.set(sessionId, terminal);
+    
+    // Setup resize observer
+    this.setupResizeObserver(sessionId);
+    
+    return terminal;
+  }
+  
+  setupKeyHandlers(terminal, sessionId) {
+    // Ctrl+Shift+F for search
+    terminal.attachCustomKeyEventHandler((e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+        e.preventDefault();
+        this.showSearch(sessionId);
+        return false;
+      }
+      
+      // Ctrl+C for copy when there's selection
+      if (e.ctrlKey && e.key === 'c' && terminal.hasSelection()) {
+        e.preventDefault();
+        const selection = terminal.getSelection();
+        navigator.clipboard.writeText(selection);
+        return false;
+      }
+      
+      // Ctrl+V for paste
+      if (e.ctrlKey && e.key === 'v') {
+        e.preventDefault();
+        navigator.clipboard.readText().then(text => {
+          this.orchestrator.sendTerminalInput(sessionId, text);
+        });
+        return false;
+      }
+      
+      return true;
+    });
+  }
+  
+  setupResizeObserver(sessionId) {
+    const terminalElement = document.getElementById(`terminal-${sessionId}`);
+    if (!terminalElement) return;
+    
+    const resizeObserver = new ResizeObserver(() => {
+      this.fitTerminal(sessionId);
+    });
+    
+    resizeObserver.observe(terminalElement);
+    
+    // Store observer for cleanup
+    terminalElement._resizeObserver = resizeObserver;
+  }
+  
+  fitTerminal(sessionId) {
+    const fitAddon = this.fitAddons.get(sessionId);
+    if (fitAddon) {
+      try {
+        fitAddon.fit();
+        
+        // Get dimensions and notify server
+        const terminal = this.terminals.get(sessionId);
+        if (terminal) {
+          const dimensions = { cols: terminal.cols, rows: terminal.rows };
+          this.orchestrator.resizeTerminal(sessionId, dimensions.cols, dimensions.rows);
+        }
+      } catch (err) {
+        console.error(`Failed to fit terminal ${sessionId}:`, err);
+      }
+    }
+  }
+  
+  handleOutput(sessionId, data) {
+    const terminal = this.terminals.get(sessionId);
+    if (!terminal) {
+      // Create terminal if it doesn't exist
+      const sessionInfo = this.orchestrator.sessions.get(sessionId) || {};
+      this.createTerminal(sessionId, sessionInfo);
+      
+      // Try again
+      const newTerminal = this.terminals.get(sessionId);
+      if (newTerminal) {
+        newTerminal.write(data);
+      }
+      return;
+    }
+    
+    // Write data to terminal
+    terminal.write(data);
+    
+    // Auto-scroll if enabled
+    if (this.orchestrator.settings.autoScroll) {
+      terminal.scrollToBottom();
+    }
+    
+    // Check for special patterns (optional enhancement)
+    this.checkOutputPatterns(sessionId, data);
+  }
+  
+  checkOutputPatterns(sessionId, data) {
+    // Check for error patterns
+    if (/error|failed|exception/i.test(data)) {
+      // Could highlight the terminal or show a visual indicator
+      const container = document.getElementById(`container-${sessionId}`);
+      if (container) {
+        container.classList.add('has-error');
+        setTimeout(() => {
+          container.classList.remove('has-error');
+        }, 3000);
+      }
+    }
+  }
+  
+  showSearch(sessionId) {
+    const searchAddon = this.searchAddons.get(sessionId);
+    const terminal = this.terminals.get(sessionId);
+    
+    if (!searchAddon || !terminal) return;
+    
+    // Create search UI if it doesn't exist
+    let searchBar = document.getElementById(`search-${sessionId}`);
+    if (!searchBar) {
+      searchBar = this.createSearchBar(sessionId);
+      const container = document.getElementById(`container-${sessionId}`);
+      container.appendChild(searchBar);
+    }
+    
+    // Show search bar
+    searchBar.classList.remove('hidden');
+    const searchInput = searchBar.querySelector('input');
+    searchInput.focus();
+    searchInput.select();
+  }
+  
+  createSearchBar(sessionId) {
+    const searchBar = document.createElement('div');
+    searchBar.id = `search-${sessionId}`;
+    searchBar.className = 'terminal-search-bar hidden';
+    searchBar.innerHTML = `
+      <input type="text" placeholder="Search..." class="search-input" />
+      <button class="search-button" data-action="prev">↑</button>
+      <button class="search-button" data-action="next">↓</button>
+      <button class="search-button" data-action="close">✕</button>
+      <span class="search-results"></span>
+    `;
+    
+    const searchAddon = this.searchAddons.get(sessionId);
+    const input = searchBar.querySelector('input');
+    const results = searchBar.querySelector('.search-results');
+    
+    // Search on input
+    input.addEventListener('input', (e) => {
+      const term = e.target.value;
+      if (term) {
+        searchAddon.findNext(term, { 
+          regex: false, 
+          wholeWord: false, 
+          caseSensitive: false 
+        });
+      }
+    });
+    
+    // Handle enter key
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          searchAddon.findPrevious(input.value);
+        } else {
+          searchAddon.findNext(input.value);
+        }
+      } else if (e.key === 'Escape') {
+        this.hideSearch(sessionId);
+      }
+    });
+    
+    // Button actions
+    searchBar.addEventListener('click', (e) => {
+      const button = e.target.closest('.search-button');
+      if (!button) return;
+      
+      const action = button.dataset.action;
+      switch (action) {
+        case 'prev':
+          searchAddon.findPrevious(input.value);
+          break;
+        case 'next':
+          searchAddon.findNext(input.value);
+          break;
+        case 'close':
+          this.hideSearch(sessionId);
+          break;
+      }
+    });
+    
+    // Style
+    const style = document.createElement('style');
+    style.textContent = `
+      .terminal-search-bar {
+        position: absolute;
+        top: 40px;
+        right: 10px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        padding: var(--space-sm);
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        z-index: 100;
+      }
+      
+      .search-input {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        padding: 4px 8px;
+        border-radius: var(--radius-sm);
+        width: 200px;
+        font-size: 0.875rem;
+      }
+      
+      .search-button {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        padding: 4px 8px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-size: 0.875rem;
+        min-width: 28px;
+      }
+      
+      .search-button:hover {
+        background: var(--bg-secondary);
+      }
+      
+      .search-results {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-left: var(--space-sm);
+      }
+      
+      .terminal-container.has-error {
+        border-color: var(--accent-danger);
+        animation: error-flash 0.5s;
+      }
+      
+      @keyframes error-flash {
+        0%, 100% { border-color: var(--border-color); }
+        50% { border-color: var(--accent-danger); }
+      }
+    `;
+    
+    if (!document.getElementById('terminal-search-styles')) {
+      style.id = 'terminal-search-styles';
+      document.head.appendChild(style);
+    }
+    
+    return searchBar;
+  }
+  
+  hideSearch(sessionId) {
+    const searchBar = document.getElementById(`search-${sessionId}`);
+    if (searchBar) {
+      searchBar.classList.add('hidden');
+    }
+  }
+  
+  clearTerminal(sessionId) {
+    const terminal = this.terminals.get(sessionId);
+    if (terminal) {
+      terminal.clear();
+    }
+  }
+  
+  destroyTerminal(sessionId) {
+    const terminal = this.terminals.get(sessionId);
+    if (terminal) {
+      terminal.dispose();
+      this.terminals.delete(sessionId);
+    }
+    
+    // Clean up addons
+    this.fitAddons.delete(sessionId);
+    this.searchAddons.delete(sessionId);
+    this.webLinksAddons.delete(sessionId);
+    
+    // Clean up resize observer
+    const terminalElement = document.getElementById(`terminal-${sessionId}`);
+    if (terminalElement && terminalElement._resizeObserver) {
+      terminalElement._resizeObserver.disconnect();
+    }
+  }
+  
+  updateTheme(theme) {
+    const themeConfig = theme === 'light' ? this.lightTheme : this.theme;
+    
+    for (const [sessionId, terminal] of this.terminals) {
+      terminal.options.theme = themeConfig;
+    }
+  }
+  
+  // Utility method to focus a terminal
+  focusTerminal(sessionId) {
+    const terminal = this.terminals.get(sessionId);
+    if (terminal) {
+      terminal.focus();
+    }
+  }
+  
+  // Get terminal content as text
+  getTerminalContent(sessionId) {
+    const terminal = this.terminals.get(sessionId);
+    if (!terminal) return '';
+    
+    const buffer = terminal.buffer.active;
+    const lines = [];
+    
+    for (let i = 0; i < buffer.length; i++) {
+      const line = buffer.getLine(i);
+      if (line) {
+        lines.push(line.translateToString());
+      }
+    }
+    
+    return lines.join('\n');
+  }
+}
