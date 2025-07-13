@@ -63,7 +63,7 @@ class SessionManager extends EventEmitter {
         // Create server session
         this.createSession(`${worktree.id}-server`, {
           command: 'bash',
-          args: ['-c', 'echo "Ready to run: bun index.ts" && exec bash'],
+          args: ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
           cwd: worktree.path,
           type: 'server',
           worktreeId: worktree.id
@@ -93,8 +93,8 @@ class SessionManager extends EventEmitter {
         cwd: config.cwd,
         env: {
           ...process.env,
-          // Limit environment exposure for security
-          PATH: '/usr/local/bin:/usr/bin:/bin',
+          // Include snap binaries and common paths
+          PATH: `/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
           HOME: config.cwd,
           TERM: 'xterm-color'
         }
