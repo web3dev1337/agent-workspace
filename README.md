@@ -58,6 +58,12 @@ cp .env.example .env
 ### Running
 
 ```bash
+# Check your environment first
+./check-environment.sh
+
+# If bun is not in PATH, add it:
+export PATH=/snap/bin:$PATH
+
 # Start the server
 npm start
 
