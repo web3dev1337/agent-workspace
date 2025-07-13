@@ -598,6 +598,16 @@ class ClaudeOrchestrator {
   }
 
   showClaudeReadyNotification(sessionId) {
+    // Rate limiting: don't show notification if we showed one recently
+    const now = Date.now();
+    if (!this.lastNotificationTime) this.lastNotificationTime = {};
+    
+    if (this.lastNotificationTime[sessionId] && (now - this.lastNotificationTime[sessionId]) < 5000) {
+      console.log(`Rate limiting notification for ${sessionId}`);
+      return;
+    }
+    this.lastNotificationTime[sessionId] = now;
+    
     const worktreeId = sessionId.replace('-claude', '');
     const session = this.sessions.get(sessionId);
     const branch = session ? session.branch : '';

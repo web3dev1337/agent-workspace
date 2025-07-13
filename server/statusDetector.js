@@ -93,12 +93,25 @@ class StatusDetector {
     const lastFewLines = lines.slice(-5).join('\n');
     const lastLine = lines[lines.length - 1].trim();
     
-    // First, check if waiting for input (highest priority)
-    for (const pattern of this.waitingPatterns) {
-      if (pattern.test(lastFewLines)) {
-        logger.debug('Waiting pattern detected', { 
+    // Check for specific Claude ready states (more restrictive)
+    const isClaudeReady = /\? for shortcuts\s*$/.test(lastLine);
+    const isBashConfirmation = /Do you want to proceed\?/.test(lastFewLines) || /\? 1\. Yes/.test(lastFewLines);
+    
+    if (isClaudeReady || isBashConfirmation) {
+      logger.debug('Claude waiting for input', { 
+        isClaudeReady, 
+        isBashConfirmation,
+        lastLine: lastLine.slice(-50) // Last 50 chars for debugging
+      });
+      return this.updateStatus('waiting', buffer);
+    }
+    
+    // Check other waiting patterns (less sensitive)
+    for (const pattern of this.waitingPatterns.slice(3)) { // Skip the first 3 patterns we already checked
+      if (pattern.test(lastLine)) { // Only check last line, not last few lines
+        logger.debug('Other waiting pattern detected', { 
           pattern: pattern.toString(),
-          match: lastFewLines.match(pattern)?.[0]
+          match: lastLine.match(pattern)?.[0]
         });
         return this.updateStatus('waiting', buffer);
       }
