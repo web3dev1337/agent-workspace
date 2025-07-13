@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Orchestrator</title>
+    
+    <!-- Xterm.js for terminal rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    
+    <!-- Our styles -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==">
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-content">
+            <h1>Claude Orchestrator</h1>
+            <div class="header-stats" id="header-stats">
+                <span class="stat">
+                    <span class="stat-label">Active:</span>
+                    <span class="stat-value" id="active-count">0</span>
+                </span>
+                <span class="stat">
+                    <span class="stat-label">Waiting:</span>
+                    <span class="stat-value waiting" id="waiting-count">0</span>
+                </span>
+                <span class="stat">
+                    <span class="stat-label">Idle:</span>
+                    <span class="stat-value idle" id="idle-count">0</span>
+                </span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button id="notification-toggle" class="icon-button" title="Notifications">
+                <span class="notification-badge" id="notification-badge">0</span>
+                🔔
+            </button>
+            <button id="settings-toggle" class="icon-button" title="Settings">
+                ⚙️
+            </button>
+            <div class="connection-status" id="connection-status">
+                <span class="status-dot disconnected"></span>
+                <span>Disconnected</span>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Notification Panel -->
+    <div id="notification-panel" class="notification-panel hidden">
+        <div class="panel-header">
+            <h3>Notifications</h3>
+            <button id="clear-notifications" class="text-button">Clear All</button>
+        </div>
+        <div id="notification-list" class="notification-list">
+            <!-- Notifications will be inserted here -->
+        </div>
+    </div>
+    
+    <!-- Settings Panel -->
+    <div id="settings-panel" class="settings-panel hidden">
+        <div class="panel-header">
+            <h3>Settings</h3>
+            <button id="close-settings" class="icon-button">✕</button>
+        </div>
+        <div class="settings-content">
+            <div class="setting-group">
+                <label>
+                    <input type="checkbox" id="enable-notifications" />
+                    Enable Browser Notifications
+                </label>
+            </div>
+            <div class="setting-group">
+                <label>
+                    <input type="checkbox" id="enable-sounds" />
+                    Enable Sound Alerts
+                </label>
+            </div>
+            <div class="setting-group">
+                <label>
+                    <input type="checkbox" id="auto-scroll" checked />
+                    Auto-scroll Terminals
+                </label>
+            </div>
+            <div class="setting-group">
+                <label>
+                    Theme:
+                    <select id="theme-select">
+                        <option value="dark">Dark</option>
+                        <option value="light">Light</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Dashboard -->
+    <main id="dashboard" class="dashboard">
+        <!-- Terminal grid will be dynamically generated -->
+        <div class="loading-message" id="loading-message">
+            <div class="spinner"></div>
+            <p>Initializing terminals...</p>
+        </div>
+    </main>
+    
+    <!-- Quick Action Modal -->
+    <div id="quick-action-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3 id="modal-title">Confirm Action</h3>
+            <p id="modal-message">Do you want to proceed?</p>
+            <div class="modal-actions">
+                <button id="modal-yes" class="button-primary">Yes</button>
+                <button id="modal-no" class="button-secondary">No</button>
+                <button id="modal-cancel" class="button-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-search@0.13.0/lib/xterm-addon-search.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
+    
+    <!-- Our scripts -->
+    <script src="app.js"></script>
+    <script src="terminal.js"></script>
+    <script src="notifications.js"></script>
+</body>
+</html>
