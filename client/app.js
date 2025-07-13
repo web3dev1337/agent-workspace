@@ -312,6 +312,7 @@ class ClaudeOrchestrator {
     
     // Update session data
     const session = this.sessions.get(sessionId);
+    const previousStatus = session ? session.status : null;
     if (session) {
       session.status = status;
     }
@@ -319,6 +320,11 @@ class ClaudeOrchestrator {
     // Update quick actions for Claude sessions
     if (sessionId.includes('claude')) {
       this.updateQuickActions(sessionId, status);
+      
+      // Show notification when Claude becomes ready (transitions from busy to waiting)
+      if (previousStatus === 'busy' && status === 'waiting') {
+        this.showClaudeReadyNotification(sessionId);
+      }
     }
     
     // Update statistics
@@ -583,6 +589,67 @@ class ClaudeOrchestrator {
     
     // Also show in console
     console.warn('Claude Update Required:', updateInfo);
+  }
+
+  showClaudeReadyNotification(sessionId) {
+    const worktreeId = sessionId.replace('-claude', '');
+    const session = this.sessions.get(sessionId);
+    const branch = session ? session.branch : '';
+    
+    // Create small toast notification
+    const toast = document.createElement('div');
+    toast.className = 'ready-toast';
+    toast.innerHTML = `
+      <div class="toast-content">
+        <span class="toast-icon">✅</span>
+        <span class="toast-text">Claude ${worktreeId} ready ${branch ? `(${branch})` : ''}</span>
+      </div>
+    `;
+    
+    // Add to page
+    document.body.appendChild(toast);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.remove();
+      }
+    }, 3000);
+    
+    // Play notification sound if enabled
+    if (this.settings.sounds) {
+      this.playNotificationSound();
+    }
+    
+    // Browser notification if enabled
+    if (this.settings.notifications && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(`Claude ${worktreeId} Ready`, {
+        body: `Claude finished responding and is ready for input ${branch ? `(${branch})` : ''}`,
+        icon: '/favicon.ico',
+        tag: `claude-ready-${sessionId}` // Prevent duplicates
+      });
+    }
+    
+    console.log(`🎉 Claude ${worktreeId} is ready for input!`);
+  }
+
+  playNotificationSound() {
+    // Create a simple notification sound
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+    oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.3);
   }
 }
 

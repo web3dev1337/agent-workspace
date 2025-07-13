@@ -508,6 +508,57 @@ h1 {
   background: rgba(255, 255, 255, 0.3);
 }
 
+/* Toast Notifications */
+.ready-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: var(--accent-success);
+  color: white;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  animation: slideInRight 0.3s ease-out, fadeOutRight 0.3s ease-in 2.7s forwards;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.toast-icon {
+  font-size: 1.2rem;
+}
+
+.toast-text {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
 .status-indicator.waiting {
   background: var(--accent-danger);
   animation: pulse 1s infinite;
