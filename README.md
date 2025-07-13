@@ -64,6 +64,9 @@ cp .env.example .env
 # If bun is not in PATH, add it:
 export PATH=/snap/bin:$PATH
 
+# Setup Claude hooks for better notifications (optional but recommended)
+./setup-claude-hooks.sh
+
 # Start the server
 npm start
 

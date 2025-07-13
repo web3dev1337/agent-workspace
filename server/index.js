@@ -127,6 +127,44 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Claude hook endpoints
+app.post('/api/claude-ready', express.json(), (req, res) => {
+  const { worktree, sessionId } = req.body;
+  logger.info('Claude ready notification from hook', { worktree, sessionId });
+  
+  // Update session status to waiting
+  const session = sessionManager.sessions.get(sessionId);
+  if (session) {
+    session.status = 'waiting';
+    sessionManager.emitStatusUpdate(sessionId, 'waiting');
+    
+    // Trigger notification
+    io.emit('notification-trigger', {
+      sessionId,
+      type: 'waiting',
+      message: `Claude ${worktree} finished responding`,
+      branch: session.branch
+    });
+  }
+  
+  res.json({ success: true });
+});
+
+app.post('/api/claude-notification', express.json(), (req, res) => {
+  const { worktree, sessionId, message } = req.body;
+  logger.info('Claude notification from hook', { worktree, sessionId, message });
+  
+  // Forward notification to clients
+  io.emit('notification-trigger', {
+    sessionId,
+    type: 'notification',
+    message: message,
+    worktree: worktree
+  });
+  
+  res.json({ success: true });
+});
+
 // Start server
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
