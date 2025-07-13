@@ -82,6 +82,7 @@ class StatusDetector {
     // Track recent detections to avoid flip-flopping
     this.recentDetections = new Map();
     this.detectionWindow = 2000; // 2 seconds
+    this.lastBufferLength = 0; // For debug logging
   }
   
   detectStatus(buffer) {
@@ -93,14 +94,26 @@ class StatusDetector {
     const lastFewLines = lines.slice(-5).join('\n');
     const lastLine = lines[lines.length - 1].trim();
     
-    // Check for specific Claude ready states (more restrictive)
-    const isClaudeReady = /\? for shortcuts\s*$/.test(lastLine);
-    const isBashConfirmation = /Do you want to proceed\?/.test(lastFewLines) || /\? 1\. Yes/.test(lastFewLines);
+    // Debug logging to see what Claude actually outputs
+    if (buffer.length > this.lastBufferLength + 100) { // Significant new output
+      logger.debug('Claude output detected', {
+        lastLine: lastLine,
+        lastFewLines: lastFewLines.slice(-200),
+        bufferGrowth: buffer.length - this.lastBufferLength
+      });
+      this.lastBufferLength = buffer.length;
+    }
     
-    if (isClaudeReady || isBashConfirmation) {
+    // Check for specific Claude ready states
+    const isClaudeReady = lastLine === ''; // Claude seems to end with empty line when ready
+    const isBashConfirmation = /Do you want to proceed\?/.test(lastFewLines) || /\? 1\. Yes/.test(lastFewLines);
+    const hasQuestionMark = lastLine.endsWith('?'); // Claude asking a question
+    
+    if (isBashConfirmation || hasQuestionMark) {
       logger.debug('Claude waiting for input', { 
         isClaudeReady, 
         isBashConfirmation,
+        hasQuestionMark,
         lastLine: lastLine.slice(-50) // Last 50 chars for debugging
       });
       return this.updateStatus('waiting', buffer);
@@ -117,11 +130,25 @@ class StatusDetector {
       }
     }
     
-    // Check if there's been no output for a while (might be waiting)
+    // Check if Claude finished speaking (no activity for 2+ seconds)
     const timeSinceLastOutput = this.getTimeSinceLastOutput(buffer);
-    if (timeSinceLastOutput > 5000 && lastLine.match(/[?:>$]$/)) {
-      // Ends with prompt-like character and no recent output
-      return this.updateStatus('waiting', buffer);
+    if (timeSinceLastOutput > 2000) {
+      // Check if the last content looks like Claude finished a response
+      const lastContentLine = lines.reverse().find(line => line.trim().length > 0) || '';
+      
+      // Claude often ends with a bullet point message or question
+      if (lastContentLine.match(/^●.*\?$/) || // Bullet ending with question
+          lastContentLine.match(/What.*\?$/) || // Question starting with What
+          lastContentLine.match(/\?$/) || // Any question
+          lastContentLine.match(/^●.*\.$/) || // Bullet ending with period
+          timeSinceLastOutput > 5000) { // Or just been quiet for 5+ seconds
+        
+        logger.debug('Claude appears ready (quiet period)', {
+          timeSinceLastOutput,
+          lastContentLine: lastContentLine.slice(-100)
+        });
+        return this.updateStatus('waiting', buffer);
+      }
     }
     
     // Check for busy patterns in recent output
