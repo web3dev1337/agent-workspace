@@ -315,14 +315,20 @@ class ClaudeOrchestrator {
     const previousStatus = session ? session.status : null;
     if (session) {
       session.status = status;
+      
+      // Track that user has interacted if going from waiting to busy
+      if (previousStatus === 'waiting' && status === 'busy') {
+        session.hasUserInput = true;
+      }
     }
     
     // Update quick actions for Claude sessions
     if (sessionId.includes('claude')) {
       this.updateQuickActions(sessionId, status);
       
-      // Show notification when Claude becomes ready (transitions from busy to waiting)
-      if (previousStatus === 'busy' && status === 'waiting') {
+      // Show notification when Claude becomes ready AFTER user input
+      // (transitions from busy to waiting, and user has actually sent input)
+      if (previousStatus === 'busy' && status === 'waiting' && session && session.hasUserInput) {
         this.showClaudeReadyNotification(sessionId);
       }
     }

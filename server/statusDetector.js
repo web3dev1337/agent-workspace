@@ -17,6 +17,8 @@ class StatusDetector {
     // Patterns that indicate Claude is waiting for user input
     this.waitingPatterns = [
       /\? for shortcuts/i,  // Claude ready prompt
+      /Do you want to proceed\?/i,  // Bash command confirmation
+      /\? 1\. Yes/i,  // Bash command options
       /\(y\/N\)/i,
       /\(Y\/n\)/i,
       /\[y\/n\]/i,
