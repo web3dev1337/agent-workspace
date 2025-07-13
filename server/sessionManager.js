@@ -65,7 +65,7 @@ class SessionManager extends EventEmitter {
         // Create Claude session with proper shell environment
         this.createSession(`${worktree.id}-claude`, {
           command: 'bash',
-          args: ['-c', `cd "${worktree.path}" && exec claude`],
+          args: ['-c', `cd "${worktree.path}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`],
           cwd: worktree.path,
           type: 'claude',
           worktreeId: worktree.id
@@ -371,7 +371,7 @@ class SessionManager extends EventEmitter {
     // For Claude sessions, use proper bash wrapper
     if (config.type === 'claude') {
       config.command = 'bash';
-      config.args = ['-c', `cd "${config.cwd}" && exec claude`];
+      config.args = ['-c', `cd "${config.cwd}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`];
     }
     
     // Terminate existing session
