@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Orchestrator</title>
+    
+    <!-- Xterm.js for terminal rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    
+    <!-- Our styles -->
+    <link rel="stylesheet" href="styles-new.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==">
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2>Worktrees</h2>
+            <button id="view-presets" class="icon-button" title="View Presets">📋</button>
+        </div>
+        
+        <div class="worktree-list" id="worktree-list">
+            <!-- Worktree items will be dynamically generated -->
+        </div>
+        
+        <div class="sidebar-footer">
+            <button id="view-all" class="button-secondary">View All</button>
+            <button id="view-claude-only" class="button-secondary">Claude Only</button>
+            <button id="view-servers-only" class="button-secondary">Servers Only</button>
+        </div>
+    </aside>
+    
+    <!-- Main Content -->
+    <div class="main-container">
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <h1>Claude Orchestrator</h1>
+                <a href="index.html" style="margin-left: 20px; color: var(--accent-primary); text-decoration: none; font-size: 0.875rem;">← Classic UI</a>
+                <div class="view-controls">
+                    <select id="grid-layout" class="layout-select">
+                        <option value="2x4">2×4 Grid</option>
+                        <option value="1x2">1×2 Side by Side</option>
+                        <option value="2x2">2×2 Grid</option>
+                        <option value="3x3">3×3 Grid</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="notification-toggle" class="icon-button" title="Notifications">
+                    <span class="notification-badge" id="notification-badge">0</span>
+                    🔔
+                </button>
+                <button id="settings-toggle" class="icon-button" title="Settings">
+                    ⚙️
+                </button>
+                <div class="connection-status" id="connection-status">
+                    <span class="status-dot disconnected"></span>
+                    <span>Disconnected</span>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Terminal Grid -->
+        <main id="terminal-grid" class="terminal-grid">
+            <div class="loading-message" id="loading-message">
+                <div class="spinner"></div>
+                <p>Initializing terminals...</p>
+            </div>
+        </main>
+    </div>
+    
+    <!-- View Presets Modal -->
+    <div id="presets-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>View Presets</h3>
+            <div class="preset-list">
+                <button class="preset-btn" data-preset="all">All Terminals (2×4)</button>
+                <button class="preset-btn" data-preset="claude-all">All Claude AIs</button>
+                <button class="preset-btn" data-preset="servers-all">All Servers</button>
+                <button class="preset-btn" data-preset="work-1-5">Work 1 + 5</button>
+                <button class="preset-btn" data-preset="custom-claude">Claude 2+5+6+8+1+7</button>
+            </div>
+            <div class="modal-actions">
+                <button id="close-presets" class="button-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Settings Panel -->
+    <div id="settings-panel" class="settings-panel hidden">
+        <div class="panel-header">
+            <h3>Settings</h3>
+            <button id="close-settings" class="icon-button">✕</button>
+        </div>
+        <div class="settings-content">
+            <div class="setting-group">
+                <label>
+                    <input type="checkbox" id="enable-notifications" />
+                    Enable Browser Notifications
+                </label>
+            </div>
+            <div class="setting-group">
+                <label>
+                    <input type="checkbox" id="enable-sounds" />
+                    Enable Sound Alerts
+                </label>
+            </div>
+            <div class="setting-group">
+                <label>
+                    <input type="checkbox" id="auto-scroll" checked />
+                    Auto-scroll Terminals
+                </label>
+            </div>
+            <div class="setting-group">
+                <label>
+                    Theme:
+                    <select id="theme-select">
+                        <option value="dark">Dark</option>
+                        <option value="light">Light</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-search@0.13.0/lib/xterm-addon-search.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
+    
+    <!-- Our scripts -->
+    <script src="app-new.js"></script>
+    <script src="terminal.js"></script>
+    <script src="notifications.js"></script>
+</body>
+</html>

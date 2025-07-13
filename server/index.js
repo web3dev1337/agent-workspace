@@ -109,6 +109,19 @@ io.on('connection', (socket) => {
     sessionManager.restartSession(sessionId);
   });
   
+  // Handle server control
+  socket.on('server-control', ({ sessionId, action }) => {
+    logger.info('Server control request', { sessionId, action });
+    
+    if (action === 'start') {
+      sessionManager.writeToSession(sessionId, 'bun index.ts\n');
+    } else if (action === 'stop') {
+      sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C
+    } else if (action === 'kill') {
+      sessionManager.writeToSession(sessionId, '\x03\x03'); // Double Ctrl+C
+    }
+  });
+  
   socket.on('disconnect', () => {
     logger.info('Client disconnected', { socketId: socket.id });
   });
