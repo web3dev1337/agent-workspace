@@ -177,8 +177,16 @@ class SessionManager extends EventEmitter {
           signal
         });
         
-        // Clean up
-        this.sessions.delete(sessionId);
+        // Auto-restart Claude sessions that exit unexpectedly
+        if (config.type === 'claude' && exitCode !== 0) {
+          logger.info('Auto-restarting crashed Claude session', { sessionId });
+          setTimeout(() => {
+            this.restartSession(sessionId);
+          }, 2000);
+        } else {
+          // Clean up only if not restarting
+          this.sessions.delete(sessionId);
+        }
       });
       
       this.sessions.set(sessionId, session);

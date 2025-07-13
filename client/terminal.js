@@ -108,8 +108,19 @@ class TerminalManager {
     // Initial fit
     this.fitTerminal(sessionId);
     
+    // Focus terminal when clicked
+    terminalElement.addEventListener('click', () => {
+      terminal.focus();
+    });
+    
+    // Auto-focus if it's a Claude session
+    if (sessionId.includes('claude')) {
+      setTimeout(() => terminal.focus(), 100);
+    }
+    
     // Handle input
     terminal.onData((data) => {
+      console.log(`Terminal input for ${sessionId}:`, data);
       this.orchestrator.sendTerminalInput(sessionId, data);
     });
     
