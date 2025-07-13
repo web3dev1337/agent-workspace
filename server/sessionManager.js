@@ -51,10 +51,10 @@ class SessionManager extends EventEmitter {
     
     for (const worktree of this.worktrees) {
       try {
-        // Create Claude session
+        // Create Claude session with proper shell environment
         this.createSession(`${worktree.id}-claude`, {
-          command: 'claude',
-          args: [],
+          command: 'bash',
+          args: ['-c', `cd "${worktree.path}" && exec claude`],
           cwd: worktree.path,
           type: 'claude',
           worktreeId: worktree.id
@@ -177,16 +177,9 @@ class SessionManager extends EventEmitter {
           signal
         });
         
-        // Auto-restart Claude sessions that exit unexpectedly
-        if (config.type === 'claude' && exitCode !== 0) {
-          logger.info('Auto-restarting crashed Claude session', { sessionId });
-          setTimeout(() => {
-            this.restartSession(sessionId);
-          }, 2000);
-        } else {
-          // Clean up only if not restarting
-          this.sessions.delete(sessionId);
-        }
+        // Don't auto-restart for now - causing loops
+        // TODO: Fix Claude CLI startup issues first
+        this.sessions.delete(sessionId);
       });
       
       this.sessions.set(sessionId, session);
@@ -352,12 +345,21 @@ class SessionManager extends EventEmitter {
   
   restartSession(sessionId) {
     const session = this.sessions.get(sessionId);
-    if (!session) return false;
+    if (!session) {
+      logger.warn('Cannot restart session - not found', { sessionId });
+      return false;
+    }
     
-    logger.info('Restarting session', { sessionId });
+    logger.info('Manually restarting session', { sessionId });
     
     // Save config before terminating
     const config = { ...session.config };
+    
+    // For Claude sessions, use proper bash wrapper
+    if (config.type === 'claude') {
+      config.command = 'bash';
+      config.args = ['-c', `cd "${config.cwd}" && exec claude`];
+    }
     
     // Terminate existing session
     this.terminateSession(sessionId);
@@ -367,6 +369,7 @@ class SessionManager extends EventEmitter {
       try {
         this.createSession(sessionId, config);
         this.io.emit('session-restarted', { sessionId });
+        logger.info('Session restarted successfully', { sessionId });
         return true;
       } catch (error) {
         logger.error('Failed to restart session', { 
@@ -375,7 +378,9 @@ class SessionManager extends EventEmitter {
         });
         return false;
       }
-    }, 2000);
+    }, 1000);
+    
+    return true;
   }
   
   cleanup() {
