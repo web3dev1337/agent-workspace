@@ -1,6 +1,7 @@
 const pty = require('node-pty');
 const { EventEmitter } = require('events');
 const winston = require('winston');
+const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -46,8 +47,18 @@ class SessionManager extends EventEmitter {
     this.gitHelper = helper;
   }
   
-  initializeSessions() {
+  async initializeSessions() {
     logger.info('Initializing sessions', { count: this.worktrees.length });
+    
+    // Check Claude CLI version before starting sessions
+    const versionInfo = await ClaudeVersionChecker.checkVersion();
+    if (!versionInfo.isCompatible) {
+      const updateInfo = ClaudeVersionChecker.generateUpdateInstructions(versionInfo);
+      logger.error('Claude CLI version incompatible', updateInfo);
+      
+      // Emit update requirement to clients
+      this.io.emit('claude-update-required', updateInfo);
+    }
     
     for (const worktree of this.worktrees) {
       try {
@@ -93,10 +104,12 @@ class SessionManager extends EventEmitter {
         cwd: config.cwd,
         env: {
           ...process.env,
-          // Include snap binaries and common paths
-          PATH: `/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
-          HOME: config.cwd,
-          TERM: 'xterm-color'
+          // Include snap binaries, node paths, and common paths
+          PATH: `${process.env.HOME}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
+          HOME: process.env.HOME, // Use actual home directory for Claude CLI access
+          TERM: 'xterm-color',
+          // Ensure Claude CLI can find its config
+          NODE_PATH: process.env.NODE_PATH
         }
       });
       

@@ -141,7 +141,9 @@ httpServer.listen(PORT, HOST, () => {
   }
   
   // Initialize sessions
-  sessionManager.initializeSessions();
+  sessionManager.initializeSessions().catch(error => {
+    logger.error('Failed to initialize sessions', { error: error.message });
+  });
 });
 
 // Graceful shutdown

@@ -460,6 +460,54 @@ h1 {
   to { opacity: 1; }
 }
 
+/* Update Banner */
+.update-banner {
+  background: var(--accent-danger);
+  color: white;
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.update-content h3 {
+  margin: 0 0 var(--space-sm) 0;
+  font-size: 1.1rem;
+}
+
+.update-content p {
+  margin: 0 0 var(--space-md) 0;
+  opacity: 0.9;
+}
+
+.update-instructions {
+  background: rgba(0, 0, 0, 0.2);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  margin-bottom: var(--space-md);
+}
+
+.update-instructions div {
+  margin-bottom: 0.25rem;
+}
+
+.dismiss-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .status-indicator.waiting {
   background: var(--accent-danger);
   animation: pulse 1s infinite;
