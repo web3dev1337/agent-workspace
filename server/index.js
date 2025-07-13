@@ -1,0 +1,166 @@
+require('dotenv').config();
+const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+const winston = require('winston');
+
+// Initialize logger
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ 
+      filename: 'logs/error.log', 
+      level: 'error',
+      maxsize: 10485760, // 10MB
+      maxFiles: 5
+    }),
+    new winston.transports.File({ 
+      filename: 'logs/combined.log',
+      maxsize: 10485760,
+      maxFiles: 5
+    }),
+    new winston.transports.Console({
+      format: winston.format.simple()
+    })
+  ]
+});
+
+// We'll import these after creating them
+// const { SessionManager } = require('./sessionManager');
+// const { NotificationService } = require('./notificationService');
+
+const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: false // Only allow same-origin for security
+  }
+});
+
+// Serve static files from client directory
+app.use(express.static(path.join(__dirname, '../client')));
+
+// Basic auth middleware (optional)
+const AUTH_TOKEN = process.env.AUTH_TOKEN;
+if (AUTH_TOKEN) {
+  app.use((req, res, next) => {
+    // Skip auth for socket.io requests
+    if (req.path.startsWith('/socket.io/')) {
+      return next();
+    }
+    
+    const token = req.headers['x-auth-token'] || req.query.token;
+    if (token !== AUTH_TOKEN) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+  });
+  
+  // Socket.IO auth
+  io.use((socket, next) => {
+    const token = socket.handshake.auth.token || socket.handshake.query.token;
+    if (token !== AUTH_TOKEN) {
+      return next(new Error('Authentication failed'));
+    }
+    next();
+  });
+}
+
+// Initialize session manager and services (placeholder for now)
+// const sessionManager = new SessionManager(io);
+// const notificationService = new NotificationService(io);
+
+// WebSocket connection handling
+io.on('connection', (socket) => {
+  logger.info('Client connected', { socketId: socket.id });
+  
+  // Placeholder: Send initial session states
+  socket.emit('sessions', {});
+  
+  // Handle terminal input
+  socket.on('terminal-input', ({ sessionId, data }) => {
+    logger.debug('Terminal input received', { sessionId, dataLength: data.length });
+    // sessionManager.writeToSession(sessionId, data);
+  });
+  
+  // Handle terminal resize
+  socket.on('terminal-resize', ({ sessionId, cols, rows }) => {
+    logger.debug('Terminal resize', { sessionId, cols, rows });
+    // sessionManager.resizeSession(sessionId, cols, rows);
+  });
+  
+  socket.on('disconnect', () => {
+    logger.info('Client disconnected', { socketId: socket.id });
+  });
+  
+  socket.on('error', (error) => {
+    logger.error('Socket error', { error: error.message, socketId: socket.id });
+  });
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// Start server
+const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+
+httpServer.listen(PORT, HOST, () => {
+  logger.info(`Server running on http://${HOST}:${PORT}`);
+  if (HOST === '0.0.0.0') {
+    logger.info(`LAN access available on port ${PORT}`);
+  }
+  if (AUTH_TOKEN) {
+    logger.info('Authentication enabled');
+  }
+  
+  // Initialize sessions (placeholder)
+  // sessionManager.initializeSessions();
+});
+
+// Graceful shutdown
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+function shutdown() {
+  logger.info('Shutting down server...');
+  
+  // Close socket connections
+  io.close(() => {
+    logger.info('Socket.IO connections closed');
+  });
+  
+  // Close HTTP server
+  httpServer.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
+  
+  // Force shutdown after 10 seconds
+  setTimeout(() => {
+    logger.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+}
+
+// Handle uncaught errors
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception', { error: error.message, stack: error.stack });
+  shutdown();
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled rejection', { reason, promise });
+});
