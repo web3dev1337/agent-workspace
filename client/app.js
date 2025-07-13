@@ -97,6 +97,10 @@ class ClaudeOrchestrator {
       this.socket.on('session-restarted', ({ sessionId }) => {
         this.handleSessionRestart(sessionId);
       });
+
+      this.socket.on('claude-update-required', (updateInfo) => {
+        this.showClaudeUpdateRequired(updateInfo);
+      });
       
       // Set timeout for connection
       setTimeout(() => {
@@ -557,6 +561,28 @@ class ClaudeOrchestrator {
     } else {
       this.showError('Not connected to server');
     }
+  }
+
+  showClaudeUpdateRequired(updateInfo) {
+    // Create update banner
+    const banner = document.createElement('div');
+    banner.className = 'update-banner';
+    banner.innerHTML = `
+      <div class="update-content">
+        <h3>⚠️ ${updateInfo.title}</h3>
+        <p>${updateInfo.message}</p>
+        <div class="update-instructions">
+          ${updateInfo.instructions.map(line => `<div>${line}</div>`).join('')}
+        </div>
+        <button onclick="this.parentElement.parentElement.remove()" class="dismiss-btn">Dismiss</button>
+      </div>
+    `;
+    
+    // Add to top of page
+    document.body.insertBefore(banner, document.body.firstChild);
+    
+    // Also show in console
+    console.warn('Claude Update Required:', updateInfo);
   }
 }
 
