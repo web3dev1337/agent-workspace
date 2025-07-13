@@ -31,9 +31,11 @@ const logger = winston.createLogger({
   ]
 });
 
-// We'll import these after creating them
-// const { SessionManager } = require('./sessionManager');
-// const { NotificationService } = require('./notificationService');
+// Import services
+const { SessionManager } = require('./sessionManager');
+const { StatusDetector } = require('./statusDetector');
+const { GitHelper } = require('./gitHelper');
+const { NotificationService } = require('./notificationService');
 
 const app = express();
 const httpServer = createServer(app);
@@ -72,27 +74,39 @@ if (AUTH_TOKEN) {
   });
 }
 
-// Initialize session manager and services (placeholder for now)
-// const sessionManager = new SessionManager(io);
-// const notificationService = new NotificationService(io);
+// Initialize services
+const sessionManager = new SessionManager(io);
+const statusDetector = new StatusDetector();
+const gitHelper = new GitHelper();
+const notificationService = new NotificationService(io);
+
+// Connect services
+sessionManager.setStatusDetector(statusDetector);
+sessionManager.setGitHelper(gitHelper);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
   logger.info('Client connected', { socketId: socket.id });
   
-  // Placeholder: Send initial session states
-  socket.emit('sessions', {});
+  // Send initial session states
+  socket.emit('sessions', sessionManager.getSessionStates());
   
   // Handle terminal input
   socket.on('terminal-input', ({ sessionId, data }) => {
     logger.debug('Terminal input received', { sessionId, dataLength: data.length });
-    // sessionManager.writeToSession(sessionId, data);
+    sessionManager.writeToSession(sessionId, data);
   });
   
   // Handle terminal resize
   socket.on('terminal-resize', ({ sessionId, cols, rows }) => {
     logger.debug('Terminal resize', { sessionId, cols, rows });
-    // sessionManager.resizeSession(sessionId, cols, rows);
+    sessionManager.resizeSession(sessionId, cols, rows);
+  });
+  
+  // Handle session restart
+  socket.on('restart-session', ({ sessionId }) => {
+    logger.info('Session restart requested', { sessionId });
+    sessionManager.restartSession(sessionId);
   });
   
   socket.on('disconnect', () => {
@@ -126,8 +140,8 @@ httpServer.listen(PORT, HOST, () => {
     logger.info('Authentication enabled');
   }
   
-  // Initialize sessions (placeholder)
-  // sessionManager.initializeSessions();
+  // Initialize sessions
+  sessionManager.initializeSessions();
 });
 
 // Graceful shutdown
@@ -136,6 +150,9 @@ process.on('SIGINT', shutdown);
 
 function shutdown() {
   logger.info('Shutting down server...');
+  
+  // Clean up sessions first
+  sessionManager.cleanup();
   
   // Close socket connections
   io.close(() => {
