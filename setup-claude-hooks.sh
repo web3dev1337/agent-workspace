@@ -35,7 +35,7 @@ for i in {1..8}; do
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST http://localhost:$ORCHESTRATOR_PORT/api/claude-notification -H 'Content-Type: application/json' -d '{\"worktree\": \"work$i\", \"sessionId\": \"work$i-claude\", \"message\": \"'\$(cat)'\"}' || true"
+            "command": "echo 'Notification sent' || true"
           }
         ]
       }

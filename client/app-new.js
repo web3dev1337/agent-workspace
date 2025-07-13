@@ -360,28 +360,53 @@ class ClaudeOrchestrator {
       grid.classList.add(`layout-${layout}`);
     }
     
-    // Refit terminals
-    this.activeView.forEach(sessionId => {
-      this.terminalManager.fitTerminal(sessionId);
-    });
+    // Force re-render of terminals
+    setTimeout(() => {
+      this.activeView.forEach(sessionId => {
+        if (this.terminalManager.terminals.has(sessionId)) {
+          this.terminalManager.fitTerminal(sessionId);
+        }
+      });
+    }, 100);
   }
   
   showTerminals(sessionIds) {
     this.activeView = sessionIds;
     const grid = document.getElementById('terminal-grid');
+    
+    // Store existing terminal data
+    const existingTerminals = new Map();
+    this.terminalManager.terminals.forEach((terminal, id) => {
+      existingTerminals.set(id, {
+        terminal: terminal,
+        content: terminal.buffer.active.getLine(0) // Check if has content
+      });
+    });
+    
     grid.innerHTML = '';
     
     // Create terminals for active view
-    sessionIds.forEach(sessionId => {
+    sessionIds.forEach((sessionId, index) => {
       const session = this.sessions.get(sessionId);
       if (session) {
         const terminal = this.createTerminalElement(sessionId, session);
         grid.appendChild(terminal);
         
-        // Initialize terminal
+        // Initialize or restore terminal
         setTimeout(() => {
-          this.terminalManager.createTerminal(sessionId, session);
-        }, 100);
+          if (existingTerminals.has(sessionId)) {
+            // Terminal already exists, just re-attach it
+            const terminalEl = document.getElementById(`terminal-${sessionId}`);
+            if (terminalEl && this.terminalManager.terminals.has(sessionId)) {
+              const term = this.terminalManager.terminals.get(sessionId);
+              term.open(terminalEl);
+              this.terminalManager.fitTerminal(sessionId);
+            }
+          } else {
+            // Create new terminal
+            this.terminalManager.createTerminal(sessionId, session);
+          }
+        }, 50 + (index * 50)); // Stagger creation
       }
     });
   }
