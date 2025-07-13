@@ -24,8 +24,11 @@ class ClaudeOrchestrator {
       // Connect to server
       await this.connectToServer();
       
-      // Hide loading message
-      document.getElementById('loading-message').classList.add('hidden');
+      // Hide loading message if it exists
+      const loadingMessage = document.getElementById('loading-message');
+      if (loadingMessage) {
+        loadingMessage.classList.add('hidden');
+      }
       
     } catch (error) {
       console.error('Failed to initialize:', error);
@@ -200,6 +203,17 @@ class ClaudeOrchestrator {
   
   createDashboard() {
     const dashboard = document.getElementById('dashboard');
+    if (!dashboard) {
+      console.error('Dashboard element not found');
+      return;
+    }
+    
+    // Remove loading message
+    const loadingMessage = document.getElementById('loading-message');
+    if (loadingMessage) {
+      loadingMessage.remove();
+    }
+    
     dashboard.innerHTML = '';
     
     // Group sessions by worktree
