@@ -288,6 +288,7 @@ class ClaudeOrchestrator {
         <span class="terminal-title">${isClaudeSession ? 'Claude AI' : 'Server'}</span>
         <span class="branch-name" id="branch-${sessionId}">Loading...</span>
         <span class="status-indicator idle" id="status-${sessionId}" title="idle"></span>
+        ${isClaudeSession ? `<button class="restart-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>` : ''}
       </div>
       <div class="terminal-body">
         <div class="terminal" id="terminal-${sessionId}"></div>
@@ -544,10 +545,24 @@ class ClaudeOrchestrator {
     // Check localStorage
     return localStorage.getItem('claude-orchestrator-token');
   }
+
+  restartClaudeSession(sessionId) {
+    console.log(`Restarting Claude session: ${sessionId}`);
+    
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('restart-session', { sessionId });
+      
+      // Update UI to show restarting
+      this.updateSessionStatus(sessionId, 'restarting');
+    } else {
+      this.showError('Not connected to server');
+    }
+  }
 }
 
 // Initialize when DOM is ready
 let orchestrator;
 document.addEventListener('DOMContentLoaded', () => {
   orchestrator = new ClaudeOrchestrator();
+  window.orchestrator = orchestrator; // Make globally available for restart buttons
 });

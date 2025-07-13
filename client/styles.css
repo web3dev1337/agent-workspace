@@ -428,8 +428,36 @@ h1 {
   background: var(--accent-success);
 }
 
+.restart-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  margin-left: auto;
+  transition: all 0.2s;
+}
+
+.restart-btn:hover {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+
 .status-indicator.busy {
   background: var(--accent-warning);
+}
+
+.status-indicator.restarting {
+  background: var(--accent-primary);
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
 }
 
 .status-indicator.waiting {
