@@ -16,6 +16,7 @@ class StatusDetector {
   constructor() {
     // Patterns that indicate Claude is waiting for user input
     this.waitingPatterns = [
+      /\? for shortcuts/i,  // Claude ready prompt
       /\(y\/N\)/i,
       /\(Y\/n\)/i,
       /\[y\/n\]/i,
