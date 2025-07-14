@@ -125,16 +125,16 @@ class ClaudeOrchestrator {
         this.serverPorts.set(sessionId, port);
         console.log(`Server ${sessionId} started on port ${port}`);
         
-        // First open localhost to trigger server initialization
+        // Only open localhost automatically - Hytopia needs manual click due to popup blockers
         setTimeout(() => {
           const localhostUrl = `http://localhost:${port}`;
           console.log(`Opening localhost for initialization: ${localhostUrl}`);
           window.open(localhostUrl, '_blank');
           
-          // Then open Hytopia after a short delay
-          setTimeout(() => {
-            this.playInHytopia(sessionId);
-          }, 1000);
+          // Show notification that server is ready
+          if (this.settings.notifications) {
+            this.showNotification('Server Ready', `Server ${sessionId.replace('-server', '')} is running on port ${port}. Click 🎮 to play!`);
+          }
         }, 2000); // Wait 2 seconds for server to fully start
       });
       
@@ -554,9 +554,12 @@ class ClaudeOrchestrator {
             <button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>
           ` : ''}
           ${isServerSession ? `
-            <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="${this.serverStatuses.get(sessionId) === 'running' ? 'Stop Server' : 'Start Server & Open Hytopia'}">
+            <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="${this.serverStatuses.get(sessionId) === 'running' ? 'Stop Server' : 'Start Server & Open Browser'}">
               ${this.serverStatuses.get(sessionId) === 'running' ? '⏹' : '▶'}
             </button>
+            ${this.serverStatuses.get(sessionId) === 'running' ? `
+              <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
+            ` : ''}
             <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
           ` : ''}
         </div>
@@ -743,9 +746,12 @@ class ClaudeOrchestrator {
     
     // Update controls HTML
     controlsDiv.innerHTML = `
-      <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="${isRunning ? 'Stop Server' : 'Start Server & Open Hytopia'}">
+      <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="${isRunning ? 'Stop Server' : 'Start Server & Open Browser'}">
         ${isRunning ? '⏹' : '▶'}
       </button>
+      ${isRunning ? `
+        <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
+      ` : ''}
       <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
     `;
   }
@@ -905,6 +911,15 @@ class ClaudeOrchestrator {
     console.log(`🎉 Claude ${worktreeId} is ready for input!`);
   }
 
+  showNotification(title, message) {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, {
+        body: message,
+        icon: '/favicon.ico'
+      });
+    }
+  }
+  
   playNotificationSound() {
     // Create a simple notification sound
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
