@@ -9,6 +9,7 @@ class ClaudeOrchestrator {
     this.settings = this.loadSettings();
     this.currentLayout = '2x4';
     this.serverStatuses = new Map(); // Track server running status
+    this.serverPorts = new Map(); // Track server ports
     
     this.init();
   }
@@ -118,6 +119,11 @@ class ClaudeOrchestrator {
 
       this.socket.on('claude-update-required', (updateInfo) => {
         this.showClaudeUpdateRequired(updateInfo);
+      });
+      
+      this.socket.on('server-started', ({ sessionId, port }) => {
+        this.serverPorts.set(sessionId, port);
+        console.log(`Server ${sessionId} started on port ${port}`);
       });
       
       // Set timeout for connection
@@ -499,6 +505,9 @@ class ClaudeOrchestrator {
             <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Start/Stop Server">
               ${this.serverStatuses.get(sessionId) === 'running' ? '⏹' : '▶'}
             </button>
+            ${this.serverStatuses.get(sessionId) === 'running' ? `
+              <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
+            ` : ''}
             <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
           ` : ''}
         </div>
@@ -596,10 +605,11 @@ class ClaudeOrchestrator {
       // Stop server
       this.socket.emit('server-control', { sessionId, action: 'stop' });
       this.serverStatuses.set(sessionId, 'idle');
+      this.serverPorts.delete(sessionId); // Clear port info
     } else {
       // Start server
       this.socket.emit('server-control', { sessionId, action: 'start' });
-      this.serverStatuses.set(sessionId, 'running');
+      // Don't set to running immediately - wait for confirmation
     }
     
     // Update button
@@ -624,6 +634,21 @@ class ClaudeOrchestrator {
     }
     
     this.updateSidebarStatus(sessionId, 'idle');
+    this.updateServerControls(sessionId);
+  }
+  
+  playInHytopia(sessionId) {
+    const port = this.serverPorts.get(sessionId);
+    if (!port) {
+      console.error('No port found for server', sessionId);
+      return;
+    }
+    
+    const serverUrl = `localhost:${port}`;
+    const hytopiaUrl = `https://hytopia.com/play/?${serverUrl}`;
+    
+    console.log(`Opening Hytopia for ${sessionId} at ${hytopiaUrl}`);
+    window.open(hytopiaUrl, '_blank');
   }
   
   updateServerStatus(sessionId, output) {
@@ -636,6 +661,8 @@ class ClaudeOrchestrator {
       if (button) {
         button.textContent = '⏹';
       }
+      
+      this.updateServerControls(sessionId);
     }
     
     // Check if server stopped
@@ -647,7 +674,30 @@ class ClaudeOrchestrator {
       if (button) {
         button.textContent = '▶';
       }
+      
+      this.updateServerControls(sessionId);
     }
+  }
+  
+  updateServerControls(sessionId) {
+    const wrapper = document.getElementById(`wrapper-${sessionId}`);
+    if (!wrapper) return;
+    
+    const controlsDiv = wrapper.querySelector('.terminal-controls');
+    if (!controlsDiv) return;
+    
+    const isRunning = this.serverStatuses.get(sessionId) === 'running';
+    
+    // Update controls HTML
+    controlsDiv.innerHTML = `
+      <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Start/Stop Server">
+        ${isRunning ? '⏹' : '▶'}
+      </button>
+      ${isRunning ? `
+        <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
+      ` : ''}
+      <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
+    `;
   }
   
   handleServerError(sessionId, output) {

@@ -127,7 +127,15 @@ io.on('connection', (socket) => {
     logger.info('Server control request', { sessionId, action });
     
     if (action === 'start') {
-      sessionManager.writeToSession(sessionId, 'bun index.ts\n');
+      // Extract worktree number and assign port accordingly
+      const worktreeMatch = sessionId.match(/work(\d+)/);
+      const worktreeNum = worktreeMatch ? parseInt(worktreeMatch[1]) : 1;
+      const port = 8080 + worktreeNum - 1; // work1=8080, work2=8081, etc.
+      
+      sessionManager.writeToSession(sessionId, `PORT=${port} bun index.ts\n`);
+      
+      // Emit port info back to client
+      socket.emit('server-started', { sessionId, port });
     } else if (action === 'stop') {
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C
     } else if (action === 'kill') {

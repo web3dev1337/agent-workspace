@@ -324,6 +324,20 @@ header h1 {
   border-color: var(--accent-danger);
 }
 
+/* Special style for play button */
+.control-btn[title="Play in Hytopia"] {
+  background: var(--accent-success);
+  color: white;
+  border-color: var(--accent-success);
+  font-weight: bold;
+}
+
+.control-btn[title="Play in Hytopia"]:hover {
+  background: #4fc963;
+  border-color: #4fc963;
+  transform: scale(1.1);
+}
+
 .status-indicator {
   width: 10px;
   height: 10px;
