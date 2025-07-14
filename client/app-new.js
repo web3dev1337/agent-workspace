@@ -240,6 +240,7 @@ class ClaudeOrchestrator {
       });
     } else {
       console.error('Settings toggle button not found!');
+    }
     
     document.getElementById('close-settings').addEventListener('click', () => {
       document.getElementById('settings-panel').classList.add('hidden');
