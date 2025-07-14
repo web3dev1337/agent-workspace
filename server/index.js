@@ -132,10 +132,22 @@ io.on('connection', (socket) => {
       const worktreeNum = worktreeMatch ? parseInt(worktreeMatch[1]) : 1;
       const port = 8080 + worktreeNum - 1; // work1=8080, work2=8081, etc.
       
-      sessionManager.writeToSession(sessionId, `PORT=${port} bun index.ts\n`);
+      // Clear any existing input first with Ctrl+C, then send command
+      sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C to clear
       
-      // Emit port info back to client
-      socket.emit('server-started', { sessionId, port });
+      setTimeout(() => {
+        const command = `PORT=${port} bun index.ts\n`;
+        logger.info('Starting server with command', { sessionId, command, port });
+        
+        const written = sessionManager.writeToSession(sessionId, command);
+        if (!written) {
+          logger.error('Failed to write command to session', { sessionId });
+          return;
+        }
+        
+        // Emit port info back to client
+        socket.emit('server-started', { sessionId, port });
+      }, 100); // Small delay after Ctrl+C
     } else if (action === 'stop') {
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C
     } else if (action === 'kill') {
