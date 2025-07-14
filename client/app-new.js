@@ -124,6 +124,11 @@ class ClaudeOrchestrator {
       this.socket.on('server-started', ({ sessionId, port }) => {
         this.serverPorts.set(sessionId, port);
         console.log(`Server ${sessionId} started on port ${port}`);
+        
+        // Automatically open Hytopia when server starts
+        setTimeout(() => {
+          this.playInHytopia(sessionId);
+        }, 2000); // Wait 2 seconds for server to fully start
       });
       
       // Set timeout for connection
@@ -502,12 +507,9 @@ class ClaudeOrchestrator {
             <button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>
           ` : ''}
           ${isServerSession ? `
-            <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Start/Stop Server">
+            <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="${this.serverStatuses.get(sessionId) === 'running' ? 'Stop Server' : 'Start Server & Open Hytopia'}">
               ${this.serverStatuses.get(sessionId) === 'running' ? '⏹' : '▶'}
             </button>
-            ${this.serverStatuses.get(sessionId) === 'running' ? `
-              <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
-            ` : ''}
             <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
           ` : ''}
         </div>
@@ -652,8 +654,12 @@ class ClaudeOrchestrator {
   }
   
   updateServerStatus(sessionId, output) {
-    // Check if server started
-    if (output.includes('Server started') || output.includes('Listening on')) {
+    // Check if server started - look for various startup messages
+    if (output.includes('Server started') || 
+        output.includes('Listening on') || 
+        output.includes('Server running') ||
+        output.includes('Started server') ||
+        output.includes('🚀')) {
       this.serverStatuses.set(sessionId, 'running');
       this.updateSidebarStatus(sessionId, 'running');
       
@@ -690,12 +696,9 @@ class ClaudeOrchestrator {
     
     // Update controls HTML
     controlsDiv.innerHTML = `
-      <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Start/Stop Server">
+      <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="${isRunning ? 'Stop Server' : 'Start Server & Open Hytopia'}">
         ${isRunning ? '⏹' : '▶'}
       </button>
-      ${isRunning ? `
-        <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
-      ` : ''}
       <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
     `;
   }
