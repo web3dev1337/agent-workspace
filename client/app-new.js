@@ -19,9 +19,15 @@ class ClaudeOrchestrator {
       this.terminalManager = new TerminalManager(this);
       this.notificationManager = new NotificationManager(this);
       
+      // Request notification permission if enabled
+      if (this.settings.notifications) {
+        this.notificationManager.requestPermission();
+      }
+      
       // Set up UI
       this.setupEventListeners();
       this.applyTheme();
+      this.syncSettingsUI();
       
       // Connect to server
       await this.connectToServer();
@@ -40,10 +46,13 @@ class ClaudeOrchestrator {
   
   async connectToServer() {
     return new Promise((resolve, reject) => {
+      console.log('Attempting to connect to server...');
       const authToken = this.getAuthToken();
       const socketOptions = authToken ? { auth: { token: authToken } } : {};
       
-      this.socket = io(socketOptions);
+      // Explicitly connect to the server URL
+      this.socket = io(window.location.origin, socketOptions);
+      console.log('Socket created, waiting for connection...');
       
       // Connection events
       this.socket.on('connect', () => {
@@ -69,6 +78,7 @@ class ClaudeOrchestrator {
       
       // Session events
       this.socket.on('sessions', (sessionStates) => {
+        console.log('Received sessions event:', sessionStates);
         this.handleInitialSessions(sessionStates);
       });
       
@@ -111,11 +121,18 @@ class ClaudeOrchestrator {
       });
       
       // Set timeout for connection
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         if (!this.socket.connected) {
+          console.error('Connection timeout - server may not be reachable');
+          this.showError('Connection timeout - please check if server is running on port 3000');
           reject(new Error('Connection timeout'));
         }
       }, 10000);
+      
+      // Clear timeout on successful connection
+      this.socket.on('connect', () => {
+        clearTimeout(timeoutId);
+      });
     });
   }
   
@@ -220,6 +237,12 @@ class ClaudeOrchestrator {
       });
     }
     
+    // Hide loading message FIRST
+    const loadingMessage = document.getElementById('loading-message');
+    if (loadingMessage) {
+      loadingMessage.style.display = 'none';
+    }
+    
     // Build sidebar
     this.buildSidebar();
     
@@ -314,17 +337,43 @@ class ClaudeOrchestrator {
   }
   
   showAllTerminals() {
-    const sessions = Array.from(this.sessions.keys());
-    this.showTerminals(sessions);
+    // Get all sessions and create proper order: work1-claude, work1-server, work2-claude, work2-server, etc.
+    const orderedSessions = [];
+    for (let i = 1; i <= 8; i++) {
+      const claudeId = `work${i}-claude`;
+      const serverId = `work${i}-server`;
+      
+      if (this.sessions.has(claudeId)) {
+        orderedSessions.push(claudeId);
+      }
+      if (this.sessions.has(serverId)) {
+        orderedSessions.push(serverId);
+      }
+    }
+    
+    console.log('Showing all terminals in order:', orderedSessions);
+    this.showTerminals(orderedSessions);
   }
   
   showClaudeOnly() {
-    const sessions = Array.from(this.sessions.keys()).filter(id => id.includes('-claude'));
+    const sessions = Array.from(this.sessions.keys())
+      .filter(id => id.includes('-claude'))
+      .sort((a, b) => {
+        const aNum = parseInt(a.match(/work(\d+)/)?.[1] || '0');
+        const bNum = parseInt(b.match(/work(\d+)/)?.[1] || '0');
+        return aNum - bNum;
+      });
     this.showTerminals(sessions);
   }
   
   showServersOnly() {
-    const sessions = Array.from(this.sessions.keys()).filter(id => id.includes('-server'));
+    const sessions = Array.from(this.sessions.keys())
+      .filter(id => id.includes('-server'))
+      .sort((a, b) => {
+        const aNum = parseInt(a.match(/work(\d+)/)?.[1] || '0');
+        const bNum = parseInt(b.match(/work(\d+)/)?.[1] || '0');
+        return aNum - bNum;
+      });
     this.showTerminals(sessions);
   }
   
@@ -374,39 +423,54 @@ class ClaudeOrchestrator {
     this.activeView = sessionIds;
     const grid = document.getElementById('terminal-grid');
     
-    // Store existing terminal data
-    const existingTerminals = new Map();
-    this.terminalManager.terminals.forEach((terminal, id) => {
-      existingTerminals.set(id, {
-        terminal: terminal,
-        content: terminal.buffer.active.getLine(0) // Check if has content
-      });
+    // Sort sessionIds to ensure proper ordering: work1-claude, work1-server, work2-claude, work2-server, etc.
+    const sortedSessionIds = sessionIds.slice().sort((a, b) => {
+      // Extract worktree number
+      const getWorkNum = (id) => parseInt(id.match(/work(\d+)/)?.[1] || 0);
+      const numA = getWorkNum(a);
+      const numB = getWorkNum(b);
+      
+      // First sort by worktree number
+      if (numA !== numB) return numA - numB;
+      
+      // Then claude before server
+      if (a.includes('claude') && b.includes('server')) return -1;
+      if (a.includes('server') && b.includes('claude')) return 1;
+      return 0;
     });
     
+    // Clear grid but don't destroy terminals
     grid.innerHTML = '';
     
-    // Create terminals for active view
-    sessionIds.forEach((sessionId, index) => {
+    // Create terminal elements for active view
+    sortedSessionIds.forEach((sessionId) => {
       const session = this.sessions.get(sessionId);
       if (session) {
-        const terminal = this.createTerminalElement(sessionId, session);
-        grid.appendChild(terminal);
-        
-        // Initialize or restore terminal
+        const wrapper = this.createTerminalElement(sessionId, session);
+        grid.appendChild(wrapper);
+      }
+    });
+    
+    // Now handle terminal instances
+    sortedSessionIds.forEach((sessionId, index) => {
+      const session = this.sessions.get(sessionId);
+      if (session) {
         setTimeout(() => {
-          if (existingTerminals.has(sessionId)) {
-            // Terminal already exists, just re-attach it
-            const terminalEl = document.getElementById(`terminal-${sessionId}`);
-            if (terminalEl && this.terminalManager.terminals.has(sessionId)) {
-              const term = this.terminalManager.terminals.get(sessionId);
-              term.open(terminalEl);
-              this.terminalManager.fitTerminal(sessionId);
-            }
+          const terminalEl = document.getElementById(`terminal-${sessionId}`);
+          if (!terminalEl) return;
+          
+          // Always clear the element first to avoid duplicates
+          terminalEl.innerHTML = '';
+          
+          if (this.terminalManager.terminals.has(sessionId)) {
+            // Don't re-open existing terminals, they're already attached
+            // Just resize them
+            this.terminalManager.fitTerminal(sessionId);
           } else {
-            // Create new terminal
+            // Create new terminal only if it doesn't exist
             this.terminalManager.createTerminal(sessionId, session);
           }
-        }, 50 + (index * 50)); // Stagger creation
+        }, 50 + (index * 25)); // Reduced stagger time
       }
     });
   }
@@ -763,8 +827,8 @@ class ClaudeOrchestrator {
   loadSettings() {
     const stored = localStorage.getItem('claude-orchestrator-settings');
     const defaults = {
-      notifications: false,
-      sounds: false,
+      notifications: true,
+      sounds: true,
       autoScroll: true,
       theme: 'dark'
     };
@@ -786,6 +850,14 @@ class ClaudeOrchestrator {
     } else {
       document.body.classList.remove('light-theme');
     }
+  }
+  
+  syncSettingsUI() {
+    // Sync checkbox states with settings
+    document.getElementById('enable-notifications').checked = this.settings.notifications;
+    document.getElementById('enable-sounds').checked = this.settings.sounds;
+    document.getElementById('auto-scroll').checked = this.settings.autoScroll;
+    document.getElementById('theme-select').value = this.settings.theme;
   }
   
   getAuthToken() {

@@ -46,7 +46,20 @@ const io = new Server(httpServer, {
 });
 
 // Serve static files from client directory
-app.use(express.static(path.join(__dirname, '../client')));
+const clientPath = path.join(__dirname, '../client');
+logger.info(`Serving static files from: ${clientPath}`);
+app.use(express.static(clientPath));
+
+// Log all requests for debugging
+app.use((req, res, next) => {
+  logger.info(`Request: ${req.method} ${req.path}`);
+  next();
+});
+
+// Serve the new UI at /new
+app.get('/new', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/index-new.html'));
+});
 
 // Basic auth middleware (optional)
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
