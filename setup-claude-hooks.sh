@@ -24,7 +24,7 @@ for i in {1..8}; do
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST http://localhost:$ORCHESTRATOR_PORT/api/claude-ready -H 'Content-Type: application/json' -d '{\"worktree\": \"work$i\", \"sessionId\": \"work$i-claude\"}' || true"
+            "command": "echo 'Claude ready work$i' && curl -s -X POST http://localhost:$ORCHESTRATOR_PORT/api/claude-ready -H 'Content-Type: application/json' -d '{\\\"worktree\\\": \\\"work$i\\\", \\\"sessionId\\\": \\\"work$i-claude\\\"}' || true"
           }
         ]
       }

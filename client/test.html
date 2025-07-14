@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Claude Orchestrator Test</title>
+</head>
+<body>
+    <h1>Connection Test</h1>
+    <div id="status">Testing...</div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const statusDiv = document.getElementById('status');
+        
+        try {
+            statusDiv.innerHTML += '<br>1. Socket.IO library loaded';
+            
+            const socket = io();
+            statusDiv.innerHTML += '<br>2. Socket created';
+            
+            socket.on('connect', () => {
+                statusDiv.innerHTML += '<br>3. Connected to server!';
+                statusDiv.style.color = 'green';
+            });
+            
+            socket.on('connect_error', (error) => {
+                statusDiv.innerHTML += '<br>3. Connection error: ' + error.message;
+                statusDiv.style.color = 'red';
+            });
+            
+            socket.on('sessions', (data) => {
+                statusDiv.innerHTML += '<br>4. Received sessions: ' + Object.keys(data).length + ' sessions';
+            });
+            
+        } catch (error) {
+            statusDiv.innerHTML += '<br>Error: ' + error.message;
+            statusDiv.style.color = 'red';
+        }
+    </script>
+</body>
+</html>

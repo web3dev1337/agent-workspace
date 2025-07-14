@@ -1,4 +1,9 @@
 // Terminal management with Xterm.js
+// Ensure Terminal is available globally
+if (typeof Terminal === 'undefined' && typeof window !== 'undefined' && window.Terminal) {
+  window.Terminal = window.Terminal;
+}
+
 class TerminalManager {
   constructor(orchestrator) {
     this.orchestrator = orchestrator;
@@ -61,6 +66,7 @@ class TerminalManager {
   createTerminal(sessionId, sessionInfo) {
     // Skip if already exists
     if (this.terminals.has(sessionId)) {
+      console.warn(`Terminal ${sessionId} already exists, skipping creation`);
       return this.terminals.get(sessionId);
     }
     
@@ -101,6 +107,9 @@ class TerminalManager {
     this.fitAddons.set(sessionId, fitAddon);
     this.searchAddons.set(sessionId, searchAddon);
     this.webLinksAddons.set(sessionId, webLinksAddon);
+    
+    // Clear any existing content first
+    terminalElement.innerHTML = '';
     
     // Open terminal in DOM
     terminal.open(terminalElement);
@@ -433,8 +442,12 @@ class TerminalManager {
     
     // Clean up resize observer
     const terminalElement = document.getElementById(`terminal-${sessionId}`);
-    if (terminalElement && terminalElement._resizeObserver) {
-      terminalElement._resizeObserver.disconnect();
+    if (terminalElement) {
+      if (terminalElement._resizeObserver) {
+        terminalElement._resizeObserver.disconnect();
+      }
+      // Clear the element
+      terminalElement.innerHTML = '';
     }
   }
   
