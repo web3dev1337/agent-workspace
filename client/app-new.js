@@ -125,9 +125,16 @@ class ClaudeOrchestrator {
         this.serverPorts.set(sessionId, port);
         console.log(`Server ${sessionId} started on port ${port}`);
         
-        // Automatically open Hytopia when server starts
+        // First open localhost to trigger server initialization
         setTimeout(() => {
-          this.playInHytopia(sessionId);
+          const localhostUrl = `http://localhost:${port}`;
+          console.log(`Opening localhost for initialization: ${localhostUrl}`);
+          window.open(localhostUrl, '_blank');
+          
+          // Then open Hytopia after a short delay
+          setTimeout(() => {
+            this.playInHytopia(sessionId);
+          }, 1000);
         }, 2000); // Wait 2 seconds for server to fully start
       });
       
@@ -148,14 +155,42 @@ class ClaudeOrchestrator {
   }
   
   setupEventListeners() {
-    // Sidebar worktree clicks
-    document.getElementById('worktree-list').addEventListener('click', (e) => {
-      const item = e.target.closest('.worktree-item');
-      if (item) {
-        const worktreeId = item.dataset.worktreeId;
-        this.showWorktree(worktreeId);
+    // Check if elements exist before adding listeners
+    const elements = {
+      'worktree-list': null,
+      'view-all': null,
+      'view-claude-only': null,
+      'view-servers-only': null,
+      'view-presets': null,
+      'close-presets': null,
+      'grid-layout': null,
+      'settings-toggle': null,
+      'close-settings': null,
+      'notification-toggle': null,
+      'enable-notifications': null,
+      'enable-sounds': null,
+      'auto-scroll': null,
+      'theme-select': null
+    };
+    
+    // Check all elements exist
+    for (const id in elements) {
+      elements[id] = document.getElementById(id);
+      if (!elements[id]) {
+        console.warn(`Element not found: ${id}`);
       }
-    });
+    }
+    
+    // Sidebar worktree clicks
+    if (elements['worktree-list']) {
+      elements['worktree-list'].addEventListener('click', (e) => {
+        const item = e.target.closest('.worktree-item');
+        if (item) {
+          const worktreeId = item.dataset.worktreeId;
+          this.showWorktree(worktreeId);
+        }
+      });
+    }
     
     // View buttons
     document.getElementById('view-all').addEventListener('click', () => {
@@ -194,9 +229,17 @@ class ClaudeOrchestrator {
     });
     
     // Settings
-    document.getElementById('settings-toggle').addEventListener('click', () => {
-      document.getElementById('settings-panel').classList.toggle('hidden');
-    });
+    const settingsToggle = document.getElementById('settings-toggle');
+    if (settingsToggle) {
+      settingsToggle.addEventListener('click', () => {
+        const panel = document.getElementById('settings-panel');
+        if (panel) {
+          panel.classList.toggle('hidden');
+          console.log('Settings panel toggled');
+        }
+      });
+    } else {
+      console.error('Settings toggle button not found!');
     
     document.getElementById('close-settings').addEventListener('click', () => {
       document.getElementById('settings-panel').classList.add('hidden');
@@ -227,9 +270,12 @@ class ClaudeOrchestrator {
       this.applyTheme();
     });
     
-    // Notification toggle
+    // Notification toggle - for now, just open settings to notification section
     document.getElementById('notification-toggle').addEventListener('click', () => {
-      // Toggle notification panel (if you want to add one)
+      // Open settings panel
+      document.getElementById('settings-panel').classList.remove('hidden');
+      // Focus on notifications checkbox
+      document.getElementById('enable-notifications').focus();
     });
   }
   
