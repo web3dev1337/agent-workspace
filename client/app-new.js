@@ -138,6 +138,17 @@ class ClaudeOrchestrator {
         }, 2000); // Wait 2 seconds for server to fully start
       });
       
+      this.socket.on('branch-update', ({ sessionId, branch }) => {
+        const session = this.sessions.get(sessionId);
+        if (session) {
+          session.branch = branch;
+          console.log(`Branch updated for ${sessionId}: ${branch}`);
+          
+          // Update sidebar display
+          this.buildSidebar();
+        }
+      });
+      
       // Set timeout for connection
       const timeoutId = setTimeout(() => {
         if (!this.socket.connected) {
