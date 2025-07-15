@@ -292,9 +292,15 @@ header h1 {
 }
 
 .terminal-branch {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+  font-size: 0.95rem;
+  color: var(--accent-primary);
   font-family: var(--font-mono);
+  font-weight: 600;
+  margin-left: var(--space-sm);
+  background: rgba(99, 179, 237, 0.1);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-primary);
 }
 
 .terminal-controls {
