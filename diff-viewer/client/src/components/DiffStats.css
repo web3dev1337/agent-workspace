@@ -1,0 +1,53 @@
+.diff-stats {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.stat-item.additions .stat-value {
+  color: var(--accent-success);
+}
+
+.stat-item.deletions .stat-value {
+  color: var(--accent-danger);
+}
+
+.stat-item.reduction .stat-value {
+  color: var(--accent-primary);
+}
+
+.diff-bar {
+  width: 100px;
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+}
+
+.diff-bar-additions {
+  background: var(--accent-success);
+  height: 100%;
+}
+
+.diff-bar-deletions {
+  background: var(--accent-danger);
+  height: 100%;
+}
