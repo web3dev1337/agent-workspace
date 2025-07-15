@@ -307,9 +307,23 @@ class SessionManager extends EventEmitter {
   }
   
   resetInactivityTimer(session) {
-    clearTimeout(session.inactivityTimer);
+    // Clear existing timer
+    if (session.inactivityTimer) {
+      clearTimeout(session.inactivityTimer);
+      session.inactivityTimer = null;
+    }
     
-    return setTimeout(() => {
+    // Don't set new timer if session is being terminated
+    if (!this.sessions.has(session.id)) {
+      return null;
+    }
+    
+    session.inactivityTimer = setTimeout(() => {
+      // Double-check session still exists before terminating
+      if (!this.sessions.has(session.id)) {
+        return;
+      }
+      
       logger.warn('Session inactive, terminating', { 
         sessionId: session.id,
         lastActivity: new Date(session.lastActivity).toISOString()
@@ -317,6 +331,8 @@ class SessionManager extends EventEmitter {
       
       this.terminateSession(session.id);
     }, this.sessionTimeout);
+    
+    return session.inactivityTimer;
   }
   
   checkProcessLimit(session) {
@@ -342,18 +358,30 @@ class SessionManager extends EventEmitter {
   
   terminateSession(sessionId) {
     const session = this.sessions.get(sessionId);
-    if (!session || !session.pty) return;
+    if (!session) return;
     
     logger.info('Terminating session', { sessionId });
     
-    try {
-      session.pty.kill();
-    } catch (error) {
-      logger.error('Failed to terminate session', { 
-        sessionId, 
-        error: error.message 
-      });
+    // Clear the inactivity timer to prevent infinite loops
+    if (session.inactivityTimer) {
+      clearTimeout(session.inactivityTimer);
+      session.inactivityTimer = null;
     }
+    
+    // Kill the PTY process if it exists
+    if (session.pty) {
+      try {
+        session.pty.kill();
+      } catch (error) {
+        logger.error('Failed to kill PTY', { 
+          sessionId, 
+          error: error.message 
+        });
+      }
+    }
+    
+    // Remove from sessions map
+    this.sessions.delete(sessionId);
   }
   
   restartSession(sessionId) {
