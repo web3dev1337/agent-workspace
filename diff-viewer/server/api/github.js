@@ -1,5 +1,6 @@
 const express = require('express');
 const { Octokit } = require('@octokit/rest');
+const { getCache } = require('../cache/database');
 const router = express.Router();
 
 // Initialize GitHub client
@@ -7,20 +8,18 @@ const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN
 });
 
-// Cache for GitHub data (simple in-memory for MVP)
-const cache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// Get database cache instance
+const dbCache = getCache();
 
 // Get PR data
 router.get('/pr/:owner/:repo/:pr', async (req, res) => {
   try {
     const { owner, repo, pr } = req.params;
-    const cacheKey = `pr:${owner}/${repo}/${pr}`;
     
     // Check cache
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return res.json(cached.data);
+    const cached = dbCache.getMetadata('pr', owner, repo, pr);
+    if (cached) {
+      return res.json(cached);
     }
 
     // Fetch PR data
@@ -68,10 +67,7 @@ router.get('/pr/:owner/:repo/:pr', async (req, res) => {
     };
 
     // Cache result
-    cache.set(cacheKey, {
-      data: result,
-      timestamp: Date.now()
-    });
+    dbCache.setMetadata('pr', owner, repo, pr, result);
 
     res.json(result);
   } catch (error) {
@@ -87,12 +83,11 @@ router.get('/pr/:owner/:repo/:pr', async (req, res) => {
 router.get('/commit/:owner/:repo/:sha', async (req, res) => {
   try {
     const { owner, repo, sha } = req.params;
-    const cacheKey = `commit:${owner}/${repo}/${sha}`;
     
     // Check cache
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return res.json(cached.data);
+    const cached = dbCache.getMetadata('commit', owner, repo, sha);
+    if (cached) {
+      return res.json(cached);
     }
 
     // Fetch commit data
@@ -126,10 +121,7 @@ router.get('/commit/:owner/:repo/:sha', async (req, res) => {
     };
 
     // Cache result
-    cache.set(cacheKey, {
-      data: result,
-      timestamp: Date.now()
-    });
+    dbCache.setMetadata('commit', owner, repo, sha, result);
 
     res.json(result);
   } catch (error) {
@@ -170,6 +162,35 @@ router.get('/file/:owner/:repo/:path(*)', async (req, res) => {
     console.error('GitHub API error:', error);
     res.status(error.status || 500).json({
       error: 'Failed to fetch file content',
+      message: error.message
+    });
+  }
+});
+
+// Get cache statistics
+router.get('/cache/stats', (req, res) => {
+  try {
+    const stats = dbCache.getStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to get cache stats',
+      message: error.message
+    });
+  }
+});
+
+// Clear expired cache entries
+router.post('/cache/cleanup', (req, res) => {
+  try {
+    const deletedCount = dbCache.cleanup();
+    res.json({ 
+      message: 'Cache cleanup completed',
+      deletedEntries: deletedCount 
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to cleanup cache',
       message: error.message
     });
   }

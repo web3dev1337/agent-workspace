@@ -1,10 +1,19 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const http = require('http');
 require('dotenv').config();
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.DIFF_VIEWER_PORT || 7655;
+
+// Initialize WebSocket
+const WebSocketManager = require('./websocket');
+const wsManager = new WebSocketManager(server);
+
+// Make WebSocket manager available to routes
+app.locals.wsManager = wsManager;
 
 // Middleware
 app.use(cors());
@@ -16,6 +25,8 @@ app.use(express.static(path.join(__dirname, '../client/dist')));
 // API Routes
 app.use('/api/github', require('./api/github'));
 app.use('/api/diff', require('./api/diff'));
+app.use('/api/export', require('./api/export'));
+app.use('/api/ai', require('./api/ai-summary'));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -41,7 +52,8 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🔍 Diff Viewer running on http://localhost:${PORT}`);
   console.log(`📊 API available at http://localhost:${PORT}/api`);
+  console.log(`🔌 WebSocket ready for real-time updates`);
 });
