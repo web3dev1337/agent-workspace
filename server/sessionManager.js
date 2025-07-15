@@ -27,6 +27,7 @@ class SessionManager extends EventEmitter {
     this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || '/home/ab';
     this.worktreeCount = parseInt(process.env.WORKTREE_COUNT || '8');
     this.sessionTimeout = parseInt(process.env.SESSION_TIMEOUT || '1800000'); // 30 minutes
+    this.branchRefreshInterval = null;
     this.maxProcessesPerSession = parseInt(process.env.MAX_PROCESSES_PER_SESSION || '50');
     
     // Build worktree configuration
@@ -90,6 +91,28 @@ class SessionManager extends EventEmitter {
           error: error.message 
         });
       }
+    }
+    
+    // Start periodic branch refresh (every 30 seconds)
+    this.startBranchRefresh();
+  }
+  
+  startBranchRefresh() {
+    if (this.branchRefreshInterval) {
+      clearInterval(this.branchRefreshInterval);
+    }
+    
+    this.branchRefreshInterval = setInterval(() => {
+      this.worktrees.forEach(worktree => {
+        this.updateGitBranch(worktree.id, worktree.path);
+      });
+    }, 30000); // Refresh every 30 seconds
+  }
+  
+  stopBranchRefresh() {
+    if (this.branchRefreshInterval) {
+      clearInterval(this.branchRefreshInterval);
+      this.branchRefreshInterval = null;
     }
   }
   
@@ -226,6 +249,14 @@ class SessionManager extends EventEmitter {
       if (session.status === 'waiting' && session.type === 'claude') {
         session.status = 'busy';
         this.emitStatusUpdate(sessionId, 'busy');
+      }
+      
+      // Check if this is a git command that might change branches
+      if (data.includes('git checkout') || data.includes('git switch') || data.includes('git branch')) {
+        // Schedule branch refresh after a short delay
+        setTimeout(() => {
+          this.updateGitBranch(session.worktreeId, session.cwd);
+        }, 1000);
       }
       
       return true;
