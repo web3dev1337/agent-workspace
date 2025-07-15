@@ -300,6 +300,22 @@ class ClaudeOrchestrator {
       // Focus on notifications checkbox
       document.getElementById('enable-notifications').focus();
     });
+    
+    // Handle window resize to fix blank terminals
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        // Refit all visible terminals
+        this.activeView.forEach(sessionId => {
+          this.terminalManager.fitTerminal(sessionId);
+          const term = this.terminalManager.terminals.get(sessionId);
+          if (term) {
+            term.refresh(0, term.rows - 1);
+          }
+        });
+      }, 250);
+    });
   }
   
   handleInitialSessions(sessionStates) {
@@ -539,13 +555,19 @@ class ClaudeOrchestrator {
           const terminalEl = document.getElementById(`terminal-${sessionId}`);
           if (!terminalEl) return;
           
-          // Always clear the element first to avoid duplicates
-          terminalEl.innerHTML = '';
-          
           if (this.terminalManager.terminals.has(sessionId)) {
-            // Don't re-open existing terminals, they're already attached
-            // Just resize them
+            // Re-attach existing terminal to the new element
+            const term = this.terminalManager.terminals.get(sessionId);
+            
+            // Clear and re-open the terminal in the new element
+            terminalEl.innerHTML = '';
+            term.open(terminalEl);
+            
+            // Force a resize and refresh
             this.terminalManager.fitTerminal(sessionId);
+            
+            // Force a screen refresh to show content
+            term.refresh(0, term.rows - 1);
           } else {
             // Create new terminal only if it doesn't exist
             this.terminalManager.createTerminal(sessionId, session);
@@ -574,6 +596,7 @@ class ClaudeOrchestrator {
         <div class="terminal-controls">
           ${isClaudeSession ? `
             <button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>
+            <button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>
             ${this.getGitHubButtons(sessionId)}
           ` : ''}
           ${isServerSession ? `
@@ -784,10 +807,13 @@ class ClaudeOrchestrator {
     
     // Always show branch button (uses current session's git info)
     const session = this.sessions.get(sessionId);
-    if (session && session.branch) {
+    if (session && session.branch && session.branch !== 'master') {
       const worktreeId = sessionId.split('-')[0];
       const branchUrl = `https://github.com/NeuralPixelGames/HyFire2/tree/${session.branch}`;
+      const compareUrl = `https://github.com/NeuralPixelGames/HyFire2/compare/master...${session.branch}`;
+      
       buttons += `<button class="control-btn" onclick="window.open('${branchUrl}', '_blank')" title="View Branch on GitHub">🌿</button>`;
+      buttons += `<button class="control-btn" onclick="window.open('${compareUrl}', '_blank')" title="View Branch Diff">📊</button>`;
     }
     
     // Show PR button if PR link detected
@@ -922,6 +948,25 @@ class ClaudeOrchestrator {
       this.updateSessionStatus(sessionId, 'restarting');
     } else {
       this.showError('Not connected to server');
+    }
+  }
+  
+  refreshTerminal(sessionId) {
+    console.log('Refreshing terminal:', sessionId);
+    const term = this.terminalManager.terminals.get(sessionId);
+    if (term) {
+      // Force fit and refresh
+      this.terminalManager.fitTerminal(sessionId);
+      term.refresh(0, term.rows - 1);
+      
+      // Also try scrolling to bottom to trigger redraw
+      term.scrollToBottom();
+      
+      // If still blank, re-attach to DOM
+      const terminalEl = document.getElementById(`terminal-${sessionId}`);
+      if (terminalEl && terminalEl.children.length === 0) {
+        term.open(terminalEl);
+      }
     }
   }
   
