@@ -780,7 +780,7 @@ class ClaudeOrchestrator {
     const session = this.sessions.get(sessionId);
     if (session && session.branch) {
       const worktreeId = sessionId.split('-')[0];
-      const branchUrl = `https://github.com/web3dev1337/claude-orchestrator/tree/${session.branch}`;
+      const branchUrl = `https://github.com/NeuralPixelGames/HyFire2/tree/${session.branch}`;
       buttons += `<button class="control-btn" onclick="window.open('${branchUrl}', '_blank')" title="View Branch on GitHub">🌿</button>`;
     }
     
