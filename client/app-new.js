@@ -10,6 +10,7 @@ class ClaudeOrchestrator {
     this.currentLayout = '2x4';
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
+    this.githubLinks = new Map(); // Track GitHub PR/branch links per session
     
     this.init();
   }
@@ -95,6 +96,16 @@ class ClaudeOrchestrator {
         if (sessionId.includes('-server')) {
           this.updateServerStatus(sessionId, data);
         }
+        
+        // Detect GitHub URLs in Claude sessions
+        if (sessionId.includes('-claude')) {
+          this.detectGitHubLinks(sessionId, data);
+        }
+        
+        // Detect clear commands to reset PR links
+        if (data.includes('/clear') || data.includes('clear')) {
+          this.clearGitHubLinks(sessionId);
+        }
       });
       
       this.socket.on('status-update', ({ sessionId, status }) => {
@@ -127,7 +138,7 @@ class ClaudeOrchestrator {
         
         // Only open localhost automatically - Hytopia needs manual click due to popup blockers
         setTimeout(() => {
-          const localhostUrl = `http://localhost:${port}`;
+          const localhostUrl = `https://localhost:${port}`;
           console.log(`Opening localhost for initialization: ${localhostUrl}`);
           window.open(localhostUrl, '_blank');
           
@@ -563,6 +574,7 @@ class ClaudeOrchestrator {
         <div class="terminal-controls">
           ${isClaudeSession ? `
             <button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>
+            ${this.getGitHubButtons(sessionId)}
           ` : ''}
           ${isServerSession ? `
             <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="${this.serverStatuses.get(sessionId) === 'running' ? 'Stop Server' : 'Start Server & Open Browser'}">
@@ -570,7 +582,9 @@ class ClaudeOrchestrator {
             </button>
             ${this.serverStatuses.get(sessionId) === 'running' ? `
               <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
+              <button class="control-btn" onclick="window.orchestrator.copyLocalhostUrl('${sessionId}')" title="Copy HTTPS localhost URL">📋</button>
             ` : ''}
+            <button class="control-btn" onclick="window.orchestrator.openHytopiaWebsite()" title="Open Hytopia Website">🌐</button>
             <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
           ` : ''}
         </div>
@@ -714,6 +728,84 @@ class ClaudeOrchestrator {
     window.open(hytopiaUrl, '_blank');
   }
   
+  detectGitHubLinks(sessionId, data) {
+    // Look for GitHub URLs
+    const githubUrlPattern = /https:\/\/github\.com\/[^\s\)]+/g;
+    const matches = data.match(githubUrlPattern);
+    
+    if (matches) {
+      const links = this.githubLinks.get(sessionId) || {};
+      
+      matches.forEach(url => {
+        if (url.includes('/pull/')) {
+          links.pr = url;
+        } else if (url.includes('/tree/') || url.includes('/commits/')) {
+          links.branch = url;
+        }
+      });
+      
+      this.githubLinks.set(sessionId, links);
+      this.updateTerminalControls(sessionId);
+    }
+  }
+  
+  clearGitHubLinks(sessionId) {
+    this.githubLinks.delete(sessionId);
+    this.updateTerminalControls(sessionId);
+  }
+  
+  copyLocalhostUrl(sessionId) {
+    const port = this.serverPorts.get(sessionId);
+    if (!port) {
+      console.error('No port found for server', sessionId);
+      return;
+    }
+    
+    const url = `https://localhost:${port}`;
+    navigator.clipboard.writeText(url).then(() => {
+      console.log(`Copied ${url} to clipboard`);
+      this.showNotification('Copied!', `${url} copied to clipboard`);
+    });
+  }
+  
+  openHytopiaWebsite() {
+    window.open('https://hytopia.com', '_blank');
+  }
+  
+  getGitHubButtons(sessionId) {
+    const links = this.githubLinks.get(sessionId) || {};
+    let buttons = '';
+    
+    // Always show branch button (uses current session's git info)
+    const session = this.sessions.get(sessionId);
+    if (session && session.branch) {
+      const worktreeId = sessionId.split('-')[0];
+      const branchUrl = `https://github.com/web3dev1337/claude-orchestrator/tree/${session.branch}`;
+      buttons += `<button class="control-btn" onclick="window.open('${branchUrl}', '_blank')" title="View Branch on GitHub">🌿</button>`;
+    }
+    
+    // Show PR button if PR link detected
+    if (links.pr) {
+      buttons += `<button class="control-btn" onclick="window.open('${links.pr}', '_blank')" title="View PR on GitHub">📥</button>`;
+    }
+    
+    return buttons;
+  }
+  
+  updateTerminalControls(sessionId) {
+    // Trigger a refresh of the terminal element to update buttons
+    const terminalWrapper = document.querySelector(`[id*="${sessionId}"]`);
+    if (terminalWrapper) {
+      // Find the controls div and update it
+      const controlsDiv = terminalWrapper.querySelector('.terminal-controls');
+      if (controlsDiv && sessionId.includes('-claude')) {
+        const restartBtn = controlsDiv.innerHTML.includes('↻') ? 
+          `<button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>` : '';
+        controlsDiv.innerHTML = restartBtn + this.getGitHubButtons(sessionId);
+      }
+    }
+  }
+  
   updateServerStatus(sessionId, output) {
     // Check if server started - look for various startup messages
     if (output.includes('Server started') || 
@@ -762,7 +854,9 @@ class ClaudeOrchestrator {
       </button>
       ${isRunning ? `
         <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
+        <button class="control-btn" onclick="window.orchestrator.copyLocalhostUrl('${sessionId}')" title="Copy HTTPS localhost URL">📋</button>
       ` : ''}
+      <button class="control-btn" onclick="window.orchestrator.openHytopiaWebsite()" title="Open Hytopia Website">🌐</button>
       <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
     `;
   }
