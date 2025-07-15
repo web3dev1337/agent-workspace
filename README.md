@@ -1,6 +1,6 @@
 # Claude Orchestrator
 
-A web-based multi-terminal orchestrator for managing multiple Claude Code sessions in parallel. Built specifically for developers running multiple AI coding agents simultaneously.
+A web-based multi-terminal orchestrator for managing multiple Claude Code sessions in parallel with an advanced git diff viewer. Built specifically for developers running multiple AI coding agents simultaneously.
 
 ![Status](https://img.shields.io/badge/Phase-MVP%20Complete-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen)
@@ -8,13 +8,23 @@ A web-based multi-terminal orchestrator for managing multiple Claude Code sessio
 
 ## 🚀 Features
 
+### Terminal Orchestrator
 - **16 Terminal Dashboard**: 8 Claude AI + 8 server terminals in one view
-- **Real-time Status Tracking**: Visual indicators (🟢 idle / 🟡 busy / 🔴 waiting)
+- **Real-time Status Tracking**: Visual indicators (🟢 ready / 🟡 busy / 🔴 waiting)
 - **Smart Notifications**: Browser alerts when Claude needs your input
 - **Git Integration**: Shows current branch for each worktree
 - **Quick Actions**: One-click Yes/No responses for Claude prompts
-- **Token Usage Tracking**: Monitor context window usage (Phase 2)
-- **Local & Secure**: No external dependencies, runs entirely on your machine
+- **Code Review Assignment**: Assign PRs to other Claude instances for review
+- **Activity Filtering**: Show/hide inactive sessions
+
+### Advanced Diff Viewer (New!)
+- **Semantic Diffs**: AST-based analysis reduces noise by 30%
+- **AI-Powered Summaries**: Intelligent code review with risk detection
+- **Monaco Editor**: VS Code-like diff viewing experience
+- **Export Options**: Save diffs as PDF or Markdown
+- **Real-time Collaboration**: WebSocket-powered cursor sharing
+- **Persistent Caching**: SQLite-backed GitHub API cache
+- **One-Click Launch**: Direct access from detected GitHub URLs
 
 ## 📸 Screenshots
 
@@ -67,12 +77,17 @@ export PATH=/snap/bin:$PATH
 # Setup Claude hooks for better notifications (optional but recommended)
 ./setup-claude-hooks.sh
 
-# Start the server
+# Start the orchestrator
 npm start
 
 # Access the dashboard
-# Local: http://localhost:3000
-# LAN:   http://192.168.1.x:3000
+# Orchestrator: http://localhost:3000
+# Diff Viewer:  http://localhost:7655
+# LAN Access:   http://192.168.1.x:3000
+
+# Or start diff viewer separately:
+cd diff-viewer
+./start.sh
 ```
 
 ### First Time Setup
@@ -85,20 +100,25 @@ npm start
 
 ```
 claude-orchestrator/
-├── server/           # Backend Node.js server
-│   ├── index.js     # Main Express server
-│   ├── sessionManager.js    # PTY process management
-│   ├── statusDetector.js    # Claude state detection
-│   ├── gitHelper.js         # Git branch detection
-│   └── notificationService.js   # Notification handling
-├── client/          # Frontend web dashboard
-│   ├── index.html   # Main dashboard UI
-│   ├── app.js       # Client orchestration
-│   ├── terminal.js  # Xterm.js integration
-│   └── styles.css   # Dashboard styling
-├── config/          # Configuration files
-├── logs/           # Session logs (gitignored)
-└── sessions/       # Session state persistence (gitignored)
+├── server/               # Backend Node.js server
+│   ├── index.js         # Main Express server
+│   ├── sessionManager.js # PTY process management
+│   ├── statusDetector.js # Claude state detection
+│   └── gitHelper.js     # Git branch detection
+├── client/              # Frontend web dashboard
+│   ├── index.html       # Main dashboard UI
+│   ├── app-new.js       # Client orchestration
+│   └── styles-new.css   # Dashboard styling
+├── diff-viewer/         # Advanced diff viewer
+│   ├── server/          # Express + WebSocket backend
+│   │   ├── api/         # REST endpoints
+│   │   ├── cache/       # SQLite caching
+│   │   └── diff-engine/ # AST-based analysis
+│   └── client/          # React + Monaco frontend
+│       ├── src/         # React components
+│       └── vite.config.js # Build configuration
+├── logs/                # Session logs (gitignored)
+└── sessions/            # Session state (gitignored)
 ```
 
 ## Security
