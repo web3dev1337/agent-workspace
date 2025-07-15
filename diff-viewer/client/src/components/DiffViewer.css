@@ -45,6 +45,12 @@
   justify-content: space-between;
 }
 
+.controls-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .toggle-btn {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);

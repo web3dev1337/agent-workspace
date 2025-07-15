@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useParams } from 'react-router-dom';
 import DiffViewer from './components/DiffViewer';
+import ErrorBoundary from './components/ErrorBoundary';
+import LoadingSpinner from './components/LoadingSpinner';
 import axios from 'axios';
 import './styles/App.css';
 
@@ -30,7 +32,8 @@ function DiffViewerRoute() {
       
       setDiffData({
         metadata: metadataRes.data,
-        diff: diffRes.data
+        diff: diffRes.data,
+        type: pr ? 'pr' : 'commit'
       });
     } catch (err) {
       console.error('Error fetching diff:', err);
@@ -43,8 +46,7 @@ function DiffViewerRoute() {
   if (loading) {
     return (
       <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Loading diff data...</p>
+        <LoadingSpinner message="Loading diff data..." size="large" />
       </div>
     );
   }
@@ -64,27 +66,29 @@ function DiffViewerRoute() {
 
 function App() {
   return (
-    <Router>
-      <div className="app">
-        <header className="app-header">
-          <h1>Advanced Git Diff Viewer</h1>
-          <div className="header-subtitle">
-            Semantic diffs powered by AST analysis
-          </div>
-        </header>
-        
-        <Routes>
-          <Route path="/pr/:owner/:repo/:pr" element={<DiffViewerRoute />} />
-          <Route path="/commit/:owner/:repo/:sha" element={<DiffViewerRoute />} />
-          <Route path="/" element={
-            <div className="welcome-container">
-              <h2>Welcome to Advanced Diff Viewer</h2>
-              <p>Open a PR or commit from Claude Orchestrator to view diffs.</p>
+    <ErrorBoundary>
+      <Router>
+        <div className="app">
+          <header className="app-header">
+            <h1>Advanced Git Diff Viewer</h1>
+            <div className="header-subtitle">
+              Semantic diffs powered by AST analysis
             </div>
-          } />
-        </Routes>
-      </div>
-    </Router>
+          </header>
+          
+          <Routes>
+            <Route path="/pr/:owner/:repo/:pr" element={<DiffViewerRoute />} />
+            <Route path="/commit/:owner/:repo/:sha" element={<DiffViewerRoute />} />
+            <Route path="/" element={
+              <div className="welcome-container">
+                <h2>Welcome to Advanced Diff Viewer</h2>
+                <p>Open a PR or commit from Claude Orchestrator to view diffs.</p>
+              </div>
+            } />
+          </Routes>
+        </div>
+      </Router>
+    </ErrorBoundary>
   );
 }
 

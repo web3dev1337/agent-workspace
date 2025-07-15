@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import DiffEditor from '@monaco-editor/react';
 import FileTree from './FileTree';
 import DiffStats from './DiffStats';
+import ExportMenu from './ExportMenu';
+import AISummary from './AISummary';
 import './DiffViewer.css';
 
 const DiffViewer = ({ data }) => {
@@ -10,7 +12,7 @@ const DiffViewer = ({ data }) => {
   const [showSemanticView, setShowSemanticView] = useState(true);
   const editorRef = useRef(null);
 
-  const { metadata, diff } = data;
+  const { metadata, diff, type } = data;
   const files = diff.files || [];
 
   useEffect(() => {
@@ -111,16 +113,21 @@ const DiffViewer = ({ data }) => {
       </div>
 
       <div className="diff-controls">
-        <button 
-          className={`toggle-btn ${showSemanticView ? 'active' : ''}`}
-          onClick={() => setShowSemanticView(!showSemanticView)}
-        >
-          {showSemanticView ? '🧠 Semantic View' : '📄 Raw View'}
-        </button>
+        <div className="controls-left">
+          <button 
+            className={`toggle-btn ${showSemanticView ? 'active' : ''}`}
+            onClick={() => setShowSemanticView(!showSemanticView)}
+          >
+            {showSemanticView ? '🧠 Semantic View' : '📄 Raw View'}
+          </button>
+          <ExportMenu diffData={diff} metadata={metadata} />
+        </div>
         <div className="navigation-hint">
           Use <kbd>j</kbd>/<kbd>k</kbd> to navigate, <kbd>s</kbd> to toggle view
         </div>
       </div>
+
+      <AISummary diffData={diff} metadata={metadata} type={type} />
 
       <div className="diff-content">
         <div className="file-tree-sidebar">
