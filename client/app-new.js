@@ -737,6 +737,12 @@ class ClaudeOrchestrator {
       const links = this.githubLinks.get(sessionId) || {};
       
       matches.forEach(url => {
+        // Clean up ANSI escape codes and other terminal artifacts
+        url = url.replace(/\x1b\[[0-9;]*m/g, '') // Remove ANSI codes
+                 .replace(/%1B\[[0-9;]*m/g, '') // Remove URL-encoded ANSI codes
+                 .replace(/\u001b\[[0-9;]*m/g, '') // Remove Unicode ANSI codes
+                 .trim();
+        
         if (url.includes('/pull/')) {
           links.pr = url;
         } else if (url.includes('/tree/') || url.includes('/commits/')) {
