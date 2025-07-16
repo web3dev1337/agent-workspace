@@ -2,11 +2,133 @@ const express = require('express');
 const router = express.Router();
 const { DiffEngine } = require('../diff-engine/engine');
 const { AIAnalyzer } = require('../diff-engine/ai-analyzer');
+const { getCache } = require('../cache/database');
 
 const diffEngine = new DiffEngine();
 const aiAnalyzer = new AIAnalyzer();
+const dbCache = getCache();
 
-// Process diff for a PR
+// Get diff analysis for a PR
+router.get('/pr/:owner/:repo/:pr', async (req, res) => {
+  try {
+    const { owner, repo, pr } = req.params;
+    
+    // Check cache
+    const cached = dbCache.getDiff('pr', owner, repo, pr);
+    if (cached) {
+      console.log('📦 Returning cached diff data');
+      return res.json(cached.analysis);
+    }
+    console.log('🔄 No cache found, generating new analysis...');
+    
+    // Get PR data from GitHub API cache
+    const prData = dbCache.getMetadata('pr', owner, repo, pr);
+    if (!prData) {
+      return res.status(404).json({ error: 'PR data not found. Fetch from GitHub first.' });
+    }
+    
+    const { files } = prData;
+    
+    // Analyze each file with enhanced content support
+    const analyzedFiles = await Promise.all(
+      files.map(async file => {
+        // Handle different file types
+        const diffAnalysis = await diffEngine.analyzeDiff(file);
+        
+        console.log(`📊 Analysis for ${file.filename}:`, {
+          hasAnalysis: !!diffAnalysis,
+          type: diffAnalysis?.type,
+          hasRefactorings: !!diffAnalysis?.refactorings,
+          hasStats: !!diffAnalysis?.stats
+        });
+        
+        return {
+          filename: file.filename,
+          path: file.filename,
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+          patch: file.patch,
+          // Include the full analysis for SmartDiffView
+          analysis: diffAnalysis,
+          // Legacy support
+          ...diffAnalysis,
+          semanticChanges: diffAnalysis.stats
+        };
+      })
+    );
+    
+    // Calculate overall stats
+    const stats = calculateOverallStats(analyzedFiles);
+    
+    const result = {
+      files: analyzedFiles,
+      stats,
+      metadata: {
+        pr: prData.pr,
+        analyzedAt: new Date().toISOString()
+      }
+    };
+    
+    // Cache the analysis
+    const semanticReduction = stats.semanticReduction || 0;
+    dbCache.setDiff('pr', owner, repo, pr, result, semanticReduction);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('PR diff analysis error:', error);
+    res.status(500).json({
+      error: 'Failed to analyze PR diff',
+      message: error.message
+    });
+  }
+});
+
+// Get diff analysis for a commit
+router.get('/commit/:owner/:repo/:sha', async (req, res) => {
+  try {
+    const { owner, repo, sha } = req.params;
+    
+    // Similar logic for commits
+    const cached = dbCache.getDiff('commit', owner, repo, sha);
+    if (cached) {
+      return res.json(cached.analysis);
+    }
+    
+    const commitData = dbCache.getMetadata('commit', owner, repo, sha);
+    if (!commitData) {
+      return res.status(404).json({ error: 'Commit data not found. Fetch from GitHub first.' });
+    }
+    
+    // Process similar to PR
+    const { files } = commitData;
+    const analyzedFiles = await Promise.all(
+      files.map(file => diffEngine.analyzeDiff(file))
+    );
+    
+    const stats = calculateOverallStats(analyzedFiles);
+    const result = {
+      files: analyzedFiles,
+      stats,
+      metadata: {
+        commit: commitData.commit,
+        analyzedAt: new Date().toISOString()
+      }
+    };
+    
+    dbCache.setDiff('commit', owner, repo, sha, result, stats.semanticReduction || 0);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Commit diff analysis error:', error);
+    res.status(500).json({
+      error: 'Failed to analyze commit diff',
+      message: error.message
+    });
+  }
+});
+
+// Process custom diff analysis
 router.post('/analyze', async (req, res) => {
   try {
     const { files, prInfo } = req.body;
@@ -115,6 +237,34 @@ function calculateOverallMetrics(results) {
     overallReduction: totals.originalLines > 0 
       ? ((totals.originalLines - totals.shownLines) / totals.originalLines * 100).toFixed(1)
       : 0
+  };
+}
+
+function calculateOverallStats(analyzedFiles) {
+  let totalOriginal = 0;
+  let totalSignificant = 0;
+  let totalAdded = 0;
+  let totalDeleted = 0;
+  
+  analyzedFiles.forEach(file => {
+    if (file.stats) {
+      totalOriginal += file.additions + file.deletions;
+      totalSignificant += file.stats.significant || 0;
+      totalAdded += file.additions || 0;
+      totalDeleted += file.deletions || 0;
+    }
+  });
+  
+  const semanticReduction = totalOriginal > 0
+    ? ((totalOriginal - totalSignificant) / totalOriginal * 100).toFixed(1)
+    : 0;
+  
+  return {
+    files: analyzedFiles.length,
+    additions: totalAdded,
+    deletions: totalDeleted,
+    changes: totalAdded + totalDeleted,
+    semanticReduction: parseFloat(semanticReduction)
   };
 }
 

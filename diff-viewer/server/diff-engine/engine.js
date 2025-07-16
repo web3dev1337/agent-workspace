@@ -2,11 +2,21 @@ const Parser = require('tree-sitter');
 const JavaScript = require('tree-sitter-javascript');
 const TypeScript = require('tree-sitter-typescript').typescript;
 const Python = require('tree-sitter-python');
+const MinifiedDiffEngine = require('./minified-diff');
+const JsonYamlDiffEngine = require('./json-yaml-diff');
+const BinaryDiffEngine = require('./binary-diff');
+const AdvancedSemanticEngine = require('./advanced-semantic-engine');
 
 class DiffEngine {
   constructor() {
     this.parsers = new Map();
     this.initializeParsers();
+    
+    // Initialize specialized engines
+    this.minifiedEngine = new MinifiedDiffEngine();
+    this.jsonYamlEngine = new JsonYamlDiffEngine();
+    this.binaryEngine = new BinaryDiffEngine();
+    this.semanticEngine = new AdvancedSemanticEngine();
   }
 
   initializeParsers() {
@@ -29,9 +39,25 @@ class DiffEngine {
   }
 
   async analyzeDiff(file) {
-    const extension = file.filename.split('.').pop().toLowerCase();
+    const filename = file.filename;
+    const extension = filename.split('.').pop().toLowerCase();
+    
+    // Check for binary files first
+    if (this.binaryEngine.isBinary(filename)) {
+      return this.analyzeBinaryDiff(file);
+    }
+    
+    // Check for JSON/YAML files
+    if (this.jsonYamlEngine.isSupported(filename)) {
+      return this.analyzeStructuredDiff(file);
+    }
+    
+    // Check if file is minified
+    if (file.patch && this.minifiedEngine.isMinified(filename, file.patch)) {
+      return this.analyzeMinifiedDiff(file);
+    }
+    
     const parser = this.parsers.get(extension);
-
     if (!parser) {
       // Fallback to text-based diff
       return this.textBasedDiff(file);
@@ -45,14 +71,23 @@ class DiffEngine {
       const oldTree = parser.parse(oldContent);
       const newTree = parser.parse(newContent);
 
-      // Compute semantic diff
-      const changes = this.computeSemanticDiff(oldTree, newTree, file);
+      // Use advanced semantic analysis
+      const semanticAnalysis = await this.performAdvancedAnalysis(
+        oldContent, 
+        newContent, 
+        oldTree, 
+        newTree, 
+        extension,
+        filename
+      );
 
       return {
         type: 'semantic',
         language: extension,
-        changes,
-        stats: this.calculateStats(changes)
+        ...semanticAnalysis,
+        // Add backwards compatibility
+        changes: semanticAnalysis.significantChanges,
+        stats: semanticAnalysis.stats
       };
     } catch (error) {
       console.error('AST parsing failed, falling back to text diff:', error);
@@ -284,6 +319,14 @@ class DiffEngine {
           content: line.substring(1),
           significant: !this.isWhitespaceOnly(line.substring(1))
         });
+      } else if (line.startsWith(' ')) {
+        // Context lines - these appear in both old and new
+        changes.push({
+          type: 'context',
+          line: currentHunk?.newStart + index,
+          content: line.substring(1),
+          significant: false
+        });
       }
     });
     
@@ -313,6 +356,160 @@ class DiffEngine {
       : 0;
     
     return stats;
+  }
+  
+  async analyzeBinaryDiff(file) {
+    try {
+      // Extract old and new content from the file object
+      // For binary files, we need the actual content, not the patch
+      const oldContent = file.previous_content || '';
+      const newContent = file.content || '';
+      
+      const binaryDiff = await this.binaryEngine.computeBinaryDiff(
+        oldContent,
+        newContent,
+        file.filename
+      );
+      
+      return {
+        type: 'binary',
+        filename: file.filename,
+        diff: this.binaryEngine.formatBinaryDiff(binaryDiff),
+        stats: {
+          significant: binaryDiff.hasChanged ? 1 : 0,
+          total: 1
+        }
+      };
+    } catch (error) {
+      console.error('Binary diff failed:', error);
+      return this.textBasedDiff(file);
+    }
+  }
+  
+  async analyzeStructuredDiff(file) {
+    try {
+      const { oldContent, newContent } = this.extractContentFromPatch(file.patch);
+      
+      const structuredDiff = this.jsonYamlEngine.computeSemanticDiff(
+        oldContent,
+        newContent,
+        file.filename
+      );
+      
+      if (structuredDiff.fallbackToText) {
+        return this.textBasedDiff(file);
+      }
+      
+      return {
+        type: 'structured',
+        language: structuredDiff.type,
+        diff: this.jsonYamlEngine.formatDiff(structuredDiff),
+        stats: {
+          significant: structuredDiff.analysis.stats.keysModified + 
+                      structuredDiff.analysis.stats.keysAdded + 
+                      structuredDiff.analysis.stats.keysRemoved,
+          total: structuredDiff.changes.length
+        }
+      };
+    } catch (error) {
+      console.error('Structured diff failed:', error);
+      return this.textBasedDiff(file);
+    }
+  }
+  
+  async analyzeMinifiedDiff(file) {
+    try {
+      const { oldContent, newContent } = this.extractContentFromPatch(file.patch);
+      
+      const minifiedDiff = this.minifiedEngine.generateMinifiedDiff(
+        oldContent,
+        newContent,
+        file.filename
+      );
+      
+      return {
+        type: 'minified',
+        filename: file.filename,
+        diff: minifiedDiff,
+        stats: {
+          significant: minifiedDiff.tokenDiff.stats.tokensAdded + 
+                      minifiedDiff.tokenDiff.stats.tokensRemoved,
+          total: minifiedDiff.tokenDiff.stats.totalNewTokens
+        }
+      };
+    } catch (error) {
+      console.error('Minified diff failed:', error);
+      return this.textBasedDiff(file);
+    }
+  }
+
+  /**
+   * Perform advanced semantic analysis using the new engine
+   */
+  async performAdvancedAnalysis(oldContent, newContent, oldTree, newTree, language, filename) {
+    // Bind the parseAST method to use our tree-sitter parsers
+    this.semanticEngine.parseAST = async (content, lang) => {
+      const parser = this.parsers.get(lang);
+      if (!parser) throw new Error(`No parser for language: ${lang}`);
+      return parser.parse(content);
+    };
+
+    // Run the advanced analysis
+    const analysis = await this.semanticEngine.analyzeSmartDiff(
+      oldContent,
+      newContent,
+      language,
+      filename
+    );
+
+    // Add visual hints for the UI
+    analysis.visualHints = {
+      collapseNoise: true,
+      highlightRefactorings: true,
+      groupRelatedChanges: true,
+      showComplexityIndicators: true
+    };
+
+    // Add summary for quick understanding
+    analysis.summary = this.generateSmartSummary(analysis);
+
+    return analysis;
+  }
+
+  /**
+   * Generate a smart summary of the changes
+   */
+  generateSmartSummary(analysis) {
+    const parts = [];
+    
+    if (analysis.netNewLogic > 0) {
+      parts.push(`${analysis.netNewLogic} lines of new logic`);
+    }
+    
+    if (analysis.refactorings.length > 0) {
+      const refactorTypes = {};
+      analysis.refactorings.forEach(r => {
+        refactorTypes[r.type] = (refactorTypes[r.type] || 0) + 1;
+      });
+      
+      Object.entries(refactorTypes).forEach(([type, count]) => {
+        parts.push(`${count} ${type.replace(/_/g, ' ')}${count > 1 ? 's' : ''}`);
+      });
+    }
+    
+    if (analysis.movedBlocks.length > 0) {
+      parts.push(`${analysis.movedBlocks.length} code blocks moved`);
+    }
+    
+    if (analysis.duplications.length > 0) {
+      parts.push(`${analysis.duplications.length} duplications detected`);
+    }
+    
+    if (analysis.stats.noiseReduction > 30) {
+      parts.push(`${analysis.stats.noiseReduction}% noise filtered out`);
+    }
+    
+    return parts.length > 0 ? parts.join(', ') : 'Minor changes';
   }
 }
 

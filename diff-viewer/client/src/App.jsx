@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useParams } from 'react-router-dom';
 import DiffViewer from './components/DiffViewer';
+import SmartDiffViewer from './components/SmartDiffViewer';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 import axios from 'axios';
@@ -30,11 +31,25 @@ function DiffViewerRoute() {
       // Fetch diff data
       const diffRes = await axios.get(`/diff/pr/${owner}/${repo}/${pr}`);
       
-      setDiffData({
-        metadata: metadataRes.data,
+      const data = {
+        metadata: {
+          ...metadataRes.data,
+          owner,
+          repo,
+          number: pr,
+          pr: pr
+        },
         diff: diffRes.data,
         type: pr ? 'pr' : 'commit'
+      };
+      
+      console.log('📊 Diff data loaded:', {
+        files: diffRes.data.files?.length,
+        firstFile: diffRes.data.files?.[0],
+        metadata: metadataRes.data.pr
       });
+      
+      setDiffData(data);
     } catch (err) {
       console.error('Error fetching diff:', err);
       setError(err.response?.data?.error || 'Failed to fetch diff data');
@@ -61,7 +76,13 @@ function DiffViewerRoute() {
     );
   }
 
-  return <DiffViewer data={diffData} />;
+  // Use SmartDiffViewer for enhanced features or fallback to regular DiffViewer
+  if (diffData.diff && diffData.diff.files) {
+    return <SmartDiffViewer data={diffData} />;
+  } else {
+    // Fallback to original DiffViewer if data structure is different
+    return <DiffViewer data={diffData} />;
+  }
 }
 
 function App() {
@@ -69,12 +90,6 @@ function App() {
     <ErrorBoundary>
       <Router>
         <div className="app">
-          <header className="app-header">
-            <h1>Advanced Git Diff Viewer</h1>
-            <div className="header-subtitle">
-              Semantic diffs powered by AST analysis
-            </div>
-          </header>
           
           <Routes>
             <Route path="/pr/:owner/:repo/:pr" element={<DiffViewerRoute />} />
