@@ -26,7 +26,22 @@ app.use(express.static(path.join(__dirname, '../client/dist')));
 app.use('/api/github', require('./api/github'));
 app.use('/api/diff', require('./api/diff'));
 app.use('/api/export', require('./api/export'));
-app.use('/api/ai', require('./api/ai-summary'));
+app.use('/api/review', require('./api/review'));
+
+// Optional AI route - only load if Anthropic SDK is available
+try {
+  require('@anthropic-ai/sdk');
+  app.use('/api/ai', require('./api/ai-summary'));
+  console.log('✅ AI summaries enabled');
+} catch (error) {
+  console.log('⚠️  AI summaries disabled (install @anthropic-ai/sdk to enable)');
+  app.use('/api/ai', (req, res) => {
+    res.status(503).json({ 
+      error: 'AI summaries not available',
+      message: 'Install @anthropic-ai/sdk to enable this feature'
+    });
+  });
+}
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -1,0 +1,197 @@
+.smart-diff-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #0a0a0a;
+  color: #ccc;
+}
+
+/* Header */
+.viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.pr-info h2 {
+  margin: 0 0 5px 0;
+  color: #fff;
+  font-size: 20px;
+}
+
+.pr-description {
+  margin: 0;
+  color: #888;
+  font-size: 14px;
+}
+
+.overall-stats {
+  display: flex;
+  gap: 30px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #4caf50;
+}
+
+/* Main Content */
+.viewer-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.left-panel {
+  width: 300px;
+  min-width: 250px;
+  max-width: 400px;
+  resize: horizontal;
+  overflow: auto;
+  border-right: 1px solid #2a2a2a;
+}
+
+.right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* No file selected */
+.no-file-selected {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+}
+
+.no-file-selected p {
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+.no-file-selected .hint {
+  font-size: 14px;
+}
+
+.no-file-selected kbd {
+  padding: 3px 8px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #aaa;
+}
+
+/* Settings Panel */
+.viewer-settings {
+  padding: 10px 20px;
+  background: #1a1a1a;
+  border-top: 1px solid #2a2a2a;
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+}
+
+.viewer-settings label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #aaa;
+}
+
+.viewer-settings label:hover {
+  color: #fff;
+}
+
+.viewer-settings input[type="checkbox"] {
+  cursor: pointer;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .viewer-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+  
+  .overall-stats {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 768px) {
+  .viewer-content {
+    flex-direction: column;
+  }
+  
+  .left-panel {
+    width: 100%;
+    max-width: 100%;
+    height: 200px;
+    border-right: none;
+    border-bottom: 1px solid #2a2a2a;
+  }
+  
+  .viewer-settings {
+    flex-wrap: wrap;
+  }
+}
+
+/* Enhanced Monaco Integration */
+.right-panel > div {
+  flex: 1;
+  overflow: auto;
+}
+
+/* Loading State */
+.smart-diff-viewer.loading::after {
+  content: 'Loading diff analysis...';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  color: #666;
+}
+
+/* Focus Indicators */
+.smart-diff-viewer:focus-within .left-panel {
+  border-right-color: #2196f3;
+}
+
+/* Performance - Hardware acceleration */
+.viewer-content {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Smooth transitions */
+.left-panel,
+.right-panel,
+.viewer-settings {
+  transition: all 0.2s ease;
+}

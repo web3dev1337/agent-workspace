@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import DiffEditor from '@monaco-editor/react';
 import FileTree from './FileTree';
-import DiffStats from './DiffStats';
-import ExportMenu from './ExportMenu';
-import AISummary from './AISummary';
+import CollapsibleHeader from './CollapsibleHeader';
+import EnhancedMonacoDiff from './EnhancedMonacoDiff';
 import './DiffViewer.css';
 
 const DiffViewer = ({ data }) => {
@@ -13,15 +12,44 @@ const DiffViewer = ({ data }) => {
   const editorRef = useRef(null);
 
   const { metadata, diff, type } = data;
-  const files = diff.files || [];
+  
+  // Merge metadata files with diff files to get content
+  const files = diff.files?.map(diffFile => {
+    // Find matching file in metadata to get content
+    const metadataFile = metadata.files?.find(f => 
+      f.filename === diffFile.path || f.filename === diffFile.filename
+    );
+    
+    // Merge the data, preferring content from metadata
+    return {
+      ...diffFile,
+      ...metadataFile, // Include all metadata fields including patch
+      oldContent: metadataFile?.oldContent || diffFile.oldContent,
+      newContent: metadataFile?.newContent || diffFile.newContent,
+      filename: diffFile.filename || diffFile.path,
+      path: diffFile.path || diffFile.filename,
+      patch: metadataFile?.patch || diffFile.patch // Ensure patch is included
+    };
+  }) || [];
 
   useEffect(() => {
-    // Select first file by default
-    if (files.length > 0 && !selectedFile) {
-      setSelectedFile(files[0]);
-      setCurrentFileIndex(0);
+    // Select first file by default when data loads
+    if (files.length > 0) {
+      console.log('🎯 Auto-selecting first file:', files[0]);
+      // Small delay to ensure components are mounted
+      setTimeout(() => {
+        setSelectedFile(files[0]);
+        setCurrentFileIndex(0);
+      }, 100);
     }
-  }, [files]);
+  }, [data]); // Trigger when data changes, not files
+
+  // Force re-render when selectedFile changes
+  useEffect(() => {
+    if (selectedFile) {
+      console.log('📁 File selected:', selectedFile.path);
+    }
+  }, [selectedFile]);
 
   useEffect(() => {
     // Keyboard shortcuts
@@ -57,77 +85,99 @@ const DiffViewer = ({ data }) => {
   const getFileContent = (file) => {
     if (!file) return { original: '', modified: '' };
     
-    if (showSemanticView && file.semanticDiff) {
-      // Use semantic diff if available
+    // If we have oldContent/newContent, use them
+    if (file.oldContent || file.newContent) {
       return {
-        original: file.semanticDiff.original || file.oldContent || '',
-        modified: file.semanticDiff.modified || file.newContent || ''
+        original: file.oldContent || '',
+        modified: file.newContent || ''
       };
     }
     
-    return {
-      original: file.oldContent || '',
-      modified: file.newContent || ''
-    };
+    // If we have a changes array (from text-based diff), reconstruct content
+    if (file.changes && Array.isArray(file.changes)) {
+      const oldLines = [];
+      const newLines = [];
+      
+      file.changes.forEach(change => {
+        if (change.type === 'deleted' || change.type === 'context') {
+          oldLines.push(change.content);
+        }
+        if (change.type === 'added' || change.type === 'context') {
+          newLines.push(change.content);
+        }
+      });
+      
+      return {
+        original: oldLines.join('\n'),
+        modified: newLines.join('\n')
+      };
+    }
+    
+    // If this is a new file (status: 'added'), only show in modified pane
+    if (file.status === 'added') {
+      const content = file.changes?.map(c => c.content).join('\n') || '';
+      return {
+        original: '',
+        modified: content
+      };
+    }
+    
+    // If this is a deleted file (status: 'removed'), only show in original pane
+    if (file.status === 'removed') {
+      const content = file.changes?.map(c => c.content).join('\n') || '';
+      return {
+        original: content,
+        modified: ''
+      };
+    }
+    
+    return { original: '', modified: '' };
   };
 
   const renderDiffEditor = () => {
-    if (!selectedFile) return null;
+    if (!selectedFile) {
+      console.log('⚠️ No file selected');
+      return null;
+    }
 
     const { original, modified } = getFileContent(selectedFile);
+    
+    console.log('📄 Rendering diff for:', {
+      file: selectedFile.path || selectedFile.filename,
+      hasOriginal: !!original,
+      hasModified: !!modified,
+      originalLength: original?.length,
+      modifiedLength: modified?.length,
+      firstChars: {
+        original: original?.substring(0, 50),
+        modified: modified?.substring(0, 50)
+      },
+      fullFile: selectedFile
+    });
 
+    // Ensure we have valid strings for Monaco
+    const originalContent = String(original || '');
+    const modifiedContent = String(modified || '');
+    
+    // Try the custom side-by-side view instead
     return (
-      <DiffEditor
+      <MonacoSideBySide
+        original={originalContent}
+        modified={modifiedContent}
+        language={getLanguageFromPath(selectedFile.path || selectedFile.filename)}
         height="100%"
-        theme="vs-dark"
-        original={original}
-        modified={modified}
-        language={getLanguageFromPath(selectedFile.path)}
-        options={{
-          readOnly: true,
-          renderSideBySide: true,
-          scrollBeyondLastLine: false,
-          minimap: { enabled: false },
-          fontSize: 14,
-          automaticLayout: true,
-          renderValidationDecorations: 'off'
-        }}
-        onMount={(editor) => {
-          editorRef.current = editor;
-        }}
       />
     );
   };
 
   return (
     <div className="diff-viewer-container">
-      <div className="diff-header">
-        <div className="pr-info">
-          <h2>#{metadata.number}: {metadata.title}</h2>
-          <div className="pr-meta">
-            <span className="author">by {metadata.user?.login}</span>
-            <span className="branch">{metadata.head?.ref} → {metadata.base?.ref}</span>
-          </div>
-        </div>
-        <DiffStats stats={diff.stats} />
-      </div>
-
-      <div className="diff-controls">
-        <div className="controls-left">
-          <button 
-            className={`toggle-btn ${showSemanticView ? 'active' : ''}`}
-            onClick={() => setShowSemanticView(!showSemanticView)}
-          >
-            {showSemanticView ? '🧠 Semantic View' : '📄 Raw View'}
-          </button>
-          <ExportMenu diffData={diff} metadata={metadata} />
-        </div>
-        <div className="navigation-hint">
-          Use <kbd>j</kbd>/<kbd>k</kbd> to navigate, <kbd>s</kbd> to toggle view
-        </div>
-      </div>
-
-      <AISummary diffData={diff} metadata={metadata} type={type} />
+      <CollapsibleHeader 
+        metadata={metadata}
+        diff={diff}
+        onToggleView={setShowSemanticView}
+        showSemanticView={showSemanticView}
+      />
 
       <div className="diff-content">
         <div className="file-tree-sidebar">
@@ -141,16 +191,26 @@ const DiffViewer = ({ data }) => {
         <div className="diff-editor-container">
           {selectedFile ? (
             <>
-              <div className="file-header">
-                <span className="file-path">{selectedFile.path}</span>
-                {selectedFile.semanticChanges && (
-                  <span className="semantic-info">
-                    {selectedFile.semanticChanges.moved > 0 && 
-                      `${selectedFile.semanticChanges.moved} moved blocks`}
-                  </span>
-                )}
+              <div style={{ 
+                background: '#2d2d30', 
+                padding: '4px 12px', 
+                borderBottom: '1px solid #3e3e42',
+                height: '28px',
+                display: 'flex',
+                alignItems: 'center',
+                flexShrink: 0
+              }}>
+                <span style={{ 
+                  fontFamily: 'monospace', 
+                  fontSize: '12px',
+                  color: '#cccccc' 
+                }}>
+                  {selectedFile.path}
+                </span>
               </div>
-              {renderDiffEditor()}
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <EnhancedMonacoDiff file={selectedFile} />
+              </div>
             </>
           ) : (
             <div className="no-file-selected">

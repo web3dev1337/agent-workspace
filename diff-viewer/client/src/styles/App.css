@@ -8,15 +8,15 @@
 .app-header {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  padding: 16px 24px;
+  padding: 8px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 80px;
+  height: 40px;
 }
 
 .app-header h1 {
-  font-size: 24px;
+  font-size: 16px;
   font-weight: 600;
   margin: 0;
 }
