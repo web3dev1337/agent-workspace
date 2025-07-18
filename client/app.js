@@ -45,7 +45,7 @@ class ClaudeOrchestrator {
         socketOptions.auth = { token: this.authToken };
       }
       
-      this.socket = io(socketOptions);
+      this.socket = io('http://localhost:3000', socketOptions);
       
       // Connection events
       this.socket.on('connect', () => {
