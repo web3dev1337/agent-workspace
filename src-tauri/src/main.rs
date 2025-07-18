@@ -27,6 +27,30 @@ fn toggle_devtools(window: tauri::WebviewWindow) {
 }
 
 #[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    // In WSL, check for wslview first (it handles opening Windows browser from WSL)
+    if cfg!(target_os = "linux") {
+        // Check if we're in WSL
+        if std::path::Path::new("/proc/sys/fs/binfmt_misc/WSLInterop").exists() {
+            // Try wslview first (from wslu package)
+            if let Ok(_) = std::process::Command::new("wslview").arg(&url).spawn() {
+                return Ok(());
+            }
+            // Fallback to powershell.exe
+            if let Ok(_) = std::process::Command::new("powershell.exe")
+                .arg("-c")
+                .arg(format!("Start-Process '{}'", url))
+                .spawn() {
+                return Ok(());
+            }
+        }
+    }
+    
+    // Fallback to system open
+    open::that(&url).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn spawn_terminal(
     terminal_manager: State<'_, Arc<TerminalManager>>,
     session_id: Option<String>
@@ -150,6 +174,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             show_notification,
             toggle_devtools,
+            open_external,
             spawn_terminal,
             write_terminal,
             resize_terminal,

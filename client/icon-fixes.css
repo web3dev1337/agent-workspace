@@ -1,0 +1,44 @@
+/* Icon fixes for WSLg emoji rendering issues */
+
+/* Replace emoji with text labels */
+.control-btn[title="View Branch on GitHub"]:after {
+  content: "Branch";
+  font-size: 0.7rem;
+}
+
+.control-btn[title="View Branch Diff"]:after {
+  content: "Diff";
+  font-size: 0.7rem;
+}
+
+.control-btn[title="View PR on GitHub"]:after {
+  content: "PR";
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+
+.control-btn[title="Restart Claude"]:after {
+  content: "↻";
+  font-size: 1rem;
+}
+
+.control-btn[title="Refresh Terminal Display"]:after {
+  content: "⟳";
+  font-size: 1rem;
+}
+
+.control-btn[title="Play in Hytopia"]:after {
+  content: "Play";
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+
+/* Hide the emoji content */
+.control-btn {
+  font-size: 0 !important;
+}
+
+.control-btn:after {
+  font-size: 0.75rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
