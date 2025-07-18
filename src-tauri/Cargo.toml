@@ -25,6 +25,7 @@ futures = "0.3"
 anyhow = "1.0"
 uuid = { version = "1.4", features = ["v4"] }
 notify = "6.0"
+open = "5.0"
 
 [profile.release]
 panic = "abort"

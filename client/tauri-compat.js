@@ -9,10 +9,11 @@
     const originalOpen = window.open;
     
     window.open = function(url, target, features) {
-      // If it's an external URL, use Tauri's shell.open
+      // If it's an external URL, use our custom command
       if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-        if (window.__TAURI__ && window.__TAURI__.shell) {
-          window.__TAURI__.shell.open(url);
+        if (window.__TAURI__ && window.__TAURI__.invoke) {
+          window.__TAURI__.invoke('open_external', { url: url })
+            .catch(err => console.error('Failed to open external URL:', err));
           return null; // Return null as we can't return a window reference
         }
       }
