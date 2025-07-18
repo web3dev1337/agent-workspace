@@ -1,4 +1,4 @@
-use portable_pty::{CommandBuilder, PtySize, native_pty_system, PtySystem};
+use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::io::{Read, Write};
