@@ -1,0 +1,220 @@
+:root {
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #252526;
+    --bg-tertiary: #2d2d30;
+    --text-primary: #cccccc;
+    --text-secondary: #969696;
+    --accent: #007acc;
+    --success: #4ec9b0;
+    --warning: #ce9178;
+    --error: #f44747;
+    --border: #3e3e42;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+header {
+    background-color: var(--bg-secondary);
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+h1 {
+    font-size: 1.5rem;
+    font-weight: 500;
+}
+
+.status-bar {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.status-indicator {
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.status-indicator.connected {
+    background-color: var(--success);
+    color: var(--bg-primary);
+}
+
+.status-indicator.disconnected {
+    background-color: var(--error);
+    color: white;
+}
+
+button {
+    background-color: var(--accent);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: opacity 0.2s;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+main {
+    flex: 1;
+    display: flex;
+    gap: 1px;
+    background-color: var(--border);
+    overflow: hidden;
+}
+
+.terminal-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-primary);
+}
+
+.terminal-section h2 {
+    padding: 0.75rem 1rem;
+    background-color: var(--bg-tertiary);
+    font-size: 1rem;
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+}
+
+.terminals {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 1px;
+    background-color: var(--border);
+}
+
+.terminal-container {
+    background-color: var(--bg-secondary);
+    position: relative;
+    overflow: hidden;
+}
+
+.terminal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+}
+
+.terminal-title {
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.terminal-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--text-secondary);
+}
+
+.terminal-status.running {
+    background-color: var(--success);
+}
+
+.terminal-status.needs-input {
+    background-color: var(--warning);
+    animation: pulse 1s infinite;
+}
+
+.terminal-status.error {
+    background-color: var(--error);
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.terminal-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.terminal-actions button {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.terminal-content {
+    position: absolute;
+    top: 40px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+footer {
+    background-color: var(--bg-secondary);
+    padding: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.controls {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+/* Xterm.js customization */
+.xterm {
+    height: 100%;
+    padding: 0.5rem;
+}
+
+.xterm-viewport {
+    background-color: var(--bg-secondary) !important;
+}
+
+/* Responsive design */
+@media (max-width: 1200px) {
+    .terminals {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(8, 1fr);
+    }
+    
+    main {
+        flex-direction: column;
+    }
+}
