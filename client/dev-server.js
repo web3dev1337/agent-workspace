@@ -1,8 +1,16 @@
 const express = require('express');
 const path = require('path');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
-const PORT = 8080;
+const PORT = 2080;
+
+// Proxy socket.io requests to the backend server
+app.use('/socket.io', createProxyMiddleware({
+    target: 'http://localhost:3000',
+    ws: true,
+    changeOrigin: true
+}));
 
 // Serve static files from client directory
 app.use(express.static(__dirname));

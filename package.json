@@ -27,14 +27,15 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "http-proxy-middleware": "^3.0.5",
     "node-pty": "^1.0.0",
     "socket.io": "^4.6.1",
     "winston": "^3.11.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0-rc.18",
-    "nodemon": "^3.0.1",
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.1"
   },
   "engines": {
     "node": ">=16.0.0"
