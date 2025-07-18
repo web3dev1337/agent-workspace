@@ -11,6 +11,8 @@ class ClaudeOrchestrator {
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
     this.githubLinks = new Map(); // Track GitHub PR/branch links per session
+    this.sessionActivity = new Map(); // Track which sessions have been used
+    this.showActiveOnly = false; // Filter toggle
     
     this.init();
   }
@@ -102,9 +104,16 @@ class ClaudeOrchestrator {
           this.detectGitHubLinks(sessionId, data);
         }
         
-        // Detect clear commands to reset PR links
+        // Detect clear commands to reset PR links and activity
         if (data.includes('/clear') || data.includes('clear')) {
           this.clearGitHubLinks(sessionId);
+          this.sessionActivity.delete(sessionId);
+          this.buildSidebar();
+        }
+        
+        // Mark session as active when there's terminal activity
+        if (data.trim().length > 0) {
+          this.sessionActivity.set(sessionId, 'active');
         }
       });
       
@@ -321,8 +330,9 @@ class ClaudeOrchestrator {
   handleInitialSessions(sessionStates) {
     console.log('Received initial sessions:', sessionStates);
     
-    // Clear existing sessions
+    // Clear existing sessions and activity tracking
     this.sessions.clear();
+    this.sessionActivity.clear();
     
     // Process sessions
     for (const [sessionId, state] of Object.entries(sessionStates)) {
@@ -331,6 +341,9 @@ class ClaudeOrchestrator {
         ...state,
         hasUserInput: false
       });
+      
+      // All fresh sessions start as inactive - they need user interaction to become active
+      this.sessionActivity.set(sessionId, 'inactive');
     }
     
     // Hide loading message FIRST
@@ -348,6 +361,11 @@ class ClaudeOrchestrator {
   
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
+    
+    // Always ensure filter toggle exists and is updated FIRST
+    this.ensureFilterToggleExists();
+    
+    // Clear and rebuild the worktree list
     worktreeList.innerHTML = '';
     
     // Group sessions by worktree
@@ -374,12 +392,23 @@ class ClaudeOrchestrator {
     
     // Create sidebar items
     for (const [worktreeId, worktree] of worktrees) {
+      // Check if worktree is active (has any session marked as active)
+      const isActive = this.isWorktreeActive(worktreeId);
+      
+      // Skip inactive worktrees if filter is enabled
+      if (this.showActiveOnly && !isActive) {
+        continue;
+      }
+      
       const item = document.createElement('div');
-      item.className = 'worktree-item';
+      item.className = `worktree-item ${!isActive ? 'inactive' : ''}`;
       item.dataset.worktreeId = worktreeId;
       
       const branch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
       const worktreeNumber = worktreeId.replace('work', '');
+      
+      // Convert claude status for display (waiting -> ready for green color)
+      const claudeDisplayStatus = worktree.claude?.status === 'waiting' ? 'ready' : worktree.claude?.status;
       
       item.innerHTML = `
         <div class="worktree-header">
@@ -389,7 +418,7 @@ class ClaudeOrchestrator {
           ${worktree.claude ? `
             <div class="session-status">
               <span class="session-icon">🤖</span>
-              <span class="status-dot ${worktree.claude.status}"></span>
+              <span class="status-dot ${claudeDisplayStatus}"></span>
               <span>Claude</span>
             </div>
           ` : ''}
@@ -403,15 +432,82 @@ class ClaudeOrchestrator {
         </div>
       `;
       
+      // Add click handler to show this worktree
+      item.addEventListener('click', () => {
+        this.showWorktree(worktreeId);
+      });
+      
       worktreeList.appendChild(item);
     }
   }
   
+  ensureFilterToggleExists() {
+    let filterToggle = document.getElementById('filter-toggle');
+    
+    if (!filterToggle) {
+      // Create the filter toggle element
+      filterToggle = document.createElement('div');
+      filterToggle.className = 'filter-toggle';
+      filterToggle.id = 'filter-toggle';
+      
+      // Insert it right before the worktree list
+      const worktreeList = document.getElementById('worktree-list');
+      worktreeList.parentNode.insertBefore(filterToggle, worktreeList);
+    }
+    
+    // Always update the button content
+    filterToggle.innerHTML = `
+      <button class="${this.showActiveOnly ? 'active' : ''}" onclick="window.orchestrator.toggleActivityFilter()">
+        ${this.showActiveOnly ? 'Show All' : 'Active Only'}
+      </button>
+    `;
+  }
+
   getServerStatusClass(sessionId) {
     const status = this.serverStatuses.get(sessionId);
     if (status === 'running') return 'running';
     if (status === 'error') return 'error';
     return 'idle';
+  }
+  
+  isWorktreeActive(worktreeId) {
+    // Check if any session in this worktree has been marked as active
+    const claudeSessionId = `${worktreeId}-claude`;
+    const serverSessionId = `${worktreeId}-server`;
+    
+    return this.sessionActivity.get(claudeSessionId) === 'active' || 
+           this.sessionActivity.get(serverSessionId) === 'active';
+  }
+  
+  toggleActivityFilter() {
+    this.showActiveOnly = !this.showActiveOnly;
+    this.buildSidebar();
+    
+    // Also update the main grid view to match the filter
+    if (this.showActiveOnly) {
+      this.showActiveWorktreesOnly();
+    } else {
+      this.showAllTerminals();
+    }
+  }
+  
+  showActiveWorktreesOnly() {
+    const activeSessions = [];
+    
+    // Find all sessions that belong to active worktrees
+    for (const [sessionId, session] of this.sessions) {
+      const worktreeId = session.worktreeId || sessionId.split('-')[0];
+      if (this.isWorktreeActive(worktreeId)) {
+        activeSessions.push(sessionId);
+      }
+    }
+    
+    if (activeSessions.length > 0) {
+      this.showTerminals(activeSessions);
+    } else {
+      // No active sessions, show a message or default to all
+      this.showAllTerminals();
+    }
   }
   
   showWorktree(worktreeId) {
@@ -597,6 +693,7 @@ class ClaudeOrchestrator {
           ${isClaudeSession ? `
             <button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>
             <button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>
+            <button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>
             ${this.getGitHubButtons(sessionId)}
           ` : ''}
           ${isServerSession ? `
@@ -622,10 +719,13 @@ class ClaudeOrchestrator {
   }
   
   updateSessionStatus(sessionId, status) {
+    // Convert 'waiting' to 'ready' for better UX (green instead of orange)
+    const displayStatus = status === 'waiting' ? 'ready' : status;
+    
     const statusElement = document.getElementById(`status-${sessionId}`);
     if (statusElement) {
-      statusElement.className = `status-indicator ${status}`;
-      statusElement.title = status;
+      statusElement.className = `status-indicator ${displayStatus}`;
+      statusElement.title = displayStatus;
     }
     
     // Update session data
@@ -638,6 +738,15 @@ class ClaudeOrchestrator {
       if (previousStatus === 'waiting' && status === 'busy') {
         session.hasUserInput = true;
       }
+      
+      // Only mark as active when user actually interacts (waiting -> busy transition)
+      // OR when status changes to busy (meaning user is actively working)
+      if ((previousStatus === 'waiting' && status === 'busy') || status === 'busy') {
+        this.sessionActivity.set(sessionId, 'active');
+        this.buildSidebar(); // Refresh to update grey/active state
+      }
+      
+      // Don't mark fresh "waiting" sessions as active - they're just showing welcome screen
     }
     
     // Update quick actions for Claude sessions
@@ -768,6 +877,8 @@ class ClaudeOrchestrator {
         
         if (url.includes('/pull/')) {
           links.pr = url;
+        } else if (url.includes('/commit/')) {
+          links.commit = url;
         } else if (url.includes('/tree/') || url.includes('/commits/')) {
           links.branch = url;
         }
@@ -819,6 +930,13 @@ class ClaudeOrchestrator {
     // Show PR button if PR link detected
     if (links.pr) {
       buttons += `<button class="control-btn" onclick="window.open('${links.pr}', '_blank')" title="View PR on GitHub">📥</button>`;
+      // Add advanced diff viewer button for PRs
+      buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${links.pr}')" title="Advanced Diff View">🔍</button>`;
+    }
+    
+    // Check for commit URLs
+    if (links.commit) {
+      buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${links.commit}')" title="Advanced Diff View">🔍</button>`;
     }
     
     return buttons;
@@ -831,9 +949,10 @@ class ClaudeOrchestrator {
       // Find the controls div and update it
       const controlsDiv = terminalWrapper.querySelector('.terminal-controls');
       if (controlsDiv && sessionId.includes('-claude')) {
-        const restartBtn = controlsDiv.innerHTML.includes('↻') ? 
-          `<button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>` : '';
-        controlsDiv.innerHTML = restartBtn + this.getGitHubButtons(sessionId);
+        const restartBtn = `<button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>`;
+        const refreshBtn = `<button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>`;
+        const reviewBtn = `<button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>`;
+        controlsDiv.innerHTML = restartBtn + refreshBtn + reviewBtn + this.getGitHubButtons(sessionId);
       }
     }
   }
@@ -913,6 +1032,17 @@ class ClaudeOrchestrator {
     if (!this.socket || !this.socket.connected) {
       console.error('Not connected to server');
       return;
+    }
+    
+    // Mark session as active when user first provides input
+    // But only for meaningful input (not just arrow keys, etc.)
+    if (data.length > 0 && !data.match(/^[\x1b\x7f\r\n]/) && data.trim().length > 0) {
+      const currentActivity = this.sessionActivity.get(sessionId);
+      if (currentActivity !== 'active') {
+        console.log(`Marking ${sessionId} as active due to user input`);
+        this.sessionActivity.set(sessionId, 'active');
+        this.buildSidebar(); // Refresh to update grey/active state
+      }
     }
     
     this.socket.emit('terminal-input', { sessionId, data });
@@ -1131,6 +1261,289 @@ class ClaudeOrchestrator {
     document.getElementById('theme-select').value = this.settings.theme;
   }
   
+  showCodeReviewDropdown(sessionId) {
+    // Close any existing dropdowns
+    document.querySelectorAll('.review-dropdown').forEach(dropdown => dropdown.remove());
+    
+    // Get the terminal controls container
+    const terminalWrapper = document.getElementById(`wrapper-${sessionId}`);
+    const controlsContainer = terminalWrapper.querySelector('.terminal-controls');
+    
+    // Create dropdown
+    const dropdown = document.createElement('div');
+    dropdown.className = 'review-dropdown';
+    dropdown.innerHTML = this.buildReviewerDropdownHTML(sessionId);
+    
+    // Position and add to DOM
+    controlsContainer.appendChild(dropdown);
+    
+    // Close dropdown when clicking outside
+    const closeDropdown = (e) => {
+      if (!dropdown.contains(e.target)) {
+        dropdown.remove();
+        document.removeEventListener('click', closeDropdown);
+      }
+    };
+    
+    // Add close listener after a short delay to prevent immediate closure
+    setTimeout(() => {
+      document.addEventListener('click', closeDropdown);
+    }, 100);
+  }
+  
+  buildReviewerDropdownHTML(requestingSessionId) {
+    const availableReviewers = this.getAvailableReviewers(requestingSessionId);
+    
+    let html = `
+      <div class="review-dropdown-header">
+        Assign Code Review
+      </div>
+    `;
+    
+    if (availableReviewers.length === 0) {
+      html += `
+        <div class="reviewer-option disabled">
+          <span class="reviewer-status inactive"></span>
+          <span>No available reviewers</span>
+        </div>
+      `;
+    } else {
+      availableReviewers.forEach(({ sessionId, session, worktreeNumber, status }) => {
+        const statusClass = status === 'waiting' ? 'ready' : status === 'busy' ? 'busy' : 'inactive';
+        html += `
+          <div class="reviewer-option" onclick="window.orchestrator.assignCodeReview('${requestingSessionId}', '${sessionId}')">
+            <span class="reviewer-status ${statusClass}"></span>
+            <span>🤖 Claude ${worktreeNumber}</span>
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">(${session.branch || 'unknown'})</span>
+          </div>
+        `;
+      });
+    }
+    
+    return html;
+  }
+  
+  getAvailableReviewers(requestingSessionId) {
+    const reviewers = [];
+    
+    for (const [sessionId, session] of this.sessions) {
+      // Only include Claude sessions that are not the requesting session
+      if (sessionId.includes('-claude') && sessionId !== requestingSessionId) {
+        const worktreeNumber = sessionId.replace('-claude', '').replace('work', '');
+        const isActive = this.sessionActivity.get(sessionId) === 'active';
+        
+        // Prefer active sessions, but include inactive ones as backup
+        if (isActive || session.status === 'waiting') {
+          reviewers.push({
+            sessionId,
+            session,
+            worktreeNumber,
+            status: session.status,
+            isActive
+          });
+        }
+      }
+    }
+    
+    // Sort by preference: active + ready first, then active + busy, then inactive
+    reviewers.sort((a, b) => {
+      if (a.isActive && !b.isActive) return -1;
+      if (!a.isActive && b.isActive) return 1;
+      if (a.status === 'waiting' && b.status !== 'waiting') return -1;
+      if (a.status !== 'waiting' && b.status === 'waiting') return 1;
+      return 0;
+    });
+    
+    return reviewers;
+  }
+  
+  async assignCodeReview(requestingSessionId, reviewerSessionId) {
+    // Close dropdown
+    document.querySelectorAll('.review-dropdown').forEach(dropdown => dropdown.remove());
+    
+    try {
+      // Extract code/PR information from the requesting session
+      const codeInfo = await this.extractCodeForReview(requestingSessionId);
+      
+      if (!codeInfo.hasContent) {
+        this.showToast(`No code changes detected in Claude ${requestingSessionId.replace('work', '').replace('-claude', '')}`, 'warning');
+        return;
+      }
+      
+      // Format review request
+      const reviewRequest = this.formatReviewRequest(codeInfo, requestingSessionId);
+      
+      // Send to reviewer Claude
+      this.sendTerminalInput(reviewerSessionId, reviewRequest);
+      
+      // Mark both sessions as active
+      this.sessionActivity.set(reviewerSessionId, 'active');
+      this.buildSidebar();
+      
+      // Show success message
+      const requestingWorktree = requestingSessionId.replace('work', '').replace('-claude', '');
+      const reviewerWorktree = reviewerSessionId.replace('work', '').replace('-claude', '');
+      this.showToast(`Code review assigned: Claude ${requestingWorktree} → Claude ${reviewerWorktree}`, 'success');
+      
+    } catch (error) {
+      console.error('Error assigning code review:', error);
+      this.showToast('Failed to assign code review', 'error');
+    }
+  }
+  
+  async extractCodeForReview(sessionId) {
+    // Get terminal content
+    const terminalContent = this.terminalManager.getTerminalContent(sessionId);
+    
+    // Look for various types of code content
+    const codePatterns = {
+      prUrl: /https:\/\/github\.com\/[^\s]+\/pull\/\d+/g,
+      gitDiff: /diff --git[\s\S]*?(?=diff --git|$)/g,
+      fileChanges: /^\+\+\+ b\/.*$/gm,
+      codeBlocks: /```[\s\S]*?```/g,
+      bashCommands: /(?:git\s+(?:diff|log|show)|gh\s+pr)/g
+    };
+    
+    const extracted = {
+      prUrls: [...(terminalContent.match(codePatterns.prUrl) || [])],
+      gitDiffs: [...(terminalContent.match(codePatterns.gitDiff) || [])],
+      codeBlocks: [...(terminalContent.match(codePatterns.codeBlocks) || [])],
+      recentCommands: this.extractRecentCommands(terminalContent),
+      hasContent: false
+    };
+    
+    // Determine if there's reviewable content
+    extracted.hasContent = extracted.prUrls.length > 0 || 
+                          extracted.gitDiffs.length > 0 || 
+                          extracted.codeBlocks.length > 0 ||
+                          extracted.recentCommands.some(cmd => cmd.includes('git') || cmd.includes('gh pr'));
+    
+    return extracted;
+  }
+  
+  extractRecentCommands(terminalContent) {
+    const lines = terminalContent.split('\n');
+    const commands = [];
+    
+    // Look for command patterns (simple approach)
+    for (let i = lines.length - 1; i >= 0 && commands.length < 10; i--) {
+      const line = lines[i].trim();
+      if (line.match(/^(git|gh|npm|bun|yarn|node)\s+/) || line.includes('claude ')) {
+        commands.unshift(line);
+      }
+    }
+    
+    return commands;
+  }
+  
+  formatReviewRequest(codeInfo, requestingSessionId) {
+    const requestingWorktree = requestingSessionId.replace('work', '').replace('-claude', '');
+    
+    let request = `Please review the code from Claude ${requestingWorktree}:\n\n`;
+    
+    if (codeInfo.prUrls.length > 0) {
+      request += `**Pull Request(s):**\n`;
+      codeInfo.prUrls.forEach(url => {
+        request += `- ${url}\n`;
+      });
+      request += `\nPlease review this PR and provide feedback on:\n`;
+      request += `- Code quality and best practices\n`;
+      request += `- Potential bugs or issues\n`;
+      request += `- Suggestions for improvement\n`;
+      request += `- Architecture and design patterns\n\n`;
+    }
+    
+    if (codeInfo.gitDiffs.length > 0) {
+      request += `**Git Diff:**\n\`\`\`diff\n`;
+      request += codeInfo.gitDiffs.slice(0, 2).join('\n'); // Limit to first 2 diffs
+      request += `\n\`\`\`\n\n`;
+    }
+    
+    if (codeInfo.codeBlocks.length > 0) {
+      request += `**Code Changes:**\n`;
+      request += codeInfo.codeBlocks.slice(0, 3).join('\n\n'); // Limit to first 3 blocks
+      request += `\n\n`;
+    }
+    
+    if (codeInfo.recentCommands.length > 0) {
+      request += `**Recent Commands:**\n`;
+      codeInfo.recentCommands.forEach(cmd => {
+        request += `- \`${cmd}\`\n`;
+      });
+      request += `\n`;
+    }
+    
+    request += `Please provide a thorough code review with specific feedback and suggestions.\n`;
+    
+    return request;
+  }
+  
+  showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+      <div class="toast-content">
+        <span class="toast-icon">${type === 'success' ? '✅' : type === 'warning' ? '⚠️' : type === 'error' ? '❌' : 'ℹ️'}</span>
+        <span class="toast-text">${message}</span>
+      </div>
+    `;
+    
+    // Add styles for different toast types
+    const styles = {
+      info: 'var(--accent-primary)',
+      success: 'var(--accent-success)', 
+      warning: 'var(--accent-warning)',
+      error: 'var(--accent-danger)'
+    };
+    
+    toast.style.cssText = `
+      position: fixed;
+      top: calc(var(--header-height) + 20px);
+      right: 20px;
+      background: ${styles[type]};
+      color: white;
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-md);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      animation: slideInRight 0.3s ease-out, fadeOutRight 0.3s ease-in 4.7s forwards;
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Remove after 5 seconds
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.remove();
+      }
+    }, 5000);
+  }
+
+  launchDiffViewer(githubUrl) {
+    // Parse GitHub URL to extract owner, repo, and PR/commit
+    const prMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
+    const commitMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/);
+    
+    let diffViewerUrl = 'http://localhost:7655';
+    
+    if (prMatch) {
+      const [, owner, repo, pr] = prMatch;
+      diffViewerUrl += `/pr/${owner}/${repo}/${pr}`;
+    } else if (commitMatch) {
+      const [, owner, repo, sha] = commitMatch;
+      diffViewerUrl += `/commit/${owner}/${repo}/${sha}`;
+    } else {
+      this.showToast('Unable to parse GitHub URL', 'error');
+      return;
+    }
+    
+    // Open in new tab
+    window.open(diffViewerUrl, '_blank');
+    
+    // Show info toast
+    this.showToast('Opening Advanced Diff Viewer...', 'info');
+  }
+
   getAuthToken() {
     // Check URL params first
     const urlParams = new URLSearchParams(window.location.search);

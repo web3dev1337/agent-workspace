@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Diff Viewer API</title>
+</head>
+<body>
+    <h1>Debug Diff Viewer API</h1>
+    <button onclick="testAPI()">Test API</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function testAPI() {
+            const output = document.getElementById('output');
+            output.textContent = 'Testing...\n';
+            
+            try {
+                // Test fetching PR data
+                const response = await fetch('http://localhost:7655/api/github/pr/NeuralPixelGames/HyFire2/876');
+                const data = await response.json();
+                
+                output.textContent += `\nPR Data fetched: ${data.files.length} files\n`;
+                
+                // Show first file details
+                const firstFile = data.files[0];
+                output.textContent += `\nFirst file: ${firstFile.filename}\n`;
+                output.textContent += `Status: ${firstFile.status}\n`;
+                output.textContent += `Has patch: ${!!firstFile.patch}\n`;
+                output.textContent += `Patch length: ${firstFile.patch?.length || 0}\n`;
+                output.textContent += `Has oldContent: ${!!firstFile.oldContent} (${firstFile.oldContent?.length || 0} chars)\n`;
+                output.textContent += `Has newContent: ${!!firstFile.newContent} (${firstFile.newContent?.length || 0} chars)\n`;
+                
+                // Show patch sample
+                if (firstFile.patch) {
+                    output.textContent += `\nPatch preview:\n${firstFile.patch.substring(0, 500)}...\n`;
+                }
+                
+                // Test diff analysis
+                const diffResponse = await fetch('http://localhost:7655/api/diff/pr/NeuralPixelGames/HyFire2/876');
+                const diffData = await diffResponse.json();
+                
+                output.textContent += `\n\nDiff Analysis:\n`;
+                const firstDiff = diffData.files[0];
+                output.textContent += `File: ${firstDiff.path || firstDiff.filename}\n`;
+                output.textContent += `Type: ${firstDiff.type}\n`;
+                output.textContent += `Changes: ${firstDiff.changes?.length || 0}\n`;
+                
+                // Show the actual file object
+                output.textContent += `\n\nFull first file object:\n`;
+                output.textContent += JSON.stringify(firstFile, null, 2);
+                
+            } catch (error) {
+                output.textContent += `\nError: ${error.message}\n`;
+            }
+        }
+    </script>
+</body>
+</html>
