@@ -1,4 +1,4 @@
-use notify::{Watcher, RecursiveMode, Event, Config, RecommendedWatcher};
+use notify::{Watcher, RecursiveMode, Config, RecommendedWatcher};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;

@@ -19,8 +19,11 @@ fn show_notification(title: String, body: String) -> Result<(), String> {
 
 #[tauri::command]
 fn toggle_devtools(window: tauri::WebviewWindow) {
-    // Simple devtools toggle
-    window.open_devtools();
+    // Devtools are available in debug builds only
+    #[cfg(debug_assertions)]
+    {
+        window.open_devtools();
+    }
 }
 
 #[tauri::command]
@@ -105,6 +108,9 @@ fn main() {
     // Create channels for terminal output and file events
     let (output_tx, mut output_rx) = mpsc::unbounded_channel::<TerminalOutput>();
     let (file_event_tx, mut file_event_rx) = mpsc::unbounded_channel::<FileEvent>();
+    
+    // Enable GPU acceleration
+    std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "0");
     
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
