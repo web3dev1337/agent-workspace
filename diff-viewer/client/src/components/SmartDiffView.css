@@ -1,0 +1,334 @@
+.smart-diff-view {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Summary Section */
+.diff-summary {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.diff-summary h3 {
+  margin: 0 0 10px 0;
+  color: #fff;
+  font-size: 20px;
+}
+
+.summary-text {
+  color: #aaa;
+  margin: 0 0 20px 0;
+  font-size: 16px;
+}
+
+.diff-stats {
+  display: flex;
+  gap: 30px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: #4caf50;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #888;
+  text-transform: uppercase;
+}
+
+/* Section Styles */
+.diff-section {
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  margin-bottom: 15px;
+  overflow: hidden;
+}
+
+.section-header {
+  padding: 15px 20px;
+  background: #1a1a1a;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.section-header:hover {
+  background: #222;
+}
+
+.section-header h4 {
+  margin: 0;
+  flex: 1;
+  color: #fff;
+  font-size: 16px;
+}
+
+.toggle-icon {
+  color: #666;
+  font-size: 12px;
+}
+
+.section-hint {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+}
+
+.section-content {
+  padding: 15px 20px;
+}
+
+/* Refactorings */
+.refactoring-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: #0a0a0a;
+  border-left: 3px solid #2196f3;
+  border-radius: 3px;
+}
+
+.ref-type {
+  color: #2196f3;
+  text-transform: capitalize;
+  font-weight: 500;
+  min-width: 120px;
+}
+
+.ref-detail {
+  flex: 1;
+  color: #ccc;
+}
+
+.ref-detail code {
+  background: #1a1a1a;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: #ffa726;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+}
+
+.confidence {
+  color: #666;
+  font-size: 12px;
+}
+
+/* Moved Code */
+.moved-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 8px 10px;
+  margin-bottom: 5px;
+  background: #0a0a0a;
+  border-left: 3px solid #9c27b0;
+}
+
+.move-unit {
+  color: #e1bee7;
+  font-weight: 500;
+}
+
+.move-detail {
+  color: #999;
+  font-size: 14px;
+}
+
+/* Duplications */
+.section-header.warning {
+  background: #3d2a00;
+  border: 1px solid #ffa726;
+}
+
+.duplication-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: #1a0a00;
+  border-left: 3px solid #ff9800;
+  border-radius: 3px;
+}
+
+.dup-units {
+  color: #ffb74d;
+  font-weight: 500;
+}
+
+.dup-detail {
+  color: #999;
+  font-size: 14px;
+}
+
+/* Changes */
+.change-group {
+  margin-bottom: 20px;
+}
+
+.change-group h5 {
+  margin: 0 0 10px 0;
+  color: #aaa;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.change-group h5.collapsible {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.change-group h5.collapsible:hover {
+  color: #ccc;
+}
+
+/* Change Items */
+.change-item {
+  margin-bottom: 8px;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.change-item.collapsed {
+  opacity: 0.6;
+}
+
+.change-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 15px;
+  background: #0a0a0a;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.change-header:hover {
+  background: #111;
+}
+
+.change-icon {
+  width: 20px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.change-item.added .change-icon {
+  color: #4caf50;
+}
+
+.change-item.deleted .change-icon {
+  color: #f44336;
+}
+
+.change-item.modified .change-icon {
+  color: #ff9800;
+}
+
+.change-name {
+  flex: 1;
+  color: #fff;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 14px;
+}
+
+.change-lines {
+  color: #666;
+  font-size: 12px;
+}
+
+.change-similarity {
+  color: #888;
+  font-size: 12px;
+}
+
+/* Complexity Badges */
+.complexity-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.complexity-badge.high {
+  background: #d32f2f;
+  color: #fff;
+}
+
+.complexity-badge.medium {
+  background: #f57c00;
+  color: #fff;
+}
+
+/* Noise Section */
+.section-header.collapsed {
+  background: #0a0a0a;
+  color: #666;
+}
+
+.noise .section-header h4 {
+  color: #666;
+}
+
+/* Progressive Disclosure */
+.change-details {
+  padding: 15px;
+  background: #050505;
+  border-top: 1px solid #1a1a1a;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  color: #aaa;
+}
+
+/* Animations */
+@keyframes highlight {
+  0% { background: #333; }
+  100% { background: transparent; }
+}
+
+.change-item.newly-added {
+  animation: highlight 1s ease-out;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .diff-stats {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .stat {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+  }
+  
+  .change-header {
+    flex-wrap: wrap;
+  }
+}

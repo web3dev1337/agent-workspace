@@ -94,12 +94,24 @@ class StatusDetector {
     const lastFewLines = lines.slice(-5).join('\n');
     const lastLine = lines[lines.length - 1].trim();
     
+    // Check if this looks like Claude startup/welcome screen
+    const isClaudeStartup = buffer.includes('Welcome to Claude Code!') && 
+                           buffer.includes('for shortcuts') &&
+                           buffer.includes('See you in a minute');
+    
+    // If it's startup and shows the ready prompt, it should be waiting (ready)
+    if (isClaudeStartup && buffer.includes('◯ See you in a minute')) {
+      logger.debug('Claude startup detected - ready for input');
+      return this.updateStatus('waiting', buffer);
+    }
+    
     // Debug logging to see what Claude actually outputs
     if (buffer.length > this.lastBufferLength + 100) { // Significant new output
       logger.debug('Claude output detected', {
         lastLine: lastLine,
         lastFewLines: lastFewLines.slice(-200),
-        bufferGrowth: buffer.length - this.lastBufferLength
+        bufferGrowth: buffer.length - this.lastBufferLength,
+        isStartup: isClaudeStartup
       });
       this.lastBufferLength = buffer.length;
     }

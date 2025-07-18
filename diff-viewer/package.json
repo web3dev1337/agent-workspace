@@ -1,0 +1,43 @@
+{
+  "name": "diff-viewer",
+  "version": "1.0.0",
+  "description": "Advanced Git Diff Viewer for Claude Orchestrator",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "node server/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "git",
+    "diff",
+    "ast",
+    "code-review"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@octokit/rest": "^19.0.7",
+    "better-sqlite3": "^12.2.0",
+    "cors": "^2.8.5",
+    "diff": "^5.2.0",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "js-yaml": "^4.1.0",
+    "json-diff": "^1.0.6",
+    "markdown-pdf": "^11.0.0",
+    "marked": "^16.0.0",
+    "puppeteer": "^24.12.1",
+    "socket.io": "^4.8.1",
+    "sqlite3": "^5.1.7",
+    "tree-sitter": "^0.20.1",
+    "tree-sitter-javascript": "^0.20.0",
+    "tree-sitter-python": "^0.20.2",
+    "tree-sitter-typescript": "^0.20.1",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^18.15.11",
+    "typescript": "^5.0.4"
+  }
+}

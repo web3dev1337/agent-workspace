@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  diff-viewer:
+    build: .
+    ports:
+      - "7655:7655"
+    environment:
+      - NODE_ENV=production
+      - DIFF_VIEWER_PORT=7655
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - ENABLE_AI_ANALYSIS=true
+    volumes:
+      - ./cache:/app/cache
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:7655/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
