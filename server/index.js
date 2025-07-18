@@ -41,7 +41,8 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: false // Only allow same-origin for security
+    origin: ["http://localhost:2080", "http://localhost:3000", "tauri://localhost"],
+    credentials: true
   }
 });
 
