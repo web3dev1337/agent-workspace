@@ -20,7 +20,7 @@ pub struct TerminalOutput {
 }
 
 pub struct Terminal {
-    id: String,
+    _id: String,
     pty: Box<dyn portable_pty::MasterPty + Send>,
     writer: Box<dyn std::io::Write + Send>,
 }
@@ -58,14 +58,14 @@ impl TerminalManager {
         let cmd = CommandBuilder::new(std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string()));
 
         // Spawn the child process
-        let child = pty_pair.slave.spawn_command(cmd)?;
+        let _child = pty_pair.slave.spawn_command(cmd)?;
         
         // Get writer for sending input
         let writer = pty_pair.master.take_writer()?;
         
         // Create terminal instance
         let terminal = Terminal {
-            id: session_id.clone(),
+            _id: session_id.clone(),
             pty: pty_pair.master,
             writer,
         };
