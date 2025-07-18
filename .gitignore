@@ -38,3 +38,11 @@ config/security.json
 # Build files
 dist/
 build/
+
+# Rust/Tauri build artifacts
+src-tauri/target/
+src-tauri/Cargo.lock
+src-tauri/WixTools/
+
+# Tauri generated files
+src-tauri/gen/
