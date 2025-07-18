@@ -9,9 +9,6 @@
     "beforeDevCommand": "",
     "beforeBuildCommand": ""
   },
-  "permissions": [
-    "shell:allow-open"
-  ],
   "app": {
     "windows": [
       {
