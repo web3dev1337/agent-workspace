@@ -6,7 +6,9 @@ use tokio::sync::mpsc;
 use std::sync::Arc;
 
 mod terminal;
+mod file_watcher;
 use terminal::{TerminalManager, TerminalOutput};
+use file_watcher::{FileWatcherManager, FileEvent};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -72,9 +74,37 @@ async fn list_terminals(
     Ok(terminal_manager.list_terminals())
 }
 
+#[tauri::command]
+async fn watch_directory(
+    file_watcher: State<'_, Arc<FileWatcherManager>>,
+    path: String
+) -> Result<(), String> {
+    file_watcher
+        .watch_directory(path)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn unwatch_directory(
+    file_watcher: State<'_, Arc<FileWatcherManager>>,
+    path: String
+) -> Result<(), String> {
+    file_watcher
+        .unwatch_directory(&path)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn list_watched_paths(
+    file_watcher: State<'_, Arc<FileWatcherManager>>
+) -> Result<Vec<String>, String> {
+    Ok(file_watcher.list_watched_paths())
+}
+
 fn main() {
-    // Create channel for terminal output
+    // Create channels for terminal output and file events
     let (output_tx, mut output_rx) = mpsc::unbounded_channel::<TerminalOutput>();
+    let (file_event_tx, mut file_event_rx) = mpsc::unbounded_channel::<FileEvent>();
     
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -85,14 +115,27 @@ fn main() {
             let terminal_manager = Arc::new(TerminalManager::new(output_tx));
             app.manage(terminal_manager);
             
-            // Clone app handle for the output handler
+            // Create file watcher manager
+            let file_watcher = Arc::new(FileWatcherManager::new(file_event_tx));
+            app.manage(file_watcher);
+            
+            // Clone app handle for the output handlers
             let app_handle = app.handle().clone();
+            let app_handle2 = app.handle().clone();
             
             // Spawn task to handle terminal output
             tauri::async_runtime::spawn(async move {
                 while let Some(output) = output_rx.recv().await {
                     // Emit terminal output to frontend
                     app_handle.emit("terminal-output", output).unwrap();
+                }
+            });
+            
+            // Spawn task to handle file events
+            tauri::async_runtime::spawn(async move {
+                while let Some(event) = file_event_rx.recv().await {
+                    // Emit file event to frontend
+                    app_handle2.emit("file-event", event).unwrap();
                 }
             });
             
@@ -105,7 +148,10 @@ fn main() {
             write_terminal,
             resize_terminal,
             kill_terminal,
-            list_terminals
+            list_terminals,
+            watch_directory,
+            unwatch_directory,
+            list_watched_paths
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
