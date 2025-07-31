@@ -61,37 +61,64 @@ class SessionManager extends EventEmitter {
       this.io.emit('claude-update-required', updateInfo);
     }
     
+    // Create all sessions in parallel for faster startup
+    const sessionPromises = [];
+    
     for (const worktree of this.worktrees) {
-      try {
-        // Create Claude session with proper shell environment
-        this.createSession(`${worktree.id}-claude`, {
-          command: 'bash',
-          args: ['-c', `cd "${worktree.path}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`],
-          cwd: worktree.path,
-          type: 'claude',
-          worktreeId: worktree.id
-        });
-        
-        // Create server session
-        this.createSession(`${worktree.id}-server`, {
-          command: 'bash',
-          args: ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
-          cwd: worktree.path,
-          type: 'server',
-          worktreeId: worktree.id
-        });
-        
-        // Get initial git branch
-        if (this.gitHelper) {
-          this.updateGitBranch(worktree.id, worktree.path);
-        }
-      } catch (error) {
-        logger.error('Failed to initialize worktree sessions', { 
-          worktree: worktree.id, 
-          error: error.message 
-        });
+      // Add Claude session creation to promises array
+      sessionPromises.push(
+        Promise.resolve().then(() => {
+          this.createSession(`${worktree.id}-claude`, {
+            command: 'bash',
+            args: ['-c', `cd "${worktree.path}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`],
+            cwd: worktree.path,
+            type: 'claude',
+            worktreeId: worktree.id
+          });
+        }).catch(error => {
+          logger.error('Failed to initialize Claude session', { 
+            worktree: worktree.id, 
+            error: error.message 
+          });
+        })
+      );
+      
+      // Add server session creation to promises array
+      sessionPromises.push(
+        Promise.resolve().then(() => {
+          this.createSession(`${worktree.id}-server`, {
+            command: 'bash',
+            args: ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
+            cwd: worktree.path,
+            type: 'server',
+            worktreeId: worktree.id
+          });
+        }).catch(error => {
+          logger.error('Failed to initialize server session', { 
+            worktree: worktree.id, 
+            error: error.message 
+          });
+        })
+      );
+      
+      // Add git branch update to promises array
+      if (this.gitHelper) {
+        sessionPromises.push(
+          Promise.resolve().then(() => {
+            this.updateGitBranch(worktree.id, worktree.path);
+          }).catch(error => {
+            logger.error('Failed to update git branch', { 
+              worktree: worktree.id, 
+              error: error.message 
+            });
+          })
+        );
       }
     }
+    
+    // Wait for all sessions to be created in parallel
+    await Promise.all(sessionPromises);
+    logger.info('All sessions initialized', { count: sessionPromises.length });
     
     // Start periodic branch refresh (every 30 seconds)
     this.startBranchRefresh();
