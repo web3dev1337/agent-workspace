@@ -41,8 +41,11 @@ fi
 # Check worktrees
 echo ""
 echo "📁 Worktree Check:"
+# Use WORKTREE_BASE_PATH from environment or default to $HOME
+WORKTREE_BASE="${WORKTREE_BASE_PATH:-$HOME}"
+echo "   Base path: $WORKTREE_BASE"
 for i in {1..8}; do
-    path="/home/ab/HyFire2-work$i"
+    path="$WORKTREE_BASE/HyFire2-work$i"
     if [ -d "$path" ]; then
         echo "✅ work$i: $path"
     else
