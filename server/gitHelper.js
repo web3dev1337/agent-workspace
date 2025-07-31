@@ -25,7 +25,7 @@ class GitHelper {
     
     // Valid worktree paths for security
     this.validPaths = new Set();
-    const basePath = process.env.WORKTREE_BASE_PATH || '/home/ab';
+    const basePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
     const worktreeCount = parseInt(process.env.WORKTREE_COUNT || '8');
     
     for (let i = 1; i <= worktreeCount; i++) {
