@@ -24,7 +24,7 @@ class SessionManager extends EventEmitter {
     this.gitHelper = null; // Will be set later
     
     // Configuration
-    this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || '/home/ab';
+    this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
     this.worktreeCount = parseInt(process.env.WORKTREE_COUNT || '8');
     this.sessionTimeout = parseInt(process.env.SESSION_TIMEOUT || '1800000'); // 30 minutes
     this.branchRefreshInterval = null;
@@ -50,6 +50,32 @@ class SessionManager extends EventEmitter {
   
   async initializeSessions() {
     logger.info('Initializing sessions', { count: this.worktrees.length });
+    
+    // Log configuration for debugging
+    logger.info('SessionManager configuration:', {
+      worktreeBasePath: this.worktreeBasePath,
+      worktreeCount: this.worktreeCount,
+      usingDefault: !process.env.WORKTREE_BASE_PATH
+    });
+    
+    // Check if worktrees exist
+    const fs = require('fs').promises;
+    let missingWorktrees = [];
+    for (let i = 1; i <= this.worktreeCount; i++) {
+      const worktreePath = `${this.worktreeBasePath}/HyFire2-work${i}`;
+      try {
+        await fs.access(worktreePath);
+      } catch (error) {
+        missingWorktrees.push(worktreePath);
+      }
+    }
+    
+    if (missingWorktrees.length > 0) {
+      logger.warn('Missing worktrees detected. Please ensure all worktrees are created:', {
+        missing: missingWorktrees,
+        hint: 'Set WORKTREE_BASE_PATH in .env file or create worktrees in your home directory'
+      });
+    }
     
     // Check Claude CLI version before starting sessions
     const versionInfo = await ClaudeVersionChecker.checkVersion();
