@@ -142,8 +142,10 @@ class ClaudeOrchestrator {
       });
       
       this.socket.on('server-started', ({ sessionId, port }) => {
+        console.log(`[SERVER-STARTED EVENT] Session: ${sessionId}, Port: ${port}`);
         this.serverPorts.set(sessionId, port);
         console.log(`Server ${sessionId} started on port ${port}`);
+        console.log('Current serverPorts:', Array.from(this.serverPorts.entries()));
         
         // Only open localhost automatically - Hytopia needs manual click due to popup blockers
         setTimeout(() => {
@@ -847,9 +849,20 @@ class ClaudeOrchestrator {
   }
   
   playInHytopia(sessionId) {
+    console.log(`[PLAY IN HYTOPIA] Session: ${sessionId}`);
+    console.log('Available ports:', Array.from(this.serverPorts.entries()));
     const port = this.serverPorts.get(sessionId);
     if (!port) {
       console.error('No port found for server', sessionId);
+      // Try to calculate port based on worktree number
+      const worktreeMatch = sessionId.match(/work(\d+)/);
+      if (worktreeMatch) {
+        const worktreeNum = parseInt(worktreeMatch[1]);
+        const calculatedPort = 8080 + worktreeNum - 1;
+        console.log(`Calculated port ${calculatedPort} for ${sessionId}`);
+        this.serverPorts.set(sessionId, calculatedPort);
+        this.playInHytopia(sessionId); // Retry with calculated port
+      }
       return;
     }
     
