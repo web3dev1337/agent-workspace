@@ -3,9 +3,11 @@
 # Setup Claude hooks in each worktree to notify orchestrator when Claude is ready
 
 ORCHESTRATOR_PORT=${PORT:-3000}
+# Use WORKTREE_BASE_PATH from environment or default to $HOME
+WORKTREE_BASE="${WORKTREE_BASE_PATH:-$HOME}"
 
 for i in {1..8}; do
-  WORKTREE_DIR="/home/<user>/HyFire2-work$i"
+  WORKTREE_DIR="$WORKTREE_BASE/HyFire2-work$i"
   CLAUDE_DIR="$WORKTREE_DIR/.claude"
   
   if [ -d "$WORKTREE_DIR" ]; then
