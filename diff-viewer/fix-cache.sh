@@ -12,7 +12,7 @@ read
 
 # Step 2: Clear the cache
 echo "2️⃣ Clearing cache database..."
-cd /home/<user>/HyFire2-work1/claude-orchestrator/diff-viewer
+cd ${WORKTREE_BASE:-$HOME}/HyFire2-work1/claude-orchestrator/diff-viewer
 rm -f server/cache/diff-cache.db
 echo "✅ Cache cleared!"
 echo ""

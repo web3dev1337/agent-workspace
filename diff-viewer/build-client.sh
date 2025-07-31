@@ -2,7 +2,7 @@
 
 echo "Building diff-viewer client..."
 
-cd /home/<user>/HyFire2-work1/claude-orchestrator/diff-viewer/client
+cd ${WORKTREE_BASE:-$HOME}/HyFire2-work1/claude-orchestrator/diff-viewer/client
 
 # Install dependencies if needed
 if [ ! -d "node_modules" ]; then

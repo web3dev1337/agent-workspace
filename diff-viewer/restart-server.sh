@@ -8,7 +8,7 @@ echo "⏳ Waiting for port to be free..."
 sleep 2
 
 echo "🚀 Starting diff viewer server..."
-cd /home/<user>/HyFire2-work1/claude-orchestrator/diff-viewer
+cd ${WORKTREE_BASE:-$HOME}/HyFire2-work1/claude-orchestrator/diff-viewer
 
 # Build client if dist doesn't exist
 if [ ! -d "client/dist" ]; then

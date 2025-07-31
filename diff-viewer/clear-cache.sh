@@ -3,7 +3,7 @@
 echo "🧹 Clearing diff viewer cache..."
 
 # Remove the SQLite cache database
-rm -f /home/<user>/HyFire2-work1/claude-orchestrator/diff-viewer/server/cache/diff-cache.db
+rm -f ${WORKTREE_BASE:-$HOME}/HyFire2-work1/claude-orchestrator/diff-viewer/server/cache/diff-cache.db
 
 echo "✅ Cache cleared!"
 echo ""
