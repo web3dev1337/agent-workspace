@@ -3,7 +3,7 @@
 # Build and run the diff viewer
 
 echo "🔨 Building the diff viewer client..."
-cd /home/ab/HyFire2-work1/claude-orchestrator/diff-viewer/client
+cd ${WORKTREE_BASE:-$HOME}/HyFire2-work1/claude-orchestrator/diff-viewer/client
 
 # Build the client
 npm run build

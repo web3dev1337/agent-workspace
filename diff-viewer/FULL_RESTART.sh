@@ -12,7 +12,7 @@ sleep 2
 
 # Clear all caches
 echo "2️⃣ Clearing all caches..."
-cd /home/ab/HyFire2-work1/claude-orchestrator/diff-viewer
+cd ${WORKTREE_BASE:-$HOME}/HyFire2-work1/claude-orchestrator/diff-viewer
 rm -f server/cache/diff-cache.db
 rm -rf .cache
 rm -rf node_modules/.cache
