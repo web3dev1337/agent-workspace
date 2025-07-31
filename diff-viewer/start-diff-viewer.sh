@@ -3,7 +3,7 @@
 echo "🚀 Starting Advanced Diff Viewer..."
 
 # Navigate to diff-viewer directory
-cd /home/<user>/HyFire2-work1/claude-orchestrator/diff-viewer
+cd ${WORKTREE_BASE:-$HOME}/HyFire2-work1/claude-orchestrator/diff-viewer
 
 # Build client if dist doesn't exist
 if [ ! -d "client/dist" ]; then

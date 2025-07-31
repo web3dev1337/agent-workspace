@@ -10,7 +10,7 @@ if ! command -v npm &> /dev/null; then
 fi
 
 # Navigate to the diff-viewer directory
-cd /home/<user>/HyFire2-work1/claude-orchestrator/diff-viewer
+cd ${WORKTREE_BASE:-$HOME}/HyFire2-work1/claude-orchestrator/diff-viewer
 
 # Install specific missing packages
 npm install diff@^5.1.0 js-yaml@^4.1.0 json-diff@^1.0.6

@@ -5,7 +5,7 @@ echo "===================="
 echo ""
 
 # Navigate to client directory
-cd /home/<user>/HyFire2-work1/claude-orchestrator/diff-viewer/client
+cd ${WORKTREE_BASE:-$HOME}/HyFire2-work1/claude-orchestrator/diff-viewer/client
 
 # Run the build
 echo "Running: npm run build"
