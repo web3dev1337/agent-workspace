@@ -1,4 +1,11 @@
-const pty = require('node-pty');
+// Use mock pty for Windows development if node-pty fails to load
+let pty;
+try {
+  pty = require('node-pty');
+} catch (err) {
+  console.warn('node-pty failed to load, using mock implementation');
+  pty = require('./mockPty');
+}
 const { EventEmitter } = require('events');
 const winston = require('winston');
 const { ClaudeVersionChecker } = require('./claudeVersionChecker');
