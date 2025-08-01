@@ -70,7 +70,79 @@ If you need the diff viewer:
    ./start-diff-viewer.sh
    ```
 
-## Troubleshooting
+## Windows Setup (Git Bash)
+
+For Windows users using Git Bash, additional setup is required:
+
+### Prerequisites
+
+1. **Visual Studio Build Tools 2022**
+   - Download from: https://aka.ms/vs/17/release/vs_buildtools.exe
+   - During installation, select:
+     - ✅ "Desktop development with C++" workload
+     - ✅ MSVC v143 - VS 2022 C++ x64/x86 build tools
+     - ✅ Windows 11 SDK (or Windows 10 SDK)
+   - Total download: ~2-3 GB
+
+2. **Rust (for Tauri)**
+   - Download from: https://win.rustup.rs/x86_64
+   - Run the installer (it will auto-detect VS Build Tools)
+   - Restart your terminal after installation
+
+### Windows-Specific Steps
+
+1. **Clone and setup**
+   ```bash
+   git clone https://github.com/web3dev1337/claude-orchestrator.git
+   cd claude-orchestrator
+   ```
+
+2. **Create HyFire2 worktrees**
+   ```bash
+   # Navigate to your HyFire2 repository
+   cd GitHub/HyFire2
+   
+   # Create 8 worktrees in your home directory
+   for i in {1..8}; do
+     git worktree add ~/HyFire2-work$i
+   done
+   
+   # Update each worktree to latest master
+   for i in {1..8}; do
+     cd ~/HyFire2-work$i && git pull origin master
+   done
+   ```
+
+3. **Install dependencies**
+   ```bash
+   cd ~/GitHub/claude-orchestrator
+   npm install
+   ```
+
+4. **If port 3000 is in use, create .env file**
+   ```bash
+   echo "PORT=3001" > .env
+   ```
+
+5. **Start the application**
+   ```bash
+   npm run dev
+   ```
+
+### Windows Limitations
+
+- The application uses a mock PTY implementation on Windows
+- Terminal functionality is limited compared to WSL/Linux
+- For full functionality, consider using WSL2
+
+### Troubleshooting Windows Issues
+
+- **node-pty build fails**: This is expected on Windows. The app will use the mock PTY fallback
+- **Port already in use**: Create `.env` file with `PORT=3001` or another free port
+- **Rust not found after install**: Restart your Git Bash terminal
+- **VS Build Tools not detected**: Ensure you selected the C++ workload during installation
+
+## General Troubleshooting
 
 - **Worktrees not found**: The system now automatically uses your home directory. If you have worktrees elsewhere, set `WORKTREE_BASE_PATH` in `.env`
 - **Permission errors**: Make sure all `.sh` scripts are executable: `chmod +x *.sh`
