@@ -55,7 +55,7 @@ class ClaudeOrchestrator {
       const socketOptions = authToken ? { auth: { token: authToken } } : {};
       
       // Explicitly connect to the server URL
-      this.socket = io('http://localhost:3000', socketOptions);
+      this.socket = io('http://localhost:3001', socketOptions);
       console.log('Socket created, waiting for connection...');
       
       // Connection events

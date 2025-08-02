@@ -6,8 +6,11 @@ const app = express();
 const PORT = 2080;
 
 // Proxy socket.io requests to the backend server
+// Get port from environment or use default
+const BACKEND_PORT = process.env.PORT || 3001;
+
 app.use('/socket.io', createProxyMiddleware({
-    target: 'http://localhost:3000',
+    target: `http://localhost:${BACKEND_PORT}`,
     ws: true,
     changeOrigin: true
 }));
