@@ -21,12 +21,25 @@ class MockPty extends EventEmitter {
     };
     
     // Use Windows cmd.exe instead
-    const cmd = `${shell} ${args.join(' ')}`;
-    this.process = exec(cmd, {
-      cwd: options.cwd,
-      env: options.env,
-      shell: true
-    });
+    const { spawn } = require('child_process');
+    
+    // For Windows, properly handle cmd.exe commands
+    if (process.platform === 'win32' && shell === 'cmd.exe') {
+      this.process = spawn(shell, args, {
+        cwd: options.cwd,
+        env: options.env,
+        windowsHide: true,
+        shell: false
+      });
+    } else {
+      const cmd = `${shell} ${args.join(' ')}`;
+      this.process = exec(cmd, {
+        cwd: options.cwd,
+        env: options.env,
+        shell: true,
+        windowsHide: true
+      });
+    }
     
     this.process.stdout.on('data', (data) => {
       this.emit('data', data.toString());

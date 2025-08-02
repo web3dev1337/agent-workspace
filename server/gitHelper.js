@@ -29,7 +29,7 @@ class GitHelper {
     const worktreeCount = parseInt(process.env.WORKTREE_COUNT || '8');
     
     for (let i = 1; i <= worktreeCount; i++) {
-      this.validPaths.add(`${basePath}/HyFire2-work${i}`);
+      this.validPaths.add(path.join(basePath, `HyFire2-work${i}`));
     }
   }
   
@@ -201,7 +201,13 @@ class GitHelper {
   isValidPath(worktreePath) {
     // Normalize path to prevent traversal attacks
     const normalized = path.normalize(worktreePath);
-    return this.validPaths.has(normalized);
+    // Check if any valid path matches the normalized path
+    for (const validPath of this.validPaths) {
+      if (path.normalize(validPath) === normalized) {
+        return true;
+      }
+    }
+    return false;
   }
   
   isValidBranchName(branchName) {

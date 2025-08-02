@@ -42,7 +42,7 @@ class SessionManager extends EventEmitter {
     for (let i = 1; i <= this.worktreeCount; i++) {
       this.worktrees.push({
         id: `work${i}`,
-        path: `${this.worktreeBasePath}/HyFire2-work${i}`
+        path: require('path').join(this.worktreeBasePath, `HyFire2-work${i}`)
       });
     }
   }
@@ -67,9 +67,10 @@ class SessionManager extends EventEmitter {
     
     // Check if worktrees exist
     const fs = require('fs').promises;
+    const path = require('path');
     let missingWorktrees = [];
     for (let i = 1; i <= this.worktreeCount; i++) {
-      const worktreePath = `${this.worktreeBasePath}/HyFire2-work${i}`;
+      const worktreePath = path.join(this.worktreeBasePath, `HyFire2-work${i}`);
       try {
         await fs.access(worktreePath);
       } catch (error) {
@@ -102,8 +103,10 @@ class SessionManager extends EventEmitter {
       sessionPromises.push(
         Promise.resolve().then(() => {
           this.createSession(`${worktree.id}-claude`, {
-            command: 'bash',
-            args: ['-c', `cd "${worktree.path}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`],
+            command: process.platform === 'win32' ? 'cmd.exe' : 'bash',
+            args: process.platform === 'win32' 
+              ? ['/c', `cd /d "${worktree.path}" && claude`]
+              : ['-c', `cd "${worktree.path}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`],
             cwd: worktree.path,
             type: 'claude',
             worktreeId: worktree.id
@@ -120,8 +123,10 @@ class SessionManager extends EventEmitter {
       sessionPromises.push(
         Promise.resolve().then(() => {
           this.createSession(`${worktree.id}-server`, {
-            command: 'bash',
-            args: ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
+            command: process.platform === 'win32' ? 'cmd.exe' : 'bash',
+            args: process.platform === 'win32'
+              ? ['/c', `cd /d "${worktree.path}" && echo === Server Terminal for ${worktree.id} === && echo Directory: %CD% && echo. && echo Ready to run: bun index.ts && echo Available commands: bun, npm, node && echo. && cmd`]
+              : ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
             cwd: worktree.path,
             type: 'server',
             worktreeId: worktree.id
@@ -188,8 +193,10 @@ class SessionManager extends EventEmitter {
         env: {
           ...process.env,
           // Include snap binaries, node paths, and common paths
-          PATH: `${process.env.HOME}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
-          HOME: process.env.HOME, // Use actual home directory for Claude CLI access
+          PATH: process.platform === 'win32'
+            ? process.env.PATH // On Windows, use the system PATH as-is
+            : `${process.env.HOME}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
+          HOME: process.platform === 'win32' ? process.env.USERPROFILE : process.env.HOME,
           TERM: 'xterm-color',
           // Ensure Claude CLI can find its config
           NODE_PATH: process.env.NODE_PATH
@@ -429,7 +436,12 @@ class SessionManager extends EventEmitter {
   checkProcessLimit(session) {
     if (!session.pty || !session.pty.pid) return;
     
-    // Use pgrep to count child processes
+    // Skip process limit check on Windows for now
+    if (process.platform === 'win32') {
+      return;
+    }
+    
+    // Use pgrep to count child processes (Linux/Mac only)
     const { exec } = require('child_process');
     exec(`pgrep -P ${session.pty.pid} | wc -l`, (err, stdout) => {
       if (!err) {
@@ -489,8 +501,10 @@ class SessionManager extends EventEmitter {
     
     // For Claude sessions, use proper bash wrapper
     if (config.type === 'claude') {
-      config.command = 'bash';
-      config.args = ['-c', `cd "${config.cwd}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`];
+      config.command = process.platform === 'win32' ? 'cmd.exe' : 'bash';
+      config.args = process.platform === 'win32'
+        ? ['/c', `cd /d "${config.cwd}" && claude`]
+        : ['-c', `cd "${config.cwd}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`];
     }
     
     // Terminate existing session
