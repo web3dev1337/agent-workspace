@@ -6,7 +6,6 @@ try {
   console.warn('node-pty failed to load, using mock implementation');
   pty = require('./mockPty');
 }
-const isWindows = process.platform === 'win32';
 const { EventEmitter } = require('events');
 const winston = require('winston');
 const { ClaudeVersionChecker } = require('./claudeVersionChecker');
@@ -32,13 +31,7 @@ class SessionManager extends EventEmitter {
     this.gitHelper = null; // Will be set later
     
     // Configuration
-    if (isWindows) {
-      this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || 'C:\\Users\\AB';
-      this.claudePath = 'claude'; // Assume claude is in PATH on Windows
-    } else {
-      this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
-      this.claudePath = `${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`;
-    }
+    this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
     this.worktreeCount = parseInt(process.env.WORKTREE_COUNT || '8');
     this.sessionTimeout = parseInt(process.env.SESSION_TIMEOUT || '1800000'); // 30 minutes
     this.branchRefreshInterval = null;
@@ -52,24 +45,6 @@ class SessionManager extends EventEmitter {
         path: require('path').join(this.worktreeBasePath, `HyFire2-work${i}`)
       });
     }
-  }
-  
-  getEnvironment() {
-    const env = {
-      ...process.env,
-      TERM: 'xterm-color',
-      NODE_PATH: process.env.NODE_PATH
-    };
-
-    if (isWindows) {
-      env.PATH = process.env.PATH;
-      env.HOME = process.env.USERPROFILE || process.env.HOME;
-    } else {
-      env.PATH = `${process.env.HOME}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
-      env.HOME = process.env.HOME;
-    }
-
-    return env;
   }
   
   setStatusDetector(detector) {
@@ -87,9 +62,6 @@ class SessionManager extends EventEmitter {
     logger.info('SessionManager configuration:', {
       worktreeBasePath: this.worktreeBasePath,
       worktreeCount: this.worktreeCount,
-      platform: process.platform,
-      isWindows: isWindows,
-      claudePath: this.claudePath,
       usingDefault: !process.env.WORKTREE_BASE_PATH
     });
     
@@ -129,21 +101,13 @@ class SessionManager extends EventEmitter {
       // Add Claude session creation to promises array
       sessionPromises.push(
         Promise.resolve().then(() => {
-          const config = {
+          this.createSession(`${worktree.id}-claude`, {
+            command: 'bash',
+            args: ['-c', `cd "${worktree.path}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`],
             cwd: worktree.path,
             type: 'claude',
             worktreeId: worktree.id
-          };
-          
-          if (isWindows) {
-            config.command = 'cmd.exe';
-            config.args = ['/c', `cd /d "${worktree.path}" && claude`];
-          } else {
-            config.command = 'bash';
-            config.args = ['-c', `cd "${worktree.path}" && exec ${this.claudePath}`];
-          }
-          
-          this.createSession(`${worktree.id}-claude`, config);
+          });
         }).catch(error => {
           logger.error('Failed to initialize Claude session', { 
             worktree: worktree.id, 
@@ -155,21 +119,13 @@ class SessionManager extends EventEmitter {
       // Add server session creation to promises array
       sessionPromises.push(
         Promise.resolve().then(() => {
-          const config = {
+          this.createSession(`${worktree.id}-server`, {
+            command: 'bash',
+            args: ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
             cwd: worktree.path,
             type: 'server',
             worktreeId: worktree.id
-          };
-          
-          if (isWindows) {
-            config.command = 'cmd.exe';
-            config.args = ['/c', `cd /d "${worktree.path}" && echo === Server Terminal for ${worktree.id} === && echo Directory: %CD% && echo. && echo Ready to run: bun index.ts && echo Available commands: bun, npm, node && echo. && cmd`];
-          } else {
-            config.command = 'bash';
-            config.args = ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`];
-          }
-          
-          this.createSession(`${worktree.id}-server`, config);
+          });
         }).catch(error => {
           logger.error('Failed to initialize server session', { 
             worktree: worktree.id, 
@@ -229,7 +185,15 @@ class SessionManager extends EventEmitter {
         cols: 80,
         rows: 24,
         cwd: config.cwd,
-        env: this.getEnvironment()
+        env: {
+          ...process.env,
+          // Include snap binaries, node paths, and common paths
+          PATH: `${process.env.HOME}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
+          HOME: process.env.HOME, // Use actual home directory for Claude CLI access
+          TERM: 'xterm-color',
+          // Ensure Claude CLI can find its config
+          NODE_PATH: process.env.NODE_PATH
+        }
       });
       
       const session = {
@@ -317,11 +281,9 @@ class SessionManager extends EventEmitter {
       this.sessions.set(sessionId, session);
       
       // Monitor for fork bombs (every 5 seconds)
-      if (!isWindows) {
-        session.processMonitor = setInterval(() => {
-          this.checkProcessLimit(session);
-        }, 5000);
-      }
+      session.processMonitor = setInterval(() => {
+        this.checkProcessLimit(session);
+      }, 5000);
       
     } catch (error) {
       logger.error('Failed to create session', { 
@@ -465,7 +427,6 @@ class SessionManager extends EventEmitter {
   }
   
   checkProcessLimit(session) {
-    if (isWindows) return; // Skip on Windows as pgrep is not available
     if (!session.pty || !session.pty.pid) return;
     
     // Use pgrep to count child processes
@@ -526,15 +487,10 @@ class SessionManager extends EventEmitter {
     // Save config before terminating
     const config = { ...session.config };
     
-    // Update command/args based on platform
+    // For Claude sessions, use proper bash wrapper
     if (config.type === 'claude') {
-      if (isWindows) {
-        config.command = 'cmd.exe';
-        config.args = ['/c', `cd /d "${config.cwd}" && claude`];
-      } else {
-        config.command = 'bash';
-        config.args = ['-c', `cd "${config.cwd}" && exec ${this.claudePath}`];
-      }
+      config.command = 'bash';
+      config.args = ['-c', `cd "${config.cwd}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`];
     }
     
     // Terminate existing session
@@ -564,9 +520,7 @@ class SessionManager extends EventEmitter {
     
     for (const [sessionId, session] of this.sessions) {
       clearTimeout(session.inactivityTimer);
-      if (session.processMonitor) {
-        clearInterval(session.processMonitor);
-      }
+      clearInterval(session.processMonitor);
       
       try {
         if (session.pty) {
