@@ -96,7 +96,7 @@ class SessionManager extends EventEmitter {
         Promise.resolve().then(() => {
           this.createSession(`${worktree.id}-claude`, {
             command: 'bash',
-            args: ['-c', `cd "${worktree.path}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`],
+            args: ['-c', `cd "${worktree.path}" && exec claude`],
             cwd: worktree.path,
             type: 'claude',
             worktreeId: worktree.id
