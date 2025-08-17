@@ -7,6 +7,7 @@
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
     "dev:client": "node client/dev-server.js",
+    "app": "bash scripts/run-orchestrator.sh",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
