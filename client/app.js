@@ -102,6 +102,9 @@ class ClaudeOrchestrator {
         this.showClaudeUpdateRequired(updateInfo);
       });
       
+      // Periodic heartbeat to keep sessions alive while UI is open
+      this.startHeartbeats();
+      
       // Set timeout for connection
       setTimeout(() => {
         if (!this.socket.connected) {
@@ -109,6 +112,20 @@ class ClaudeOrchestrator {
         }
       }, 10000);
     });
+  }
+  
+  startHeartbeats() {
+    // Clear previous if any
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval);
+    }
+    // Send a heartbeat for each known session every 30s
+    this._heartbeatInterval = setInterval(() => {
+      if (!this.socket || !this.socket.connected) return;
+      for (const sessionId of this.sessions.keys()) {
+        this.socket.emit('session-heartbeat', { sessionId });
+      }
+    }, 30000);
   }
   
   setupUIListeners() {

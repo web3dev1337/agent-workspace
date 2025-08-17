@@ -141,6 +141,9 @@ class ClaudeOrchestrator {
         this.showClaudeUpdateRequired(updateInfo);
       });
       
+      // Periodic heartbeat to keep sessions alive while UI is open
+      this.startHeartbeats();
+      
       this.socket.on('server-started', ({ sessionId, port }) => {
         console.log(`[SERVER-STARTED EVENT] Session: ${sessionId}, Port: ${port}`);
         this.serverPorts.set(sessionId, port);
@@ -185,6 +188,18 @@ class ClaudeOrchestrator {
         clearTimeout(timeoutId);
       });
     });
+  }
+  
+  startHeartbeats() {
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval);
+    }
+    this._heartbeatInterval = setInterval(() => {
+      if (!this.socket || !this.socket.connected) return;
+      for (const sessionId of this.sessions.keys()) {
+        this.socket.emit('session-heartbeat', { sessionId });
+      }
+    }, 30000);
   }
   
   setupEventListeners() {
