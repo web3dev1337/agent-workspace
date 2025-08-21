@@ -27,6 +27,9 @@ class SessionManager extends EventEmitter {
     this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
     this.worktreeCount = parseInt(process.env.WORKTREE_COUNT || '8');
     this.sessionTimeout = parseInt(process.env.SESSION_TIMEOUT || '1800000'); // 30 minutes
+    // Per-session-type timeouts. 0 disables auto-termination for that type.
+    this.claudeSessionTimeout = parseInt(process.env.CLAUDE_SESSION_TIMEOUT || '0'); // default disabled
+    this.serverSessionTimeout = parseInt(process.env.SERVER_SESSION_TIMEOUT || '43200000'); // default 12 hours
     this.branchRefreshInterval = null;
     this.maxProcessesPerSession = parseInt(process.env.MAX_PROCESSES_PER_SESSION || '50');
     
@@ -38,6 +41,14 @@ class SessionManager extends EventEmitter {
         path: `${this.worktreeBasePath}/HyFire2-work${i}`
       });
     }
+  }
+
+  // Determine effective inactivity timeout per session (ms)
+  getSessionTimeout(session) {
+    if (!session) return this.sessionTimeout;
+    if (session.type === 'claude') return this.claudeSessionTimeout;
+    if (session.type === 'server') return this.serverSessionTimeout;
+    return this.sessionTimeout;
   }
   
   setStatusDetector(detector) {
@@ -202,8 +213,13 @@ class SessionManager extends EventEmitter {
         config: config
       };
       
-      // Set up inactivity timer
-      session.inactivityTimer = this.resetInactivityTimer(session);
+      // Set up inactivity timer (respect per-type timeout; 0 disables)
+      const effectiveTimeout = this.getSessionTimeout(session);
+      if (effectiveTimeout > 0) {
+        session.inactivityTimer = this.resetInactivityTimer(session);
+      } else {
+        session.inactivityTimer = null;
+      }
       
       // Handle output
       ptyProcess.onData((data) => {
@@ -297,6 +313,9 @@ class SessionManager extends EventEmitter {
     try {
       session.pty.write(data);
       session.lastActivity = Date.now();
+      
+      // Reset inactivity timer on any user input to keep the session alive
+      this.resetInactivityTimer(session);
       
       // If was waiting and user provided input, mark as busy
       if (session.status === 'waiting' && session.type === 'claude') {
@@ -402,9 +421,22 @@ class SessionManager extends EventEmitter {
       return null;
     }
     
+    const timeout = this.getSessionTimeout(session);
+    if (timeout <= 0) {
+      return null;
+    }
+
     session.inactivityTimer = setTimeout(() => {
       // Double-check session still exists before terminating
       if (!this.sessions.has(session.id)) {
+        return;
+      }
+      
+      // Only terminate if we've truly been inactive for the full timeout window
+      const now = Date.now();
+      if (now - session.lastActivity < timeout) {
+        // Activity occurred since this timer was set; reschedule
+        this.resetInactivityTimer(session);
         return;
       }
       
@@ -414,9 +446,18 @@ class SessionManager extends EventEmitter {
       });
       
       this.terminateSession(session.id);
-    }, this.sessionTimeout);
+    }, timeout);
     
     return session.inactivityTimer;
+  }
+
+  // Heartbeat from clients to keep sessions alive while the UI is open
+  heartbeat(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return false;
+    session.lastActivity = Date.now();
+    this.resetInactivityTimer(session);
+    return true;
   }
   
   checkProcessLimit(session) {

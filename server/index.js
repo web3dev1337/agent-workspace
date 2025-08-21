@@ -123,6 +123,11 @@ io.on('connection', (socket) => {
     sessionManager.restartSession(sessionId);
   });
   
+  // Handle session heartbeat to keep sessions alive while UI is open
+  socket.on('session-heartbeat', ({ sessionId }) => {
+    sessionManager.heartbeat(sessionId);
+  });
+  
   // Handle server control
   socket.on('server-control', ({ sessionId, action }) => {
     logger.info('Server control request', { sessionId, action });
