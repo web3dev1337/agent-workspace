@@ -121,8 +121,8 @@ class ClaudeOrchestrator {
         this.updateSessionStatus(sessionId, status);
       });
       
-      this.socket.on('branch-update', ({ sessionId, branch }) => {
-        this.updateSessionBranch(sessionId, branch);
+      this.socket.on('branch-update', ({ sessionId, branch, remoteUrl, defaultBranch }) => {
+        this.updateSessionBranch(sessionId, branch, remoteUrl, defaultBranch);
       });
       
       this.socket.on('notification-trigger', (notification) => {
@@ -163,10 +163,12 @@ class ClaudeOrchestrator {
         }, 2000); // Wait 2 seconds for server to fully start
       });
       
-      this.socket.on('branch-update', ({ sessionId, branch }) => {
+      this.socket.on('branch-update', ({ sessionId, branch, remoteUrl, defaultBranch }) => {
         const session = this.sessions.get(sessionId);
         if (session) {
           session.branch = branch;
+          session.remoteUrl = remoteUrl;
+          session.defaultBranch = defaultBranch;
           console.log(`Branch updated for ${sessionId}: ${branch}`);
           
           // Update sidebar display
@@ -793,10 +795,16 @@ class ClaudeOrchestrator {
     }
   }
   
-  updateSessionBranch(sessionId, branch) {
+  updateSessionBranch(sessionId, branch, remoteUrl, defaultBranch) {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.branch = branch;
+      if (remoteUrl) {
+        session.remoteUrl = remoteUrl;
+      }
+      if (defaultBranch) {
+        session.defaultBranch = defaultBranch;
+      }
     }
     
     // Update terminal branch display
@@ -807,6 +815,9 @@ class ClaudeOrchestrator {
     
     // Update sidebar
     this.buildSidebar();
+    
+    // Update GitHub buttons with new remote URL
+    this.updateTerminalControls(sessionId);
   }
   
   updateQuickActions(sessionId, status) {
@@ -946,13 +957,19 @@ class ClaudeOrchestrator {
     
     // Always show branch button (uses current session's git info)
     const session = this.sessions.get(sessionId);
-    if (session && session.branch && session.branch !== 'master') {
+    if (session && session.branch && session.branch !== 'master' && session.branch !== 'main') {
       const worktreeId = sessionId.split('-')[0];
-      const branchUrl = `https://github.com/NeuralPixelGames/HyFire2/tree/${session.branch}`;
-      const compareUrl = `https://github.com/NeuralPixelGames/HyFire2/compare/master...${session.branch}`;
       
-      buttons += `<button class="control-btn" onclick="window.open('${branchUrl}', '_blank')" title="View Branch on GitHub">🌿</button>`;
-      buttons += `<button class="control-btn" onclick="window.open('${compareUrl}', '_blank')" title="View Branch Diff">📊</button>`;
+      // Use dynamic remote URL if available
+      if (session.remoteUrl) {
+        const branchUrl = `${session.remoteUrl}/tree/${session.branch}`;
+        // Use the actual default branch from git, fallback to 'main' if not available
+        const defaultBranch = session.defaultBranch || 'main';
+        const compareUrl = `${session.remoteUrl}/compare/${defaultBranch}...${session.branch}`;
+        
+        buttons += `<button class="control-btn" onclick="window.open('${branchUrl}', '_blank')" title="View Branch on GitHub">🌿</button>`;
+        buttons += `<button class="control-btn" onclick="window.open('${compareUrl}', '_blank')" title="View Branch Diff">📊</button>`;
+      }
     }
     
     // Show PR button if PR link detected

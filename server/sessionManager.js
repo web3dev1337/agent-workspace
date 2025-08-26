@@ -364,13 +364,17 @@ class SessionManager extends EventEmitter {
     
     try {
       const branch = await this.gitHelper.getCurrentBranch(path);
+      const remoteUrl = await this.gitHelper.getRemoteUrl(path);
+      const defaultBranch = await this.gitHelper.getDefaultBranch(path);
       
       // Update both claude and server sessions for this worktree
       [`${worktreeId}-claude`, `${worktreeId}-server`].forEach(sessionId => {
         const session = this.sessions.get(sessionId);
         if (session) {
           session.branch = branch;
-          this.io.emit('branch-update', { sessionId, branch });
+          session.remoteUrl = remoteUrl;
+          session.defaultBranch = defaultBranch;
+          this.io.emit('branch-update', { sessionId, branch, remoteUrl, defaultBranch });
         }
       });
     } catch (error) {
@@ -391,6 +395,8 @@ class SessionManager extends EventEmitter {
       states[id] = {
         status: session.status,
         branch: session.branch,
+        remoteUrl: session.remoteUrl,
+        defaultBranch: session.defaultBranch,
         type: session.type,
         worktreeId: session.worktreeId,
         lastActivity: session.lastActivity
