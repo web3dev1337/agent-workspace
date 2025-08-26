@@ -1696,16 +1696,27 @@ class ClaudeOrchestrator {
       // Resize terminal to fit the focused container after animation
       setTimeout(() => {
         try {
+          // Store original font size
+          this.focusedTerminalInfo.originalFontSize = xtermInstance.options.fontSize || 12;
+          
+          // Increase font size for better readability in focused mode
+          const originalSize = this.focusedTerminalInfo.originalFontSize;
+          const newFontSize = Math.round(originalSize * 1.8); // 1.8x larger (reduced from 3x by ~60%)
+          xtermInstance.options.fontSize = newFontSize;
+          
           const rect = focusedTerminalBody.getBoundingClientRect();
-          // Calculate new dimensions based on container size
-          const cols = Math.floor((rect.width - 20) / 9);  // Approximate character width with padding
-          const rows = Math.floor((rect.height - 20) / 17); // Approximate line height with padding
+          // Calculate new dimensions based on container size with larger font
+          const charWidth = newFontSize * 0.6;  // Approximate character width
+          const lineHeight = newFontSize * 1.4; // Approximate line height
+          
+          const cols = Math.floor((rect.width - 30) / charWidth);
+          const rows = Math.floor((rect.height - 30) / lineHeight);
           
           // Apply reasonable limits
-          const finalCols = Math.min(250, Math.max(80, cols));
-          const finalRows = Math.min(100, Math.max(24, rows));
+          const finalCols = Math.min(200, Math.max(80, cols));
+          const finalRows = Math.min(80, Math.max(24, rows));
           
-          console.log(`Resizing focused terminal from ${xtermInstance.cols}x${xtermInstance.rows} to ${finalCols}x${finalRows}`);
+          console.log(`Resizing focused terminal from ${xtermInstance.cols}x${xtermInstance.rows} to ${finalCols}x${finalRows} with font size ${newFontSize}px`);
           
           // Resize xterm
           xtermInstance.resize(finalCols, finalRows);
@@ -1764,11 +1775,15 @@ class ClaudeOrchestrator {
         focusOverlay.classList.remove('active');
       }
       
-      // Restore original terminal size
+      // Restore original terminal size and font
       const xtermInstance = this.terminalManager?.terminals?.get(sessionId);
       if (xtermInstance && originalDimensions) {
         setTimeout(() => {
-          console.log(`Restoring terminal size to ${originalDimensions.cols}x${originalDimensions.rows}`);
+          // Restore original font size
+          const originalFontSize = this.focusedTerminalInfo.originalFontSize || 12;
+          xtermInstance.options.fontSize = originalFontSize;
+          
+          console.log(`Restoring terminal size to ${originalDimensions.cols}x${originalDimensions.rows} with font size ${originalFontSize}px`);
           xtermInstance.resize(originalDimensions.cols, originalDimensions.rows);
           
           // Use fit addon if available
