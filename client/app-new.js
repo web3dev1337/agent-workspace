@@ -709,6 +709,7 @@ class ClaudeOrchestrator {
           <span class="terminal-branch">${session.branch || ''}</span>
         </div>
         <div class="terminal-controls">
+          <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
           ${isClaudeSession ? `
             <button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>
             <button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>
@@ -994,10 +995,11 @@ class ClaudeOrchestrator {
       // Find the controls div and update it
       const controlsDiv = terminalWrapper.querySelector('.terminal-controls');
       if (controlsDiv && sessionId.includes('-claude')) {
+        const focusBtn = `<button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>`;
         const restartBtn = `<button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>`;
         const refreshBtn = `<button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>`;
         const reviewBtn = `<button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>`;
-        controlsDiv.innerHTML = restartBtn + refreshBtn + reviewBtn + this.getGitHubButtons(sessionId);
+        controlsDiv.innerHTML = focusBtn + restartBtn + refreshBtn + reviewBtn + this.getGitHubButtons(sessionId);
       }
     }
   }
@@ -1045,6 +1047,7 @@ class ClaudeOrchestrator {
     
     // Update controls HTML
     controlsDiv.innerHTML = `
+      <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
       <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="${isRunning ? 'Stop Server' : 'Start Server & Open Browser'}">
         ${isRunning ? '⏹' : '▶'}
       </button>
@@ -1604,6 +1607,229 @@ class ClaudeOrchestrator {
     
     // Check localStorage
     return localStorage.getItem('claude-orchestrator-token');
+  }
+  
+  // Terminal Focus Feature
+  focusTerminal(sessionId) {
+    try {
+      const terminalWrapper = document.getElementById(`wrapper-${sessionId}`);
+      if (!terminalWrapper) {
+        console.error(`Terminal wrapper not found for ${sessionId}`);
+        return;
+      }
+      
+      // Get session info
+      const session = this.sessions.get(sessionId);
+      if (!session) {
+        console.error(`Session not found for ${sessionId}`);
+        return;
+      }
+      
+      // Get the xterm instance from terminalManager
+      const xtermInstance = this.terminalManager?.terminals?.get(sessionId);
+      if (!xtermInstance) {
+        console.error(`Terminal instance not found for ${sessionId}`);
+        return;
+      }
+      
+      // Store original parent for unfocus
+      const terminalElement = terminalWrapper.querySelector('.terminal');
+      if (!terminalElement) {
+        console.error(`Terminal element not found in wrapper for ${sessionId}`);
+        return;
+      }
+      
+      this.focusedTerminalInfo = {
+        sessionId: sessionId,
+        originalParent: terminalElement.parentElement,
+        originalNextSibling: terminalElement.nextSibling,
+        terminalElement: terminalElement,
+        terminalWrapper: terminalWrapper,
+        originalDimensions: {
+          cols: xtermInstance.cols || 80,
+          rows: xtermInstance.rows || 24
+        }
+      };
+      
+      // Add focusing animation to original terminal
+      terminalWrapper.classList.add('focusing');
+      
+      // Update overlay header
+      const focusedTitle = document.getElementById('focused-title');
+      const focusedBranch = document.getElementById('focused-branch');
+      const focusedStatus = document.getElementById('focused-status');
+      
+      const isClaudeSession = sessionId.includes('-claude');
+      const worktreeNumber = sessionId.split('-')[0].replace('work', '');
+      
+      if (focusedTitle) focusedTitle.textContent = `${isClaudeSession ? '🤖 Claude' : '💻 Server'} ${worktreeNumber}`;
+      if (focusedBranch) focusedBranch.textContent = session.branch || '';
+      if (focusedStatus) focusedStatus.className = `status-indicator ${session.status || 'idle'}`;
+      
+      // Move the actual terminal element to focused container
+      const focusedTerminalBody = document.getElementById('focused-terminal-body');
+      if (!focusedTerminalBody) {
+        console.error('Focused terminal body container not found');
+        return;
+      }
+      
+      focusedTerminalBody.innerHTML = '';
+      focusedTerminalBody.appendChild(terminalElement);
+      
+      // Hide original wrapper
+      terminalWrapper.style.visibility = 'hidden';
+      
+      // Activate focus overlay with animation
+      const focusOverlay = document.getElementById('focus-overlay');
+      if (focusOverlay) {
+        focusOverlay.classList.add('active');
+      }
+      
+      // Bind ESC key for unfocus
+      this.handleEscKey = (e) => {
+        if (e.key === 'Escape') {
+          this.unfocusTerminal();
+        }
+      };
+      document.addEventListener('keydown', this.handleEscKey);
+      
+      // Resize terminal to fit the focused container after animation
+      setTimeout(() => {
+        try {
+          // Store original font size
+          this.focusedTerminalInfo.originalFontSize = xtermInstance.options.fontSize || 12;
+          
+          // Increase font size for better readability in focused mode
+          const originalSize = this.focusedTerminalInfo.originalFontSize;
+          const newFontSize = Math.round(originalSize * 1.8); // 1.8x larger (reduced from 3x by ~60%)
+          xtermInstance.options.fontSize = newFontSize;
+          
+          const rect = focusedTerminalBody.getBoundingClientRect();
+          // Calculate new dimensions based on container size with larger font
+          const charWidth = newFontSize * 0.6;  // Approximate character width
+          const lineHeight = newFontSize * 1.4; // Approximate line height
+          
+          const cols = Math.floor((rect.width - 30) / charWidth);
+          const rows = Math.floor((rect.height - 30) / lineHeight);
+          
+          // Apply reasonable limits
+          const finalCols = Math.min(200, Math.max(80, cols));
+          const finalRows = Math.min(80, Math.max(24, rows));
+          
+          console.log(`Resizing focused terminal from ${xtermInstance.cols}x${xtermInstance.rows} to ${finalCols}x${finalRows} with font size ${newFontSize}px`);
+          
+          // Resize xterm
+          xtermInstance.resize(finalCols, finalRows);
+          
+          // Use fit addon if available
+          const fitAddon = this.terminalManager?.fitAddons?.get(sessionId);
+          if (fitAddon) {
+            fitAddon.fit();
+          }
+          
+          // Send resize command to backend
+          if (this.socket) {
+            this.socket.emit('resize', {
+              sessionId: sessionId,
+              cols: finalCols,
+              rows: finalRows
+            });
+          }
+          
+          // Focus the terminal for input
+          xtermInstance.focus();
+        } catch (resizeError) {
+          console.error('Error resizing focused terminal:', resizeError);
+        }
+      }, 200);
+      
+      // Remove focusing animation after transition
+      setTimeout(() => {
+        terminalWrapper.classList.remove('focusing');
+      }, 300);
+      
+    } catch (error) {
+      console.error('Error focusing terminal:', error);
+    }
+  }
+  
+  unfocusTerminal() {
+    try {
+      if (!this.focusedTerminalInfo) return;
+      
+      const { sessionId, originalParent, originalNextSibling, terminalElement, terminalWrapper, originalDimensions } = this.focusedTerminalInfo;
+      
+      // Move terminal element back to original location
+      if (originalNextSibling) {
+        originalParent.insertBefore(terminalElement, originalNextSibling);
+      } else {
+        originalParent.appendChild(terminalElement);
+      }
+      
+      // Show original wrapper
+      terminalWrapper.style.visibility = 'visible';
+      
+      // Deactivate focus overlay
+      const focusOverlay = document.getElementById('focus-overlay');
+      if (focusOverlay) {
+        focusOverlay.classList.remove('active');
+      }
+      
+      // Restore original terminal size and font
+      const xtermInstance = this.terminalManager?.terminals?.get(sessionId);
+      if (xtermInstance) {
+        // Restore font size immediately before moving the terminal back
+        const originalFontSize = this.focusedTerminalInfo.originalFontSize || 12;
+        console.log(`Restoring font size from ${xtermInstance.options.fontSize}px to ${originalFontSize}px`);
+        xtermInstance.options.fontSize = originalFontSize;
+        
+        // Force a refresh of the terminal to apply font change
+        xtermInstance.refresh(0, xtermInstance.rows - 1);
+        
+        if (originalDimensions) {
+          setTimeout(() => {
+            console.log(`Restoring terminal dimensions to ${originalDimensions.cols}x${originalDimensions.rows}`);
+            xtermInstance.resize(originalDimensions.cols, originalDimensions.rows);
+            
+            // Use fit addon if available
+            const fitAddon = this.terminalManager?.fitAddons?.get(sessionId);
+            if (fitAddon) {
+              setTimeout(() => fitAddon.fit(), 50);
+            }
+            
+            // Send resize command to backend
+            if (this.socket) {
+              this.socket.emit('resize', {
+                sessionId: sessionId,
+                cols: originalDimensions.cols,
+                rows: originalDimensions.rows
+              });
+            }
+          }, 100);
+        }
+      }
+      
+      // Clean up
+      this.focusedTerminalInfo = null;
+      
+      // Remove ESC key listener
+      if (this.handleEscKey) {
+        document.removeEventListener('keydown', this.handleEscKey);
+        this.handleEscKey = null;
+      }
+    } catch (error) {
+      console.error('Error unfocusing terminal:', error);
+    }
+  }
+  
+  calculateTerminalDimensions(container) {
+    if (!container) return null;
+    
+    const rect = container.getBoundingClientRect();
+    const cols = Math.floor(rect.width / 9);  // Approximate character width
+    const rows = Math.floor(rect.height / 20); // Approximate line height
+    
+    return { cols: Math.max(80, cols), rows: Math.max(24, rows) };
   }
 }
 

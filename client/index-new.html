@@ -137,6 +137,27 @@
     
     <!-- Our scripts -->
     <script src="app-new.js"></script>
+    <!-- Focus Overlay -->
+    <div id="focus-overlay" class="focus-overlay">
+        <div class="focus-backdrop" onclick="window.orchestrator.unfocusTerminal()"></div>
+        <div class="focused-terminal-container">
+            <div class="focused-terminal-header">
+                <div class="focused-terminal-title">
+                    <span class="status-indicator" id="focused-status"></span>
+                    <span id="focused-title"></span>
+                    <span id="focused-branch" style="color: var(--accent-primary); font-family: var(--font-mono);"></span>
+                </div>
+                <div class="focus-controls">
+                    <button class="focus-close-btn" onclick="window.orchestrator.unfocusTerminal()" title="Close (ESC)">✕</button>
+                </div>
+            </div>
+            <div class="focused-terminal-body" id="focused-terminal-body">
+                <!-- Terminal will be moved here when focused -->
+            </div>
+        </div>
+        <div class="focus-hint">Press ESC or click outside to exit focus mode</div>
+    </div>
+
     <script src="tauri-compat.js"></script>
     <script src="terminal.js"></script>
     <script src="notifications.js"></script>
