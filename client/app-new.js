@@ -1777,30 +1777,36 @@ class ClaudeOrchestrator {
       
       // Restore original terminal size and font
       const xtermInstance = this.terminalManager?.terminals?.get(sessionId);
-      if (xtermInstance && originalDimensions) {
-        setTimeout(() => {
-          // Restore original font size
-          const originalFontSize = this.focusedTerminalInfo.originalFontSize || 12;
-          xtermInstance.options.fontSize = originalFontSize;
-          
-          console.log(`Restoring terminal size to ${originalDimensions.cols}x${originalDimensions.rows} with font size ${originalFontSize}px`);
-          xtermInstance.resize(originalDimensions.cols, originalDimensions.rows);
-          
-          // Use fit addon if available
-          const fitAddon = this.terminalManager?.fitAddons?.get(sessionId);
-          if (fitAddon) {
-            setTimeout(() => fitAddon.fit(), 50);
-          }
-          
-          // Send resize command to backend
-          if (this.socket) {
-            this.socket.emit('resize', {
-              sessionId: sessionId,
-              cols: originalDimensions.cols,
-              rows: originalDimensions.rows
-            });
-          }
-        }, 100);
+      if (xtermInstance) {
+        // Restore font size immediately before moving the terminal back
+        const originalFontSize = this.focusedTerminalInfo.originalFontSize || 12;
+        console.log(`Restoring font size from ${xtermInstance.options.fontSize}px to ${originalFontSize}px`);
+        xtermInstance.options.fontSize = originalFontSize;
+        
+        // Force a refresh of the terminal to apply font change
+        xtermInstance.refresh(0, xtermInstance.rows - 1);
+        
+        if (originalDimensions) {
+          setTimeout(() => {
+            console.log(`Restoring terminal dimensions to ${originalDimensions.cols}x${originalDimensions.rows}`);
+            xtermInstance.resize(originalDimensions.cols, originalDimensions.rows);
+            
+            // Use fit addon if available
+            const fitAddon = this.terminalManager?.fitAddons?.get(sessionId);
+            if (fitAddon) {
+              setTimeout(() => fitAddon.fit(), 50);
+            }
+            
+            // Send resize command to backend
+            if (this.socket) {
+              this.socket.emit('resize', {
+                sessionId: sessionId,
+                cols: originalDimensions.cols,
+                rows: originalDimensions.rows
+              });
+            }
+          }, 100);
+        }
       }
       
       // Clean up
