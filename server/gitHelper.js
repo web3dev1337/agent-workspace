@@ -23,14 +23,11 @@ class GitHelper {
     this.branchCache = new Map();
     this.cacheTimeout = 30000; // 30 seconds
     
-    // Valid worktree paths for security
-    this.validPaths = new Set();
-    const basePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
-    const worktreeCount = parseInt(process.env.WORKTREE_COUNT || '8');
+    // Store base path for validation
+    this.basePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
     
-    for (let i = 1; i <= worktreeCount; i++) {
-      this.validPaths.add(`${basePath}/HyFire2-work${i}`);
-    }
+    // If specific worktree pattern is needed, it can be configured
+    this.worktreePattern = process.env.WORKTREE_PATTERN || null;
   }
   
   async getCurrentBranch(worktreePath) {
@@ -198,10 +195,96 @@ class GitHelper {
     }
   }
   
+  async getRemoteUrl(worktreePath) {
+    if (!this.isValidPath(worktreePath)) {
+      throw new Error('Invalid worktree path');
+    }
+    
+    try {
+      const { stdout } = await execAsync('git remote get-url origin', {
+        cwd: worktreePath,
+        timeout: 5000,
+        env: {
+          ...process.env,
+          GIT_CONFIG_NOSYSTEM: '1',
+          HOME: worktreePath
+        }
+      });
+      
+      const remoteUrl = stdout.trim();
+      
+      // Convert SSH URL to HTTPS URL for GitHub
+      let httpUrl = remoteUrl;
+      if (remoteUrl.startsWith('git@github.com:')) {
+        httpUrl = remoteUrl
+          .replace('git@github.com:', 'https://github.com/')
+          .replace(/\.git$/, '');
+      } else if (remoteUrl.startsWith('https://')) {
+        httpUrl = remoteUrl.replace(/\.git$/, '');
+      }
+      
+      logger.info('Retrieved remote URL', { path: worktreePath, url: httpUrl });
+      return httpUrl;
+      
+    } catch (error) {
+      logger.error('Failed to get remote URL', { 
+        path: worktreePath, 
+        error: error.message 
+      });
+      return null;
+    }
+  }
+  
+  async getDefaultBranch(worktreePath) {
+    if (!this.isValidPath(worktreePath)) {
+      throw new Error('Invalid worktree path');
+    }
+    
+    try {
+      // Try to get the default branch from remote
+      const { stdout } = await execAsync('git symbolic-ref refs/remotes/origin/HEAD', {
+        cwd: worktreePath,
+        timeout: 5000
+      });
+      
+      // Extract branch name from refs/remotes/origin/main or refs/remotes/origin/master
+      const defaultBranch = stdout.trim().replace('refs/remotes/origin/', '');
+      logger.info('Retrieved default branch', { path: worktreePath, branch: defaultBranch });
+      return defaultBranch;
+      
+    } catch (error) {
+      // If that fails, try to check if main or master exists
+      try {
+        await execAsync('git show-ref --verify --quiet refs/heads/main', {
+          cwd: worktreePath,
+          timeout: 5000
+        });
+        return 'main';
+      } catch {
+        // Default to master if main doesn't exist
+        return 'master';
+      }
+    }
+  }
+  
   isValidPath(worktreePath) {
     // Normalize path to prevent traversal attacks
-    const normalized = path.normalize(worktreePath);
-    return this.validPaths.has(normalized);
+    const normalized = path.resolve(worktreePath);
+    
+    // Check if path starts with base path
+    if (!normalized.startsWith(this.basePath)) {
+      return false;
+    }
+    
+    // If a specific worktree pattern is configured, validate against it
+    if (this.worktreePattern) {
+      const pattern = new RegExp(this.worktreePattern);
+      return pattern.test(normalized);
+    }
+    
+    // Otherwise, allow any subdirectory under the base path
+    // Additional checks can be added here
+    return true;
   }
   
   isValidBranchName(branchName) {
