@@ -46,21 +46,34 @@ const io = new Server(httpServer, {
   }
 });
 
-// Serve static files from client directory
-const clientPath = path.join(__dirname, '../client');
-logger.info(`Serving static files from: ${clientPath}`);
-app.use(express.static(clientPath));
-
 // Log all requests for debugging
 app.use((req, res, next) => {
   logger.info(`Request: ${req.method} ${req.path}`);
   next();
 });
 
-// Serve the new UI at /new
-app.get('/new', (req, res) => {
+// Define specific routes BEFORE static file serving
+// Serve the new UI as default
+app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/index-new.html'));
 });
+
+// Redirect old /new route to root for backward compatibility
+app.get('/new', (req, res) => {
+  res.redirect('/');
+});
+
+// Serve the classic UI at /classic
+app.get('/classic', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/index.html'));
+});
+
+// Serve static files from client directory (but exclude index files)
+const clientPath = path.join(__dirname, '../client');
+logger.info(`Serving static files from: ${clientPath}`);
+app.use(express.static(clientPath, {
+  index: false // Don't automatically serve index.html
+}));
 
 // Basic auth middleware (optional)
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
