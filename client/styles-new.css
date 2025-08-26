@@ -952,9 +952,28 @@ header h1 {
   height: calc(100% - 65px);
   position: relative;
   background: #0a0e1a;
+  padding: 10px;
+  box-sizing: border-box;
 }
 
 .focused-terminal-body .terminal {
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
+}
+
+.focused-terminal-body .xterm {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.focused-terminal-body .xterm-viewport {
+  width: 100% !important;
+  background-color: transparent !important;
+}
+
+.focused-terminal-body .xterm-screen {
+  width: 100% !important;
   height: 100% !important;
 }
 
