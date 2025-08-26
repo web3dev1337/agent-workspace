@@ -709,6 +709,7 @@ class ClaudeOrchestrator {
           <span class="terminal-branch">${session.branch || ''}</span>
         </div>
         <div class="terminal-controls">
+          <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
           ${isClaudeSession ? `
             <button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>
             <button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>
@@ -994,10 +995,11 @@ class ClaudeOrchestrator {
       // Find the controls div and update it
       const controlsDiv = terminalWrapper.querySelector('.terminal-controls');
       if (controlsDiv && sessionId.includes('-claude')) {
+        const focusBtn = `<button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>`;
         const restartBtn = `<button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>`;
         const refreshBtn = `<button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>`;
         const reviewBtn = `<button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>`;
-        controlsDiv.innerHTML = restartBtn + refreshBtn + reviewBtn + this.getGitHubButtons(sessionId);
+        controlsDiv.innerHTML = focusBtn + restartBtn + refreshBtn + reviewBtn + this.getGitHubButtons(sessionId);
       }
     }
   }
@@ -1045,6 +1047,7 @@ class ClaudeOrchestrator {
     
     // Update controls HTML
     controlsDiv.innerHTML = `
+      <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
       <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="${isRunning ? 'Stop Server' : 'Start Server & Open Browser'}">
         ${isRunning ? '⏹' : '▶'}
       </button>
@@ -1604,6 +1607,139 @@ class ClaudeOrchestrator {
     
     // Check localStorage
     return localStorage.getItem('claude-orchestrator-token');
+  }
+  
+  // Terminal Focus Feature
+  focusTerminal(sessionId) {
+    const terminalWrapper = document.getElementById(`wrapper-${sessionId}`);
+    if (!terminalWrapper) return;
+    
+    // Get session info
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    
+    // Store original parent for unfocus
+    this.focusedTerminalInfo = {
+      sessionId: sessionId,
+      originalParent: terminalWrapper.parentElement,
+      originalNextSibling: terminalWrapper.nextSibling,
+      terminalWrapper: terminalWrapper,
+      terminalBody: terminalWrapper.querySelector('.terminal')
+    };
+    
+    // Add focusing animation to original terminal
+    terminalWrapper.classList.add('focusing');
+    
+    // Update overlay header
+    const focusedTitle = document.getElementById('focused-title');
+    const focusedBranch = document.getElementById('focused-branch');
+    const focusedStatus = document.getElementById('focused-status');
+    
+    const isClaudeSession = sessionId.includes('-claude');
+    const worktreeNumber = sessionId.split('-')[0].replace('work', '');
+    
+    focusedTitle.textContent = `${isClaudeSession ? '🤖 Claude' : '💻 Server'} ${worktreeNumber}`;
+    focusedBranch.textContent = session.branch || '';
+    focusedStatus.className = `status-indicator ${session.status || 'idle'}`;
+    
+    // Move terminal to focused container
+    const focusedTerminalBody = document.getElementById('focused-terminal-body');
+    focusedTerminalBody.innerHTML = '';
+    
+    // Clone the terminal element to preserve xterm instance
+    const terminalClone = this.focusedTerminalInfo.terminalBody.cloneNode(true);
+    focusedTerminalBody.appendChild(terminalClone);
+    
+    // Hide original terminal
+    terminalWrapper.style.visibility = 'hidden';
+    
+    // Activate focus overlay with animation
+    const focusOverlay = document.getElementById('focus-overlay');
+    focusOverlay.classList.add('active');
+    
+    // Bind ESC key for unfocus
+    this.handleEscKey = (e) => {
+      if (e.key === 'Escape') {
+        this.unfocusTerminal();
+      }
+    };
+    document.addEventListener('keydown', this.handleEscKey);
+    
+    // Get the actual terminal instance and resize it for the focused view
+    const xtermInstance = this.terminals.get(sessionId);
+    if (xtermInstance) {
+      setTimeout(() => {
+        // Move the actual terminal canvas to the focused view
+        const originalCanvas = this.focusedTerminalInfo.terminalBody.querySelector('.xterm-screen');
+        const focusedCanvas = terminalClone.querySelector('.xterm-screen');
+        if (originalCanvas && focusedCanvas) {
+          focusedCanvas.parentNode.replaceChild(originalCanvas, focusedCanvas);
+        }
+        
+        // Trigger resize to fit the new container
+        const dimensions = this.calculateTerminalDimensions(focusedTerminalBody);
+        if (dimensions) {
+          xtermInstance.resize(dimensions.cols, dimensions.rows);
+        }
+      }, 50);
+    }
+    
+    // Remove focusing animation after transition
+    setTimeout(() => {
+      terminalWrapper.classList.remove('focusing');
+    }, 300);
+  }
+  
+  unfocusTerminal() {
+    if (!this.focusedTerminalInfo) return;
+    
+    const { sessionId, originalParent, originalNextSibling, terminalWrapper, terminalBody } = this.focusedTerminalInfo;
+    
+    // Restore terminal canvas to original location
+    const focusedTerminalBody = document.getElementById('focused-terminal-body');
+    const focusedCanvas = focusedTerminalBody.querySelector('.xterm-screen');
+    const originalTerminal = terminalBody.querySelector('.xterm-screen');
+    
+    if (focusedCanvas && originalTerminal && originalTerminal.parentNode) {
+      originalTerminal.parentNode.replaceChild(focusedCanvas, originalTerminal);
+    }
+    
+    // Show original terminal
+    terminalWrapper.style.visibility = 'visible';
+    
+    // Deactivate focus overlay
+    const focusOverlay = document.getElementById('focus-overlay');
+    focusOverlay.classList.remove('active');
+    
+    // Resize terminal back to original size
+    const xtermInstance = this.terminals.get(sessionId);
+    if (xtermInstance) {
+      setTimeout(() => {
+        const dimensions = this.calculateTerminalDimensions(terminalBody);
+        if (dimensions) {
+          xtermInstance.resize(dimensions.cols, dimensions.rows);
+        }
+      }, 400);
+    }
+    
+    // Clean up
+    this.focusedTerminalInfo = null;
+    
+    // Remove ESC key listener
+    if (this.handleEscKey) {
+      document.removeEventListener('keydown', this.handleEscKey);
+      this.handleEscKey = null;
+    }
+  }
+  
+  calculateTerminalDimensions(container) {
+    if (!container) return null;
+    
+    const rect = container.getBoundingClientRect();
+    const cols = Math.floor(rect.width / 9);  // Approximate character width
+    const rows = Math.floor(rect.height / 20); // Approximate line height
+    
+    return { cols: Math.max(80, cols), rows: Math.max(24, rows) };
   }
 }
 
