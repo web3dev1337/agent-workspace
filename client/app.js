@@ -909,26 +909,43 @@ class ClaudeOrchestrator {
   }
   
   detectGitHubLinks(sessionId, data) {
-    // Look for GitHub URLs
-    const githubUrlPattern = /https:\/\/github\.com\/[^\s\)]+/g;
+    // Look for GitHub URLs with improved pattern matching
+    const githubUrlPattern = /https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(?:\/[^\s\)\]\}\>\"\'\`]*)?/g;
     const matches = data.match(githubUrlPattern);
     
     if (matches) {
       const links = this.githubLinks.get(sessionId) || {};
       
-      matches.forEach(url => {
+      matches.forEach(originalUrl => {
         // Clean up ANSI escape codes and other terminal artifacts
-        url = url.replace(/\x1b\[[0-9;]*m/g, '') // Remove ANSI codes
-                 .replace(/%1B\[[0-9;]*m/g, '') // Remove URL-encoded ANSI codes
-                 .replace(/\u001b\[[0-9;]*m/g, '') // Remove Unicode ANSI codes
-                 .trim();
+        let url = originalUrl
+          .replace(/\x1b\[[0-9;]*m/g, '') // Remove ANSI codes
+          .replace(/%1B\[[0-9;]*m/g, '') // Remove URL-encoded ANSI codes
+          .replace(/\u001b\[[0-9;]*m/g, '') // Remove Unicode ANSI codes
+          .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Remove other control characters
+          .trim();
         
-        if (url.includes('/pull/')) {
+        // Remove common trailing punctuation that might be captured
+        url = url.replace(/[,;.!?)\]}>'"`]*$/, '');
+        
+        // Validate URL format
+        try {
+          new URL(url);
+        } catch (e) {
+          console.warn('Invalid GitHub URL detected:', url);
+          return;
+        }
+        
+        // Categorize the URL
+        if (url.includes('/pull/') && url.match(/\/pull\/\d+\/?$/)) {
           links.pr = url;
-        } else if (url.includes('/commit/')) {
+          console.log('PR link detected:', url);
+        } else if (url.includes('/commit/') && url.match(/\/commit\/[a-f0-9]+\/?$/)) {
           links.commit = url;
+          console.log('Commit link detected:', url);
         } else if (url.includes('/tree/') || url.includes('/commits/')) {
           links.branch = url;
+          console.log('Branch link detected:', url);
         }
       });
       
@@ -960,6 +977,18 @@ class ClaudeOrchestrator {
     window.open('https://hytopia.com', '_blank');
   }
   
+  openPRLink(url) {
+    try {
+      // Validate the URL
+      new URL(url);
+      console.log('Opening PR URL:', url);
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error('Invalid PR URL:', url, error);
+      this.showToast('Invalid PR URL', 'error');
+    }
+  }
+  
   getGitHubButtons(sessionId) {
     const links = this.githubLinks.get(sessionId) || {};
     let buttons = '';
@@ -983,7 +1012,9 @@ class ClaudeOrchestrator {
     
     // Show PR button if PR link detected
     if (links.pr) {
-      buttons += `<button class="control-btn" onclick="window.open('${links.pr}', '_blank')" title="View PR on GitHub">📥</button>`;
+      // Add some debugging
+      console.log('Adding PR button for session:', sessionId, 'URL:', links.pr);
+      buttons += `<button class="control-btn" onclick="window.orchestrator.openPRLink('${links.pr}')" title="View PR on GitHub (${links.pr})">📥</button>`;
       // Add advanced diff viewer button for PRs
       buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${links.pr}')" title="Advanced Diff View">🔍</button>`;
     }
