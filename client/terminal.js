@@ -16,6 +16,9 @@ class TerminalManager {
     this.lastPasteTimes = new Map();
     this.pasteCooldown = 200; // milliseconds
     
+    // Track scroll state per terminal
+    this.terminalScrollStates = new Map();
+    
     // Terminal theme
     this.theme = {
       background: '#0d1117',
@@ -153,6 +156,16 @@ class TerminalManager {
       }
     });
     
+    // Track scroll state
+    terminal.onScroll(() => {
+      const buffer = terminal.buffer.active;
+      const isAtBottom = buffer.viewportY === buffer.baseY;
+      this.terminalScrollStates.set(sessionId, { isAtBottom });
+    });
+    
+    // Initialize scroll state as at bottom
+    this.terminalScrollStates.set(sessionId, { isAtBottom: true });
+    
     // Custom key handlers
     this.setupKeyHandlers(terminal, sessionId);
     
@@ -262,12 +275,17 @@ class TerminalManager {
       return;
     }
     
+    // Get current scroll state
+    const scrollState = this.terminalScrollStates.get(sessionId) || { isAtBottom: true };
+    
     // Write data to terminal
     terminal.write(data);
     
-    // Auto-scroll if enabled
-    if (this.orchestrator.settings.autoScroll) {
+    // Only auto-scroll if was already at bottom and autoScroll is enabled
+    if (this.orchestrator.settings.autoScroll && scrollState.isAtBottom) {
       terminal.scrollToBottom();
+      // Update scroll state after auto-scrolling
+      this.terminalScrollStates.set(sessionId, { isAtBottom: true });
     }
     
     // Check for special patterns (optional enhancement)
@@ -461,6 +479,9 @@ class TerminalManager {
     
     // Clean up paste tracking
     this.lastPasteTimes.delete(sessionId);
+    
+    // Clean up scroll state
+    this.terminalScrollStates.delete(sessionId);
     
     // Clean up addons
     this.fitAddons.delete(sessionId);
