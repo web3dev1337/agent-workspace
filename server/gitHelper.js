@@ -30,18 +30,35 @@ class GitHelper {
     this.worktreePattern = process.env.WORKTREE_PATTERN || null;
   }
   
-  async getCurrentBranch(worktreePath) {
+  async getCurrentBranch(worktreePath, skipCache = false) {
+    logger.info('🔍 getCurrentBranch called', { 
+      path: worktreePath, 
+      skipCache,
+      timestamp: new Date().toISOString()
+    });
+    
     // Security: Validate path to prevent directory traversal
     if (!this.isValidPath(worktreePath)) {
       logger.error('Invalid worktree path attempted', { path: worktreePath });
       throw new Error('Invalid worktree path');
     }
     
-    // Check cache first
-    const cached = this.getCachedBranch(worktreePath);
-    if (cached) {
-      logger.debug('Using cached branch', { path: worktreePath, branch: cached });
-      return cached;
+    // Check cache first (unless explicitly skipped)
+    if (!skipCache) {
+      const cached = this.getCachedBranch(worktreePath);
+      if (cached) {
+        logger.info('📦 Using cached branch', { 
+          path: worktreePath, 
+          branch: cached,
+          cacheAge: this.branchCache.has(worktreePath) ? 
+            Date.now() - this.branchCache.get(worktreePath).timestamp : 'unknown'
+        });
+        return cached;
+      } else {
+        logger.info('🚫 No cache found', { path: worktreePath });
+      }
+    } else {
+      logger.info('⏭️ Skipping cache as requested', { path: worktreePath });
     }
     
     try {
@@ -64,6 +81,11 @@ class GitHelper {
       }
       
       const branch = stdout.trim();
+      logger.info('🌿 Git command returned branch', { 
+        path: worktreePath, 
+        branch,
+        timestamp: new Date().toISOString()
+      });
       
       // Handle detached HEAD state
       if (branch === 'HEAD') {
@@ -318,6 +340,16 @@ class GitHelper {
   clearCache() {
     this.branchCache.clear();
     logger.info('Cleared branch cache');
+  }
+  
+  clearCacheForPath(worktreePath) {
+    const hadCache = this.branchCache.has(worktreePath);
+    this.branchCache.delete(worktreePath);
+    logger.info('🗑️ Cleared branch cache for path', { 
+      path: worktreePath,
+      hadCache,
+      timestamp: new Date().toISOString()
+    });
   }
   
   // Batch operation to update all branches
