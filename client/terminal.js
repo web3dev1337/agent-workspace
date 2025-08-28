@@ -16,6 +16,10 @@ class TerminalManager {
     this.lastPasteTimes = new Map();
     this.pasteCooldown = 200; // milliseconds
     
+    // Word deletion debouncing
+    this.lastWordDeleteTimes = new Map();
+    this.wordDeleteCooldown = 150; // milliseconds
+    
     // Track scroll state per terminal
     this.terminalScrollStates = new Map();
     this.userScrolling = new Map();
@@ -362,6 +366,28 @@ class TerminalManager {
         return false;
       }
       
+      // Ctrl+Backspace or Alt+Backspace for word deletion with debouncing
+      if ((e.ctrlKey || e.altKey) && e.key === 'Backspace') {
+        e.preventDefault();
+        
+        // Check if we're within the cooldown period
+        const now = Date.now();
+        const lastDelete = this.lastWordDeleteTimes.get(sessionId) || 0;
+        
+        if (now - lastDelete < this.wordDeleteCooldown) {
+          // Still in cooldown, ignore this word deletion
+          console.log(`Ignoring word deletion for ${sessionId}, cooldown active`);
+          return false;
+        }
+        
+        // Update last word delete time
+        this.lastWordDeleteTimes.set(sessionId, now);
+        
+        // Send Ctrl+W sequence to delete word backwards
+        this.orchestrator.sendTerminalInput(sessionId, '\x17');
+        return false;
+      }
+      
       // Track keyboard scrolling (Page Up, Page Down, Home, End, Ctrl+Home, Ctrl+End)
       if (e.key === 'PageUp' || e.key === 'PageDown' || 
           e.key === 'Home' || e.key === 'End' ||
@@ -627,6 +653,7 @@ class TerminalManager {
     
     // Clean up paste tracking
     this.lastPasteTimes.delete(sessionId);
+    this.lastWordDeleteTimes.delete(sessionId);
     
     // Clean up scroll state
     this.terminalScrollStates.delete(sessionId);
