@@ -20,6 +20,13 @@ class TerminalManager {
     this.lastWordDeleteTimes = new Map();
     this.wordDeleteCooldown = 150; // milliseconds
     
+    // Track scroll state per terminal
+    this.terminalScrollStates = new Map();
+    this.userScrolling = new Map();
+    
+    // Apply global terminal scrollbar styles
+    this.applyScrollbarStyles();
+    
     // Terminal theme
     this.theme = {
       background: '#0d1117',
@@ -69,6 +76,104 @@ class TerminalManager {
       brightCyan: '#3192aa',
       brightWhite: '#8c959f'
     };
+  }
+  
+  applyScrollbarStyles() {
+    // Check if styles already exist
+    if (document.getElementById('terminal-scrollbar-styles')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'terminal-scrollbar-styles';
+    style.textContent = `
+      /* Custom scrollbar for ALL terminal elements - minimal dark squared design */
+      .xterm .xterm-viewport::-webkit-scrollbar,
+      .xterm-viewport::-webkit-scrollbar,
+      .xterm-screen::-webkit-scrollbar,
+      .xterm::-webkit-scrollbar,
+      [id^="terminal-"]::-webkit-scrollbar,
+      [id^="terminal-"] *::-webkit-scrollbar,
+      .terminal-container::-webkit-scrollbar,
+      .terminal-container *::-webkit-scrollbar {
+        width: 8px !important;
+        height: 8px !important;
+        background: #0d1117 !important;
+      }
+      
+      .xterm .xterm-viewport::-webkit-scrollbar-track,
+      .xterm-viewport::-webkit-scrollbar-track,
+      .xterm-screen::-webkit-scrollbar-track,
+      .xterm::-webkit-scrollbar-track,
+      [id^="terminal-"]::-webkit-scrollbar-track,
+      [id^="terminal-"] *::-webkit-scrollbar-track,
+      .terminal-container::-webkit-scrollbar-track,
+      .terminal-container *::-webkit-scrollbar-track {
+        background: #0d1117 !important;
+        border: none !important;
+        border-radius: 0 !important;
+      }
+      
+      .xterm .xterm-viewport::-webkit-scrollbar-thumb,
+      .xterm-viewport::-webkit-scrollbar-thumb,
+      .xterm-screen::-webkit-scrollbar-thumb,
+      .xterm::-webkit-scrollbar-thumb,
+      [id^="terminal-"]::-webkit-scrollbar-thumb,
+      [id^="terminal-"] *::-webkit-scrollbar-thumb,
+      .terminal-container::-webkit-scrollbar-thumb,
+      .terminal-container *::-webkit-scrollbar-thumb {
+        background: #30363d !important;
+        border: none !important;
+        border-radius: 0 !important;
+        transition: background 0.2s ease;
+      }
+      
+      .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover,
+      .xterm-viewport::-webkit-scrollbar-thumb:hover,
+      .xterm-screen::-webkit-scrollbar-thumb:hover,
+      .xterm::-webkit-scrollbar-thumb:hover,
+      [id^="terminal-"]::-webkit-scrollbar-thumb:hover,
+      [id^="terminal-"] *::-webkit-scrollbar-thumb:hover,
+      .terminal-container::-webkit-scrollbar-thumb:hover,
+      .terminal-container *::-webkit-scrollbar-thumb:hover {
+        background: #484f58 !important;
+      }
+      
+      .xterm .xterm-viewport::-webkit-scrollbar-thumb:active,
+      .xterm-viewport::-webkit-scrollbar-thumb:active,
+      .xterm-screen::-webkit-scrollbar-thumb:active,
+      .xterm::-webkit-scrollbar-thumb:active,
+      [id^="terminal-"]::-webkit-scrollbar-thumb:active,
+      [id^="terminal-"] *::-webkit-scrollbar-thumb:active,
+      .terminal-container::-webkit-scrollbar-thumb:active,
+      .terminal-container *::-webkit-scrollbar-thumb:active {
+        background: #6e7681 !important;
+      }
+      
+      .xterm .xterm-viewport::-webkit-scrollbar-corner,
+      .xterm-viewport::-webkit-scrollbar-corner,
+      .xterm-screen::-webkit-scrollbar-corner,
+      .xterm::-webkit-scrollbar-corner,
+      [id^="terminal-"]::-webkit-scrollbar-corner,
+      [id^="terminal-"] *::-webkit-scrollbar-corner,
+      .terminal-container::-webkit-scrollbar-corner,
+      .terminal-container *::-webkit-scrollbar-corner {
+        background: #0d1117 !important;
+      }
+      
+      /* Firefox scrollbar styling */
+      .xterm .xterm-viewport,
+      .xterm-viewport,
+      .xterm-screen,
+      .xterm,
+      [id^="terminal-"],
+      [id^="terminal-"] *,
+      .terminal-container,
+      .terminal-container * {
+        scrollbar-width: thin !important;
+        scrollbar-color: #30363d #0d1117 !important;
+      }
+    `;
+    
+    document.head.appendChild(style);
   }
   
   createTerminal(sessionId, sessionInfo) {
@@ -157,6 +262,40 @@ class TerminalManager {
       }
     });
     
+    // Track user scrolling with mouse wheel
+    terminalElement.addEventListener('wheel', (e) => {
+      // User is scrolling, mark as user interaction
+      this.userScrolling.set(sessionId, true);
+      
+      // Clear user scrolling flag after a short delay
+      setTimeout(() => {
+        this.checkScrollPosition(sessionId);
+      }, 100);
+    });
+    
+    // Track scrollbar dragging
+    terminalElement.addEventListener('mousedown', (e) => {
+      // Check if clicking on scrollbar (rough approximation)
+      const rect = terminalElement.getBoundingClientRect();
+      const isScrollbar = e.clientX > rect.right - 20; // Scrollbar is typically ~17px wide
+      
+      if (isScrollbar) {
+        this.userScrolling.set(sessionId, true);
+        
+        // Monitor mouse up to check final position
+        const handleMouseUp = () => {
+          setTimeout(() => {
+            this.checkScrollPosition(sessionId);
+          }, 100);
+          document.removeEventListener('mouseup', handleMouseUp);
+        };
+        document.addEventListener('mouseup', handleMouseUp);
+      }
+    });
+    
+    // Initialize scroll state
+    this.userScrolling.set(sessionId, false);
+    
     // Custom key handlers
     this.setupKeyHandlers(terminal, sessionId);
     
@@ -167,6 +306,18 @@ class TerminalManager {
     this.setupResizeObserver(sessionId);
     
     return terminal;
+  }
+  
+  checkScrollPosition(sessionId) {
+    const terminal = this.terminals.get(sessionId);
+    if (terminal) {
+      const buffer = terminal.buffer.active;
+      const scrollOffset = buffer.baseY - buffer.viewportY;
+      // If user scrolled back to bottom (within 5 lines), clear the flag
+      if (scrollOffset <= 5) {
+        this.userScrolling.set(sessionId, false);
+      }
+    }
   }
   
   setupKeyHandlers(terminal, sessionId) {
@@ -237,6 +388,18 @@ class TerminalManager {
         return false;
       }
       
+      // Track keyboard scrolling (Page Up, Page Down, Home, End, Ctrl+Home, Ctrl+End)
+      if (e.key === 'PageUp' || e.key === 'PageDown' || 
+          e.key === 'Home' || e.key === 'End' ||
+          (e.ctrlKey && (e.key === 'Home' || e.key === 'End'))) {
+        this.userScrolling.set(sessionId, true);
+        
+        // Check if at bottom after keyboard navigation
+        setTimeout(() => {
+          this.checkScrollPosition(sessionId);
+        }, 100);
+      }
+      
       return true;
     });
   }
@@ -288,11 +451,14 @@ class TerminalManager {
       return;
     }
     
+    // Check if user is manually scrolling
+    const isUserScrolling = this.userScrolling.get(sessionId) || false;
+    
     // Write data to terminal
     terminal.write(data);
     
-    // Auto-scroll if enabled
-    if (this.orchestrator.settings.autoScroll) {
+    // Only auto-scroll if user is not manually scrolling and autoScroll is enabled
+    if (this.orchestrator.settings.autoScroll && !isUserScrolling) {
       terminal.scrollToBottom();
     }
     
@@ -488,6 +654,10 @@ class TerminalManager {
     // Clean up paste tracking
     this.lastPasteTimes.delete(sessionId);
     this.lastWordDeleteTimes.delete(sessionId);
+    
+    // Clean up scroll state
+    this.terminalScrollStates.delete(sessionId);
+    this.userScrolling.delete(sessionId);
     
     // Clean up addons
     this.fitAddons.delete(sessionId);
