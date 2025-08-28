@@ -1,6 +1,8 @@
 const pty = require('node-pty');
 const { EventEmitter } = require('events');
 const winston = require('winston');
+const fs = require('fs');
+const path = require('path');
 const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 
 const logger = winston.createLogger({
@@ -22,6 +24,7 @@ class SessionManager extends EventEmitter {
     this.sessions = new Map();
     this.statusDetector = null; // Will be set later
     this.gitHelper = null; // Will be set later
+    this.fileWatchers = new Map(); // Store file watchers for .git/HEAD files
     
     // Configuration
     this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
@@ -159,6 +162,9 @@ class SessionManager extends EventEmitter {
     
     // Start periodic branch refresh (every 30 seconds)
     this.startBranchRefresh();
+    
+    // Setup file watchers for instant branch detection
+    this.setupGitWatchers();
   }
   
   startBranchRefresh() {
@@ -178,6 +184,146 @@ class SessionManager extends EventEmitter {
       clearInterval(this.branchRefreshInterval);
       this.branchRefreshInterval = null;
     }
+  }
+  
+  setupGitWatchers() {
+    // Setup file watchers for each worktree's .git/HEAD file
+    this.worktrees.forEach(worktree => {
+      try {
+        // Find the actual HEAD file location (handles both regular repos and worktrees)
+        const headPath = this.findHeadFile(worktree.path);
+        
+        if (headPath) {
+          // Create a watcher for this HEAD file
+          const watcher = fs.watch(headPath, (eventType) => {
+            if (eventType === 'change') {
+              logger.info('👀 Detected .git/HEAD change', { 
+                worktree: worktree.id,
+                eventType,
+                headPath,
+                timestamp: new Date().toISOString()
+              });
+              
+              // Clear cache and update branch immediately
+              if (this.gitHelper) {
+                this.gitHelper.clearCacheForPath(worktree.path);
+              }
+              
+              // Small delay to ensure the file write is complete
+              setTimeout(() => {
+                logger.info('⏰ Triggering branch update from file watcher', { 
+                  worktree: worktree.id,
+                  delay: '50ms'
+                });
+                this.updateGitBranch(worktree.id, worktree.path, true);
+              }, 50);
+            }
+          });
+          
+          this.fileWatchers.set(worktree.id, watcher);
+          logger.info('Setup git watcher for worktree', { 
+            worktree: worktree.id,
+            headPath 
+          });
+        } else {
+          logger.warn('No .git/HEAD file found for worktree', { 
+            worktree: worktree.id,
+            searchedPaths: 'multiple locations' 
+          });
+        }
+      } catch (error) {
+        logger.error('Failed to setup git watcher', { 
+          worktree: worktree.id, 
+          error: error.message 
+        });
+      }
+    });
+  }
+  
+  findHeadFile(repoPath) {
+    // 1. Check for regular .git/HEAD (normal repository)
+    const regularHeadPath = path.join(repoPath, '.git', 'HEAD');
+    if (fs.existsSync(regularHeadPath)) {
+      logger.debug('Found regular .git/HEAD', { path: regularHeadPath });
+      return regularHeadPath;
+    }
+    
+    // 2. Check if .git is a file (worktree)
+    const gitPath = path.join(repoPath, '.git');
+    if (fs.existsSync(gitPath) && fs.statSync(gitPath).isFile()) {
+      try {
+        // Read the .git file to get the actual git directory
+        const gitFileContent = fs.readFileSync(gitPath, 'utf8').trim();
+        const match = gitFileContent.match(/^gitdir:\s*(.+)$/);
+        
+        if (match) {
+          let gitDir = match[1];
+          
+          // Handle relative paths
+          if (!path.isAbsolute(gitDir)) {
+            gitDir = path.resolve(repoPath, gitDir);
+          }
+          
+          const worktreeHeadPath = path.join(gitDir, 'HEAD');
+          if (fs.existsSync(worktreeHeadPath)) {
+            logger.debug('Found worktree HEAD', { 
+              repoPath,
+              gitDir,
+              headPath: worktreeHeadPath 
+            });
+            return worktreeHeadPath;
+          }
+        }
+      } catch (error) {
+        logger.warn('Failed to parse .git file', { 
+          path: gitPath,
+          error: error.message 
+        });
+      }
+    }
+    
+    // 3. Try to find git directory using git command as fallback
+    try {
+      const { execSync } = require('child_process');
+      const gitDir = execSync('git rev-parse --git-dir', { 
+        cwd: repoPath,
+        encoding: 'utf8' 
+      }).trim();
+      
+      const headPath = path.join(gitDir, 'HEAD');
+      if (fs.existsSync(headPath)) {
+        logger.debug('Found HEAD via git command', { 
+          repoPath,
+          gitDir,
+          headPath 
+        });
+        return headPath;
+      }
+    } catch (error) {
+      // Git command failed, not a git repository
+      logger.debug('Git command failed', { 
+        repoPath,
+        error: error.message 
+      });
+    }
+    
+    return null;
+  }
+  
+  cleanupGitWatchers() {
+    // Clean up all file watchers
+    this.fileWatchers.forEach((watcher, worktreeId) => {
+      try {
+        watcher.close();
+        logger.debug('Closed git watcher', { worktree: worktreeId });
+      } catch (error) {
+        logger.error('Failed to close git watcher', { 
+          worktree: worktreeId, 
+          error: error.message 
+        });
+      }
+    });
+    this.fileWatchers.clear();
   }
   
   createSession(sessionId, config) {
@@ -323,12 +469,64 @@ class SessionManager extends EventEmitter {
         this.emitStatusUpdate(sessionId, 'busy');
       }
       
-      // Check if this is a git command that might change branches
-      if (data.includes('git checkout') || data.includes('git switch') || data.includes('git branch')) {
-        // Schedule branch refresh after a short delay
-        setTimeout(() => {
-          this.updateGitBranch(session.worktreeId, session.cwd);
-        }, 1000);
+      // Track the current command being typed
+      if (!session.currentCommand) {
+        session.currentCommand = '';
+      }
+      
+      // Build command string or reset on Enter
+      if (data === '\r' || data === '\n') {
+        // Command was executed, check if it was a git command
+        const command = session.currentCommand.trim();
+        
+        // Match various git commands that could change branches
+        const gitCommandPatterns = [
+          /^git\s+(checkout|switch|branch|merge|pull|fetch|rebase|reset|cherry-pick)/i,
+          /^git\s+co\s+/i,  // Common alias for checkout
+          /^git\s+sw\s+/i,  // Common alias for switch
+        ];
+        
+        const isGitCommand = gitCommandPatterns.some(pattern => pattern.test(command));
+        
+        if (isGitCommand) {
+          logger.info('🎉 Detected git command execution', { 
+            sessionId,
+            command: command.substring(0, 50),
+            worktreeId: session.worktreeId,
+            timestamp: new Date().toISOString()
+          });
+          
+          // Clear cache and schedule immediate branch refresh
+          if (this.gitHelper) {
+            this.gitHelper.clearCacheForPath(session.config.cwd);
+          }
+          
+          // Use a slightly longer delay for commands that might take time
+          const delay = command.includes('pull') || command.includes('fetch') || command.includes('merge') ? 500 : 200;
+          
+          setTimeout(() => {
+            logger.info('⏰ Triggering branch update after git command', { 
+              sessionId,
+              worktreeId: session.worktreeId,
+              delay: `${delay}ms`
+            });
+            this.updateGitBranch(session.worktreeId, session.config.cwd, true);
+          }, delay);
+        }
+        
+        // Reset command buffer after Enter
+        session.currentCommand = '';
+      } else if (data === '\x7f' || data === '\b') {
+        // Backspace - remove last character
+        if (session.currentCommand.length > 0) {
+          session.currentCommand = session.currentCommand.slice(0, -1);
+        }
+      } else if (data === '\x03') {
+        // Ctrl+C - clear command
+        session.currentCommand = '';
+      } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+        // Regular character - add to command
+        session.currentCommand += data;
       }
       
       return true;
@@ -359,11 +557,21 @@ class SessionManager extends EventEmitter {
     }
   }
   
-  async updateGitBranch(worktreeId, path) {
-    if (!this.gitHelper) return;
+  async updateGitBranch(worktreeId, path, skipCache = false) {
+    logger.info('🔄 updateGitBranch called', { 
+      worktreeId, 
+      path, 
+      skipCache,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (!this.gitHelper) {
+      logger.warn('⚠️ No gitHelper available');
+      return;
+    }
     
     try {
-      const branch = await this.gitHelper.getCurrentBranch(path);
+      const branch = await this.gitHelper.getCurrentBranch(path, skipCache);
       const remoteUrl = await this.gitHelper.getRemoteUrl(path);
       const defaultBranch = await this.gitHelper.getDefaultBranch(path);
       
@@ -371,16 +579,29 @@ class SessionManager extends EventEmitter {
       [`${worktreeId}-claude`, `${worktreeId}-server`].forEach(sessionId => {
         const session = this.sessions.get(sessionId);
         if (session) {
+          const oldBranch = session.branch;
           session.branch = branch;
           session.remoteUrl = remoteUrl;
           session.defaultBranch = defaultBranch;
+          
+          logger.info('📡 Emitting branch-update', { 
+            sessionId, 
+            oldBranch,
+            newBranch: branch,
+            remoteUrl: remoteUrl ? 'present' : 'none',
+            defaultBranch,
+            timestamp: new Date().toISOString()
+          });
+          
           this.io.emit('branch-update', { sessionId, branch, remoteUrl, defaultBranch });
         }
       });
     } catch (error) {
-      logger.error('Failed to update git branch', { 
+      logger.error('❌ Failed to update git branch', { 
         worktreeId, 
-        error: error.message 
+        path,
+        error: error.message,
+        timestamp: new Date().toISOString()
       });
     }
   }
@@ -575,6 +796,8 @@ class SessionManager extends EventEmitter {
     }
     
     this.sessions.clear();
+    this.stopBranchRefresh();
+    this.cleanupGitWatchers();
   }
 }
 

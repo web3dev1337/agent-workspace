@@ -706,7 +706,7 @@ class ClaudeOrchestrator {
         <div class="terminal-title">
           <span class="status-indicator ${session.status}" id="status-${sessionId}"></span>
           <span>${isClaudeSession ? '🤖 Claude' : '💻 Server'} ${worktreeNumber}</span>
-          <span class="terminal-branch">${session.branch || ''}</span>
+          <span class="terminal-branch ${(session.branch === 'master' || session.branch === 'main' || session.branch?.startsWith('master-') || session.branch?.startsWith('main-')) ? 'master-branch' : ''}">${session.branch || ''}</span>
         </div>
         <div class="terminal-controls">
           <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
@@ -812,6 +812,14 @@ class ClaudeOrchestrator {
     const terminalElement = document.querySelector(`#wrapper-${sessionId} .terminal-branch`);
     if (terminalElement) {
       terminalElement.textContent = branch || '';
+      
+      // Add red styling for master/main branches
+      if (branch === 'master' || branch === 'main' || 
+          branch?.startsWith('master-') || branch?.startsWith('main-')) {
+        terminalElement.classList.add('master-branch');
+      } else {
+        terminalElement.classList.remove('master-branch');
+      }
     }
     
     // Update sidebar

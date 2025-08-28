@@ -303,6 +303,12 @@ header h1 {
   border: 1px solid var(--accent-primary);
 }
 
+.terminal-branch.master-branch {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+  border-color: #dc2626;
+}
+
 .terminal-controls {
   display: flex;
   gap: var(--space-xs);
