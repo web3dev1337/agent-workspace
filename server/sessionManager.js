@@ -26,15 +26,20 @@ class SessionManager extends EventEmitter {
     this.gitHelper = null; // Will be set later
     this.fileWatchers = new Map(); // Store file watchers for .git/HEAD files
     
-    // Configuration
-    this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
-    this.worktreeCount = parseInt(process.env.WORKTREE_COUNT || '8');
-    this.sessionTimeout = parseInt(process.env.SESSION_TIMEOUT || '1800000'); // 30 minutes
+    // Load configuration
+    this.config = this.loadConfig();
+    
+    // Configuration with env overrides
+    this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || 
+      (this.config.worktrees.basePath === 'auto' ? process.env.HOME : this.config.worktrees.basePath);
+    this.worktreeCount = parseInt(process.env.WORKTREE_COUNT || this.config.worktrees.count.toString());
+    this.sessionTimeout = parseInt(process.env.SESSION_TIMEOUT || this.config.sessions.timeoutMs.toString());
     // Per-session-type timeouts. 0 disables auto-termination for that type.
-    this.claudeSessionTimeout = parseInt(process.env.CLAUDE_SESSION_TIMEOUT || '0'); // default disabled
-    this.serverSessionTimeout = parseInt(process.env.SERVER_SESSION_TIMEOUT || '43200000'); // default 12 hours
+    this.claudeSessionTimeout = parseInt(process.env.CLAUDE_SESSION_TIMEOUT || this.config.sessions.claudeTimeoutMs?.toString() || '0');
+    this.serverSessionTimeout = parseInt(process.env.SERVER_SESSION_TIMEOUT || this.config.sessions.serverTimeoutMs?.toString() || '43200000');
     this.branchRefreshInterval = null;
-    this.maxProcessesPerSession = parseInt(process.env.MAX_PROCESSES_PER_SESSION || '50');
+    this.maxProcessesPerSession = parseInt(process.env.MAX_PROCESSES_PER_SESSION || this.config.sessions.maxProcessesPerSession.toString());
+    this.maxBufferSize = parseInt(process.env.MAX_BUFFER_SIZE || this.config.sessions.maxBufferSize.toString());
     
     // Build worktree configuration
     this.worktrees = [];
@@ -52,6 +57,23 @@ class SessionManager extends EventEmitter {
     if (session.type === 'claude') return this.claudeSessionTimeout;
     if (session.type === 'server') return this.serverSessionTimeout;
     return this.sessionTimeout;
+  }
+  
+  loadConfig() {
+    const configPath = path.join(__dirname, '..', 'config.json');
+    try {
+      const configData = fs.readFileSync(configPath, 'utf8');
+      return JSON.parse(configData);
+    } catch (error) {
+      logger.warn('Could not load config.json, using defaults', { error: error.message });
+      return {
+        server: { port: 3000, host: "0.0.0.0" },
+        worktrees: { basePath: "auto", count: 8 },
+        sessions: { timeoutMs: 1800000, maxBufferSize: 100000, maxProcessesPerSession: 50 },
+        logging: { level: "info" },
+        tokens: { maxContextTokens: 200000 }
+      };
+    }
   }
   
   setStatusDetector(detector) {
@@ -407,9 +429,9 @@ class SessionManager extends EventEmitter {
           }
         }
         
-        // Keep buffer size manageable (last 100KB)
-        if (session.buffer.length > 100000) {
-          session.buffer = session.buffer.slice(-50000);
+        // Keep buffer size manageable
+        if (session.buffer.length > this.maxBufferSize) {
+          session.buffer = session.buffer.slice(-Math.floor(this.maxBufferSize / 2));
         }
       });
       
@@ -643,13 +665,9 @@ class SessionManager extends EventEmitter {
       session.inactivityTimer = null;
     }
     
-    // Don't set new timer if session is being terminated
-    if (!this.sessions.has(session.id)) {
-      return null;
-    }
-    
+    // Don't set new timer if session is being terminated or timeout is disabled  
     const timeout = this.getSessionTimeout(session);
-    if (timeout <= 0) {
+    if (!this.sessions.has(session.id) || timeout <= 0) {
       return null;
     }
 
