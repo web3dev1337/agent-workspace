@@ -35,6 +35,7 @@ class SessionManager extends EventEmitter {
     this.serverSessionTimeout = parseInt(process.env.SERVER_SESSION_TIMEOUT || '43200000'); // default 12 hours
     this.branchRefreshInterval = null;
     this.maxProcessesPerSession = parseInt(process.env.MAX_PROCESSES_PER_SESSION || '50');
+    this.maxBufferSize = parseInt(process.env.MAX_BUFFER_SIZE || '100000');
     
     // Build worktree configuration
     this.worktrees = [];
@@ -407,9 +408,9 @@ class SessionManager extends EventEmitter {
           }
         }
         
-        // Keep buffer size manageable (last 100KB)
-        if (session.buffer.length > 100000) {
-          session.buffer = session.buffer.slice(-50000);
+        // Keep buffer size manageable
+        if (session.buffer.length > this.maxBufferSize) {
+          session.buffer = session.buffer.slice(-Math.floor(this.maxBufferSize / 2));
         }
       });
       
@@ -643,8 +644,8 @@ class SessionManager extends EventEmitter {
       session.inactivityTimer = null;
     }
     
-    // Don't set new timer if session is being terminated
-    if (!this.sessions.has(session.id)) {
+    // Don't set new timer if session is being terminated or timeout is disabled
+    if (!this.sessions.has(session.id) || this.sessionTimeout === 0) {
       return null;
     }
     
