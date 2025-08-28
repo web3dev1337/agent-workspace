@@ -18,6 +18,7 @@ class TerminalManager {
     
     // Track scroll state per terminal
     this.terminalScrollStates = new Map();
+    this.userScrolling = new Map();
     
     // Terminal theme
     this.theme = {
@@ -156,15 +157,39 @@ class TerminalManager {
       }
     });
     
-    // Track scroll state
-    terminal.onScroll(() => {
-      const buffer = terminal.buffer.active;
-      const isAtBottom = buffer.viewportY === buffer.baseY;
-      this.terminalScrollStates.set(sessionId, { isAtBottom });
+    // Track user scrolling with mouse wheel
+    terminalElement.addEventListener('wheel', (e) => {
+      // User is scrolling, mark as user interaction
+      this.userScrolling.set(sessionId, true);
+      
+      // Clear user scrolling flag after a short delay
+      setTimeout(() => {
+        this.checkScrollPosition(sessionId);
+      }, 100);
     });
     
-    // Initialize scroll state as at bottom
-    this.terminalScrollStates.set(sessionId, { isAtBottom: true });
+    // Track scrollbar dragging
+    terminalElement.addEventListener('mousedown', (e) => {
+      // Check if clicking on scrollbar (rough approximation)
+      const rect = terminalElement.getBoundingClientRect();
+      const isScrollbar = e.clientX > rect.right - 20; // Scrollbar is typically ~17px wide
+      
+      if (isScrollbar) {
+        this.userScrolling.set(sessionId, true);
+        
+        // Monitor mouse up to check final position
+        const handleMouseUp = () => {
+          setTimeout(() => {
+            this.checkScrollPosition(sessionId);
+          }, 100);
+          document.removeEventListener('mouseup', handleMouseUp);
+        };
+        document.addEventListener('mouseup', handleMouseUp);
+      }
+    });
+    
+    // Initialize scroll state
+    this.userScrolling.set(sessionId, false);
     
     // Custom key handlers
     this.setupKeyHandlers(terminal, sessionId);
@@ -176,6 +201,18 @@ class TerminalManager {
     this.setupResizeObserver(sessionId);
     
     return terminal;
+  }
+  
+  checkScrollPosition(sessionId) {
+    const terminal = this.terminals.get(sessionId);
+    if (terminal) {
+      const buffer = terminal.buffer.active;
+      const scrollOffset = buffer.baseY - buffer.viewportY;
+      // If user scrolled back to bottom (within 5 lines), clear the flag
+      if (scrollOffset <= 5) {
+        this.userScrolling.set(sessionId, false);
+      }
+    }
   }
   
   setupKeyHandlers(terminal, sessionId) {
@@ -222,6 +259,18 @@ class TerminalManager {
         });
         
         return false;
+      }
+      
+      // Track keyboard scrolling (Page Up, Page Down, Home, End, Ctrl+Home, Ctrl+End)
+      if (e.key === 'PageUp' || e.key === 'PageDown' || 
+          e.key === 'Home' || e.key === 'End' ||
+          (e.ctrlKey && (e.key === 'Home' || e.key === 'End'))) {
+        this.userScrolling.set(sessionId, true);
+        
+        // Check if at bottom after keyboard navigation
+        setTimeout(() => {
+          this.checkScrollPosition(sessionId);
+        }, 100);
       }
       
       return true;
@@ -275,17 +324,15 @@ class TerminalManager {
       return;
     }
     
-    // Get current scroll state
-    const scrollState = this.terminalScrollStates.get(sessionId) || { isAtBottom: true };
+    // Check if user is manually scrolling
+    const isUserScrolling = this.userScrolling.get(sessionId) || false;
     
     // Write data to terminal
     terminal.write(data);
     
-    // Only auto-scroll if was already at bottom and autoScroll is enabled
-    if (this.orchestrator.settings.autoScroll && scrollState.isAtBottom) {
+    // Only auto-scroll if user is not manually scrolling and autoScroll is enabled
+    if (this.orchestrator.settings.autoScroll && !isUserScrolling) {
       terminal.scrollToBottom();
-      // Update scroll state after auto-scrolling
-      this.terminalScrollStates.set(sessionId, { isAtBottom: true });
     }
     
     // Check for special patterns (optional enhancement)
@@ -482,6 +529,7 @@ class TerminalManager {
     
     // Clean up scroll state
     this.terminalScrollStates.delete(sessionId);
+    this.userScrolling.delete(sessionId);
     
     // Clean up addons
     this.fitAddons.delete(sessionId);
