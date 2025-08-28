@@ -43,6 +43,52 @@ body {
   flex-direction: column;
 }
 
+/* Terminal Scrollbar Styling - Dark minimal squared design */
+.xterm .xterm-viewport::-webkit-scrollbar,
+.xterm::-webkit-scrollbar,
+[id^="terminal-"] ::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+  background: #0d1117 !important;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track,
+.xterm::-webkit-scrollbar-track,
+[id^="terminal-"] ::-webkit-scrollbar-track {
+  background: #0d1117 !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb,
+.xterm::-webkit-scrollbar-thumb,
+[id^="terminal-"] ::-webkit-scrollbar-thumb {
+  background: #30363d !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover,
+.xterm::-webkit-scrollbar-thumb:hover,
+[id^="terminal-"] ::-webkit-scrollbar-thumb:hover {
+  background: #484f58 !important;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:active,
+.xterm::-webkit-scrollbar-thumb:active,
+[id^="terminal-"] ::-webkit-scrollbar-thumb:active {
+  background: #6e7681 !important;
+}
+
+/* Firefox */
+.xterm .xterm-viewport,
+.xterm,
+[id^="terminal-"],
+[id^="terminal-"] * {
+  scrollbar-width: thin !important;
+  scrollbar-color: #30363d #0d1117 !important;
+}
+
 /* Header */
 header {
   background: var(--bg-secondary);
