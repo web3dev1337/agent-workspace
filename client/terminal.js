@@ -12,6 +12,10 @@ class TerminalManager {
     this.searchAddons = new Map();
     this.webLinksAddons = new Map();
     
+    // Paste debouncing
+    this.lastPasteTimes = new Map();
+    this.pasteCooldown = 200; // milliseconds
+    
     // Terminal theme
     this.theme = {
       background: '#0d1117',
@@ -178,12 +182,32 @@ class TerminalManager {
         return false;
       }
       
-      // Ctrl+V for paste
+      // Ctrl+V for paste with debouncing
       if (e.ctrlKey && e.key === 'v') {
         e.preventDefault();
+        
+        // Check if we're within the cooldown period
+        const now = Date.now();
+        const lastPaste = this.lastPasteTimes.get(sessionId) || 0;
+        
+        if (now - lastPaste < this.pasteCooldown) {
+          // Still in cooldown, ignore this paste
+          console.log(`Ignoring paste for ${sessionId}, cooldown active`);
+          return false;
+        }
+        
+        // Update last paste time
+        this.lastPasteTimes.set(sessionId, now);
+        
+        // Perform the paste
         navigator.clipboard.readText().then(text => {
           this.orchestrator.sendTerminalInput(sessionId, text);
+        }).catch(err => {
+          console.error('Failed to read clipboard:', err);
+          // Reset the paste time on error so user can retry immediately
+          this.lastPasteTimes.delete(sessionId);
         });
+        
         return false;
       }
       
@@ -434,6 +458,9 @@ class TerminalManager {
       terminal.dispose();
       this.terminals.delete(sessionId);
     }
+    
+    // Clean up paste tracking
+    this.lastPasteTimes.delete(sessionId);
     
     // Clean up addons
     this.fitAddons.delete(sessionId);
