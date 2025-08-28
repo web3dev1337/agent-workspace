@@ -122,6 +122,11 @@ class ClaudeOrchestrator {
       });
       
       this.socket.on('branch-update', ({ sessionId, branch, remoteUrl, defaultBranch }) => {
+        console.log('🌐 Socket received branch-update event:', {
+          sessionId,
+          branch,
+          timestamp: new Date().toISOString()
+        });
         this.updateSessionBranch(sessionId, branch, remoteUrl, defaultBranch);
       });
       
@@ -797,8 +802,17 @@ class ClaudeOrchestrator {
   }
   
   updateSessionBranch(sessionId, branch, remoteUrl, defaultBranch) {
+    console.log('🔄 Branch update received:', {
+      sessionId,
+      branch,
+      remoteUrl: remoteUrl ? 'present' : 'none',
+      defaultBranch,
+      timestamp: new Date().toISOString()
+    });
+    
     const session = this.sessions.get(sessionId);
     if (session) {
+      const oldBranch = session.branch;
       session.branch = branch;
       if (remoteUrl) {
         session.remoteUrl = remoteUrl;
@@ -806,12 +820,27 @@ class ClaudeOrchestrator {
       if (defaultBranch) {
         session.defaultBranch = defaultBranch;
       }
+      console.log('📝 Session updated:', {
+        sessionId,
+        oldBranch,
+        newBranch: branch
+      });
+    } else {
+      console.warn('⚠️ Session not found for branch update:', sessionId);
     }
     
     // Update terminal branch display
     const terminalElement = document.querySelector(`#wrapper-${sessionId} .terminal-branch`);
     if (terminalElement) {
+      console.log('🎯 Updating terminal branch display:', {
+        sessionId,
+        element: terminalElement,
+        oldText: terminalElement.textContent,
+        newText: branch
+      });
       terminalElement.textContent = branch || '';
+    } else {
+      console.warn('⚠️ Terminal branch element not found:', `#wrapper-${sessionId} .terminal-branch`);
     }
     
     // Update sidebar
