@@ -53,18 +53,8 @@ app.use((req, res, next) => {
 });
 
 // Define specific routes BEFORE static file serving
-// Serve the new UI as default
+// Serve the UI as default
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/index-new.html'));
-});
-
-// Redirect old /new route to root for backward compatibility
-app.get('/new', (req, res) => {
-  res.redirect('/');
-});
-
-// Serve the classic UI at /classic
-app.get('/classic', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/index.html'));
 });
 

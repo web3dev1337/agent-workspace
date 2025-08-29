@@ -256,6 +256,94 @@ class GitHelper {
       return null;
     }
   }
+
+  async checkForExistingPR(remoteUrl, branch) {
+    // Only check for GitHub repositories
+    if (!remoteUrl || !remoteUrl.includes('github.com') || !branch || branch === 'main' || branch === 'master' || branch.startsWith('detached@')) {
+      return null;
+    }
+
+    try {
+      // Extract owner and repo from GitHub URL
+      const urlMatch = remoteUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+      if (!urlMatch) {
+        return null;
+      }
+
+      const [, owner, repo] = urlMatch;
+      
+      // Use GitHub CLI if available, otherwise use GitHub API directly
+      try {
+        const { stdout } = await execAsync(`gh pr list --head ${branch} --json url --jq '.[0].url'`, {
+          timeout: 10000,
+          env: {
+            ...process.env,
+            GH_REPO: `${owner}/${repo}`
+          }
+        });
+        
+        const prUrl = stdout.trim();
+        if (prUrl && prUrl !== 'null' && prUrl.startsWith('https://github.com')) {
+          logger.info('Found existing PR via gh CLI', { branch, prUrl });
+          return prUrl;
+        }
+      } catch (ghError) {
+        logger.debug('gh CLI not available or failed, trying API directly', { error: ghError.message });
+        
+        // Fallback to direct GitHub API call without authentication
+        const https = require('https');
+        const apiUrl = `https://api.github.com/repos/${owner}/${repo}/pulls?head=${owner}:${branch}&state=open`;
+        
+        return new Promise((resolve) => {
+          const req = https.get(apiUrl, {
+            headers: {
+              'User-Agent': 'claude-orchestrator',
+              'Accept': 'application/vnd.github.v3+json'
+            },
+            timeout: 10000
+          }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+              try {
+                const prs = JSON.parse(data);
+                if (Array.isArray(prs) && prs.length > 0) {
+                  const prUrl = prs[0].html_url;
+                  logger.info('Found existing PR via GitHub API', { branch, prUrl });
+                  resolve(prUrl);
+                } else {
+                  resolve(null);
+                }
+              } catch (parseError) {
+                logger.debug('Failed to parse GitHub API response', { error: parseError.message });
+                resolve(null);
+              }
+            });
+          });
+          
+          req.on('error', (error) => {
+            logger.debug('GitHub API request failed', { error: error.message });
+            resolve(null);
+          });
+          
+          req.on('timeout', () => {
+            logger.debug('GitHub API request timed out');
+            req.destroy();
+            resolve(null);
+          });
+        });
+      }
+      
+      return null;
+    } catch (error) {
+      logger.debug('Failed to check for existing PR', { 
+        branch, 
+        remoteUrl, 
+        error: error.message 
+      });
+      return null;
+    }
+  }
   
   async getDefaultBranch(worktreePath) {
     if (!this.isValidPath(worktreePath)) {
