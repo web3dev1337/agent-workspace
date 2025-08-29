@@ -450,9 +450,46 @@ class SessionManager extends EventEmitter {
           signal
         });
         
-        // Don't auto-restart for now - causing loops
-        // TODO: Fix Claude CLI startup issues first
-        this.sessions.delete(sessionId);
+        // Auto-restart Claude sessions that exit from CTRL+C or other interrupts
+        // This ensures the terminal remains usable after CTRL+C
+        if (config.type === 'claude') {
+          logger.info('Claude session exited, auto-restarting for usability', { 
+            sessionId, 
+            signal,
+            exitCode 
+          });
+          
+          // Remove the old session
+          this.sessions.delete(sessionId);
+          
+          // Restart after a short delay to allow cleanup
+          setTimeout(() => {
+            try {
+              // Create a fresh bash session that user can interact with
+              // User can then run 'claude' command again if desired
+              const restartConfig = {
+                ...config,
+                command: 'bash',
+                args: ['-c', `cd "${config.cwd}" && echo "Claude session ended. Terminal ready for commands." && echo "Type 'claude' to start a new Claude session." && echo "" && exec bash`]
+              };
+              
+              this.createSession(sessionId, restartConfig);
+              
+              // After creating the bash session, emit restart event
+              this.io.emit('session-restarted', { sessionId });
+              
+              logger.info('Claude session restarted as interactive bash', { sessionId });
+            } catch (error) {
+              logger.error('Failed to restart Claude session', { 
+                sessionId, 
+                error: error.message 
+              });
+            }
+          }, 500);
+        } else {
+          // For non-Claude sessions, just remove as before
+          this.sessions.delete(sessionId);
+        }
       });
       
       this.sessions.set(sessionId, session);
