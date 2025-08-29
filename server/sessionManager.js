@@ -597,6 +597,9 @@ class SessionManager extends EventEmitter {
       const remoteUrl = await this.gitHelper.getRemoteUrl(path);
       const defaultBranch = await this.gitHelper.getDefaultBranch(path);
       
+      // Check for existing PR for this branch
+      const existingPR = await this.gitHelper.checkForExistingPR(remoteUrl, branch);
+      
       // Update both claude and server sessions for this worktree
       [`${worktreeId}-claude`, `${worktreeId}-server`].forEach(sessionId => {
         const session = this.sessions.get(sessionId);
@@ -605,6 +608,7 @@ class SessionManager extends EventEmitter {
           session.branch = branch;
           session.remoteUrl = remoteUrl;
           session.defaultBranch = defaultBranch;
+          session.existingPR = existingPR;
           
           logger.info('📡 Emitting branch-update', { 
             sessionId, 
@@ -612,10 +616,11 @@ class SessionManager extends EventEmitter {
             newBranch: branch,
             remoteUrl: remoteUrl ? 'present' : 'none',
             defaultBranch,
+            existingPR: existingPR ? 'found' : 'none',
             timestamp: new Date().toISOString()
           });
           
-          this.io.emit('branch-update', { sessionId, branch, remoteUrl, defaultBranch });
+          this.io.emit('branch-update', { sessionId, branch, remoteUrl, defaultBranch, existingPR });
         }
       });
     } catch (error) {
@@ -640,6 +645,7 @@ class SessionManager extends EventEmitter {
         branch: session.branch,
         remoteUrl: session.remoteUrl,
         defaultBranch: session.defaultBranch,
+        existingPR: session.existingPR,
         type: session.type,
         worktreeId: session.worktreeId,
         lastActivity: session.lastActivity
