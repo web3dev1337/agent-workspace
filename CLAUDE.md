@@ -22,8 +22,7 @@ git checkout -b fix/your-feature-name main
 **ALWAYS** run these git commands IMMEDIATELY when starting ANY work!
 
 ## 🚨 CRITICAL: READ THESE FILES 🚨
-**2. Read `CODEBASE_DOCUMENTATION.md`** - Contains system docs and architecture overview
-**3. Read `API_REFERENCE.md`** - Complete API reference for backend/frontend communication
+**2. Read `CODEBASE_DOCUMENTATION.md`** - Contains system docs and file locations
 
 ## 🚨 CRITICAL: ALWAYS CREATE A PR WHEN DONE 🚨
 **When you complete ANY feature or fix, you MUST create a pull request using `gh pr create`. This is NOT optional. Add "Create PR" as your final todo item to ensure you never forget.**
@@ -34,19 +33,15 @@ git checkout -b fix/your-feature-name main
 
 ## Code Style Guidelines
 
-### JavaScript/Node.js Standards
-- Use explicit async/await patterns for asynchronous operations
+### Node.js Standards
 - Follow existing patterns in the codebase
-- Prefer modern ES6+ syntax
-- **Always prefer configuration files over magic numbers** - use config.json or environment variables
-- **Use JSON/YAML files for configuration** - avoid hardcoded values
+- **Always prefer parameters over magic numbers** - use constants or config
+- **Use JSON files for configuration** - prefer config files over hardcoded values
 
-### Project Architecture Patterns
-- Backend services extend from base service classes
+### Orchestrator Patterns
 - Use singleton pattern for managers (SessionManager, StatusDetector, etc.)
 - Event-driven communication via Socket.IO
-- Modular service architecture with clear separation of concerns
-- Clean code principles: simpler is better where possible
+- Clean code, simpler is better where possible
 
 ### Import/Module Verification
 - **New files**: Verify with `ls` after Write tool
@@ -55,13 +50,8 @@ git checkout -b fix/your-feature-name main
 - **Quick check**: `node --check server/index.js` to catch syntax errors
 
 ## Testing Requirements
-- Run lint after making changes to files (not before)
-- Always lint specific files when possible:
-  - `npm run lint` (ESLint for style/code quality)
-  - `node --check filename.js` (syntax validation)
 - Do a quick sanity check before creating PR:
-  - `npm run test` (if tests exist)
-  - `node --check server/index.js` (syntax validation)
+  - `node --check server/index.js` (catch syntax errors)
   - Test the specific feature manually
 
 ## Architecture Notes
@@ -90,21 +80,11 @@ git checkout -b fix/your-feature-name main
 ## Common Commands
 ```bash
 # Development
-npm run dev              # Start backend server
-npm run dev:client       # Start client development server
-npm run tauri:dev        # Start native app in development
-npm run dev:all          # Start all services concurrently
+npm run dev
+npm run tauri:dev
 
-# Diff Viewer
-cd diff-viewer && npm start    # Start diff viewer
-
-# Testing and Validation
-npm run lint             # ESLint code quality checks
-node --check server/index.js   # Syntax validation
-npm test                 # Run tests (if available)
-
-# Production
-npm run tauri:build      # Build native app for production
+# Testing
+node --check server/index.js
 ```
 
 ## Performance Considerations
@@ -127,7 +107,7 @@ git checkout -b feature/new-feature main
 2. Check existing similar implementations
 3. Follow established patterns (service-based architecture)
 4. Commit and push often
-5. Update documentation if adding new systems
+5. **Update documentation if adding new files/systems**: Update CODEBASE_DOCUMENTATION.md in a SEPARATE commit BEFORE the main work
 6. Test the feature thoroughly
 7. **Remove debug logs**: Remove any temporary debug logging added for this specific feature/bug
 8. **Run final checks**: lint, syntax check, and manual testing
