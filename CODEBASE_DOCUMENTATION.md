@@ -1,5 +1,8 @@
 # Claude Orchestrator Codebase Documentation
 
+🚨 **READ THIS ENTIRE FILE** 🚨
+**CRITICAL: You MUST read this complete file from start to finish. Do not truncate or skip sections.**
+
 Essential reference for navigating the multi-terminal orchestrator codebase. Read this FIRST before implementing any feature.
 
 **IMPORTANT**: Before creating pull requests, please update this document if you have added any new files or systems or made significant changes where the documentation is inaccurate.
@@ -266,3 +269,6 @@ LOGGING:      Winston-based structured logging with rotation
 4. Terminal output can be high-frequency - use throttling
 5. Native app requires different event handling than web client
 6. File watching can be resource intensive - use efficient patterns
+
+---
+🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨

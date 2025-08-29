@@ -1,5 +1,8 @@
 # Claude Orchestrator Guidelines for Claude Code
 
+🚨 **READ THIS ENTIRE FILE** 🚨
+**CRITICAL: You MUST read this complete file from start to finish. Do not truncate or skip sections.**
+
 *Note: This is a multi-terminal orchestrator project for managing Claude Code sessions with native desktop app and advanced diff viewer capabilities.*
 
 ## 🚨 IMPORTANT: ALWAYS PROVIDE PR URL 🚨
@@ -22,7 +25,7 @@ git checkout -b fix/your-feature-name main
 **ALWAYS** run these git commands IMMEDIATELY when starting ANY work!
 
 ## 🚨 CRITICAL: READ THESE FILES 🚨
-**2. Read `CODEBASE_DOCUMENTATION.md`** - Contains system docs and file locations
+**2. Read `CODEBASE_DOCUMENTATION.md`** - Contains system docs and file locations (READ THE ENTIRE FILE)
 
 ## 🚨 CRITICAL: ALWAYS CREATE A PR WHEN DONE 🚨
 **When you complete ANY feature or fix, you MUST create a pull request using `gh pr create`. This is NOT optional. Add "Create PR" as your final todo item to ensure you never forget.**
@@ -176,3 +179,6 @@ SERVICES:     Modular service architecture with clear interfaces
 4. All managers use singleton pattern for consistency
 5. Git operations should be async and error-handled
 6. Logs should use Winston logger, not console.log
+
+---
+🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
