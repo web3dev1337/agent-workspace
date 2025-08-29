@@ -121,8 +121,8 @@ class ClaudeOrchestrator {
         this.updateSessionStatus(sessionId, status);
       });
       
-      this.socket.on('branch-update', ({ sessionId, branch, remoteUrl, defaultBranch }) => {
-        this.updateSessionBranch(sessionId, branch, remoteUrl, defaultBranch);
+      this.socket.on('branch-update', ({ sessionId, branch, remoteUrl, defaultBranch, existingPR }) => {
+        this.updateSessionBranch(sessionId, branch, remoteUrl, defaultBranch, existingPR);
       });
       
       this.socket.on('notification-trigger', (notification) => {
@@ -360,6 +360,14 @@ class ClaudeOrchestrator {
         ...state,
         hasUserInput: false
       });
+      
+      // If there's an existing PR, add it to GitHub links automatically
+      if (state.existingPR) {
+        const links = this.githubLinks.get(sessionId) || {};
+        links.pr = state.existingPR;
+        this.githubLinks.set(sessionId, links);
+        console.log('Loaded existing PR for session:', sessionId, state.existingPR);
+      }
       
       // All fresh sessions start as inactive - they need user interaction to become active
       this.sessionActivity.set(sessionId, 'inactive');
@@ -796,7 +804,7 @@ class ClaudeOrchestrator {
     }
   }
   
-  updateSessionBranch(sessionId, branch, remoteUrl, defaultBranch) {
+  updateSessionBranch(sessionId, branch, remoteUrl, defaultBranch, existingPR) {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.branch = branch;
@@ -805,6 +813,16 @@ class ClaudeOrchestrator {
       }
       if (defaultBranch) {
         session.defaultBranch = defaultBranch;
+      }
+      
+      console.log(`Branch updated for ${sessionId}: ${branch}`, existingPR ? `(existing PR: ${existingPR})` : '');
+      
+      // If there's an existing PR, add it to GitHub links automatically
+      if (existingPR) {
+        const links = this.githubLinks.get(sessionId) || {};
+        links.pr = existingPR;
+        this.githubLinks.set(sessionId, links);
+        console.log('Automatically detected existing PR:', existingPR);
       }
     }
     
