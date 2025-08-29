@@ -1,5 +1,8 @@
 # Claude Code Permissions Management
 
+🚨 **READ THIS ENTIRE FILE** 🚨
+**CRITICAL: You MUST read this complete file from start to finish. Do not truncate or skip sections.**
+
 This document tracks Claude Code permissions and provides instructions for updating them across development environments.
 
 ## Current Allowed Commands
@@ -183,3 +186,6 @@ To add new commands to the allowed list:
 - Minimal command access
 - Only essential operational commands
 - No development tools access
+
+---
+🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
