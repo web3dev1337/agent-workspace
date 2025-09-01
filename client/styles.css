@@ -591,6 +591,72 @@ header h1 {
   justify-content: flex-end;
 }
 
+/* Claude Startup Modal */
+.claude-startup-content {
+  max-width: 450px;
+}
+
+.startup-options {
+  margin: var(--space-lg) 0;
+}
+
+.option-group {
+  margin-bottom: var(--space-lg);
+}
+
+.option-group > label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+  color: var(--text-primary);
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.radio-option, .checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.radio-option:hover, .checkbox-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.radio-option input[type="radio"],
+.checkbox-option input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.session-info {
+  padding: var(--space-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* Claude Start Button */
+.claude-start-btn {
+  background: linear-gradient(135deg, var(--accent-primary), #2ea043);
+  color: white;
+  font-weight: 600;
+}
+
+.claude-start-btn:hover {
+  background: linear-gradient(135deg, #1c5cc5, #2ea043);
+  transform: scale(1.05);
+}
+
 /* Settings Panel */
 .settings-panel {
   position: fixed;
