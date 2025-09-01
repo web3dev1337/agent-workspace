@@ -151,7 +151,7 @@ io.on('connection', (socket) => {
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C to clear
       
       setTimeout(() => {
-        const command = `PORT=${port} bun index.ts\n`;
+        const command = `PORT=${port} hytopia start\n`;
         logger.info('Starting server with command', { sessionId, command, port });
         
         const written = sessionManager.writeToSession(sessionId, command);
