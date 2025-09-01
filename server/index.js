@@ -126,6 +126,12 @@ io.on('connection', (socket) => {
     sessionManager.restartSession(sessionId);
   });
   
+  // Handle Claude start with specific options
+  socket.on('start-claude', ({ sessionId, options }) => {
+    logger.info('Claude start requested', { sessionId, options });
+    sessionManager.startClaudeWithOptions(sessionId, options);
+  });
+  
   // Handle session heartbeat to keep sessions alive while UI is open
   socket.on('session-heartbeat', ({ sessionId }) => {
     sessionManager.heartbeat(sessionId);
