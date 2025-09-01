@@ -652,9 +652,16 @@ header h1 {
   font-weight: 600;
 }
 
-.claude-start-btn:hover {
+.claude-start-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #1c5cc5, #2ea043);
   transform: scale(1.05);
+}
+
+.claude-start-btn:disabled {
+  background: linear-gradient(135deg, #4a5568, #718096);
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Terminal Startup UI */
