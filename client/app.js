@@ -143,6 +143,12 @@ class ClaudeOrchestrator {
         if (startupUI) {
           startupUI.style.display = 'none';
         }
+        
+        // Enable the start button now that Claude has started
+        const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
+        if (startBtn) {
+          startBtn.disabled = false;
+        }
       });
 
       this.socket.on('claude-update-required', (updateInfo) => {
@@ -745,7 +751,7 @@ class ClaudeOrchestrator {
         <div class="terminal-controls">
           <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
           ${isClaudeSession ? `
-            <button class="control-btn claude-start-btn" id="claude-start-btn-${sessionId}" style="display: none;" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude">🚀</button>
+            <button class="control-btn claude-start-btn" id="claude-start-btn-${sessionId}" disabled onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude">🚀</button>
             <button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>
             <button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>
             <button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>
@@ -1227,11 +1233,11 @@ class ClaudeOrchestrator {
     console.log(`Session ${sessionId} exited with code ${exitCode}`);
     this.updateSessionStatus(sessionId, 'exited');
     
-    // If it's a Claude session, show the start button in the menu strip
+    // If it's a Claude session, enable the start button and show startup UI
     if (sessionId.includes('-claude')) {
       const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
       if (startBtn) {
-        startBtn.style.display = '';
+        startBtn.disabled = false;
       }
       
       // Also show the startup UI again
@@ -1253,10 +1259,10 @@ class ClaudeOrchestrator {
         startupUI.style.display = 'block';
       }
       
-      // Show the start button in menu strip
+      // Enable the start button in menu strip
       const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
       if (startBtn) {
-        startBtn.style.display = '';
+        startBtn.disabled = false;
       }
     }
   }
@@ -2049,6 +2055,12 @@ class ClaudeOrchestrator {
     const startupUI = document.getElementById(`startup-ui-${sessionId}`);
     if (startupUI) {
       startupUI.style.display = 'none';
+    }
+    
+    // Enable the start button for future use
+    const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
+    if (startBtn) {
+      startBtn.disabled = false;
     }
   }
 }
