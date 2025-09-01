@@ -591,6 +591,199 @@ header h1 {
   justify-content: flex-end;
 }
 
+/* Claude Startup Modal */
+.claude-startup-content {
+  max-width: 450px;
+}
+
+.startup-options {
+  margin: var(--space-lg) 0;
+}
+
+.option-group {
+  margin-bottom: var(--space-lg);
+}
+
+.option-group > label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+  color: var(--text-primary);
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.radio-option, .checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.radio-option:hover, .checkbox-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.radio-option input[type="radio"],
+.checkbox-option input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.session-info {
+  padding: var(--space-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* Claude Start Button */
+.claude-start-btn {
+  background: linear-gradient(135deg, var(--accent-primary), #2ea043);
+  color: white;
+  font-weight: 600;
+}
+
+.claude-start-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1c5cc5, #2ea043);
+  transform: scale(1.05);
+}
+
+.claude-start-btn:disabled {
+  background: linear-gradient(135deg, #4a5568, #718096);
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Terminal Startup UI */
+.terminal-startup-ui {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: var(--radius-md);
+}
+
+.startup-ui-content {
+  text-align: center;
+  padding: var(--space-xl);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  max-width: 500px;
+  width: 90%;
+}
+
+.startup-ui-content h3 {
+  margin-bottom: var(--space-lg);
+  color: var(--text-primary);
+  font-size: 1.5rem;
+}
+
+.startup-options-inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.option-group-inline {
+  text-align: left;
+}
+
+.option-group-inline > label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+  color: var(--text-primary);
+}
+
+.radio-group-inline {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: center;
+}
+
+.radio-option-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.radio-option-inline:hover {
+  background: var(--bg-primary);
+  border-color: var(--accent-primary);
+}
+
+.radio-option-inline input[type="radio"]:checked + span {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.checkbox-option-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  cursor: pointer;
+}
+
+.checkbox-option-inline input[type="checkbox"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.start-claude-inline {
+  width: 100%;
+  padding: var(--space-md) var(--space-lg);
+  background: linear-gradient(135deg, var(--accent-primary), #2ea043);
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-top: var(--space-md);
+}
+
+.start-claude-inline:hover {
+  background: linear-gradient(135deg, #1c5cc5, #2ea043);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(31, 111, 235, 0.3);
+}
+
+.start-claude-inline:active {
+  transform: translateY(0);
+}
+
+/* Ensure terminal body is positioned correctly */
+.terminal-body {
+  position: relative;
+  height: 100%;
+}
+
 /* Settings Panel */
 .settings-panel {
   position: fixed;

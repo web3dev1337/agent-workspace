@@ -132,7 +132,7 @@ class SessionManager extends EventEmitter {
         Promise.resolve().then(() => {
           this.createSession(`${worktree.id}-claude`, {
             command: 'bash',
-            args: ['-c', `cd "${worktree.path}" && exec claude`],
+            args: ['-c', `cd "${worktree.path}" && echo "Claude Terminal Ready" && echo "Use the UI controls to start Claude with your preferred options" && echo "" && exec bash`],
             cwd: worktree.path,
             type: 'claude',
             worktreeId: worktree.id
@@ -833,6 +833,46 @@ class SessionManager extends EventEmitter {
         return false;
       }
     }, 1000);
+    
+    return true;
+  }
+  
+  startClaudeWithOptions(sessionId, options) {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      logger.warn('Cannot start Claude - session not found', { sessionId });
+      return false;
+    }
+    
+    if (session.type !== 'claude') {
+      logger.warn('Cannot start Claude on non-Claude session', { sessionId, type: session.type });
+      return false;
+    }
+    
+    logger.info('Starting Claude with options', { sessionId, options });
+    
+    // Build Claude command based on options
+    let claudeCommand = 'claude';
+    
+    if (options.mode === 'continue') {
+      claudeCommand = 'claude --continue';
+    } else if (options.mode === 'resume') {
+      claudeCommand = 'claude --resume';
+    }
+    
+    if (options.skipPermissions) {
+      claudeCommand += ' --dangerously-skip-permissions';
+    }
+    
+    // Write the command to the terminal
+    const commandToRun = `${claudeCommand}\n`;
+    logger.info('Executing Claude command', { sessionId, command: claudeCommand });
+    
+    // Send the command to the terminal
+    this.writeToSession(sessionId, commandToRun);
+    
+    // Emit event to notify UI that Claude is starting
+    this.io.emit('claude-started', { sessionId, options });
     
     return true;
   }
