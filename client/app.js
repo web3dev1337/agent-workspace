@@ -220,7 +220,9 @@ class ClaudeOrchestrator {
       'enable-notifications': null,
       'enable-sounds': null,
       'auto-scroll': null,
-      'theme-select': null
+      'theme-select': null,
+      'start-claude': null,
+      'cancel-claude-startup': null
     };
     
     // Check all elements exist
@@ -328,6 +330,22 @@ class ClaudeOrchestrator {
       // Focus on notifications checkbox
       document.getElementById('enable-notifications').focus();
     });
+    
+    // Claude startup modal handlers
+    const startClaudeBtn = document.getElementById('start-claude');
+    const cancelClaudeBtn = document.getElementById('cancel-claude-startup');
+    
+    if (startClaudeBtn) {
+      startClaudeBtn.addEventListener('click', () => {
+        this.handleClaudeStart();
+      });
+    }
+    
+    if (cancelClaudeBtn) {
+      cancelClaudeBtn.addEventListener('click', () => {
+        this.hideClaudeStartupModal();
+      });
+    }
     
     // Handle window resize to fix blank terminals
     let resizeTimeout;
@@ -719,6 +737,7 @@ class ClaudeOrchestrator {
         <div class="terminal-controls">
           <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
           ${isClaudeSession ? `
+            <button class="control-btn claude-start-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude">🚀</button>
             <button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>
             <button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>
             <button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>
@@ -1887,6 +1906,56 @@ class ClaudeOrchestrator {
     const rows = Math.floor(rect.height / 20); // Approximate line height
     
     return { cols: Math.max(80, cols), rows: Math.max(24, rows) };
+  }
+  
+  showClaudeStartupModal(sessionId) {
+    const modal = document.getElementById('claude-startup-modal');
+    const sessionInfo = document.getElementById('startup-session-id');
+    
+    if (modal && sessionInfo) {
+      // Store the session ID for later use
+      this.pendingClaudeSession = sessionId;
+      
+      // Update session info display
+      sessionInfo.textContent = `Session: ${sessionId.replace('-claude', '')}`;
+      
+      // Reset form to defaults
+      document.querySelector('input[name="claude-mode"][value="fresh"]').checked = true;
+      document.getElementById('skip-permissions').checked = false;
+      
+      // Show modal
+      modal.classList.remove('hidden');
+    }
+  }
+  
+  hideClaudeStartupModal() {
+    const modal = document.getElementById('claude-startup-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      this.pendingClaudeSession = null;
+    }
+  }
+  
+  handleClaudeStart() {
+    if (!this.pendingClaudeSession || !this.socket || !this.socket.connected) {
+      return;
+    }
+    
+    // Get selected options
+    const mode = document.querySelector('input[name="claude-mode"]:checked')?.value || 'fresh';
+    const skipPermissions = document.getElementById('skip-permissions')?.checked || false;
+    
+    // Send command to server
+    this.socket.emit('start-claude', {
+      sessionId: this.pendingClaudeSession,
+      options: {
+        mode: mode,
+        skipPermissions: skipPermissions
+      }
+    });
+    
+    // Hide modal
+    this.hideClaudeStartupModal();
   }
 }
 
