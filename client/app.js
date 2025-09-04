@@ -795,6 +795,13 @@ class ClaudeOrchestrator {
             // Create new terminal only if it doesn't exist
             this.terminalManager.createTerminal(sessionId, session);
           }
+          
+          // Auto-start Claude sessions with user settings
+          if (sessionId.includes('-claude') && this.userSettings) {
+            setTimeout(() => {
+              this.autoStartClaude(sessionId);
+            }, 1000); // Give terminal time to initialize
+          }
         }, 50 + (index * 25)); // Reduced stagger time
       }
     });
