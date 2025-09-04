@@ -4,6 +4,7 @@ const winston = require('winston');
 const fs = require('fs');
 const path = require('path');
 const { ClaudeVersionChecker } = require('./claudeVersionChecker');
+const { UserSettingsService } = require('./userSettingsService');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -25,6 +26,7 @@ class SessionManager extends EventEmitter {
     this.statusDetector = null; // Will be set later
     this.gitHelper = null; // Will be set later
     this.fileWatchers = new Map(); // Store file watchers for .git/HEAD files
+    this.userSettings = UserSettingsService.getInstance();
     
     // Load configuration
     this.config = this.loadConfig();
@@ -849,18 +851,34 @@ class SessionManager extends EventEmitter {
       return false;
     }
     
-    logger.info('Starting Claude with options', { sessionId, options });
+    // Get effective settings for this session (global + per-terminal overrides)
+    const effectiveSettings = this.userSettings.getEffectiveSettings(sessionId);
     
-    // Build Claude command based on options
+    // Merge UI options with user settings (UI options take precedence)
+    const finalOptions = {
+      ...options,
+      skipPermissions: options.skipPermissions !== undefined 
+        ? options.skipPermissions 
+        : effectiveSettings.claudeFlags.skipPermissions
+    };
+    
+    logger.info('Starting Claude with options', { 
+      sessionId, 
+      uiOptions: options, 
+      effectiveSettings: effectiveSettings.claudeFlags,
+      finalOptions 
+    });
+    
+    // Build Claude command based on final options
     let claudeCommand = 'claude';
     
-    if (options.mode === 'continue') {
+    if (finalOptions.mode === 'continue') {
       claudeCommand = 'claude --continue';
-    } else if (options.mode === 'resume') {
+    } else if (finalOptions.mode === 'resume') {
       claudeCommand = 'claude --resume';
     }
     
-    if (options.skipPermissions) {
+    if (finalOptions.skipPermissions) {
       claudeCommand += ' --dangerously-skip-permissions';
     }
     
@@ -872,7 +890,7 @@ class SessionManager extends EventEmitter {
     this.writeToSession(sessionId, commandToRun);
     
     // Emit event to notify UI that Claude is starting
-    this.io.emit('claude-started', { sessionId, options });
+    this.io.emit('claude-started', { sessionId, options: finalOptions });
     
     return true;
   }
