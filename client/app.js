@@ -796,7 +796,10 @@ class ClaudeOrchestrator {
             this.terminalManager.createTerminal(sessionId, session);
           }
           
-          // Claude sessions are now auto-started by the backend with user settings
+          // Auto-start Claude sessions with user settings after they're loaded
+          if (sessionId.includes('-claude')) {
+            this.waitForSettingsAndAutoStart(sessionId);
+          }
         }, 50 + (index * 25)); // Reduced stagger time
       }
     });
@@ -2544,27 +2547,34 @@ class ClaudeOrchestrator {
       
       console.log(`Opening replay viewer for ${sessionId} at ${replayViewerUrl}`);
       
-      // Open in new window/tab
-      const newWindow = window.open(replayViewerUrl, `replay-viewer-work${worktreeNum}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
+      // Open in new tab (simpler approach)
+      window.open(replayViewerUrl, '_blank');
       
-      if (!newWindow) {
-        // Fallback if popup blocked - show instructions
-        this.showTemporaryMessage('Popup blocked. Please allow popups or manually open: ' + replayViewerUrl, 'error');
-        
-        // Also copy URL to clipboard as fallback
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(replayViewerUrl).then(() => {
-            console.log('Replay viewer URL copied to clipboard');
-          });
-        }
-      } else {
-        this.showTemporaryMessage(`Opened replay viewer for work${worktreeNum}`, 'success');
-      }
+      // Show success message with URL for reference
+      this.showTemporaryMessage(`Opening replay viewer for work${worktreeNum}`, 'success');
+      console.log(`Replay viewer URL: ${replayViewerUrl}`);
       
     } catch (error) {
       console.error('Error opening replay viewer:', error);
       this.showTemporaryMessage('Failed to open replay viewer', 'error');
     }
+  }
+
+  waitForSettingsAndAutoStart(sessionId) {
+    // Wait for user settings to be loaded, then auto-start
+    const checkAndStart = () => {
+      if (this.userSettings) {
+        console.log('User settings loaded, auto-starting Claude for:', sessionId);
+        setTimeout(() => {
+          this.autoStartClaude(sessionId);
+        }, 1000);
+      } else {
+        console.log('Waiting for user settings to load for:', sessionId);
+        setTimeout(checkAndStart, 500); // Check again in 500ms
+      }
+    };
+    
+    setTimeout(checkAndStart, 1000); // Initial delay for terminal setup
   }
 
   async checkForSettingsUpdates() {
