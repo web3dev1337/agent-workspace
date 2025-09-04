@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "global": {
     "claudeFlags": {
-      "skipPermissions": true
+      "skipPermissions": false
     },
     "terminal": {}
   },
