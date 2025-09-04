@@ -796,12 +796,7 @@ class ClaudeOrchestrator {
             this.terminalManager.createTerminal(sessionId, session);
           }
           
-          // Auto-start Claude sessions with user settings
-          if (sessionId.includes('-claude') && this.userSettings) {
-            setTimeout(() => {
-              this.autoStartClaude(sessionId);
-            }, 1000); // Give terminal time to initialize
-          }
+          // Claude sessions are now auto-started by the backend with user settings
         }, 50 + (index * 25)); // Reduced stagger time
       }
     });
