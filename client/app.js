@@ -2529,21 +2529,8 @@ class ClaudeOrchestrator {
         console.warn('Could not get worktree config, using defaults:', error);
       }
       
-      // Detect if we're in WSL or native Linux
-      const isWSL = navigator.userAgent.includes('Windows') || 
-                    window.navigator.platform.includes('Win') ||
-                    (worktreeConfig && worktreeConfig.basePath.includes('/home/'));
-      
-      let replayViewerUrl;
-      if (isWSL) {
-        // WSL path format - get the actual username from the path if available
-        const username = worktreeConfig ? worktreeConfig.basePath.split('/').pop() : 'ab';
-        replayViewerUrl = `file://wsl.localhost/Ubuntu/home/${username}/HyFire2-work${worktreeNum}/tools/replay-viewer/index.html`;
-      } else {
-        // Native Linux path - use the actual base path from config
-        const basePath = worktreeConfig ? worktreeConfig.basePath : '/home/ab';
-        replayViewerUrl = `file://${basePath}/HyFire2-work${worktreeNum}/tools/replay-viewer/index.html`;
-      }
+      // Use server-hosted replay viewer (avoids browser file:// restrictions)
+      const replayViewerUrl = `${window.location.origin}/replay-viewer/work${worktreeNum}/`;
       
       console.log(`Opening replay viewer for ${sessionId} at ${replayViewerUrl}`);
       
