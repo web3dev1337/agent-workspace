@@ -819,8 +819,8 @@ class ClaudeOrchestrator {
         <div class="terminal-controls">
           <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
           ${isClaudeSession ? `
-            <button class="control-btn claude-start-btn" id="claude-start-btn-${sessionId}" disabled onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude">🚀</button>
-            <button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>
+            <button class="control-btn claude-start-btn" id="claude-start-btn-${sessionId}" disabled onclick="window.orchestrator.autoStartClaude('${sessionId}')" title="Start Claude with Settings">🚀</button>
+            <button class="control-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude with Options">↻</button>
             <button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>
             <button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>
             ${this.getGitHubButtons(sessionId)}
@@ -2056,7 +2056,51 @@ class ClaudeOrchestrator {
     return { cols: Math.max(80, cols), rows: Math.max(24, rows) };
   }
   
-  showClaudeStartupModal(sessionId) {
+  async autoStartClaude(sessionId) {
+    console.log(`Auto-starting Claude with user settings: ${sessionId}`);
+    
+    if (!this.socket || !this.socket.connected) {
+      this.showError('Not connected to server');
+      return;
+    }
+    
+    try {
+      // Get effective settings for this session
+      const response = await fetch(`/api/user-settings/effective/${sessionId}`);
+      let effectiveSettings = { claudeFlags: { skipPermissions: false } };
+      
+      if (response.ok) {
+        effectiveSettings = await response.json();
+      } else {
+        console.warn('Could not load effective settings, using defaults');
+      }
+      
+      // Start Claude with effective settings
+      const options = {
+        mode: 'fresh', // Default to fresh for auto-start
+        skipPermissions: effectiveSettings.claudeFlags.skipPermissions
+      };
+      
+      console.log('Auto-starting Claude with options:', options);
+      
+      this.socket.emit('start-claude', {
+        sessionId: sessionId,
+        options: options
+      });
+      
+      // Hide the startup UI if it exists
+      const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+      if (startupUI) {
+        startupUI.style.display = 'none';
+      }
+      
+    } catch (error) {
+      console.error('Error auto-starting Claude:', error);
+      this.showError('Failed to start Claude with settings');
+    }
+  }
+
+  async showClaudeStartupModal(sessionId) {
     const modal = document.getElementById('claude-startup-modal');
     const sessionInfo = document.getElementById('startup-session-id');
     
@@ -2067,9 +2111,27 @@ class ClaudeOrchestrator {
       // Update session info display
       sessionInfo.textContent = `Session: ${sessionId.replace('-claude', '')}`;
       
-      // Reset form to defaults
-      document.querySelector('input[name="claude-mode"][value="fresh"]').checked = true;
-      document.getElementById('skip-permissions').checked = false;
+      try {
+        // Get effective settings for this session and pre-populate
+        const response = await fetch(`/api/user-settings/effective/${sessionId}`);
+        let effectiveSettings = { claudeFlags: { skipPermissions: false } };
+        
+        if (response.ok) {
+          effectiveSettings = await response.json();
+        }
+        
+        // Pre-populate form with effective settings
+        document.querySelector('input[name="claude-mode"][value="fresh"]').checked = true;
+        document.getElementById('skip-permissions').checked = effectiveSettings.claudeFlags.skipPermissions;
+        
+        console.log('Pre-populated modal with settings:', effectiveSettings);
+        
+      } catch (error) {
+        console.error('Error loading effective settings for modal:', error);
+        // Fall back to defaults
+        document.querySelector('input[name="claude-mode"][value="fresh"]').checked = true;
+        document.getElementById('skip-permissions').checked = false;
+      }
       
       // Show modal
       modal.classList.remove('hidden');
@@ -2106,34 +2168,60 @@ class ClaudeOrchestrator {
     this.hideClaudeStartupModal();
   }
   
-  startClaudeFromTerminal(sessionId) {
+  async startClaudeFromTerminal(sessionId) {
     if (!this.socket || !this.socket.connected) {
       return;
     }
     
-    // Get selected options from the inline UI
-    const mode = document.querySelector(`input[name="claude-mode-${sessionId}"]:checked`)?.value || 'fresh';
-    const skipPermissions = document.getElementById(`skip-permissions-${sessionId}`)?.checked || false;
-    
-    // Send command to server
-    this.socket.emit('start-claude', {
-      sessionId: sessionId,
-      options: {
-        mode: mode,
-        skipPermissions: skipPermissions
+    try {
+      // Get effective settings for this session
+      const response = await fetch(`/api/user-settings/effective/${sessionId}`);
+      let effectiveSettings = { claudeFlags: { skipPermissions: false } };
+      
+      if (response.ok) {
+        effectiveSettings = await response.json();
       }
-    });
-    
-    // Hide the startup UI
-    const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-    if (startupUI) {
-      startupUI.style.display = 'none';
+      
+      // Get selected options from the inline UI, but use effective settings as fallback
+      const mode = document.querySelector(`input[name="claude-mode-${sessionId}"]:checked`)?.value || 'fresh';
+      const skipPermissions = document.getElementById(`skip-permissions-${sessionId}`)?.checked ?? effectiveSettings.claudeFlags.skipPermissions;
+      
+      // Send command to server
+      this.socket.emit('start-claude', {
+        sessionId: sessionId,
+        options: {
+          mode: mode,
+          skipPermissions: skipPermissions
+        }
+      });
+      
+      // Hide the startup UI
+      const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+      if (startupUI) {
+        startupUI.style.display = 'none';
+      }
+      
+      // Enable the start button for future use
+      const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
+      if (startBtn) {
+        startBtn.disabled = false;
+      }
+      
+    } catch (error) {
+      console.error('Error starting Claude from terminal:', error);
     }
+  }
+
+  restartClaudeSession(sessionId) {
+    console.log(`Restarting Claude session: ${sessionId}`);
     
-    // Enable the start button for future use
-    const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
-    if (startBtn) {
-      startBtn.disabled = false;
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('restart-session', { sessionId });
+      
+      // Update UI to show restarting
+      this.updateSessionStatus(sessionId, 'restarting');
+    } else {
+      this.showError('Not connected to server');
     }
   }
 
