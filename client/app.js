@@ -7,6 +7,7 @@ class ClaudeOrchestrator {
     this.terminalManager = null;
     this.notificationManager = null;
     this.settings = this.loadSettings();
+    this.userSettings = null; // Will be loaded from server
     this.currentLayout = '2x4';
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
@@ -36,6 +37,12 @@ class ClaudeOrchestrator {
       // Connect to server
       await this.connectToServer();
       
+      // Load user settings from server
+      await this.loadUserSettings();
+      
+      // Check for updates on startup
+      this.checkForSettingsUpdates();
+      
       // Hide loading message if it exists
       const loadingMessage = document.getElementById('loading-message');
       if (loadingMessage) {
@@ -54,8 +61,9 @@ class ClaudeOrchestrator {
       const authToken = this.getAuthToken();
       const socketOptions = authToken ? { auth: { token: authToken } } : {};
       
-      // Explicitly connect to the server URL
-      this.socket = io('http://localhost:3000', socketOptions);
+      // Connect to server - detect correct port
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      this.socket = io(serverUrl, socketOptions);
       console.log('Socket created, waiting for connection...');
       
       // Connection events
@@ -155,6 +163,27 @@ class ClaudeOrchestrator {
         this.showClaudeUpdateRequired(updateInfo);
       });
       
+      this.socket.on('user-settings-updated', (settings) => {
+        console.log('User settings updated:', settings);
+        this.userSettings = settings;
+        this.syncUserSettingsUI();
+      });
+
+      this.socket.on('git-updated', (result) => {
+        console.log('Git updated:', result);
+        this.showTemporaryMessage(`Repository updated successfully! ${result.wasUpToDate ? 'Already up to date.' : 'Changes pulled.'}`, 'success');
+        
+        // Refresh the page after successful update
+        if (!result.wasUpToDate) {
+          setTimeout(() => {
+            this.showTemporaryMessage('Refreshing page to apply updates...', 'info');
+            setTimeout(() => {
+              location.reload();
+            }, 2000);
+          }, 3000);
+        }
+      });
+      
       // Periodic heartbeat to keep sessions alive while UI is open
       this.startHeartbeats();
       
@@ -235,6 +264,13 @@ class ClaudeOrchestrator {
       'enable-sounds': null,
       'auto-scroll': null,
       'theme-select': null,
+      'global-skip-permissions': null,
+      'reset-to-defaults': null,
+      'save-as-default': null,
+      'check-updates': null,
+      'pull-updates': null,
+      'dismiss-settings-notification': null,
+      'dismiss-git-notification': null,
       'start-claude': null,
       'cancel-claude-startup': null
     };
@@ -335,6 +371,38 @@ class ClaudeOrchestrator {
       this.settings.theme = e.target.value;
       this.saveSettings();
       this.applyTheme();
+    });
+
+    // User settings (terminal flags)
+    document.getElementById('global-skip-permissions').addEventListener('change', (e) => {
+      this.updateGlobalUserSetting('claudeFlags.skipPermissions', e.target.checked);
+    });
+
+    // Template management buttons
+    document.getElementById('reset-to-defaults').addEventListener('click', () => {
+      this.resetToDefaults();
+    });
+
+    document.getElementById('save-as-default').addEventListener('click', () => {
+      this.saveAsDefault();
+    });
+
+    // Git update buttons
+    document.getElementById('check-updates').addEventListener('click', () => {
+      this.checkForUpdates();
+    });
+
+    document.getElementById('pull-updates').addEventListener('click', () => {
+      this.pullLatestChanges();
+    });
+
+    // Notification dismiss buttons
+    document.getElementById('dismiss-settings-notification').addEventListener('click', () => {
+      document.getElementById('settings-update-notification').classList.add('hidden');
+    });
+
+    document.getElementById('dismiss-git-notification').addEventListener('click', () => {
+      document.getElementById('git-update-notification').classList.add('hidden');
     });
     
     // Notification toggle - for now, just open settings to notification section
@@ -727,6 +795,13 @@ class ClaudeOrchestrator {
             // Create new terminal only if it doesn't exist
             this.terminalManager.createTerminal(sessionId, session);
           }
+          
+          // Auto-start Claude sessions with user settings
+          if (sessionId.includes('-claude') && this.userSettings) {
+            setTimeout(() => {
+              this.autoStartClaude(sessionId);
+            }, 1000); // Give terminal time to initialize
+          }
         }, 50 + (index * 25)); // Reduced stagger time
       }
     });
@@ -751,8 +826,8 @@ class ClaudeOrchestrator {
         <div class="terminal-controls">
           <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
           ${isClaudeSession ? `
-            <button class="control-btn claude-start-btn" id="claude-start-btn-${sessionId}" disabled onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude">🚀</button>
-            <button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>
+            <button class="control-btn claude-start-btn" id="claude-start-btn-${sessionId}" disabled onclick="window.orchestrator.autoStartClaude('${sessionId}')" title="Start Claude with Settings">🚀</button>
+            <button class="control-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude with Options">↻</button>
             <button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>
             <button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>
             ${this.getGitHubButtons(sessionId)}
@@ -1458,6 +1533,11 @@ class ClaudeOrchestrator {
     document.getElementById('enable-sounds').checked = this.settings.sounds;
     document.getElementById('auto-scroll').checked = this.settings.autoScroll;
     document.getElementById('theme-select').value = this.settings.theme;
+    
+    // Sync user settings UI if loaded
+    if (this.userSettings) {
+      this.syncUserSettingsUI();
+    }
   }
   
   showCodeReviewDropdown(sessionId) {
@@ -1983,7 +2063,51 @@ class ClaudeOrchestrator {
     return { cols: Math.max(80, cols), rows: Math.max(24, rows) };
   }
   
-  showClaudeStartupModal(sessionId) {
+  async autoStartClaude(sessionId) {
+    console.log(`Auto-starting Claude with user settings: ${sessionId}`);
+    
+    if (!this.socket || !this.socket.connected) {
+      this.showError('Not connected to server');
+      return;
+    }
+    
+    try {
+      // Get effective settings for this session
+      const response = await fetch(`/api/user-settings/effective/${sessionId}`);
+      let effectiveSettings = { claudeFlags: { skipPermissions: false } };
+      
+      if (response.ok) {
+        effectiveSettings = await response.json();
+      } else {
+        console.warn('Could not load effective settings, using defaults');
+      }
+      
+      // Start Claude with effective settings
+      const options = {
+        mode: 'fresh', // Default to fresh for auto-start
+        skipPermissions: effectiveSettings.claudeFlags.skipPermissions
+      };
+      
+      console.log('Auto-starting Claude with options:', options);
+      
+      this.socket.emit('start-claude', {
+        sessionId: sessionId,
+        options: options
+      });
+      
+      // Hide the startup UI if it exists
+      const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+      if (startupUI) {
+        startupUI.style.display = 'none';
+      }
+      
+    } catch (error) {
+      console.error('Error auto-starting Claude:', error);
+      this.showError('Failed to start Claude with settings');
+    }
+  }
+
+  async showClaudeStartupModal(sessionId) {
     const modal = document.getElementById('claude-startup-modal');
     const sessionInfo = document.getElementById('startup-session-id');
     
@@ -1994,9 +2118,27 @@ class ClaudeOrchestrator {
       // Update session info display
       sessionInfo.textContent = `Session: ${sessionId.replace('-claude', '')}`;
       
-      // Reset form to defaults
-      document.querySelector('input[name="claude-mode"][value="fresh"]').checked = true;
-      document.getElementById('skip-permissions').checked = false;
+      try {
+        // Get effective settings for this session and pre-populate
+        const response = await fetch(`/api/user-settings/effective/${sessionId}`);
+        let effectiveSettings = { claudeFlags: { skipPermissions: false } };
+        
+        if (response.ok) {
+          effectiveSettings = await response.json();
+        }
+        
+        // Pre-populate form with effective settings
+        document.querySelector('input[name="claude-mode"][value="fresh"]').checked = true;
+        document.getElementById('skip-permissions').checked = effectiveSettings.claudeFlags.skipPermissions;
+        
+        console.log('Pre-populated modal with settings:', effectiveSettings);
+        
+      } catch (error) {
+        console.error('Error loading effective settings for modal:', error);
+        // Fall back to defaults
+        document.querySelector('input[name="claude-mode"][value="fresh"]').checked = true;
+        document.getElementById('skip-permissions').checked = false;
+      }
       
       // Show modal
       modal.classList.remove('hidden');
@@ -2033,34 +2175,419 @@ class ClaudeOrchestrator {
     this.hideClaudeStartupModal();
   }
   
-  startClaudeFromTerminal(sessionId) {
+  async startClaudeFromTerminal(sessionId) {
     if (!this.socket || !this.socket.connected) {
       return;
     }
     
-    // Get selected options from the inline UI
-    const mode = document.querySelector(`input[name="claude-mode-${sessionId}"]:checked`)?.value || 'fresh';
-    const skipPermissions = document.getElementById(`skip-permissions-${sessionId}`)?.checked || false;
-    
-    // Send command to server
-    this.socket.emit('start-claude', {
-      sessionId: sessionId,
-      options: {
-        mode: mode,
-        skipPermissions: skipPermissions
+    try {
+      // Get effective settings for this session
+      const response = await fetch(`/api/user-settings/effective/${sessionId}`);
+      let effectiveSettings = { claudeFlags: { skipPermissions: false } };
+      
+      if (response.ok) {
+        effectiveSettings = await response.json();
       }
-    });
-    
-    // Hide the startup UI
-    const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-    if (startupUI) {
-      startupUI.style.display = 'none';
+      
+      // Get selected options from the inline UI, but use effective settings as fallback
+      const mode = document.querySelector(`input[name="claude-mode-${sessionId}"]:checked`)?.value || 'fresh';
+      const skipPermissions = document.getElementById(`skip-permissions-${sessionId}`)?.checked ?? effectiveSettings.claudeFlags.skipPermissions;
+      
+      // Send command to server
+      this.socket.emit('start-claude', {
+        sessionId: sessionId,
+        options: {
+          mode: mode,
+          skipPermissions: skipPermissions
+        }
+      });
+      
+      // Hide the startup UI
+      const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+      if (startupUI) {
+        startupUI.style.display = 'none';
+      }
+      
+      // Enable the start button for future use
+      const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
+      if (startBtn) {
+        startBtn.disabled = false;
+      }
+      
+    } catch (error) {
+      console.error('Error starting Claude from terminal:', error);
     }
+  }
+
+  restartClaudeSession(sessionId) {
+    console.log(`Restarting Claude session: ${sessionId}`);
     
-    // Enable the start button for future use
-    const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
-    if (startBtn) {
-      startBtn.disabled = false;
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('restart-session', { sessionId });
+      
+      // Update UI to show restarting
+      this.updateSessionStatus(sessionId, 'restarting');
+    } else {
+      this.showError('Not connected to server');
+    }
+  }
+
+  // User Settings Methods
+  async loadUserSettings() {
+    try {
+      const response = await fetch('/api/user-settings');
+      if (response.ok) {
+        this.userSettings = await response.json();
+        console.log('User settings loaded:', this.userSettings);
+        this.syncUserSettingsUI();
+      } else {
+        console.error('Failed to load user settings:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error loading user settings:', error);
+    }
+  }
+
+  async updateGlobalUserSetting(path, value) {
+    try {
+      // Ensure userSettings is loaded
+      if (!this.userSettings) {
+        console.warn('User settings not loaded, attempting to load...');
+        await this.loadUserSettings();
+        
+        if (!this.userSettings) {
+          console.error('Failed to load user settings');
+          return;
+        }
+      }
+      
+      const pathParts = path.split('.');
+      const newGlobal = JSON.parse(JSON.stringify(this.userSettings.global));
+      
+      // Navigate to the correct nested property
+      let current = newGlobal;
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        if (!current[pathParts[i]]) {
+          current[pathParts[i]] = {};
+        }
+        current = current[pathParts[i]];
+      }
+      current[pathParts[pathParts.length - 1]] = value;
+
+      const response = await fetch('/api/user-settings/global', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ global: newGlobal })
+      });
+
+      if (response.ok) {
+        const updatedSettings = await response.json();
+        this.userSettings = updatedSettings;
+        console.log('Global setting updated:', path, '=', value);
+      } else {
+        console.error('Failed to update global setting:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error updating global setting:', error);
+    }
+  }
+
+  async updatePerTerminalSetting(sessionId, setting) {
+    try {
+      const response = await fetch(`/api/user-settings/terminal/${sessionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(setting)
+      });
+
+      if (response.ok) {
+        const updatedSettings = await response.json();
+        this.userSettings = updatedSettings;
+        console.log('Per-terminal setting updated for', sessionId, ':', setting);
+      } else {
+        console.error('Failed to update per-terminal setting:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error updating per-terminal setting:', error);
+    }
+  }
+
+  async clearPerTerminalSetting(sessionId) {
+    try {
+      const response = await fetch(`/api/user-settings/terminal/${sessionId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        const updatedSettings = await response.json();
+        this.userSettings = updatedSettings;
+        console.log('Cleared per-terminal settings for', sessionId);
+      } else {
+        console.error('Failed to clear per-terminal setting:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error clearing per-terminal setting:', error);
+    }
+  }
+
+  syncUserSettingsUI() {
+    if (!this.userSettings) {
+      console.warn('Cannot sync user settings UI - settings not loaded');
+      return;
+    }
+
+    // Update global settings UI
+    const globalSkipPermissions = document.getElementById('global-skip-permissions');
+    if (globalSkipPermissions) {
+      globalSkipPermissions.checked = this.userSettings.global.claudeFlags.skipPermissions;
+    }
+
+    // Update per-terminal settings UI
+    this.updatePerTerminalSettingsUI();
+  }
+
+  updatePerTerminalSettingsUI() {
+    const container = document.getElementById('per-terminal-settings');
+    if (!container || !this.userSettings) return;
+
+    // Get the container for per-terminal items
+    let itemsContainer = container.querySelector('.per-terminal-items');
+    if (!itemsContainer) {
+      itemsContainer = document.createElement('div');
+      itemsContainer.className = 'per-terminal-items';
+      container.appendChild(itemsContainer);
+    }
+
+    // Clear existing items
+    itemsContainer.innerHTML = '';
+
+    // Add items for each Claude session
+    for (const [sessionId, session] of this.sessions) {
+      if (sessionId.includes('-claude')) {
+        const item = this.createPerTerminalSettingItem(sessionId, session);
+        itemsContainer.appendChild(item);
+      }
+    }
+  }
+
+  createPerTerminalSettingItem(sessionId, session) {
+    const div = document.createElement('div');
+    div.className = 'per-terminal-item';
+
+    const hasOverride = this.userSettings.perTerminal[sessionId];
+    const effectiveSkipPermissions = hasOverride && hasOverride.claudeFlags 
+      ? hasOverride.claudeFlags.skipPermissions
+      : this.userSettings.global.claudeFlags.skipPermissions;
+
+    div.innerHTML = `
+      <div class="terminal-name">${sessionId}</div>
+      <div class="terminal-controls">
+        <label>
+          <input type="checkbox" class="terminal-skip-permissions" 
+                 data-session-id="${sessionId}" 
+                 ${effectiveSkipPermissions ? 'checked' : ''}>
+          Skip Permissions
+        </label>
+        ${hasOverride ? `
+          <button class="clear-override-btn" data-session-id="${sessionId}" title="Use global setting">
+            ↻
+          </button>
+        ` : ''}
+      </div>
+    `;
+
+    // Add event listeners
+    const checkbox = div.querySelector('.terminal-skip-permissions');
+    checkbox.addEventListener('change', (e) => {
+      this.updatePerTerminalSetting(sessionId, {
+        claudeFlags: { skipPermissions: e.target.checked }
+      });
+    });
+
+    const clearBtn = div.querySelector('.clear-override-btn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        this.clearPerTerminalSetting(sessionId);
+      });
+    }
+
+    return div;
+  }
+
+  async resetToDefaults() {
+    try {
+      if (!confirm('Reset all user settings to repository defaults? This will overwrite all your current settings.')) {
+        return;
+      }
+
+      const response = await fetch('/api/user-settings/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        const updatedSettings = await response.json();
+        this.userSettings = updatedSettings;
+        this.syncUserSettingsUI();
+        console.log('Reset to defaults successfully');
+        
+        // Show user feedback
+        this.showTemporaryMessage('Settings reset to defaults');
+      } else {
+        console.error('Failed to reset to defaults:', response.statusText);
+        this.showTemporaryMessage('Failed to reset settings', 'error');
+      }
+    } catch (error) {
+      console.error('Error resetting to defaults:', error);
+      this.showTemporaryMessage('Error resetting settings', 'error');
+    }
+  }
+
+  async saveAsDefault() {
+    try {
+      if (!confirm('Save current settings as the repository default template? This will affect new installations.')) {
+        return;
+      }
+
+      const response = await fetch('/api/user-settings/save-as-default', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        console.log('Saved as default template successfully');
+        
+        // Show user feedback with commit reminder
+        this.showTemporaryMessage('Settings saved as default template. Remember to commit and push the changes to user-settings.default.json!', 'success');
+      } else {
+        console.error('Failed to save as default:', response.statusText);
+        this.showTemporaryMessage('Failed to save as default template', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving as default:', error);
+      this.showTemporaryMessage('Error saving as default template', 'error');
+    }
+  }
+
+  showTemporaryMessage(message, type = 'info') {
+    // Create a temporary message element
+    const messageEl = document.createElement('div');
+    messageEl.className = `temporary-message ${type}`;
+    messageEl.textContent = message;
+    
+    // Style the message
+    messageEl.style.cssText = `
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      background: ${type === 'error' ? 'var(--accent-danger)' : type === 'success' ? 'var(--accent-success)' : 'var(--accent-primary)'};
+      color: white;
+      padding: var(--space-md);
+      border-radius: var(--radius-md);
+      z-index: 10000;
+      max-width: 400px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+    `;
+    
+    document.body.appendChild(messageEl);
+    
+    // Animate in
+    setTimeout(() => {
+      messageEl.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // Remove after delay
+    setTimeout(() => {
+      messageEl.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        document.body.removeChild(messageEl);
+      }, 300);
+    }, 5000);
+  }
+
+  async checkForSettingsUpdates() {
+    try {
+      const response = await fetch('/api/user-settings/check-updates');
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result && result.hasUpdates) {
+          const notification = document.getElementById('settings-update-notification');
+          notification.classList.remove('hidden');
+          console.log('Settings updates available:', result);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking for settings updates:', error);
+    }
+  }
+
+  async checkForUpdates() {
+    try {
+      this.showTemporaryMessage('Checking for updates...', 'info');
+      
+      const response = await fetch('/api/git/check-updates');
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.hasUpdates) {
+          const notification = document.getElementById('git-update-notification');
+          const textElement = document.getElementById('git-notification-text');
+          textElement.textContent = `${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available on ${result.currentBranch}`;
+          notification.classList.remove('hidden');
+          
+          this.showTemporaryMessage(`Found ${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available`, 'success');
+        } else if (result.hasUpdates === false) {
+          this.showTemporaryMessage('Repository is up to date', 'success');
+        } else {
+          this.showTemporaryMessage('Unable to check for updates', 'error');
+        }
+      } else {
+        this.showTemporaryMessage('Failed to check for updates', 'error');
+      }
+    } catch (error) {
+      console.error('Error checking for updates:', error);
+      this.showTemporaryMessage('Error checking for updates', 'error');
+    }
+  }
+
+  async pullLatestChanges() {
+    try {
+      if (!confirm('Pull the latest changes from the repository? This will update the orchestrator code. Make sure you have no uncommitted changes.')) {
+        return;
+      }
+
+      this.showTemporaryMessage('Pulling latest changes...', 'info');
+      
+      const response = await fetch('/api/git/pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.success) {
+          // Success message will be handled by socket event
+          const notification = document.getElementById('git-update-notification');
+          notification.classList.add('hidden');
+        } else {
+          this.showTemporaryMessage(result.error || 'Failed to pull changes', 'error');
+          
+          // Show specific error details if available
+          if (result.changes && result.changes.length > 0) {
+            console.log('Uncommitted changes:', result.changes);
+            this.showTemporaryMessage('Please commit or stash your changes first', 'error');
+          }
+        }
+      } else {
+        this.showTemporaryMessage('Failed to pull latest changes', 'error');
+      }
+    } catch (error) {
+      console.error('Error pulling latest changes:', error);
+      this.showTemporaryMessage('Error pulling latest changes', 'error');
     }
   }
 }

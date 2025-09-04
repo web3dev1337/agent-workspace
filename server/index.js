@@ -36,6 +36,8 @@ const { SessionManager } = require('./sessionManager');
 const { StatusDetector } = require('./statusDetector');
 const { GitHelper } = require('./gitHelper');
 const { NotificationService } = require('./notificationService');
+const { UserSettingsService } = require('./userSettingsService');
+const { GitUpdateService } = require('./gitUpdateService');
 
 const app = express();
 const httpServer = createServer(app);
@@ -224,6 +226,198 @@ app.post('/api/claude-notification', express.json(), (req, res) => {
   });
   
   res.json({ success: true });
+});
+
+// Service instances
+const userSettingsService = UserSettingsService.getInstance();
+const gitUpdateService = GitUpdateService.getInstance();
+
+// Get all user settings
+app.get('/api/user-settings', (req, res) => {
+  try {
+    const settings = userSettingsService.getAllSettings();
+    res.json(settings);
+  } catch (error) {
+    logger.error('Failed to get user settings', { error: error.message });
+    res.status(500).json({ error: 'Failed to get user settings' });
+  }
+});
+
+// Update global settings
+app.put('/api/user-settings/global', express.json(), (req, res) => {
+  try {
+    const { global } = req.body;
+    const success = userSettingsService.updateGlobalSettings(global);
+    
+    if (success) {
+      const updatedSettings = userSettingsService.getAllSettings();
+      res.json(updatedSettings);
+      
+      // Notify all clients about settings change
+      io.emit('user-settings-updated', updatedSettings);
+    } else {
+      res.status(500).json({ error: 'Failed to save settings' });
+    }
+  } catch (error) {
+    logger.error('Failed to update global settings', { error: error.message });
+    res.status(500).json({ error: 'Failed to update global settings' });
+  }
+});
+
+// Update per-terminal settings
+app.put('/api/user-settings/terminal/:sessionId', express.json(), (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const settings = req.body;
+    const success = userSettingsService.updatePerTerminalSettings(sessionId, settings);
+    
+    if (success) {
+      const updatedSettings = userSettingsService.getAllSettings();
+      res.json(updatedSettings);
+      
+      // Notify all clients about settings change
+      io.emit('user-settings-updated', updatedSettings);
+    } else {
+      res.status(500).json({ error: 'Failed to save settings' });
+    }
+  } catch (error) {
+    logger.error('Failed to update per-terminal settings', { 
+      sessionId: req.params.sessionId, 
+      error: error.message 
+    });
+    res.status(500).json({ error: 'Failed to update per-terminal settings' });
+  }
+});
+
+// Clear per-terminal settings
+app.delete('/api/user-settings/terminal/:sessionId', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const success = userSettingsService.clearPerTerminalSettings(sessionId);
+    
+    if (success) {
+      const updatedSettings = userSettingsService.getAllSettings();
+      res.json(updatedSettings);
+      
+      // Notify all clients about settings change
+      io.emit('user-settings-updated', updatedSettings);
+    } else {
+      res.status(500).json({ error: 'Failed to clear settings' });
+    }
+  } catch (error) {
+    logger.error('Failed to clear per-terminal settings', { 
+      sessionId: req.params.sessionId, 
+      error: error.message 
+    });
+    res.status(500).json({ error: 'Failed to clear per-terminal settings' });
+  }
+});
+
+// Get effective settings for a specific session
+app.get('/api/user-settings/effective/:sessionId', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const effectiveSettings = userSettingsService.getEffectiveSettings(sessionId);
+    res.json(effectiveSettings);
+  } catch (error) {
+    logger.error('Failed to get effective settings', { 
+      sessionId: req.params.sessionId, 
+      error: error.message 
+    });
+    res.status(500).json({ error: 'Failed to get effective settings' });
+  }
+});
+
+// Get default template
+app.get('/api/user-settings/default', (req, res) => {
+  try {
+    const defaultTemplate = userSettingsService.getDefaultTemplate();
+    res.json(defaultTemplate);
+  } catch (error) {
+    logger.error('Failed to get default template', { error: error.message });
+    res.status(500).json({ error: 'Failed to get default template' });
+  }
+});
+
+// Reset user settings to defaults
+app.post('/api/user-settings/reset', (req, res) => {
+  try {
+    const success = userSettingsService.resetToDefaults();
+    
+    if (success) {
+      const updatedSettings = userSettingsService.getAllSettings();
+      res.json(updatedSettings);
+      
+      // Notify all clients about settings change
+      io.emit('user-settings-updated', updatedSettings);
+    } else {
+      res.status(500).json({ error: 'Failed to reset settings' });
+    }
+  } catch (error) {
+    logger.error('Failed to reset settings', { error: error.message });
+    res.status(500).json({ error: 'Failed to reset settings' });
+  }
+});
+
+// Save current settings as default template
+app.post('/api/user-settings/save-as-default', (req, res) => {
+  try {
+    const success = userSettingsService.saveAsDefault();
+    
+    if (success) {
+      res.json({ success: true, message: 'Settings saved as default template' });
+    } else {
+      res.status(500).json({ error: 'Failed to save as default template' });
+    }
+  } catch (error) {
+    logger.error('Failed to save as default template', { error: error.message });
+    res.status(500).json({ error: 'Failed to save as default template' });
+  }
+});
+
+// Check for default settings updates
+app.get('/api/user-settings/check-updates', (req, res) => {
+  try {
+    const updateCheck = userSettingsService.checkForDefaultUpdates();
+    res.json(updateCheck);
+  } catch (error) {
+    logger.error('Failed to check for settings updates', { error: error.message });
+    res.status(500).json({ error: 'Failed to check for settings updates' });
+  }
+});
+
+// Git update API endpoints
+app.get('/api/git/status', (req, res) => {
+  gitUpdateService.getStatus()
+    .then(status => res.json(status))
+    .catch(error => {
+      logger.error('Failed to get git status', { error: error.message });
+      res.status(500).json({ error: 'Failed to get git status' });
+    });
+});
+
+app.get('/api/git/check-updates', (req, res) => {
+  gitUpdateService.checkForUpdates()
+    .then(result => res.json(result))
+    .catch(error => {
+      logger.error('Failed to check for git updates', { error: error.message });
+      res.status(500).json({ error: 'Failed to check for git updates' });
+    });
+});
+
+app.post('/api/git/pull', (req, res) => {
+  gitUpdateService.pullLatest()
+    .then(result => {
+      if (result.success) {
+        // Notify clients about successful update
+        io.emit('git-updated', result);
+      }
+      res.json(result);
+    })
+    .catch(error => {
+      logger.error('Failed to pull latest changes', { error: error.message });
+      res.status(500).json({ error: 'Failed to pull latest changes' });
+    });
 });
 
 // Start server

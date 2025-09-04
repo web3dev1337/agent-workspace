@@ -179,6 +179,7 @@ SERVICES:     Modular service architecture with clear interfaces
 4. All managers use singleton pattern for consistency
 5. Git operations should be async and error-handled
 6. Logs should use Winston logger, not console.log
+7. **Be careful with `pkill -f` commands** - avoid broad patterns that could kill WSL or Claude Code itself
 
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
