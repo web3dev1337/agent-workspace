@@ -420,6 +420,21 @@ app.post('/api/git/pull', (req, res) => {
     });
 });
 
+// Get worktree configuration for frontend
+app.get('/api/worktrees/config', (req, res) => {
+  try {
+    const config = {
+      basePath: sessionManager.worktreeBasePath,
+      count: sessionManager.worktreeCount,
+      worktrees: sessionManager.worktrees
+    };
+    res.json(config);
+  } catch (error) {
+    logger.error('Failed to get worktree config', { error: error.message });
+    res.status(500).json({ error: 'Failed to get worktree config' });
+  }
+});
+
 // Start server
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';

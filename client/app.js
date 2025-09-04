@@ -820,6 +820,7 @@ class ClaudeOrchestrator {
         </div>
         <div class="terminal-controls">
           <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
+          <button class="control-btn" onclick="window.orchestrator.openReplayViewer('${sessionId}')" title="Open Replay Viewer">📹</button>
           ${isClaudeSession ? `
             <button class="control-btn claude-start-btn" id="claude-start-btn-${sessionId}" disabled onclick="window.orchestrator.autoStartClaude('${sessionId}')" title="Start Claude with Settings">🚀</button>
             <button class="control-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude with Options">↻</button>
@@ -2500,6 +2501,70 @@ class ClaudeOrchestrator {
         document.body.removeChild(messageEl);
       }, 300);
     }, 5000);
+  }
+
+  async openReplayViewer(sessionId) {
+    try {
+      // Extract worktree ID from sessionId (e.g., "work1-claude" -> "work1")
+      const worktreeMatch = sessionId.match(/work(\d+)/);
+      if (!worktreeMatch) {
+        console.error('Could not extract worktree number from sessionId:', sessionId);
+        this.showTemporaryMessage('Invalid session ID for replay viewer', 'error');
+        return;
+      }
+      
+      const worktreeNum = worktreeMatch[1];
+      
+      // Get worktree configuration from server for accurate path
+      let worktreeConfig = null;
+      try {
+        const response = await fetch('/api/worktrees/config');
+        if (response.ok) {
+          worktreeConfig = await response.json();
+        }
+      } catch (error) {
+        console.warn('Could not get worktree config, using defaults:', error);
+      }
+      
+      // Detect if we're in WSL or native Linux
+      const isWSL = navigator.userAgent.includes('Windows') || 
+                    window.navigator.platform.includes('Win') ||
+                    (worktreeConfig && worktreeConfig.basePath.includes('/home/'));
+      
+      let replayViewerUrl;
+      if (isWSL) {
+        // WSL path format - get the actual username from the path if available
+        const username = worktreeConfig ? worktreeConfig.basePath.split('/').pop() : 'ab';
+        replayViewerUrl = `file://wsl.localhost/Ubuntu/home/${username}/HyFire2-work${worktreeNum}/tools/replay-viewer/index.html`;
+      } else {
+        // Native Linux path - use the actual base path from config
+        const basePath = worktreeConfig ? worktreeConfig.basePath : '/home/ab';
+        replayViewerUrl = `file://${basePath}/HyFire2-work${worktreeNum}/tools/replay-viewer/index.html`;
+      }
+      
+      console.log(`Opening replay viewer for ${sessionId} at ${replayViewerUrl}`);
+      
+      // Open in new window/tab
+      const newWindow = window.open(replayViewerUrl, `replay-viewer-work${worktreeNum}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
+      
+      if (!newWindow) {
+        // Fallback if popup blocked - show instructions
+        this.showTemporaryMessage('Popup blocked. Please allow popups or manually open: ' + replayViewerUrl, 'error');
+        
+        // Also copy URL to clipboard as fallback
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(replayViewerUrl).then(() => {
+            console.log('Replay viewer URL copied to clipboard');
+          });
+        }
+      } else {
+        this.showTemporaryMessage(`Opened replay viewer for work${worktreeNum}`, 'success');
+      }
+      
+    } catch (error) {
+      console.error('Error opening replay viewer:', error);
+      this.showTemporaryMessage('Failed to open replay viewer', 'error');
+    }
   }
 
   async checkForSettingsUpdates() {
