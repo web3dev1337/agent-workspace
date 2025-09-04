@@ -100,9 +100,64 @@ class GitUpdateService {
       // Fetch first
       await this.fetchLatest();
 
-      // Pull current branch
+      // Pull current branch (use different strategy based on branch)
+      let pullCommand = `git pull origin ${currentBranch}`;
+      
+      // For feature branches, try to pull from remote, but if it fails, suggest using main/master
+      if (!isOnMainBranch) {
+        // First check if the remote branch exists
+        return new Promise((resolve) => {
+          exec(`git ls-remote --heads origin ${currentBranch}`, { cwd: this.projectRoot }, (error, stdout) => {
+            const remoteBranchExists = stdout.trim().length > 0;
+            
+            if (!remoteBranchExists) {
+              // Feature branch doesn't exist on remote, suggest main/master
+              resolve({
+                success: false,
+                error: `Branch '${currentBranch}' doesn't exist on remote. Consider switching to main/master for updates, or push your feature branch first.`,
+                currentBranch,
+                suggestion: 'Switch to main branch for updates'
+              });
+              return;
+            }
+            
+            // Remote branch exists, proceed with normal pull
+            exec(pullCommand, { cwd: this.projectRoot }, (error, stdout, stderr) => {
+              if (error) {
+                logger.error('Failed to pull latest changes', { 
+                  error: error.message, 
+                  stderr,
+                  currentBranch 
+                });
+                resolve({
+                  success: false,
+                  error: `Failed to pull ${currentBranch}: ${error.message}`,
+                  stderr,
+                  currentBranch,
+                  suggestion: 'Try switching to main/master branch'
+                });
+                return;
+              }
+              
+              logger.info('Successfully pulled latest changes', { 
+                currentBranch,
+                output: stdout 
+              });
+
+              resolve({
+                success: true,
+                currentBranch,
+                output: stdout,
+                wasUpToDate: stdout.includes('Already up to date') || stdout.includes('Already up-to-date')
+              });
+            });
+          });
+        });
+      }
+      
+      // For main/master branches, proceed normally
       return new Promise((resolve) => {
-        exec(`git pull origin ${currentBranch}`, { cwd: this.projectRoot }, (error, stdout, stderr) => {
+        exec(pullCommand, { cwd: this.projectRoot }, (error, stdout, stderr) => {
           if (error) {
             logger.error('Failed to pull latest changes', { 
               error: error.message, 
