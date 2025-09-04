@@ -61,8 +61,8 @@ class ClaudeOrchestrator {
       const authToken = this.getAuthToken();
       const socketOptions = authToken ? { auth: { token: authToken } } : {};
       
-      // Explicitly connect to the server URL
-      this.socket = io('http://localhost:3000', socketOptions);
+      // Connect to server (use current origin's port)
+      this.socket = io(window.location.origin, socketOptions);
       console.log('Socket created, waiting for connection...');
       
       // Connection events
@@ -2139,7 +2139,7 @@ class ClaudeOrchestrator {
   // User Settings Methods
   async loadUserSettings() {
     try {
-      const response = await fetch('http://localhost:3000/api/user-settings');
+      const response = await fetch('/api/user-settings');
       if (response.ok) {
         this.userSettings = await response.json();
         console.log('User settings loaded:', this.userSettings);
@@ -2178,7 +2178,7 @@ class ClaudeOrchestrator {
       }
       current[pathParts[pathParts.length - 1]] = value;
 
-      const response = await fetch('http://localhost:3000/api/user-settings/global', {
+      const response = await fetch('/api/user-settings/global', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ global: newGlobal })
@@ -2324,7 +2324,7 @@ class ClaudeOrchestrator {
         return;
       }
 
-      const response = await fetch('http://localhost:3000/api/user-settings/reset', {
+      const response = await fetch('/api/user-settings/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -2353,7 +2353,7 @@ class ClaudeOrchestrator {
         return;
       }
 
-      const response = await fetch('http://localhost:3000/api/user-settings/save-as-default', {
+      const response = await fetch('/api/user-settings/save-as-default', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -2413,7 +2413,7 @@ class ClaudeOrchestrator {
 
   async checkForSettingsUpdates() {
     try {
-      const response = await fetch('http://localhost:3000/api/user-settings/check-updates');
+      const response = await fetch('/api/user-settings/check-updates');
       if (response.ok) {
         const result = await response.json();
         
@@ -2432,7 +2432,7 @@ class ClaudeOrchestrator {
     try {
       this.showTemporaryMessage('Checking for updates...', 'info');
       
-      const response = await fetch('http://localhost:3000/api/git/check-updates');
+      const response = await fetch('/api/git/check-updates');
       if (response.ok) {
         const result = await response.json();
         
@@ -2465,7 +2465,7 @@ class ClaudeOrchestrator {
 
       this.showTemporaryMessage('Pulling latest changes...', 'info');
       
-      const response = await fetch('http://localhost:3000/api/git/pull', {
+      const response = await fetch('/api/git/pull', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
