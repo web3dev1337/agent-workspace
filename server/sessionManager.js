@@ -132,12 +132,22 @@ class SessionManager extends EventEmitter {
       // Add Claude session creation to promises array
       sessionPromises.push(
         Promise.resolve().then(() => {
+          // Get effective settings for this session
+          const effectiveSettings = this.userSettings.getEffectiveSettings(`${worktree.id}-claude`);
+          
+          // Build Claude command with user settings
+          let claudeCommand = 'claude';
+          if (effectiveSettings.claudeFlags.skipPermissions) {
+            claudeCommand += ' --dangerously-skip-permissions';
+          }
+          
           this.createSession(`${worktree.id}-claude`, {
             command: 'bash',
-            args: ['-c', `cd "${worktree.path}" && echo "Claude Terminal Ready" && echo "Use the UI controls to start Claude with your preferred options" && echo "" && exec bash`],
+            args: ['-c', `cd "${worktree.path}" && exec ${claudeCommand}`],
             cwd: worktree.path,
             type: 'claude',
-            worktreeId: worktree.id
+            worktreeId: worktree.id,
+            autoStarted: true // Flag to indicate this was auto-started
           });
         }).catch(error => {
           logger.error('Failed to initialize Claude session', { 
