@@ -61,8 +61,9 @@ class ClaudeOrchestrator {
       const authToken = this.getAuthToken();
       const socketOptions = authToken ? { auth: { token: authToken } } : {};
       
-      // Connect to server (use current origin's port)
-      this.socket = io(window.location.origin, socketOptions);
+      // Connect to server - detect correct port
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      this.socket = io(serverUrl, socketOptions);
       console.log('Socket created, waiting for connection...');
       
       // Connection events
