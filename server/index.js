@@ -36,6 +36,7 @@ const { SessionManager } = require('./sessionManager');
 const { StatusDetector } = require('./statusDetector');
 const { GitHelper } = require('./gitHelper');
 const { NotificationService } = require('./notificationService');
+const { UserSettingsService } = require('./userSettingsService');
 
 const app = express();
 const httpServer = createServer(app);
@@ -224,6 +225,105 @@ app.post('/api/claude-notification', express.json(), (req, res) => {
   });
   
   res.json({ success: true });
+});
+
+// User Settings API endpoints
+const userSettingsService = UserSettingsService.getInstance();
+
+// Get all user settings
+app.get('/api/user-settings', (req, res) => {
+  try {
+    const settings = userSettingsService.getAllSettings();
+    res.json(settings);
+  } catch (error) {
+    logger.error('Failed to get user settings', { error: error.message });
+    res.status(500).json({ error: 'Failed to get user settings' });
+  }
+});
+
+// Update global settings
+app.put('/api/user-settings/global', express.json(), (req, res) => {
+  try {
+    const { global } = req.body;
+    const success = userSettingsService.updateGlobalSettings(global);
+    
+    if (success) {
+      const updatedSettings = userSettingsService.getAllSettings();
+      res.json(updatedSettings);
+      
+      // Notify all clients about settings change
+      io.emit('user-settings-updated', updatedSettings);
+    } else {
+      res.status(500).json({ error: 'Failed to save settings' });
+    }
+  } catch (error) {
+    logger.error('Failed to update global settings', { error: error.message });
+    res.status(500).json({ error: 'Failed to update global settings' });
+  }
+});
+
+// Update per-terminal settings
+app.put('/api/user-settings/terminal/:sessionId', express.json(), (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const settings = req.body;
+    const success = userSettingsService.updatePerTerminalSettings(sessionId, settings);
+    
+    if (success) {
+      const updatedSettings = userSettingsService.getAllSettings();
+      res.json(updatedSettings);
+      
+      // Notify all clients about settings change
+      io.emit('user-settings-updated', updatedSettings);
+    } else {
+      res.status(500).json({ error: 'Failed to save settings' });
+    }
+  } catch (error) {
+    logger.error('Failed to update per-terminal settings', { 
+      sessionId: req.params.sessionId, 
+      error: error.message 
+    });
+    res.status(500).json({ error: 'Failed to update per-terminal settings' });
+  }
+});
+
+// Clear per-terminal settings
+app.delete('/api/user-settings/terminal/:sessionId', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const success = userSettingsService.clearPerTerminalSettings(sessionId);
+    
+    if (success) {
+      const updatedSettings = userSettingsService.getAllSettings();
+      res.json(updatedSettings);
+      
+      // Notify all clients about settings change
+      io.emit('user-settings-updated', updatedSettings);
+    } else {
+      res.status(500).json({ error: 'Failed to clear settings' });
+    }
+  } catch (error) {
+    logger.error('Failed to clear per-terminal settings', { 
+      sessionId: req.params.sessionId, 
+      error: error.message 
+    });
+    res.status(500).json({ error: 'Failed to clear per-terminal settings' });
+  }
+});
+
+// Get effective settings for a specific session
+app.get('/api/user-settings/effective/:sessionId', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const effectiveSettings = userSettingsService.getEffectiveSettings(sessionId);
+    res.json(effectiveSettings);
+  } catch (error) {
+    logger.error('Failed to get effective settings', { 
+      sessionId: req.params.sessionId, 
+      error: error.message 
+    });
+    res.status(500).json({ error: 'Failed to get effective settings' });
+  }
 });
 
 // Start server

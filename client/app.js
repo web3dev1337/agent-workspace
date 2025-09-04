@@ -7,6 +7,7 @@ class ClaudeOrchestrator {
     this.terminalManager = null;
     this.notificationManager = null;
     this.settings = this.loadSettings();
+    this.userSettings = null; // Will be loaded from server
     this.currentLayout = '2x4';
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
@@ -35,6 +36,9 @@ class ClaudeOrchestrator {
       
       // Connect to server
       await this.connectToServer();
+      
+      // Load user settings from server
+      await this.loadUserSettings();
       
       // Hide loading message if it exists
       const loadingMessage = document.getElementById('loading-message');
@@ -155,6 +159,12 @@ class ClaudeOrchestrator {
         this.showClaudeUpdateRequired(updateInfo);
       });
       
+      this.socket.on('user-settings-updated', (settings) => {
+        console.log('User settings updated:', settings);
+        this.userSettings = settings;
+        this.syncUserSettingsUI();
+      });
+      
       // Periodic heartbeat to keep sessions alive while UI is open
       this.startHeartbeats();
       
@@ -235,6 +245,7 @@ class ClaudeOrchestrator {
       'enable-sounds': null,
       'auto-scroll': null,
       'theme-select': null,
+      'global-skip-permissions': null,
       'start-claude': null,
       'cancel-claude-startup': null
     };
@@ -335,6 +346,11 @@ class ClaudeOrchestrator {
       this.settings.theme = e.target.value;
       this.saveSettings();
       this.applyTheme();
+    });
+
+    // User settings (terminal flags)
+    document.getElementById('global-skip-permissions').addEventListener('change', (e) => {
+      this.updateGlobalUserSetting('claudeFlags.skipPermissions', e.target.checked);
     });
     
     // Notification toggle - for now, just open settings to notification section
@@ -1458,6 +1474,11 @@ class ClaudeOrchestrator {
     document.getElementById('enable-sounds').checked = this.settings.sounds;
     document.getElementById('auto-scroll').checked = this.settings.autoScroll;
     document.getElementById('theme-select').value = this.settings.theme;
+    
+    // Sync user settings UI if loaded
+    if (this.userSettings) {
+      this.syncUserSettingsUI();
+    }
   }
   
   showCodeReviewDropdown(sessionId) {
@@ -2062,6 +2083,174 @@ class ClaudeOrchestrator {
     if (startBtn) {
       startBtn.disabled = false;
     }
+  }
+
+  // User Settings Methods
+  async loadUserSettings() {
+    try {
+      const response = await fetch('/api/user-settings');
+      if (response.ok) {
+        this.userSettings = await response.json();
+        console.log('User settings loaded:', this.userSettings);
+        this.syncUserSettingsUI();
+      } else {
+        console.error('Failed to load user settings:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error loading user settings:', error);
+    }
+  }
+
+  async updateGlobalUserSetting(path, value) {
+    try {
+      const pathParts = path.split('.');
+      const newGlobal = JSON.parse(JSON.stringify(this.userSettings.global));
+      
+      // Navigate to the correct nested property
+      let current = newGlobal;
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        if (!current[pathParts[i]]) {
+          current[pathParts[i]] = {};
+        }
+        current = current[pathParts[i]];
+      }
+      current[pathParts[pathParts.length - 1]] = value;
+
+      const response = await fetch('/api/user-settings/global', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ global: newGlobal })
+      });
+
+      if (response.ok) {
+        const updatedSettings = await response.json();
+        this.userSettings = updatedSettings;
+        console.log('Global setting updated:', path, '=', value);
+      } else {
+        console.error('Failed to update global setting:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error updating global setting:', error);
+    }
+  }
+
+  async updatePerTerminalSetting(sessionId, setting) {
+    try {
+      const response = await fetch(`/api/user-settings/terminal/${sessionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(setting)
+      });
+
+      if (response.ok) {
+        const updatedSettings = await response.json();
+        this.userSettings = updatedSettings;
+        console.log('Per-terminal setting updated for', sessionId, ':', setting);
+      } else {
+        console.error('Failed to update per-terminal setting:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error updating per-terminal setting:', error);
+    }
+  }
+
+  async clearPerTerminalSetting(sessionId) {
+    try {
+      const response = await fetch(`/api/user-settings/terminal/${sessionId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        const updatedSettings = await response.json();
+        this.userSettings = updatedSettings;
+        console.log('Cleared per-terminal settings for', sessionId);
+      } else {
+        console.error('Failed to clear per-terminal setting:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error clearing per-terminal setting:', error);
+    }
+  }
+
+  syncUserSettingsUI() {
+    if (!this.userSettings) return;
+
+    // Update global settings UI
+    const globalSkipPermissions = document.getElementById('global-skip-permissions');
+    if (globalSkipPermissions) {
+      globalSkipPermissions.checked = this.userSettings.global.claudeFlags.skipPermissions;
+    }
+
+    // Update per-terminal settings UI
+    this.updatePerTerminalSettingsUI();
+  }
+
+  updatePerTerminalSettingsUI() {
+    const container = document.getElementById('per-terminal-settings');
+    if (!container || !this.userSettings) return;
+
+    // Get the container for per-terminal items
+    let itemsContainer = container.querySelector('.per-terminal-items');
+    if (!itemsContainer) {
+      itemsContainer = document.createElement('div');
+      itemsContainer.className = 'per-terminal-items';
+      container.appendChild(itemsContainer);
+    }
+
+    // Clear existing items
+    itemsContainer.innerHTML = '';
+
+    // Add items for each Claude session
+    for (const [sessionId, session] of this.sessions) {
+      if (sessionId.includes('-claude')) {
+        const item = this.createPerTerminalSettingItem(sessionId, session);
+        itemsContainer.appendChild(item);
+      }
+    }
+  }
+
+  createPerTerminalSettingItem(sessionId, session) {
+    const div = document.createElement('div');
+    div.className = 'per-terminal-item';
+
+    const hasOverride = this.userSettings.perTerminal[sessionId];
+    const effectiveSkipPermissions = hasOverride && hasOverride.claudeFlags 
+      ? hasOverride.claudeFlags.skipPermissions
+      : this.userSettings.global.claudeFlags.skipPermissions;
+
+    div.innerHTML = `
+      <div class="terminal-name">${sessionId}</div>
+      <div class="terminal-controls">
+        <label>
+          <input type="checkbox" class="terminal-skip-permissions" 
+                 data-session-id="${sessionId}" 
+                 ${effectiveSkipPermissions ? 'checked' : ''}>
+          Skip Permissions
+        </label>
+        ${hasOverride ? `
+          <button class="clear-override-btn" data-session-id="${sessionId}" title="Use global setting">
+            ↻
+          </button>
+        ` : ''}
+      </div>
+    `;
+
+    // Add event listeners
+    const checkbox = div.querySelector('.terminal-skip-permissions');
+    checkbox.addEventListener('change', (e) => {
+      this.updatePerTerminalSetting(sessionId, {
+        claudeFlags: { skipPermissions: e.target.checked }
+      });
+    });
+
+    const clearBtn = div.querySelector('.clear-override-btn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        this.clearPerTerminalSetting(sessionId);
+      });
+    }
+
+    return div;
   }
 }
 
