@@ -796,11 +796,9 @@ class ClaudeOrchestrator {
             this.terminalManager.createTerminal(sessionId, session);
           }
           
-          // Auto-start Claude sessions with user settings
-          if (sessionId.includes('-claude') && this.userSettings) {
-            setTimeout(() => {
-              this.autoStartClaude(sessionId);
-            }, 1000); // Give terminal time to initialize
+          // Auto-start Claude sessions with user settings after they're loaded
+          if (sessionId.includes('-claude')) {
+            this.waitForSettingsAndAutoStart(sessionId);
           }
         }, 50 + (index * 25)); // Reduced stagger time
       }
@@ -825,6 +823,7 @@ class ClaudeOrchestrator {
         </div>
         <div class="terminal-controls">
           <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
+          <button class="control-btn" onclick="window.orchestrator.openReplayViewer('${sessionId}')" title="Open Replay Viewer">📹</button>
           ${isClaudeSession ? `
             <button class="control-btn claude-start-btn" id="claude-start-btn-${sessionId}" disabled onclick="window.orchestrator.autoStartClaude('${sessionId}')" title="Start Claude with Settings">🚀</button>
             <button class="control-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude with Options">↻</button>
@@ -2505,6 +2504,64 @@ class ClaudeOrchestrator {
         document.body.removeChild(messageEl);
       }, 300);
     }, 5000);
+  }
+
+  async openReplayViewer(sessionId) {
+    try {
+      // Extract worktree ID from sessionId (e.g., "work1-claude" -> "work1")
+      const worktreeMatch = sessionId.match(/work(\d+)/);
+      if (!worktreeMatch) {
+        console.error('Could not extract worktree number from sessionId:', sessionId);
+        this.showTemporaryMessage('Invalid session ID for replay viewer', 'error');
+        return;
+      }
+      
+      const worktreeNum = worktreeMatch[1];
+      
+      // Get worktree configuration from server for accurate path
+      let worktreeConfig = null;
+      try {
+        const response = await fetch('/api/worktrees/config');
+        if (response.ok) {
+          worktreeConfig = await response.json();
+        }
+      } catch (error) {
+        console.warn('Could not get worktree config, using defaults:', error);
+      }
+      
+      // Use server-hosted replay viewer (avoids browser file:// restrictions)
+      const replayViewerUrl = `${window.location.origin}/replay-viewer/work${worktreeNum}/`;
+      
+      console.log(`Opening replay viewer for ${sessionId} at ${replayViewerUrl}`);
+      
+      // Open in new tab (simpler approach)
+      window.open(replayViewerUrl, '_blank');
+      
+      // Show success message with URL for reference
+      this.showTemporaryMessage(`Opening replay viewer for work${worktreeNum}`, 'success');
+      console.log(`Replay viewer URL: ${replayViewerUrl}`);
+      
+    } catch (error) {
+      console.error('Error opening replay viewer:', error);
+      this.showTemporaryMessage('Failed to open replay viewer', 'error');
+    }
+  }
+
+  waitForSettingsAndAutoStart(sessionId) {
+    // Wait for user settings to be loaded, then auto-start
+    const checkAndStart = () => {
+      if (this.userSettings) {
+        console.log('User settings loaded, auto-starting Claude for:', sessionId);
+        setTimeout(() => {
+          this.autoStartClaude(sessionId);
+        }, 1000);
+      } else {
+        console.log('Waiting for user settings to load for:', sessionId);
+        setTimeout(checkAndStart, 500); // Check again in 500ms
+      }
+    };
+    
+    setTimeout(checkAndStart, 1000); // Initial delay for terminal setup
   }
 
   async checkForSettingsUpdates() {
