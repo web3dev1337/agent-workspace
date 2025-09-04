@@ -163,6 +163,65 @@
                     </select>
                 </label>
             </div>
+            
+            <!-- Terminal Settings -->
+            <div class="setting-section">
+                <h4>Terminal Settings</h4>
+                
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="global-skip-permissions" />
+                        <strong>Global: Skip Permissions</strong>
+                        <small>Apply --dangerously-skip-permissions to all new Claude sessions</small>
+                    </label>
+                </div>
+                
+                <div class="setting-group per-terminal-settings" id="per-terminal-settings">
+                    <h5>Per-Terminal Overrides</h5>
+                    <p class="setting-description">Override global settings for specific terminals (requires terminal restart)</p>
+                    <!-- Per-terminal settings will be populated by JavaScript -->
+                </div>
+                
+                <div class="setting-group">
+                    <h5>Default Template Management</h5>
+                    <p class="setting-description">Manage the default settings template committed to the repository</p>
+                    <div class="template-actions">
+                        <button id="reset-to-defaults" class="template-btn secondary">
+                            Reset to Defaults
+                        </button>
+                        <button id="save-as-default" class="template-btn primary">
+                            Save as Default
+                        </button>
+                    </div>
+                    <div id="settings-update-notification" class="update-notification hidden">
+                        <div class="notification-content">
+                            <span class="notification-icon">📢</span>
+                            <span class="notification-text">Default settings have been updated in the repository</span>
+                            <button id="dismiss-settings-notification" class="dismiss-btn">×</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="setting-group">
+                    <h5>Repository Updates</h5>
+                    <p class="setting-description">Keep the orchestrator up to date with the latest changes</p>
+                    <div class="template-actions">
+                        <button id="check-updates" class="template-btn secondary">
+                            Check for Updates
+                        </button>
+                        <button id="pull-updates" class="template-btn primary">
+                            Pull Latest Changes
+                        </button>
+                    </div>
+                    <div id="git-update-notification" class="update-notification hidden">
+                        <div class="notification-content">
+                            <span class="notification-icon">🔄</span>
+                            <span class="notification-text" id="git-notification-text">Updates available</span>
+                            <button id="dismiss-git-notification" class="dismiss-btn">×</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     

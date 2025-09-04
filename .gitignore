@@ -35,6 +35,10 @@ Thumbs.db
 # Security config
 config/security.json
 
+# User-specific settings
+user-settings.json
+.user-settings-metadata.json
+
 # Build files
 dist/
 build/
