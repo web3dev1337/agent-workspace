@@ -920,6 +920,93 @@ header h1 {
   color: var(--text-primary);
 }
 
+.template-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.template-btn {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: all 0.2s;
+}
+
+.template-btn.primary {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+
+.template-btn.primary:hover {
+  background: #0969da;
+  border-color: #0969da;
+}
+
+.template-btn.secondary {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+.template-btn.secondary:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.update-notification {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent-warning);
+  border-radius: var(--radius-sm);
+  transition: all 0.3s;
+}
+
+.update-notification.hidden {
+  display: none;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.notification-icon {
+  font-size: 1.1em;
+}
+
+.notification-text {
+  flex: 1;
+  color: var(--text-primary);
+  font-size: 0.9em;
+}
+
+.dismiss-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1.2em;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.dismiss-btn:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
 /* Loading */
 .loading-message {
   position: absolute;

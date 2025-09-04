@@ -60,19 +60,124 @@ class UserSettingsService {
         logger.info('Loaded user settings', { path: this.settingsPath });
         return merged;
       } else {
-        logger.info('No user settings file found, creating with defaults', { 
+        logger.info('No user settings file found, creating from default template', { 
           path: this.settingsPath 
         });
-        const defaults = this.getDefaultSettings();
+        const defaults = this.loadDefaultTemplate();
         this.saveSettings(defaults);
         return defaults;
       }
     } catch (error) {
-      logger.error('Failed to load user settings, using defaults', { 
+      logger.error('Failed to load user settings, using fallback defaults', { 
         path: this.settingsPath,
         error: error.message 
       });
       return this.getDefaultSettings();
+    }
+  }
+
+  loadDefaultTemplate() {
+    const defaultTemplatePath = path.join(__dirname, '..', 'user-settings.default.json');
+    try {
+      if (fs.existsSync(defaultTemplatePath)) {
+        const data = fs.readFileSync(defaultTemplatePath, 'utf8');
+        const template = JSON.parse(data);
+        logger.info('Loaded default template from repository', { path: defaultTemplatePath });
+        return template;
+      } else {
+        logger.warn('Default template not found, using hardcoded defaults', { 
+          path: defaultTemplatePath 
+        });
+        return this.getDefaultSettings();
+      }
+    } catch (error) {
+      logger.error('Failed to load default template, using hardcoded defaults', { 
+        path: defaultTemplatePath,
+        error: error.message 
+      });
+      return this.getDefaultSettings();
+    }
+  }
+
+  getDefaultTemplate() {
+    return this.loadDefaultTemplate();
+  }
+
+  resetToDefaults() {
+    try {
+      const defaults = this.loadDefaultTemplate();
+      this.settings = defaults;
+      const saved = this.saveSettings();
+      if (saved) {
+        logger.info('Reset user settings to default template');
+      }
+      return saved;
+    } catch (error) {
+      logger.error('Failed to reset to defaults', { error: error.message });
+      return false;
+    }
+  }
+
+  saveAsDefault() {
+    const defaultTemplatePath = path.join(__dirname, '..', 'user-settings.default.json');
+    try {
+      fs.writeFileSync(defaultTemplatePath, JSON.stringify(this.settings, null, 2));
+      
+      // Update the metadata with timestamp
+      this.updateLastDefaultUpdate();
+      
+      logger.info('Saved current settings as default template', { path: defaultTemplatePath });
+      return true;
+    } catch (error) {
+      logger.error('Failed to save as default template', { 
+        path: defaultTemplatePath,
+        error: error.message 
+      });
+      return false;
+    }
+  }
+
+  updateLastDefaultUpdate() {
+    try {
+      // Store metadata about when the default was last updated
+      const metadataPath = path.join(__dirname, '..', '.user-settings-metadata.json');
+      const metadata = {
+        lastDefaultUpdate: new Date().toISOString(),
+        defaultVersion: this.settings.version || '1.0.0'
+      };
+      fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+    } catch (error) {
+      logger.warn('Failed to update default metadata', { error: error.message });
+    }
+  }
+
+  checkForDefaultUpdates() {
+    try {
+      const metadataPath = path.join(__dirname, '..', '.user-settings-metadata.json');
+      
+      if (!fs.existsSync(metadataPath)) {
+        return null; // No metadata, can't check
+      }
+      
+      const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+      const currentDefaults = this.loadDefaultTemplate();
+      
+      // Check if defaults are different from current user settings
+      const isDefaultDifferent = JSON.stringify(currentDefaults) !== JSON.stringify(this.settings);
+      
+      if (isDefaultDifferent) {
+        return {
+          hasUpdates: true,
+          lastUpdate: metadata.lastDefaultUpdate,
+          currentDefaults: currentDefaults,
+          userSettings: this.settings
+        };
+      }
+      
+      return { hasUpdates: false };
+    } catch (error) {
+      logger.error('Failed to check for default updates', { error: error.message });
+      return null;
     }
   }
 
