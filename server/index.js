@@ -435,6 +435,28 @@ app.get('/api/worktrees/config', (req, res) => {
   }
 });
 
+// Serve replay viewer for each worktree
+app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
+  try {
+    const { worktreeId } = req.params;
+    const worktreeNum = worktreeId.replace('work', '');
+    const requestedFile = req.params[0] || 'index.html';
+    const replayViewerPath = path.join(sessionManager.worktreeBasePath, `HyFire2-work${worktreeNum}`, 'tools', 'replay-viewer', requestedFile);
+    
+    logger.info('Serving replay viewer file', { worktreeId, requestedFile, path: replayViewerPath });
+    
+    if (require('fs').existsSync(replayViewerPath)) {
+      res.sendFile(replayViewerPath);
+    } else {
+      logger.warn('Replay viewer file not found', { path: replayViewerPath });
+      res.status(404).send(`Replay viewer file not found: ${requestedFile}`);
+    }
+  } catch (error) {
+    logger.error('Error serving replay viewer', { error: error.message });
+    res.status(500).send('Error loading replay viewer');
+  }
+});
+
 // Start server
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
