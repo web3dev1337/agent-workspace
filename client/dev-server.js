@@ -15,10 +15,8 @@ app.use('/socket.io', createProxyMiddleware({
 // Proxy API requests to the backend server
 app.use('/api', createProxyMiddleware({
     target: 'http://localhost:3000',
-    changeOrigin: true,
-    pathRewrite: {
-        '^/api': '/api' // Keep the /api prefix
-    }
+    changeOrigin: true
+    // Remove pathRewrite to preserve default behavior
 }));
 
 // Serve static files from client directory
