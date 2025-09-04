@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "global": {
+    "claudeFlags": {
+      "skipPermissions": true
+    },
+    "terminal": {}
+  },
+  "perTerminal": {}
+}

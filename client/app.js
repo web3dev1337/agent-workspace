@@ -40,6 +40,9 @@ class ClaudeOrchestrator {
       // Load user settings from server
       await this.loadUserSettings();
       
+      // Check for updates on startup
+      this.checkForSettingsUpdates();
+      
       // Hide loading message if it exists
       const loadingMessage = document.getElementById('loading-message');
       if (loadingMessage) {
@@ -164,6 +167,21 @@ class ClaudeOrchestrator {
         this.userSettings = settings;
         this.syncUserSettingsUI();
       });
+
+      this.socket.on('git-updated', (result) => {
+        console.log('Git updated:', result);
+        this.showTemporaryMessage(`Repository updated successfully! ${result.wasUpToDate ? 'Already up to date.' : 'Changes pulled.'}`, 'success');
+        
+        // Refresh the page after successful update
+        if (!result.wasUpToDate) {
+          setTimeout(() => {
+            this.showTemporaryMessage('Refreshing page to apply updates...', 'info');
+            setTimeout(() => {
+              location.reload();
+            }, 2000);
+          }, 3000);
+        }
+      });
       
       // Periodic heartbeat to keep sessions alive while UI is open
       this.startHeartbeats();
@@ -246,6 +264,12 @@ class ClaudeOrchestrator {
       'auto-scroll': null,
       'theme-select': null,
       'global-skip-permissions': null,
+      'reset-to-defaults': null,
+      'save-as-default': null,
+      'check-updates': null,
+      'pull-updates': null,
+      'dismiss-settings-notification': null,
+      'dismiss-git-notification': null,
       'start-claude': null,
       'cancel-claude-startup': null
     };
@@ -351,6 +375,33 @@ class ClaudeOrchestrator {
     // User settings (terminal flags)
     document.getElementById('global-skip-permissions').addEventListener('change', (e) => {
       this.updateGlobalUserSetting('claudeFlags.skipPermissions', e.target.checked);
+    });
+
+    // Template management buttons
+    document.getElementById('reset-to-defaults').addEventListener('click', () => {
+      this.resetToDefaults();
+    });
+
+    document.getElementById('save-as-default').addEventListener('click', () => {
+      this.saveAsDefault();
+    });
+
+    // Git update buttons
+    document.getElementById('check-updates').addEventListener('click', () => {
+      this.checkForUpdates();
+    });
+
+    document.getElementById('pull-updates').addEventListener('click', () => {
+      this.pullLatestChanges();
+    });
+
+    // Notification dismiss buttons
+    document.getElementById('dismiss-settings-notification').addEventListener('click', () => {
+      document.getElementById('settings-update-notification').classList.add('hidden');
+    });
+
+    document.getElementById('dismiss-git-notification').addEventListener('click', () => {
+      document.getElementById('git-update-notification').classList.add('hidden');
     });
     
     // Notification toggle - for now, just open settings to notification section
@@ -2251,6 +2302,183 @@ class ClaudeOrchestrator {
     }
 
     return div;
+  }
+
+  async resetToDefaults() {
+    try {
+      if (!confirm('Reset all user settings to repository defaults? This will overwrite all your current settings.')) {
+        return;
+      }
+
+      const response = await fetch('/api/user-settings/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        const updatedSettings = await response.json();
+        this.userSettings = updatedSettings;
+        this.syncUserSettingsUI();
+        console.log('Reset to defaults successfully');
+        
+        // Show user feedback
+        this.showTemporaryMessage('Settings reset to defaults');
+      } else {
+        console.error('Failed to reset to defaults:', response.statusText);
+        this.showTemporaryMessage('Failed to reset settings', 'error');
+      }
+    } catch (error) {
+      console.error('Error resetting to defaults:', error);
+      this.showTemporaryMessage('Error resetting settings', 'error');
+    }
+  }
+
+  async saveAsDefault() {
+    try {
+      if (!confirm('Save current settings as the repository default template? This will affect new installations.')) {
+        return;
+      }
+
+      const response = await fetch('/api/user-settings/save-as-default', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        console.log('Saved as default template successfully');
+        
+        // Show user feedback with commit reminder
+        this.showTemporaryMessage('Settings saved as default template. Remember to commit and push the changes to user-settings.default.json!', 'success');
+      } else {
+        console.error('Failed to save as default:', response.statusText);
+        this.showTemporaryMessage('Failed to save as default template', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving as default:', error);
+      this.showTemporaryMessage('Error saving as default template', 'error');
+    }
+  }
+
+  showTemporaryMessage(message, type = 'info') {
+    // Create a temporary message element
+    const messageEl = document.createElement('div');
+    messageEl.className = `temporary-message ${type}`;
+    messageEl.textContent = message;
+    
+    // Style the message
+    messageEl.style.cssText = `
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      background: ${type === 'error' ? 'var(--accent-danger)' : type === 'success' ? 'var(--accent-success)' : 'var(--accent-primary)'};
+      color: white;
+      padding: var(--space-md);
+      border-radius: var(--radius-md);
+      z-index: 10000;
+      max-width: 400px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+    `;
+    
+    document.body.appendChild(messageEl);
+    
+    // Animate in
+    setTimeout(() => {
+      messageEl.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // Remove after delay
+    setTimeout(() => {
+      messageEl.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        document.body.removeChild(messageEl);
+      }, 300);
+    }, 5000);
+  }
+
+  async checkForSettingsUpdates() {
+    try {
+      const response = await fetch('/api/user-settings/check-updates');
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result && result.hasUpdates) {
+          const notification = document.getElementById('settings-update-notification');
+          notification.classList.remove('hidden');
+          console.log('Settings updates available:', result);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking for settings updates:', error);
+    }
+  }
+
+  async checkForUpdates() {
+    try {
+      this.showTemporaryMessage('Checking for updates...', 'info');
+      
+      const response = await fetch('/api/git/check-updates');
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.hasUpdates) {
+          const notification = document.getElementById('git-update-notification');
+          const textElement = document.getElementById('git-notification-text');
+          textElement.textContent = `${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available on ${result.currentBranch}`;
+          notification.classList.remove('hidden');
+          
+          this.showTemporaryMessage(`Found ${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available`, 'success');
+        } else if (result.hasUpdates === false) {
+          this.showTemporaryMessage('Repository is up to date', 'success');
+        } else {
+          this.showTemporaryMessage('Unable to check for updates', 'error');
+        }
+      } else {
+        this.showTemporaryMessage('Failed to check for updates', 'error');
+      }
+    } catch (error) {
+      console.error('Error checking for updates:', error);
+      this.showTemporaryMessage('Error checking for updates', 'error');
+    }
+  }
+
+  async pullLatestChanges() {
+    try {
+      if (!confirm('Pull the latest changes from the repository? This will update the orchestrator code. Make sure you have no uncommitted changes.')) {
+        return;
+      }
+
+      this.showTemporaryMessage('Pulling latest changes...', 'info');
+      
+      const response = await fetch('/api/git/pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.success) {
+          // Success message will be handled by socket event
+          const notification = document.getElementById('git-update-notification');
+          notification.classList.add('hidden');
+        } else {
+          this.showTemporaryMessage(result.error || 'Failed to pull changes', 'error');
+          
+          // Show specific error details if available
+          if (result.changes && result.changes.length > 0) {
+            console.log('Uncommitted changes:', result.changes);
+            this.showTemporaryMessage('Please commit or stash your changes first', 'error');
+          }
+        }
+      } else {
+        this.showTemporaryMessage('Failed to pull latest changes', 'error');
+      }
+    } catch (error) {
+      console.error('Error pulling latest changes:', error);
+      this.showTemporaryMessage('Error pulling latest changes', 'error');
+    }
   }
 }
 
