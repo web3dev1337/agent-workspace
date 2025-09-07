@@ -414,21 +414,31 @@ class ClaudeOrchestrator {
       document.getElementById('enable-notifications').focus();
     });
     
-    // Claude startup modal handlers
-    const startClaudeBtn = document.getElementById('start-claude');
+    // Claude startup modal handlers (simplified)
     const cancelClaudeBtn = document.getElementById('cancel-claude-startup');
-    
-    if (startClaudeBtn) {
-      startClaudeBtn.addEventListener('click', () => {
-        this.handleClaudeStart();
-      });
-    }
     
     if (cancelClaudeBtn) {
       cancelClaudeBtn.addEventListener('click', () => {
         this.hideClaudeStartupModal();
       });
     }
+    
+    // Handle startup option button clicks
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.startup-option-btn')) {
+        const btn = e.target.closest('.startup-option-btn');
+        const mode = btn.dataset.mode;
+        
+        // Check if modal YOLO is checked
+        const modalYolo = document.getElementById('modal-yolo');
+        const skipPermissions = modalYolo ? modalYolo.checked : false;
+        
+        if (this.pendingClaudeSession) {
+          this.startClaudeWithOptions(this.pendingClaudeSession, mode, skipPermissions);
+          this.hideClaudeStartupModal();
+        }
+      }
+    });
     
     // Handle window resize to fix blank terminals
     let resizeTimeout;
@@ -997,34 +1007,25 @@ class ClaudeOrchestrator {
         <div class="terminal" id="terminal-${sessionId}"></div>
         ${isClaudeSession ? `
           <div class="terminal-startup-ui" id="startup-ui-${sessionId}">
-            <div class="startup-ui-content">
-              <h3>🚀 Start Claude Session</h3>
-              <div class="startup-options-inline">
-                <div class="option-group-inline">
-                  <label>Session Mode:</label>
-                  <div class="radio-group-inline">
-                    <label class="radio-option-inline">
-                      <input type="radio" name="claude-mode-${sessionId}" value="fresh" checked>
-                      <span>Fresh</span>
-                    </label>
-                    <label class="radio-option-inline">
-                      <input type="radio" name="claude-mode-${sessionId}" value="continue">
-                      <span>Continue</span>
-                    </label>
-                    <label class="radio-option-inline">
-                      <input type="radio" name="claude-mode-${sessionId}" value="resume">
-                      <span>Resume</span>
-                    </label>
-                  </div>
-                </div>
-                <div class="option-group-inline">
-                  <label class="checkbox-option-inline">
-                    <input type="checkbox" id="skip-permissions-${sessionId}" value="skip">
-                    <span>Skip Permissions (YOLO mode)</span>
-                  </label>
-                </div>
-                <button class="start-claude-inline" onclick="window.orchestrator.startClaudeFromTerminal('${sessionId}')">Start Claude</button>
+            <div class="startup-ui-simple">
+              <div class="startup-buttons-inline">
+                <button class="startup-btn-inline" id="btn-fresh-${sessionId}" onclick="window.orchestrator.quickStartClaude('${sessionId}', 'fresh')">
+                  <span class="btn-icon">🆕</span>
+                  <span>Fresh</span>
+                </button>
+                <button class="startup-btn-inline" id="btn-continue-${sessionId}" onclick="window.orchestrator.quickStartClaude('${sessionId}', 'continue')">
+                  <span class="btn-icon">➡️</span>
+                  <span>Continue</span>
+                </button>
+                <button class="startup-btn-inline" id="btn-resume-${sessionId}" onclick="window.orchestrator.quickStartClaude('${sessionId}', 'resume')">
+                  <span class="btn-icon">⏸️</span>
+                  <span>Resume</span>
+                </button>
               </div>
+              <label class="yolo-toggle">
+                <input type="checkbox" id="yolo-${sessionId}" onchange="window.orchestrator.updateYoloState('${sessionId}', this.checked)">
+                <span class="yolo-label">🚀 YOLO Mode</span>
+              </label>
             </div>
           </div>
         ` : ''}
@@ -2261,29 +2262,8 @@ class ClaudeOrchestrator {
       this.pendingClaudeSession = sessionId;
       
       // Update session info display
-      sessionInfo.textContent = `Session: ${sessionId.replace('-claude', '')}`;
-      
-      try {
-        // Get effective settings for this session and pre-populate
-        const response = await fetch(`/api/user-settings/effective/${sessionId}`);
-        let effectiveSettings = { claudeFlags: { skipPermissions: false } };
-        
-        if (response.ok) {
-          effectiveSettings = await response.json();
-        }
-        
-        // Pre-populate form with effective settings
-        document.querySelector('input[name="claude-mode"][value="fresh"]').checked = true;
-        document.getElementById('skip-permissions').checked = effectiveSettings.claudeFlags.skipPermissions;
-        
-        console.log('Pre-populated modal with settings:', effectiveSettings);
-        
-      } catch (error) {
-        console.error('Error loading effective settings for modal:', error);
-        // Fall back to defaults
-        document.querySelector('input[name="claude-mode"][value="fresh"]').checked = true;
-        document.getElementById('skip-permissions').checked = false;
-      }
+      const worktreeNumber = sessionId.replace('work', '').replace('-claude', '');
+      sessionInfo.textContent = `Work ${worktreeNumber}`;
       
       // Show modal
       modal.classList.remove('hidden');
@@ -2298,26 +2278,56 @@ class ClaudeOrchestrator {
     }
   }
   
-  handleClaudeStart() {
-    if (!this.pendingClaudeSession || !this.socket || !this.socket.connected) {
+  startClaudeWithOptions(sessionId, mode, skipPermissions) {
+    if (!this.socket || !this.socket.connected) {
+      this.showError('Not connected to server');
       return;
     }
     
-    // Get selected options
-    const mode = document.querySelector('input[name="claude-mode"]:checked')?.value || 'fresh';
-    const skipPermissions = document.getElementById('skip-permissions')?.checked || false;
+    console.log(`Starting Claude ${sessionId} with mode: ${mode}, skip: ${skipPermissions}`);
     
     // Send command to server
     this.socket.emit('start-claude', {
-      sessionId: this.pendingClaudeSession,
+      sessionId: sessionId,
       options: {
         mode: mode,
         skipPermissions: skipPermissions
       }
     });
+  }
+  
+  quickStartClaude(sessionId, mode) {
+    // Check if YOLO mode is enabled
+    const yoloCheckbox = document.getElementById(`yolo-${sessionId}`);
+    const skipPermissions = yoloCheckbox ? yoloCheckbox.checked : false;
     
-    // Hide modal
-    this.hideClaudeStartupModal();
+    // Hide the startup UI
+    const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+    if (startupUI) {
+      startupUI.style.display = 'none';
+    }
+    
+    // Start Claude with selected options
+    this.startClaudeWithOptions(sessionId, mode, skipPermissions);
+  }
+  
+  updateYoloState(sessionId, checked) {
+    // Update button styles to show YOLO is active
+    const buttons = [
+      document.getElementById(`btn-fresh-${sessionId}`),
+      document.getElementById(`btn-continue-${sessionId}`),
+      document.getElementById(`btn-resume-${sessionId}`)
+    ];
+    
+    buttons.forEach(btn => {
+      if (btn) {
+        if (checked) {
+          btn.classList.add('yolo-active');
+        } else {
+          btn.classList.remove('yolo-active');
+        }
+      }
+    });
   }
   
   async startClaudeFromTerminal(sessionId) {
