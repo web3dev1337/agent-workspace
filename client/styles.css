@@ -397,6 +397,28 @@ header h1 {
   filter: grayscale(50%);
 }
 
+.worktree-item.hidden-terminal {
+  opacity: 0.5;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-color);
+}
+
+.worktree-item.hidden-terminal:hover {
+  opacity: 0.7;
+  border-color: var(--accent-primary);
+  border-style: solid;
+}
+
+.visibility-indicator {
+  margin-right: 4px;
+  font-size: 0.9em;
+  opacity: 0.8;
+}
+
+.worktree-item.hidden-terminal .visibility-indicator {
+  filter: grayscale(100%);
+}
+
 .filter-toggle {
   margin-bottom: var(--space-md);
 }
