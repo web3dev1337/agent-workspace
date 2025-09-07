@@ -140,8 +140,8 @@ io.on('connection', (socket) => {
   });
   
   // Handle server control
-  socket.on('server-control', ({ sessionId, action }) => {
-    logger.info('Server control request', { sessionId, action });
+  socket.on('server-control', ({ sessionId, action, environment }) => {
+    logger.info('Server control request', { sessionId, action, environment });
     
     if (action === 'start') {
       // Extract worktree number and assign port accordingly
@@ -153,8 +153,10 @@ io.on('connection', (socket) => {
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C to clear
       
       setTimeout(() => {
-        const command = `PORT=${port} hytopia start\n`;
-        logger.info('Starting server with command', { sessionId, command, port });
+        // Build command with NODE_ENV based on environment parameter
+        const nodeEnv = environment === 'production' ? 'production' : 'development';
+        const command = `NODE_ENV=${nodeEnv} PORT=${port} hytopia start\n`;
+        logger.info('Starting server with command', { sessionId, command, port, nodeEnv });
         
         const written = sessionManager.writeToSession(sessionId, command);
         if (!written) {
@@ -163,7 +165,7 @@ io.on('connection', (socket) => {
         }
         
         // Emit port info back to client
-        socket.emit('server-started', { sessionId, port });
+        socket.emit('server-started', { sessionId, port, environment: nodeEnv });
       }, 100); // Small delay after Ctrl+C
     } else if (action === 'stop') {
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C
