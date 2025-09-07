@@ -337,62 +337,16 @@ header h1 {
   border-color: var(--accent-danger);
 }
 
-/* Environment dropdown styles */
-.env-dropdown {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  min-width: 200px;
-  overflow: hidden;
-  animation: dropdownSlide 0.2s ease-out;
-}
-
-@keyframes dropdownSlide {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.env-option {
-  display: flex;
-  align-items: center;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: background 0.2s;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.env-option:last-child {
-  border-bottom: none;
-}
-
-.env-option:hover {
-  background: var(--bg-tertiary);
-}
-
-.env-icon {
-  font-size: 1.2rem;
-  margin-right: 10px;
-}
-
-.env-label {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-  flex: 1;
-}
-
-.env-desc {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  margin-left: 8px;
+/* Environment select styles */
+.control-btn.env-select {
+  min-width: 100px;
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 20px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  background-size: 16px;
 }
 
 /* Special style for play button */

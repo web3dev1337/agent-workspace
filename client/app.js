@@ -832,9 +832,14 @@ class ClaudeOrchestrator {
             ${this.getGitHubButtons(sessionId)}
           ` : ''}
           ${isServerSession ? `
-            <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}', event)" title="${this.serverStatuses.get(sessionId) === 'running' ? 'Stop Server' : 'Start Server (Choose Environment)'}">
-              ${this.serverStatuses.get(sessionId) === 'running' ? '⏹' : '▶'}
-            </button>
+            ${this.serverStatuses.get(sessionId) === 'running' ? 
+              `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
+              `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
+                <option value="" selected>▶ Start...</option>
+                <option value="development">🛠️ Development</option>
+                <option value="production">🚀 Production</option>
+              </select>`
+            }
             ${this.serverStatuses.get(sessionId) === 'running' ? `
               <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
               <button class="control-btn" onclick="window.orchestrator.copyLocalhostUrl('${sessionId}')" title="Copy HTTPS localhost URL">📋</button>
@@ -1002,92 +1007,18 @@ class ClaudeOrchestrator {
   }
   
   // Server control methods
-  toggleServer(sessionId, event) {
+  toggleServer(sessionId, environment = 'development') {
     const status = this.serverStatuses.get(sessionId);
     
     if (status === 'running') {
       // Stop server
       this.socket.emit('server-control', { sessionId, action: 'stop' });
       this.serverStatuses.set(sessionId, 'idle');
-      this.serverPorts.delete(sessionId); // Clear port info
-      
-      // Update button
-      const button = document.getElementById(`server-toggle-${sessionId}`);
-      if (button) {
-        button.textContent = '▶';
-      }
-      
-      // Update sidebar
+      this.serverPorts.delete(sessionId);
       this.updateSidebarStatus(sessionId, 'idle');
     } else {
-      // Show environment dropdown for starting server
-      if (event) {
-        event.stopPropagation();
-        this.showEnvironmentDropdown(sessionId, event.target);
-      }
-    }
-  }
-  
-  showEnvironmentDropdown(sessionId, button) {
-    // Remove any existing dropdown
-    const existingDropdown = document.querySelector('.env-dropdown');
-    if (existingDropdown) {
-      existingDropdown.remove();
-    }
-    
-    // Create dropdown menu
-    const dropdown = document.createElement('div');
-    dropdown.className = 'env-dropdown';
-    dropdown.innerHTML = `
-      <div class="env-option" onclick="window.orchestrator.startServerWithEnv('${sessionId}', 'development')">
-        <span class="env-icon">🛠️</span>
-        <span class="env-label">Development</span>
-        <span class="env-desc">NODE_ENV=development</span>
-      </div>
-      <div class="env-option" onclick="window.orchestrator.startServerWithEnv('${sessionId}', 'production')">
-        <span class="env-icon">🚀</span>
-        <span class="env-label">Production</span>
-        <span class="env-desc">NODE_ENV=production</span>
-      </div>
-    `;
-    
-    // Position dropdown relative to button
-    const rect = button.getBoundingClientRect();
-    dropdown.style.position = 'absolute';
-    dropdown.style.top = `${rect.bottom + 5}px`;
-    dropdown.style.left = `${rect.left}px`;
-    dropdown.style.zIndex = '10000';
-    
-    document.body.appendChild(dropdown);
-    
-    // Close dropdown when clicking outside
-    const closeDropdown = (e) => {
-      if (!dropdown.contains(e.target) && e.target !== button) {
-        dropdown.remove();
-        document.removeEventListener('click', closeDropdown);
-      }
-    };
-    
-    // Add slight delay to avoid immediate closure
-    setTimeout(() => {
-      document.addEventListener('click', closeDropdown);
-    }, 10);
-  }
-  
-  startServerWithEnv(sessionId, environment) {
-    // Remove dropdown
-    const dropdown = document.querySelector('.env-dropdown');
-    if (dropdown) {
-      dropdown.remove();
-    }
-    
-    // Start server with environment
-    this.socket.emit('server-control', { sessionId, action: 'start', environment });
-    
-    // Update button (will be updated again when server confirms)
-    const button = document.getElementById(`server-toggle-${sessionId}`);
-    if (button) {
-      button.textContent = '⏹';
+      // Start server with environment
+      this.socket.emit('server-control', { sessionId, action: 'start', environment });
     }
   }
   
@@ -1310,8 +1241,14 @@ class ClaudeOrchestrator {
     // Update controls HTML
     controlsDiv.innerHTML = `
       <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
-      <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}', event)" title="${isRunning ? 'Stop Server' : 'Start Server (Choose Environment)'}">
-        ${isRunning ? '⏹' : '▶'}
+      ${isRunning ? 
+        `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹` :
+        `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
+          <option value="" selected>▶ Start...</option>
+          <option value="development">🛠️ Development</option>
+          <option value="production">🚀 Production</option>
+        </select>`
+      }
       </button>
       ${isRunning ? `
         <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
