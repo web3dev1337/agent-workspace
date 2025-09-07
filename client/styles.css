@@ -337,6 +337,64 @@ header h1 {
   border-color: var(--accent-danger);
 }
 
+/* Environment dropdown styles */
+.env-dropdown {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  overflow: hidden;
+  animation: dropdownSlide 0.2s ease-out;
+}
+
+@keyframes dropdownSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.env-option {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.env-option:last-child {
+  border-bottom: none;
+}
+
+.env-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.env-icon {
+  font-size: 1.2rem;
+  margin-right: 10px;
+}
+
+.env-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.env-desc {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  margin-left: 8px;
+}
+
 /* Special style for play button */
 .control-btn[title="Play in Hytopia"] {
   background: var(--accent-success);
