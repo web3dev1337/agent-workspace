@@ -835,9 +835,9 @@ class ClaudeOrchestrator {
             ${this.serverStatuses.get(sessionId) === 'running' ? 
               `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
               `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
-                <option value="" selected>▶ Start...</option>
-                <option value="development">🛠️ Development</option>
-                <option value="production">🚀 Production</option>
+                <option value="" selected>▶</option>
+                <option value="development">Dev</option>
+                <option value="production">Prod</option>
               </select>`
             }
             ${this.serverStatuses.get(sessionId) === 'running' ? `
@@ -1244,9 +1244,9 @@ class ClaudeOrchestrator {
       ${isRunning ? 
         `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹` :
         `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
-          <option value="" selected>▶ Start...</option>
-          <option value="development">🛠️ Development</option>
-          <option value="production">🚀 Production</option>
+          <option value="" selected>▶</option>
+          <option value="development">Dev</option>
+          <option value="production">Prod</option>
         </select>`
       }
       </button>
