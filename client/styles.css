@@ -626,49 +626,53 @@ header h1 {
   justify-content: flex-end;
 }
 
-/* Claude Startup Modal */
-.claude-startup-content {
-  max-width: 450px;
+/* Claude Startup Modal (Simplified) */
+.claude-startup-simple {
+  max-width: 400px;
+  text-align: center;
 }
 
-.startup-options {
-  margin: var(--space-lg) 0;
-}
-
-.option-group {
+.claude-startup-simple h3 {
   margin-bottom: var(--space-lg);
 }
 
-.option-group > label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: var(--space-sm);
-  color: var(--text-primary);
+.startup-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
 }
 
-.radio-group {
+.startup-option-btn {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.radio-option, .checkbox-option {
-  display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.radio-option:hover, .checkbox-option:hover {
+  justify-content: center;
+  padding: var(--space-lg);
   background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 80px;
 }
 
-.radio-option input[type="radio"],
-.checkbox-option input[type="checkbox"] {
-  cursor: pointer;
+.startup-option-btn:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+  transform: scale(1.05);
+}
+
+
+.option-icon {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-xs);
+}
+
+.option-label {
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
 .session-info {
@@ -714,93 +718,95 @@ header h1 {
   border-radius: var(--radius-md);
 }
 
-.startup-ui-content {
+.startup-ui-simple {
   text-align: center;
   padding: var(--space-xl);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-  max-width: 500px;
-  width: 90%;
 }
 
-.startup-ui-content h3 {
-  margin-bottom: var(--space-lg);
-  color: var(--text-primary);
-  font-size: 1.5rem;
-}
-
-.startup-options-inline {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-}
-
-.option-group-inline {
-  text-align: left;
-}
-
-.option-group-inline > label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: var(--space-sm);
-  color: var(--text-primary);
-}
-
-.radio-group-inline {
+.startup-buttons-inline {
   display: flex;
   gap: var(--space-md);
   justify-content: center;
+  flex-wrap: wrap;
 }
 
-.radio-option-inline {
+.startup-btn-inline {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  justify-content: center;
+  padding: var(--space-md) var(--space-lg);
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
+  min-width: 90px;
+  min-height: 70px;
+  color: var(--text-primary);
 }
 
-.radio-option-inline:hover {
-  background: var(--bg-primary);
+.startup-btn-inline:hover {
+  background: var(--accent-primary);
   border-color: var(--accent-primary);
+  color: white;
+  transform: scale(1.05);
 }
 
-.radio-option-inline input[type="radio"]:checked + span {
-  color: var(--accent-primary);
+
+.startup-btn-inline .btn-icon {
+  font-size: 1.5rem;
+  margin-bottom: 4px;
+}
+
+.startup-btn-inline span:last-child {
   font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.3s;
+  margin-top: var(--space-md);
 }
 
-.checkbox-option-inline {
+/* YOLO Toggle Styles */
+.yolo-toggle, .yolo-toggle-modal {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
+  margin-top: var(--space-md);
   padding: var(--space-sm);
   cursor: pointer;
 }
 
-.checkbox-option-inline input[type="checkbox"] {
+.yolo-toggle input[type="checkbox"],
+.yolo-toggle-modal input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
   cursor: pointer;
-  width: 18px;
-  height: 18px;
 }
 
-.start-claude-inline {
-  width: 100%;
-  padding: var(--space-md) var(--space-lg);
-  background: linear-gradient(135deg, var(--accent-primary), #2ea043);
-  color: white;
-  font-size: 1.1rem;
+.yolo-label {
   font-weight: 600;
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.3s;
-  margin-top: var(--space-md);
+  color: var(--text-secondary);
+  transition: color 0.2s;
+}
+
+.yolo-toggle input:checked + .yolo-label,
+.yolo-toggle-modal input:checked + .yolo-label {
+  color: #667eea;
+}
+
+/* Buttons when YOLO is active */
+.startup-btn-inline.yolo-active {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+  border-color: #667eea;
+}
+
+.startup-btn-inline.yolo-active:hover {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
 }
 
 .start-claude-inline:hover {
