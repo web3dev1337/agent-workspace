@@ -786,10 +786,7 @@ class ClaudeOrchestrator {
             this.terminalManager.createTerminal(sessionId, session);
           }
           
-          // Auto-start Claude sessions with user settings
-          if (sessionId.includes('-claude')) {
-            this.waitForSettingsAndAutoStart(sessionId);
-          }
+          // Don't auto-start Claude - let user choose via modal or button
         }, 50 + (index * 25));
       }
     });
@@ -946,10 +943,7 @@ class ClaudeOrchestrator {
             this.terminalManager.createTerminal(sessionId, session);
           }
           
-          // Auto-start Claude sessions with user settings after they're loaded
-          if (sessionId.includes('-claude')) {
-            this.waitForSettingsAndAutoStart(sessionId);
-          }
+          // Don't auto-start Claude - let user choose via modal or button
         }, 50 + (index * 25)); // Reduced stagger time
       }
     });
