@@ -832,9 +832,14 @@ class ClaudeOrchestrator {
             ${this.getGitHubButtons(sessionId)}
           ` : ''}
           ${isServerSession ? `
-            <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="${this.serverStatuses.get(sessionId) === 'running' ? 'Stop Server' : 'Start Server & Open Browser'}">
-              ${this.serverStatuses.get(sessionId) === 'running' ? '⏹' : '▶'}
-            </button>
+            ${this.serverStatuses.get(sessionId) === 'running' ? 
+              `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
+              `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
+                <option value="" selected>▶</option>
+                <option value="development">Dev</option>
+                <option value="production">Prod</option>
+              </select>`
+            }
             ${this.serverStatuses.get(sessionId) === 'running' ? `
               <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
               <button class="control-btn" onclick="window.orchestrator.copyLocalhostUrl('${sessionId}')" title="Copy HTTPS localhost URL">📋</button>
@@ -1002,28 +1007,19 @@ class ClaudeOrchestrator {
   }
   
   // Server control methods
-  toggleServer(sessionId) {
+  toggleServer(sessionId, environment = 'development') {
     const status = this.serverStatuses.get(sessionId);
     
     if (status === 'running') {
       // Stop server
       this.socket.emit('server-control', { sessionId, action: 'stop' });
       this.serverStatuses.set(sessionId, 'idle');
-      this.serverPorts.delete(sessionId); // Clear port info
+      this.serverPorts.delete(sessionId);
+      this.updateSidebarStatus(sessionId, 'idle');
     } else {
-      // Start server
-      this.socket.emit('server-control', { sessionId, action: 'start' });
-      // Don't set to running immediately - wait for confirmation
+      // Start server with environment
+      this.socket.emit('server-control', { sessionId, action: 'start', environment });
     }
-    
-    // Update button
-    const button = document.getElementById(`server-toggle-${sessionId}`);
-    if (button) {
-      button.textContent = status === 'running' ? '▶' : '⏹';
-    }
-    
-    // Update sidebar
-    this.updateSidebarStatus(sessionId, status === 'running' ? 'idle' : 'running');
   }
   
   killServer(sessionId) {
@@ -1245,8 +1241,14 @@ class ClaudeOrchestrator {
     // Update controls HTML
     controlsDiv.innerHTML = `
       <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
-      <button class="control-btn" id="server-toggle-${sessionId}" onclick="window.orchestrator.toggleServer('${sessionId}')" title="${isRunning ? 'Stop Server' : 'Start Server & Open Browser'}">
-        ${isRunning ? '⏹' : '▶'}
+      ${isRunning ? 
+        `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹` :
+        `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
+          <option value="" selected>▶</option>
+          <option value="development">Dev</option>
+          <option value="production">Prod</option>
+        </select>`
+      }
       </button>
       ${isRunning ? `
         <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
