@@ -185,6 +185,29 @@ class ClaudeOrchestrator {
         }
       });
       
+      // Build production events
+      this.socket.on('build-started', ({ sessionId, worktreeNum }) => {
+        console.log(`Build started for worktree ${worktreeNum}`);
+      });
+      
+      this.socket.on('build-completed', ({ sessionId, worktreeNum, zipPath }) => {
+        console.log(`Build completed for worktree ${worktreeNum}: ${zipPath}`);
+        
+        // Restore the build button (use work{num} pattern to find buttons)
+        this.restoreBuildButton(`work${worktreeNum}`);
+        
+        // Request to reveal the file in explorer
+        this.socket.emit('reveal-in-explorer', { path: zipPath });
+      });
+      
+      this.socket.on('build-failed', ({ sessionId, worktreeNum, error }) => {
+        console.error(`Build failed for worktree ${worktreeNum}:`, error);
+        this.showError(`❌ Build failed for Worktree ${worktreeNum}: ${error}`);
+        
+        // Restore the build button (use work{num} pattern to find buttons)
+        this.restoreBuildButton(`work${worktreeNum}`);
+      });
+      
       // Periodic heartbeat to keep sessions alive while UI is open
       this.startHeartbeats();
       
@@ -983,6 +1006,7 @@ class ClaudeOrchestrator {
             <button class="control-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude with Options">↻</button>
             <button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>
             <button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>
+            <button class="control-btn" onclick="window.orchestrator.buildProduction('${sessionId}')" title="Build Production ZIP">📦</button>
             ${this.getGitHubButtons(sessionId)}
           ` : ''}
           ${isServerSession ? `
@@ -999,6 +1023,7 @@ class ClaudeOrchestrator {
               <button class="control-btn" onclick="window.orchestrator.copyLocalhostUrl('${sessionId}')" title="Copy HTTPS localhost URL">📋</button>
             ` : ''}
             <button class="control-btn" onclick="window.orchestrator.openHytopiaWebsite()" title="Open Hytopia Website">🌐</button>
+            <button class="control-btn" onclick="window.orchestrator.buildProduction('${sessionId}')" title="Build Production ZIP">📦</button>
             <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
           ` : ''}
         </div>
@@ -1205,6 +1230,56 @@ class ClaudeOrchestrator {
     
     console.log(`Opening Hytopia for ${sessionId} at ${hytopiaUrl}`);
     window.open(hytopiaUrl, '_blank');
+  }
+  
+  restoreBuildButton(sessionId) {
+    // Find any button that might be building for this worktree
+    const worktreeMatch = sessionId.match(/work(\d+)/);
+    if (!worktreeMatch) return;
+    
+    const worktreeNum = worktreeMatch[1];
+    
+    // Check both claude and server buttons for this worktree
+    [`work${worktreeNum}-claude`, `work${worktreeNum}-server`].forEach(id => {
+      const btn = this.buildingButtons?.get(id);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '📦';
+        btn.classList.remove('building');
+        this.buildingButtons.delete(id);
+      }
+    });
+  }
+  
+  buildProduction(sessionId) {
+    // Extract worktree number from sessionId (e.g., 'work1-claude' -> 1)
+    const worktreeMatch = sessionId.match(/work(\d+)/);
+    if (!worktreeMatch) {
+      console.error('Could not extract worktree number from sessionId:', sessionId);
+      this.showError('Failed to identify worktree for build');
+      return;
+    }
+    
+    const worktreeNum = worktreeMatch[1];
+    console.log(`Building production ZIP for worktree ${worktreeNum}`);
+    
+    // Disable the build button and show loading state
+    const buildBtn = document.querySelector(`#wrapper-${sessionId} button[onclick*="buildProduction"]`);
+    if (buildBtn) {
+      buildBtn.disabled = true;
+      buildBtn.innerHTML = '<span class="loading-spinner"></span>';
+      buildBtn.classList.add('building');
+    }
+    
+    // Store the button reference for later
+    this.buildingButtons = this.buildingButtons || new Map();
+    this.buildingButtons.set(sessionId, buildBtn);
+    
+    // Emit socket event to trigger build on backend
+    this.socket.emit('build-production', { 
+      sessionId,
+      worktreeNum 
+    });
   }
   
   detectGitHubLinks(sessionId, data) {

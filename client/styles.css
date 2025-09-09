@@ -945,6 +945,28 @@ header h1 {
   margin: 0;
 }
 
+/* Loading spinner for build button */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.control-btn.building {
+  background: var(--color-warning);
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
 .clear-override-btn {
   background: var(--bg-primary);
   color: var(--text-secondary);
