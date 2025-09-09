@@ -90,42 +90,29 @@
         </div>
     </div>
     
-    <!-- Claude Startup Options Modal -->
+    <!-- Claude Startup Options Modal (Simplified) -->
     <div id="claude-startup-modal" class="modal hidden">
-        <div class="modal-content claude-startup-content">
-            <h3>Claude Startup Options</h3>
-            <div class="startup-options">
-                <div class="option-group">
-                    <label>Session Mode:</label>
-                    <div class="radio-group">
-                        <label class="radio-option">
-                            <input type="radio" name="claude-mode" value="fresh" checked>
-                            <span>Fresh Session</span>
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="claude-mode" value="continue">
-                            <span>Continue (--continue)</span>
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="claude-mode" value="resume">
-                            <span>Resume (--resume)</span>
-                        </label>
-                    </div>
-                </div>
-                <div class="option-group">
-                    <label class="checkbox-option">
-                        <input type="checkbox" id="skip-permissions" value="skip">
-                        <span>Skip Permissions (--dangerously-skip-permissions)</span>
-                    </label>
-                </div>
-                <div class="session-info">
-                    <span id="startup-session-id"></span>
-                </div>
+        <div class="modal-content claude-startup-simple">
+            <h3>Start Claude - <span id="startup-session-id"></span></h3>
+            <div class="startup-buttons">
+                <button class="startup-option-btn" data-mode="fresh">
+                    <span class="option-icon">🆕</span>
+                    <span class="option-label">Fresh</span>
+                </button>
+                <button class="startup-option-btn" data-mode="continue">
+                    <span class="option-icon">➡️</span>
+                    <span class="option-label">Continue</span>
+                </button>
+                <button class="startup-option-btn" data-mode="resume">
+                    <span class="option-icon">⏸️</span>
+                    <span class="option-label">Resume</span>
+                </button>
             </div>
-            <div class="modal-actions">
-                <button id="start-claude" class="button-primary">Start Claude</button>
-                <button id="cancel-claude-startup" class="button-secondary">Cancel</button>
-            </div>
+            <label class="yolo-toggle-modal">
+                <input type="checkbox" id="modal-yolo">
+                <span class="yolo-label">🚀 YOLO Mode (skip permissions)</span>
+            </label>
+            <button id="cancel-claude-startup" class="button-secondary">Cancel</button>
         </div>
     </div>
     

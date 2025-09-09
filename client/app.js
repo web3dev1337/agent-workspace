@@ -3,6 +3,7 @@ class ClaudeOrchestrator {
   constructor() {
     this.sessions = new Map();
     this.activeView = [];
+    this.visibleTerminals = new Set(); // Track which terminals are visible
     this.socket = null;
     this.terminalManager = null;
     this.notificationManager = null;
@@ -283,13 +284,13 @@ class ClaudeOrchestrator {
       }
     }
     
-    // Sidebar worktree clicks
+    // Sidebar worktree clicks - use toggle instead of show
     if (elements['worktree-list']) {
       elements['worktree-list'].addEventListener('click', (e) => {
         const item = e.target.closest('.worktree-item');
         if (item) {
           const worktreeId = item.dataset.worktreeId;
-          this.showWorktree(worktreeId);
+          this.toggleWorktreeVisibility(worktreeId);
         }
       });
     }
@@ -413,21 +414,31 @@ class ClaudeOrchestrator {
       document.getElementById('enable-notifications').focus();
     });
     
-    // Claude startup modal handlers
-    const startClaudeBtn = document.getElementById('start-claude');
+    // Claude startup modal handlers (simplified)
     const cancelClaudeBtn = document.getElementById('cancel-claude-startup');
-    
-    if (startClaudeBtn) {
-      startClaudeBtn.addEventListener('click', () => {
-        this.handleClaudeStart();
-      });
-    }
     
     if (cancelClaudeBtn) {
       cancelClaudeBtn.addEventListener('click', () => {
         this.hideClaudeStartupModal();
       });
     }
+    
+    // Handle startup option button clicks
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.startup-option-btn')) {
+        const btn = e.target.closest('.startup-option-btn');
+        const mode = btn.dataset.mode;
+        
+        // Check if modal YOLO is checked
+        const modalYolo = document.getElementById('modal-yolo');
+        const skipPermissions = modalYolo ? modalYolo.checked : false;
+        
+        if (this.pendingClaudeSession) {
+          this.startClaudeWithOptions(this.pendingClaudeSession, mode, skipPermissions);
+          this.hideClaudeStartupModal();
+        }
+      }
+    });
     
     // Handle window resize to fix blank terminals
     let resizeTimeout;
@@ -452,6 +463,7 @@ class ClaudeOrchestrator {
     // Clear existing sessions and activity tracking
     this.sessions.clear();
     this.sessionActivity.clear();
+    this.visibleTerminals.clear();
     
     // Process sessions
     for (const [sessionId, state] of Object.entries(sessionStates)) {
@@ -471,6 +483,9 @@ class ClaudeOrchestrator {
       
       // All fresh sessions start as inactive - they need user interaction to become active
       this.sessionActivity.set(sessionId, 'inactive');
+      
+      // Add all terminals to visible set by default
+      this.visibleTerminals.add(sessionId);
     }
     
     // Hide loading message FIRST
@@ -482,8 +497,8 @@ class ClaudeOrchestrator {
     // Build sidebar
     this.buildSidebar();
     
-    // Show default view (all terminals)
-    this.showAllTerminals();
+    // Show all visible terminals
+    this.updateTerminalGrid();
   }
   
   buildSidebar() {
@@ -527,8 +542,13 @@ class ClaudeOrchestrator {
         continue;
       }
       
+      // Check if any session in this worktree is visible
+      const claudeId = `${worktreeId}-claude`;
+      const serverId = `${worktreeId}-server`;
+      const isVisible = this.visibleTerminals.has(claudeId) || this.visibleTerminals.has(serverId);
+      
       const item = document.createElement('div');
-      item.className = `worktree-item ${!isActive ? 'inactive' : ''}`;
+      item.className = `worktree-item ${!isActive ? 'inactive' : ''} ${!isVisible ? 'hidden-terminal' : ''}`;
       item.dataset.worktreeId = worktreeId;
       
       const branch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
@@ -539,7 +559,10 @@ class ClaudeOrchestrator {
       
       item.innerHTML = `
         <div class="worktree-header">
-          <div class="worktree-title">${worktreeNumber} - ${branch}</div>
+          <div class="worktree-title">
+            <span class="visibility-indicator">${isVisible ? '👁' : '🚫'}</span>
+            ${worktreeNumber} - ${branch}
+          </div>
         </div>
         <div class="worktree-sessions">
           ${worktree.claude ? `
@@ -559,10 +582,7 @@ class ClaudeOrchestrator {
         </div>
       `;
       
-      // Add click handler to show this worktree
-      item.addEventListener('click', () => {
-        this.showWorktree(worktreeId);
-      });
+      // Click handler is already attached via event delegation in setupEventListeners
       
       worktreeList.appendChild(item);
     }
@@ -619,84 +639,196 @@ class ClaudeOrchestrator {
   }
   
   showActiveWorktreesOnly() {
-    const activeSessions = [];
+    // Clear visible terminals first
+    this.visibleTerminals.clear();
     
-    // Find all sessions that belong to active worktrees
+    // Add only active worktree sessions to visible set
     for (const [sessionId, session] of this.sessions) {
       const worktreeId = session.worktreeId || sessionId.split('-')[0];
       if (this.isWorktreeActive(worktreeId)) {
-        activeSessions.push(sessionId);
+        this.visibleTerminals.add(sessionId);
       }
     }
     
-    if (activeSessions.length > 0) {
-      this.showTerminals(activeSessions);
-    } else {
-      // No active sessions, show a message or default to all
+    // If no active sessions, show all
+    if (this.visibleTerminals.size === 0) {
       this.showAllTerminals();
+    } else {
+      this.updateTerminalGrid();
+      this.buildSidebar();
     }
+  }
+  
+  toggleWorktreeVisibility(worktreeId) {
+    console.log(`Toggling visibility for worktree: ${worktreeId}`);
+    
+    // Find Claude and server sessions for this worktree
+    const claudeId = `${worktreeId}-claude`;
+    const serverId = `${worktreeId}-server`;
+    const sessions = [];
+    
+    if (this.sessions.has(claudeId)) sessions.push(claudeId);
+    if (this.sessions.has(serverId)) sessions.push(serverId);
+    
+    if (sessions.length === 0) {
+      console.warn(`No sessions found for worktree ${worktreeId}`);
+      return;
+    }
+    
+    // Check if ANY session from this worktree is currently visible
+    const anyVisible = sessions.some(id => this.visibleTerminals.has(id));
+    
+    if (anyVisible) {
+      // Hide terminals - just hide DOM elements without re-rendering
+      sessions.forEach(id => {
+        this.visibleTerminals.delete(id);
+        const wrapper = document.getElementById(`wrapper-${id}`);
+        if (wrapper) {
+          wrapper.style.display = 'none';
+        }
+      });
+    } else {
+      // Show terminals - add back to visible set and display
+      sessions.forEach(id => {
+        this.visibleTerminals.add(id);
+        const wrapper = document.getElementById(`wrapper-${id}`);
+        if (wrapper) {
+          wrapper.style.display = 'block';
+          // Fit terminal when showing
+          setTimeout(() => {
+            this.terminalManager.fitTerminal(id);
+          }, 50);
+        } else {
+          // If wrapper doesn't exist, we need to do a full refresh
+          this.updateTerminalGrid();
+          return;
+        }
+      });
+    }
+    
+    // Update sidebar to show visibility state
+    this.buildSidebar();
   }
   
   showWorktree(worktreeId) {
+    // Legacy function - now just ensures worktree is visible
     const sessions = [];
-    
-    // Find Claude and server sessions for this worktree
     for (const [sessionId, session] of this.sessions) {
       if (session.worktreeId === worktreeId || sessionId.startsWith(worktreeId)) {
         sessions.push(sessionId);
+        this.visibleTerminals.add(sessionId);
       }
     }
     
-    this.showTerminals(sessions);
-    
-    // Highlight active worktree
-    document.querySelectorAll('.worktree-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.worktreeId === worktreeId);
-    });
+    this.updateTerminalGrid();
+    this.buildSidebar();
   }
   
   showAllTerminals() {
-    // Get all sessions and create proper order: work1-claude, work1-server, work2-claude, work2-server, etc.
-    const orderedSessions = [];
+    // Add all sessions to visible set
+    for (const sessionId of this.sessions.keys()) {
+      this.visibleTerminals.add(sessionId);
+    }
+    
+    this.updateTerminalGrid();
+    this.buildSidebar();
+  }
+  
+  updateTerminalGrid() {
+    // Get ALL sessions in proper order
+    const allSessions = [];
     for (let i = 1; i <= 8; i++) {
       const claudeId = `work${i}-claude`;
       const serverId = `work${i}-server`;
       
       if (this.sessions.has(claudeId)) {
-        orderedSessions.push(claudeId);
+        allSessions.push(claudeId);
       }
       if (this.sessions.has(serverId)) {
-        orderedSessions.push(serverId);
+        allSessions.push(serverId);
       }
     }
     
-    console.log('Showing all terminals in order:', orderedSessions);
-    this.showTerminals(orderedSessions);
+    console.log('Rendering all terminals, will hide non-visible ones');
+    this.renderTerminalsWithVisibility(allSessions);
+  }
+  
+  renderTerminalsWithVisibility(sessionIds) {
+    // Render all terminals but apply visibility
+    this.activeView = sessionIds.filter(id => this.visibleTerminals.has(id));
+    const grid = document.getElementById('terminal-grid');
+    
+    // Clear grid
+    grid.innerHTML = '';
+    
+    // Create terminal elements for ALL sessions
+    sessionIds.forEach((sessionId) => {
+      const session = this.sessions.get(sessionId);
+      if (session) {
+        const wrapper = this.createTerminalElement(sessionId, session);
+        // Hide if not in visible set
+        if (!this.visibleTerminals.has(sessionId)) {
+          wrapper.style.display = 'none';
+        }
+        grid.appendChild(wrapper);
+      }
+    });
+    
+    // Initialize terminals
+    sessionIds.forEach((sessionId, index) => {
+      const session = this.sessions.get(sessionId);
+      if (session) {
+        setTimeout(() => {
+          const terminalEl = document.getElementById(`terminal-${sessionId}`);
+          if (!terminalEl) return;
+          
+          if (this.terminalManager.terminals.has(sessionId)) {
+            const term = this.terminalManager.terminals.get(sessionId);
+            terminalEl.innerHTML = '';
+            term.open(terminalEl);
+            
+            // Only fit if visible
+            if (this.visibleTerminals.has(sessionId)) {
+              this.terminalManager.fitTerminal(sessionId);
+              term.refresh(0, term.rows - 1);
+            }
+          } else {
+            this.terminalManager.createTerminal(sessionId, session);
+          }
+          
+          // Don't auto-start Claude - let user choose via modal or button
+        }, 50 + (index * 25));
+      }
+    });
   }
   
   showClaudeOnly() {
-    const sessions = Array.from(this.sessions.keys())
-      .filter(id => id.includes('-claude'))
-      .sort((a, b) => {
-        const aNum = parseInt(a.match(/work(\d+)/)?.[1] || '0');
-        const bNum = parseInt(b.match(/work(\d+)/)?.[1] || '0');
-        return aNum - bNum;
-      });
-    this.showTerminals(sessions);
+    // Clear visible terminals and add only Claude sessions
+    this.visibleTerminals.clear();
+    for (const sessionId of this.sessions.keys()) {
+      if (sessionId.includes('-claude')) {
+        this.visibleTerminals.add(sessionId);
+      }
+    }
+    this.updateTerminalGrid();
+    this.buildSidebar();
   }
   
   showServersOnly() {
-    const sessions = Array.from(this.sessions.keys())
-      .filter(id => id.includes('-server'))
-      .sort((a, b) => {
-        const aNum = parseInt(a.match(/work(\d+)/)?.[1] || '0');
-        const bNum = parseInt(b.match(/work(\d+)/)?.[1] || '0');
-        return aNum - bNum;
-      });
-    this.showTerminals(sessions);
+    // Clear visible terminals and add only server sessions
+    this.visibleTerminals.clear();
+    for (const sessionId of this.sessions.keys()) {
+      if (sessionId.includes('-server')) {
+        this.visibleTerminals.add(sessionId);
+      }
+    }
+    this.updateTerminalGrid();
+    this.buildSidebar();
   }
   
   applyPreset(preset) {
+    this.visibleTerminals.clear();
+    
     switch (preset) {
       case 'all':
         this.showAllTerminals();
@@ -708,10 +840,22 @@ class ClaudeOrchestrator {
         this.showServersOnly();
         break;
       case 'work-1-5':
-        this.showTerminals(['work1-claude', 'work1-server', 'work5-claude', 'work5-server']);
+        ['work1-claude', 'work1-server', 'work5-claude', 'work5-server'].forEach(id => {
+          if (this.sessions.has(id)) {
+            this.visibleTerminals.add(id);
+          }
+        });
+        this.updateTerminalGrid();
+        this.buildSidebar();
         break;
       case 'custom-claude':
-        this.showTerminals(['work2-claude', 'work5-claude', 'work6-claude', 'work8-claude', 'work1-claude', 'work7-claude']);
+        ['work2-claude', 'work5-claude', 'work6-claude', 'work8-claude', 'work1-claude', 'work7-claude'].forEach(id => {
+          if (this.sessions.has(id)) {
+            this.visibleTerminals.add(id);
+          }
+        });
+        this.updateTerminalGrid();
+        this.buildSidebar();
         break;
     }
   }
@@ -739,6 +883,19 @@ class ClaudeOrchestrator {
   }
   
   showTerminals(sessionIds) {
+    // Legacy function - update visible set and refresh everything
+    this.visibleTerminals.clear();
+    sessionIds.forEach(id => {
+      if (this.sessions.has(id)) {
+        this.visibleTerminals.add(id);
+      }
+    });
+    this.updateTerminalGrid();
+    this.buildSidebar();
+  }
+  
+  renderTerminals(sessionIds) {
+    // Core rendering function - just displays terminals without updating state
     this.activeView = sessionIds;
     const grid = document.getElementById('terminal-grid');
     
@@ -796,10 +953,7 @@ class ClaudeOrchestrator {
             this.terminalManager.createTerminal(sessionId, session);
           }
           
-          // Auto-start Claude sessions with user settings after they're loaded
-          if (sessionId.includes('-claude')) {
-            this.waitForSettingsAndAutoStart(sessionId);
-          }
+          // Don't auto-start Claude - let user choose via modal or button
         }, 50 + (index * 25)); // Reduced stagger time
       }
     });
@@ -853,34 +1007,25 @@ class ClaudeOrchestrator {
         <div class="terminal" id="terminal-${sessionId}"></div>
         ${isClaudeSession ? `
           <div class="terminal-startup-ui" id="startup-ui-${sessionId}">
-            <div class="startup-ui-content">
-              <h3>🚀 Start Claude Session</h3>
-              <div class="startup-options-inline">
-                <div class="option-group-inline">
-                  <label>Session Mode:</label>
-                  <div class="radio-group-inline">
-                    <label class="radio-option-inline">
-                      <input type="radio" name="claude-mode-${sessionId}" value="fresh" checked>
-                      <span>Fresh</span>
-                    </label>
-                    <label class="radio-option-inline">
-                      <input type="radio" name="claude-mode-${sessionId}" value="continue">
-                      <span>Continue</span>
-                    </label>
-                    <label class="radio-option-inline">
-                      <input type="radio" name="claude-mode-${sessionId}" value="resume">
-                      <span>Resume</span>
-                    </label>
-                  </div>
-                </div>
-                <div class="option-group-inline">
-                  <label class="checkbox-option-inline">
-                    <input type="checkbox" id="skip-permissions-${sessionId}" value="skip">
-                    <span>Skip Permissions (YOLO mode)</span>
-                  </label>
-                </div>
-                <button class="start-claude-inline" onclick="window.orchestrator.startClaudeFromTerminal('${sessionId}')">Start Claude</button>
+            <div class="startup-ui-simple">
+              <div class="startup-buttons-inline">
+                <button class="startup-btn-inline" id="btn-fresh-${sessionId}" onclick="window.orchestrator.quickStartClaude('${sessionId}', 'fresh')">
+                  <span class="btn-icon">🆕</span>
+                  <span>Fresh</span>
+                </button>
+                <button class="startup-btn-inline" id="btn-continue-${sessionId}" onclick="window.orchestrator.quickStartClaude('${sessionId}', 'continue')">
+                  <span class="btn-icon">➡️</span>
+                  <span>Continue</span>
+                </button>
+                <button class="startup-btn-inline" id="btn-resume-${sessionId}" onclick="window.orchestrator.quickStartClaude('${sessionId}', 'resume')">
+                  <span class="btn-icon">⏸️</span>
+                  <span>Resume</span>
+                </button>
               </div>
+              <label class="yolo-toggle">
+                <input type="checkbox" id="yolo-${sessionId}" onchange="window.orchestrator.updateYoloState('${sessionId}', this.checked)">
+                <span class="yolo-label">🚀 YOLO Mode</span>
+              </label>
             </div>
           </div>
         ` : ''}
@@ -2117,29 +2262,8 @@ class ClaudeOrchestrator {
       this.pendingClaudeSession = sessionId;
       
       // Update session info display
-      sessionInfo.textContent = `Session: ${sessionId.replace('-claude', '')}`;
-      
-      try {
-        // Get effective settings for this session and pre-populate
-        const response = await fetch(`/api/user-settings/effective/${sessionId}`);
-        let effectiveSettings = { claudeFlags: { skipPermissions: false } };
-        
-        if (response.ok) {
-          effectiveSettings = await response.json();
-        }
-        
-        // Pre-populate form with effective settings
-        document.querySelector('input[name="claude-mode"][value="fresh"]').checked = true;
-        document.getElementById('skip-permissions').checked = effectiveSettings.claudeFlags.skipPermissions;
-        
-        console.log('Pre-populated modal with settings:', effectiveSettings);
-        
-      } catch (error) {
-        console.error('Error loading effective settings for modal:', error);
-        // Fall back to defaults
-        document.querySelector('input[name="claude-mode"][value="fresh"]').checked = true;
-        document.getElementById('skip-permissions').checked = false;
-      }
+      const worktreeNumber = sessionId.replace('work', '').replace('-claude', '');
+      sessionInfo.textContent = `Work ${worktreeNumber}`;
       
       // Show modal
       modal.classList.remove('hidden');
@@ -2154,26 +2278,56 @@ class ClaudeOrchestrator {
     }
   }
   
-  handleClaudeStart() {
-    if (!this.pendingClaudeSession || !this.socket || !this.socket.connected) {
+  startClaudeWithOptions(sessionId, mode, skipPermissions) {
+    if (!this.socket || !this.socket.connected) {
+      this.showError('Not connected to server');
       return;
     }
     
-    // Get selected options
-    const mode = document.querySelector('input[name="claude-mode"]:checked')?.value || 'fresh';
-    const skipPermissions = document.getElementById('skip-permissions')?.checked || false;
+    console.log(`Starting Claude ${sessionId} with mode: ${mode}, skip: ${skipPermissions}`);
     
     // Send command to server
     this.socket.emit('start-claude', {
-      sessionId: this.pendingClaudeSession,
+      sessionId: sessionId,
       options: {
         mode: mode,
         skipPermissions: skipPermissions
       }
     });
+  }
+  
+  quickStartClaude(sessionId, mode) {
+    // Check if YOLO mode is enabled
+    const yoloCheckbox = document.getElementById(`yolo-${sessionId}`);
+    const skipPermissions = yoloCheckbox ? yoloCheckbox.checked : false;
     
-    // Hide modal
-    this.hideClaudeStartupModal();
+    // Hide the startup UI
+    const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+    if (startupUI) {
+      startupUI.style.display = 'none';
+    }
+    
+    // Start Claude with selected options
+    this.startClaudeWithOptions(sessionId, mode, skipPermissions);
+  }
+  
+  updateYoloState(sessionId, checked) {
+    // Update button styles to show YOLO is active
+    const buttons = [
+      document.getElementById(`btn-fresh-${sessionId}`),
+      document.getElementById(`btn-continue-${sessionId}`),
+      document.getElementById(`btn-resume-${sessionId}`)
+    ];
+    
+    buttons.forEach(btn => {
+      if (btn) {
+        if (checked) {
+          btn.classList.add('yolo-active');
+        } else {
+          btn.classList.remove('yolo-active');
+        }
+      }
+    });
   }
   
   async startClaudeFromTerminal(sessionId) {
