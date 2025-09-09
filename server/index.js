@@ -174,6 +174,147 @@ io.on('connection', (socket) => {
     }
   });
   
+  // Handle build production request
+  socket.on('build-production', ({ sessionId, worktreeNum }) => {
+    logger.info('Build production requested', { sessionId, worktreeNum });
+    
+    const { spawn } = require('child_process');
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Construct the path to the build script
+    const scriptPath = `/home/<user>/HyFire2-work${worktreeNum}/build-production-with-console.sh`;
+    
+    // Check if script exists
+    if (!fs.existsSync(scriptPath)) {
+      logger.error('Build script not found', { scriptPath });
+      socket.emit('build-failed', { 
+        sessionId, 
+        worktreeNum, 
+        error: 'Build script not found' 
+      });
+      return;
+    }
+    
+    // Emit build started
+    socket.emit('build-started', { sessionId, worktreeNum });
+    
+    // Run the build script
+    const buildProcess = spawn('bash', [scriptPath], {
+      cwd: `/home/<user>/HyFire2-work${worktreeNum}`
+    });
+    
+    let buildOutput = '';
+    let errorOutput = '';
+    
+    buildProcess.stdout.on('data', (data) => {
+      buildOutput += data.toString();
+      logger.debug('Build output', { worktreeNum, data: data.toString() });
+    });
+    
+    buildProcess.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+      logger.warn('Build error output', { worktreeNum, data: data.toString() });
+    });
+    
+    buildProcess.on('error', (error) => {
+      logger.error('Build process error', { worktreeNum, error: error.message });
+      socket.emit('build-failed', { 
+        sessionId, 
+        worktreeNum, 
+        error: error.message 
+      });
+    });
+    
+    buildProcess.on('close', (code) => {
+      if (code === 0) {
+        // Build succeeded - find the created zip file in the worktree root
+        const worktreePath = `/home/<user>/HyFire2-work${worktreeNum}`;
+        
+        // Look for the most recently created .zip file with console pattern
+        try {
+          const files = fs.readdirSync(worktreePath);
+          // Look for zips with the console pattern (e.g., hyfire2-with-console-*.zip)
+          const zipFiles = files.filter(f => f.endsWith('.zip') && f.includes('console'));
+          
+          if (zipFiles.length > 0) {
+            // Get the most recent zip file
+            const zipStats = zipFiles.map(f => ({
+              name: f,
+              path: path.join(worktreePath, f),
+              mtime: fs.statSync(path.join(worktreePath, f)).mtime
+            }));
+            
+            zipStats.sort((a, b) => b.mtime - a.mtime);
+            const latestZip = zipStats[0];
+            
+            logger.info('Build completed successfully', { 
+              worktreeNum, 
+              zipPath: latestZip.path 
+            });
+            
+            socket.emit('build-completed', { 
+              sessionId, 
+              worktreeNum, 
+              zipPath: latestZip.path 
+            });
+          } else {
+            logger.warn('Build completed but no zip file found', { worktreeNum });
+            socket.emit('build-failed', { 
+              sessionId, 
+              worktreeNum, 
+              error: 'Build completed but no zip file was created' 
+            });
+          }
+        } catch (error) {
+          logger.error('Error finding build output', { 
+            worktreeNum, 
+            error: error.message 
+          });
+          socket.emit('build-failed', { 
+            sessionId, 
+            worktreeNum, 
+            error: 'Failed to locate build output' 
+          });
+        }
+      } else {
+        logger.error('Build failed with non-zero exit code', { 
+          worktreeNum, 
+          code, 
+          errorOutput 
+        });
+        socket.emit('build-failed', { 
+          sessionId, 
+          worktreeNum, 
+          error: `Build failed with exit code ${code}` 
+        });
+      }
+    });
+  });
+  
+  // Handle reveal in explorer request
+  socket.on('reveal-in-explorer', ({ path: filePath }) => {
+    logger.info('Reveal in explorer requested', { filePath });
+    
+    const { exec } = require('child_process');
+    
+    // Use xdg-open on Linux/WSL to open the file manager
+    // The file manager will open to the directory containing the file
+    const dirPath = path.dirname(filePath);
+    const command = `explorer.exe "$(wslpath -w '${dirPath}')"`;
+    
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        logger.error('Failed to open file explorer', { 
+          error: error.message, 
+          stderr 
+        });
+      } else {
+        logger.info('File explorer opened successfully', { dirPath });
+      }
+    });
+  });
+  
   socket.on('disconnect', () => {
     logger.info('Client disconnected', { socketId: socket.id });
   });
