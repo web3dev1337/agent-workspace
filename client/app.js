@@ -188,12 +188,10 @@ class ClaudeOrchestrator {
       // Build production events
       this.socket.on('build-started', ({ sessionId, worktreeNum }) => {
         console.log(`Build started for worktree ${worktreeNum}`);
-        this.showTemporaryMessage(`🔨 Build started for Worktree ${worktreeNum}...`, 'info');
       });
       
       this.socket.on('build-completed', ({ sessionId, worktreeNum, zipPath }) => {
         console.log(`Build completed for worktree ${worktreeNum}: ${zipPath}`);
-        this.showTemporaryMessage(`✅ Build completed for Worktree ${worktreeNum}! Opening file location...`, 'success');
         
         // Restore the build button (use work{num} pattern to find buttons)
         this.restoreBuildButton(`work${worktreeNum}`);
@@ -1276,9 +1274,6 @@ class ClaudeOrchestrator {
     // Store the button reference for later
     this.buildingButtons = this.buildingButtons || new Map();
     this.buildingButtons.set(sessionId, buildBtn);
-    
-    // Show build started notification
-    this.showTemporaryMessage(`🏗️ Starting production build for Worktree ${worktreeNum}...`, 'info');
     
     // Emit socket event to trigger build on backend
     this.socket.emit('build-production', { 
