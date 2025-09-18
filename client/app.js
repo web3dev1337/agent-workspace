@@ -402,6 +402,34 @@ class ClaudeOrchestrator {
       this.updateGlobalUserSetting('claudeFlags.skipPermissions', e.target.checked);
     });
 
+    // Auto-start settings
+    const globalAutoStart = document.getElementById('global-auto-start');
+    const autoStartOptions = document.getElementById('auto-start-options');
+
+    if (globalAutoStart) {
+      globalAutoStart.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('autoStart.enabled', e.target.checked);
+        autoStartOptions.style.display = e.target.checked ? 'block' : 'none';
+      });
+    }
+
+    const globalAutoStartMode = document.getElementById('global-auto-start-mode');
+    if (globalAutoStartMode) {
+      globalAutoStartMode.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('autoStart.mode', e.target.value);
+      });
+    }
+
+    const globalAutoStartDelay = document.getElementById('global-auto-start-delay');
+    if (globalAutoStartDelay) {
+      globalAutoStartDelay.addEventListener('change', (e) => {
+        const delay = parseInt(e.target.value);
+        if (!isNaN(delay) && delay >= 0 && delay <= 5000) {
+          this.updateGlobalUserSetting('autoStart.delay', delay);
+        }
+      });
+    }
+
     // Template management buttons
     document.getElementById('reset-to-defaults').addEventListener('click', () => {
       this.resetToDefaults();
@@ -2572,6 +2600,24 @@ class ClaudeOrchestrator {
       globalSkipPermissions.checked = this.userSettings.global.claudeFlags.skipPermissions;
     }
 
+    // Update auto-start settings UI
+    const globalAutoStart = document.getElementById('global-auto-start');
+    const autoStartOptions = document.getElementById('auto-start-options');
+    const autoStartMode = document.getElementById('global-auto-start-mode');
+    const autoStartDelay = document.getElementById('global-auto-start-delay');
+
+    if (globalAutoStart && this.userSettings.global.autoStart) {
+      globalAutoStart.checked = this.userSettings.global.autoStart.enabled || false;
+      autoStartOptions.style.display = globalAutoStart.checked ? 'block' : 'none';
+
+      if (autoStartMode) {
+        autoStartMode.value = this.userSettings.global.autoStart.mode || 'fresh';
+      }
+      if (autoStartDelay) {
+        autoStartDelay.value = this.userSettings.global.autoStart.delay || 500;
+      }
+    }
+
     // Update per-terminal settings UI
     this.updatePerTerminalSettingsUI();
   }
@@ -2605,33 +2651,116 @@ class ClaudeOrchestrator {
     div.className = 'per-terminal-item';
 
     const hasOverride = this.userSettings.perTerminal[sessionId];
-    const effectiveSkipPermissions = hasOverride && hasOverride.claudeFlags 
+
+    // Get effective settings (with defaults)
+    const effectiveSkipPermissions = hasOverride && hasOverride.claudeFlags
       ? hasOverride.claudeFlags.skipPermissions
       : this.userSettings.global.claudeFlags.skipPermissions;
+
+    const effectiveAutoStart = {
+      enabled: hasOverride && hasOverride.autoStart && hasOverride.autoStart.enabled !== undefined
+        ? hasOverride.autoStart.enabled
+        : (this.userSettings.global.autoStart ? this.userSettings.global.autoStart.enabled : false),
+      mode: hasOverride && hasOverride.autoStart && hasOverride.autoStart.mode
+        ? hasOverride.autoStart.mode
+        : (this.userSettings.global.autoStart ? this.userSettings.global.autoStart.mode : 'fresh'),
+      delay: hasOverride && hasOverride.autoStart && hasOverride.autoStart.delay !== undefined
+        ? hasOverride.autoStart.delay
+        : (this.userSettings.global.autoStart ? this.userSettings.global.autoStart.delay : 500)
+    };
 
     div.innerHTML = `
       <div class="terminal-name">${sessionId}</div>
       <div class="terminal-controls">
-        <label>
-          <input type="checkbox" class="terminal-skip-permissions" 
-                 data-session-id="${sessionId}" 
-                 ${effectiveSkipPermissions ? 'checked' : ''}>
-          Skip Permissions
-        </label>
-        ${hasOverride ? `
-          <button class="clear-override-btn" data-session-id="${sessionId}" title="Use global setting">
-            ↻
-          </button>
-        ` : ''}
+        <div class="terminal-control-row">
+          <label>
+            <input type="checkbox" class="terminal-skip-permissions"
+                   data-session-id="${sessionId}"
+                   ${effectiveSkipPermissions ? 'checked' : ''}>
+            Skip Permissions
+          </label>
+          <label style="margin-left: 15px;">
+            <input type="checkbox" class="terminal-auto-start"
+                   data-session-id="${sessionId}"
+                   ${effectiveAutoStart.enabled ? 'checked' : ''}>
+            Auto-Start
+          </label>
+          ${hasOverride ? `
+            <button class="clear-override-btn" data-session-id="${sessionId}" title="Use global settings">
+              ↻
+            </button>
+          ` : ''}
+        </div>
+        <div class="terminal-auto-start-options" style="margin-left: 20px; margin-top: 5px; display: ${effectiveAutoStart.enabled ? 'block' : 'none'};">
+          <select class="terminal-auto-start-mode" data-session-id="${sessionId}">
+            <option value="fresh" ${effectiveAutoStart.mode === 'fresh' ? 'selected' : ''}>Fresh</option>
+            <option value="continue" ${effectiveAutoStart.mode === 'continue' ? 'selected' : ''}>Continue</option>
+            <option value="resume" ${effectiveAutoStart.mode === 'resume' ? 'selected' : ''}>Resume</option>
+          </select>
+          <input type="number" class="terminal-auto-start-delay" data-session-id="${sessionId}"
+                 value="${effectiveAutoStart.delay}" min="0" max="5000" style="width: 60px; margin-left: 10px;"
+                 placeholder="Delay (ms)">
+        </div>
       </div>
     `;
 
     // Add event listeners
-    const checkbox = div.querySelector('.terminal-skip-permissions');
-    checkbox.addEventListener('change', (e) => {
+    const skipCheckbox = div.querySelector('.terminal-skip-permissions');
+    skipCheckbox.addEventListener('change', (e) => {
+      const currentOverride = this.userSettings.perTerminal[sessionId] || {};
       this.updatePerTerminalSetting(sessionId, {
+        ...currentOverride,
         claudeFlags: { skipPermissions: e.target.checked }
       });
+    });
+
+    const autoStartCheckbox = div.querySelector('.terminal-auto-start');
+    const autoStartOptions = div.querySelector('.terminal-auto-start-options');
+
+    autoStartCheckbox.addEventListener('change', (e) => {
+      const currentOverride = this.userSettings.perTerminal[sessionId] || {};
+      const currentAutoStart = currentOverride.autoStart || {};
+
+      autoStartOptions.style.display = e.target.checked ? 'block' : 'none';
+
+      this.updatePerTerminalSetting(sessionId, {
+        ...currentOverride,
+        autoStart: {
+          ...currentAutoStart,
+          enabled: e.target.checked
+        }
+      });
+    });
+
+    const modeSelect = div.querySelector('.terminal-auto-start-mode');
+    modeSelect.addEventListener('change', (e) => {
+      const currentOverride = this.userSettings.perTerminal[sessionId] || {};
+      const currentAutoStart = currentOverride.autoStart || {};
+
+      this.updatePerTerminalSetting(sessionId, {
+        ...currentOverride,
+        autoStart: {
+          ...currentAutoStart,
+          mode: e.target.value
+        }
+      });
+    });
+
+    const delayInput = div.querySelector('.terminal-auto-start-delay');
+    delayInput.addEventListener('change', (e) => {
+      const delay = parseInt(e.target.value);
+      if (!isNaN(delay) && delay >= 0 && delay <= 5000) {
+        const currentOverride = this.userSettings.perTerminal[sessionId] || {};
+        const currentAutoStart = currentOverride.autoStart || {};
+
+        this.updatePerTerminalSetting(sessionId, {
+          ...currentOverride,
+          autoStart: {
+            ...currentAutoStart,
+            delay: delay
+          }
+        });
+      }
     });
 
     const clearBtn = div.querySelector('.clear-override-btn');
