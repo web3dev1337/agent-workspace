@@ -29,11 +29,16 @@ class UserSettingsService {
 
   getDefaultSettings() {
     return {
-      version: '1.0.0',
+      version: '1.1.0',
       global: {
         claudeFlags: {
           skipPermissions: false,
           // Add other global Claude flags here in the future
+        },
+        autoStart: {
+          enabled: false,
+          mode: 'fresh', // 'fresh', 'continue', or 'resume'
+          delay: 500 // ms delay before auto-starting
         },
         terminal: {
           // Add other global terminal settings here in the future
@@ -42,7 +47,7 @@ class UserSettingsService {
       perTerminal: {
         // sessionId -> override settings
         // Example:
-        // "work1-claude": { claudeFlags: { skipPermissions: true } }
+        // "work1-claude": { claudeFlags: { skipPermissions: true }, autoStart: { enabled: true, mode: 'continue' } }
       }
     };
   }
@@ -183,20 +188,23 @@ class UserSettingsService {
 
   mergeSettings(defaults, userSettings) {
     const merged = JSON.parse(JSON.stringify(defaults)); // Deep clone defaults
-    
+
     if (userSettings.global) {
       if (userSettings.global.claudeFlags) {
         Object.assign(merged.global.claudeFlags, userSettings.global.claudeFlags);
+      }
+      if (userSettings.global.autoStart) {
+        Object.assign(merged.global.autoStart, userSettings.global.autoStart);
       }
       if (userSettings.global.terminal) {
         Object.assign(merged.global.terminal, userSettings.global.terminal);
       }
     }
-    
+
     if (userSettings.perTerminal) {
       merged.perTerminal = { ...merged.perTerminal, ...userSettings.perTerminal };
     }
-    
+
     return merged;
   }
 
@@ -219,19 +227,23 @@ class UserSettingsService {
   getEffectiveSettings(sessionId) {
     const global = this.settings.global;
     const perTerminal = this.settings.perTerminal[sessionId] || {};
-    
+
     // Merge global and per-terminal settings
     const effective = {
       claudeFlags: {
         ...global.claudeFlags,
         ...(perTerminal.claudeFlags || {})
       },
+      autoStart: {
+        ...(global.autoStart || {}),
+        ...(perTerminal.autoStart || {})
+      },
       terminal: {
         ...global.terminal,
         ...(perTerminal.terminal || {})
       }
     };
-    
+
     return effective;
   }
 
@@ -244,14 +256,21 @@ class UserSettingsService {
         ...newGlobal
       };
       
-      // Deep merge claudeFlags and terminal
+      // Deep merge claudeFlags, autoStart, and terminal
       if (newGlobal.claudeFlags) {
         this.settings.global.claudeFlags = {
           ...this.getDefaultSettings().global.claudeFlags,
           ...newGlobal.claudeFlags
         };
       }
-      
+
+      if (newGlobal.autoStart) {
+        this.settings.global.autoStart = {
+          ...this.getDefaultSettings().global.autoStart,
+          ...newGlobal.autoStart
+        };
+      }
+
       if (newGlobal.terminal) {
         this.settings.global.terminal = {
           ...this.getDefaultSettings().global.terminal,

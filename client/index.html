@@ -162,7 +162,30 @@
                         <small>Apply --dangerously-skip-permissions to all new Claude sessions</small>
                     </label>
                 </div>
-                
+
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="global-auto-start" />
+                        <strong>Auto-Start Claude Sessions</strong>
+                        <small>Automatically start Claude when sessions are ready</small>
+                    </label>
+                </div>
+
+                <div class="setting-group" id="auto-start-options" style="margin-left: 20px; display: none;">
+                    <label>
+                        <strong>Default Mode:</strong>
+                        <select id="global-auto-start-mode">
+                            <option value="fresh">Fresh - Start new session</option>
+                            <option value="continue">Continue - Resume conversation</option>
+                            <option value="resume">Resume - Restore interrupted session</option>
+                        </select>
+                    </label>
+                    <label style="margin-top: 10px;">
+                        <strong>Start Delay (ms):</strong>
+                        <input type="number" id="global-auto-start-delay" value="500" min="0" max="5000" style="width: 100px;" />
+                    </label>
+                </div>
+
                 <div class="setting-group per-terminal-settings" id="per-terminal-settings">
                     <h5>Per-Terminal Overrides</h5>
                     <p class="setting-description">Override global settings for specific terminals (requires terminal restart)</p>

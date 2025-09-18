@@ -380,7 +380,8 @@ class SessionManager extends EventEmitter {
         buffer: '',
         lastActivity: Date.now(),
         tokenUsage: 0,
-        config: config
+        config: config,
+        autoStarted: false  // Track if auto-start has been triggered
       };
       
       // Set up inactivity timer (respect per-type timeout; 0 disables)
@@ -421,6 +422,33 @@ class SessionManager extends EventEmitter {
                 message: `Claude ${config.worktreeId} needs your input`,
                 branch: session.branch
               });
+
+              // Check for auto-start settings
+              const effectiveSettings = this.userSettings.getEffectiveSettings(sessionId);
+              if (effectiveSettings.autoStart && effectiveSettings.autoStart.enabled && !session.autoStarted) {
+                // Mark as auto-started to prevent multiple triggers
+                session.autoStarted = true;
+
+                // Apply auto-start with configured delay
+                const delay = effectiveSettings.autoStart.delay || 500;
+                const mode = effectiveSettings.autoStart.mode || 'fresh';
+                const skipPermissions = effectiveSettings.claudeFlags.skipPermissions || false;
+
+                logger.info('Auto-starting Claude session', {
+                  sessionId,
+                  mode,
+                  delay,
+                  skipPermissions
+                });
+
+                // Start Claude after delay
+                setTimeout(() => {
+                  this.startClaudeWithOptions(sessionId, {
+                    mode: mode,
+                    skipPermissions: skipPermissions
+                  });
+                }, delay);
+              }
             }
             
             logger.info('Session status changed', { 
