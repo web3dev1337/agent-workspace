@@ -402,6 +402,34 @@ class ClaudeOrchestrator {
       this.updateGlobalUserSetting('claudeFlags.skipPermissions', e.target.checked);
     });
 
+    // Auto-start settings
+    const globalAutoStart = document.getElementById('global-auto-start');
+    const autoStartOptions = document.getElementById('auto-start-options');
+
+    if (globalAutoStart) {
+      globalAutoStart.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('autoStart.enabled', e.target.checked);
+        autoStartOptions.style.display = e.target.checked ? 'block' : 'none';
+      });
+    }
+
+    const globalAutoStartMode = document.getElementById('global-auto-start-mode');
+    if (globalAutoStartMode) {
+      globalAutoStartMode.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('autoStart.mode', e.target.value);
+      });
+    }
+
+    const globalAutoStartDelay = document.getElementById('global-auto-start-delay');
+    if (globalAutoStartDelay) {
+      globalAutoStartDelay.addEventListener('change', (e) => {
+        const delay = parseInt(e.target.value);
+        if (!isNaN(delay) && delay >= 0 && delay <= 5000) {
+          this.updateGlobalUserSetting('autoStart.delay', delay);
+        }
+      });
+    }
+
     // Template management buttons
     document.getElementById('reset-to-defaults').addEventListener('click', () => {
       this.resetToDefaults();
@@ -519,9 +547,55 @@ class ClaudeOrchestrator {
     
     // Build sidebar
     this.buildSidebar();
-    
+
     // Show all visible terminals
     this.updateTerminalGrid();
+
+    // Check for auto-start after a delay to let terminals initialize
+    setTimeout(() => {
+      this.checkAndApplyAutoStart();
+    }, 2000);
+  }
+
+  checkAndApplyAutoStart() {
+    if (!this.userSettings) {
+      console.log('User settings not loaded yet, skipping auto-start');
+      return;
+    }
+
+    // Check each Claude session for auto-start
+    for (const [sessionId, session] of this.sessions) {
+      if (sessionId.includes('-claude')) {
+        const effectiveSettings = this.getEffectiveSettings(sessionId);
+
+        if (effectiveSettings && effectiveSettings.autoStart && effectiveSettings.autoStart.enabled) {
+          console.log(`Auto-start enabled for ${sessionId}`, effectiveSettings.autoStart);
+
+          // Hide the startup UI
+          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+          if (startupUI) {
+            startupUI.style.display = 'none';
+          }
+
+          // Apply auto-start with configured delay
+          const delay = effectiveSettings.autoStart.delay || 500;
+          const mode = effectiveSettings.autoStart.mode || 'fresh';
+          const skipPermissions = effectiveSettings.claudeFlags.skipPermissions || false;
+
+          setTimeout(() => {
+            console.log(`Auto-starting Claude ${sessionId} with mode: ${mode}, skip: ${skipPermissions}`);
+            this.startClaudeWithOptions(sessionId, mode, skipPermissions);
+          }, delay);
+        } else {
+          // Show the startup UI if auto-start is not enabled
+          console.log(`Auto-start disabled for ${sessionId}, showing UI`);
+          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+          if (startupUI) {
+            startupUI.style.display = 'block';
+          }
+        }
+      }
+    }
   }
   
   buildSidebar() {
@@ -1064,31 +1138,50 @@ class ClaudeOrchestrator {
   updateSessionStatus(sessionId, status) {
     // Convert 'waiting' to 'ready' for better UX (green instead of orange)
     const displayStatus = status === 'waiting' ? 'ready' : status;
-    
+
     const statusElement = document.getElementById(`status-${sessionId}`);
     if (statusElement) {
       statusElement.className = `status-indicator ${displayStatus}`;
       statusElement.title = displayStatus;
     }
-    
+
     // Update session data
     const session = this.sessions.get(sessionId);
     const previousStatus = session ? session.status : null;
     if (session) {
       session.status = status;
-      
+
       // Track that user has interacted if going from waiting to busy
       if (previousStatus === 'waiting' && status === 'busy') {
         session.hasUserInput = true;
       }
-      
+
       // Only mark as active when user actually interacts (waiting -> busy transition)
       // OR when status changes to busy (meaning user is actively working)
       if ((previousStatus === 'waiting' && status === 'busy') || status === 'busy') {
         this.sessionActivity.set(sessionId, 'active');
         this.buildSidebar(); // Refresh to update grey/active state
       }
-      
+
+      // Check if auto-start is enabled when status becomes waiting
+      if (status === 'waiting' && sessionId.includes('-claude') && this.userSettings) {
+        const effectiveSettings = this.getEffectiveSettings(sessionId);
+
+        if (effectiveSettings && effectiveSettings.autoStart && effectiveSettings.autoStart.enabled) {
+          // Hide the startup UI since auto-start will handle it
+          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+          if (startupUI) {
+            startupUI.style.display = 'none';
+          }
+        } else {
+          // Show the startup UI if auto-start is not enabled
+          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+          if (startupUI) {
+            startupUI.style.display = 'block';
+          }
+        }
+      }
+
       // Don't mark fresh "waiting" sessions as active - they're just showing welcome screen
     }
     
@@ -2286,36 +2379,39 @@ class ClaudeOrchestrator {
   
   async autoStartClaude(sessionId) {
     console.log(`Auto-starting Claude with user settings: ${sessionId}`);
-    
+
     if (!this.socket || !this.socket.connected) {
       this.showError('Not connected to server');
       return;
     }
-    
+
     try {
       // Get effective settings for this session
       const response = await fetch(`/api/user-settings/effective/${sessionId}`);
-      let effectiveSettings = { claudeFlags: { skipPermissions: false } };
-      
+      let effectiveSettings = {
+        claudeFlags: { skipPermissions: false },
+        autoStart: { mode: 'fresh' }
+      };
+
       if (response.ok) {
         effectiveSettings = await response.json();
       } else {
         console.warn('Could not load effective settings, using defaults');
       }
-      
+
       // Start Claude with effective settings
       const options = {
-        mode: 'fresh', // Default to fresh for auto-start
+        mode: effectiveSettings.autoStart?.mode || 'fresh',
         skipPermissions: effectiveSettings.claudeFlags.skipPermissions
       };
-      
+
       console.log('Auto-starting Claude with options:', options);
-      
+
       this.socket.emit('start-claude', {
         sessionId: sessionId,
         options: options
       });
-      
+
       // Hide the startup UI if it exists
       const startupUI = document.getElementById(`startup-ui-${sessionId}`);
       if (startupUI) {
@@ -2560,6 +2656,29 @@ class ClaudeOrchestrator {
     }
   }
 
+  getEffectiveSettings(sessionId) {
+    if (!this.userSettings) return null;
+
+    const global = this.userSettings.global || {};
+    const perTerminal = this.userSettings.perTerminal[sessionId] || {};
+
+    // Merge global and per-terminal settings
+    return {
+      claudeFlags: {
+        ...(global.claudeFlags || {}),
+        ...(perTerminal.claudeFlags || {})
+      },
+      autoStart: {
+        ...(global.autoStart || {}),
+        ...(perTerminal.autoStart || {})
+      },
+      terminal: {
+        ...(global.terminal || {}),
+        ...(perTerminal.terminal || {})
+      }
+    };
+  }
+
   syncUserSettingsUI() {
     if (!this.userSettings) {
       console.warn('Cannot sync user settings UI - settings not loaded');
@@ -2570,6 +2689,24 @@ class ClaudeOrchestrator {
     const globalSkipPermissions = document.getElementById('global-skip-permissions');
     if (globalSkipPermissions) {
       globalSkipPermissions.checked = this.userSettings.global.claudeFlags.skipPermissions;
+    }
+
+    // Update auto-start settings UI
+    const globalAutoStart = document.getElementById('global-auto-start');
+    const autoStartOptions = document.getElementById('auto-start-options');
+    const autoStartMode = document.getElementById('global-auto-start-mode');
+    const autoStartDelay = document.getElementById('global-auto-start-delay');
+
+    if (globalAutoStart && this.userSettings.global.autoStart) {
+      globalAutoStart.checked = this.userSettings.global.autoStart.enabled || false;
+      autoStartOptions.style.display = globalAutoStart.checked ? 'block' : 'none';
+
+      if (autoStartMode) {
+        autoStartMode.value = this.userSettings.global.autoStart.mode || 'fresh';
+      }
+      if (autoStartDelay) {
+        autoStartDelay.value = this.userSettings.global.autoStart.delay || 500;
+      }
     }
 
     // Update per-terminal settings UI
@@ -2605,33 +2742,116 @@ class ClaudeOrchestrator {
     div.className = 'per-terminal-item';
 
     const hasOverride = this.userSettings.perTerminal[sessionId];
-    const effectiveSkipPermissions = hasOverride && hasOverride.claudeFlags 
+
+    // Get effective settings (with defaults)
+    const effectiveSkipPermissions = hasOverride && hasOverride.claudeFlags
       ? hasOverride.claudeFlags.skipPermissions
       : this.userSettings.global.claudeFlags.skipPermissions;
+
+    const effectiveAutoStart = {
+      enabled: hasOverride && hasOverride.autoStart && hasOverride.autoStart.enabled !== undefined
+        ? hasOverride.autoStart.enabled
+        : (this.userSettings.global.autoStart ? this.userSettings.global.autoStart.enabled : false),
+      mode: hasOverride && hasOverride.autoStart && hasOverride.autoStart.mode
+        ? hasOverride.autoStart.mode
+        : (this.userSettings.global.autoStart ? this.userSettings.global.autoStart.mode : 'fresh'),
+      delay: hasOverride && hasOverride.autoStart && hasOverride.autoStart.delay !== undefined
+        ? hasOverride.autoStart.delay
+        : (this.userSettings.global.autoStart ? this.userSettings.global.autoStart.delay : 500)
+    };
 
     div.innerHTML = `
       <div class="terminal-name">${sessionId}</div>
       <div class="terminal-controls">
-        <label>
-          <input type="checkbox" class="terminal-skip-permissions" 
-                 data-session-id="${sessionId}" 
-                 ${effectiveSkipPermissions ? 'checked' : ''}>
-          Skip Permissions
-        </label>
-        ${hasOverride ? `
-          <button class="clear-override-btn" data-session-id="${sessionId}" title="Use global setting">
-            ↻
-          </button>
-        ` : ''}
+        <div class="terminal-control-row">
+          <label>
+            <input type="checkbox" class="terminal-skip-permissions"
+                   data-session-id="${sessionId}"
+                   ${effectiveSkipPermissions ? 'checked' : ''}>
+            Skip Permissions
+          </label>
+          <label style="margin-left: 15px;">
+            <input type="checkbox" class="terminal-auto-start"
+                   data-session-id="${sessionId}"
+                   ${effectiveAutoStart.enabled ? 'checked' : ''}>
+            Auto-Start
+          </label>
+          ${hasOverride ? `
+            <button class="clear-override-btn" data-session-id="${sessionId}" title="Use global settings">
+              ↻
+            </button>
+          ` : ''}
+        </div>
+        <div class="terminal-auto-start-options" style="margin-left: 20px; margin-top: 5px; display: ${effectiveAutoStart.enabled ? 'block' : 'none'};">
+          <select class="terminal-auto-start-mode" data-session-id="${sessionId}">
+            <option value="fresh" ${effectiveAutoStart.mode === 'fresh' ? 'selected' : ''}>Fresh</option>
+            <option value="continue" ${effectiveAutoStart.mode === 'continue' ? 'selected' : ''}>Continue</option>
+            <option value="resume" ${effectiveAutoStart.mode === 'resume' ? 'selected' : ''}>Resume</option>
+          </select>
+          <input type="number" class="terminal-auto-start-delay" data-session-id="${sessionId}"
+                 value="${effectiveAutoStart.delay}" min="0" max="5000" style="width: 60px; margin-left: 10px;"
+                 placeholder="Delay (ms)">
+        </div>
       </div>
     `;
 
     // Add event listeners
-    const checkbox = div.querySelector('.terminal-skip-permissions');
-    checkbox.addEventListener('change', (e) => {
+    const skipCheckbox = div.querySelector('.terminal-skip-permissions');
+    skipCheckbox.addEventListener('change', (e) => {
+      const currentOverride = this.userSettings.perTerminal[sessionId] || {};
       this.updatePerTerminalSetting(sessionId, {
+        ...currentOverride,
         claudeFlags: { skipPermissions: e.target.checked }
       });
+    });
+
+    const autoStartCheckbox = div.querySelector('.terminal-auto-start');
+    const autoStartOptions = div.querySelector('.terminal-auto-start-options');
+
+    autoStartCheckbox.addEventListener('change', (e) => {
+      const currentOverride = this.userSettings.perTerminal[sessionId] || {};
+      const currentAutoStart = currentOverride.autoStart || {};
+
+      autoStartOptions.style.display = e.target.checked ? 'block' : 'none';
+
+      this.updatePerTerminalSetting(sessionId, {
+        ...currentOverride,
+        autoStart: {
+          ...currentAutoStart,
+          enabled: e.target.checked
+        }
+      });
+    });
+
+    const modeSelect = div.querySelector('.terminal-auto-start-mode');
+    modeSelect.addEventListener('change', (e) => {
+      const currentOverride = this.userSettings.perTerminal[sessionId] || {};
+      const currentAutoStart = currentOverride.autoStart || {};
+
+      this.updatePerTerminalSetting(sessionId, {
+        ...currentOverride,
+        autoStart: {
+          ...currentAutoStart,
+          mode: e.target.value
+        }
+      });
+    });
+
+    const delayInput = div.querySelector('.terminal-auto-start-delay');
+    delayInput.addEventListener('change', (e) => {
+      const delay = parseInt(e.target.value);
+      if (!isNaN(delay) && delay >= 0 && delay <= 5000) {
+        const currentOverride = this.userSettings.perTerminal[sessionId] || {};
+        const currentAutoStart = currentOverride.autoStart || {};
+
+        this.updatePerTerminalSetting(sessionId, {
+          ...currentOverride,
+          autoStart: {
+            ...currentAutoStart,
+            delay: delay
+          }
+        });
+      }
     });
 
     const clearBtn = div.querySelector('.clear-override-btn');
