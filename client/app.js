@@ -547,9 +547,48 @@ class ClaudeOrchestrator {
     
     // Build sidebar
     this.buildSidebar();
-    
+
     // Show all visible terminals
     this.updateTerminalGrid();
+
+    // Check for auto-start after a delay to let terminals initialize
+    setTimeout(() => {
+      this.checkAndApplyAutoStart();
+    }, 2000);
+  }
+
+  checkAndApplyAutoStart() {
+    if (!this.userSettings) {
+      console.log('User settings not loaded yet, skipping auto-start');
+      return;
+    }
+
+    // Check each Claude session for auto-start
+    for (const [sessionId, session] of this.sessions) {
+      if (sessionId.includes('-claude')) {
+        const effectiveSettings = this.getEffectiveSettings(sessionId);
+
+        if (effectiveSettings && effectiveSettings.autoStart && effectiveSettings.autoStart.enabled) {
+          console.log(`Auto-start enabled for ${sessionId}`, effectiveSettings.autoStart);
+
+          // Hide the startup UI
+          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+          if (startupUI) {
+            startupUI.style.display = 'none';
+          }
+
+          // Apply auto-start with configured delay
+          const delay = effectiveSettings.autoStart.delay || 500;
+          const mode = effectiveSettings.autoStart.mode || 'fresh';
+          const skipPermissions = effectiveSettings.claudeFlags.skipPermissions || false;
+
+          setTimeout(() => {
+            console.log(`Auto-starting Claude ${sessionId} with mode: ${mode}, skip: ${skipPermissions}`);
+            this.startClaudeWithOptions(sessionId, mode, skipPermissions);
+          }, delay);
+        }
+      }
+    }
   }
   
   buildSidebar() {
@@ -1059,7 +1098,7 @@ class ClaudeOrchestrator {
       <div class="terminal-body">
         <div class="terminal" id="terminal-${sessionId}"></div>
         ${isClaudeSession ? `
-          <div class="terminal-startup-ui" id="startup-ui-${sessionId}">
+          <div class="terminal-startup-ui" id="startup-ui-${sessionId}" style="display: none;">
             <div class="startup-ui-simple">
               <div class="startup-buttons-inline">
                 <button class="startup-btn-inline" id="btn-fresh-${sessionId}" onclick="window.orchestrator.quickStartClaude('${sessionId}', 'fresh')">
@@ -1092,31 +1131,50 @@ class ClaudeOrchestrator {
   updateSessionStatus(sessionId, status) {
     // Convert 'waiting' to 'ready' for better UX (green instead of orange)
     const displayStatus = status === 'waiting' ? 'ready' : status;
-    
+
     const statusElement = document.getElementById(`status-${sessionId}`);
     if (statusElement) {
       statusElement.className = `status-indicator ${displayStatus}`;
       statusElement.title = displayStatus;
     }
-    
+
     // Update session data
     const session = this.sessions.get(sessionId);
     const previousStatus = session ? session.status : null;
     if (session) {
       session.status = status;
-      
+
       // Track that user has interacted if going from waiting to busy
       if (previousStatus === 'waiting' && status === 'busy') {
         session.hasUserInput = true;
       }
-      
+
       // Only mark as active when user actually interacts (waiting -> busy transition)
       // OR when status changes to busy (meaning user is actively working)
       if ((previousStatus === 'waiting' && status === 'busy') || status === 'busy') {
         this.sessionActivity.set(sessionId, 'active');
         this.buildSidebar(); // Refresh to update grey/active state
       }
-      
+
+      // Check if auto-start is enabled when status becomes waiting
+      if (status === 'waiting' && sessionId.includes('-claude') && this.userSettings) {
+        const effectiveSettings = this.getEffectiveSettings(sessionId);
+
+        if (effectiveSettings && effectiveSettings.autoStart && effectiveSettings.autoStart.enabled) {
+          // Hide the startup UI since auto-start will handle it
+          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+          if (startupUI) {
+            startupUI.style.display = 'none';
+          }
+        } else {
+          // Show the startup UI if auto-start is not enabled
+          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+          if (startupUI) {
+            startupUI.style.display = 'block';
+          }
+        }
+      }
+
       // Don't mark fresh "waiting" sessions as active - they're just showing welcome screen
     }
     
@@ -2314,36 +2372,39 @@ class ClaudeOrchestrator {
   
   async autoStartClaude(sessionId) {
     console.log(`Auto-starting Claude with user settings: ${sessionId}`);
-    
+
     if (!this.socket || !this.socket.connected) {
       this.showError('Not connected to server');
       return;
     }
-    
+
     try {
       // Get effective settings for this session
       const response = await fetch(`/api/user-settings/effective/${sessionId}`);
-      let effectiveSettings = { claudeFlags: { skipPermissions: false } };
-      
+      let effectiveSettings = {
+        claudeFlags: { skipPermissions: false },
+        autoStart: { mode: 'fresh' }
+      };
+
       if (response.ok) {
         effectiveSettings = await response.json();
       } else {
         console.warn('Could not load effective settings, using defaults');
       }
-      
+
       // Start Claude with effective settings
       const options = {
-        mode: 'fresh', // Default to fresh for auto-start
+        mode: effectiveSettings.autoStart?.mode || 'fresh',
         skipPermissions: effectiveSettings.claudeFlags.skipPermissions
       };
-      
+
       console.log('Auto-starting Claude with options:', options);
-      
+
       this.socket.emit('start-claude', {
         sessionId: sessionId,
         options: options
       });
-      
+
       // Hide the startup UI if it exists
       const startupUI = document.getElementById(`startup-ui-${sessionId}`);
       if (startupUI) {
@@ -2586,6 +2647,29 @@ class ClaudeOrchestrator {
     } catch (error) {
       console.error('Error clearing per-terminal setting:', error);
     }
+  }
+
+  getEffectiveSettings(sessionId) {
+    if (!this.userSettings) return null;
+
+    const global = this.userSettings.global || {};
+    const perTerminal = this.userSettings.perTerminal[sessionId] || {};
+
+    // Merge global and per-terminal settings
+    return {
+      claudeFlags: {
+        ...(global.claudeFlags || {}),
+        ...(perTerminal.claudeFlags || {})
+      },
+      autoStart: {
+        ...(global.autoStart || {}),
+        ...(perTerminal.autoStart || {})
+      },
+      terminal: {
+        ...(global.terminal || {}),
+        ...(perTerminal.terminal || {})
+      }
+    };
   }
 
   syncUserSettingsUI() {

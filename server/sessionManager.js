@@ -134,7 +134,7 @@ class SessionManager extends EventEmitter {
         Promise.resolve().then(() => {
           this.createSession(`${worktree.id}-claude`, {
             command: 'bash',
-            args: ['-c', `cd "${worktree.path}" && echo "Claude Terminal Ready" && echo "Starting Claude with your configured settings..." && exec bash`],
+            args: ['-c', `cd "${worktree.path}" && exec bash`],
             cwd: worktree.path,
             type: 'claude',
             worktreeId: worktree.id
