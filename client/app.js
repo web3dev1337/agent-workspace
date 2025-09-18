@@ -586,6 +586,13 @@ class ClaudeOrchestrator {
             console.log(`Auto-starting Claude ${sessionId} with mode: ${mode}, skip: ${skipPermissions}`);
             this.startClaudeWithOptions(sessionId, mode, skipPermissions);
           }, delay);
+        } else {
+          // Show the startup UI if auto-start is not enabled
+          console.log(`Auto-start disabled for ${sessionId}, showing UI`);
+          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+          if (startupUI) {
+            startupUI.style.display = 'block';
+          }
         }
       }
     }
@@ -1098,7 +1105,7 @@ class ClaudeOrchestrator {
       <div class="terminal-body">
         <div class="terminal" id="terminal-${sessionId}"></div>
         ${isClaudeSession ? `
-          <div class="terminal-startup-ui" id="startup-ui-${sessionId}" style="display: none;">
+          <div class="terminal-startup-ui" id="startup-ui-${sessionId}">
             <div class="startup-ui-simple">
               <div class="startup-buttons-inline">
                 <button class="startup-btn-inline" id="btn-fresh-${sessionId}" onclick="window.orchestrator.quickStartClaude('${sessionId}', 'fresh')">
