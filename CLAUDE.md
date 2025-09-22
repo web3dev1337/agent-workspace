@@ -182,92 +182,71 @@ SERVICES:     Modular service architecture with clear interfaces
 7. **Be careful with `pkill -f` commands** - avoid broad patterns that could kill WSL or Claude Code itself
 8. **node-pty segfaults**: Run `npm rebuild node-pty` if server crashes with segmentation fault
 
-## Development Instance Setup (IMPORTANT for Claude-based development)
+## Safe Development Setup (IMPORTANT - Read this!)
 
 ### Problem: Self-Modification Conflict
 When using Claude to update the Orchestrator, it can kill/restart the system running your Claude sessions, causing work loss.
 
-### Solution: Separate Development Instance
+### Solution: Two Simple Commands
 
-**Quick Setup (run these commands):**
+## 🎯 SIMPLE COMMANDS - USE THESE:
+
+### For YOUR WORK (Production):
 ```bash
-# Clone to dev directory
+cd ~/claude-orchestrator-temp
+npm run prod           # Runs on ports 3000/2080 (your normal setup)
+```
+
+### For CLAUDE TO MODIFY (Safe Dev):
+```bash
+cd ~/claude-orchestrator-dev
+npm run dev:safe       # Runs on ports 4000/2081 (isolated from production)
+```
+
+## One-Time Setup for Dev Instance:
+```bash
+# Clone to dev directory (only do this once)
 cd ~
 git clone https://github.com/web3dev1337/claude-orchestrator.git claude-orchestrator-dev
 
-# Configure dev ports
-cat > ~/claude-orchestrator-dev/.env << 'EOF'
+# Configure and install
+cd ~/claude-orchestrator-dev
+cat > .env << 'EOF'
 PORT=4000
 CLIENT_PORT=2081
-TAURI_DEV_PORT=1421
 WORKTREE_BASE_PATH=/home/ab
 WORKTREE_COUNT=8
 LOG_DIR=logs-dev
-LOG_LEVEL=info
 EOF
 
-# Install dependencies
-cd ~/claude-orchestrator-dev
 npm install
 npm rebuild node-pty
 
-# Update client dev server to use env ports
+# Update client to use environment ports
 sed -i 's/const PORT = 2080/const PORT = process.env.CLIENT_PORT || 2080/' client/dev-server.js
 sed -i 's/target: '\''http:\/\/localhost:3000'\''/target: `http:\/\/localhost:\${process.env.PORT || 3000}`/' client/dev-server.js
-
-# Create startup script
-cat > ~/claude-orchestrator-dev/run-dev.sh << 'EOF'
-#!/bin/bash
-echo "🚀 Starting Development Orchestrator Instance"
-echo "   Server: http://localhost:4000"
-echo "   Client: http://localhost:2081"
-echo ""
-echo "⚠️  This is the DEVELOPMENT instance - safe to modify!"
-echo ""
-
-# Load .env file and export all variables
-set -a
-source .env
-set +a
-
-# Kill any processes on our dev ports first
-lsof -ti :4000 | xargs -r kill -9 2>/dev/null
-lsof -ti :2081 | xargs -r kill -9 2>/dev/null
-
-npm run dev:all
-EOF
-
-chmod +x ~/claude-orchestrator-dev/run-dev.sh
 ```
 
-### Usage:
-```bash
-# Run development instance (ports 4000/2081)
-cd ~/claude-orchestrator-dev
-./run-dev.sh
+## Quick Reference:
 
-# Production remains on ports 3000/2080
-cd ~/claude-orchestrator-temp
-npm run dev:all
-```
+| Purpose | Command | Directory | Ports | Claude Can Modify? |
+|---------|---------|-----------|-------|-------------------|
+| **Your Work** | `npm run prod` | ~/claude-orchestrator-temp | 3000/2080 | ❌ NO |
+| **Claude Dev** | `npm run dev:safe` | ~/claude-orchestrator-dev | 4000/2081 | ✅ YES |
 
-### Port Mapping:
-| Instance | Directory | Server | Client | Safe to Modify? |
-|----------|-----------|--------|--------|-----------------|
-| Production | ~/claude-orchestrator-temp | 3000 | 2080 | ❌ No (while in use) |
-| Development | ~/claude-orchestrator-dev | 4000 | 2081 | ✅ Yes (always) |
+## For Your Team:
+- **Production**: Always use `npm run prod` for your actual work
+- **Development**: Use `npm run dev:safe` when Claude needs to modify the Orchestrator
+- Both can run simultaneously without conflicts
+- The commands are identical in both directories - the .env file controls which ports are used
 
-### Best Practices:
-1. **Never let Claude modify production** while it's running your sessions
-2. **Test on dev instance first** before deploying to production
-3. **Use different terminals** to distinguish prod vs dev
-4. **Schedule maintenance windows** for production updates
+## What These Commands Do:
+Both `npm run prod` and `npm run dev:safe` run the same three services:
+- **Server** (nodemon with hot-reload)
+- **Client** (dev server with proxy)
+- **Tauri** (native desktop app)
 
-### The `dev:all` Command:
-Runs three services concurrently:
-- **Server** (nodemon) - Backend with Socket.IO
-- **Client dev server** - Proxies requests to backend
-- **Tauri app** - Native desktop application
+The only difference is the ports they use!
 
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
