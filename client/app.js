@@ -313,7 +313,14 @@ class ClaudeOrchestrator {
         const item = e.target.closest('.worktree-item');
         if (item) {
           const worktreeId = item.dataset.worktreeId;
-          this.toggleWorktreeVisibility(worktreeId);
+
+          // Ctrl+Click or Cmd+Click = solo mode (show only this worktree)
+          if (e.ctrlKey || e.metaKey) {
+            this.showOnlyWorktree(worktreeId);
+          } else {
+            // Normal click = toggle visibility
+            this.toggleWorktreeVisibility(worktreeId);
+          }
         }
       });
     }
@@ -645,8 +652,10 @@ class ClaudeOrchestrator {
       const isVisible = this.visibleTerminals.has(claudeId) || this.visibleTerminals.has(serverId);
       
       const item = document.createElement('div');
-      item.className = `worktree-item ${!isActive ? 'inactive' : ''} ${!isVisible ? 'hidden-terminal' : ''}`;
+      // Only show visibility state, not activity state (activity filtering is handled separately)
+      item.className = `worktree-item ${!isVisible ? 'hidden-terminal' : ''}`;
       item.dataset.worktreeId = worktreeId;
+      item.title = 'Click to toggle • Ctrl+Click to show only this worktree';
       
       const branch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
       const worktreeNumber = worktreeId.replace('work', '');
@@ -756,27 +765,53 @@ class ClaudeOrchestrator {
     }
   }
   
+  showOnlyWorktree(worktreeId) {
+    console.log(`Showing only worktree: ${worktreeId}`);
+
+    // Clear all visible terminals first
+    this.visibleTerminals.clear();
+
+    // Add only this worktree's sessions
+    const claudeId = `${worktreeId}-claude`;
+    const serverId = `${worktreeId}-server`;
+
+    if (this.sessions.has(claudeId)) {
+      this.visibleTerminals.add(claudeId);
+    }
+    if (this.sessions.has(serverId)) {
+      this.visibleTerminals.add(serverId);
+    }
+
+    // Update the grid to show only these terminals
+    this.updateTerminalGrid();
+    this.buildSidebar();
+  }
+
   toggleWorktreeVisibility(worktreeId) {
     console.log(`Toggling visibility for worktree: ${worktreeId}`);
-    
+
     // Find Claude and server sessions for this worktree
     const claudeId = `${worktreeId}-claude`;
     const serverId = `${worktreeId}-server`;
     const sessions = [];
-    
+
     if (this.sessions.has(claudeId)) sessions.push(claudeId);
     if (this.sessions.has(serverId)) sessions.push(serverId);
-    
+
     if (sessions.length === 0) {
       console.warn(`No sessions found for worktree ${worktreeId}`);
       return;
     }
-    
+
     // Check if ANY session from this worktree is currently visible
     const anyVisible = sessions.some(id => this.visibleTerminals.has(id));
-    
+
+    // Log current state for debugging
+    const claudeSession = this.sessions.get(claudeId);
+    console.log(`Toggling ${worktreeId}: currently ${anyVisible ? 'visible' : 'hidden'}, Claude status: ${claudeSession?.status || 'unknown'}`);
+
     if (anyVisible) {
-      // Hide terminals - just hide DOM elements without re-rendering
+      // Hide terminals - allow hiding even if Claude is running (user wants to focus elsewhere)
       sessions.forEach(id => {
         this.visibleTerminals.delete(id);
         const wrapper = document.getElementById(`wrapper-${id}`);
@@ -784,25 +819,34 @@ class ClaudeOrchestrator {
           wrapper.style.display = 'none';
         }
       });
+      console.log(`Hidden worktree ${worktreeId}`);
     } else {
       // Show terminals - add back to visible set and display
       sessions.forEach(id => {
         this.visibleTerminals.add(id);
         const wrapper = document.getElementById(`wrapper-${id}`);
         if (wrapper) {
-          wrapper.style.display = 'block';
+          // Use flex display to match the CSS styling
+          wrapper.style.display = 'flex';
           // Fit terminal when showing
           setTimeout(() => {
             this.terminalManager.fitTerminal(id);
+            // Also refresh the terminal to ensure content is visible
+            const term = this.terminalManager.terminals.get(id);
+            if (term) {
+              term.refresh(0, term.rows - 1);
+            }
           }, 50);
         } else {
           // If wrapper doesn't exist, we need to do a full refresh
+          console.log(`Wrapper not found for ${id}, doing full refresh`);
           this.updateTerminalGrid();
           return;
         }
       });
+      console.log(`Shown worktree ${worktreeId}`);
     }
-    
+
     // Update sidebar to show visibility state
     this.buildSidebar();
   }
@@ -1073,7 +1117,7 @@ class ClaudeOrchestrator {
           <span class="terminal-branch ${(session.branch === 'master' || session.branch === 'main' || session.branch?.startsWith('master-') || session.branch?.startsWith('main-')) ? 'master-branch' : ''}">${session.branch || ''}</span>
         </div>
         <div class="terminal-controls">
-          <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
+          <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Show Only This Worktree">🔍</button>
           <button class="control-btn" onclick="window.orchestrator.openReplayViewer('${sessionId}')" title="Open Replay Viewer">📹</button>
           ${isClaudeSession ? `
             <button class="control-btn claude-start-btn" id="claude-start-btn-${sessionId}" disabled onclick="window.orchestrator.autoStartClaude('${sessionId}')" title="Start Claude with Settings">🚀</button>
@@ -1501,7 +1545,7 @@ class ClaudeOrchestrator {
       // Find the controls div and update it
       const controlsDiv = terminalWrapper.querySelector('.terminal-controls');
       if (controlsDiv && sessionId.includes('-claude')) {
-        const focusBtn = `<button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>`;
+        const focusBtn = `<button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Show Only This Worktree">🔍</button>`;
         const restartBtn = `<button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>`;
         const refreshBtn = `<button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>`;
         const reviewBtn = `<button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>`;
@@ -1553,7 +1597,7 @@ class ClaudeOrchestrator {
     
     // Update controls HTML
     controlsDiv.innerHTML = `
-      <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Focus Terminal">🔍</button>
+      <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Show Only This Worktree">🔍</button>
       ${isRunning ? 
         `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹` :
         `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
@@ -2154,22 +2198,37 @@ class ClaudeOrchestrator {
     return localStorage.getItem('claude-orchestrator-token');
   }
   
-  // Terminal Focus Feature
+  // Terminal Focus Feature - Now shows only that worktree
   focusTerminal(sessionId) {
+    // Extract worktree ID from session ID
+    const worktreeId = sessionId.split('-')[0];
+
+    // Show only this worktree (hides all others)
+    this.showOnlyWorktree(worktreeId);
+
+    // Optional: scroll to the terminal if needed
+    const terminalWrapper = document.getElementById(`wrapper-${sessionId}`);
+    if (terminalWrapper) {
+      terminalWrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    return; // Skip the old overlay logic
+
+    // OLD OVERLAY LOGIC BELOW (keeping for reference, will be removed)
     try {
-      const terminalWrapper = document.getElementById(`wrapper-${sessionId}`);
-      if (!terminalWrapper) {
+      const terminalWrapperOld = document.getElementById(`wrapper-${sessionId}`);
+      if (!terminalWrapperOld) {
         console.error(`Terminal wrapper not found for ${sessionId}`);
         return;
       }
-      
+
       // Get session info
       const session = this.sessions.get(sessionId);
       if (!session) {
         console.error(`Session not found for ${sessionId}`);
         return;
       }
-      
+
       // Get the xterm instance from terminalManager
       const xtermInstance = this.terminalManager?.terminals?.get(sessionId);
       if (!xtermInstance) {
