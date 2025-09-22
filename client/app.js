@@ -824,40 +824,19 @@ class ClaudeOrchestrator {
       // Hide terminals - allow hiding even if Claude is running (user wants to focus elsewhere)
       sessions.forEach(id => {
         this.visibleTerminals.delete(id);
-        const wrapper = document.getElementById(`wrapper-${id}`);
-        if (wrapper) {
-          wrapper.style.display = 'none';
-        }
       });
       console.log(`Hidden worktree ${worktreeId}`);
     } else {
-      // Show terminals - add back to visible set and display
+      // Show terminals - add back to visible set
       sessions.forEach(id => {
         this.visibleTerminals.add(id);
-        const wrapper = document.getElementById(`wrapper-${id}`);
-        if (wrapper) {
-          // Use flex display to match the CSS styling
-          wrapper.style.display = 'flex';
-          // Fit terminal when showing
-          setTimeout(() => {
-            this.terminalManager.fitTerminal(id);
-            // Also refresh the terminal to ensure content is visible
-            const term = this.terminalManager.terminals.get(id);
-            if (term) {
-              term.refresh(0, term.rows - 1);
-            }
-          }, 50);
-        } else {
-          // If wrapper doesn't exist, we need to do a full refresh
-          console.log(`Wrapper not found for ${id}, doing full refresh`);
-          this.updateTerminalGrid();
-          return;
-        }
       });
       console.log(`Shown worktree ${worktreeId}`);
     }
 
-    // Update sidebar to show visibility state
+    // IMPORTANT: Must update the entire grid to recalculate layout
+    // This will re-render with correct data-visible-count and apply proper CSS grid
+    this.updateTerminalGrid();
     this.buildSidebar();
   }
   

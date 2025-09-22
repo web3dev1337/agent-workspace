@@ -760,7 +760,7 @@ header h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 100;  /* Increased to ensure it's always on top */
   border-radius: var(--radius-md);
 }
 
