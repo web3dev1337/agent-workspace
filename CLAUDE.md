@@ -180,6 +180,73 @@ SERVICES:     Modular service architecture with clear interfaces
 5. Git operations should be async and error-handled
 6. Logs should use Winston logger, not console.log
 7. **Be careful with `pkill -f` commands** - avoid broad patterns that could kill WSL or Claude Code itself
+8. **node-pty segfaults**: Run `npm rebuild node-pty` if server crashes with segmentation fault
+
+## Safe Development Setup (IMPORTANT - Read this!)
+
+### Problem: Self-Modification Conflict
+When using Claude to update the Orchestrator, it can kill/restart the system running your Claude sessions, causing work loss.
+
+### Solution: Two Simple Commands
+
+## 🎯 SIMPLE COMMANDS - USE THESE:
+
+### For YOUR WORK (Production):
+```bash
+cd ~/claude-orchestrator-temp
+npm run prod           # Runs on ports 3000/2080 (your normal setup)
+```
+
+### For CLAUDE TO MODIFY (Safe Dev):
+```bash
+cd ~/claude-orchestrator-dev
+npm run dev:safe       # Runs on ports 4000/2081 (isolated from production)
+```
+
+## One-Time Setup for Dev Instance:
+```bash
+# Clone to dev directory (only do this once)
+cd ~
+git clone https://github.com/web3dev1337/claude-orchestrator.git claude-orchestrator-dev
+
+# Configure and install
+cd ~/claude-orchestrator-dev
+cat > .env << 'EOF'
+PORT=4000
+CLIENT_PORT=2081
+WORKTREE_BASE_PATH=/home/ab
+WORKTREE_COUNT=8
+LOG_DIR=logs-dev
+EOF
+
+npm install
+npm rebuild node-pty
+
+# Update client to use environment ports
+sed -i 's/const PORT = 2080/const PORT = process.env.CLIENT_PORT || 2080/' client/dev-server.js
+sed -i 's/target: '\''http:\/\/localhost:3000'\''/target: `http:\/\/localhost:\${process.env.PORT || 3000}`/' client/dev-server.js
+```
+
+## Quick Reference:
+
+| Purpose | Command | Directory | Ports | Claude Can Modify? |
+|---------|---------|-----------|-------|-------------------|
+| **Your Work** | `npm run prod` | ~/claude-orchestrator-temp | 3000/2080 | ❌ NO |
+| **Claude Dev** | `npm run dev:safe` | ~/claude-orchestrator-dev | 4000/2081 | ✅ YES |
+
+## For Your Team:
+- **Production**: Always use `npm run prod` for your actual work
+- **Development**: Use `npm run dev:safe` when Claude needs to modify the Orchestrator
+- Both can run simultaneously without conflicts
+- The commands are identical in both directories - the .env file controls which ports are used
+
+## What These Commands Do:
+Both `npm run prod` and `npm run dev:safe` run the same three services:
+- **Server** (nodemon with hot-reload)
+- **Client** (dev server with proxy)
+- **Tauri** (native desktop app)
+
+The only difference is the ports they use!
 
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
