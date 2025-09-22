@@ -1174,10 +1174,13 @@ class ClaudeOrchestrator {
             startupUI.style.display = 'none';
           }
         } else {
-          // Show the startup UI if auto-start is not enabled
-          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-          if (startupUI) {
-            startupUI.style.display = 'block';
+          // Only show the startup UI if auto-start is not enabled AND Claude is not already running
+          // Check if this is the first time (not a status change from busy->waiting)
+          if (previousStatus === 'idle' || !previousStatus) {
+            const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+            if (startupUI) {
+              startupUI.style.display = 'block';
+            }
           }
         }
       }
@@ -1640,18 +1643,26 @@ class ClaudeOrchestrator {
   handleSessionRestart(sessionId) {
     console.log(`Session ${sessionId} restarted`);
     // Terminal will automatically reconnect and show new content
-    
-    // If it's a Claude session that restarted, show the startup UI
+
+    // If it's a Claude session that restarted, only show the startup UI if Claude is not running
     if (sessionId.includes('-claude')) {
-      const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-      if (startupUI) {
-        startupUI.style.display = 'block';
-      }
-      
-      // Enable the start button in menu strip
-      const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
-      if (startBtn) {
-        startBtn.disabled = false;
+      const session = this.sessions.get(sessionId);
+      const isClaudeRunning = session && session.status !== 'idle';
+
+      // Only show startup UI if Claude is NOT running
+      if (!isClaudeRunning) {
+        const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+        if (startupUI) {
+          startupUI.style.display = 'block';
+        }
+
+        // Enable the start button in menu strip
+        const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
+        if (startBtn) {
+          startBtn.disabled = false;
+        }
+      } else {
+        console.log(`Claude is running in ${sessionId}, not showing startup UI`);
       }
     }
   }
