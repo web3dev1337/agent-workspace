@@ -301,29 +301,43 @@ header h1 {
   grid-template-rows: repeat(3, 1fr);
 }
 
-/* 5 pairs (10 terminals): 4 columns to avoid being too tall */
+/* 5 pairs (10 terminals): 4x2 grid with last pair spanning bottom */
 .terminal-grid[data-visible-count="10"] {
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(3, 1fr);
 }
+/* Make last 2 terminals span the bottom row */
+.terminal-grid[data-visible-count="10"] > :nth-child(9) {
+  grid-column: 1 / span 2;
+}
+.terminal-grid[data-visible-count="10"] > :nth-child(10) {
+  grid-column: 3 / span 2;
+}
 
-/* 11 terminals */
+/* 11 terminals - odd case */
 .terminal-grid[data-visible-count="11"] {
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(3, 1fr);
 }
 
-/* 6 pairs (12 terminals) */
+/* 6 pairs (12 terminals): 4 columns x 3 rows works perfectly */
 .terminal-grid[data-visible-count="12"] {
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(3, 1fr);
 }
 
-/* 7 pairs (14 terminals) */
+/* 7 pairs (14 terminals): 4x4 grid with last pair spanning bottom */
 .terminal-grid[data-visible-count="13"],
 .terminal-grid[data-visible-count="14"] {
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(4, 1fr);
+}
+/* Make last 2 terminals span the bottom row */
+.terminal-grid[data-visible-count="14"] > :nth-child(13) {
+  grid-column: 1 / span 2;
+}
+.terminal-grid[data-visible-count="14"] > :nth-child(14) {
+  grid-column: 3 / span 2;
 }
 
 /* 8 pairs (16 terminals) */
