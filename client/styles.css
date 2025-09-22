@@ -245,50 +245,88 @@ header h1 {
   contain: layout size;
 }
 
-/* Dynamic layouts for different terminal counts */
+/* Dynamic layouts for different terminal counts - Pair-aware (Claude + Server) */
+
+/* Single terminal (shouldn't happen often) */
 .terminal-grid[data-visible-count="1"] {
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
 }
 
+/* 1 pair (2 terminals): Side by side */
 .terminal-grid[data-visible-count="2"] {
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: 1fr;
 }
 
+/* Odd terminal (3) - probably 1 pair + 1 solo */
 .terminal-grid[data-visible-count="3"] {
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: 1fr;
 }
 
+/* 2 pairs (4 terminals): 2x2 grid */
 .terminal-grid[data-visible-count="4"] {
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: repeat(2, 1fr);
 }
 
-.terminal-grid[data-visible-count="5"],
-.terminal-grid[data-visible-count="6"] {
+/* 5 terminals - 2 pairs + 1 solo */
+.terminal-grid[data-visible-count="5"] {
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(2, 1fr);
 }
 
-.terminal-grid[data-visible-count="7"],
-.terminal-grid[data-visible-count="8"],
+/* 3 pairs (6 terminals): Stack 3 pairs vertically */
+.terminal-grid[data-visible-count="6"] {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+/* 7 terminals - 3 pairs + 1 solo */
+.terminal-grid[data-visible-count="7"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+/* 4 pairs (8 terminals): Stack 4 pairs vertically */
+.terminal-grid[data-visible-count="8"] {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+}
+
+/* 9 terminals */
 .terminal-grid[data-visible-count="9"] {
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
 }
 
-.terminal-grid[data-visible-count="10"],
-.terminal-grid[data-visible-count="11"],
+/* 5 pairs (10 terminals): 4 columns to avoid being too tall */
+.terminal-grid[data-visible-count="10"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+/* 11 terminals */
+.terminal-grid[data-visible-count="11"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+/* 6 pairs (12 terminals) */
 .terminal-grid[data-visible-count="12"] {
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(3, 1fr);
 }
 
-/* For more than 12, use 4x4 */
+/* 7 pairs (14 terminals) */
 .terminal-grid[data-visible-count="13"],
-.terminal-grid[data-visible-count="14"],
+.terminal-grid[data-visible-count="14"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+}
+
+/* 8 pairs (16 terminals) */
 .terminal-grid[data-visible-count="15"],
 .terminal-grid[data-visible-count="16"] {
   grid-template-columns: repeat(4, 1fr);
