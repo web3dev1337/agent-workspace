@@ -795,10 +795,16 @@ class ClaudeOrchestrator {
         this.visibleTerminals.add(id);
         const wrapper = document.getElementById(`wrapper-${id}`);
         if (wrapper) {
-          wrapper.style.display = 'block';
+          // Use flex display to match the CSS styling
+          wrapper.style.display = 'flex';
           // Fit terminal when showing
           setTimeout(() => {
             this.terminalManager.fitTerminal(id);
+            // Also refresh the terminal to ensure content is visible
+            const term = this.terminalManager.terminals.get(id);
+            if (term) {
+              term.refresh(0, term.rows - 1);
+            }
           }, 50);
         } else {
           // If wrapper doesn't exist, we need to do a full refresh
