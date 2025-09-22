@@ -645,7 +645,8 @@ class ClaudeOrchestrator {
       const isVisible = this.visibleTerminals.has(claudeId) || this.visibleTerminals.has(serverId);
       
       const item = document.createElement('div');
-      item.className = `worktree-item ${!isActive ? 'inactive' : ''} ${!isVisible ? 'hidden-terminal' : ''}`;
+      // Only show visibility state, not activity state (activity filtering is handled separately)
+      item.className = `worktree-item ${!isVisible ? 'hidden-terminal' : ''}`;
       item.dataset.worktreeId = worktreeId;
       
       const branch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
