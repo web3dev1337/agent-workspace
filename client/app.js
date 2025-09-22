@@ -758,25 +758,29 @@ class ClaudeOrchestrator {
   
   toggleWorktreeVisibility(worktreeId) {
     console.log(`Toggling visibility for worktree: ${worktreeId}`);
-    
+
     // Find Claude and server sessions for this worktree
     const claudeId = `${worktreeId}-claude`;
     const serverId = `${worktreeId}-server`;
     const sessions = [];
-    
+
     if (this.sessions.has(claudeId)) sessions.push(claudeId);
     if (this.sessions.has(serverId)) sessions.push(serverId);
-    
+
     if (sessions.length === 0) {
       console.warn(`No sessions found for worktree ${worktreeId}`);
       return;
     }
-    
+
     // Check if ANY session from this worktree is currently visible
     const anyVisible = sessions.some(id => this.visibleTerminals.has(id));
-    
+
+    // Log current state for debugging
+    const claudeSession = this.sessions.get(claudeId);
+    console.log(`Toggling ${worktreeId}: currently ${anyVisible ? 'visible' : 'hidden'}, Claude status: ${claudeSession?.status || 'unknown'}`);
+
     if (anyVisible) {
-      // Hide terminals - just hide DOM elements without re-rendering
+      // Hide terminals - allow hiding even if Claude is running (user wants to focus elsewhere)
       sessions.forEach(id => {
         this.visibleTerminals.delete(id);
         const wrapper = document.getElementById(`wrapper-${id}`);
@@ -784,6 +788,7 @@ class ClaudeOrchestrator {
           wrapper.style.display = 'none';
         }
       });
+      console.log(`Hidden worktree ${worktreeId}`);
     } else {
       // Show terminals - add back to visible set and display
       sessions.forEach(id => {
@@ -797,12 +802,14 @@ class ClaudeOrchestrator {
           }, 50);
         } else {
           // If wrapper doesn't exist, we need to do a full refresh
+          console.log(`Wrapper not found for ${id}, doing full refresh`);
           this.updateTerminalGrid();
           return;
         }
       });
+      console.log(`Shown worktree ${worktreeId}`);
     }
-    
+
     // Update sidebar to show visibility state
     this.buildSidebar();
   }
