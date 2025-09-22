@@ -40,13 +40,8 @@
             <div class="header-content">
                 <h1>Claude Orchestrator</h1>
                 <div class="view-controls">
-                    <select id="grid-layout" class="layout-select">
-                        <option value="2x4">2×4 Grid</option>
-                        <option value="1x2">1×2 Side by Side</option>
-                        <option value="2x2">2×2 Grid</option>
-                        <option value="3x3">3×3 Grid</option>
-                        <option value="custom">Custom</option>
-                    </select>
+                    <!-- Dynamic grid layout - automatically adjusts based on visible terminals -->
+                    <span class="layout-info" id="layout-info">Dynamic Layout</span>
                 </div>
             </div>
             <div class="header-actions">

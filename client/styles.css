@@ -238,25 +238,71 @@ header h1 {
   overflow: hidden;
   display: grid;
   gap: var(--space-md);
+  /* Dynamic grid - automatically adjusts based on visible terminals */
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(2, minmax(0, 1fr));
   height: calc(100vh - var(--header-height) - 2 * var(--space-md));
   contain: layout size;
 }
 
-.terminal-grid.layout-1x2 {
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+/* Dynamic layouts for different terminal counts */
+.terminal-grid[data-visible-count="1"] {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
 }
 
-.terminal-grid.layout-2x2 {
+.terminal-grid[data-visible-count="2"] {
   grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-template-rows: 1fr;
 }
 
-.terminal-grid.layout-3x3 {
+.terminal-grid[data-visible-count="3"] {
   grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, minmax(0, 1fr));
+  grid-template-rows: 1fr;
+}
+
+.terminal-grid[data-visible-count="4"] {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.terminal-grid[data-visible-count="5"],
+.terminal-grid[data-visible-count="6"] {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.terminal-grid[data-visible-count="7"],
+.terminal-grid[data-visible-count="8"],
+.terminal-grid[data-visible-count="9"] {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+.terminal-grid[data-visible-count="10"],
+.terminal-grid[data-visible-count="11"],
+.terminal-grid[data-visible-count="12"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+/* For more than 12, use 4x4 */
+.terminal-grid[data-visible-count="13"],
+.terminal-grid[data-visible-count="14"],
+.terminal-grid[data-visible-count="15"],
+.terminal-grid[data-visible-count="16"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+}
+
+/* Layout info display */
+.layout-info {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
 }
 
 /* Terminal Container */
