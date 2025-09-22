@@ -1191,10 +1191,34 @@ class ClaudeOrchestrator {
     // Update quick actions for Claude sessions
     if (sessionId.includes('claude')) {
       this.updateQuickActions(sessionId, status);
-      
+
+      // Clear any pending notification timer if Claude goes busy again
+      if (status === 'busy' && this.notificationTimers && this.notificationTimers[sessionId]) {
+        clearTimeout(this.notificationTimers[sessionId]);
+        delete this.notificationTimers[sessionId];
+      }
+
       // Show notification when Claude becomes ready AFTER user input
+      // But NOT during intermediate todo steps - wait for a longer idle period
       if (previousStatus === 'busy' && status === 'waiting' && session && session.hasUserInput) {
-        this.showClaudeReadyNotification(sessionId);
+        // Set a timer to check if Claude stays in waiting state (not just intermediate)
+        if (this.notificationTimers && this.notificationTimers[sessionId]) {
+          clearTimeout(this.notificationTimers[sessionId]);
+        }
+
+        if (!this.notificationTimers) {
+          this.notificationTimers = {};
+        }
+
+        // Only show notification if Claude stays in waiting state for 3+ seconds
+        // This filters out intermediate todo steps which quickly go back to busy
+        this.notificationTimers[sessionId] = setTimeout(() => {
+          const currentSession = this.sessions.get(sessionId);
+          if (currentSession && currentSession.status === 'waiting') {
+            console.log(`Showing ready notification for ${sessionId} after stable waiting state`);
+            this.showClaudeReadyNotification(sessionId);
+          }
+        }, 3000);
       }
     }
     
@@ -1748,9 +1772,10 @@ class ClaudeOrchestrator {
     // Rate limiting: don't show notification if we showed one recently
     const now = Date.now();
     if (!this.lastNotificationTime) this.lastNotificationTime = {};
-    
-    if (this.lastNotificationTime[sessionId] && (now - this.lastNotificationTime[sessionId]) < 5000) {
-      console.log(`Rate limiting notification for ${sessionId}`);
+
+    // Increased rate limit to 30 seconds to avoid spam during todo lists
+    if (this.lastNotificationTime[sessionId] && (now - this.lastNotificationTime[sessionId]) < 30000) {
+      console.log(`Rate limiting notification for ${sessionId} (shown ${Math.round((now - this.lastNotificationTime[sessionId]) / 1000)}s ago)`);
       return;
     }
     this.lastNotificationTime[sessionId] = now;
