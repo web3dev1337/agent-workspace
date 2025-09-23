@@ -15,6 +15,7 @@ class ClaudeOrchestrator {
     this.githubLinks = new Map(); // Track GitHub PR/branch links per session
     this.sessionActivity = new Map(); // Track which sessions have been used
     this.showActiveOnly = false; // Filter toggle
+    this.serverLaunchSettings = this.loadServerLaunchSettings(); // Server launch flags
     
     this.init();
   }
@@ -1106,13 +1107,17 @@ class ClaudeOrchestrator {
             ${this.getGitHubButtons(sessionId)}
           ` : ''}
           ${isServerSession ? `
-            ${this.serverStatuses.get(sessionId) === 'running' ? 
+            ${this.serverStatuses.get(sessionId) === 'running' ?
               `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
-              `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
-                <option value="" selected>▶</option>
-                <option value="development">Dev</option>
-                <option value="production">Prod</option>
-              </select>`
+              `<div class="server-launch-group">
+                <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
+                  <option value="" selected>▶</option>
+                  <option value="development">Dev</option>
+                  <option value="production">Prod</option>
+                  <option value="custom">Custom...</option>
+                </select>
+                <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
+              </div>`
             }
             ${this.serverStatuses.get(sessionId) === 'running' ? `
               <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
@@ -1321,7 +1326,7 @@ class ClaudeOrchestrator {
   // Server control methods
   toggleServer(sessionId, environment = 'development') {
     const status = this.serverStatuses.get(sessionId);
-    
+
     if (status === 'running') {
       // Stop server
       this.socket.emit('server-control', { sessionId, action: 'stop' });
@@ -1329,8 +1334,18 @@ class ClaudeOrchestrator {
       this.serverPorts.delete(sessionId);
       this.updateSidebarStatus(sessionId, 'idle');
     } else {
-      // Start server with environment
-      this.socket.emit('server-control', { sessionId, action: 'start', environment });
+      // Get launch settings for this session
+      const launchSettings = environment === 'custom' ?
+        this.getEffectiveLaunchSettings(sessionId) :
+        {}; // Use defaults for dev/prod
+
+      // Start server with environment and settings
+      this.socket.emit('server-control', {
+        sessionId,
+        action: 'start',
+        environment: environment === 'custom' ? 'development' : environment,
+        launchSettings
+      });
     }
   }
   
@@ -1879,12 +1894,186 @@ class ClaudeOrchestrator {
       autoScroll: true,
       theme: 'dark'
     };
-    
+
     if (stored) {
       return { ...defaults, ...JSON.parse(stored) };
     }
-    
+
     return defaults;
+  }
+
+  loadServerLaunchSettings() {
+    const stored = localStorage.getItem('server-launch-settings');
+    const defaults = {
+      global: {
+        envVars: '',
+        nodeOptions: '',
+        gameArgs: ''
+      },
+      perWorktree: {}
+    };
+
+    if (stored) {
+      return { ...defaults, ...JSON.parse(stored) };
+    }
+
+    return defaults;
+  }
+
+  saveServerLaunchSettings() {
+    localStorage.setItem('server-launch-settings', JSON.stringify(this.serverLaunchSettings));
+  }
+
+  getEffectiveLaunchSettings(sessionId) {
+    const worktreeId = sessionId.split('-')[0];
+    const worktreeSettings = this.serverLaunchSettings.perWorktree[worktreeId] || {};
+
+    return {
+      envVars: worktreeSettings.envVars || this.serverLaunchSettings.global.envVars || '',
+      nodeOptions: worktreeSettings.nodeOptions || this.serverLaunchSettings.global.nodeOptions || '',
+      gameArgs: worktreeSettings.gameArgs || this.serverLaunchSettings.global.gameArgs || ''
+    };
+  }
+
+  showServerLaunchSettings(sessionId) {
+    const worktreeId = sessionId.split('-')[0];
+    const worktreeSettings = this.serverLaunchSettings.perWorktree[worktreeId] || {};
+    const globalSettings = this.serverLaunchSettings.global;
+
+    // Create modal HTML
+    const modalHtml = `
+      <div id="launch-settings-modal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2>Server Launch Settings - ${worktreeId}</h2>
+            <button class="close-btn" onclick="window.orchestrator.closeLaunchSettingsModal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="settings-section">
+              <h3>Global Defaults (apply to all worktrees)</h3>
+              <div class="setting-group">
+                <label>Environment Variables:</label>
+                <input type="text" id="global-env-vars" placeholder="e.g., AUTO_START_WITH_BOTS=true DEBUG=*"
+                       value="${globalSettings.envVars || ''}" />
+                <small>Space-separated VAR=value pairs</small>
+              </div>
+              <div class="setting-group">
+                <label>Node Options:</label>
+                <input type="text" id="global-node-options" placeholder="e.g., --max-old-space-size=4096"
+                       value="${globalSettings.nodeOptions || ''}" />
+              </div>
+              <div class="setting-group">
+                <label>Game Arguments:</label>
+                <input type="text" id="global-game-args" placeholder="e.g., --warmup=3 --buytime=10"
+                       value="${globalSettings.gameArgs || ''}" />
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <h3>${worktreeId} Specific Settings (overrides global)</h3>
+              <div class="setting-group">
+                <label>Environment Variables:</label>
+                <input type="text" id="worktree-env-vars" placeholder="Leave empty to use global"
+                       value="${worktreeSettings.envVars || ''}" />
+              </div>
+              <div class="setting-group">
+                <label>Node Options:</label>
+                <input type="text" id="worktree-node-options" placeholder="Leave empty to use global"
+                       value="${worktreeSettings.nodeOptions || ''}" />
+              </div>
+              <div class="setting-group">
+                <label>Game Arguments:</label>
+                <input type="text" id="worktree-game-args" placeholder="Leave empty to use global"
+                       value="${worktreeSettings.gameArgs || ''}" />
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <h3>Quick Presets</h3>
+              <div class="preset-buttons">
+                <button class="preset-btn" onclick="window.orchestrator.applyLaunchPreset('bots-only')">
+                  🤖 Bots Only Mode
+                </button>
+                <button class="preset-btn" onclick="window.orchestrator.applyLaunchPreset('fast-rounds')">
+                  ⚡ Fast Rounds
+                </button>
+                <button class="preset-btn" onclick="window.orchestrator.applyLaunchPreset('debug')">
+                  🐛 Debug Mode
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-save" onclick="window.orchestrator.saveLaunchSettings('${sessionId}')">Save Settings</button>
+            <button class="btn-cancel" onclick="window.orchestrator.closeLaunchSettingsModal()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Add modal to page
+    const existingModal = document.getElementById('launch-settings-modal');
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  }
+
+  closeLaunchSettingsModal() {
+    const modal = document.getElementById('launch-settings-modal');
+    if (modal) {
+      modal.remove();
+    }
+  }
+
+  saveLaunchSettings(sessionId) {
+    const worktreeId = sessionId.split('-')[0];
+
+    // Save global settings
+    this.serverLaunchSettings.global = {
+      envVars: document.getElementById('global-env-vars').value,
+      nodeOptions: document.getElementById('global-node-options').value,
+      gameArgs: document.getElementById('global-game-args').value
+    };
+
+    // Save worktree-specific settings
+    const worktreeEnv = document.getElementById('worktree-env-vars').value;
+    const worktreeNode = document.getElementById('worktree-node-options').value;
+    const worktreeArgs = document.getElementById('worktree-game-args').value;
+
+    if (worktreeEnv || worktreeNode || worktreeArgs) {
+      this.serverLaunchSettings.perWorktree[worktreeId] = {
+        envVars: worktreeEnv,
+        nodeOptions: worktreeNode,
+        gameArgs: worktreeArgs
+      };
+    } else {
+      delete this.serverLaunchSettings.perWorktree[worktreeId];
+    }
+
+    this.saveServerLaunchSettings();
+    this.closeLaunchSettingsModal();
+
+    // Show feedback
+    this.showNotification('Launch settings saved', 'success');
+  }
+
+  applyLaunchPreset(preset) {
+    const globalEnvInput = document.getElementById('global-env-vars');
+    const globalArgsInput = document.getElementById('global-game-args');
+
+    switch(preset) {
+      case 'bots-only':
+        globalEnvInput.value = 'AUTO_START_WITH_BOTS=true';
+        break;
+      case 'fast-rounds':
+        globalArgsInput.value = '--warmup=3 --buytime=10 --roundtime=60';
+        break;
+      case 'debug':
+        globalEnvInput.value = 'DEBUG=* NODE_ENV=development';
+        break;
+    }
   }
   
   saveSettings() {

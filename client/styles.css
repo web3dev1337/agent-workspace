@@ -1049,6 +1049,181 @@ header h1 {
   100% { transform: rotate(360deg); }
 }
 
+/* Server Launch Settings */
+.server-launch-group {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+#launch-settings-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+#launch-settings-modal .modal-content {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  max-width: 800px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+#launch-settings-modal .modal-header {
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#launch-settings-modal .modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+#launch-settings-modal .close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+}
+
+#launch-settings-modal .close-btn:hover {
+  background: var(--bg-secondary);
+}
+
+#launch-settings-modal .modal-body {
+  padding: var(--space-lg);
+}
+
+#launch-settings-modal .settings-section {
+  margin-bottom: var(--space-xl);
+}
+
+#launch-settings-modal .settings-section:last-child {
+  margin-bottom: 0;
+}
+
+#launch-settings-modal .settings-section h3 {
+  color: var(--accent-primary);
+  font-size: 1.1rem;
+  margin-bottom: var(--space-md);
+}
+
+#launch-settings-modal .setting-group {
+  margin-bottom: var(--space-md);
+}
+
+#launch-settings-modal .setting-group label {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: var(--space-xs);
+}
+
+#launch-settings-modal .setting-group input {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: monospace;
+}
+
+#launch-settings-modal .setting-group input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+#launch-settings-modal .setting-group small {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: 0.8rem;
+  margin-top: var(--space-xs);
+}
+
+#launch-settings-modal .preset-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-md);
+}
+
+#launch-settings-modal .preset-btn {
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+#launch-settings-modal .preset-btn:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+}
+
+#launch-settings-modal .modal-footer {
+  padding: var(--space-lg);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+}
+
+#launch-settings-modal .btn-save,
+#launch-settings-modal .btn-cancel {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+#launch-settings-modal .btn-save {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+}
+
+#launch-settings-modal .btn-save:hover {
+  background: var(--accent-secondary);
+}
+
+#launch-settings-modal .btn-cancel {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+#launch-settings-modal .btn-cancel:hover {
+  background: var(--bg-tertiary);
+}
+
 .loading-spinner {
   display: inline-block;
   width: 14px;
