@@ -1110,11 +1110,11 @@ class ClaudeOrchestrator {
             ${this.serverStatuses.get(sessionId) === 'running' ?
               `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
               `<div class="server-launch-group">
-                <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
-                  <option value="" selected>▶</option>
+                <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+                  <option value="">▶</option>
                   <option value="development">Dev</option>
                   <option value="production">Prod</option>
-                  <option value="custom">Custom...</option>
+                  <option value="custom" selected>Custom...</option>
                 </select>
                 <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
               </div>`
@@ -1620,10 +1620,11 @@ class ClaudeOrchestrator {
       <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Show Only This Worktree">🔍</button>
       ${isRunning ? 
         `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹` :
-        `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
-          <option value="" selected>▶</option>
+        `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+          <option value="">▶</option>
           <option value="development">Dev</option>
           <option value="production">Prod</option>
+          <option value="custom" selected>Custom...</option>
         </select>`
       }
       </button>
@@ -1906,9 +1907,9 @@ class ClaudeOrchestrator {
     const stored = localStorage.getItem('server-launch-settings');
     const defaults = {
       global: {
-        envVars: '',
-        nodeOptions: '',
-        gameArgs: ''
+        envVars: 'AUTO_START_WITH_BOTS=true NODE_ENV=development',
+        nodeOptions: '--max-old-space-size=4096',
+        gameArgs: '--mode=casual --roundtime=60 --buytime=10 --warmup=5 --maxrounds=13 --teamsize=5'
       },
       perWorktree: {}
     };
@@ -1966,6 +1967,36 @@ class ClaudeOrchestrator {
                 <label>Game Arguments:</label>
                 <input type="text" id="global-game-args" placeholder="e.g., --warmup=3 --buytime=10"
                        value="${globalSettings.gameArgs || ''}" />
+                <details class="game-args-help">
+                  <summary>📖 Available Game Flags (click to expand)</summary>
+                  <div class="help-content">
+                    <strong>Game Mode:</strong><br>
+                    <code>--mode=competitive</code> or <code>--mode=casual</code> - Set game mode<br><br>
+
+                    <strong>Timing (in seconds):</strong><br>
+                    <code>--roundtime=90</code> - Round duration (default: 90 competitive, 135 casual)<br>
+                    <code>--buytime=20</code> - Buy phase duration<br>
+                    <code>--warmup=60</code> - Warmup phase duration<br>
+                    <code>--bombtimer=40</code> - Bomb timer duration<br>
+                    <code>--preroundtime=3</code> - Countdown before buy phase<br>
+                    <code>--roundendtime=5</code> - Time between rounds<br><br>
+
+                    <strong>Team Settings:</strong><br>
+                    <code>--teamsize=16</code> - Max players per team<br>
+                    <code>--minplayers=2</code> - Min players to start<br>
+                    <code>--strictteams=true</code> - Enforce team limits<br>
+                    <code>--friendlyfire=true</code> - Enable friendly fire<br>
+                    <code>--spectators=true</code> - Allow spectators<br><br>
+
+                    <strong>Match Settings:</strong><br>
+                    <code>--maxrounds=30</code> - Maximum rounds to play<br>
+                    <code>--overtime=true</code> - Enable overtime<br>
+                    <code>--halftime=15</code> - Switch sides after X rounds<br><br>
+
+                    <strong>Example:</strong><br>
+                    <code>--mode=casual --roundtime=60 --buytime=10 --warmup=5 --teamsize=8</code>
+                  </div>
+                </details>
               </div>
             </div>
 
@@ -2007,6 +2038,14 @@ class ClaudeOrchestrator {
                   <input type="checkbox" id="preset-memory" onchange="window.orchestrator.updatePresetsFromCheckboxes()">
                   <span>💾 Extra Memory</span>
                 </label>
+                <label class="preset-checkbox">
+                  <input type="checkbox" id="preset-dev" onchange="window.orchestrator.updatePresetsFromCheckboxes()">
+                  <span>🔧 Development Mode</span>
+                </label>
+                <label class="preset-checkbox">
+                  <input type="checkbox" id="preset-quick" onchange="window.orchestrator.updatePresetsFromCheckboxes()">
+                  <span>⚡ Quick Test (2 rounds)</span>
+                </label>
               </div>
             </div>
           </div>
@@ -2040,6 +2079,8 @@ class ClaudeOrchestrator {
     document.getElementById('preset-fast').checked = globalArgs.includes('--warmup=3') && globalArgs.includes('--buytime=10');
     document.getElementById('preset-debug').checked = globalEnv.includes('DEBUG=*');
     document.getElementById('preset-memory').checked = globalNode.includes('--max-old-space-size');
+    document.getElementById('preset-dev').checked = globalEnv.includes('NODE_ENV=development');
+    document.getElementById('preset-quick').checked = globalArgs.includes('--maxrounds=2') && globalArgs.includes('--roundtime=30');
   }
 
   closeLaunchSettingsModal() {
@@ -2086,6 +2127,8 @@ class ClaudeOrchestrator {
     const fastChecked = document.getElementById('preset-fast').checked;
     const debugChecked = document.getElementById('preset-debug').checked;
     const memoryChecked = document.getElementById('preset-memory').checked;
+    const devChecked = document.getElementById('preset-dev').checked;
+    const quickChecked = document.getElementById('preset-quick').checked;
 
     const globalEnvInput = document.getElementById('global-env-vars');
     const globalNodeInput = document.getElementById('global-node-options');
@@ -2136,6 +2179,19 @@ class ClaudeOrchestrator {
 
     if (memoryChecked) {
       addUnique(nodeOptions, ['--max-old-space-size=8192']);
+    }
+
+    if (devChecked) {
+      // Remove production env if it exists
+      envVars = envVars.filter(v => !v.includes('NODE_ENV=production'));
+      addUnique(envVars, ['NODE_ENV=development']);
+    }
+
+    if (quickChecked) {
+      // Quick test mode - 2 rounds, very short times
+      // Remove conflicting args first
+      gameArgs = gameArgs.filter(arg => !arg.includes('--maxrounds') && !arg.includes('--roundtime') && !arg.includes('--warmup') && !arg.includes('--buytime'));
+      addUnique(gameArgs, ['--maxrounds=2', '--roundtime=30', '--warmup=2', '--buytime=5']);
     }
 
     // Update the input fields
