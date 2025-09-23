@@ -306,11 +306,11 @@ header h1 {
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(3, 1fr);
 }
-/* Make last 2 terminals span the bottom row */
-.terminal-grid[data-visible-count="10"] > :nth-child(9) {
+/* Make LAST 2 terminals span the bottom row (using nth-last-child for flexibility) */
+.terminal-grid[data-visible-count="10"] > :nth-last-child(2) {
   grid-column: 1 / span 2;
 }
-.terminal-grid[data-visible-count="10"] > :nth-child(10) {
+.terminal-grid[data-visible-count="10"] > :nth-last-child(1) {
   grid-column: 3 / span 2;
 }
 
@@ -332,11 +332,11 @@ header h1 {
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(4, 1fr);
 }
-/* Make last 2 terminals span the bottom row */
-.terminal-grid[data-visible-count="14"] > :nth-child(13) {
+/* Make LAST 2 terminals span the bottom row (using nth-last-child for flexibility) */
+.terminal-grid[data-visible-count="14"] > :nth-last-child(2) {
   grid-column: 1 / span 2;
 }
-.terminal-grid[data-visible-count="14"] > :nth-child(14) {
+.terminal-grid[data-visible-count="14"] > :nth-last-child(1) {
   grid-column: 3 / span 2;
 }
 

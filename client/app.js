@@ -894,16 +894,13 @@ class ClaudeOrchestrator {
 
     // Clear grid
     grid.innerHTML = '';
-    
-    // Create terminal elements for ALL sessions
+
+    // Only create and add VISIBLE terminal elements to the grid
+    // This ensures CSS nth-child selectors work correctly
     sessionIds.forEach((sessionId) => {
       const session = this.sessions.get(sessionId);
-      if (session) {
+      if (session && this.visibleTerminals.has(sessionId)) {
         const wrapper = this.createTerminalElement(sessionId, session);
-        // Hide if not in visible set
-        if (!this.visibleTerminals.has(sessionId)) {
-          wrapper.style.display = 'none';
-        }
         grid.appendChild(wrapper);
       }
     });
