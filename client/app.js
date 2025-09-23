@@ -15,6 +15,7 @@ class ClaudeOrchestrator {
     this.githubLinks = new Map(); // Track GitHub PR/branch links per session
     this.sessionActivity = new Map(); // Track which sessions have been used
     this.showActiveOnly = false; // Filter toggle
+    this.serverLaunchSettings = this.loadServerLaunchSettings(); // Server launch flags
     
     this.init();
   }
@@ -1106,13 +1107,17 @@ class ClaudeOrchestrator {
             ${this.getGitHubButtons(sessionId)}
           ` : ''}
           ${isServerSession ? `
-            ${this.serverStatuses.get(sessionId) === 'running' ? 
+            ${this.serverStatuses.get(sessionId) === 'running' ?
               `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
-              `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
-                <option value="" selected>▶</option>
-                <option value="development">Dev</option>
-                <option value="production">Prod</option>
-              </select>`
+              `<div class="server-launch-group">
+                <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+                  <option value="">▶</option>
+                  <option value="development">Dev</option>
+                  <option value="production">Prod</option>
+                  <option value="custom" selected>Custom...</option>
+                </select>
+                <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
+              </div>`
             }
             ${this.serverStatuses.get(sessionId) === 'running' ? `
               <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
@@ -1321,16 +1326,27 @@ class ClaudeOrchestrator {
   // Server control methods
   toggleServer(sessionId, environment = 'development') {
     const status = this.serverStatuses.get(sessionId);
-    
+
     if (status === 'running') {
       // Stop server
       this.socket.emit('server-control', { sessionId, action: 'stop' });
       this.serverStatuses.set(sessionId, 'idle');
       this.serverPorts.delete(sessionId);
       this.updateSidebarStatus(sessionId, 'idle');
+      this.updateServerControls(sessionId); // Restore launch controls
     } else {
-      // Start server with environment
-      this.socket.emit('server-control', { sessionId, action: 'start', environment });
+      // Get launch settings for this session
+      const launchSettings = environment === 'custom' ?
+        this.getEffectiveLaunchSettings(sessionId) :
+        {}; // Use defaults for dev/prod
+
+      // Start server with environment and settings
+      this.socket.emit('server-control', {
+        sessionId,
+        action: 'start',
+        environment: environment === 'custom' ? 'development' : environment,
+        launchSettings
+      });
     }
   }
   
@@ -1594,29 +1610,33 @@ class ClaudeOrchestrator {
   updateServerControls(sessionId) {
     const wrapper = document.getElementById(`wrapper-${sessionId}`);
     if (!wrapper) return;
-    
+
     const controlsDiv = wrapper.querySelector('.terminal-controls');
     if (!controlsDiv) return;
-    
+
     const isRunning = this.serverStatuses.get(sessionId) === 'running';
-    
-    // Update controls HTML
+
+    // Update controls HTML - restore full control set including settings button
     controlsDiv.innerHTML = `
       <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Show Only This Worktree">🔍</button>
-      ${isRunning ? 
-        `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹` :
-        `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='';" title="Start Server">
-          <option value="" selected>▶</option>
-          <option value="development">Dev</option>
-          <option value="production">Prod</option>
-        </select>`
+      ${isRunning ?
+        `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
+        `<div class="server-launch-group">
+          <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+            <option value="">▶</option>
+            <option value="development">Dev</option>
+            <option value="production">Prod</option>
+            <option value="custom" selected>Custom...</option>
+          </select>
+          <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
+        </div>`
       }
-      </button>
       ${isRunning ? `
         <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
         <button class="control-btn" onclick="window.orchestrator.copyLocalhostUrl('${sessionId}')" title="Copy HTTPS localhost URL">📋</button>
       ` : ''}
       <button class="control-btn" onclick="window.orchestrator.openHytopiaWebsite()" title="Open Hytopia Website">🌐</button>
+      <button class="control-btn" onclick="window.orchestrator.buildProduction('${sessionId}')" title="Build Production ZIP">📦</button>
       <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
     `;
   }
@@ -1670,18 +1690,32 @@ class ClaudeOrchestrator {
   handleSessionExit(sessionId, exitCode) {
     console.log(`Session ${sessionId} exited with code ${exitCode}`);
     this.updateSessionStatus(sessionId, 'exited');
-    
+
     // If it's a Claude session, enable the start button and show startup UI
     if (sessionId.includes('-claude')) {
       const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
       if (startBtn) {
         startBtn.disabled = false;
       }
-      
+
       // Also show the startup UI again
       const startupUI = document.getElementById(`startup-ui-${sessionId}`);
       if (startupUI) {
         startupUI.style.display = 'block';
+      }
+    }
+
+    // If it's a server session, update status and restore controls
+    if (sessionId.includes('-server')) {
+      this.serverStatuses.set(sessionId, 'idle');
+      this.serverPorts.delete(sessionId);
+      this.updateSidebarStatus(sessionId, 'idle');
+      this.updateServerControls(sessionId);
+
+      // Show notification if it crashed unexpectedly
+      if (exitCode !== 0) {
+        const worktreeId = sessionId.split('-')[0];
+        this.showNotification(`Server ${worktreeId} stopped unexpectedly (exit code: ${exitCode})`, 'warning');
       }
     }
   }
@@ -1879,12 +1913,703 @@ class ClaudeOrchestrator {
       autoScroll: true,
       theme: 'dark'
     };
-    
+
     if (stored) {
       return { ...defaults, ...JSON.parse(stored) };
     }
-    
+
     return defaults;
+  }
+
+  loadServerLaunchSettings() {
+    const stored = localStorage.getItem('server-launch-settings');
+    const defaults = {
+      global: {
+        envVars: 'AUTO_START_WITH_BOTS=true NODE_ENV=development',
+        nodeOptions: '--max-old-space-size=4096',
+        gameArgs: '--mode=casual --roundtime=60 --buytime=10 --warmup=5 --maxrounds=13 --teamsize=5'
+      },
+      perWorktree: {}
+    };
+
+    if (stored) {
+      return { ...defaults, ...JSON.parse(stored) };
+    }
+
+    return defaults;
+  }
+
+  saveServerLaunchSettings() {
+    localStorage.setItem('server-launch-settings', JSON.stringify(this.serverLaunchSettings));
+  }
+
+  getEffectiveLaunchSettings(sessionId) {
+    const worktreeId = sessionId.split('-')[0];
+    const worktreeSettings = this.serverLaunchSettings.perWorktree[worktreeId] || {};
+
+    return {
+      envVars: worktreeSettings.envVars || this.serverLaunchSettings.global.envVars || '',
+      nodeOptions: worktreeSettings.nodeOptions || this.serverLaunchSettings.global.nodeOptions || '',
+      gameArgs: worktreeSettings.gameArgs || this.serverLaunchSettings.global.gameArgs || ''
+    };
+  }
+
+  showServerLaunchSettings(sessionId) {
+    const worktreeId = sessionId.split('-')[0];
+    const settings = this.parseCurrentSettings(worktreeId);
+
+    // Create full-screen interactive modal without tabs
+    const modalHtml = `
+      <div id="launch-settings-modal" class="modal launch-settings-fullscreen">
+        <div class="modal-content fullscreen">
+          <div class="modal-header">
+            <h2>🎮 Game Server Configuration - ${worktreeId}</h2>
+            <button class="close-btn" onclick="window.orchestrator.closeLaunchSettingsModal()">✕</button>
+          </div>
+
+          <div class="modal-body">
+            <div class="settings-container">
+              <!-- Left Column: Quick Presets & Game Settings -->
+              <div class="settings-column">
+                <section class="settings-section">
+                  <h3>⚡ Quick Presets</h3>
+                  <div class="preset-grid">
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('quick-test')">
+                      <span class="preset-icon">⚡</span>
+                      <span class="preset-name">Quick Test</span>
+                      <span class="preset-desc">2 rounds, 30s</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('fast-game')">
+                      <span class="preset-icon">🏃</span>
+                      <span class="preset-name">Fast Game</span>
+                      <span class="preset-desc">5 rounds, 60s</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('normal')">
+                      <span class="preset-icon">🎮</span>
+                      <span class="preset-name">Normal</span>
+                      <span class="preset-desc">13 rounds</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('competitive')">
+                      <span class="preset-icon">🏆</span>
+                      <span class="preset-name">Competitive</span>
+                      <span class="preset-desc">30 rounds</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('debug')">
+                      <span class="preset-icon">🐛</span>
+                      <span class="preset-name">Debug</span>
+                      <span class="preset-desc">Dev + logs</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('bots-only')">
+                      <span class="preset-icon">🤖</span>
+                      <span class="preset-name">Bots</span>
+                      <span class="preset-desc">Auto-fill</span>
+                    </button>
+                  </div>
+                </section>
+
+                <section class="settings-section">
+                  <h3>🎮 Game Rules</h3>
+                  <div class="settings-grid">
+                    <div class="setting-item">
+                      <label>Game Mode</label>
+                      <div class="radio-group">
+                        <label class="radio-option">
+                          <input type="radio" name="game-mode" value="casual" ${settings.mode === 'casual' ? 'checked' : ''}
+                                 onchange="window.orchestrator.updateConfigSummary()">
+                          <span>Casual</span>
+                        </label>
+                        <label class="radio-option">
+                          <input type="radio" name="game-mode" value="competitive" ${settings.mode === 'competitive' ? 'checked' : ''}
+                                 onchange="window.orchestrator.updateConfigSummary()">
+                          <span>Competitive</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Max Rounds</label>
+                      <div class="slider-container">
+                        <input type="range" id="max-rounds" min="1" max="30" value="${settings.maxRounds}"
+                               oninput="document.getElementById('max-rounds-value').textContent = this.value; window.orchestrator.updateConfigSummary()">
+                        <span id="max-rounds-value" class="slider-value">${settings.maxRounds}</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Team Size</label>
+                      <div class="slider-container">
+                        <input type="range" id="team-size" min="1" max="16" value="${settings.teamSize}"
+                               oninput="document.getElementById('team-size-value').textContent = this.value; window.orchestrator.updateConfigSummary()">
+                        <span id="team-size-value" class="slider-value">${settings.teamSize}</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Min Players</label>
+                      <div class="slider-container">
+                        <input type="range" id="min-players" min="1" max="10" value="${settings.minPlayers}"
+                               oninput="document.getElementById('min-players-value').textContent = this.value; window.orchestrator.updateConfigSummary()">
+                        <span id="min-players-value" class="slider-value">${settings.minPlayers}</span>
+                      </div>
+                    </div>
+
+                    <div class="toggles-row">
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="friendly-fire" ${settings.friendlyFire ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Friendly Fire</span>
+                      </label>
+
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="auto-bots" ${settings.autoBots ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Auto Bots</span>
+                      </label>
+
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="allow-spectators" ${settings.spectators ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Spectators</span>
+                      </label>
+
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="strict-teams" ${settings.strictTeams ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Strict Teams</span>
+                      </label>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <!-- Middle Column: Timing Settings -->
+              <div class="settings-column">
+                <section class="settings-section">
+                  <h3>⏱️ Timing Settings</h3>
+                  <div class="settings-grid">
+                    <div class="setting-item">
+                      <label>Round Time</label>
+                      <div class="slider-container">
+                        <input type="range" id="round-time" min="30" max="300" value="${settings.roundTime}"
+                               oninput="document.getElementById('round-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="round-time-value" class="slider-value">${settings.roundTime}s</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Buy Time</label>
+                      <div class="slider-container">
+                        <input type="range" id="buy-time" min="5" max="60" value="${settings.buyTime}"
+                               oninput="document.getElementById('buy-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="buy-time-value" class="slider-value">${settings.buyTime}s</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Warmup Time</label>
+                      <div class="slider-container">
+                        <input type="range" id="warmup-time" min="0" max="120" value="${settings.warmupTime}"
+                               oninput="document.getElementById('warmup-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="warmup-time-value" class="slider-value">${settings.warmupTime}s</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Bomb Timer</label>
+                      <div class="slider-container">
+                        <input type="range" id="bomb-timer" min="20" max="60" value="${settings.bombTimer}"
+                               oninput="document.getElementById('bomb-timer-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="bomb-timer-value" class="slider-value">${settings.bombTimer}s</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Pre-Round</label>
+                      <div class="slider-container">
+                        <input type="range" id="preround-time" min="0" max="10" value="${settings.preRoundTime}"
+                               oninput="document.getElementById('preround-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="preround-time-value" class="slider-value">${settings.preRoundTime}s</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Round End</label>
+                      <div class="slider-container">
+                        <input type="range" id="roundend-time" min="0" max="15" value="${settings.roundEndTime}"
+                               oninput="document.getElementById('roundend-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="roundend-time-value" class="slider-value">${settings.roundEndTime}s</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="settings-section">
+                  <h3>⚙️ Server Settings</h3>
+                  <div class="settings-grid">
+                    <div class="setting-item">
+                      <label>Environment</label>
+                      <div class="radio-group">
+                        <label class="radio-option">
+                          <input type="radio" name="node-env" value="development" ${settings.nodeEnv === 'development' ? 'checked' : ''}
+                                 onchange="window.orchestrator.updateConfigSummary()">
+                          <span>Development</span>
+                        </label>
+                        <label class="radio-option">
+                          <input type="radio" name="node-env" value="production" ${settings.nodeEnv === 'production' ? 'checked' : ''}
+                                 onchange="window.orchestrator.updateConfigSummary()">
+                          <span>Production</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Memory Limit</label>
+                      <div class="slider-container">
+                        <input type="range" id="memory-limit" min="1024" max="16384" step="1024" value="${settings.memoryLimit}"
+                               oninput="document.getElementById('memory-limit-value').textContent = (this.value/1024) + 'GB'; window.orchestrator.updateConfigSummary()">
+                        <span id="memory-limit-value" class="slider-value">${settings.memoryLimit/1024}GB</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Server Port</label>
+                      <input type="number" id="server-port" value="${settings.port || 3000}" min="1000" max="65535"
+                             class="setting-input" onchange="window.orchestrator.updateConfigSummary()">
+                    </div>
+
+                    <div class="toggles-row">
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="debug-mode" ${settings.debugMode ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Debug Mode</span>
+                      </label>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <!-- Right Column: Status & Advanced -->
+              <div class="settings-column">
+                <section class="settings-section">
+                  <h3>📊 Current Configuration</h3>
+                  <div class="config-summary" id="config-summary">
+                    <!-- Will be populated by JS -->
+                  </div>
+                </section>
+
+                <section class="settings-section">
+                  <h3>🔧 Advanced Options</h3>
+                  <div class="advanced-settings">
+                    <div class="setting-group">
+                      <label>Extra Environment Variables</label>
+                      <input type="text" id="extra-env" class="setting-input-full"
+                             placeholder="KEY=value KEY2=value2" value="${settings.extraEnv || ''}"
+                             onchange="window.orchestrator.updateConfigSummary()">
+                    </div>
+
+                    <div class="setting-group">
+                      <label>Extra Node Options</label>
+                      <input type="text" id="extra-node" class="setting-input-full"
+                             placeholder="--inspect --trace-warnings" value="${settings.extraNode || ''}"
+                             onchange="window.orchestrator.updateConfigSummary()">
+                    </div>
+
+                    <div class="setting-group">
+                      <label>Extra Game Arguments</label>
+                      <input type="text" id="extra-args" class="setting-input-full"
+                             placeholder="--custom-flag=value" value="${settings.extraArgs || ''}"
+                             onchange="window.orchestrator.updateConfigSummary()">
+                    </div>
+
+                    <div class="setting-group">
+                      <label>Command Preview</label>
+                      <pre id="command-preview" class="command-preview"></pre>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn-secondary" onclick="window.orchestrator.resetToDefaults()">Reset to Defaults</button>
+            <button class="btn-save" onclick="window.orchestrator.saveInteractiveLaunchSettings('${sessionId}')">Apply & Launch</button>
+            <button class="btn-cancel" onclick="window.orchestrator.closeLaunchSettingsModal()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Add modal to page
+    const existingModal = document.getElementById('launch-settings-modal');
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Update the config summary
+    this.updateConfigSummary();
+  }
+
+  parseCurrentSettings(worktreeId) {
+    const worktreeSettings = this.serverLaunchSettings.perWorktree[worktreeId] || {};
+    const globalSettings = this.serverLaunchSettings.global;
+
+    // Parse existing settings or use defaults
+    const envVars = worktreeSettings.envVars || globalSettings.envVars || '';
+    const nodeOptions = worktreeSettings.nodeOptions || globalSettings.nodeOptions || '';
+    const gameArgs = worktreeSettings.gameArgs || globalSettings.gameArgs || '';
+
+    // Parse individual values
+    const settings = {
+      // Game rules
+      mode: gameArgs.match(/--mode=(\w+)/)?.[1] || 'casual',
+      maxRounds: parseInt(gameArgs.match(/--maxrounds=(\d+)/)?.[1] || '13'),
+      teamSize: parseInt(gameArgs.match(/--teamsize=(\d+)/)?.[1] || '5'),
+      minPlayers: parseInt(gameArgs.match(/--minplayers=(\d+)/)?.[1] || '2'),
+      friendlyFire: gameArgs.includes('--friendlyfire=true'),
+      autoBots: envVars.includes('AUTO_START_WITH_BOTS=true'),
+      spectators: !gameArgs.includes('--spectators=false'),
+      strictTeams: gameArgs.includes('--strictteams=true'),
+
+      // Timing
+      roundTime: parseInt(gameArgs.match(/--roundtime=(\d+)/)?.[1] || '60'),
+      buyTime: parseInt(gameArgs.match(/--buytime=(\d+)/)?.[1] || '10'),
+      warmupTime: parseInt(gameArgs.match(/--warmup=(\d+)/)?.[1] || '5'),
+      bombTimer: parseInt(gameArgs.match(/--bombtimer=(\d+)/)?.[1] || '40'),
+      preRoundTime: parseInt(gameArgs.match(/--preroundtime=(\d+)/)?.[1] || '3'),
+      roundEndTime: parseInt(gameArgs.match(/--roundendtime=(\d+)/)?.[1] || '5'),
+
+      // Server
+      nodeEnv: envVars.match(/NODE_ENV=(\w+)/)?.[1] || 'development',
+      memoryLimit: parseInt(nodeOptions.match(/--max-old-space-size=(\d+)/)?.[1] || '4096'),
+      debugMode: envVars.includes('DEBUG=*'),
+      port: parseInt(envVars.match(/PORT=(\d+)/)?.[1] || '3000'),
+
+      // Advanced
+      extraEnv: envVars.replace(/AUTO_START_WITH_BOTS=\w+|NODE_ENV=\w+|DEBUG=\*|PORT=\d+/g, '').trim(),
+      extraNode: nodeOptions.replace(/--max-old-space-size=\d+/g, '').trim(),
+      extraArgs: gameArgs.replace(/--mode=\w+|--maxrounds=\d+|--teamsize=\d+|--minplayers=\d+|--friendlyfire=\w+|--spectators=\w+|--strictteams=\w+|--roundtime=\d+|--buytime=\d+|--warmup=\d+|--bombtimer=\d+|--preroundtime=\d+|--roundendtime=\d+/g, '').trim()
+    };
+
+    return settings;
+  }
+
+  setupTabSwitching() {
+    const tabs = document.querySelectorAll('.tab-btn');
+    const contents = document.querySelectorAll('.tab-content');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Remove active from all
+        tabs.forEach(t => t.classList.remove('active'));
+        contents.forEach(c => c.classList.remove('active'));
+
+        // Add active to clicked
+        tab.classList.add('active');
+        const tabId = `tab-${tab.dataset.tab}`;
+        document.getElementById(tabId).classList.add('active');
+      });
+    });
+  }
+
+  updateConfigSummary() {
+    const summary = document.getElementById('config-summary');
+    const preview = document.getElementById('command-preview');
+
+    if (!summary) return;
+
+    // Gather all settings - handle radio buttons
+    const gameModeRadio = document.querySelector('input[name="game-mode"]:checked');
+    const nodeEnvRadio = document.querySelector('input[name="node-env"]:checked');
+
+    const config = {
+      mode: gameModeRadio?.value || 'casual',
+      maxRounds: document.getElementById('max-rounds')?.value || 13,
+      teamSize: document.getElementById('team-size')?.value || 5,
+      roundTime: document.getElementById('round-time')?.value || 60,
+      buyTime: document.getElementById('buy-time')?.value || 10,
+      warmupTime: document.getElementById('warmup-time')?.value || 5,
+      autoBots: document.getElementById('auto-bots')?.checked || false,
+      friendlyFire: document.getElementById('friendly-fire')?.checked || false,
+      nodeEnv: nodeEnvRadio?.value || 'development',
+      memoryLimit: document.getElementById('memory-limit')?.value || 4096,
+      debugMode: document.getElementById('debug-mode')?.checked || false
+    };
+
+    // Update summary display
+    summary.innerHTML = `
+      <div class="config-item">🎮 Mode: <strong>${config.mode}</strong></div>
+      <div class="config-item">🎯 Rounds: <strong>${config.maxRounds}</strong></div>
+      <div class="config-item">👥 Team Size: <strong>${config.teamSize}v${config.teamSize}</strong></div>
+      <div class="config-item">⏱️ Round Time: <strong>${config.roundTime}s</strong></div>
+      <div class="config-item">💰 Buy Time: <strong>${config.buyTime}s</strong></div>
+      <div class="config-item">🔥 Warmup: <strong>${config.warmupTime}s</strong></div>
+      <div class="config-item">${config.autoBots ? '✅' : '❌'} Auto-fill with bots</div>
+      <div class="config-item">${config.friendlyFire ? '✅' : '❌'} Friendly fire</div>
+      <div class="config-item">🖥️ Environment: <strong>${config.nodeEnv}</strong></div>
+      <div class="config-item">💾 Memory: <strong>${config.memoryLimit/1024}GB</strong></div>
+    `;
+
+    // Generate command preview if on advanced tab
+    if (preview) {
+      const envVars = this.buildEnvVarsFromUI();
+      const nodeOptions = this.buildNodeOptionsFromUI();
+      const gameArgs = this.buildGameArgsFromUI();
+
+      preview.textContent = `NODE_ENV=${config.nodeEnv} ${envVars} node ${nodeOptions} server.js ${gameArgs}`;
+    }
+  }
+
+  buildEnvVarsFromUI() {
+    const parts = [];
+    if (document.getElementById('auto-bots')?.checked) parts.push('AUTO_START_WITH_BOTS=true');
+    if (document.getElementById('debug-mode')?.checked) parts.push('DEBUG=*');
+    const extra = document.getElementById('extra-env')?.value;
+    if (extra) parts.push(extra);
+    return parts.join(' ');
+  }
+
+  buildNodeOptionsFromUI() {
+    const parts = [];
+    const memory = document.getElementById('memory-limit')?.value;
+    if (memory) parts.push(`--max-old-space-size=${memory}`);
+    const extra = document.getElementById('extra-node')?.value;
+    if (extra) parts.push(extra);
+    return parts.join(' ');
+  }
+
+  buildGameArgsFromUI() {
+    const parts = [];
+    const mode = document.querySelector('input[name="game-mode"]:checked')?.value;
+    if (mode) parts.push(`--mode=${mode}`);
+
+    const maxRounds = document.getElementById('max-rounds')?.value;
+    if (maxRounds) parts.push(`--maxrounds=${maxRounds}`);
+
+    const teamSize = document.getElementById('team-size')?.value;
+    if (teamSize) parts.push(`--teamsize=${teamSize}`);
+
+    const roundTime = document.getElementById('round-time')?.value;
+    if (roundTime) parts.push(`--roundtime=${roundTime}`);
+
+    const buyTime = document.getElementById('buy-time')?.value;
+    if (buyTime) parts.push(`--buytime=${buyTime}`);
+
+    const warmup = document.getElementById('warmup-time')?.value;
+    if (warmup) parts.push(`--warmup=${warmup}`);
+
+    if (document.getElementById('friendly-fire')?.checked) parts.push('--friendlyfire=true');
+    if (document.getElementById('strict-teams')?.checked) parts.push('--strictteams=true');
+
+    const extra = document.getElementById('extra-args')?.value;
+    if (extra) parts.push(extra);
+
+    return parts.join(' ');
+  }
+
+  applyPreset(preset) {
+    const presets = {
+      'quick-test': {
+        maxRounds: 2, roundTime: 30, buyTime: 5, warmupTime: 2
+      },
+      'fast-game': {
+        maxRounds: 5, roundTime: 60, buyTime: 10, warmupTime: 3
+      },
+      'normal': {
+        maxRounds: 13, roundTime: 60, buyTime: 10, warmupTime: 5
+      },
+      'competitive': {
+        maxRounds: 30, roundTime: 90, buyTime: 20, warmupTime: 60, mode: 'competitive'
+      },
+      'debug': {
+        debugMode: true, nodeEnv: 'development', maxRounds: 2
+      },
+      'bots-only': {
+        autoBots: true, minPlayers: 1
+      }
+    };
+
+    const settings = presets[preset];
+    if (!settings) return;
+
+    // Apply settings to UI
+    Object.entries(settings).forEach(([key, value]) => {
+      const el = document.getElementById(key.replace(/([A-Z])/g, '-$1').toLowerCase());
+      if (el) {
+        if (el.type === 'checkbox') {
+          el.checked = value;
+        } else {
+          el.value = value;
+          // Update slider display if applicable
+          const display = document.getElementById(el.id + '-value');
+          if (display) {
+            display.textContent = el.id.includes('time') ? value + 's' : value;
+          }
+        }
+      }
+    });
+
+    this.updateConfigSummary();
+  }
+
+  resetToDefaults() {
+    this.applyPreset('normal');
+  }
+
+  updatePresetCheckboxesFromValues() {
+    const globalEnv = document.getElementById('global-env-vars').value;
+    const globalNode = document.getElementById('global-node-options').value;
+    const globalArgs = document.getElementById('global-game-args').value;
+
+    // Check which presets are active
+    document.getElementById('preset-bots').checked = globalEnv.includes('AUTO_START_WITH_BOTS=true');
+    document.getElementById('preset-fast').checked = globalArgs.includes('--warmup=3') && globalArgs.includes('--buytime=10');
+    document.getElementById('preset-debug').checked = globalEnv.includes('DEBUG=*');
+    document.getElementById('preset-memory').checked = globalNode.includes('--max-old-space-size');
+    document.getElementById('preset-dev').checked = globalEnv.includes('NODE_ENV=development');
+    document.getElementById('preset-quick').checked = globalArgs.includes('--maxrounds=2') && globalArgs.includes('--roundtime=30');
+  }
+
+  closeLaunchSettingsModal() {
+    const modal = document.getElementById('launch-settings-modal');
+    if (modal) {
+      modal.remove();
+    }
+  }
+
+  saveInteractiveLaunchSettings(sessionId) {
+    const worktreeId = sessionId.split('-')[0];
+
+    // Build settings from UI - handle radio buttons
+    const nodeEnv = document.querySelector('input[name="node-env"]:checked')?.value || 'development';
+    const envVars = `NODE_ENV=${nodeEnv} ${this.buildEnvVarsFromUI()}`.trim();
+    const nodeOptions = this.buildNodeOptionsFromUI();
+    const gameArgs = this.buildGameArgsFromUI();
+
+    // Save as global settings
+    this.serverLaunchSettings.global = {
+      envVars: envVars,
+      nodeOptions: nodeOptions,
+      gameArgs: gameArgs
+    };
+
+    this.saveServerLaunchSettings();
+    this.closeLaunchSettingsModal();
+
+    // Auto-launch the server with custom settings
+    this.toggleServer(sessionId, 'custom');
+  }
+
+  saveLaunchSettings(sessionId) {
+    const worktreeId = sessionId.split('-')[0];
+
+    // Save global settings
+    this.serverLaunchSettings.global = {
+      envVars: document.getElementById('global-env-vars').value,
+      nodeOptions: document.getElementById('global-node-options').value,
+      gameArgs: document.getElementById('global-game-args').value
+    };
+
+    // Save worktree-specific settings
+    const worktreeEnv = document.getElementById('worktree-env-vars').value;
+    const worktreeNode = document.getElementById('worktree-node-options').value;
+    const worktreeArgs = document.getElementById('worktree-game-args').value;
+
+    if (worktreeEnv || worktreeNode || worktreeArgs) {
+      this.serverLaunchSettings.perWorktree[worktreeId] = {
+        envVars: worktreeEnv,
+        nodeOptions: worktreeNode,
+        gameArgs: worktreeArgs
+      };
+    } else {
+      delete this.serverLaunchSettings.perWorktree[worktreeId];
+    }
+
+    this.saveServerLaunchSettings();
+    this.closeLaunchSettingsModal();
+
+    // Show feedback
+    this.showNotification('Launch settings saved', 'success');
+  }
+
+  updatePresetsFromCheckboxes() {
+    const botsChecked = document.getElementById('preset-bots').checked;
+    const fastChecked = document.getElementById('preset-fast').checked;
+    const debugChecked = document.getElementById('preset-debug').checked;
+    const memoryChecked = document.getElementById('preset-memory').checked;
+    const devChecked = document.getElementById('preset-dev').checked;
+    const quickChecked = document.getElementById('preset-quick').checked;
+
+    const globalEnvInput = document.getElementById('global-env-vars');
+    const globalNodeInput = document.getElementById('global-node-options');
+    const globalArgsInput = document.getElementById('global-game-args');
+
+    // Start with existing manual entries (if any)
+    let envVars = [];
+    let nodeOptions = [];
+    let gameArgs = [];
+
+    // Parse existing values to avoid duplicates
+    const currentEnv = globalEnvInput.value.trim();
+    const currentNode = globalNodeInput.value.trim();
+    const currentArgs = globalArgsInput.value.trim();
+
+    // Helper to add if not already present
+    const addUnique = (arr, items) => {
+      items.forEach(item => {
+        if (!arr.includes(item)) {
+          arr.push(item);
+        }
+      });
+    };
+
+    // Start with current non-preset values
+    if (currentEnv && !currentEnv.includes('AUTO_START_WITH_BOTS') && !currentEnv.includes('DEBUG=')) {
+      envVars.push(currentEnv);
+    }
+    if (currentNode && !currentNode.includes('--max-old-space-size')) {
+      nodeOptions.push(currentNode);
+    }
+    if (currentArgs && !currentArgs.includes('--warmup') && !currentArgs.includes('--buytime')) {
+      gameArgs.push(currentArgs);
+    }
+
+    // Add preset values based on checkboxes
+    if (botsChecked) {
+      addUnique(envVars, ['AUTO_START_WITH_BOTS=true']);
+    }
+
+    if (fastChecked) {
+      addUnique(gameArgs, ['--warmup=3', '--buytime=10', '--roundtime=60']);
+    }
+
+    if (debugChecked) {
+      addUnique(envVars, ['DEBUG=*', 'NODE_ENV=development']);
+    }
+
+    if (memoryChecked) {
+      addUnique(nodeOptions, ['--max-old-space-size=8192']);
+    }
+
+    if (devChecked) {
+      // Remove production env if it exists
+      envVars = envVars.filter(v => !v.includes('NODE_ENV=production'));
+      addUnique(envVars, ['NODE_ENV=development']);
+    }
+
+    if (quickChecked) {
+      // Quick test mode - 2 rounds, very short times
+      // Remove conflicting args first
+      gameArgs = gameArgs.filter(arg => !arg.includes('--maxrounds') && !arg.includes('--roundtime') && !arg.includes('--warmup') && !arg.includes('--buytime'));
+      addUnique(gameArgs, ['--maxrounds=2', '--roundtime=30', '--warmup=2', '--buytime=5']);
+    }
+
+    // Update the input fields
+    globalEnvInput.value = envVars.join(' ');
+    globalNodeInput.value = nodeOptions.join(' ');
+    globalArgsInput.value = gameArgs.join(' ');
   }
   
   saveSettings() {

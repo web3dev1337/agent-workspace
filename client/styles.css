@@ -1049,6 +1049,197 @@ header h1 {
   100% { transform: rotate(360deg); }
 }
 
+/* Server Launch Settings */
+.server-launch-group {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+#launch-settings-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+#launch-settings-modal .modal-content {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  max-width: 800px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+#launch-settings-modal .modal-header {
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#launch-settings-modal .modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+#launch-settings-modal .close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+}
+
+#launch-settings-modal .close-btn:hover {
+  background: var(--bg-secondary);
+}
+
+#launch-settings-modal .modal-body {
+  padding: var(--space-lg);
+}
+
+#launch-settings-modal .settings-section {
+  margin-bottom: var(--space-xl);
+}
+
+#launch-settings-modal .settings-section:last-child {
+  margin-bottom: 0;
+}
+
+#launch-settings-modal .settings-section h3 {
+  color: var(--accent-primary);
+  font-size: 1.1rem;
+  margin-bottom: var(--space-md);
+}
+
+#launch-settings-modal .setting-group {
+  margin-bottom: var(--space-md);
+}
+
+#launch-settings-modal .setting-group label {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: var(--space-xs);
+}
+
+#launch-settings-modal .setting-group input {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: monospace;
+}
+
+#launch-settings-modal .setting-group input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+#launch-settings-modal .setting-group small {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: 0.8rem;
+  margin-top: var(--space-xs);
+}
+
+#launch-settings-modal .preset-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-md);
+}
+
+#launch-settings-modal .preset-checkbox {
+  display: flex;
+  align-items: center;
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+#launch-settings-modal .preset-checkbox:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+}
+
+#launch-settings-modal .preset-checkbox input[type="checkbox"] {
+  margin-right: var(--space-sm);
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+#launch-settings-modal .preset-checkbox input[type="checkbox"]:checked + span {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+#launch-settings-modal .preset-checkbox span {
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+#launch-settings-modal .modal-footer {
+  padding: var(--space-lg);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+}
+
+#launch-settings-modal .btn-save,
+#launch-settings-modal .btn-cancel {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+#launch-settings-modal .btn-save {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+}
+
+#launch-settings-modal .btn-save:hover {
+  background: var(--accent-secondary);
+}
+
+#launch-settings-modal .btn-cancel {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+#launch-settings-modal .btn-cancel:hover {
+  background: var(--bg-tertiary);
+}
+
 .loading-spinner {
   display: inline-block;
   width: 14px;
@@ -1605,4 +1796,745 @@ header h1 {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+}
+
+/* Fullscreen Launch Settings Modal */
+.launch-settings-fullscreen .modal-content.fullscreen {
+  max-width: calc(100vw - 100px);
+  width: calc(100vw - 100px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+.launch-settings-interactive .modal-header {
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.launch-settings-interactive .modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Tabs */
+.launch-settings-interactive .tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border-color);
+  background: var(--bg-secondary);
+  padding: 0 var(--space-lg);
+  flex-shrink: 0;
+}
+
+.launch-settings-interactive .tab-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: var(--space-md) var(--space-lg);
+  cursor: pointer;
+  font-size: 0.9rem;
+  position: relative;
+  transition: all 0.2s ease;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+
+.launch-settings-interactive .tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.launch-settings-interactive .tab-btn.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+  font-weight: 500;
+}
+
+/* Tab Content */
+.launch-settings-interactive .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.launch-settings-interactive .tab-content {
+  display: none;
+  padding: var(--space-lg);
+}
+
+.launch-settings-interactive .tab-content.active {
+  display: block;
+}
+
+/* Quick Setup Tab */
+.launch-settings-interactive .quick-presets h3 {
+  margin-bottom: var(--space-md);
+  color: var(--text-primary);
+}
+
+.launch-settings-interactive .preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.launch-settings-interactive .preset-btn-large {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  text-align: center;
+}
+
+.launch-settings-interactive .preset-btn-large:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+  transform: translateY(-2px);
+}
+
+.launch-settings-interactive .preset-icon {
+  font-size: 2rem;
+}
+
+.launch-settings-interactive .preset-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.launch-settings-interactive .preset-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Config Summary */
+.launch-settings-interactive .current-config {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+}
+
+.launch-settings-interactive .config-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-sm);
+}
+
+.launch-settings-interactive .config-item {
+  padding: var(--space-sm);
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.launch-settings-interactive .config-item strong {
+  color: var(--text-primary);
+}
+
+/* Settings Grid */
+.launch-settings-interactive .settings-grid {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.launch-settings-interactive .setting-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.launch-settings-interactive .setting-item > label:first-child {
+  flex: 0 0 200px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* Sliders */
+.launch-settings-interactive .slider-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.launch-settings-interactive input[type="range"] {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.launch-settings-interactive input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.launch-settings-interactive input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: var(--accent-hover);
+}
+
+.launch-settings-interactive input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.launch-settings-interactive .slider-value {
+  min-width: 50px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+}
+
+/* Toggle Switches */
+.launch-settings-interactive .toggle-item {
+  justify-content: space-between;
+}
+
+.launch-settings-interactive .toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 24px;
+}
+
+.launch-settings-interactive .toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.launch-settings-interactive .toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-tertiary);
+  transition: all 0.3s ease;
+  border-radius: 24px;
+}
+
+.launch-settings-interactive .toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: all 0.3s ease;
+  border-radius: 50%;
+}
+
+.launch-settings-interactive input:checked + .toggle-slider {
+  background-color: var(--accent-primary);
+}
+
+.launch-settings-interactive input:checked + .toggle-slider:before {
+  transform: translateX(24px);
+}
+
+/* Select Dropdowns */
+.launch-settings-interactive .setting-select {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.launch-settings-interactive .setting-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+/* Input Fields */
+.launch-settings-interactive .setting-input,
+.launch-settings-interactive .setting-input-full {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.launch-settings-interactive .setting-input {
+  width: 150px;
+}
+
+.launch-settings-interactive .setting-input-full {
+  width: 100%;
+}
+
+.launch-settings-interactive .setting-input:focus,
+.launch-settings-interactive .setting-input-full:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+/* Advanced Tab */
+.launch-settings-interactive .advanced-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.launch-settings-interactive .command-preview {
+  background: var(--bg-tertiary);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--accent-secondary);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Modal Footer */
+.launch-settings-interactive .modal-footer {
+  padding: var(--space-lg);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  gap: var(--space-md);
+}
+
+.launch-settings-interactive .btn-save,
+.launch-settings-interactive .btn-secondary,
+.launch-settings-interactive .btn-cancel {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.launch-settings-interactive .btn-save {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.launch-settings-interactive .btn-save:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.launch-settings-interactive .btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  margin-right: auto;
+}
+
+.launch-settings-interactive .btn-secondary:hover {
+  background: var(--bg-hover);
+}
+
+.launch-settings-interactive .btn-cancel {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.launch-settings-interactive .btn-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Fullscreen Settings Styles */
+.launch-settings-fullscreen .modal-header {
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.launch-settings-fullscreen .modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.launch-settings-fullscreen .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.launch-settings-fullscreen .settings-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-xl);
+  padding: var(--space-xl);
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.launch-settings-fullscreen .settings-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-width: 350px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.launch-settings-fullscreen .settings-section {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  flex-shrink: 0;
+}
+
+.launch-settings-fullscreen .settings-section h3 {
+  margin: 0 0 var(--space-md) 0;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* Updated Preset Grid */
+.launch-settings-fullscreen .preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
+}
+
+.launch-settings-fullscreen .preset-btn-large {
+  background: var(--bg-primary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  text-align: center;
+}
+
+.launch-settings-fullscreen .preset-btn-large:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+  transform: translateY(-2px);
+}
+
+.launch-settings-fullscreen .preset-icon {
+  font-size: 1.5rem;
+}
+
+.launch-settings-fullscreen .preset-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.launch-settings-fullscreen .preset-desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Radio Groups */
+.launch-settings-fullscreen .radio-group {
+  display: flex;
+  gap: var(--space-md);
+  flex: 1;
+}
+
+.launch-settings-fullscreen .radio-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-primary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.launch-settings-fullscreen .radio-option:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.launch-settings-fullscreen .radio-option input[type="radio"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.launch-settings-fullscreen .radio-option input[type="radio"]:checked + span {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.launch-settings-fullscreen .radio-option input[type="radio"]:checked ~ * {
+  color: var(--accent-primary);
+}
+
+.launch-settings-fullscreen input[type="radio"]:checked + span,
+.launch-settings-fullscreen input[type="radio"]:checked ~ span {
+  color: var(--accent-primary);
+}
+
+.launch-settings-fullscreen .radio-option:has(input:checked) {
+  border-color: var(--accent-primary);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+/* Toggles Row */
+.launch-settings-fullscreen .toggles-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.launch-settings-fullscreen .toggle-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+}
+
+.launch-settings-fullscreen .toggle-label {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+/* Settings Grid Updates */
+.launch-settings-fullscreen .settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.launch-settings-fullscreen .setting-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.launch-settings-fullscreen .setting-item > label:first-child {
+  flex: 0 0 120px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+/* Sliders */
+.launch-settings-fullscreen .slider-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.launch-settings-fullscreen input[type="range"] {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.launch-settings-fullscreen input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.launch-settings-fullscreen input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: var(--accent-hover);
+}
+
+.launch-settings-fullscreen .slider-value {
+  min-width: 45px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+
+/* Config Summary */
+.launch-settings-fullscreen .config-summary {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-xs);
+}
+
+.launch-settings-fullscreen .config-item {
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.launch-settings-fullscreen .config-item strong {
+  color: var(--text-primary);
+  margin-left: auto;
+}
+
+/* Advanced Settings */
+.launch-settings-fullscreen .advanced-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.launch-settings-fullscreen .setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.launch-settings-fullscreen .setting-group label {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.launch-settings-fullscreen .setting-input,
+.launch-settings-fullscreen .setting-input-full {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.launch-settings-fullscreen .setting-input {
+  width: 120px;
+}
+
+.launch-settings-fullscreen .command-preview {
+  background: var(--bg-tertiary);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent-secondary);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 100px;
+}
+
+/* Modal Footer */
+.launch-settings-fullscreen .modal-footer {
+  padding: var(--space-lg);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  gap: var(--space-md);
+}
+
+.launch-settings-fullscreen .btn-save,
+.launch-settings-fullscreen .btn-secondary,
+.launch-settings-fullscreen .btn-cancel {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.launch-settings-fullscreen .btn-save {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.launch-settings-fullscreen .btn-save:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.launch-settings-fullscreen .btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  margin-right: auto;
+}
+
+.launch-settings-fullscreen .btn-secondary:hover {
+  background: var(--bg-hover);
+}
+
+.launch-settings-fullscreen .btn-cancel {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.launch-settings-fullscreen .btn-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }

@@ -140,30 +140,55 @@ io.on('connection', (socket) => {
   });
   
   // Handle server control
-  socket.on('server-control', ({ sessionId, action, environment }) => {
-    logger.info('Server control request', { sessionId, action, environment });
-    
+  socket.on('server-control', ({ sessionId, action, environment, launchSettings }) => {
+    logger.info('Server control request', { sessionId, action, environment, launchSettings });
+
     if (action === 'start') {
       // Extract worktree number and assign port accordingly
       const worktreeMatch = sessionId.match(/work(\d+)/);
       const worktreeNum = worktreeMatch ? parseInt(worktreeMatch[1]) : 1;
       const port = 8080 + worktreeNum - 1; // work1=8080, work2=8081, etc.
-      
+
       // Clear any existing input first with Ctrl+C, then send command
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C to clear
-      
+
       setTimeout(() => {
-        // Build command with NODE_ENV based on environment parameter
+        // Build command with NODE_ENV and custom settings
         const nodeEnv = environment === 'production' ? 'production' : 'development';
-        const command = `NODE_ENV=${nodeEnv} PORT=${port} hytopia start\n`;
+
+        // Start with base environment variables
+        let envVars = `NODE_ENV=${nodeEnv} PORT=${port}`;
+
+        // Add custom environment variables if provided
+        if (launchSettings && launchSettings.envVars) {
+          envVars += ` ${launchSettings.envVars}`;
+        }
+
+        // Build the command
+        let command = envVars;
+
+        // Add node options if provided
+        if (launchSettings && launchSettings.nodeOptions) {
+          command += ` node ${launchSettings.nodeOptions} $(which hytopia) start`;
+        } else {
+          command += ` hytopia start`;
+        }
+
+        // Add game arguments if provided
+        if (launchSettings && launchSettings.gameArgs) {
+          command += ` ${launchSettings.gameArgs}`;
+        }
+
+        command += '\n';
+
         logger.info('Starting server with command', { sessionId, command, port, nodeEnv });
-        
+
         const written = sessionManager.writeToSession(sessionId, command);
         if (!written) {
           logger.error('Failed to write command to session', { sessionId });
           return;
         }
-        
+
         // Emit port info back to client
         socket.emit('server-started', { sessionId, port, environment: nodeEnv });
       }, 100); // Small delay after Ctrl+C
