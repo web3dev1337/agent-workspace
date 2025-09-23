@@ -1989,17 +1989,24 @@ class ClaudeOrchestrator {
             </div>
 
             <div class="settings-section">
-              <h3>Quick Presets</h3>
-              <div class="preset-buttons">
-                <button class="preset-btn" onclick="window.orchestrator.applyLaunchPreset('bots-only')">
-                  🤖 Bots Only Mode
-                </button>
-                <button class="preset-btn" onclick="window.orchestrator.applyLaunchPreset('fast-rounds')">
-                  ⚡ Fast Rounds
-                </button>
-                <button class="preset-btn" onclick="window.orchestrator.applyLaunchPreset('debug')">
-                  🐛 Debug Mode
-                </button>
+              <h3>Quick Presets (combine multiple)</h3>
+              <div class="preset-checkboxes">
+                <label class="preset-checkbox">
+                  <input type="checkbox" id="preset-bots" onchange="window.orchestrator.updatePresetsFromCheckboxes()">
+                  <span>🤖 Bots Only Mode</span>
+                </label>
+                <label class="preset-checkbox">
+                  <input type="checkbox" id="preset-fast" onchange="window.orchestrator.updatePresetsFromCheckboxes()">
+                  <span>⚡ Fast Rounds</span>
+                </label>
+                <label class="preset-checkbox">
+                  <input type="checkbox" id="preset-debug" onchange="window.orchestrator.updatePresetsFromCheckboxes()">
+                  <span>🐛 Debug Mode</span>
+                </label>
+                <label class="preset-checkbox">
+                  <input type="checkbox" id="preset-memory" onchange="window.orchestrator.updatePresetsFromCheckboxes()">
+                  <span>💾 Extra Memory</span>
+                </label>
               </div>
             </div>
           </div>
@@ -2018,6 +2025,21 @@ class ClaudeOrchestrator {
     }
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Check the appropriate preset checkboxes based on current values
+    this.updatePresetCheckboxesFromValues();
+  }
+
+  updatePresetCheckboxesFromValues() {
+    const globalEnv = document.getElementById('global-env-vars').value;
+    const globalNode = document.getElementById('global-node-options').value;
+    const globalArgs = document.getElementById('global-game-args').value;
+
+    // Check which presets are active
+    document.getElementById('preset-bots').checked = globalEnv.includes('AUTO_START_WITH_BOTS=true');
+    document.getElementById('preset-fast').checked = globalArgs.includes('--warmup=3') && globalArgs.includes('--buytime=10');
+    document.getElementById('preset-debug').checked = globalEnv.includes('DEBUG=*');
+    document.getElementById('preset-memory').checked = globalNode.includes('--max-old-space-size');
   }
 
   closeLaunchSettingsModal() {
@@ -2059,21 +2081,67 @@ class ClaudeOrchestrator {
     this.showNotification('Launch settings saved', 'success');
   }
 
-  applyLaunchPreset(preset) {
+  updatePresetsFromCheckboxes() {
+    const botsChecked = document.getElementById('preset-bots').checked;
+    const fastChecked = document.getElementById('preset-fast').checked;
+    const debugChecked = document.getElementById('preset-debug').checked;
+    const memoryChecked = document.getElementById('preset-memory').checked;
+
     const globalEnvInput = document.getElementById('global-env-vars');
+    const globalNodeInput = document.getElementById('global-node-options');
     const globalArgsInput = document.getElementById('global-game-args');
 
-    switch(preset) {
-      case 'bots-only':
-        globalEnvInput.value = 'AUTO_START_WITH_BOTS=true';
-        break;
-      case 'fast-rounds':
-        globalArgsInput.value = '--warmup=3 --buytime=10 --roundtime=60';
-        break;
-      case 'debug':
-        globalEnvInput.value = 'DEBUG=* NODE_ENV=development';
-        break;
+    // Start with existing manual entries (if any)
+    let envVars = [];
+    let nodeOptions = [];
+    let gameArgs = [];
+
+    // Parse existing values to avoid duplicates
+    const currentEnv = globalEnvInput.value.trim();
+    const currentNode = globalNodeInput.value.trim();
+    const currentArgs = globalArgsInput.value.trim();
+
+    // Helper to add if not already present
+    const addUnique = (arr, items) => {
+      items.forEach(item => {
+        if (!arr.includes(item)) {
+          arr.push(item);
+        }
+      });
+    };
+
+    // Start with current non-preset values
+    if (currentEnv && !currentEnv.includes('AUTO_START_WITH_BOTS') && !currentEnv.includes('DEBUG=')) {
+      envVars.push(currentEnv);
     }
+    if (currentNode && !currentNode.includes('--max-old-space-size')) {
+      nodeOptions.push(currentNode);
+    }
+    if (currentArgs && !currentArgs.includes('--warmup') && !currentArgs.includes('--buytime')) {
+      gameArgs.push(currentArgs);
+    }
+
+    // Add preset values based on checkboxes
+    if (botsChecked) {
+      addUnique(envVars, ['AUTO_START_WITH_BOTS=true']);
+    }
+
+    if (fastChecked) {
+      addUnique(gameArgs, ['--warmup=3', '--buytime=10', '--roundtime=60']);
+    }
+
+    if (debugChecked) {
+      addUnique(envVars, ['DEBUG=*', 'NODE_ENV=development']);
+    }
+
+    if (memoryChecked) {
+      addUnique(nodeOptions, ['--max-old-space-size=8192']);
+    }
+
+    // Update the input fields
+    globalEnvInput.value = envVars.join(' ');
+    globalNodeInput.value = nodeOptions.join(' ');
+    globalArgsInput.value = gameArgs.join(' ');
   }
   
   saveSettings() {
