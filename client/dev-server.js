@@ -3,18 +3,19 @@ const path = require('path');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
-const PORT = 2080;
+const PORT = process.env.CLIENT_PORT || 2080;
+const SERVER_PORT = process.env.PORT || 3000;
 
 // Proxy socket.io requests to the backend server
 app.use('/socket.io', createProxyMiddleware({
-    target: 'http://localhost:3000',
+    target: `http://localhost:${SERVER_PORT}`,
     ws: true,
     changeOrigin: true
 }));
 
 // Proxy API requests to the backend server
 app.use('/api', createProxyMiddleware({
-    target: 'http://localhost:3000',
+    target: `http://localhost:${SERVER_PORT}`,
     changeOrigin: true
     // Remove pathRewrite to preserve default behavior
 }));

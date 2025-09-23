@@ -1196,10 +1196,13 @@ class ClaudeOrchestrator {
             startupUI.style.display = 'none';
           }
         } else {
-          // Show the startup UI if auto-start is not enabled
-          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-          if (startupUI) {
-            startupUI.style.display = 'block';
+          // Only show the startup UI if auto-start is not enabled AND Claude is not already running
+          // Check if this is the first time (not a status change from busy->waiting)
+          if (previousStatus === 'idle' || !previousStatus) {
+            const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+            if (startupUI) {
+              startupUI.style.display = 'block';
+            }
           }
         }
       }
@@ -1210,10 +1213,34 @@ class ClaudeOrchestrator {
     // Update quick actions for Claude sessions
     if (sessionId.includes('claude')) {
       this.updateQuickActions(sessionId, status);
-      
+
+      // Clear any pending notification timer if Claude goes busy again
+      if (status === 'busy' && this.notificationTimers && this.notificationTimers[sessionId]) {
+        clearTimeout(this.notificationTimers[sessionId]);
+        delete this.notificationTimers[sessionId];
+      }
+
       // Show notification when Claude becomes ready AFTER user input
+      // But NOT during intermediate todo steps - wait for a longer idle period
       if (previousStatus === 'busy' && status === 'waiting' && session && session.hasUserInput) {
-        this.showClaudeReadyNotification(sessionId);
+        // Set a timer to check if Claude stays in waiting state (not just intermediate)
+        if (this.notificationTimers && this.notificationTimers[sessionId]) {
+          clearTimeout(this.notificationTimers[sessionId]);
+        }
+
+        if (!this.notificationTimers) {
+          this.notificationTimers = {};
+        }
+
+        // Only show notification if Claude stays in waiting state for 3+ seconds
+        // This filters out intermediate todo steps which quickly go back to busy
+        this.notificationTimers[sessionId] = setTimeout(() => {
+          const currentSession = this.sessions.get(sessionId);
+          if (currentSession && currentSession.status === 'waiting') {
+            console.log(`Showing ready notification for ${sessionId} after stable waiting state`);
+            this.showClaudeReadyNotification(sessionId);
+          }
+        }, 3000);
       }
     }
     
@@ -1662,18 +1689,26 @@ class ClaudeOrchestrator {
   handleSessionRestart(sessionId) {
     console.log(`Session ${sessionId} restarted`);
     // Terminal will automatically reconnect and show new content
-    
-    // If it's a Claude session that restarted, show the startup UI
+
+    // If it's a Claude session that restarted, only show the startup UI if Claude is not running
     if (sessionId.includes('-claude')) {
-      const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-      if (startupUI) {
-        startupUI.style.display = 'block';
-      }
-      
-      // Enable the start button in menu strip
-      const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
-      if (startBtn) {
-        startBtn.disabled = false;
+      const session = this.sessions.get(sessionId);
+      const isClaudeRunning = session && session.status !== 'idle';
+
+      // Only show startup UI if Claude is NOT running
+      if (!isClaudeRunning) {
+        const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+        if (startupUI) {
+          startupUI.style.display = 'block';
+        }
+
+        // Enable the start button in menu strip
+        const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
+        if (startBtn) {
+          startBtn.disabled = false;
+        }
+      } else {
+        console.log(`Claude is running in ${sessionId}, not showing startup UI`);
       }
     }
   }
@@ -1759,9 +1794,10 @@ class ClaudeOrchestrator {
     // Rate limiting: don't show notification if we showed one recently
     const now = Date.now();
     if (!this.lastNotificationTime) this.lastNotificationTime = {};
-    
-    if (this.lastNotificationTime[sessionId] && (now - this.lastNotificationTime[sessionId]) < 5000) {
-      console.log(`Rate limiting notification for ${sessionId}`);
+
+    // Increased rate limit to 30 seconds to avoid spam during todo lists
+    if (this.lastNotificationTime[sessionId] && (now - this.lastNotificationTime[sessionId]) < 30000) {
+      console.log(`Rate limiting notification for ${sessionId} (shown ${Math.round((now - this.lastNotificationTime[sessionId]) / 1000)}s ago)`);
       return;
     }
     this.lastNotificationTime[sessionId] = now;
