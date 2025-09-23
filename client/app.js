@@ -1958,265 +1958,275 @@ class ClaudeOrchestrator {
     const worktreeId = sessionId.split('-')[0];
     const settings = this.parseCurrentSettings(worktreeId);
 
-    // Create interactive modal with sliders and controls
+    // Create full-screen interactive modal without tabs
     const modalHtml = `
-      <div id="launch-settings-modal" class="modal launch-settings-interactive">
-        <div class="modal-content large">
+      <div id="launch-settings-modal" class="modal launch-settings-fullscreen">
+        <div class="modal-content fullscreen">
           <div class="modal-header">
-            <h2>🎮 Game Server Settings - ${worktreeId}</h2>
+            <h2>🎮 Game Server Configuration - ${worktreeId}</h2>
             <button class="close-btn" onclick="window.orchestrator.closeLaunchSettingsModal()">✕</button>
           </div>
 
-          <div class="tabs">
-            <button class="tab-btn active" data-tab="quick">⚡ Quick Setup</button>
-            <button class="tab-btn" data-tab="game">🎮 Game Rules</button>
-            <button class="tab-btn" data-tab="timing">⏱️ Timing</button>
-            <button class="tab-btn" data-tab="server">⚙️ Server</button>
-            <button class="tab-btn" data-tab="advanced">🔧 Advanced</button>
-          </div>
-
           <div class="modal-body">
-            <!-- Quick Setup Tab -->
-            <div class="tab-content active" id="tab-quick">
-              <div class="quick-presets">
-                <h3>Quick Presets</h3>
-                <div class="preset-grid">
-                  <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('quick-test')">
-                    <span class="preset-icon">⚡</span>
-                    <span class="preset-name">Quick Test</span>
-                    <span class="preset-desc">2 rounds, 30s each</span>
-                  </button>
-                  <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('fast-game')">
-                    <span class="preset-icon">🏃</span>
-                    <span class="preset-name">Fast Game</span>
-                    <span class="preset-desc">5 rounds, 60s each</span>
-                  </button>
-                  <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('normal')">
-                    <span class="preset-icon">🎮</span>
-                    <span class="preset-name">Normal</span>
-                    <span class="preset-desc">13 rounds, standard</span>
-                  </button>
-                  <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('competitive')">
-                    <span class="preset-icon">🏆</span>
-                    <span class="preset-name">Competitive</span>
-                    <span class="preset-desc">Full match, 30 rounds</span>
-                  </button>
-                  <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('debug')">
-                    <span class="preset-icon">🐛</span>
-                    <span class="preset-name">Debug</span>
-                    <span class="preset-desc">Dev mode, verbose logs</span>
-                  </button>
-                  <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('bots-only')">
-                    <span class="preset-icon">🤖</span>
-                    <span class="preset-name">Bots Only</span>
-                    <span class="preset-desc">Auto-fill with bots</span>
-                  </button>
-                </div>
+            <div class="settings-container">
+              <!-- Left Column: Quick Presets & Game Settings -->
+              <div class="settings-column">
+                <section class="settings-section">
+                  <h3>⚡ Quick Presets</h3>
+                  <div class="preset-grid">
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('quick-test')">
+                      <span class="preset-icon">⚡</span>
+                      <span class="preset-name">Quick Test</span>
+                      <span class="preset-desc">2 rounds, 30s</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('fast-game')">
+                      <span class="preset-icon">🏃</span>
+                      <span class="preset-name">Fast Game</span>
+                      <span class="preset-desc">5 rounds, 60s</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('normal')">
+                      <span class="preset-icon">🎮</span>
+                      <span class="preset-name">Normal</span>
+                      <span class="preset-desc">13 rounds</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('competitive')">
+                      <span class="preset-icon">🏆</span>
+                      <span class="preset-name">Competitive</span>
+                      <span class="preset-desc">30 rounds</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('debug')">
+                      <span class="preset-icon">🐛</span>
+                      <span class="preset-name">Debug</span>
+                      <span class="preset-desc">Dev + logs</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="window.orchestrator.applyPreset('bots-only')">
+                      <span class="preset-icon">🤖</span>
+                      <span class="preset-name">Bots</span>
+                      <span class="preset-desc">Auto-fill</span>
+                    </button>
+                  </div>
+                </section>
+
+                <section class="settings-section">
+                  <h3>🎮 Game Rules</h3>
+                  <div class="settings-grid">
+                    <div class="setting-item">
+                      <label>Game Mode</label>
+                      <div class="radio-group">
+                        <label class="radio-option">
+                          <input type="radio" name="game-mode" value="casual" ${settings.mode === 'casual' ? 'checked' : ''}
+                                 onchange="window.orchestrator.updateConfigSummary()">
+                          <span>Casual</span>
+                        </label>
+                        <label class="radio-option">
+                          <input type="radio" name="game-mode" value="competitive" ${settings.mode === 'competitive' ? 'checked' : ''}
+                                 onchange="window.orchestrator.updateConfigSummary()">
+                          <span>Competitive</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Max Rounds</label>
+                      <div class="slider-container">
+                        <input type="range" id="max-rounds" min="1" max="30" value="${settings.maxRounds}"
+                               oninput="document.getElementById('max-rounds-value').textContent = this.value; window.orchestrator.updateConfigSummary()">
+                        <span id="max-rounds-value" class="slider-value">${settings.maxRounds}</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Team Size</label>
+                      <div class="slider-container">
+                        <input type="range" id="team-size" min="1" max="16" value="${settings.teamSize}"
+                               oninput="document.getElementById('team-size-value').textContent = this.value; window.orchestrator.updateConfigSummary()">
+                        <span id="team-size-value" class="slider-value">${settings.teamSize}</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Min Players</label>
+                      <div class="slider-container">
+                        <input type="range" id="min-players" min="1" max="10" value="${settings.minPlayers}"
+                               oninput="document.getElementById('min-players-value').textContent = this.value; window.orchestrator.updateConfigSummary()">
+                        <span id="min-players-value" class="slider-value">${settings.minPlayers}</span>
+                      </div>
+                    </div>
+
+                    <div class="toggles-row">
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="friendly-fire" ${settings.friendlyFire ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Friendly Fire</span>
+                      </label>
+
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="auto-bots" ${settings.autoBots ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Auto Bots</span>
+                      </label>
+
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="allow-spectators" ${settings.spectators ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Spectators</span>
+                      </label>
+
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="strict-teams" ${settings.strictTeams ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Strict Teams</span>
+                      </label>
+                    </div>
+                  </div>
+                </section>
               </div>
 
-              <div class="current-config">
-                <h3>Current Configuration</h3>
-                <div class="config-summary" id="config-summary">
-                  <!-- Will be populated by JS -->
-                </div>
+              <!-- Middle Column: Timing Settings -->
+              <div class="settings-column">
+                <section class="settings-section">
+                  <h3>⏱️ Timing Settings</h3>
+                  <div class="settings-grid">
+                    <div class="setting-item">
+                      <label>Round Time</label>
+                      <div class="slider-container">
+                        <input type="range" id="round-time" min="30" max="300" value="${settings.roundTime}"
+                               oninput="document.getElementById('round-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="round-time-value" class="slider-value">${settings.roundTime}s</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Buy Time</label>
+                      <div class="slider-container">
+                        <input type="range" id="buy-time" min="5" max="60" value="${settings.buyTime}"
+                               oninput="document.getElementById('buy-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="buy-time-value" class="slider-value">${settings.buyTime}s</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Warmup Time</label>
+                      <div class="slider-container">
+                        <input type="range" id="warmup-time" min="0" max="120" value="${settings.warmupTime}"
+                               oninput="document.getElementById('warmup-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="warmup-time-value" class="slider-value">${settings.warmupTime}s</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Bomb Timer</label>
+                      <div class="slider-container">
+                        <input type="range" id="bomb-timer" min="20" max="60" value="${settings.bombTimer}"
+                               oninput="document.getElementById('bomb-timer-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="bomb-timer-value" class="slider-value">${settings.bombTimer}s</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Pre-Round</label>
+                      <div class="slider-container">
+                        <input type="range" id="preround-time" min="0" max="10" value="${settings.preRoundTime}"
+                               oninput="document.getElementById('preround-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="preround-time-value" class="slider-value">${settings.preRoundTime}s</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Round End</label>
+                      <div class="slider-container">
+                        <input type="range" id="roundend-time" min="0" max="15" value="${settings.roundEndTime}"
+                               oninput="document.getElementById('roundend-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
+                        <span id="roundend-time-value" class="slider-value">${settings.roundEndTime}s</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="settings-section">
+                  <h3>⚙️ Server Settings</h3>
+                  <div class="settings-grid">
+                    <div class="setting-item">
+                      <label>Environment</label>
+                      <div class="radio-group">
+                        <label class="radio-option">
+                          <input type="radio" name="node-env" value="development" ${settings.nodeEnv === 'development' ? 'checked' : ''}
+                                 onchange="window.orchestrator.updateConfigSummary()">
+                          <span>Development</span>
+                        </label>
+                        <label class="radio-option">
+                          <input type="radio" name="node-env" value="production" ${settings.nodeEnv === 'production' ? 'checked' : ''}
+                                 onchange="window.orchestrator.updateConfigSummary()">
+                          <span>Production</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Memory Limit</label>
+                      <div class="slider-container">
+                        <input type="range" id="memory-limit" min="1024" max="16384" step="1024" value="${settings.memoryLimit}"
+                               oninput="document.getElementById('memory-limit-value').textContent = (this.value/1024) + 'GB'; window.orchestrator.updateConfigSummary()">
+                        <span id="memory-limit-value" class="slider-value">${settings.memoryLimit/1024}GB</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-item">
+                      <label>Server Port</label>
+                      <input type="number" id="server-port" value="${settings.port || 3000}" min="1000" max="65535"
+                             class="setting-input" onchange="window.orchestrator.updateConfigSummary()">
+                    </div>
+
+                    <div class="toggles-row">
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="debug-mode" ${settings.debugMode ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Debug Mode</span>
+                      </label>
+                    </div>
+                  </div>
+                </section>
               </div>
-            </div>
 
-            <!-- Game Rules Tab -->
-            <div class="tab-content" id="tab-game">
-              <div class="settings-grid">
-                <div class="setting-item">
-                  <label>Game Mode</label>
-                  <select id="game-mode" class="setting-select" onchange="window.orchestrator.updateConfigSummary()">
-                    <option value="casual" ${settings.mode === 'casual' ? 'selected' : ''}>Casual</option>
-                    <option value="competitive" ${settings.mode === 'competitive' ? 'selected' : ''}>Competitive</option>
-                  </select>
-                </div>
-
-                <div class="setting-item">
-                  <label>Max Rounds</label>
-                  <div class="slider-container">
-                    <input type="range" id="max-rounds" min="1" max="30" value="${settings.maxRounds}"
-                           oninput="document.getElementById('max-rounds-value').textContent = this.value; window.orchestrator.updateConfigSummary()">
-                    <span id="max-rounds-value" class="slider-value">${settings.maxRounds}</span>
+              <!-- Right Column: Status & Advanced -->
+              <div class="settings-column">
+                <section class="settings-section">
+                  <h3>📊 Current Configuration</h3>
+                  <div class="config-summary" id="config-summary">
+                    <!-- Will be populated by JS -->
                   </div>
-                </div>
+                </section>
 
-                <div class="setting-item">
-                  <label>Team Size</label>
-                  <div class="slider-container">
-                    <input type="range" id="team-size" min="1" max="16" value="${settings.teamSize}"
-                           oninput="document.getElementById('team-size-value').textContent = this.value; window.orchestrator.updateConfigSummary()">
-                    <span id="team-size-value" class="slider-value">${settings.teamSize}</span>
+                <section class="settings-section">
+                  <h3>🔧 Advanced Options</h3>
+                  <div class="advanced-settings">
+                    <div class="setting-group">
+                      <label>Extra Environment Variables</label>
+                      <input type="text" id="extra-env" class="setting-input-full"
+                             placeholder="KEY=value KEY2=value2" value="${settings.extraEnv || ''}"
+                             onchange="window.orchestrator.updateConfigSummary()">
+                    </div>
+
+                    <div class="setting-group">
+                      <label>Extra Node Options</label>
+                      <input type="text" id="extra-node" class="setting-input-full"
+                             placeholder="--inspect --trace-warnings" value="${settings.extraNode || ''}"
+                             onchange="window.orchestrator.updateConfigSummary()">
+                    </div>
+
+                    <div class="setting-group">
+                      <label>Extra Game Arguments</label>
+                      <input type="text" id="extra-args" class="setting-input-full"
+                             placeholder="--custom-flag=value" value="${settings.extraArgs || ''}"
+                             onchange="window.orchestrator.updateConfigSummary()">
+                    </div>
+
+                    <div class="setting-group">
+                      <label>Command Preview</label>
+                      <pre id="command-preview" class="command-preview"></pre>
+                    </div>
                   </div>
-                </div>
-
-                <div class="setting-item">
-                  <label>Min Players to Start</label>
-                  <div class="slider-container">
-                    <input type="range" id="min-players" min="1" max="10" value="${settings.minPlayers}"
-                           oninput="document.getElementById('min-players-value').textContent = this.value; window.orchestrator.updateConfigSummary()">
-                    <span id="min-players-value" class="slider-value">${settings.minPlayers}</span>
-                  </div>
-                </div>
-
-                <div class="setting-item toggle-item">
-                  <label>Friendly Fire</label>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="friendly-fire" ${settings.friendlyFire ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
-                    <span class="toggle-slider"></span>
-                  </label>
-                </div>
-
-                <div class="setting-item toggle-item">
-                  <label>Auto-Start with Bots</label>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="auto-bots" ${settings.autoBots ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
-                    <span class="toggle-slider"></span>
-                  </label>
-                </div>
-
-                <div class="setting-item toggle-item">
-                  <label>Allow Spectators</label>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="allow-spectators" ${settings.spectators ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
-                    <span class="toggle-slider"></span>
-                  </label>
-                </div>
-
-                <div class="setting-item toggle-item">
-                  <label>Strict Team Limits</label>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="strict-teams" ${settings.strictTeams ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
-                    <span class="toggle-slider"></span>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <!-- Timing Tab -->
-            <div class="tab-content" id="tab-timing">
-              <div class="settings-grid">
-                <div class="setting-item">
-                  <label>Round Time (seconds)</label>
-                  <div class="slider-container">
-                    <input type="range" id="round-time" min="30" max="300" value="${settings.roundTime}"
-                           oninput="document.getElementById('round-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
-                    <span id="round-time-value" class="slider-value">${settings.roundTime}s</span>
-                  </div>
-                </div>
-
-                <div class="setting-item">
-                  <label>Buy Time (seconds)</label>
-                  <div class="slider-container">
-                    <input type="range" id="buy-time" min="5" max="60" value="${settings.buyTime}"
-                           oninput="document.getElementById('buy-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
-                    <span id="buy-time-value" class="slider-value">${settings.buyTime}s</span>
-                  </div>
-                </div>
-
-                <div class="setting-item">
-                  <label>Warmup Time (seconds)</label>
-                  <div class="slider-container">
-                    <input type="range" id="warmup-time" min="0" max="120" value="${settings.warmupTime}"
-                           oninput="document.getElementById('warmup-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
-                    <span id="warmup-time-value" class="slider-value">${settings.warmupTime}s</span>
-                  </div>
-                </div>
-
-                <div class="setting-item">
-                  <label>Bomb Timer (seconds)</label>
-                  <div class="slider-container">
-                    <input type="range" id="bomb-timer" min="20" max="60" value="${settings.bombTimer}"
-                           oninput="document.getElementById('bomb-timer-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
-                    <span id="bomb-timer-value" class="slider-value">${settings.bombTimer}s</span>
-                  </div>
-                </div>
-
-                <div class="setting-item">
-                  <label>Pre-Round Time (seconds)</label>
-                  <div class="slider-container">
-                    <input type="range" id="preround-time" min="0" max="10" value="${settings.preRoundTime}"
-                           oninput="document.getElementById('preround-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
-                    <span id="preround-time-value" class="slider-value">${settings.preRoundTime}s</span>
-                  </div>
-                </div>
-
-                <div class="setting-item">
-                  <label>Round End Time (seconds)</label>
-                  <div class="slider-container">
-                    <input type="range" id="roundend-time" min="0" max="15" value="${settings.roundEndTime}"
-                           oninput="document.getElementById('roundend-time-value').textContent = this.value + 's'; window.orchestrator.updateConfigSummary()">
-                    <span id="roundend-time-value" class="slider-value">${settings.roundEndTime}s</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Server Tab -->
-            <div class="tab-content" id="tab-server">
-              <div class="settings-grid">
-                <div class="setting-item">
-                  <label>Node Environment</label>
-                  <select id="node-env" class="setting-select" onchange="window.orchestrator.updateConfigSummary()">
-                    <option value="development" ${settings.nodeEnv === 'development' ? 'selected' : ''}>Development</option>
-                    <option value="production" ${settings.nodeEnv === 'production' ? 'selected' : ''}>Production</option>
-                  </select>
-                </div>
-
-                <div class="setting-item">
-                  <label>Memory Limit (MB)</label>
-                  <div class="slider-container">
-                    <input type="range" id="memory-limit" min="1024" max="16384" step="1024" value="${settings.memoryLimit}"
-                           oninput="document.getElementById('memory-limit-value').textContent = (this.value/1024) + 'GB'; window.orchestrator.updateConfigSummary()">
-                    <span id="memory-limit-value" class="slider-value">${settings.memoryLimit/1024}GB</span>
-                  </div>
-                </div>
-
-                <div class="setting-item toggle-item">
-                  <label>Debug Mode</label>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="debug-mode" ${settings.debugMode ? 'checked' : ''} onchange="window.orchestrator.updateConfigSummary()">
-                    <span class="toggle-slider"></span>
-                  </label>
-                </div>
-
-                <div class="setting-item">
-                  <label>Server Port</label>
-                  <input type="number" id="server-port" value="${settings.port || 3000}" min="1000" max="65535"
-                         class="setting-input" onchange="window.orchestrator.updateConfigSummary()">
-                </div>
-              </div>
-            </div>
-
-            <!-- Advanced Tab -->
-            <div class="tab-content" id="tab-advanced">
-              <div class="advanced-settings">
-                <div class="setting-group">
-                  <label>Additional Environment Variables</label>
-                  <input type="text" id="extra-env" class="setting-input-full"
-                         placeholder="KEY=value KEY2=value2" value="${settings.extraEnv || ''}"
-                         onchange="window.orchestrator.updateConfigSummary()">
-                </div>
-
-                <div class="setting-group">
-                  <label>Additional Node Options</label>
-                  <input type="text" id="extra-node" class="setting-input-full"
-                         placeholder="--inspect --trace-warnings" value="${settings.extraNode || ''}"
-                         onchange="window.orchestrator.updateConfigSummary()">
-                </div>
-
-                <div class="setting-group">
-                  <label>Additional Game Arguments</label>
-                  <input type="text" id="extra-args" class="setting-input-full"
-                         placeholder="--custom-flag=value" value="${settings.extraArgs || ''}"
-                         onchange="window.orchestrator.updateConfigSummary()">
-                </div>
-
-                <div class="setting-group">
-                  <label>Generated Command Preview</label>
-                  <pre id="command-preview" class="command-preview"></pre>
-                </div>
+                </section>
               </div>
             </div>
           </div>
@@ -2237,9 +2247,6 @@ class ClaudeOrchestrator {
     }
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-    // Set up tab switching
-    this.setupTabSwitching();
 
     // Update the config summary
     this.updateConfigSummary();
@@ -2313,9 +2320,12 @@ class ClaudeOrchestrator {
 
     if (!summary) return;
 
-    // Gather all settings
+    // Gather all settings - handle radio buttons
+    const gameModeRadio = document.querySelector('input[name="game-mode"]:checked');
+    const nodeEnvRadio = document.querySelector('input[name="node-env"]:checked');
+
     const config = {
-      mode: document.getElementById('game-mode')?.value || 'casual',
+      mode: gameModeRadio?.value || 'casual',
       maxRounds: document.getElementById('max-rounds')?.value || 13,
       teamSize: document.getElementById('team-size')?.value || 5,
       roundTime: document.getElementById('round-time')?.value || 60,
@@ -2323,7 +2333,7 @@ class ClaudeOrchestrator {
       warmupTime: document.getElementById('warmup-time')?.value || 5,
       autoBots: document.getElementById('auto-bots')?.checked || false,
       friendlyFire: document.getElementById('friendly-fire')?.checked || false,
-      nodeEnv: document.getElementById('node-env')?.value || 'development',
+      nodeEnv: nodeEnvRadio?.value || 'development',
       memoryLimit: document.getElementById('memory-limit')?.value || 4096,
       debugMode: document.getElementById('debug-mode')?.checked || false
     };
@@ -2372,7 +2382,7 @@ class ClaudeOrchestrator {
 
   buildGameArgsFromUI() {
     const parts = [];
-    const mode = document.getElementById('game-mode')?.value;
+    const mode = document.querySelector('input[name="game-mode"]:checked')?.value;
     if (mode) parts.push(`--mode=${mode}`);
 
     const maxRounds = document.getElementById('max-rounds')?.value;
@@ -2472,8 +2482,8 @@ class ClaudeOrchestrator {
   saveInteractiveLaunchSettings(sessionId) {
     const worktreeId = sessionId.split('-')[0];
 
-    // Build settings from UI
-    const nodeEnv = document.getElementById('node-env')?.value || 'development';
+    // Build settings from UI - handle radio buttons
+    const nodeEnv = document.querySelector('input[name="node-env"]:checked')?.value || 'development';
     const envVars = `NODE_ENV=${nodeEnv} ${this.buildEnvVarsFromUI()}`.trim();
     const nodeOptions = this.buildNodeOptionsFromUI();
     const gameArgs = this.buildGameArgsFromUI();
