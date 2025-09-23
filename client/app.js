@@ -1333,6 +1333,7 @@ class ClaudeOrchestrator {
       this.serverStatuses.set(sessionId, 'idle');
       this.serverPorts.delete(sessionId);
       this.updateSidebarStatus(sessionId, 'idle');
+      this.updateServerControls(sessionId); // Restore launch controls
     } else {
       // Get launch settings for this session
       const launchSettings = environment === 'custom' ?
@@ -1609,30 +1610,33 @@ class ClaudeOrchestrator {
   updateServerControls(sessionId) {
     const wrapper = document.getElementById(`wrapper-${sessionId}`);
     if (!wrapper) return;
-    
+
     const controlsDiv = wrapper.querySelector('.terminal-controls');
     if (!controlsDiv) return;
-    
+
     const isRunning = this.serverStatuses.get(sessionId) === 'running';
-    
-    // Update controls HTML
+
+    // Update controls HTML - restore full control set including settings button
     controlsDiv.innerHTML = `
       <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Show Only This Worktree">🔍</button>
-      ${isRunning ? 
-        `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹` :
-        `<select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
-          <option value="">▶</option>
-          <option value="development">Dev</option>
-          <option value="production">Prod</option>
-          <option value="custom" selected>Custom...</option>
-        </select>`
+      ${isRunning ?
+        `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
+        `<div class="server-launch-group">
+          <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+            <option value="">▶</option>
+            <option value="development">Dev</option>
+            <option value="production">Prod</option>
+            <option value="custom" selected>Custom...</option>
+          </select>
+          <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
+        </div>`
       }
-      </button>
       ${isRunning ? `
         <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
         <button class="control-btn" onclick="window.orchestrator.copyLocalhostUrl('${sessionId}')" title="Copy HTTPS localhost URL">📋</button>
       ` : ''}
       <button class="control-btn" onclick="window.orchestrator.openHytopiaWebsite()" title="Open Hytopia Website">🌐</button>
+      <button class="control-btn" onclick="window.orchestrator.buildProduction('${sessionId}')" title="Build Production ZIP">📦</button>
       <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
     `;
   }
@@ -1686,18 +1690,32 @@ class ClaudeOrchestrator {
   handleSessionExit(sessionId, exitCode) {
     console.log(`Session ${sessionId} exited with code ${exitCode}`);
     this.updateSessionStatus(sessionId, 'exited');
-    
+
     // If it's a Claude session, enable the start button and show startup UI
     if (sessionId.includes('-claude')) {
       const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
       if (startBtn) {
         startBtn.disabled = false;
       }
-      
+
       // Also show the startup UI again
       const startupUI = document.getElementById(`startup-ui-${sessionId}`);
       if (startupUI) {
         startupUI.style.display = 'block';
+      }
+    }
+
+    // If it's a server session, update status and restore controls
+    if (sessionId.includes('-server')) {
+      this.serverStatuses.set(sessionId, 'idle');
+      this.serverPorts.delete(sessionId);
+      this.updateSidebarStatus(sessionId, 'idle');
+      this.updateServerControls(sessionId);
+
+      // Show notification if it crashed unexpectedly
+      if (exitCode !== 0) {
+        const worktreeId = sessionId.split('-')[0];
+        this.showNotification(`Server ${worktreeId} stopped unexpectedly (exit code: ${exitCode})`, 'warning');
       }
     }
   }
