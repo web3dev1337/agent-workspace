@@ -1800,9 +1800,9 @@ header h1 {
 
 /* Fullscreen Launch Settings Modal */
 .launch-settings-fullscreen .modal-content.fullscreen {
-  max-width: min(1200px, 90vw);
-  width: 90%;
-  max-height: 85vh;
+  max-width: calc(100vw - 100px);
+  width: calc(100vw - 100px);
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   background: var(--bg-primary);
@@ -2208,18 +2208,19 @@ header h1 {
 
 .launch-settings-fullscreen .settings-container {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-lg);
-  padding: var(--space-lg);
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-xl);
+  padding: var(--space-xl);
   height: 100%;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .launch-settings-fullscreen .settings-column {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
-  min-width: 0;
+  gap: var(--space-lg);
+  min-width: 350px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -2227,7 +2228,7 @@ header h1 {
 .launch-settings-fullscreen .settings-section {
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
-  padding: var(--space-md);
+  padding: var(--space-lg);
   flex-shrink: 0;
 }
 
@@ -2244,23 +2245,22 @@ header h1 {
 /* Updated Preset Grid */
 .launch-settings-fullscreen .preset-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-xs);
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
 }
 
 .launch-settings-fullscreen .preset-btn-large {
   background: var(--bg-primary);
   border: 2px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: var(--space-sm);
+  padding: var(--space-md);
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-xs);
   text-align: center;
-  min-width: 0;
 }
 
 .launch-settings-fullscreen .preset-btn-large:hover {
@@ -2270,22 +2270,18 @@ header h1 {
 }
 
 .launch-settings-fullscreen .preset-icon {
-  font-size: 1.2rem;
+  font-size: 1.5rem;
 }
 
 .launch-settings-fullscreen .preset-name {
   font-weight: 600;
   color: var(--text-primary);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
 }
 
 .launch-settings-fullscreen .preset-desc {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  width: 100%;
 }
 
 /* Radio Groups */
@@ -2372,10 +2368,10 @@ header h1 {
 }
 
 .launch-settings-fullscreen .setting-item > label:first-child {
-  flex: 0 0 90px;
+  flex: 0 0 120px;
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
 /* Sliders */
