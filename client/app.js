@@ -280,7 +280,6 @@ class ClaudeOrchestrator {
       'view-servers-only': null,
       'view-presets': null,
       'close-presets': null,
-      'grid-layout': null,
       'settings-toggle': null,
       'close-settings': null,
       'notification-toggle': null,
@@ -356,10 +355,7 @@ class ClaudeOrchestrator {
       });
     });
     
-    // Grid layout
-    document.getElementById('grid-layout').addEventListener('change', (e) => {
-      this.changeLayout(e.target.value);
-    });
+    // Grid layout dropdown removed - using dynamic layout now
     
     // Settings
     const settingsToggle = document.getElementById('settings-toggle');
@@ -765,6 +761,20 @@ class ClaudeOrchestrator {
     }
   }
   
+  resizeAllVisibleTerminals() {
+    // Force resize all visible terminals to fit their containers
+    this.activeView.forEach(sessionId => {
+      const wrapper = document.getElementById(`wrapper-${sessionId}`);
+      if (wrapper && wrapper.style.display !== 'none') {
+        this.terminalManager.fitTerminal(sessionId);
+        const term = this.terminalManager.terminals.get(sessionId);
+        if (term) {
+          term.refresh(0, term.rows - 1);
+        }
+      }
+    });
+  }
+
   showOnlyWorktree(worktreeId) {
     console.log(`Showing only worktree: ${worktreeId}`);
 
@@ -814,40 +824,19 @@ class ClaudeOrchestrator {
       // Hide terminals - allow hiding even if Claude is running (user wants to focus elsewhere)
       sessions.forEach(id => {
         this.visibleTerminals.delete(id);
-        const wrapper = document.getElementById(`wrapper-${id}`);
-        if (wrapper) {
-          wrapper.style.display = 'none';
-        }
       });
       console.log(`Hidden worktree ${worktreeId}`);
     } else {
-      // Show terminals - add back to visible set and display
+      // Show terminals - add back to visible set
       sessions.forEach(id => {
         this.visibleTerminals.add(id);
-        const wrapper = document.getElementById(`wrapper-${id}`);
-        if (wrapper) {
-          // Use flex display to match the CSS styling
-          wrapper.style.display = 'flex';
-          // Fit terminal when showing
-          setTimeout(() => {
-            this.terminalManager.fitTerminal(id);
-            // Also refresh the terminal to ensure content is visible
-            const term = this.terminalManager.terminals.get(id);
-            if (term) {
-              term.refresh(0, term.rows - 1);
-            }
-          }, 50);
-        } else {
-          // If wrapper doesn't exist, we need to do a full refresh
-          console.log(`Wrapper not found for ${id}, doing full refresh`);
-          this.updateTerminalGrid();
-          return;
-        }
       });
       console.log(`Shown worktree ${worktreeId}`);
     }
 
-    // Update sidebar to show visibility state
+    // IMPORTANT: Must update the entire grid to recalculate layout
+    // This will re-render with correct data-visible-count and apply proper CSS grid
+    this.updateTerminalGrid();
     this.buildSidebar();
   }
   
@@ -898,19 +887,20 @@ class ClaudeOrchestrator {
     // Render all terminals but apply visibility
     this.activeView = sessionIds.filter(id => this.visibleTerminals.has(id));
     const grid = document.getElementById('terminal-grid');
-    
+
+    // Set the data attribute for dynamic layout based on visible count
+    const visibleCount = this.activeView.length;
+    grid.setAttribute('data-visible-count', visibleCount);
+
     // Clear grid
     grid.innerHTML = '';
-    
-    // Create terminal elements for ALL sessions
+
+    // Only create and add VISIBLE terminal elements to the grid
+    // This ensures CSS nth-child selectors work correctly
     sessionIds.forEach((sessionId) => {
       const session = this.sessions.get(sessionId);
-      if (session) {
+      if (session && this.visibleTerminals.has(sessionId)) {
         const wrapper = this.createTerminalElement(sessionId, session);
-        // Hide if not in visible set
-        if (!this.visibleTerminals.has(sessionId)) {
-          wrapper.style.display = 'none';
-        }
         grid.appendChild(wrapper);
       }
     });
@@ -930,8 +920,11 @@ class ClaudeOrchestrator {
             
             // Only fit if visible
             if (this.visibleTerminals.has(sessionId)) {
-              this.terminalManager.fitTerminal(sessionId);
-              term.refresh(0, term.rows - 1);
+              // Add a small delay to ensure CSS grid has applied
+              setTimeout(() => {
+                this.terminalManager.fitTerminal(sessionId);
+                term.refresh(0, term.rows - 1);
+              }, 100);
             }
           } else {
             this.terminalManager.createTerminal(sessionId, session);
@@ -941,6 +934,11 @@ class ClaudeOrchestrator {
         }, 50 + (index * 25));
       }
     });
+
+    // Force a resize after everything is rendered to ensure terminals fit properly
+    setTimeout(() => {
+      this.resizeAllVisibleTerminals();
+    }, 500);
   }
   
   showClaudeOnly() {
@@ -1001,27 +999,7 @@ class ClaudeOrchestrator {
     }
   }
   
-  changeLayout(layout) {
-    this.currentLayout = layout;
-    const grid = document.getElementById('terminal-grid');
-    
-    // Remove all layout classes
-    grid.className = 'terminal-grid';
-    
-    // Add new layout class
-    if (layout !== '2x4') {
-      grid.classList.add(`layout-${layout}`);
-    }
-    
-    // Force re-render of terminals
-    setTimeout(() => {
-      this.activeView.forEach(sessionId => {
-        if (this.terminalManager.terminals.has(sessionId)) {
-          this.terminalManager.fitTerminal(sessionId);
-        }
-      });
-    }, 100);
-  }
+  // changeLayout method removed - using dynamic layout based on visible terminal count
   
   showTerminals(sessionIds) {
     // Legacy function - update visible set and refresh everything

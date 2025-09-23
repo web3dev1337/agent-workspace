@@ -238,25 +238,123 @@ header h1 {
   overflow: hidden;
   display: grid;
   gap: var(--space-md);
+  /* Dynamic grid - automatically adjusts based on visible terminals */
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(2, minmax(0, 1fr));
   height: calc(100vh - var(--header-height) - 2 * var(--space-md));
   contain: layout size;
 }
 
-.terminal-grid.layout-1x2 {
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+/* Dynamic layouts for different terminal counts - Pair-aware (Claude + Server) */
+
+/* Single terminal (shouldn't happen often) */
+.terminal-grid[data-visible-count="1"] {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
 }
 
-.terminal-grid.layout-2x2 {
+/* 1 pair (2 terminals): Side by side */
+.terminal-grid[data-visible-count="2"] {
   grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-template-rows: 1fr;
 }
 
-.terminal-grid.layout-3x3 {
+/* Odd terminal (3) - probably 1 pair + 1 solo */
+.terminal-grid[data-visible-count="3"] {
   grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, minmax(0, 1fr));
+  grid-template-rows: 1fr;
+}
+
+/* 2 pairs (4 terminals): 2x2 grid */
+.terminal-grid[data-visible-count="4"] {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+/* 5 terminals - 2 pairs + 1 solo */
+.terminal-grid[data-visible-count="5"] {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+/* 3 pairs (6 terminals): Stack 3 pairs vertically */
+.terminal-grid[data-visible-count="6"] {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+/* 7 terminals - 3 pairs + 1 solo */
+.terminal-grid[data-visible-count="7"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+/* 4 pairs (8 terminals): Stack 4 pairs vertically */
+.terminal-grid[data-visible-count="8"] {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+}
+
+/* 9 terminals */
+.terminal-grid[data-visible-count="9"] {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+/* 5 pairs (10 terminals): 4x2 grid with last pair spanning bottom */
+.terminal-grid[data-visible-count="10"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+/* Make LAST 2 terminals span the bottom row (using nth-last-child for flexibility) */
+.terminal-grid[data-visible-count="10"] > :nth-last-child(2) {
+  grid-column: 1 / span 2;
+}
+.terminal-grid[data-visible-count="10"] > :nth-last-child(1) {
+  grid-column: 3 / span 2;
+}
+
+/* 11 terminals - odd case */
+.terminal-grid[data-visible-count="11"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+/* 6 pairs (12 terminals): 4 columns x 3 rows works perfectly */
+.terminal-grid[data-visible-count="12"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+/* 7 pairs (14 terminals): 4x4 grid with last pair spanning bottom */
+.terminal-grid[data-visible-count="13"],
+.terminal-grid[data-visible-count="14"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+}
+/* Make LAST 2 terminals span the bottom row (using nth-last-child for flexibility) */
+.terminal-grid[data-visible-count="14"] > :nth-last-child(2) {
+  grid-column: 1 / span 2;
+}
+.terminal-grid[data-visible-count="14"] > :nth-last-child(1) {
+  grid-column: 3 / span 2;
+}
+
+/* 8 pairs (16 terminals) */
+.terminal-grid[data-visible-count="15"],
+.terminal-grid[data-visible-count="16"] {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+}
+
+/* Layout info display */
+.layout-info {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
 }
 
 /* Terminal Container */
@@ -714,7 +812,7 @@ header h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 100;  /* Increased to ensure it's always on top */
   border-radius: var(--radius-md);
 }
 
