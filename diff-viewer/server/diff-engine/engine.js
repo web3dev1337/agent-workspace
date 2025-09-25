@@ -1,7 +1,8 @@
-const Parser = require('tree-sitter');
-const JavaScript = require('tree-sitter-javascript');
-const TypeScript = require('tree-sitter-typescript').typescript;
-const Python = require('tree-sitter-python');
+// Temporarily disabled tree-sitter - Node 24 compatibility issue
+// const Parser = require('tree-sitter');
+// const JavaScript = require('tree-sitter-javascript');
+// const TypeScript = require('tree-sitter-typescript').typescript;
+// const Python = require('tree-sitter-python');
 const MinifiedDiffEngine = require('./minified-diff');
 const JsonYamlDiffEngine = require('./json-yaml-diff');
 const BinaryDiffEngine = require('./binary-diff');
@@ -10,7 +11,7 @@ const AdvancedSemanticEngine = require('./advanced-semantic-engine');
 class DiffEngine {
   constructor() {
     this.parsers = new Map();
-    this.initializeParsers();
+    // this.initializeParsers(); // Disabled - tree-sitter compatibility
     
     // Initialize specialized engines
     this.minifiedEngine = new MinifiedDiffEngine();
