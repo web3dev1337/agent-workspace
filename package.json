@@ -7,10 +7,11 @@
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
     "dev:client": "node client/dev-server.js",
+    "dev:diff": "cd diff-viewer && npm run dev",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "dev:all": "concurrently \"npm run dev\" \"npm run dev:client\" \"npm run tauri:dev\"",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:client\" \"npm run tauri:dev\" \"npm run dev:diff\"",
     "prod": "npm run dev:all",
     "dev:safe": "PORT=4000 CLIENT_PORT=2081 npm run dev:all",
     "test": "echo \"Error: no test specified\" && exit 1"
