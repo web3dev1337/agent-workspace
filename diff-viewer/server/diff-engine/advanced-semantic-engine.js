@@ -1,4 +1,4 @@
-const Parser = require('tree-sitter');
+// const Parser = require('tree-sitter'); // Temporarily disabled - Node 24 compatibility issue
 const crypto = require('crypto');
 
 class AdvancedSemanticEngine {
