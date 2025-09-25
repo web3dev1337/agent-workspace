@@ -12,7 +12,7 @@ class DiffEngine {
   constructor() {
     this.parsers = new Map();
     // this.initializeParsers(); // Disabled - tree-sitter compatibility
-    
+
     // Initialize specialized engines
     this.minifiedEngine = new MinifiedDiffEngine();
     this.jsonYamlEngine = new JsonYamlDiffEngine();
@@ -21,22 +21,23 @@ class DiffEngine {
   }
 
   initializeParsers() {
+    // Disabled - tree-sitter compatibility with Node 24
     // JavaScript parser
-    const jsParser = new Parser();
-    jsParser.setLanguage(JavaScript);
-    this.parsers.set('js', jsParser);
-    this.parsers.set('jsx', jsParser);
+    // const jsParser = new Parser();
+    // jsParser.setLanguage(JavaScript);
+    // this.parsers.set('js', jsParser);
+    // this.parsers.set('jsx', jsParser);
 
     // TypeScript parser
-    const tsParser = new Parser();
-    tsParser.setLanguage(TypeScript);
-    this.parsers.set('ts', tsParser);
-    this.parsers.set('tsx', tsParser);
+    // const tsParser = new Parser();
+    // tsParser.setLanguage(TypeScript);
+    // this.parsers.set('ts', tsParser);
+    // this.parsers.set('tsx', tsParser);
 
     // Python parser
-    const pyParser = new Parser();
-    pyParser.setLanguage(Python);
-    this.parsers.set('py', pyParser);
+    // const pyParser = new Parser();
+    // pyParser.setLanguage(Python);
+    // this.parsers.set('py', pyParser);
   }
 
   async analyzeDiff(file) {
