@@ -221,15 +221,15 @@ Both directories are already configured with different `.env` files:
 
 | Purpose | Directory | Command | Ports | Use Case |
 |---------|-----------|---------|-------|----------|
-| **Production** | ~/claude-orchestrator | `npm run prod` | 3000/2080 | Your daily Claude work |
-| **Development** | ~/claude-orchestrator-dev | `npm run dev` or `dev:all` | 4000/2081 | Modifying Orchestrator |
+| **Production** | ~/claude-orchestrator | `npm run prod` | 3000/2080/7655 | Your daily Claude work |
+| **Development** | ~/claude-orchestrator-dev | `npm run dev` or `dev:all` | 4000/2081/7656 | Modifying Orchestrator |
 
 ### What Gets Started:
 All commands (`prod`, `dev:all`, `dev`) run these 4 services:
 - **Server** (Express backend with hot-reload)
 - **Client** (Web UI dev server)
 - **Tauri** (Native desktop app)
-- **Diff Viewer** (PR review tool on port 7655)
+- **Diff Viewer** (PR review tool on port 7655 for prod, 7656 for dev)
 
 ### Important Notes:
 - Both instances can run simultaneously without conflicts
