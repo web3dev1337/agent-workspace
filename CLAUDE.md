@@ -198,7 +198,7 @@ npm run prod           # Runs on ports 3000/2080
 #### Development Instance (Modifying the Orchestrator):
 ```bash
 cd ~/claude-orchestrator-dev
-npm run dev:isolated   # Runs on ports 4000/2081
+npm run dev   # Runs on ports 4000/2081 (override ports)
 # OR just use: npm run dev:all (since .env already sets ports to 4000/2081)
 ```
 
@@ -222,10 +222,10 @@ Both directories are already configured with different `.env` files:
 | Purpose | Directory | Command | Ports | Use Case |
 |---------|-----------|---------|-------|----------|
 | **Production** | ~/claude-orchestrator | `npm run prod` | 3000/2080 | Your daily Claude work |
-| **Development** | ~/claude-orchestrator-dev | `npm run dev:all` or `dev:isolated` | 4000/2081 | Modifying Orchestrator |
+| **Development** | ~/claude-orchestrator-dev | `npm run dev` or `dev:all` | 4000/2081 | Modifying Orchestrator |
 
 ### What Gets Started:
-All commands (`prod`, `dev:all`, `dev:isolated`) run these 4 services:
+All commands (`prod`, `dev:all`, `dev`) run these 4 services:
 - **Server** (Express backend with hot-reload)
 - **Client** (Web UI dev server)
 - **Tauri** (Native desktop app)
@@ -234,7 +234,7 @@ All commands (`prod`, `dev:all`, `dev:isolated`) run these 4 services:
 ### Important Notes:
 - Both instances can run simultaneously without conflicts
 - The `.env` files control which ports are used (no need to override)
-- `dev:isolated` is just an alias that explicitly sets ports (redundant in dev folder)
+- `dev` command explicitly sets ports to 4000/2081 (redundant in dev folder since .env has them)
 - In `claude-orchestrator-dev`, you can just use `npm run dev:all` since .env already has the right ports
 
 ---
