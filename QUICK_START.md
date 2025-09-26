@@ -12,10 +12,10 @@ npm run prod
 ### 2. For Claude to Modify Orchestrator:
 ```bash
 cd ~/claude-orchestrator-dev
-npm run dev:isolated
+npm run dev
 # OR just: npm run dev:all (since .env already has dev ports)
 ```
-**This runs an isolated dev copy on ports 4000/2081 that Claude can modify without affecting your work**
+**This runs a dev copy on ports 4000/2081 that Claude can modify without affecting your work**
 
 ---
 
