@@ -182,71 +182,60 @@ SERVICES:     Modular service architecture with clear interfaces
 7. **Be careful with `pkill -f` commands** - avoid broad patterns that could kill WSL or Claude Code itself
 8. **node-pty segfaults**: Run `npm rebuild node-pty` if server crashes with segmentation fault
 
-## Safe Development Setup (IMPORTANT - Read this!)
+## Development Setup - Two Isolated Instances
 
-### Problem: Self-Modification Conflict
-When using Claude to update the Orchestrator, it can kill/restart the system running your Claude sessions, causing work loss.
+### Why Two Instances?
+To avoid conflicts when developing the Orchestrator itself while using it for other work.
 
-### Solution: Two Simple Commands
+### 🎯 SIMPLE COMMANDS:
 
-## 🎯 SIMPLE COMMANDS - USE THESE:
-
-### For YOUR WORK (Production):
+#### Production Instance (Your Daily Work):
 ```bash
-cd ~/claude-orchestrator-temp
-npm run prod           # Runs on ports 3000/2080 (your normal setup)
+cd ~/claude-orchestrator
+npm run prod           # Runs on ports 3000/2080
 ```
 
-### For CLAUDE TO MODIFY (Safe Dev):
+#### Development Instance (Modifying the Orchestrator):
 ```bash
 cd ~/claude-orchestrator-dev
-npm run dev:safe       # Runs on ports 4000/2081 (isolated from production)
+npm run dev:isolated   # Runs on ports 4000/2081
+# OR just use: npm run dev:all (since .env already sets ports to 4000/2081)
 ```
 
-## One-Time Setup for Dev Instance:
-```bash
-# Clone to dev directory (only do this once)
-cd ~
-git clone https://github.com/web3dev1337/claude-orchestrator.git claude-orchestrator-dev
+### Setup Details:
 
-# Configure and install
-cd ~/claude-orchestrator-dev
-cat > .env << 'EOF'
-PORT=4000
-CLIENT_PORT=2081
-WORKTREE_BASE_PATH=/home/ab
-WORKTREE_COUNT=8
-LOG_DIR=logs-dev
-EOF
+Both directories are already configured with different `.env` files:
 
-npm install
-npm rebuild node-pty
+**~/claude-orchestrator/.env** (Production)
+- PORT=3000
+- Default client port 2080
+- For your actual Claude sessions
 
-# Update client to use environment ports
-sed -i 's/const PORT = 2080/const PORT = process.env.CLIENT_PORT || 2080/' client/dev-server.js
-sed -i 's/target: '\''http:\/\/localhost:3000'\''/target: `http:\/\/localhost:\${process.env.PORT || 3000}`/' client/dev-server.js
-```
+**~/claude-orchestrator-dev/.env** (Development)
+- PORT=4000
+- CLIENT_PORT=2081
+- TAURI_DEV_PORT=1421
+- For developing/testing the Orchestrator
 
-## Quick Reference:
+### Quick Reference:
 
-| Purpose | Command | Directory | Ports | Claude Can Modify? |
-|---------|---------|-----------|-------|-------------------|
-| **Your Work** | `npm run prod` | ~/claude-orchestrator-temp | 3000/2080 | ❌ NO |
-| **Claude Dev** | `npm run dev:safe` | ~/claude-orchestrator-dev | 4000/2081 | ✅ YES |
+| Purpose | Directory | Command | Ports | Use Case |
+|---------|-----------|---------|-------|----------|
+| **Production** | ~/claude-orchestrator | `npm run prod` | 3000/2080 | Your daily Claude work |
+| **Development** | ~/claude-orchestrator-dev | `npm run dev:all` or `dev:isolated` | 4000/2081 | Modifying Orchestrator |
 
-## For Your Team:
-- **Production**: Always use `npm run prod` for your actual work
-- **Development**: Use `npm run dev:safe` when Claude needs to modify the Orchestrator
-- Both can run simultaneously without conflicts
-- The commands are identical in both directories - the .env file controls which ports are used
+### What Gets Started:
+All commands (`prod`, `dev:all`, `dev:isolated`) run these 4 services:
+- **Server** (Express backend with hot-reload)
+- **Client** (Web UI dev server)
+- **Tauri** (Native desktop app)
+- **Diff Viewer** (PR review tool on port 7655)
 
-## What These Commands Do:
-Both `npm run prod` and `npm run dev:safe` run the same three services:
-- **Server** (nodemon with hot-reload)
-- **Client** (dev server with proxy)
-- **Tauri** (native desktop app)
-
-The only difference is the ports they use!
+### Important Notes:
+- Both instances can run simultaneously without conflicts
+- The `.env` files control which ports are used (no need to override)
+- `dev:isolated` is just an alias that explicitly sets ports (redundant in dev folder)
+- In `claude-orchestrator-dev`, you can just use `npm run dev:all` since .env already has the right ports
 
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨

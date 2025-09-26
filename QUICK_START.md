@@ -4,7 +4,7 @@
 
 ### 1. For Your Normal Work:
 ```bash
-cd ~/claude-orchestrator-temp
+cd ~/claude-orchestrator
 npm run prod
 ```
 **This runs your production Orchestrator on ports 3000/2080**
@@ -12,9 +12,10 @@ npm run prod
 ### 2. For Claude to Modify Orchestrator:
 ```bash
 cd ~/claude-orchestrator-dev
-npm run dev:safe
+npm run dev:isolated
+# OR just: npm run dev:all (since .env already has dev ports)
 ```
-**This runs a safe dev copy on ports 4000/2081 that Claude can modify without affecting your work**
+**This runs an isolated dev copy on ports 4000/2081 that Claude can modify without affecting your work**
 
 ---
 
