@@ -98,9 +98,8 @@ class SessionManager extends EventEmitter {
 
     for (let i = 1; i <= terminalPairs; i++) {
       const worktreeId = worktreeConfig.namingPattern.replace('{n}', i);
-      const worktreePath = worktreeConfig.enabled
-        ? path.join(repository.path, worktreeId)
-        : repository.path; // Single directory if worktrees disabled
+      // ALL workspace types use worktree pattern - no special cases
+      const worktreePath = path.join(repository.path, worktreeId);
 
       this.worktrees.push({
         id: worktreeId,
