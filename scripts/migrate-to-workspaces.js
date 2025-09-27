@@ -3,7 +3,7 @@
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
-const os = require('homedir');
+const os = require('os');
 
 const COLORS = {
   reset: '\x1b[0m',
