@@ -39,6 +39,7 @@ const { NotificationService } = require('./notificationService');
 const { UserSettingsService } = require('./userSettingsService');
 const { GitUpdateService } = require('./gitUpdateService');
 const { WorkspaceManager } = require('./workspaceManager');
+const { WorktreeHelper } = require('./worktreeHelper');
 
 const app = express();
 const httpServer = createServer(app);
@@ -100,6 +101,7 @@ const sessionManager = new SessionManager(io);
 const statusDetector = new StatusDetector();
 const gitHelper = new GitHelper();
 const notificationService = new NotificationService(io);
+const worktreeHelper = new WorktreeHelper();
 
 // Connect services
 sessionManager.setStatusDetector(statusDetector);
