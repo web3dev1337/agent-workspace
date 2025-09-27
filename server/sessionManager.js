@@ -27,30 +27,21 @@ class SessionManager extends EventEmitter {
     this.gitHelper = null; // Will be set later
     this.fileWatchers = new Map(); // Store file watchers for .git/HEAD files
     this.userSettings = UserSettingsService.getInstance();
-    
+    this.workspace = null; // Will be set by WorkspaceManager
+
     // Load configuration
     this.config = this.loadConfig();
-    
-    // Configuration with env overrides
-    this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || 
-      (this.config.worktrees.basePath === 'auto' ? process.env.HOME : this.config.worktrees.basePath);
-    this.worktreeCount = parseInt(process.env.WORKTREE_COUNT || this.config.worktrees.count.toString());
+
+    // Session timeouts
     this.sessionTimeout = parseInt(process.env.SESSION_TIMEOUT || this.config.sessions.timeoutMs.toString());
-    // Per-session-type timeouts. 0 disables auto-termination for that type.
     this.claudeSessionTimeout = parseInt(process.env.CLAUDE_SESSION_TIMEOUT || this.config.sessions.claudeTimeoutMs?.toString() || '0');
     this.serverSessionTimeout = parseInt(process.env.SERVER_SESSION_TIMEOUT || this.config.sessions.serverTimeoutMs?.toString() || '43200000');
     this.branchRefreshInterval = null;
     this.maxProcessesPerSession = parseInt(process.env.MAX_PROCESSES_PER_SESSION || this.config.sessions.maxProcessesPerSession.toString());
     this.maxBufferSize = parseInt(process.env.MAX_BUFFER_SIZE || this.config.sessions.maxBufferSize.toString());
-    
-    // Build worktree configuration
+
+    // Worktrees will be built when workspace is set
     this.worktrees = [];
-    for (let i = 1; i <= this.worktreeCount; i++) {
-      this.worktrees.push({
-        id: `work${i}`,
-        path: `${this.worktreeBasePath}/HyFire2-work${i}`
-      });
-    }
   }
 
   // Determine effective inactivity timeout per session (ms)
@@ -84,6 +75,40 @@ class SessionManager extends EventEmitter {
   
   setGitHelper(helper) {
     this.gitHelper = helper;
+  }
+
+  setWorkspace(workspace) {
+    logger.info('Setting workspace for SessionManager', { workspace: workspace.name });
+    this.workspace = workspace;
+    this.buildWorktreesFromWorkspace();
+  }
+
+  buildWorktreesFromWorkspace() {
+    if (!this.workspace) {
+      logger.warn('No workspace set, cannot build worktrees');
+      return;
+    }
+
+    this.worktrees = [];
+    const { repository, worktrees: worktreeConfig, terminals } = this.workspace;
+    const terminalPairs = terminals.pairs || 8;
+
+    for (let i = 1; i <= terminalPairs; i++) {
+      const worktreeId = worktreeConfig.namingPattern.replace('{n}', i);
+      const worktreePath = worktreeConfig.enabled
+        ? path.join(repository.path, worktreeId)
+        : repository.path; // Single directory if worktrees disabled
+
+      this.worktrees.push({
+        id: worktreeId,
+        path: worktreePath
+      });
+    }
+
+    logger.info('Built worktrees from workspace', {
+      workspace: this.workspace.name,
+      count: this.worktrees.length
+    });
   }
   
   async initializeSessions() {
