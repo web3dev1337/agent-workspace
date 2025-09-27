@@ -103,9 +103,9 @@ const WORKSPACE_TYPES = {
     id: 'writing',
     name: 'Writing Project',
     description: 'Books, articles, documentation, scripts',
-    defaultTerminalPairs: 1,
-    maxTerminalPairs: 4,
-    requiresServer: false,
+    defaultTerminalPairs: 2,
+    maxTerminalPairs: 8,
+    requiresServer: true,
     launchSettingsTemplate: 'writing',
     icon: '📖',
     detectPatterns: {
