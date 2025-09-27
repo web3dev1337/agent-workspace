@@ -44,9 +44,28 @@ class WorktreeHelper {
         throw new Error(`Master directory not found: ${masterPath}. Cannot create worktree.`);
       }
 
-      // Create worktree using git worktree add
-      // Create new branch for the worktree to avoid "already used" error
-      // Use simple naming to avoid path issues
+      // Auto-detect the actual default branch
+      let defaultBranch = repository.masterBranch;
+      try {
+        // Check if specified branch exists
+        await this.executeGitCommand(`git rev-parse --verify ${defaultBranch}`, masterPath);
+        logger.info(`Using specified branch: ${defaultBranch}`);
+      } catch (error) {
+        // Try main if master fails
+        if (defaultBranch === 'master') {
+          try {
+            await this.executeGitCommand(`git rev-parse --verify main`, masterPath);
+            defaultBranch = 'main';
+            logger.info(`Master not found, using main branch instead`);
+          } catch (error2) {
+            throw new Error(`Neither master nor main branch found in repository`);
+          }
+        } else {
+          throw new Error(`Branch ${defaultBranch} not found in repository`);
+        }
+      }
+
+      // Create worktree using detected branch
       const branchName = `${worktreeName}-dev`;
 
       // Check if branch already exists and delete it if needed
@@ -58,7 +77,7 @@ class WorktreeHelper {
         logger.debug(`Branch ${branchName} doesn't exist (expected)`);
       }
 
-      const command = `git worktree add ../${worktreeName} -b ${branchName} ${repository.masterBranch}`;
+      const command = `git worktree add ../${worktreeName} -b ${branchName} ${defaultBranch}`;
       logger.info(`Executing: ${command}`, { cwd: masterPath });
 
       await this.executeGitCommand(command, masterPath);
