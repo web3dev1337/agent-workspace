@@ -1,0 +1,34 @@
+{
+  "id": "website",
+  "name": "Website Launch Settings",
+  "tabs": [
+    {
+      "id": "quick-setup",
+      "label": "⚡ Quick Setup",
+      "presets": [
+        {
+          "id": "dev",
+          "name": "Development",
+          "icon": "💻",
+          "description": "Dev server with hot reload",
+          "settings": {
+            "nodeEnv": "development",
+            "port": 3000,
+            "hotReload": true
+          }
+        },
+        {
+          "id": "production",
+          "name": "Production",
+          "icon": "🚀",
+          "description": "Production build",
+          "settings": {
+            "nodeEnv": "production",
+            "port": 3000,
+            "minify": true
+          }
+        }
+      ]
+    }
+  ]
+}

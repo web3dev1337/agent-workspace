@@ -1,0 +1,22 @@
+{
+  "id": "writing",
+  "name": "Writing Project Settings",
+  "tabs": [
+    {
+      "id": "export",
+      "label": "📤 Export",
+      "presets": [
+        {
+          "id": "pdf",
+          "name": "PDF Export",
+          "icon": "📄",
+          "description": "Export to PDF",
+          "settings": {
+            "format": "pdf",
+            "includeMetadata": true
+          }
+        }
+      ]
+    }
+  ]
+}
