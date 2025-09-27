@@ -289,7 +289,7 @@ class WorkspaceWizard {
     if (!this.validateCurrentStep()) return;
 
     this.collectCurrentStepData();
-    if (this.currentStep < 4) {
+    if (this.currentStep < 3) {
       this.showStep(this.currentStep + 1);
     }
   }
@@ -303,13 +303,6 @@ class WorkspaceWizard {
   validateCurrentStep() {
     switch (this.currentStep) {
       case 1:
-        const selectedType = document.querySelector('.project-type-card.selected');
-        if (!selectedType) {
-          alert('Please select a project type');
-          return false;
-        }
-        break;
-      case 2:
         const selectedProject = document.querySelector('.project-item.selected');
         const customPath = document.getElementById('custom-repo-path').value;
         if (!selectedProject && !customPath) {
@@ -317,7 +310,7 @@ class WorkspaceWizard {
           return false;
         }
         break;
-      case 3:
+      case 2:
         const name = document.getElementById('workspace-name').value;
         if (!name.trim()) {
           alert('Please enter a workspace name');
@@ -331,19 +324,17 @@ class WorkspaceWizard {
   collectCurrentStepData() {
     switch (this.currentStep) {
       case 1:
-        const selectedType = document.querySelector('.project-type-card.selected');
-        this.data.type = selectedType.dataset.type;
-        break;
-      case 2:
         const selectedProject = document.querySelector('.project-item.selected');
         if (selectedProject) {
           this.data.repositoryPath = selectedProject.dataset.path;
+          this.data.type = selectedProject.dataset.type; // Auto-detected type
           this.data.suggestedName = selectedProject.querySelector('.project-name').textContent;
         } else {
           this.data.repositoryPath = document.getElementById('custom-repo-path').value;
+          this.data.type = 'custom'; // Default for custom paths
         }
         break;
-      case 3:
+      case 2:
         this.data.name = document.getElementById('workspace-name').value;
         this.data.icon = document.getElementById('workspace-icon').value;
         this.data.enableWorktrees = document.getElementById('enable-worktrees').checked;
