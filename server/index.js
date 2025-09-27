@@ -609,17 +609,36 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
 
 app.post('/api/workspaces/create-worktree', async (req, res) => {
   try {
-    const { workspaceId, worktreeNumber } = req.body;
-    logger.info('Creating individual worktree', { workspaceId, worktreeNumber });
+    const { workspaceId, repositoryPath, worktreeNumber } = req.body;
+    logger.info('Creating individual worktree', { workspaceId, worktreeNumber, repositoryPath });
 
     const workspace = workspaceManager.getWorkspace(workspaceId);
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
+    // Use provided repository path or workspace default
+    const repoPath = repositoryPath || workspace.repository?.path;
+    if (!repoPath) {
+      return res.status(400).json({ error: 'Repository path not found' });
+    }
+
+    // Create temporary workspace config for worktree creation
+    const tempWorkspace = {
+      repository: {
+        path: repoPath,
+        masterBranch: 'master' // Always use master for consistency
+      },
+      worktrees: {
+        enabled: true,
+        namingPattern: 'work{n}',
+        autoCreate: true
+      }
+    };
+
     // Create the specific worktree
     const worktreeId = `work${worktreeNumber}`;
-    await worktreeHelper.createWorktree(workspace, worktreeId);
+    await worktreeHelper.createWorktree(tempWorkspace, worktreeId);
 
     // Update workspace config to include new terminal pair
     const updatedWorkspace = {
