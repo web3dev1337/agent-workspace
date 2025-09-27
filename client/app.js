@@ -4018,23 +4018,134 @@ class ClaudeOrchestrator {
     this.socket.emit('switch-workspace', { workspaceId });
   }
 
-  showAddWorktreeModal() {
-    if (!this.currentWorkspace || !this.currentWorkspace.worktrees.enabled) {
-      alert('Worktrees are not enabled for this workspace');
-      return;
+  async showAddWorktreeModal() {
+    console.log('Opening Add Worktree modal...');
+
+    // Fetch available repositories
+    try {
+      const response = await fetch('/api/workspaces/scan-repos');
+      const allRepos = await response.json();
+      this.showAdvancedAddWorktreeModal(allRepos);
+    } catch (error) {
+      console.error('Failed to fetch repositories:', error);
+      this.showSimpleAddWorktreeModal();
+    }
+  }
+
+  showSimpleAddWorktreeModal() {
+    if (!this.currentWorkspace) return;
+    const currentRepo = this.currentWorkspace.repository;
+    const nextNumber = (this.currentWorkspace.terminals?.pairs || 1) + 1;
+    if (confirm(`Create work${nextNumber} worktree from ${currentRepo.masterBranch} branch?`)) {
+      this.createWorktree(currentRepo.path, nextNumber);
+    }
+  }
+
+  showAdvancedAddWorktreeModal(allRepos) {
+    const existing = document.getElementById('add-worktree-modal');
+    if (existing) existing.remove();
+
+    const categories = {};
+    allRepos.forEach(repo => {
+      if (!categories[repo.category]) categories[repo.category] = [];
+      categories[repo.category].push(repo);
+    });
+
+    const modal = document.createElement('div');
+    modal.id = 'add-worktree-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content large-modal">
+        <div class="modal-header">
+          <h3>Add Worktree to "${this.currentWorkspace.name}"</h3>
+          <button class="close-btn" onclick="this.closest('.modal').remove()">✕</button>
+        </div>
+        <div class="modal-body">
+          ${Object.entries(categories).map(([category, repos]) => `
+            <div class="repo-category">
+              <h4>${category}</h4>
+              ${repos.map(repo => this.renderRepoWorktreeOptions(repo)).join('')}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  renderRepoWorktreeOptions(repo) {
+    const worktreeOptions = [];
+    for (let i = 1; i <= 8; i++) {
+      const worktreeId = `work${i}`;
+      const isInUse = this.isWorktreeInUse(repo.path, worktreeId);
+      const statusIcon = isInUse ? '⚠️' : '✅';
+      const statusText = isInUse ? 'In use' : 'Available';
+
+      worktreeOptions.push(`
+        <button class="worktree-option ${isInUse ? 'in-use' : 'available'}"
+                onclick="window.orchestrator.addWorktreeToWorkspace('${repo.path}', '${worktreeId}', '${repo.type}', '${repo.name}')"
+                ${isInUse ? 'disabled' : ''}>
+          <span class="worktree-id">${worktreeId}</span>
+          <span class="worktree-status">${statusIcon} ${statusText}</span>
+        </button>
+      `);
     }
 
-    const currentCount = this.currentWorkspace.terminals.pairs;
-    const maxCount = this.currentWorkspace.terminals.maxPairs || this.currentWorkspace.worktrees.count;
+    return `
+      <div class="repo-section">
+        <div class="repo-header">
+          <span class="repo-icon">${this.getProjectIcon(repo.type)}</span>
+          <span class="repo-name">${repo.name}</span>
+          <span class="repo-path">~/${repo.relativePath}</span>
+        </div>
+        <div class="worktree-grid">
+          ${worktreeOptions.join('')}
+        </div>
+      </div>
+    `;
+  }
 
-    if (currentCount >= maxCount) {
-      alert(`Maximum worktrees reached (${maxCount})`);
-      return;
+  isWorktreeInUse(repoPath, worktreeId) {
+    // Check if worktree is in use by scanning current workspace
+    for (const workspace of this.availableWorkspaces) {
+      if (workspace.repository?.path === repoPath) {
+        const currentPairs = workspace.terminals?.pairs || 1;
+        const worktreeNum = parseInt(worktreeId.replace('work', ''));
+        if (worktreeNum <= currentPairs) return true;
+      }
     }
+    return false;
+  }
 
-    const nextNumber = currentCount + 1;
-    if (confirm(`Create work${nextNumber} worktree from ${this.currentWorkspace.repository.masterBranch} branch?`)) {
-      this.createWorktree(nextNumber);
+  async addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName) {
+    try {
+      console.log(`Adding ${worktreeId} from ${repoName} to workspace...`);
+
+      const response = await fetch('/api/workspaces/add-mixed-worktree', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: this.currentWorkspace.id,
+          repositoryPath: repoPath,
+          repositoryType: repoType,
+          repositoryName: repoName,
+          worktreeId: worktreeId
+        })
+      });
+
+      if (response.ok) {
+        this.showTemporaryMessage(`Added ${repoName} ${worktreeId} to workspace!`, 'success');
+        document.getElementById('add-worktree-modal').remove();
+        setTimeout(() => {
+          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
+        }, 1000);
+      } else {
+        const error = await response.text();
+        this.showTemporaryMessage('Failed to add worktree: ' + error, 'error');
+      }
+    } catch (error) {
+      console.error('Error adding worktree:', error);
+      this.showTemporaryMessage('Error: ' + error.message, 'error');
     }
   }
 
