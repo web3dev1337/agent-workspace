@@ -3245,3 +3245,93 @@ header h1 {
   background: var(--border-color);
   margin: var(--space-sm) 0;
 }
+
+
+/* Cross-Workspace Notifications */
+.cross-workspace-notifications-area {
+  position: fixed;
+  top: calc(var(--header-height) + 20px);
+  right: 20px;
+  width: 300px;
+  z-index: 1001;
+  pointer-events: none;
+}
+
+.cross-workspace-notification {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--accent-warning);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
+  animation: slideInRight 0.3s ease-out;
+}
+
+.notification-header {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.workspace-indicator {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.notification-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1.2rem;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-body {
+  padding: var(--space-md);
+}
+
+.notification-message {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+}
+
+.notification-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.btn-small {
+  padding: var(--space-xs) var(--space-sm);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent-primary);
+  color: white;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-small:hover {
+  background: #1a66d9;
+}
+
+.btn-small.secondary {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-small.secondary:hover {
+  background: var(--bg-tertiary);
+}
