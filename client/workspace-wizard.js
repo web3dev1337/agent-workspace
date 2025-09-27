@@ -176,7 +176,10 @@ class WorkspaceWizard {
               ${projects.map(project => `
                 <div class="project-item compact" data-path="${project.path}" data-type="${project.type}">
                   <span class="project-icon">${this.getProjectIcon(project.type)}</span>
-                  <span class="project-name">${project.name}</span>
+                  <div class="project-details">
+                    <span class="project-name">${project.name}</span>
+                    <span class="project-path">~/${project.relativePath}</span>
+                  </div>
                   <span class="project-type">${this.getTypeInfo(project.type).name}</span>
                 </div>
               `).join('')}
