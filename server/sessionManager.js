@@ -282,14 +282,14 @@ class SessionManager extends EventEmitter {
 
     // Clear workspace switching flag
     this.isWorkspaceSwitching = false;
-    
+
     // Start periodic branch refresh (every 30 seconds)
     this.startBranchRefresh();
-    
+
     // Setup file watchers for instant branch detection
     this.setupGitWatchers();
   }
-  
+
   startBranchRefresh() {
     if (this.branchRefreshInterval) {
       clearInterval(this.branchRefreshInterval);
