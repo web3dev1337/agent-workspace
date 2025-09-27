@@ -245,8 +245,14 @@ class Dashboard {
   }
 
   showCreateWorkspaceWizard() {
-    // For Phase 2, just show a placeholder
-    alert('Workspace creation wizard coming in Phase 4! For now, manually create workspace configs in ~/.orchestrator/workspaces/');
+    console.log('Opening workspace creation wizard...');
+    if (!window.WorkspaceWizard) {
+      console.error('WorkspaceWizard not loaded');
+      return;
+    }
+
+    const wizard = new WorkspaceWizard(this.orchestrator);
+    wizard.show();
   }
 
   // Helper methods
