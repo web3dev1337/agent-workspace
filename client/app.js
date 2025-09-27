@@ -212,8 +212,33 @@ class ClaudeOrchestrator {
         if (mainContainer) mainContainer.classList.remove('hidden');
         if (sidebar) sidebar.classList.remove('hidden');
 
-        // Clear existing sessions and rebuild with new workspace
+        // Clear ALL existing state completely
         this.sessions.clear();
+        this.visibleTerminals.clear();
+        this.sessionActivity.clear();
+        this.serverStatuses.clear();
+        this.serverPorts.clear();
+        this.githubLinks.clear();
+
+        // Clear terminal manager terminals
+        if (this.terminalManager) {
+          this.terminalManager.clearAll();
+        }
+
+        // Clear terminal grid completely
+        const grid = document.getElementById('terminal-grid');
+        if (grid) {
+          grid.innerHTML = '';
+          grid.removeAttribute('data-visible-count');
+        }
+
+        // Clear sidebar
+        const worktreeList = document.getElementById('worktree-list');
+        if (worktreeList) {
+          worktreeList.innerHTML = '';
+        }
+
+        // Rebuild with new workspace sessions
         this.handleInitialSessions(sessions);
       });
 
