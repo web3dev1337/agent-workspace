@@ -387,20 +387,31 @@ io.on('connection', (socket) => {
   socket.on('switch-workspace', async ({ workspaceId }) => {
     try {
       logger.info('Workspace switch requested', { workspaceId });
+
+      // IMPORTANT: Stop all current sessions first
+      logger.info('Stopping all current sessions before workspace switch');
+      sessionManager.cleanup();
+
       const newWorkspace = await workspaceManager.switchWorkspace(workspaceId);
 
       // Ensure worktrees exist for the new workspace
       logger.info('Ensuring worktrees exist for new workspace');
       await worktreeHelper.ensureWorktreesExist(newWorkspace);
 
-      // Set workspace and initialize sessions
+      // Set workspace and initialize fresh sessions
       sessionManager.setWorkspace(newWorkspace);
       await sessionManager.initializeSessions();
 
-      // Emit success
+      // Emit success with ONLY new workspace sessions
+      const newSessions = sessionManager.getSessionStates();
+      logger.info('Sending workspace-changed event', {
+        workspace: newWorkspace.name,
+        sessionCount: Object.keys(newSessions).length
+      });
+
       io.emit('workspace-changed', {
         workspace: newWorkspace,
-        sessions: sessionManager.getSessionStates()
+        sessions: newSessions
       });
 
       logger.info('Workspace switched successfully', { workspace: newWorkspace.name });
