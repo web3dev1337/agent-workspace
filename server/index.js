@@ -69,6 +69,9 @@ app.use(express.static(clientPath, {
   index: false // Don't automatically serve index.html
 }));
 
+// Middleware for JSON parsing
+app.use(express.json());
+
 // Basic auth middleware (optional)
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 if (AUTH_TOKEN) {
@@ -423,11 +426,88 @@ io.on('connection', (socket) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
+});
+
+// Workspace API endpoints
+app.get('/api/workspaces', (req, res) => {
+  try {
+    const workspaces = workspaceManager.listWorkspaces();
+    res.json(workspaces);
+  } catch (error) {
+    logger.error('Failed to list workspaces', { error: error.message });
+    res.status(500).json({ error: 'Failed to list workspaces' });
+  }
+});
+
+app.post('/api/workspaces', async (req, res) => {
+  try {
+    const workspaceData = req.body;
+    logger.info('Creating workspace via API', { name: workspaceData.name });
+
+    const workspace = await workspaceManager.createWorkspace(workspaceData);
+    res.json(workspace);
+  } catch (error) {
+    logger.error('Failed to create workspace', { error: error.message });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/workspaces/scan-repos', async (req, res) => {
+  try {
+    // Simple repo scanning implementation
+    const fs = require('fs').promises;
+    const path = require('path');
+    const os = require('os');
+
+    const scanPaths = workspaceManager.getConfig().discovery.scanPaths || [];
+    const projects = [];
+
+    for (const basePath of scanPaths) {
+      try {
+        const entries = await fs.readdir(basePath, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const projectPath = path.join(basePath, entry.name);
+
+            // Simple project type detection
+            let type = 'tool-project';
+            try {
+              const hasPackageJson = await fs.access(path.join(projectPath, 'package.json')).then(() => true).catch(() => false);
+              const hasCsproj = await fs.readdir(projectPath).then(files => files.some(f => f.endsWith('.csproj'))).catch(() => false);
+
+              if (hasPackageJson) {
+                const pkg = JSON.parse(await fs.readFile(path.join(projectPath, 'package.json'), 'utf8'));
+                if (pkg.dependencies?.hytopia) type = 'hytopia-game';
+                else type = 'website';
+              } else if (hasCsproj) {
+                type = 'monogame-game';
+              }
+            } catch (error) {
+              // Keep default type
+            }
+
+            projects.push({
+              name: entry.name,
+              path: projectPath,
+              type
+            });
+          }
+        }
+      } catch (error) {
+        logger.warn(`Failed to scan ${basePath}`, { error: error.message });
+      }
+    }
+
+    res.json(projects);
+  } catch (error) {
+    logger.error('Failed to scan repositories', { error: error.message });
+    res.status(500).json({ error: 'Failed to scan repositories' });
+  }
 });
 
 // Claude hook endpoints
