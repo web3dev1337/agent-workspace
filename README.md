@@ -1,110 +1,179 @@
-# Claude Orchestrator
+# Claude Orchestrator - Multi-Workspace Development Environment
 
-A comprehensive toolkit for managing Claude Code sessions with multiple features including a native desktop app and advanced diff viewer.
+A revolutionary multi-workspace development environment for Claude Code sessions with dynamic repository management, mixed-repo workspaces, and one-click startup.
 
-## Features
+## 🚀 Features
 
-### 🖥️ Native Desktop App (Tauri)
-A high-performance native application for managing multiple Claude Code sessions:
-- **16 Terminal Grid**: 8 Claude sessions + 8 server terminals
-- **Native Performance**: 10-20x faster startup, 75% less memory
-- **System Integration**: Tray icon, notifications, global hotkeys
-- **Real-time Updates**: Socket.IO powered terminal streaming
+### 🎯 **Multi-Workspace Management**
+- **Unlimited Workspaces**: Switch between HyFire, Epic Survivors, websites, writing projects
+- **Dashboard UI**: Visual workspace selection with activity indicators
+- **Dynamic Configuration**: 1-16 terminal pairs per workspace
+- **Project Type Awareness**: Auto-detects Hytopia, MonoGame, website, writing projects
 
-### 🔍 Advanced Diff Viewer
-A sophisticated web-based tool for code review and analysis:
-- **GitHub Integration**: View PRs, commits, and diffs
-- **AST Analysis**: Semantic understanding of code changes
-- **AI Summaries**: Automatic risk detection and insights
-- **Multiple Export**: PDF, Markdown, and sharing options
+### 🛠️ **Mixed-Repository Workspaces**
+- **Revolutionary Feature**: Combine terminals from multiple repositories in one workspace
+- **Example**: 2 HyFire + 4 Epic Survivors + 1 Website terminals together
+- **Per-Terminal Buttons**: Each terminal shows repo-appropriate controls
+- **Conflict Detection**: Smart indicators for worktree usage across workspaces
 
-## Quick Start
+### ⚡ **Dynamic Worktree Management**
+- **Auto-Creation**: Creates git worktrees on-demand when switching workspaces
+- **On-Demand Expansion**: Add more worktrees via "+ Add Worktree" button
+- **Deep Repository Scanning**: Finds all projects (HyFire2, Epic Survivors, scripts, etc.)
+- **Smart Conflict Detection**: Shows ⚠️ In use vs ✅ Available status
 
-### Running the Native App
+### 🎨 **Advanced UI Components**
+- **Workspace Creation Wizard**: 3-step guided setup with auto-type detection
+- **Enhanced Sidebar**: Quick links, worktree management, global shortcuts
+- **Cross-Workspace Notifications**: Background monitoring with muting controls
+- **Launch Settings Templates**: Project-type specific configuration UIs
 
+### 🔧 **Zero-Friction Workflow**
+- **One-Click Startup**: `orchestrator` command launches everything
+- **Desktop Integration**: Click shortcut → auto-opens browser
+- **Auto-Update**: Git pull on startup with dependency management
+- **Smart Detection**: Opens browser if already running
+
+## 📊 Quick Start
+
+### Installation
 ```bash
-# Install dependencies
-npm install
+# Navigate to orchestrator directory
+cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 
-# Run all services (recommended)
+# Run migration to set up workspace system
+node scripts/migrate-to-workspaces.js
+
+# Install one-click startup shortcuts
+bash scripts/install-startup.sh
+```
+
+### Launch Orchestrator
+```bash
+# Command line (after install)
+orchestrator
+
+# Or desktop shortcut
+# Click "Claude Orchestrator" icon
+
+# Or manual startup
 npm run dev:all
-
-# Or run individually:
-npm run dev        # Backend server
-npm run tauri:dev  # Native app
 ```
 
-### Running the Diff Viewer
+### Create Your First Custom Workspace
+1. **Access Dashboard**: http://localhost:4000 (dev) or http://localhost:2080 (prod)
+2. **Click "Create New"** → Opens workspace wizard
+3. **Select Repository**: Choose from categorized list (Hytopia Games, MonoGame Games, Writing, etc.)
+4. **Configure**: Set name, terminal count, access level
+5. **Review & Create**: Workspace ready immediately
 
+### Add Mixed-Repo Terminals
+1. **In any workspace** → Click **"+ Add Worktree"** in sidebar
+2. **Browse Categories**: Hytopia Games, MonoGame Games, Writing, Tools
+3. **Select Worktree**: See ⚠️ In use vs ✅ Available status for each work1-8
+4. **Add to Workspace**: Creates mixed-repo workspace automatically
+
+## 🏗️ Architecture
+
+### Backend Services
+- **WorkspaceManager**: Core workspace CRUD with JSON config persistence
+- **SessionManager**: Dynamic session management for single/mixed-repo workspaces
+- **WorktreeHelper**: Automated git worktree creation with conflict resolution
+- **Deep Scanner**: Recursive project discovery with path-based type detection
+
+### Frontend Components
+- **Dashboard**: Visual workspace cards with activity and stats
+- **WorkspaceSwitcher**: Header dropdown for instant workspace switching
+- **WorkspaceWizard**: Guided workspace creation with repository categorization
+- **Advanced Add Worktree**: Multi-repo selection with conflict detection
+
+### Configuration
+```
+~/.orchestrator/
+├── config.json                    # Master configuration
+├── workspaces/                    # Workspace definitions
+│   ├── hyfire2.json              # Single-repo workspace
+│   ├── epic-survivors.json       # Single-repo workspace
+│   └── custom-dev.json           # Mixed-repo workspace
+├── templates/                     # Project type templates
+└── session-states/               # Persistent session states
+```
+
+## 🎯 Workspace Types
+
+### Single-Repository Workspaces
+Traditional approach where all terminals come from one repository:
+- **HyFire 2**: 8 terminal pairs from HyFire repository
+- **Epic Survivors**: 1-8 terminal pairs from Epic Survivors repository
+- **Website**: 1-4 terminal pairs from website repository
+
+### Mixed-Repository Workspaces
+Revolutionary approach combining terminals from multiple repositories:
+- **Custom Dev**: 2 HyFire + 4 Epic Survivors + 1 Website terminals
+- **Game Focus**: 4 HyFire + 2 MonoGame + 2 Tools terminals
+- **Any Combination**: Complete flexibility in terminal composition
+
+## 🔧 Development
+
+### Project Structure
+```
+claude-orchestrator-dev/
+├── server/                      # Backend services
+│   ├── workspaceManager.js     # Core workspace management
+│   ├── sessionManager.js       # Session lifecycle with mixed-repo support
+│   ├── worktreeHelper.js       # Dynamic worktree creation
+│   └── workspaceSchemas.js     # Single/mixed workspace schemas
+├── client/                      # Frontend components
+│   ├── dashboard.js            # Workspace dashboard UI
+│   ├── workspace-switcher.js   # Header dropdown switcher
+│   ├── workspace-wizard.js     # Workspace creation wizard
+│   └── app.js                  # Main orchestrator application
+├── templates/                   # Project type templates
+│   └── launch-settings/        # Launch configuration templates
+├── scripts/                     # Automation scripts
+│   ├── migrate-to-workspaces.js # Migration from old config
+│   ├── orchestrator-startup.sh  # One-click startup
+│   └── install-startup.sh       # Desktop shortcut installer
+└── ~/.orchestrator/            # User configuration directory
+```
+
+### Available Scripts
 ```bash
-# Start the diff viewer
-cd diff-viewer
-npm install
-npm start
-
-# Or use the convenience script
-./start-diff-viewer.sh
+npm run dev:all          # Start all services (server + client + tauri)
+npm run dev              # Development mode (ports 4000/2081)
+npm run prod             # Production mode (ports 3000/2080)
+npm run tauri:dev        # Native app development
+npm run tauri:build      # Build native app for distribution
 ```
 
-## Architecture
+## 📈 Capabilities
 
-```
-claude-orchestrator/
-├── client/              # Tauri app frontend
-├── server/             # Node.js backend
-├── src-tauri/          # Rust native code
-├── diff-viewer/        # Advanced diff viewer
-│   ├── client/         # React frontend
-│   └── server/         # Express backend
-└── package.json        # Root dependencies
-```
+### Repository Discovery
+- **Deep Scanning**: Finds individual projects in nested folder structures
+- **Auto-Type Detection**: Determines project type from folder path
+- **Categories**: Hytopia Games, MonoGame Games, Websites, Writing, Tools
+- **Project Examples**: HyFire2, Epic Survivors, cb-fry-scripts, 2d-test, etc.
 
-## Performance (Native App)
+### Workspace Management
+- **Unlimited Workspaces**: Create as many as needed
+- **Dynamic Terminal Counts**: 1-16 pairs per workspace
+- **Clean Isolation**: Perfect separation between workspace sessions
+- **Instant Switching**: < 5 second workspace transitions
 
-| Metric | Browser | Tauri Native |
-|--------|---------|--------------|
-| Startup | 2-5s | 200-500ms |
-| Memory | 600MB+ | 150-300MB |
-| Latency | 50-150ms | 15-50ms |
+### Advanced Features
+- **Worktree Conflict Detection**: Visual status indicators (⚠️ In use / ✅ Available)
+- **Mixed-Repo Composition**: Any combination of repositories in one workspace
+- **3-Layer Button System**: Game → Framework → Project specific controls
+- **Background Monitoring**: Cross-workspace notifications with muting
 
-## Documentation
+## 🚀 Getting Started
 
-- [Installation Guide](INSTALL_DIFF_VIEWER.md)
-- [Diff Viewer Features](DIFF_VIEWER_FEATURES.md)
-- [Implementation Notes](IMPLEMENTATION_NOTES.md)
-- [Usage Guide](USAGE_CLARIFICATION.md)
+1. **Installation**: `bash scripts/install-startup.sh`
+2. **Launch**: `orchestrator` (or click desktop shortcut)
+3. **Create Workspace**: Dashboard → Create New → Select repository
+4. **Add Mixed Terminals**: "+ Add Worktree" → Browse repositories
+5. **Enjoy**: Complete development environment ready!
 
-## Development
+---
 
-### Prerequisites
-- Node.js 16+
-- Rust (for Tauri app)
-- Git
-
-### Building for Production
-
-```bash
-# Build Tauri app
-npm run tauri:build
-
-# Build diff viewer
-cd diff-viewer && npm run build
-```
-
-## Future Roadmap
-
-### Native App (Phase 2)
-- Port terminal management to Rust
-- Native file watching
-- Auto-update functionality
-- Direct WSL integration
-
-### Diff Viewer
-- Real-time collaboration
-- More language support
-- Enhanced AI insights
-- Performance optimizations
-
-## License
-
-MIT License - see LICENSE file for details
+**Transforms Claude Orchestrator from single-project tool to unlimited multi-workspace development environment with mixed-repository support and zero-friction workflows.**

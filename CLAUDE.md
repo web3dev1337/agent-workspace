@@ -3,7 +3,7 @@
 🚨 **READ THIS ENTIRE FILE** 🚨
 **CRITICAL: You MUST read this complete file from start to finish. Do not truncate or skip sections.**
 
-*Note: This is a multi-terminal orchestrator project for managing Claude Code sessions with native desktop app and advanced diff viewer capabilities.*
+*Note: This is a revolutionary multi-workspace orchestrator for managing unlimited Claude Code sessions with mixed-repository support, dynamic worktree creation, and zero-friction workflows.*
 
 ## 🚨 IMPORTANT: ALWAYS PROVIDE PR URL 🚨
 **When creating any pull request, ALWAYS provide the PR URL in your response to the user. This is mandatory for all PRs.**
@@ -26,6 +26,8 @@ git checkout -b fix/your-feature-name main
 
 ## 🚨 CRITICAL: READ THESE FILES 🚨
 **2. Read `CODEBASE_DOCUMENTATION.md`** - Contains system docs and file locations (READ THE ENTIRE FILE)
+**3. Read `COMPLETE_IMPLEMENTATION.md`** - Multi-workspace system overview (ESSENTIAL)
+**4. Read `PR_SUMMARY.md`** - Technical implementation details (FOR CHANGES)
 
 ## 🚨 CRITICAL: ALWAYS CREATE A PR WHEN DONE 🚨
 **When you complete ANY feature or fix, you MUST create a pull request using `gh pr create`. This is NOT optional. Add "Create PR" as your final todo item to ensure you never forget.**
