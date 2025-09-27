@@ -30,6 +30,7 @@ class SessionManager extends EventEmitter {
     this.userSettings = UserSettingsService.getInstance();
     this.workspace = null; // Will be set by WorkspaceManager
     this.worktreeHelper = new WorktreeHelper();
+    this.isWorkspaceSwitching = false; // Flag to prevent auto-restart during workspace switch
 
     // Load configuration
     this.config = this.loadConfig();
@@ -114,6 +115,9 @@ class SessionManager extends EventEmitter {
   }
   
   async initializeSessions() {
+    // Set flag to prevent auto-restart during initialization
+    this.isWorkspaceSwitching = true;
+
     // Clear ALL existing sessions first
     logger.info('Clearing existing sessions before workspace initialization');
     this.cleanupAllSessions();
@@ -224,6 +228,9 @@ class SessionManager extends EventEmitter {
     // Wait for all sessions to be created in parallel
     await Promise.all(sessionPromises);
     logger.info('All sessions initialized', { count: sessionPromises.length });
+
+    // Clear workspace switching flag
+    this.isWorkspaceSwitching = false;
     
     // Start periodic branch refresh (every 30 seconds)
     this.startBranchRefresh();
