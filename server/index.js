@@ -510,6 +510,38 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
   }
 });
 
+app.post('/api/workspaces/create-worktree', async (req, res) => {
+  try {
+    const { workspaceId, worktreeNumber } = req.body;
+    logger.info('Creating individual worktree', { workspaceId, worktreeNumber });
+
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Create the specific worktree
+    const worktreeId = `work${worktreeNumber}`;
+    await worktreeHelper.createWorktree(workspace, worktreeId);
+
+    // Update workspace config to include new terminal pair
+    const updatedWorkspace = {
+      ...workspace,
+      terminals: {
+        ...workspace.terminals,
+        pairs: Math.max(workspace.terminals.pairs, worktreeNumber)
+      }
+    };
+
+    await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+
+    res.json({ success: true, worktreeId, path: `${workspace.repository.path}/work${worktreeNumber}` });
+  } catch (error) {
+    logger.error('Failed to create worktree', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Claude hook endpoints
 app.post('/api/claude-ready', express.json(), (req, res) => {
   const { worktree, sessionId } = req.body;
