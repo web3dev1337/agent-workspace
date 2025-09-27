@@ -16,7 +16,15 @@ class ClaudeOrchestrator {
     this.sessionActivity = new Map(); // Track which sessions have been used
     this.showActiveOnly = false; // Filter toggle
     this.serverLaunchSettings = this.loadServerLaunchSettings(); // Server launch flags
-    
+
+    // Workspace management
+    this.currentWorkspace = null;
+    this.availableWorkspaces = [];
+    this.orchestratorConfig = {};
+    this.dashboard = null;
+    this.workspaceSwitcher = null;
+    this.isDashboardMode = false;
+
     this.init();
   }
   
@@ -169,6 +177,40 @@ class ClaudeOrchestrator {
         console.log('User settings updated:', settings);
         this.userSettings = settings;
         this.syncUserSettingsUI();
+      });
+
+      // Workspace events
+      this.socket.on('workspace-info', ({ active, available, config }) => {
+        console.log('Received workspace info:', { active, available, config });
+        this.currentWorkspace = active;
+        this.availableWorkspaces = available;
+        this.orchestratorConfig = config;
+
+        // Initialize dashboard if configured
+        if (config.ui.startupDashboard && !active) {
+          this.showDashboard();
+        }
+      });
+
+      this.socket.on('workspace-changed', ({ workspace, sessions }) => {
+        console.log('Workspace changed:', workspace.name);
+        this.currentWorkspace = workspace;
+        this.isDashboardMode = false;
+
+        // Hide dashboard if showing
+        if (this.dashboard) {
+          this.dashboard.hide();
+        }
+
+        // Show main UI
+        const mainContainer = document.querySelector('.main-container');
+        const sidebar = document.querySelector('.sidebar');
+        if (mainContainer) mainContainer.classList.remove('hidden');
+        if (sidebar) sidebar.classList.remove('hidden');
+
+        // Clear existing sessions and rebuild with new workspace
+        this.sessions.clear();
+        this.handleInitialSessions(sessions);
       });
 
       this.socket.on('git-updated', (result) => {
