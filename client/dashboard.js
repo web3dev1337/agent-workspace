@@ -209,15 +209,19 @@ class Dashboard {
     const card = document.querySelector(`[data-workspace-id="${workspaceId}"]`);
     if (card) {
       const btn = card.querySelector('.workspace-open-btn');
-      const originalText = btn.textContent;
-      btn.textContent = 'Loading...';
-      btn.disabled = true;
+      if (btn) {
+        const originalText = btn.textContent;
+        btn.textContent = 'Loading...';
+        btn.disabled = true;
 
-      // Restore button after timeout
-      setTimeout(() => {
-        btn.textContent = originalText;
-        btn.disabled = false;
-      }, 5000);
+        // Restore button after timeout
+        setTimeout(() => {
+          if (btn) {
+            btn.textContent = originalText;
+            btn.disabled = false;
+          }
+        }, 5000);
+      }
     }
 
     // Emit workspace switch event
