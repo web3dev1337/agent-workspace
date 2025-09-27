@@ -499,10 +499,14 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
             const type = getTypeFromPath(fullPath);
             const relativePath = path.relative(gitHubPath, fullPath);
 
+            // Get the actual project name (not "master")
+            const projectName = path.basename(path.dirname(fullPath));
+
             projects.push({
-              name: entry.name,
-              path: fullPath,
-              relativePath: relativePath,
+              name: projectName === 'games' ? entry.name : projectName, // Use directory name, not "master"
+              path: path.dirname(fullPath), // Use parent directory (where work1-8 will be created)
+              masterPath: fullPath, // Keep master path for reference
+              relativePath: path.relative(gitHubPath, path.dirname(fullPath)),
               type: type,
               category: getCategoryFromPath(fullPath)
             });

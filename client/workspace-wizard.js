@@ -170,13 +170,10 @@ class WorkspaceWizard {
             <h5>${category}</h5>
             <div class="project-list">
               ${projects.map(project => `
-                <div class="project-item" data-path="${project.path}" data-type="${project.type}">
-                  <div class="project-icon">${this.getProjectIcon(project.type)}</div>
-                  <div class="project-info">
-                    <div class="project-name">${project.name}</div>
-                    <div class="project-path">~/${project.relativePath}</div>
-                    <div class="project-type">${this.getTypeInfo(project.type).name}</div>
-                  </div>
+                <div class="project-item compact" data-path="${project.path}" data-type="${project.type}">
+                  <span class="project-icon">${this.getProjectIcon(project.type)}</span>
+                  <span class="project-name">${project.name}</span>
+                  <span class="project-type">${this.getTypeInfo(project.type).name}</span>
                 </div>
               `).join('')}
             </div>
