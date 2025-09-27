@@ -379,7 +379,39 @@ io.on('connection', (socket) => {
       }
     });
   });
-  
+
+  // Workspace management handlers
+  socket.on('switch-workspace', async ({ workspaceId }) => {
+    try {
+      logger.info('Workspace switch requested', { workspaceId });
+      const newWorkspace = await workspaceManager.switchWorkspace(workspaceId);
+
+      // Ensure worktrees exist for the new workspace
+      logger.info('Ensuring worktrees exist for new workspace');
+      await worktreeHelper.ensureWorktreesExist(newWorkspace);
+
+      // Set workspace and initialize sessions
+      sessionManager.setWorkspace(newWorkspace);
+      await sessionManager.initializeSessions();
+
+      // Emit success
+      io.emit('workspace-changed', {
+        workspace: newWorkspace,
+        sessions: sessionManager.getSessionStates()
+      });
+
+      logger.info('Workspace switched successfully', { workspace: newWorkspace.name });
+    } catch (error) {
+      logger.error('Failed to switch workspace', { error: error.message });
+      socket.emit('error', { message: 'Failed to switch workspace', error: error.message });
+    }
+  });
+
+  socket.on('list-workspaces', () => {
+    const workspaces = workspaceManager.listWorkspaces();
+    socket.emit('workspaces-list', workspaces);
+  });
+
   socket.on('disconnect', () => {
     logger.info('Client disconnected', { socketId: socket.id });
   });
