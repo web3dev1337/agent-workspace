@@ -439,10 +439,17 @@ class TerminalManager {
   handleOutput(sessionId, data) {
     const terminal = this.terminals.get(sessionId);
     if (!terminal) {
-      // Create terminal if it doesn't exist
+      // Check if DOM element exists before trying to create terminal
+      const terminalElement = document.getElementById(`terminal-${sessionId}`);
+      if (!terminalElement) {
+        console.warn(`Terminal output received for ${sessionId} but DOM element not ready yet. Ignoring.`);
+        return;
+      }
+
+      // Create terminal if DOM element exists
       const sessionInfo = this.orchestrator.sessions.get(sessionId) || {};
       this.createTerminal(sessionId, sessionInfo);
-      
+
       // Try again
       const newTerminal = this.terminals.get(sessionId);
       if (newTerminal) {
