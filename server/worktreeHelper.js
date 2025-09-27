@@ -46,7 +46,8 @@ class WorktreeHelper {
 
       // Create worktree using git worktree add
       // Create new branch for the worktree to avoid "already used" error
-      const branchName = `${worktreeName}-branch`;
+      // Use simple naming to avoid path issues
+      const branchName = `${worktreeName}-dev`;
 
       // Check if branch already exists and delete it if needed
       try {
