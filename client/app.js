@@ -240,6 +240,11 @@ class ClaudeOrchestrator {
 
         // Rebuild with new workspace sessions
         this.handleInitialSessions(sessions);
+
+        // Update workspace switcher to show correct workspace
+        if (this.workspaceSwitcher) {
+          this.workspaceSwitcher.updateCurrentWorkspace();
+        }
       });
 
       this.socket.on('git-updated', (result) => {
