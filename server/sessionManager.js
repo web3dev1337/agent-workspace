@@ -94,7 +94,7 @@ class SessionManager extends EventEmitter {
 
     this.worktrees = [];
     const { repository, worktrees: worktreeConfig, terminals } = this.workspace;
-    const terminalPairs = terminals.pairs || 8;
+    const terminalPairs = terminals.pairs || 1; // Default to 1 pair, not 8
 
     for (let i = 1; i <= terminalPairs; i++) {
       const worktreeId = worktreeConfig.namingPattern.replace('{n}', i);
