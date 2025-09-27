@@ -116,27 +116,27 @@ class SessionManager extends EventEmitter {
     
     // Log configuration for debugging
     logger.info('SessionManager configuration:', {
-      worktreeBasePath: this.worktreeBasePath,
-      worktreeCount: this.worktreeCount,
-      usingDefault: !process.env.WORKTREE_BASE_PATH
+      workspace: this.workspace?.name || 'none',
+      worktreeCount: this.worktrees.length,
+      worktreesEnabled: this.workspace?.worktrees.enabled || false
     });
     
     // Check if worktrees exist
     const fs = require('fs').promises;
     let missingWorktrees = [];
-    for (let i = 1; i <= this.worktreeCount; i++) {
-      const worktreePath = `${this.worktreeBasePath}/HyFire2-work${i}`;
+    for (const worktree of this.worktrees) {
       try {
-        await fs.access(worktreePath);
+        await fs.access(worktree.path);
       } catch (error) {
-        missingWorktrees.push(worktreePath);
+        missingWorktrees.push(worktree.path);
       }
     }
-    
+
     if (missingWorktrees.length > 0) {
       logger.warn('Missing worktrees detected. Please ensure all worktrees are created:', {
         missing: missingWorktrees,
-        hint: 'Set WORKTREE_BASE_PATH in .env file or create worktrees in your home directory'
+        workspace: this.workspace?.name,
+        hint: 'Run git worktree commands or use the workspace creation wizard'
       });
     }
     
