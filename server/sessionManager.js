@@ -141,22 +141,28 @@ class SessionManager extends EventEmitter {
       }
     }
 
-    // Check if worktrees exist (after potential creation)
+    // Filter worktrees to only existing ones
     const fs = require('fs').promises;
-    let missingWorktrees = [];
+    const existingWorktrees = [];
+    const missingWorktrees = [];
+
     for (const worktree of this.worktrees) {
       try {
         await fs.access(worktree.path);
+        existingWorktrees.push(worktree);
       } catch (error) {
         missingWorktrees.push(worktree.path);
       }
     }
 
+    // Only use existing worktrees for session creation
+    this.worktrees = existingWorktrees;
+
     if (missingWorktrees.length > 0) {
-      logger.warn('Missing worktrees detected:', {
+      logger.info('Skipping missing worktrees (will be created on-demand):', {
         missing: missingWorktrees,
-        workspace: this.workspace.name,
-        hint: 'Enable autoCreate or run git worktree commands manually'
+        existing: existingWorktrees.length,
+        workspace: this.workspace.name
       });
     }
     
