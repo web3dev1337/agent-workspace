@@ -61,7 +61,7 @@ class WorkspaceWizard {
         <div class="wizard-footer">
           <button id="wizard-prev" class="btn-secondary" onclick="window.workspaceWizard.prevStep()">Previous</button>
           <button id="wizard-next" class="btn-primary" onclick="window.workspaceWizard.nextStep()">Next</button>
-          <button id="wizard-create" class="btn-primary hidden" onclick="window.workspaceWizard.createWorkspace()">Create Workspace</button>
+          <button id="wizard-create" class="btn-primary" onclick="window.workspaceWizard.createWorkspace()" style="display: none;">Create Workspace</button>
         </div>
       </div>
     `;
@@ -88,9 +88,13 @@ class WorkspaceWizard {
     }
 
     // Update buttons (adjusted for 3 steps)
-    document.getElementById('wizard-prev').style.display = step === 1 ? 'none' : 'block';
-    document.getElementById('wizard-next').style.display = step === 3 ? 'none' : 'block';
-    document.getElementById('wizard-create').style.display = step === 3 ? 'block' : 'none';
+    const prevBtn = document.getElementById('wizard-prev');
+    const nextBtn = document.getElementById('wizard-next');
+    const createBtn = document.getElementById('wizard-create');
+
+    if (prevBtn) prevBtn.style.display = step === 1 ? 'none' : 'block';
+    if (nextBtn) nextBtn.style.display = step === 3 ? 'none' : 'block';
+    if (createBtn) createBtn.style.display = step === 3 ? 'block' : 'none';
   }
 
   renderTypeSelection() {
