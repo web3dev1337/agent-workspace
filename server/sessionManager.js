@@ -530,11 +530,11 @@ class SessionManager extends EventEmitter {
         
         // Auto-restart Claude sessions that exit from CTRL+C or other interrupts
         // This ensures the terminal remains usable after CTRL+C
-        if (config.type === 'claude') {
-          logger.info('Claude session exited, auto-restarting for usability', { 
-            sessionId, 
+        if (config.type === 'claude' && !this.isWorkspaceSwitching) {
+          logger.info('Claude session exited, auto-restarting for usability', {
+            sessionId,
             signal,
-            exitCode 
+            exitCode
           });
           
           // Remove the old session
