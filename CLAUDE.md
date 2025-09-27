@@ -63,9 +63,11 @@ git checkout -b fix/your-feature-name main
 
 ### Key Systems
 - **Server**: Express.js backend with Socket.IO (`server/index.js`)
-- **SessionManager**: Terminal session management (`server/sessionManager.js`) 
+- **SessionManager**: Terminal session management (`server/sessionManager.js`)
 - **StatusDetector**: Claude Code session monitoring (`server/statusDetector.js`)
 - **GitHelper**: Git operations and branch management (`server/gitHelper.js`)
+- **WorkspaceManager**: Multi-workspace orchestration (`server/workspaceManager.js`)
+- **WorktreeHelper**: Git worktree operations (`server/worktreeHelper.js`)
 - **NotificationService**: System notifications (`server/notificationService.js`)
 - **Tauri App**: Native desktop application (`src-tauri/`)
 - **Diff Viewer**: Advanced code review tool (`diff-viewer/`)
@@ -77,10 +79,32 @@ git checkout -b fix/your-feature-name main
 - `src-tauri/src/main.rs`: Tauri app entry point
 
 ### Project Components
-- **Multi-Terminal Management**: 16 terminal grid (8 Claude + 8 server terminals)
+- **Multi-Workspace System**: Dynamic workspace management with mixed-repo support
+- **Multi-Terminal Management**: Configurable terminal grid (default 16 terminals)
 - **Native Desktop App**: High-performance Tauri-based application
 - **Advanced Diff Viewer**: Web-based code review with AI analysis
 - **Real-time Communication**: Socket.IO for live updates
+- **Worktree Integration**: Seamless git worktree creation and management
+
+## Workspace Management
+
+### Key Concepts
+- **Single-repo workspaces**: Traditional one-repository-per-workspace
+- **Mixed-repo workspaces**: Multiple repositories in one workspace via worktrees
+- **Templates**: Predefined workspace configurations in `templates/launch-settings/`
+- **User Settings**: Personal preferences stored in `user-settings.json`
+
+### Working with Workspaces
+- Workspace configurations are stored in `~/.orchestrator/workspaces/`
+- Each workspace can have different terminal counts and repository setups
+- Mixed-repo workspaces automatically create worktrees in project directories
+- Templates provide consistent setups for different project types
+
+### Important Workspace Files
+- `server/workspaceManager.js`: Core workspace operations
+- `server/workspaceSchemas.js`: Configuration validation
+- `server/worktreeHelper.js`: Git worktree integration
+- `client/workspace-wizard.js`: UI for workspace creation
 
 ## Common Commands
 ```bash
@@ -90,6 +114,9 @@ npm run tauri:dev
 
 # Testing
 node --check server/index.js
+
+# Workspace migration (if needed)
+node scripts/migrate-to-workspaces.js
 ```
 
 ## Performance Considerations
@@ -183,6 +210,10 @@ SERVICES:     Modular service architecture with clear interfaces
 6. Logs should use Winston logger, not console.log
 7. **Be careful with `pkill -f` commands** - avoid broad patterns that could kill WSL or Claude Code itself
 8. **node-pty segfaults**: Run `npm rebuild node-pty` if server crashes with segmentation fault
+9. **Workspace switching**: Clean up all sessions before switching to prevent orphaned processes
+10. **Worktree paths**: Validate worktree paths to avoid conflicts with existing directories
+11. **Mixed-repo terminal naming**: Use consistent patterns to avoid terminal ID conflicts
+12. **Workspace templates**: Always validate against schemas to prevent invalid configurations
 
 ## Development Setup - Two Isolated Instances
 
