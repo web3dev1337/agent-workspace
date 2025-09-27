@@ -3938,6 +3938,46 @@ class ClaudeOrchestrator {
       this.showTemporaryMessage('Error pulling latest changes', 'error');
     }
   }
+
+  // Workspace management methods
+  showDashboard() {
+    console.log('Showing dashboard...');
+    this.isDashboardMode = true;
+
+    // Initialize dashboard if not already created
+    if (!this.dashboard) {
+      this.dashboard = new Dashboard(this);
+    }
+
+    // Hide main UI
+    const mainContainer = document.querySelector('.main-container');
+    const sidebar = document.querySelector('.sidebar');
+    if (mainContainer) mainContainer.classList.add('hidden');
+    if (sidebar) sidebar.classList.add('hidden');
+
+    // Show dashboard
+    this.dashboard.show();
+  }
+
+  hideDashboard() {
+    console.log('Hiding dashboard...');
+    this.isDashboardMode = false;
+
+    if (this.dashboard) {
+      this.dashboard.hide();
+    }
+
+    // Show main UI
+    const mainContainer = document.querySelector('.main-container');
+    const sidebar = document.querySelector('.sidebar');
+    if (mainContainer) mainContainer.classList.remove('hidden');
+    if (sidebar) sidebar.classList.remove('hidden');
+  }
+
+  switchToWorkspace(workspaceId) {
+    console.log('Switching to workspace:', workspaceId);
+    this.socket.emit('switch-workspace', { workspaceId });
+  }
 }
 
 // Initialize when DOM is ready
