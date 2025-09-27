@@ -390,6 +390,7 @@ io.on('connection', (socket) => {
 
       // IMPORTANT: Stop all current sessions first
       logger.info('Stopping all current sessions before workspace switch');
+      sessionManager.isWorkspaceSwitching = true; // Set flag BEFORE cleanup
       sessionManager.cleanup();
 
       const newWorkspace = await workspaceManager.switchWorkspace(workspaceId);
