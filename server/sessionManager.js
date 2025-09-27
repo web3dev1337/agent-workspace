@@ -123,7 +123,17 @@ class SessionManager extends EventEmitter {
       worktreesEnabled: this.workspace?.worktrees.enabled || false
     });
     
-    // Check if worktrees exist
+    // Auto-create worktrees if enabled
+    if (this.workspace.worktrees.enabled && this.workspace.worktrees.autoCreate) {
+      logger.info('Auto-creating worktrees for workspace');
+      try {
+        await this.worktreeHelper.ensureWorktreesExist(this.workspace);
+      } catch (error) {
+        logger.error('Failed to auto-create worktrees', { error: error.message });
+      }
+    }
+
+    // Check if worktrees exist (after potential creation)
     const fs = require('fs').promises;
     let missingWorktrees = [];
     for (const worktree of this.worktrees) {
@@ -135,10 +145,10 @@ class SessionManager extends EventEmitter {
     }
 
     if (missingWorktrees.length > 0) {
-      logger.warn('Missing worktrees detected. Please ensure all worktrees are created:', {
+      logger.warn('Missing worktrees detected:', {
         missing: missingWorktrees,
-        workspace: this.workspace?.name,
-        hint: 'Run git worktree commands or use the workspace creation wizard'
+        workspace: this.workspace.name,
+        hint: 'Enable autoCreate or run git worktree commands manually'
       });
     }
     
