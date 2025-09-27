@@ -45,7 +45,9 @@ class WorktreeHelper {
       }
 
       // Create worktree using git worktree add
-      const command = `git worktree add ${worktreeName} ${repository.masterBranch}`;
+      // Create new branch for the worktree to avoid "already used" error
+      const branchName = `${worktreeName}-branch`;
+      const command = `git worktree add ${worktreeName} -b ${branchName} ${repository.masterBranch}`;
       logger.info(`Executing: ${command}`, { cwd: masterPath });
 
       await this.executeGitCommand(command, masterPath);
