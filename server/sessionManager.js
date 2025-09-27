@@ -116,7 +116,7 @@ class SessionManager extends EventEmitter {
   async initializeSessions() {
     // Clear ALL existing sessions first
     logger.info('Clearing existing sessions before workspace initialization');
-    await this.cleanupAllSessions();
+    this.cleanupAllSessions();
 
     logger.info('Initializing sessions', { count: this.worktrees.length });
 
@@ -988,6 +988,38 @@ class SessionManager extends EventEmitter {
     this.sessions.clear();
     this.stopBranchRefresh();
     this.cleanupGitWatchers();
+  }
+
+  cleanupAllSessions() {
+    logger.info('Cleaning up all sessions for workspace switch');
+
+    // Kill all PTY processes
+    for (const [sessionId, session] of this.sessions) {
+      try {
+        if (session.pty) {
+          session.pty.kill();
+          logger.debug(`Killed session: ${sessionId}`);
+        }
+
+        // Clear process monitor
+        if (session.processMonitor) {
+          clearInterval(session.processMonitor);
+        }
+      } catch (error) {
+        logger.error('Error cleaning up session', {
+          sessionId,
+          error: error.message
+        });
+      }
+    }
+
+    // Clear all session data
+    this.sessions.clear();
+
+    // Clear git watchers
+    this.cleanupGitWatchers();
+
+    logger.info('All sessions cleaned up');
   }
 }
 
