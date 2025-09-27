@@ -3453,3 +3453,71 @@ header h1 {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: var(--space-md);
 }
+
+
+/* Compact Project List Styles */
+.project-item.compact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-xs);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: auto;
+}
+
+.project-item.compact:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+}
+
+.project-item.compact.selected {
+  border-color: var(--accent-primary);
+  background: rgba(31, 111, 235, 0.1);
+}
+
+.project-item.compact .project-icon {
+  font-size: 1.2rem;
+  width: auto;
+  margin: 0;
+}
+
+.project-item.compact .project-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.project-item.compact .project-type {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  margin: 0;
+}
+
+.project-category h5 {
+  color: var(--text-primary);
+  margin: var(--space-md) 0 var(--space-sm) 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.discovered-projects {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: var(--space-lg);
+}
+
+.wizard-content {
+  max-width: 700px !important;
+  width: 90vw;
+}
