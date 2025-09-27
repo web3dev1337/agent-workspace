@@ -367,7 +367,7 @@ class WorkspaceWizard {
         access: this.data.accessLevel,
         repository: {
           path: this.data.repositoryPath,
-          masterBranch: 'main',
+          masterBranch: 'master',
           remote: ''
         },
         worktrees: {
