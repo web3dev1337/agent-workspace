@@ -620,6 +620,76 @@ app.post('/api/workspaces/create-worktree', async (req, res) => {
   }
 });
 
+app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
+  try {
+    const { workspaceId, repositoryPath, repositoryType, repositoryName, worktreeId } = req.body;
+    logger.info('Adding mixed worktree to workspace', {
+      workspaceId,
+      repositoryName,
+      worktreeId
+    });
+
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Convert to mixed-repo workspace if it's single-repo
+    let updatedWorkspace = workspace;
+    if (workspace.workspaceType !== 'mixed-repo') {
+      logger.info('Converting single-repo workspace to mixed-repo');
+      const { convertSingleToMixed } = require('./workspaceSchemas');
+      updatedWorkspace = convertSingleToMixed(workspace);
+    }
+
+    // Add new terminal pair to the workspace
+    const terminalIdBase = `${repositoryName.toLowerCase()}-${worktreeId}`;
+    const newTerminals = [
+      {
+        id: `${terminalIdBase}-claude`,
+        repository: {
+          name: repositoryName,
+          path: repositoryPath,
+          type: repositoryType,
+          masterBranch: 'master'
+        },
+        worktree: worktreeId,
+        terminalType: 'claude',
+        visible: true
+      },
+      {
+        id: `${terminalIdBase}-server`,
+        repository: {
+          name: repositoryName,
+          path: repositoryPath,
+          type: repositoryType,
+          masterBranch: 'master'
+        },
+        worktree: worktreeId,
+        terminalType: 'server',
+        visible: true
+      }
+    ];
+
+    updatedWorkspace.terminals = updatedWorkspace.terminals.concat(newTerminals);
+
+    // Ensure the worktree exists
+    const tempWorkspace = {
+      repository: { path: repositoryPath, masterBranch: 'master' },
+      worktrees: { enabled: true, namingPattern: 'work{n}', autoCreate: true }
+    };
+    await worktreeHelper.createWorktree(tempWorkspace, worktreeId);
+
+    // Save updated workspace
+    await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+
+    res.json({ success: true, terminalIds: newTerminals.map(t => t.id) });
+  } catch (error) {
+    logger.error('Failed to add mixed worktree', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Claude hook endpoints
 app.post('/api/claude-ready', express.json(), (req, res) => {
   const { worktree, sessionId } = req.body;

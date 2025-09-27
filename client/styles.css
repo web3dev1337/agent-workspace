@@ -3335,3 +3335,121 @@ header h1 {
 .btn-small.secondary:hover {
   background: var(--bg-tertiary);
 }
+
+
+/* Add Worktree Modal Styles */
+.modal .large-modal {
+  max-width: 900px;
+  width: 95vw;
+  max-height: 90vh;
+}
+
+.repo-category {
+  margin-bottom: var(--space-xl);
+}
+
+.repo-category h4 {
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.repo-section {
+  margin-bottom: var(--space-lg);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.repo-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.repo-icon {
+  font-size: 1.5rem;
+}
+
+.repo-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.repo-path {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.worktree-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--space-sm);
+}
+
+.worktree-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
+}
+
+.worktree-option.available:hover {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+
+.worktree-option.in-use {
+  background: var(--bg-primary);
+  border-color: var(--accent-warning);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.worktree-id {
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.worktree-status {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.worktree-option.available .worktree-status {
+  color: var(--accent-success);
+}
+
+.worktree-option.in-use .worktree-status {
+  color: var(--accent-warning);
+}
+
+.project-category {
+  margin-bottom: var(--space-lg);
+}
+
+.project-category h5 {
+  color: var(--text-primary);
+  margin-bottom: var(--space-sm);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.project-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-md);
+}
