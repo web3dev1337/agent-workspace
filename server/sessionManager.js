@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 const { UserSettingsService } = require('./userSettingsService');
+const { WorktreeHelper } = require('./worktreeHelper');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -28,6 +29,7 @@ class SessionManager extends EventEmitter {
     this.fileWatchers = new Map(); // Store file watchers for .git/HEAD files
     this.userSettings = UserSettingsService.getInstance();
     this.workspace = null; // Will be set by WorkspaceManager
+    this.worktreeHelper = new WorktreeHelper();
 
     // Load configuration
     this.config = this.loadConfig();
