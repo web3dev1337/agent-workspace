@@ -4066,6 +4066,14 @@ class ClaudeOrchestrator {
       this.showTemporaryMessage('Error creating worktree: ' + error.message, 'error');
     }
   }
+
+  showSettings() {
+    // Toggle settings panel
+    const settingsPanel = document.getElementById('settings-panel');
+    if (settingsPanel) {
+      settingsPanel.classList.toggle('hidden');
+    }
+  }
 }
 
 // Initialize when DOM is ready
