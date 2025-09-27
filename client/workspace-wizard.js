@@ -49,10 +49,9 @@ class WorkspaceWizard {
         </div>
 
         <div class="wizard-progress">
-          <div class="step-indicator" data-step="1">1. Type</div>
-          <div class="step-indicator" data-step="2">2. Repository</div>
-          <div class="step-indicator" data-step="3">3. Configuration</div>
-          <div class="step-indicator" data-step="4">4. Review</div>
+          <div class="step-indicator" data-step="1">1. Repository</div>
+          <div class="step-indicator" data-step="2">2. Configuration</div>
+          <div class="step-indicator" data-step="3">3. Review</div>
         </div>
 
         <div class="wizard-body">
@@ -83,16 +82,15 @@ class WorkspaceWizard {
     // Render step content
     const body = document.querySelector('.wizard-body');
     switch (step) {
-      case 1: body.innerHTML = this.renderTypeSelection(); break;
-      case 2: body.innerHTML = this.renderRepositorySelection(); break;
-      case 3: body.innerHTML = this.renderConfiguration(); break;
-      case 4: body.innerHTML = this.renderReview(); break;
+      case 1: body.innerHTML = this.renderRepositorySelection(); break;
+      case 2: body.innerHTML = this.renderConfiguration(); break;
+      case 3: body.innerHTML = this.renderReview(); break;
     }
 
-    // Update buttons
+    // Update buttons (adjusted for 3 steps)
     document.getElementById('wizard-prev').style.display = step === 1 ? 'none' : 'block';
-    document.getElementById('wizard-next').style.display = step === 4 ? 'none' : 'block';
-    document.getElementById('wizard-create').style.display = step === 4 ? 'block' : 'none';
+    document.getElementById('wizard-next').style.display = step === 3 ? 'none' : 'block';
+    document.getElementById('wizard-create').style.display = step === 3 ? 'block' : 'none';
   }
 
   renderTypeSelection() {
@@ -155,30 +153,44 @@ class WorkspaceWizard {
   }
 
   renderRepositorySelection() {
-    const discoveredHTML = this.discoveredProjects.length > 0 ? `
+    // Group projects by category
+    const categories = {};
+    this.discoveredProjects.forEach(project => {
+      if (!categories[project.category]) {
+        categories[project.category] = [];
+      }
+      categories[project.category].push(project);
+    });
+
+    const categorizedHTML = Object.keys(categories).length > 0 ? `
       <div class="discovered-projects">
-        <h4>Auto-detected Projects:</h4>
-        <div class="project-list">
-          ${this.discoveredProjects.map(project => `
-            <div class="project-item" data-path="${project.path}">
-              <div class="project-icon">${this.getProjectIcon(project.type)}</div>
-              <div class="project-info">
-                <div class="project-name">${project.name}</div>
-                <div class="project-path">${project.path}</div>
-                <div class="project-type">${project.type}</div>
-              </div>
+        <h4>Select Project Repository:</h4>
+        ${Object.entries(categories).map(([category, projects]) => `
+          <div class="project-category">
+            <h5>${category}</h5>
+            <div class="project-list">
+              ${projects.map(project => `
+                <div class="project-item" data-path="${project.path}" data-type="${project.type}">
+                  <div class="project-icon">${this.getProjectIcon(project.type)}</div>
+                  <div class="project-info">
+                    <div class="project-name">${project.name}</div>
+                    <div class="project-path">~/${project.relativePath}</div>
+                    <div class="project-type">${this.getTypeInfo(project.type).name}</div>
+                  </div>
+                </div>
+              `).join('')}
             </div>
-          `).join('')}
-        </div>
+          </div>
+        `).join('')}
       </div>
-    ` : '';
+    ` : '<p>No projects found. Try the custom path option below.</p>';
 
     return `
       <div class="wizard-step">
         <h3>Select Repository</h3>
-        <p>Choose the repository for this workspace.</p>
+        <p>Choose the repository for this workspace. Type is auto-detected from folder structure.</p>
 
-        ${discoveredHTML}
+        ${categorizedHTML}
 
         <div class="custom-path">
           <h4>Or enter custom path:</h4>
