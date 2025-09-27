@@ -682,12 +682,17 @@ class ClaudeOrchestrator {
     // Clear and rebuild the worktree list
     worktreeList.innerHTML = '';
     
-    // Group sessions by worktree
+    // Group sessions by worktree - ONLY for current workspace
     const worktrees = new Map();
-    
+
     for (const [sessionId, session] of this.sessions) {
+      // Only show sessions that belong to current workspace
+      if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) {
+        continue; // Skip sessions from other workspaces
+      }
+
       const worktreeId = session.worktreeId || sessionId.split('-')[0];
-      
+
       if (!worktrees.has(worktreeId)) {
         worktrees.set(worktreeId, {
           id: worktreeId,
@@ -695,7 +700,7 @@ class ClaudeOrchestrator {
           server: null
         });
       }
-      
+
       const worktree = worktrees.get(worktreeId);
       if (session.type === 'claude') {
         worktree.claude = session;
