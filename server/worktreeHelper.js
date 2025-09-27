@@ -47,6 +47,16 @@ class WorktreeHelper {
       // Create worktree using git worktree add
       // Create new branch for the worktree to avoid "already used" error
       const branchName = `${worktreeName}-branch`;
+
+      // Check if branch already exists and delete it if needed
+      try {
+        await this.executeGitCommand(`git branch -D ${branchName}`, masterPath);
+        logger.info(`Deleted existing branch: ${branchName}`);
+      } catch (error) {
+        // Branch doesn't exist, that's fine
+        logger.debug(`Branch ${branchName} doesn't exist (expected)`);
+      }
+
       const command = `git worktree add ${worktreeName} -b ${branchName} ${repository.masterBranch}`;
       logger.info(`Executing: ${command}`, { cwd: masterPath });
 
