@@ -4190,6 +4190,21 @@ class ClaudeOrchestrator {
       settingsPanel.classList.toggle('hidden');
     }
   }
+
+  getProjectIcon(type) {
+    const icons = {
+      'hytopia-game': '🎮',
+      'monogame-game': '🕹️',
+      'website': '🌐',
+      'writing': '📖',
+      'tool-project': '🛠️',
+      'minecraft-mod': '⛏️',
+      'rust-game': '🦀',
+      'web-game': '🎯',
+      'ruby-rails': '💎'
+    };
+    return icons[type] || '📁';
+  }
 }
 
 // Initialize when DOM is ready
