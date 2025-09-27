@@ -3982,6 +3982,60 @@ class ClaudeOrchestrator {
     console.log('Switching to workspace:', workspaceId);
     this.socket.emit('switch-workspace', { workspaceId });
   }
+
+  showAddWorktreeModal() {
+    if (!this.currentWorkspace || !this.currentWorkspace.worktrees.enabled) {
+      alert('Worktrees are not enabled for this workspace');
+      return;
+    }
+
+    const currentCount = this.currentWorkspace.terminals.pairs;
+    const maxCount = this.currentWorkspace.terminals.maxPairs || this.currentWorkspace.worktrees.count;
+
+    if (currentCount >= maxCount) {
+      alert(`Maximum worktrees reached (${maxCount})`);
+      return;
+    }
+
+    const nextNumber = currentCount + 1;
+    if (confirm(`Create work${nextNumber} worktree from ${this.currentWorkspace.repository.masterBranch} branch?`)) {
+      this.createWorktree(nextNumber);
+    }
+  }
+
+  async createWorktree(worktreeNumber) {
+    try {
+      console.log(`Creating work${worktreeNumber} worktree...`);
+
+      const response = await fetch('/api/workspaces/create-worktree', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: this.currentWorkspace.id,
+          worktreeNumber: worktreeNumber
+        })
+      });
+
+      if (response.ok) {
+        this.showTemporaryMessage(`Worktree work${worktreeNumber} created successfully!`, 'success');
+
+        // Update workspace config to include new terminal pair
+        this.currentWorkspace.terminals.pairs = worktreeNumber;
+
+        // Refresh the workspace to show new worktree
+        setTimeout(() => {
+          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
+        }, 1000);
+      } else {
+        const error = await response.text();
+        console.error('Failed to create worktree:', error);
+        this.showTemporaryMessage('Failed to create worktree: ' + error, 'error');
+      }
+    } catch (error) {
+      console.error('Error creating worktree:', error);
+      this.showTemporaryMessage('Error creating worktree: ' + error.message, 'error');
+    }
+  }
 }
 
 // Initialize when DOM is ready
