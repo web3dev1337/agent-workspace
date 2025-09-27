@@ -229,9 +229,9 @@ class WorkspaceWizard {
         <div class="config-section">
           <label>
             <input type="checkbox" id="enable-worktrees" ${typeInfo.defaultTerminalPairs > 1 ? 'checked' : ''} />
-            Enable Git Worktrees
+            <strong>Enable Git Worktrees</strong>
           </label>
-          <small>Create multiple working directories for parallel development</small>
+          <small>Create multiple working directories (work1, work2, etc.) for parallel development on different branches</small>
         </div>
 
         <div class="config-section worktree-config">
@@ -325,7 +325,9 @@ class WorkspaceWizard {
         if (selectedProject) {
           this.data.repositoryPath = selectedProject.dataset.path;
           this.data.type = selectedProject.dataset.type; // Auto-detected type
-          this.data.suggestedName = selectedProject.querySelector('.project-name').textContent;
+          // Convert project name to proper title case
+          const projectName = selectedProject.querySelector('.project-name').textContent;
+          this.data.suggestedName = this.toTitleCase(projectName);
         } else {
           this.data.repositoryPath = document.getElementById('custom-repo-path').value;
           this.data.type = 'custom'; // Default for custom paths
@@ -469,6 +471,54 @@ class WorkspaceWizard {
 
   getProjectIcon(type) {
     return this.getTypeInfo(type).icon;
+  }
+
+  toTitleCase(str) {
+    return str
+      .replace(/[_-]/g, ' ') // Replace underscores and hyphens with spaces
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  // Override prevStep to preserve settings
+  prevStep() {
+    // Collect current step data before going back
+    this.collectCurrentStepData();
+
+    if (this.currentStep > 1) {
+      this.showStep(this.currentStep - 1);
+
+      // Restore previously entered data
+      this.restoreStepData(this.currentStep);
+    }
+  }
+
+  restoreStepData(step) {
+    switch (step) {
+      case 1:
+        // Restore selected project
+        if (this.data.repositoryPath) {
+          const projectItem = document.querySelector(`[data-path="${this.data.repositoryPath}"]`);
+          if (projectItem) {
+            projectItem.classList.add('selected');
+          }
+        }
+        break;
+      case 2:
+        // Restore configuration settings
+        if (this.data.name) document.getElementById('workspace-name').value = this.data.name;
+        if (this.data.icon) document.getElementById('workspace-icon').value = this.data.icon;
+        if (this.data.enableWorktrees !== undefined) {
+          document.getElementById('enable-worktrees').checked = this.data.enableWorktrees;
+        }
+        if (this.data.terminalPairs) {
+          document.getElementById('terminal-pairs').value = this.data.terminalPairs;
+          document.getElementById('pairs-value').textContent = this.data.terminalPairs;
+        }
+        if (this.data.accessLevel) document.getElementById('access-level').value = this.data.accessLevel;
+        break;
+    }
   }
 }
 
