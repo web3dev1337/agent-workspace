@@ -57,7 +57,7 @@ class WorktreeHelper {
         logger.debug(`Branch ${branchName} doesn't exist (expected)`);
       }
 
-      const command = `git worktree add ${worktreeName} -b ${branchName} ${repository.masterBranch}`;
+      const command = `git worktree add ../${worktreeName} -b ${branchName} ${repository.masterBranch}`;
       logger.info(`Executing: ${command}`, { cwd: masterPath });
 
       await this.executeGitCommand(command, masterPath);
