@@ -3162,3 +3162,86 @@ header h1 {
   justify-content: space-between;
   gap: var(--space-md);
 }
+
+
+/* Quick Links in Sidebar */
+.sidebar-section {
+  margin: var(--space-md) var(--space-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.sidebar-section.collapsed .section-content {
+  display: none;
+}
+
+.section-header {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.section-header h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.collapse-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.section-content {
+  padding: var(--space-sm);
+}
+
+.link-category {
+  margin-bottom: var(--space-md);
+}
+
+.link-category:last-child {
+  margin-bottom: 0;
+}
+
+.link-category h5 {
+  margin: 0 0 var(--space-xs) 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.quick-link-item {
+  display: block;
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 0.85rem;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s ease;
+}
+
+.quick-link-item:hover {
+  background: var(--bg-primary);
+  color: var(--accent-primary);
+}
+
+.links-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: var(--space-sm) 0;
+}
