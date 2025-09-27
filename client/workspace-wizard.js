@@ -371,8 +371,8 @@ class WorkspaceWizard {
           remote: ''
         },
         worktrees: {
-          enabled: this.data.enableWorktrees,
-          count: this.data.terminalPairs,
+          enabled: true,
+          count: 8,
           namingPattern: 'work{n}',
           autoCreate: true
         },

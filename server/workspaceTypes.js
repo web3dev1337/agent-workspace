@@ -268,9 +268,9 @@ function getDefaultWorkspaceConfig(type) {
     },
     worktrees: {
       enabled: true,
-      count: typeInfo.defaultTerminalPairs,
+      count: 8,
       namingPattern: 'work{n}',
-      autoCreate: false
+      autoCreate: true
     },
     launchSettings: {
       type: typeInfo.launchSettingsTemplate,
