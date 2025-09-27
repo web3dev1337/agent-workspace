@@ -94,17 +94,45 @@ class SessionManager extends EventEmitter {
 
     this.worktrees = [];
     const { repository, worktrees: worktreeConfig, terminals } = this.workspace;
-    const terminalPairs = terminals.pairs || 1; // Default to 1 pair, not 8
 
-    for (let i = 1; i <= terminalPairs; i++) {
-      const worktreeId = worktreeConfig.namingPattern.replace('{n}', i);
-      // ALL workspace types use worktree pattern - no special cases
-      const worktreePath = path.join(repository.path, worktreeId);
+    // Check if workspace has mixed-repo terminals array
+    if (Array.isArray(terminals)) {
+      // Mixed-repo workspace: Extract unique worktrees from terminals array
+      const worktreeSet = new Set();
 
-      this.worktrees.push({
-        id: worktreeId,
-        path: worktreePath
+      terminals.forEach(terminal => {
+        const repoPath = terminal.repository.path;
+        const worktreeId = terminal.worktree;
+        const worktreePath = path.join(repoPath, worktreeId);
+
+        // Use a unique key to avoid duplicates
+        const key = `${terminal.repository.name}-${worktreeId}`;
+        if (!worktreeSet.has(key)) {
+          worktreeSet.add(key);
+          this.worktrees.push({
+            id: terminal.id,
+            worktreeId: worktreeId,
+            repositoryName: terminal.repository.name,
+            repositoryPath: repoPath,
+            path: worktreePath,
+            terminalType: terminal.terminalType
+          });
+        }
       });
+    } else {
+      // Traditional single-repo workspace: Use terminals.pairs pattern
+      const terminalPairs = terminals.pairs || 1; // Default to 1 pair, not 8
+
+      for (let i = 1; i <= terminalPairs; i++) {
+        const worktreeId = worktreeConfig.namingPattern.replace('{n}', i);
+        // ALL workspace types use worktree pattern - no special cases
+        const worktreePath = path.join(repository.path, worktreeId);
+
+        this.worktrees.push({
+          id: worktreeId,
+          path: worktreePath
+        });
+      }
     }
 
     logger.info('Built worktrees from workspace', {
@@ -178,52 +206,114 @@ class SessionManager extends EventEmitter {
     // Create all sessions in parallel for faster startup
     const sessionPromises = [];
     
-    for (const worktree of this.worktrees) {
-      // Add Claude session creation to promises array
-      sessionPromises.push(
-        Promise.resolve().then(() => {
-          this.createSession(`${worktree.id}-claude`, {
-            command: 'bash',
-            args: ['-c', `cd "${worktree.path}" && exec bash`],
-            cwd: worktree.path,
-            type: 'claude',
-            worktreeId: worktree.id
-          });
-        }).catch(error => {
-          logger.error('Failed to initialize Claude session', { 
-            worktree: worktree.id, 
-            error: error.message 
-          });
-        })
-      );
-      
-      // Add server session creation to promises array
-      sessionPromises.push(
-        Promise.resolve().then(() => {
-          this.createSession(`${worktree.id}-server`, {
-            command: 'bash',
-            args: ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
-            cwd: worktree.path,
-            type: 'server',
-            worktreeId: worktree.id
-          });
-        }).catch(error => {
-          logger.error('Failed to initialize server session', { 
-            worktree: worktree.id, 
-            error: error.message 
-          });
-        })
-      );
-      
-      // Add git branch update to promises array
-      if (this.gitHelper) {
+    // Create sessions based on workspace type
+    if (Array.isArray(this.workspace.terminals)) {
+      // Mixed-repo workspace: Create sessions from terminals array
+      const terminalsToCreate = this.workspace.terminals.filter(terminal => {
+        // Only create for existing worktrees
+        return this.worktrees.some(w => w.id === terminal.id);
+      });
+
+      for (const terminal of terminalsToCreate) {
+        const worktree = this.worktrees.find(w => w.id === terminal.id);
+        if (!worktree) continue;
+
         sessionPromises.push(
           Promise.resolve().then(() => {
-            this.updateGitBranch(worktree.id, worktree.path);
+            const sessionId = terminal.id;
+            let command, args;
+
+            if (terminal.terminalType === 'claude') {
+              command = 'bash';
+              args = ['-c', `cd "${worktree.path}" && exec bash`];
+            } else {
+              // Server terminal
+              command = 'bash';
+              args = ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${terminal.repository.name}/${terminal.worktree} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`];
+            }
+
+            this.createSession(sessionId, {
+              command,
+              args,
+              cwd: worktree.path,
+              type: terminal.terminalType,
+              worktreeId: terminal.worktree,
+              repositoryName: terminal.repository.name
+            });
           }).catch(error => {
-            logger.error('Failed to update git branch', { 
-              worktree: worktree.id, 
-              error: error.message 
+            logger.error(`Failed to initialize ${terminal.terminalType} session`, {
+              terminal: terminal.id,
+              error: error.message
+            });
+          })
+        );
+      }
+    } else {
+      // Traditional single-repo workspace: Use old logic
+      for (const worktree of this.worktrees) {
+        // Add Claude session creation to promises array
+        sessionPromises.push(
+          Promise.resolve().then(() => {
+            this.createSession(`${worktree.id}-claude`, {
+              command: 'bash',
+              args: ['-c', `cd "${worktree.path}" && exec bash`],
+              cwd: worktree.path,
+              type: 'claude',
+              worktreeId: worktree.id
+            });
+          }).catch(error => {
+            logger.error('Failed to initialize Claude session', {
+              worktree: worktree.id,
+              error: error.message
+            });
+          })
+        );
+
+        // Add server session creation to promises array
+        sessionPromises.push(
+          Promise.resolve().then(() => {
+            this.createSession(`${worktree.id}-server`, {
+              command: 'bash',
+              args: ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
+              cwd: worktree.path,
+              type: 'server',
+              worktreeId: worktree.id
+            });
+          }).catch(error => {
+            logger.error('Failed to initialize server session', {
+              worktree: worktree.id,
+              error: error.message
+            });
+          })
+        );
+
+        // Add git branch update to promises array
+        if (this.gitHelper) {
+          sessionPromises.push(
+            Promise.resolve().then(() => {
+              this.updateGitBranch(worktree.id, worktree.path);
+            }).catch(error => {
+              logger.error('Failed to update git branch', {
+                worktree: worktree.id,
+                error: error.message
+              });
+            })
+          );
+        }
+      }
+    }
+
+    // Git branch updates for all worktrees (both traditional and mixed-repo)
+    if (this.gitHelper) {
+      for (const worktree of this.worktrees) {
+        sessionPromises.push(
+          Promise.resolve().then(() => {
+            const worktreeIdForGit = worktree.worktreeId || worktree.id;
+            this.updateGitBranch(worktreeIdForGit, worktree.path);
+          }).catch(error => {
+            logger.error('Failed to update git branch', {
+              worktree: worktree.id,
+              error: error.message
             });
           })
         );
