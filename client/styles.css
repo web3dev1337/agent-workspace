@@ -3603,3 +3603,34 @@ header h1 {
   flex-direction: column;
   gap: var(--space-xs);
 }
+
+
+/* Current Repo Priority Styling */
+.repo-section.current-repo {
+  border: 2px solid var(--accent-primary);
+  background: rgba(31, 111, 235, 0.05);
+  margin-bottom: var(--space-lg);
+}
+
+.repo-section.current-repo .repo-header {
+  background: rgba(31, 111, 235, 0.1);
+}
+
+.repo-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.repo-details {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.repo-section.current-repo .repo-name {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
