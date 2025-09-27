@@ -471,50 +471,116 @@ app.post('/api/workspaces', async (req, res) => {
 
 app.get('/api/workspaces/scan-repos', async (req, res) => {
   try {
-    // Simple repo scanning implementation
     const fs = require('fs').promises;
     const path = require('path');
-    const os = require('os');
 
-    const scanPaths = workspaceManager.getConfig().discovery.scanPaths || [];
     const projects = [];
+    const gitHubPath = path.join(require('os').homedir(), 'GitHub');
 
-    for (const basePath of scanPaths) {
+    // Deep scan function
+    async function scanDirectory(dirPath, depth = 0, maxDepth = 4) {
+      if (depth > maxDepth) return;
+
       try {
-        const entries = await fs.readdir(basePath, { withFileTypes: true });
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
         for (const entry of entries) {
-          if (entry.isDirectory()) {
-            const projectPath = path.join(basePath, entry.name);
+          if (!entry.isDirectory()) continue;
+          if (entry.name.startsWith('.')) continue; // Skip hidden dirs
+          if (entry.name === 'node_modules') continue;
 
-            // Simple project type detection
-            let type = 'tool-project';
-            try {
-              const hasPackageJson = await fs.access(path.join(projectPath, 'package.json')).then(() => true).catch(() => false);
-              const hasCsproj = await fs.readdir(projectPath).then(files => files.some(f => f.endsWith('.csproj'))).catch(() => false);
+          const fullPath = path.join(dirPath, entry.name);
 
-              if (hasPackageJson) {
-                const pkg = JSON.parse(await fs.readFile(path.join(projectPath, 'package.json'), 'utf8'));
-                if (pkg.dependencies?.hytopia) type = 'hytopia-game';
-                else type = 'website';
-              } else if (hasCsproj) {
-                type = 'monogame-game';
-              }
-            } catch (error) {
-              // Keep default type
-            }
+          // Check if this looks like a project (has package.json, .git, or other indicators)
+          const isProject = await isProjectDirectory(fullPath);
+
+          if (isProject) {
+            // Determine type from folder path
+            const type = getTypeFromPath(fullPath);
+            const relativePath = path.relative(gitHubPath, fullPath);
 
             projects.push({
               name: entry.name,
-              path: projectPath,
-              type
+              path: fullPath,
+              relativePath: relativePath,
+              type: type,
+              category: getCategoryFromPath(fullPath)
             });
+          } else {
+            // Continue scanning subdirectories
+            await scanDirectory(fullPath, depth + 1, maxDepth);
           }
         }
       } catch (error) {
-        logger.warn(`Failed to scan ${basePath}`, { error: error.message });
+        // Skip directories we can't read
       }
     }
 
+    // Helper: Check if directory is a project
+    async function isProjectDirectory(dirPath) {
+      try {
+        const files = await fs.readdir(dirPath);
+
+        // Project indicators
+        const hasPackageJson = files.includes('package.json');
+        const hasCsproj = files.some(f => f.endsWith('.csproj'));
+        const hasCargoToml = files.includes('Cargo.toml');
+        const hasGit = files.includes('.git');
+        const hasMakefile = files.includes('Makefile');
+        const hasReadme = files.some(f => f.toLowerCase().includes('readme'));
+
+        // Must have at least one project indicator
+        return hasPackageJson || hasCsproj || hasCargoToml || hasGit || hasMakefile || hasReadme;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    // Helper: Determine type from folder path
+    function getTypeFromPath(fullPath) {
+      const pathLower = fullPath.toLowerCase();
+
+      // Path-based type detection
+      if (pathLower.includes('/games/hytopia/')) return 'hytopia-game';
+      if (pathLower.includes('/games/monogame/')) return 'monogame-game';
+      if (pathLower.includes('/games/minecraft/')) return 'minecraft-mod';
+      if (pathLower.includes('/games/rust/')) return 'rust-game';
+      if (pathLower.includes('/games/web/')) return 'web-game';
+      if (pathLower.includes('/website/')) return 'website';
+      if (pathLower.includes('/writing/')) return 'writing';
+      if (pathLower.includes('/tools/')) return 'tool-project';
+
+      // Fallback detection
+      if (pathLower.includes('/games/')) return 'hytopia-game'; // Default game type
+      return 'tool-project';
+    }
+
+    // Helper: Get category for grouping
+    function getCategoryFromPath(fullPath) {
+      const pathLower = fullPath.toLowerCase();
+
+      if (pathLower.includes('/games/hytopia/')) return 'Hytopia Games';
+      if (pathLower.includes('/games/monogame/')) return 'MonoGame Games';
+      if (pathLower.includes('/games/')) return 'Other Games';
+      if (pathLower.includes('/website/')) return 'Websites';
+      if (pathLower.includes('/writing/')) return 'Writing';
+      if (pathLower.includes('/tools/')) return 'Tools';
+
+      return 'Other';
+    }
+
+    // Start deep scan
+    await scanDirectory(gitHubPath);
+
+    // Sort by category then name
+    projects.sort((a, b) => {
+      if (a.category !== b.category) {
+        return a.category.localeCompare(b.category);
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    logger.info(`Found ${projects.length} projects across ${new Set(projects.map(p => p.category)).size} categories`);
     res.json(projects);
   } catch (error) {
     logger.error('Failed to scan repositories', { error: error.message });
