@@ -186,6 +186,10 @@ class ClaudeOrchestrator {
         this.availableWorkspaces = available;
         this.orchestratorConfig = config;
 
+        // Initialize workspace switcher
+        this.workspaceSwitcher = new WorkspaceSwitcher(this);
+        this.workspaceSwitcher.render();
+
         // Initialize dashboard if configured
         if (config.ui.startupDashboard && !active) {
           this.showDashboard();
