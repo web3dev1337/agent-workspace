@@ -243,8 +243,8 @@ class SessionManager extends EventEmitter {
           })
         );
 
-        // Add server session creation to promises array
-      sessionPromises.push(
+          // Add server session creation to promises array
+          sessionPromises.push(
         Promise.resolve().then(() => {
           this.createSession(`${worktree.id}-server`, {
             command: 'bash',
