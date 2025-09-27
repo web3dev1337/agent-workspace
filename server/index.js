@@ -38,6 +38,7 @@ const { GitHelper } = require('./gitHelper');
 const { NotificationService } = require('./notificationService');
 const { UserSettingsService } = require('./userSettingsService');
 const { GitUpdateService } = require('./gitUpdateService');
+const { WorkspaceManager } = require('./workspaceManager');
 
 const app = express();
 const httpServer = createServer(app);
@@ -94,6 +95,7 @@ if (AUTH_TOKEN) {
 }
 
 // Initialize services
+const workspaceManager = WorkspaceManager.getInstance();
 const sessionManager = new SessionManager(io);
 const statusDetector = new StatusDetector();
 const gitHelper = new GitHelper();
@@ -103,10 +105,46 @@ const notificationService = new NotificationService(io);
 sessionManager.setStatusDetector(statusDetector);
 sessionManager.setGitHelper(gitHelper);
 
+// Initialize workspace system
+let workspaceInitialized = false;
+async function initializeWorkspaceSystem() {
+  try {
+    logger.info('Initializing workspace system...');
+    await workspaceManager.initialize();
+
+    const activeWorkspace = workspaceManager.getActiveWorkspace();
+    if (activeWorkspace) {
+      logger.info(`Active workspace: ${activeWorkspace.name}`);
+      sessionManager.setWorkspace(activeWorkspace);
+      workspaceInitialized = true;
+    } else {
+      logger.warn('No active workspace found');
+    }
+  } catch (error) {
+    logger.error('Failed to initialize workspace system', { error: error.message });
+  }
+}
+
+// Initialize workspace system before starting server
+initializeWorkspaceSystem().then(() => {
+  logger.info('Workspace system initialized');
+}).catch(error => {
+  logger.error('Workspace system initialization failed', { error: error.message });
+});
+
 // WebSocket connection handling
 io.on('connection', (socket) => {
   logger.info('Client connected', { socketId: socket.id });
-  
+
+  // Send workspace info
+  const activeWorkspace = workspaceManager.getActiveWorkspace();
+  const workspaces = workspaceManager.listWorkspaces();
+  socket.emit('workspace-info', {
+    active: activeWorkspace,
+    available: workspaces,
+    config: workspaceManager.getConfig()
+  });
+
   // Send initial session states
   socket.emit('sessions', sessionManager.getSessionStates());
   
