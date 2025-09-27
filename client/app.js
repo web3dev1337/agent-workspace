@@ -4074,6 +4074,7 @@ class ClaudeOrchestrator {
   }
 
   renderRepoWorktreeOptions(repo) {
+    const getIcon = (type) => this.getProjectIcon(type);
     const worktreeOptions = [];
     for (let i = 1; i <= 8; i++) {
       const worktreeId = `work${i}`;
@@ -4094,7 +4095,7 @@ class ClaudeOrchestrator {
     return `
       <div class="repo-section">
         <div class="repo-header">
-          <span class="repo-icon">${this.getProjectIcon(repo.type)}</span>
+          <span class="repo-icon">${getIcon(repo.type)}</span>
           <span class="repo-name">${repo.name}</span>
           <span class="repo-path">~/${repo.relativePath}</span>
         </div>
