@@ -708,4 +708,15 @@ class TerminalManager {
     
     return lines.join('\n');
   }
+
+  clearAll() {
+    console.log('Clearing all terminals for workspace switch');
+
+    // Destroy all terminals
+    for (const sessionId of this.terminals.keys()) {
+      this.destroyTerminal(sessionId);
+    }
+
+    console.log('All terminals cleared');
+  }
 }
