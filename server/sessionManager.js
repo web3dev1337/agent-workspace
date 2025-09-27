@@ -559,6 +559,8 @@ class SessionManager extends EventEmitter {
         }
       });
       
+      // Add workspace ID to session
+      session.workspace = this.workspace?.id || null;
       this.sessions.set(sessionId, session);
       
       // Monitor for fork bombs (every 5 seconds)
