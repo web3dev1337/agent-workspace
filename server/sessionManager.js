@@ -93,47 +93,23 @@ class SessionManager extends EventEmitter {
     }
 
     this.worktrees = [];
+    const { repository, worktrees: worktreeConfig, terminals } = this.workspace;
+    const terminalPairs = terminals.pairs || 8;
 
-    if (this.workspace.workspaceType === 'mixed-repo') {
-      // Mixed-repo workspace: each terminal has its own repo/worktree
-      this.workspace.terminals.forEach(terminal => {
-        const worktreePath = terminal.repository.path;
-        const fullWorktreePath = terminal.worktree
-          ? path.join(worktreePath, terminal.worktree)
-          : worktreePath;
+    for (let i = 1; i <= terminalPairs; i++) {
+      const worktreeId = worktreeConfig.namingPattern.replace('{n}', i);
+      const worktreePath = worktreeConfig.enabled
+        ? path.join(repository.path, worktreeId)
+        : repository.path; // Single directory if worktrees disabled
 
-        this.worktrees.push({
-          id: terminal.id,
-          path: fullWorktreePath,
-          repository: terminal.repository,
-          worktree: terminal.worktree,
-          terminalType: terminal.terminalType
-        });
+      this.worktrees.push({
+        id: worktreeId,
+        path: worktreePath
       });
-    } else {
-      // Single-repo workspace: traditional approach
-      const { repository, worktrees: worktreeConfig, terminals } = this.workspace;
-      const terminalPairs = terminals.pairs || 8;
-
-      for (let i = 1; i <= terminalPairs; i++) {
-        const worktreeId = worktreeConfig.namingPattern.replace('{n}', i);
-        const worktreePath = worktreeConfig.enabled
-          ? path.join(repository.path, worktreeId)
-          : repository.path;
-
-        this.worktrees.push({
-          id: worktreeId,
-          path: worktreePath,
-          repository: repository,
-          worktree: worktreeId,
-          terminalType: null // Will create both claude and server
-        });
-      }
     }
 
     logger.info('Built worktrees from workspace', {
       workspace: this.workspace.name,
-      type: this.workspace.workspaceType || 'single-repo',
       count: this.worktrees.length
     });
   }
@@ -196,55 +172,28 @@ class SessionManager extends EventEmitter {
     
     // Create all sessions in parallel for faster startup
     const sessionPromises = [];
-
-    if (this.workspace.workspaceType === 'mixed-repo') {
-      // Mixed-repo: create sessions directly from terminal definitions
-      for (const terminal of this.workspace.terminals) {
-        sessionPromises.push(
-          Promise.resolve().then(() => {
-            const worktreePath = terminal.worktree
-              ? path.join(terminal.repository.path, terminal.worktree)
-              : terminal.repository.path;
-
-            this.createSession(terminal.id, {
-              command: 'bash',
-              args: ['-c', `cd "${worktreePath}" && exec bash`],
-              cwd: worktreePath,
-              type: terminal.terminalType,
-              worktreeId: terminal.worktree || 'master',
-              repository: terminal.repository
-            });
-          }).catch(error => {
-            logger.error('Failed to initialize mixed-repo session', {
-              terminal: terminal.id,
-              error: error.message
-            });
-          })
-        );
-      }
-    } else {
-      // Single-repo: traditional approach
-      for (const worktree of this.worktrees) {
-        // Add Claude session creation to promises array
-        sessionPromises.push(
-          Promise.resolve().then(() => {
-            this.createSession(`${worktree.id}-claude`, {
-              command: 'bash',
-              args: ['-c', `cd "${worktree.path}" && exec bash`],
-              cwd: worktree.path,
-              type: 'claude',
-              worktreeId: worktree.id
-            });
-          }).catch(error => {
-            logger.error('Failed to initialize Claude session', {
-              worktree: worktree.id,
-              error: error.message
-            });
-          })
-        );
-
-          // Add server session creation to promises array
-          sessionPromises.push(
+    
+    for (const worktree of this.worktrees) {
+      // Add Claude session creation to promises array
+      sessionPromises.push(
+        Promise.resolve().then(() => {
+          this.createSession(`${worktree.id}-claude`, {
+            command: 'bash',
+            args: ['-c', `cd "${worktree.path}" && exec bash`],
+            cwd: worktree.path,
+            type: 'claude',
+            worktreeId: worktree.id
+          });
+        }).catch(error => {
+          logger.error('Failed to initialize Claude session', { 
+            worktree: worktree.id, 
+            error: error.message 
+          });
+        })
+      );
+      
+      // Add server session creation to promises array
+      sessionPromises.push(
         Promise.resolve().then(() => {
           this.createSession(`${worktree.id}-server`, {
             command: 'bash',
@@ -282,14 +231,14 @@ class SessionManager extends EventEmitter {
 
     // Clear workspace switching flag
     this.isWorkspaceSwitching = false;
-
+    
     // Start periodic branch refresh (every 30 seconds)
     this.startBranchRefresh();
-
+    
     // Setup file watchers for instant branch detection
     this.setupGitWatchers();
   }
-
+  
   startBranchRefresh() {
     if (this.branchRefreshInterval) {
       clearInterval(this.branchRefreshInterval);
