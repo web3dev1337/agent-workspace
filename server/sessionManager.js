@@ -114,8 +114,12 @@ class SessionManager extends EventEmitter {
   }
   
   async initializeSessions() {
+    // Clear ALL existing sessions first
+    logger.info('Clearing existing sessions before workspace initialization');
+    await this.cleanupAllSessions();
+
     logger.info('Initializing sessions', { count: this.worktrees.length });
-    
+
     // Log configuration for debugging
     logger.info('SessionManager configuration:', {
       workspace: this.workspace?.name || 'none',
