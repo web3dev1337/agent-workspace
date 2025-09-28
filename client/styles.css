@@ -2840,7 +2840,7 @@ header h1 {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  right: 0;
+  min-width: 300px; /* Wider dropdown to avoid text cutoff */
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -2860,8 +2860,9 @@ header h1 {
 }
 
 .workspace-dropdown-items {
-  max-height: 400px;
-  overflow-y: auto;
+  /* Remove scrollbar - show all workspaces */
+  max-height: none;
+  overflow: visible;
 }
 
 .workspace-option {
