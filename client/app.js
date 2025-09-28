@@ -7,6 +7,7 @@ class ClaudeOrchestrator {
     this.socket = null;
     this.terminalManager = null;
     this.notificationManager = null;
+    this.agentModalManager = null; // Agent modal manager
     this.settings = this.loadSettings();
     this.userSettings = null; // Will be loaded from server
     this.currentLayout = '2x4';
@@ -33,6 +34,7 @@ class ClaudeOrchestrator {
       // Initialize managers
       this.terminalManager = new TerminalManager(this);
       this.notificationManager = new NotificationManager(this);
+      this.agentModalManager = new AgentModalManager(this);
       
       // Request notification permission if enabled
       if (this.settings.notifications) {
@@ -3344,19 +3346,25 @@ class ClaudeOrchestrator {
   }
 
   async showClaudeStartupModal(sessionId) {
-    const modal = document.getElementById('claude-startup-modal');
-    const sessionInfo = document.getElementById('startup-session-id');
-    
-    if (modal && sessionInfo) {
-      // Store the session ID for later use
-      this.pendingClaudeSession = sessionId;
-      
-      // Update session info display
-      const worktreeNumber = sessionId.replace('work', '').replace('-claude', '');
-      sessionInfo.textContent = `Work ${worktreeNumber}`;
-      
-      // Show modal
-      modal.classList.remove('hidden');
+    // Use new agent modal instead of legacy Claude-specific modal
+    if (this.agentModalManager) {
+      await this.agentModalManager.showModal(sessionId);
+    } else {
+      // Fallback to legacy modal
+      const modal = document.getElementById('claude-startup-modal');
+      const sessionInfo = document.getElementById('startup-session-id');
+
+      if (modal && sessionInfo) {
+        // Store the session ID for later use
+        this.pendingClaudeSession = sessionId;
+
+        // Update session info display
+        const worktreeNumber = sessionId.replace('work', '').replace('-claude', '');
+        sessionInfo.textContent = `Work ${worktreeNumber}`;
+
+        // Show modal
+        modal.classList.remove('hidden');
+      }
     }
   }
   
@@ -3373,9 +3381,9 @@ class ClaudeOrchestrator {
       this.showError('Not connected to server');
       return;
     }
-    
+
     console.log(`Starting Claude ${sessionId} with mode: ${mode}, skip: ${skipPermissions}`);
-    
+
     // Send command to server
     this.socket.emit('start-claude', {
       sessionId: sessionId,
@@ -3383,6 +3391,24 @@ class ClaudeOrchestrator {
         mode: mode,
         skipPermissions: skipPermissions
       }
+    });
+  }
+
+  /**
+   * Start agent with configuration (agent-agnostic)
+   */
+  startAgentWithConfig(sessionId, config) {
+    if (!this.socket || !this.socket.connected) {
+      this.showError('Not connected to server');
+      return;
+    }
+
+    console.log(`Starting agent ${config.agentId} for ${sessionId} with config:`, config);
+
+    // Send command to server
+    this.socket.emit('start-agent', {
+      sessionId: sessionId,
+      config: config
     });
   }
   
