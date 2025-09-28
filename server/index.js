@@ -721,6 +721,13 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
     // Save updated workspace
     await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
 
+    // Refresh the SessionManager with the updated workspace
+    const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
+    sessionManager.setWorkspace(refreshedWorkspace);
+
+    // Reinitialize sessions to include the new terminals
+    await sessionManager.initializeSessions();
+
     res.json({ success: true, terminalIds: newTerminals.map(t => t.id) });
   } catch (error) {
     logger.error('Failed to add mixed worktree', { error: error.message });
