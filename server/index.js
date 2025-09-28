@@ -40,6 +40,7 @@ const { UserSettingsService } = require('./userSettingsService');
 const { GitUpdateService } = require('./gitUpdateService');
 const { WorkspaceManager } = require('./workspaceManager');
 const { WorktreeHelper } = require('./worktreeHelper');
+const AgentManager = require('./agentManager');
 
 const app = express();
 const httpServer = createServer(app);
@@ -100,7 +101,8 @@ if (AUTH_TOKEN) {
 
 // Initialize services
 const workspaceManager = WorkspaceManager.getInstance();
-const sessionManager = new SessionManager(io);
+const agentManager = new AgentManager();
+const sessionManager = new SessionManager(io, agentManager);
 const statusDetector = new StatusDetector();
 const gitHelper = new GitHelper();
 const notificationService = new NotificationService(io);
@@ -171,10 +173,16 @@ io.on('connection', (socket) => {
     sessionManager.restartSession(sessionId);
   });
   
-  // Handle Claude start with specific options
+  // Handle Claude start with specific options (legacy)
   socket.on('start-claude', ({ sessionId, options }) => {
-    logger.info('Claude start requested', { sessionId, options });
+    logger.info('Claude start requested (legacy)', { sessionId, options });
     sessionManager.startClaudeWithOptions(sessionId, options);
+  });
+
+  // Handle agent start with configuration
+  socket.on('start-agent', ({ sessionId, config }) => {
+    logger.info('Agent start requested', { sessionId, config });
+    sessionManager.startAgentWithConfig(sessionId, config);
   });
   
   // Handle session heartbeat to keep sessions alive while UI is open
@@ -989,6 +997,17 @@ app.post('/api/git/pull', (req, res) => {
       logger.error('Failed to pull latest changes', { error: error.message });
       res.status(500).json({ error: 'Failed to pull latest changes' });
     });
+});
+
+// Get available AI agents configuration
+app.get('/api/agents', (req, res) => {
+  try {
+    const agents = agentManager.getAllAgents().map(agent => agentManager.getUIConfig(agent.id));
+    res.json(agents);
+  } catch (error) {
+    logger.error('Failed to get agent configurations', { error: error.message });
+    res.status(500).json({ error: 'Failed to get agent configurations' });
+  }
 });
 
 // Get worktree configuration for frontend

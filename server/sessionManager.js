@@ -20,9 +20,10 @@ const logger = winston.createLogger({
 });
 
 class SessionManager extends EventEmitter {
-  constructor(io) {
+  constructor(io, agentManager) {
     super();
     this.io = io;
+    this.agentManager = agentManager;
     this.sessions = new Map();
     this.statusDetector = null; // Will be set later
     this.gitHelper = null; // Will be set later
@@ -1065,10 +1066,61 @@ class SessionManager extends EventEmitter {
     
     // Emit event to notify UI that Claude is starting
     this.io.emit('claude-started', { sessionId, options: finalOptions });
-    
+
     return true;
   }
-  
+
+  /**
+   * Start AI agent with configuration (agent-agnostic)
+   */
+  startAgentWithConfig(sessionId, config) {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      logger.warn('Cannot start agent - session not found', { sessionId });
+      return false;
+    }
+
+    if (!this.agentManager) {
+      logger.error('AgentManager not available', { sessionId });
+      return false;
+    }
+
+    // Validate configuration
+    const validation = this.agentManager.validateConfig(config);
+    if (!validation.valid) {
+      logger.error('Invalid agent configuration', { sessionId, config, error: validation.error });
+      return false;
+    }
+
+    // Handle mutually exclusive flags
+    const adjustedFlags = this.agentManager.validateAndAdjustFlags(config.agentId, config.flags);
+    const finalConfig = { ...config, flags: adjustedFlags };
+
+    logger.info('Starting agent with configuration', {
+      sessionId,
+      originalConfig: config,
+      finalConfig
+    });
+
+    try {
+      // Build command using AgentManager
+      const command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, finalConfig.flags);
+
+      logger.info('Executing agent command', { sessionId, command });
+
+      // Send the command to the terminal
+      this.writeToSession(sessionId, `${command}\n`);
+
+      // Emit event to notify UI that agent is starting
+      this.io.emit('agent-started', { sessionId, config: finalConfig });
+
+      return true;
+    } catch (error) {
+      logger.error('Failed to start agent', { sessionId, config, error: error.message });
+      return false;
+    }
+  }
+
   cleanup() {
     logger.info('Cleaning up all sessions');
     
