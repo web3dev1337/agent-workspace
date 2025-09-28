@@ -4063,7 +4063,8 @@ class ClaudeOrchestrator {
 
     // Fetch available repositories
     try {
-      const response = await fetch('/api/workspaces/scan-repos');
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
       const allRepos = await response.json();
       this.showAdvancedAddWorktreeModal(allRepos);
     } catch (error) {

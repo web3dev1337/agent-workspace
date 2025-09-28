@@ -332,7 +332,8 @@ class Dashboard {
 
   async deleteWorkspace(workspaceId) {
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}`, {
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const response = await fetch(`${serverUrl}/api/workspaces/${workspaceId}`, {
         method: 'DELETE'
       });
 
