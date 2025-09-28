@@ -74,17 +74,17 @@ class AgentManager {
       description: 'OpenAI Codex',
       baseCommand: 'codex',
       modes: {
-        search: {
-          command: 'codex --search',
-          description: 'Search and analyze mode'
+        fresh: {
+          command: 'codex',
+          description: 'Start new session'
         },
-        create: {
-          command: 'codex --create',
-          description: 'Create new content'
+        continue: {
+          command: 'codex',
+          description: 'Continue conversation'
         },
-        analyze: {
-          command: 'codex --analyze',
-          description: 'Analyze existing code'
+        resume: {
+          command: 'codex resume',
+          description: 'Resume interrupted session'
         }
       },
       flags: {
@@ -159,7 +159,7 @@ class AgentManager {
           default: false
         }
       },
-      defaultMode: 'search',
+      defaultMode: 'fresh',
       // Default flags for "most powerful" configuration
       defaultFlags: ['gpt5Model', 'highReasoning', 'workspaceWrite'],
       flagCategories: {

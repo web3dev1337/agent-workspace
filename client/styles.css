@@ -904,6 +904,239 @@ header h1 {
   color: white;
 }
 
+/* Worktree Modal Improvements */
+.worktree-modal {
+  max-width: 90vw;
+  width: 1000px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.worktree-modal-toolbar {
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.2);
+}
+
+.filter-buttons {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.filter-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.filter-btn.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+}
+
+.worktree-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+  max-height: 60vh;
+}
+
+.repo-category {
+  margin-bottom: var(--space-lg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.repo-category.collapsed .category-content {
+  display: none;
+}
+
+.category-header {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  transition: background 0.2s;
+}
+
+.category-header:hover {
+  background: var(--bg-primary);
+}
+
+.category-toggle {
+  font-size: 0.8rem;
+  transition: transform 0.2s;
+}
+
+.repo-category.collapsed .category-toggle {
+  transform: rotate(-90deg);
+}
+
+.category-header h4 {
+  margin: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.repo-count {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
+.category-content {
+  padding: var(--space-md);
+}
+
+.repo-section {
+  margin-bottom: var(--space-lg);
+  padding: var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+}
+
+.repo-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.repo-icon {
+  font-size: 1.2rem;
+  width: 24px;
+  text-align: center;
+}
+
+.repo-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.repo-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.repo-path {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.available-count {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.worktree-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-sm);
+  max-width: 100%;
+}
+
+.worktree-option {
+  padding: var(--space-sm);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  text-align: center;
+  min-height: 60px;
+}
+
+.worktree-option:hover:not(.in-use) {
+  border-color: var(--accent-primary);
+  background: var(--bg-secondary);
+  transform: translateY(-1px);
+}
+
+.worktree-option.available {
+  border-color: var(--accent-success);
+}
+
+.worktree-option.in-use {
+  border-color: var(--accent-warning);
+  background: var(--bg-secondary);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.worktree-id {
+  font-weight: 500;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.worktree-status {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.worktree-option.available .worktree-status {
+  color: var(--accent-success);
+}
+
+.worktree-option.in-use .worktree-status {
+  color: var(--accent-warning);
+}
+
 /* Claude Startup Modal (Simplified) - Legacy */
 .claude-startup-simple {
   max-width: 400px;
@@ -996,6 +1229,90 @@ header h1 {
   border-radius: var(--radius-md);
 }
 
+/* Compact Inline Agent UI */
+.startup-ui-compact {
+  text-align: center;
+  padding: var(--space-lg);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.inline-agent-selector {
+  display: flex;
+  justify-content: center;
+}
+
+.agent-dropdown {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.agent-dropdown:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.2);
+}
+
+.inline-mode-buttons {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.inline-presets {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.preset-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.preset-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
+.preset-label {
+  color: var(--text-primary);
+}
+
+.advanced-btn {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.advanced-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+/* Legacy Simple UI (for fallback) */
 .startup-ui-simple {
   text-align: center;
   padding: var(--space-xl);
