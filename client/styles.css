@@ -724,7 +724,187 @@ header h1 {
   justify-content: flex-end;
 }
 
-/* Claude Startup Modal (Simplified) */
+/* Agent Startup Modal (Dynamic) */
+.agent-startup-dynamic {
+  max-width: 600px;
+  min-width: 500px;
+}
+
+.agent-selector, .mode-selector {
+  margin-bottom: var(--space-lg);
+}
+
+.agent-selector label, .mode-selector label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: var(--space-sm);
+  color: var(--text-primary);
+}
+
+.agent-options {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.agent-option {
+  flex: 1;
+  min-width: 120px;
+  padding: var(--space-sm) var(--space-md);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.agent-option:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-secondary);
+}
+
+.agent-option.selected {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: white;
+}
+
+.agent-option .agent-icon {
+  font-size: 1.2rem;
+  margin-bottom: var(--space-xs);
+}
+
+.agent-option .agent-name {
+  font-weight: 500;
+  display: block;
+}
+
+.agent-option .agent-desc {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin-top: var(--space-xs);
+}
+
+.mode-buttons {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.mode-btn {
+  flex: 1;
+  min-width: 100px;
+  padding: var(--space-sm) var(--space-md);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.mode-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-secondary);
+}
+
+.mode-btn.selected {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: white;
+}
+
+.flag-configuration {
+  margin-bottom: var(--space-lg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  background: var(--bg-tertiary);
+}
+
+.flag-category {
+  margin-bottom: var(--space-md);
+}
+
+.flag-category:last-child {
+  margin-bottom: 0;
+}
+
+.flag-category-title {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.flag-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.flag-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.flag-option:hover {
+  background: var(--bg-secondary);
+}
+
+.flag-option input[type="checkbox"],
+.flag-option input[type="radio"] {
+  margin: 0;
+}
+
+.flag-option .flag-label {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.flag-option .flag-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.quick-presets {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+  justify-content: center;
+}
+
+.preset-btn {
+  padding: var(--space-sm) var(--space-lg);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.preset-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-secondary);
+}
+
+.preset-btn.active {
+  border-color: var(--accent-success);
+  background: var(--accent-success);
+  color: white;
+}
+
+/* Claude Startup Modal (Simplified) - Legacy */
 .claude-startup-simple {
   max-width: 400px;
   text-align: center;

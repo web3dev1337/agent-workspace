@@ -86,29 +86,46 @@
         </div>
     </div>
     
-    <!-- Claude Startup Options Modal (Simplified) -->
-    <div id="claude-startup-modal" class="modal hidden">
-        <div class="modal-content claude-startup-simple">
-            <h3>Start Claude - <span id="startup-session-id"></span></h3>
-            <div class="startup-buttons">
-                <button class="startup-option-btn" data-mode="fresh">
-                    <span class="option-icon">🆕</span>
-                    <span class="option-label">Fresh</span>
+    <!-- Agent Startup Options Modal (Dynamic) -->
+    <div id="agent-startup-modal" class="modal hidden">
+        <div class="modal-content agent-startup-dynamic">
+            <h3>Start AI Agent - <span id="startup-session-id"></span></h3>
+
+            <!-- Agent Selection -->
+            <div class="agent-selector">
+                <label>Select AI Agent:</label>
+                <div class="agent-options" id="agent-options">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+
+            <!-- Mode Selection -->
+            <div class="mode-selector" id="mode-selector">
+                <label>Mode:</label>
+                <div class="mode-buttons" id="mode-buttons">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+
+            <!-- Flag Configuration -->
+            <div class="flag-configuration" id="flag-configuration">
+                <!-- Dynamically populated based on selected agent -->
+            </div>
+
+            <!-- Quick Presets -->
+            <div class="quick-presets">
+                <button class="preset-btn" id="preset-default" data-preset="default">
+                    🛡️ Default (Safe)
                 </button>
-                <button class="startup-option-btn" data-mode="continue">
-                    <span class="option-icon">➡️</span>
-                    <span class="option-label">Continue</span>
-                </button>
-                <button class="startup-option-btn" data-mode="resume">
-                    <span class="option-icon">⏸️</span>
-                    <span class="option-label">Resume</span>
+                <button class="preset-btn" id="preset-powerful" data-preset="powerful">
+                    🚀 Most Powerful
                 </button>
             </div>
-            <label class="yolo-toggle-modal">
-                <input type="checkbox" id="modal-yolo">
-                <span class="yolo-label">🚀 YOLO Mode (skip permissions)</span>
-            </label>
-            <button id="cancel-claude-startup" class="button-secondary">Cancel</button>
+
+            <div class="modal-actions">
+                <button id="start-agent" class="button-primary">Start</button>
+                <button id="cancel-agent-startup" class="button-secondary">Cancel</button>
+            </div>
         </div>
     </div>
     
@@ -267,5 +284,6 @@
     <script src="tauri-compat.js"></script>
     <script src="terminal.js"></script>
     <script src="notifications.js"></script>
+    <script src="agent-modal.js"></script>
 </body>
 </html>
