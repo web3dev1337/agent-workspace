@@ -681,16 +681,27 @@ class ClaudeOrchestrator {
     }
   }
   
+  getRepositoryNameFromSessionId(sessionId) {
+    // Extract repository name from complex session IDs like "hytopia-2d-game-test-work1-claude"
+    // For traditional sessions like "work1-claude", return null
+    const parts = sessionId.split('-');
+    if (parts.length > 3) {
+      // Mixed-repo: "repo-name-work1-claude" -> "repo-name"
+      return parts.slice(0, -2).join('-');
+    }
+    return null; // Traditional workspace
+  }
+
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
-    
+
     // Always ensure filter toggle exists and is updated FIRST
     this.ensureFilterToggleExists();
     
     // Clear and rebuild the worktree list
     worktreeList.innerHTML = '';
     
-    // Group sessions by worktree - ONLY for current workspace
+    // Group sessions by worktree and repository for mixed-repo support
     const worktrees = new Map();
 
     for (const [sessionId, session] of this.sessions) {
@@ -701,15 +712,21 @@ class ClaudeOrchestrator {
 
       const worktreeId = session.worktreeId || sessionId.split('-')[0];
 
-      if (!worktrees.has(worktreeId)) {
-        worktrees.set(worktreeId, {
+      // For mixed-repo workspaces, get repository name from session ID
+      const repositoryName = this.getRepositoryNameFromSessionId(sessionId);
+      const key = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+
+      if (!worktrees.has(key)) {
+        worktrees.set(key, {
           id: worktreeId,
+          repositoryName: repositoryName,
+          displayName: repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId,
           claude: null,
           server: null
         });
       }
 
-      const worktree = worktrees.get(worktreeId);
+      const worktree = worktrees.get(key);
       if (session.type === 'claude') {
         worktree.claude = session;
       } else if (session.type === 'server') {
@@ -728,27 +745,26 @@ class ClaudeOrchestrator {
       }
       
       // Check if any session in this worktree is visible
-      const claudeId = `${worktreeId}-claude`;
-      const serverId = `${worktreeId}-server`;
-      const isVisible = this.visibleTerminals.has(claudeId) || this.visibleTerminals.has(serverId);
+      const isVisible = (worktree.claude && this.visibleTerminals.has(worktree.claude.sessionId)) ||
+                       (worktree.server && this.visibleTerminals.has(worktree.server.sessionId));
       
       const item = document.createElement('div');
       // Only show visibility state, not activity state (activity filtering is handled separately)
       item.className = `worktree-item ${!isVisible ? 'hidden-terminal' : ''}`;
-      item.dataset.worktreeId = worktreeId;
+      item.dataset.worktreeId = worktree.id;
       item.title = 'Click to toggle • Ctrl+Click to show only this worktree';
-      
+
       const branch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
-      const worktreeNumber = worktreeId.replace('work', '');
-      
+      const displayName = worktree.displayName;
+
       // Convert claude status for display (waiting -> ready for green color)
       const claudeDisplayStatus = worktree.claude?.status === 'waiting' ? 'ready' : worktree.claude?.status;
-      
+
       item.innerHTML = `
         <div class="worktree-header">
           <div class="worktree-title">
             <span class="visibility-indicator">${isVisible ? '👁' : '🚫'}</span>
-            ${worktreeNumber} - ${branch}
+            ${displayName} - ${branch}
           </div>
         </div>
         <div class="worktree-sessions">
