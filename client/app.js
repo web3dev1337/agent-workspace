@@ -911,8 +911,9 @@ class ClaudeOrchestrator {
     const anyVisible = sessions.some(id => this.visibleTerminals.has(id));
 
     // Log current state for debugging
-    const claudeSession = this.sessions.get(claudeId);
-    console.log(`Toggling ${worktreeId}: currently ${anyVisible ? 'visible' : 'hidden'}, Claude status: ${claudeSession?.status || 'unknown'}`);
+    const claudeSessionId = sessions.find(id => id.includes('claude'));
+    const claudeSession = claudeSessionId ? this.sessions.get(claudeSessionId) : null;
+    console.log(`Toggling ${worktreeId}: currently ${anyVisible ? 'visible' : 'hidden'}, Claude status: ${claudeSession?.status || 'unknown'}, sessions: ${sessions.join(', ')}`);
 
     if (anyVisible) {
       // Hide terminals - allow hiding even if Claude is running (user wants to focus elsewhere)
