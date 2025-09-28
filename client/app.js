@@ -961,21 +961,11 @@ class ClaudeOrchestrator {
   }
   
   updateTerminalGrid() {
-    // Get ALL sessions in proper order
-    const allSessions = [];
-    for (let i = 1; i <= 8; i++) {
-      const claudeId = `work${i}-claude`;
-      const serverId = `work${i}-server`;
-      
-      if (this.sessions.has(claudeId)) {
-        allSessions.push(claudeId);
-      }
-      if (this.sessions.has(serverId)) {
-        allSessions.push(serverId);
-      }
-    }
-    
+    // Get ALL sessions (works for both traditional and mixed-repo workspaces)
+    const allSessions = Array.from(this.sessions.keys());
+
     console.log('Rendering all terminals, will hide non-visible ones');
+    console.log('📋 All sessions found:', allSessions);
     this.renderTerminalsWithVisibility(allSessions);
   }
   
