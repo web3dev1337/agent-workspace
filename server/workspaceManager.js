@@ -356,10 +356,7 @@ class WorkspaceManager {
       throw new Error(`Workspace not found: ${workspaceId}`);
     }
 
-    // Don't allow deleting active workspace
-    if (this.activeWorkspace && this.activeWorkspace.id === workspaceId) {
-      throw new Error('Cannot delete active workspace. Switch to another workspace first.');
-    }
+    // Allow deleting active workspace (cleanup handled by caller)
 
     // Delete from disk
     const filePath = path.join(this.workspacesPath, `${workspaceId}.json`);
