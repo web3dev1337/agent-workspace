@@ -471,6 +471,7 @@ app.post('/api/workspaces', async (req, res) => {
 
 app.get('/api/workspaces/scan-repos', async (req, res) => {
   try {
+    logger.info('Starting repository scan...');
     const fs = require('fs').promises;
     const path = require('path');
 
