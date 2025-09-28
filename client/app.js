@@ -3506,7 +3506,7 @@ class ClaudeOrchestrator {
     } else if (selectedAgent === 'codex') {
       config = {
         agentId: 'codex',
-        mode: mode === 'fresh' ? 'search' : mode === 'continue' ? 'create' : 'analyze',
+        mode: mode, // Use same modes as Claude: fresh/continue/resume
         flags: usePowerfulPreset ? ['gpt5Model', 'highReasoning', 'bypassAll'] : ['gpt5Model', 'highReasoning', 'workspaceWrite']
       };
     }
@@ -3551,16 +3551,16 @@ class ClaudeOrchestrator {
     } else if (agentId === 'codex') {
       modesContainer.innerHTML = `
         <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'fresh')">
-          <span class="btn-icon">🔍</span>
-          <span>Search</span>
+          <span class="btn-icon">🆕</span>
+          <span>Fresh</span>
         </button>
         <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'continue')">
-          <span class="btn-icon">✨</span>
-          <span>Create</span>
+          <span class="btn-icon">➡️</span>
+          <span>Continue</span>
         </button>
         <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'resume')">
-          <span class="btn-icon">🔍</span>
-          <span>Analyze</span>
+          <span class="btn-icon">⏸️</span>
+          <span>Resume</span>
         </button>
       `;
     }
