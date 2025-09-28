@@ -63,10 +63,6 @@ class WorkspaceSwitcher {
           </div>
 
           <div class="workspace-dropdown-items">
-            ${available.map(workspace => this.generateWorkspaceOption(workspace)).join('')}
-
-            <div class="workspace-dropdown-divider"></div>
-
             <button class="workspace-option dashboard-option" data-action="dashboard">
               <span class="workspace-option-icon">🏠</span>
               <span class="workspace-option-info">
@@ -74,6 +70,10 @@ class WorkspaceSwitcher {
                 <span class="workspace-option-type">All workspaces</span>
               </span>
             </button>
+
+            <div class="workspace-dropdown-divider"></div>
+
+            ${available.map(workspace => this.generateWorkspaceOption(workspace)).join('')}
           </div>
         </div>
       </div>
