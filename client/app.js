@@ -4174,8 +4174,9 @@ class ClaudeOrchestrator {
         this.showTemporaryMessage(`Added ${repoName} ${worktreeId} to workspace!`, 'success');
         document.getElementById('add-worktree-modal').remove();
         setTimeout(() => {
+          console.log('🔄 Refreshing workspace after adding worktree...');
           this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
-        }, 1000);
+        }, 1500);
       } else {
         const error = await response.text();
         this.showTemporaryMessage('Failed to add worktree: ' + error, 'error');
