@@ -142,14 +142,17 @@ function convertSingleToMixed(singleWorkspace) {
   const terminals = [];
   const terminalPairs = singleWorkspace.terminals?.pairs || 1;
 
+  // Extract repository name from path (e.g., "/path/to/HyFire2" -> "HyFire2")
+  const repositoryName = singleWorkspace.repository.path.split('/').pop() || singleWorkspace.id;
+
   for (let i = 1; i <= terminalPairs; i++) {
     const worktreeName = singleWorkspace.worktrees?.namingPattern?.replace('{n}', i) || `work${i}`;
 
     terminals.push(
       {
-        id: `${singleWorkspace.id}-${worktreeName}-claude`,
+        id: `${repositoryName}-${worktreeName}-claude`,
         repository: {
-          name: singleWorkspace.id,
+          name: repositoryName,
           path: singleWorkspace.repository.path,
           type: singleWorkspace.projectType || singleWorkspace.repository.type,
           masterBranch: singleWorkspace.repository.masterBranch || 'master'
@@ -159,9 +162,9 @@ function convertSingleToMixed(singleWorkspace) {
         visible: (singleWorkspace.terminals?.defaultVisible || [1, 2, 3]).includes(i)
       },
       {
-        id: `${singleWorkspace.id}-${worktreeName}-server`,
+        id: `${repositoryName}-${worktreeName}-server`,
         repository: {
-          name: singleWorkspace.id,
+          name: repositoryName,
           path: singleWorkspace.repository.path,
           type: singleWorkspace.projectType || singleWorkspace.repository.type,
           masterBranch: singleWorkspace.repository.masterBranch || 'master'
