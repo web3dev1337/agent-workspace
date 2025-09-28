@@ -442,7 +442,15 @@ class TerminalManager {
       // Check if DOM element exists before trying to create terminal
       const terminalElement = document.getElementById(`terminal-${sessionId}`);
       if (!terminalElement) {
-        console.warn(`Terminal output received for ${sessionId} but DOM element not ready yet. Ignoring.`);
+        // Buffer early output instead of ignoring it
+        if (!this.pendingOutput) this.pendingOutput = new Map();
+        if (!this.pendingOutput.has(sessionId)) {
+          this.pendingOutput.set(sessionId, []);
+        }
+        this.pendingOutput.get(sessionId).push(data);
+
+        // Try again in a short while
+        setTimeout(() => this.handleOutput(sessionId, ''), 100);
         return;
       }
 
@@ -450,9 +458,20 @@ class TerminalManager {
       const sessionInfo = this.orchestrator.sessions.get(sessionId) || {};
       this.createTerminal(sessionId, sessionInfo);
 
-      // Try again
+      // Apply any buffered output
+      if (this.pendingOutput && this.pendingOutput.has(sessionId)) {
+        const bufferedOutput = this.pendingOutput.get(sessionId);
+        this.pendingOutput.delete(sessionId);
+
+        const newTerminal = this.terminals.get(sessionId);
+        if (newTerminal) {
+          bufferedOutput.forEach(output => newTerminal.write(output));
+        }
+      }
+
+      // Try again with current data
       const newTerminal = this.terminals.get(sessionId);
-      if (newTerminal) {
+      if (newTerminal && data) {
         newTerminal.write(data);
       }
       return;

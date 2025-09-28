@@ -882,13 +882,25 @@ class ClaudeOrchestrator {
   toggleWorktreeVisibility(worktreeId) {
     console.log(`Toggling visibility for worktree: ${worktreeId}`);
 
-    // Find Claude and server sessions for this worktree
-    const claudeId = `${worktreeId}-claude`;
-    const serverId = `${worktreeId}-server`;
+    // Find all sessions that match this worktree ID
     const sessions = [];
 
-    if (this.sessions.has(claudeId)) sessions.push(claudeId);
-    if (this.sessions.has(serverId)) sessions.push(serverId);
+    // For mixed-repo workspaces, session IDs are complex like "repo-name-worktree-type"
+    // For traditional workspaces, session IDs are simple like "worktree-type"
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (session.worktreeId === worktreeId) {
+        sessions.push(sessionId);
+      }
+    }
+
+    // Fallback to old logic for traditional workspaces
+    if (sessions.length === 0) {
+      const claudeId = `${worktreeId}-claude`;
+      const serverId = `${worktreeId}-server`;
+
+      if (this.sessions.has(claudeId)) sessions.push(claudeId);
+      if (this.sessions.has(serverId)) sessions.push(serverId);
+    }
 
     if (sessions.length === 0) {
       console.warn(`No sessions found for worktree ${worktreeId}`);
