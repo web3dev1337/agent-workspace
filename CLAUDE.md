@@ -3,7 +3,7 @@
 🚨 **READ THIS ENTIRE FILE** 🚨
 **CRITICAL: You MUST read this complete file from start to finish. Do not truncate or skip sections.**
 
-*Note: This is a multi-terminal orchestrator project for managing Claude Code sessions with native desktop app and advanced diff viewer capabilities.*
+*Note: This is a revolutionary multi-workspace orchestrator for managing unlimited Claude Code sessions with mixed-repository support, dynamic worktree creation, and zero-friction workflows.*
 
 ## 🚨 IMPORTANT: ALWAYS PROVIDE PR URL 🚨
 **When creating any pull request, ALWAYS provide the PR URL in your response to the user. This is mandatory for all PRs.**
@@ -26,6 +26,8 @@ git checkout -b fix/your-feature-name main
 
 ## 🚨 CRITICAL: READ THESE FILES 🚨
 **2. Read `CODEBASE_DOCUMENTATION.md`** - Contains system docs and file locations (READ THE ENTIRE FILE)
+**3. Read `COMPLETE_IMPLEMENTATION.md`** - Multi-workspace system overview (ESSENTIAL)
+**4. Read `PR_SUMMARY.md`** - Technical implementation details (FOR CHANGES)
 
 ## 🚨 CRITICAL: ALWAYS CREATE A PR WHEN DONE 🚨
 **When you complete ANY feature or fix, you MUST create a pull request using `gh pr create`. This is NOT optional. Add "Create PR" as your final todo item to ensure you never forget.**
@@ -61,9 +63,11 @@ git checkout -b fix/your-feature-name main
 
 ### Key Systems
 - **Server**: Express.js backend with Socket.IO (`server/index.js`)
-- **SessionManager**: Terminal session management (`server/sessionManager.js`) 
+- **SessionManager**: Terminal session management (`server/sessionManager.js`)
 - **StatusDetector**: Claude Code session monitoring (`server/statusDetector.js`)
 - **GitHelper**: Git operations and branch management (`server/gitHelper.js`)
+- **WorkspaceManager**: Multi-workspace orchestration (`server/workspaceManager.js`)
+- **WorktreeHelper**: Git worktree operations (`server/worktreeHelper.js`)
 - **NotificationService**: System notifications (`server/notificationService.js`)
 - **Tauri App**: Native desktop application (`src-tauri/`)
 - **Diff Viewer**: Advanced code review tool (`diff-viewer/`)
@@ -75,10 +79,32 @@ git checkout -b fix/your-feature-name main
 - `src-tauri/src/main.rs`: Tauri app entry point
 
 ### Project Components
-- **Multi-Terminal Management**: 16 terminal grid (8 Claude + 8 server terminals)
+- **Multi-Workspace System**: Dynamic workspace management with mixed-repo support
+- **Multi-Terminal Management**: Configurable terminal grid (default 16 terminals)
 - **Native Desktop App**: High-performance Tauri-based application
 - **Advanced Diff Viewer**: Web-based code review with AI analysis
 - **Real-time Communication**: Socket.IO for live updates
+- **Worktree Integration**: Seamless git worktree creation and management
+
+## Workspace Management
+
+### Key Concepts
+- **Single-repo workspaces**: Traditional one-repository-per-workspace
+- **Mixed-repo workspaces**: Multiple repositories in one workspace via worktrees
+- **Templates**: Predefined workspace configurations in `templates/launch-settings/`
+- **User Settings**: Personal preferences stored in `user-settings.json`
+
+### Working with Workspaces
+- Workspace configurations are stored in `~/.orchestrator/workspaces/`
+- Each workspace can have different terminal counts and repository setups
+- Mixed-repo workspaces automatically create worktrees in project directories
+- Templates provide consistent setups for different project types
+
+### Important Workspace Files
+- `server/workspaceManager.js`: Core workspace operations
+- `server/workspaceSchemas.js`: Configuration validation
+- `server/worktreeHelper.js`: Git worktree integration
+- `client/workspace-wizard.js`: UI for workspace creation
 
 ## Common Commands
 ```bash
@@ -88,6 +114,9 @@ npm run tauri:dev
 
 # Testing
 node --check server/index.js
+
+# Workspace migration (if needed)
+node scripts/migrate-to-workspaces.js
 ```
 
 ## Performance Considerations
@@ -181,6 +210,10 @@ SERVICES:     Modular service architecture with clear interfaces
 6. Logs should use Winston logger, not console.log
 7. **Be careful with `pkill -f` commands** - avoid broad patterns that could kill WSL or Claude Code itself
 8. **node-pty segfaults**: Run `npm rebuild node-pty` if server crashes with segmentation fault
+9. **Workspace switching**: Clean up all sessions before switching to prevent orphaned processes
+10. **Worktree paths**: Validate worktree paths to avoid conflicts with existing directories
+11. **Mixed-repo terminal naming**: Use consistent patterns to avoid terminal ID conflicts
+12. **Workspace templates**: Always validate against schemas to prevent invalid configurations
 
 ## Development Setup - Two Isolated Instances
 

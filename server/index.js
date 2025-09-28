@@ -38,6 +38,8 @@ const { GitHelper } = require('./gitHelper');
 const { NotificationService } = require('./notificationService');
 const { UserSettingsService } = require('./userSettingsService');
 const { GitUpdateService } = require('./gitUpdateService');
+const { WorkspaceManager } = require('./workspaceManager');
+const { WorktreeHelper } = require('./worktreeHelper');
 
 const app = express();
 const httpServer = createServer(app);
@@ -67,6 +69,9 @@ app.use(express.static(clientPath, {
   index: false // Don't automatically serve index.html
 }));
 
+// Middleware for JSON parsing
+app.use(express.json());
+
 // Basic auth middleware (optional)
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 if (AUTH_TOKEN) {
@@ -94,19 +99,57 @@ if (AUTH_TOKEN) {
 }
 
 // Initialize services
+const workspaceManager = WorkspaceManager.getInstance();
 const sessionManager = new SessionManager(io);
 const statusDetector = new StatusDetector();
 const gitHelper = new GitHelper();
 const notificationService = new NotificationService(io);
+const worktreeHelper = new WorktreeHelper();
 
 // Connect services
 sessionManager.setStatusDetector(statusDetector);
 sessionManager.setGitHelper(gitHelper);
 
+// Initialize workspace system
+let workspaceInitialized = false;
+async function initializeWorkspaceSystem() {
+  try {
+    logger.info('Initializing workspace system...');
+    await workspaceManager.initialize();
+
+    const activeWorkspace = workspaceManager.getActiveWorkspace();
+    if (activeWorkspace) {
+      logger.info(`Active workspace: ${activeWorkspace.name}`);
+      sessionManager.setWorkspace(activeWorkspace);
+      workspaceInitialized = true;
+    } else {
+      logger.warn('No active workspace found');
+    }
+  } catch (error) {
+    logger.error('Failed to initialize workspace system', { error: error.message });
+  }
+}
+
+// Initialize workspace system before starting server
+initializeWorkspaceSystem().then(() => {
+  logger.info('Workspace system initialized');
+}).catch(error => {
+  logger.error('Workspace system initialization failed', { error: error.message });
+});
+
 // WebSocket connection handling
 io.on('connection', (socket) => {
   logger.info('Client connected', { socketId: socket.id });
-  
+
+  // Send workspace info
+  const activeWorkspace = workspaceManager.getActiveWorkspace();
+  const workspaces = workspaceManager.listWorkspaces();
+  socket.emit('workspace-info', {
+    active: activeWorkspace,
+    available: workspaces,
+    config: workspaceManager.getConfig()
+  });
+
   // Send initial session states
   socket.emit('sessions', sessionManager.getSessionStates());
   
@@ -339,7 +382,51 @@ io.on('connection', (socket) => {
       }
     });
   });
-  
+
+  // Workspace management handlers
+  socket.on('switch-workspace', async ({ workspaceId }) => {
+    try {
+      logger.info('Workspace switch requested', { workspaceId });
+
+      // IMPORTANT: Stop all current sessions first
+      logger.info('Stopping all current sessions before workspace switch');
+      sessionManager.isWorkspaceSwitching = true; // Set flag BEFORE cleanup
+      sessionManager.cleanup();
+
+      const newWorkspace = await workspaceManager.switchWorkspace(workspaceId);
+
+      // Ensure worktrees exist for the new workspace
+      logger.info('Ensuring worktrees exist for new workspace');
+      await worktreeHelper.ensureWorktreesExist(newWorkspace);
+
+      // Set workspace and initialize fresh sessions
+      sessionManager.setWorkspace(newWorkspace);
+      await sessionManager.initializeSessions();
+
+      // Emit success with ONLY new workspace sessions
+      const newSessions = sessionManager.getSessionStates();
+      logger.info('Sending workspace-changed event', {
+        workspace: newWorkspace.name,
+        sessionCount: Object.keys(newSessions).length
+      });
+
+      io.emit('workspace-changed', {
+        workspace: newWorkspace,
+        sessions: newSessions
+      });
+
+      logger.info('Workspace switched successfully', { workspace: newWorkspace.name });
+    } catch (error) {
+      logger.error('Failed to switch workspace', { error: error.message });
+      socket.emit('error', { message: 'Failed to switch workspace', error: error.message });
+    }
+  });
+
+  socket.on('list-workspaces', () => {
+    const workspaces = workspaceManager.listWorkspaces();
+    socket.emit('workspaces-list', workspaces);
+  });
+
   socket.on('disconnect', () => {
     logger.info('Client disconnected', { socketId: socket.id });
   });
@@ -351,11 +438,327 @@ io.on('connection', (socket) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
+});
+
+// Workspace API endpoints
+app.get('/api/workspaces', (req, res) => {
+  try {
+    const workspaces = workspaceManager.listWorkspaces();
+    res.json(workspaces);
+  } catch (error) {
+    logger.error('Failed to list workspaces', { error: error.message });
+    res.status(500).json({ error: 'Failed to list workspaces' });
+  }
+});
+
+app.post('/api/workspaces', async (req, res) => {
+  try {
+    const workspaceData = req.body;
+    logger.info('Creating workspace via API', { name: workspaceData.name });
+
+    const workspace = await workspaceManager.createWorkspace(workspaceData);
+    res.json(workspace);
+  } catch (error) {
+    logger.error('Failed to create workspace', { error: error.message });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/workspaces/scan-repos', async (req, res) => {
+  try {
+    logger.info('Starting repository scan...');
+    const fs = require('fs').promises;
+    const path = require('path');
+
+    const projects = [];
+    const gitHubPath = path.join(require('os').homedir(), 'GitHub');
+
+    // Deep scan function
+    async function scanDirectory(dirPath, depth = 0, maxDepth = 4) {
+      if (depth > maxDepth) return;
+
+      try {
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          if (entry.name.startsWith('.')) continue; // Skip hidden dirs
+          if (entry.name === 'node_modules') continue;
+
+          const fullPath = path.join(dirPath, entry.name);
+
+          // Check if this looks like a project (has package.json, .git, or other indicators)
+          const isProject = await isProjectDirectory(fullPath);
+
+          if (isProject) {
+            // Skip if this is a worktree directory (work1, work2, etc.)
+            if (entry.name.match(/^work\d+$/)) {
+              continue;
+            }
+
+            // Determine type from folder path
+            const type = getTypeFromPath(fullPath);
+
+            // Get the actual project name
+            let projectName;
+            let projectPath;
+
+            if (entry.name === 'master') {
+              // This is a master directory, use parent as project
+              projectName = path.basename(path.dirname(fullPath));
+              projectPath = path.dirname(fullPath);
+            } else {
+              // This is the project directory itself
+              projectName = entry.name;
+              projectPath = fullPath;
+            }
+
+            projects.push({
+              name: projectName,
+              path: projectPath,
+              masterPath: entry.name === 'master' ? fullPath : path.join(fullPath, 'master'),
+              relativePath: path.relative(gitHubPath, projectPath),
+              type: type,
+              category: getCategoryFromPath(fullPath)
+            });
+          } else {
+            // Continue scanning subdirectories
+            await scanDirectory(fullPath, depth + 1, maxDepth);
+          }
+        }
+      } catch (error) {
+        // Skip directories we can't read
+      }
+    }
+
+    // Helper: Check if directory is a project
+    async function isProjectDirectory(dirPath) {
+      try {
+        const files = await fs.readdir(dirPath);
+
+        // Project indicators
+        const hasPackageJson = files.includes('package.json');
+        const hasCsproj = files.some(f => f.endsWith('.csproj'));
+        const hasCargoToml = files.includes('Cargo.toml');
+        const hasGit = files.includes('.git');
+        const hasMakefile = files.includes('Makefile');
+        const hasReadme = files.some(f => f.toLowerCase().includes('readme'));
+
+        // Must have at least one project indicator
+        return hasPackageJson || hasCsproj || hasCargoToml || hasGit || hasMakefile || hasReadme;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    // Helper: Determine type from folder path
+    function getTypeFromPath(fullPath) {
+      const pathLower = fullPath.toLowerCase();
+
+      // Path-based type detection
+      if (pathLower.includes('/games/hytopia/')) return 'hytopia-game';
+      if (pathLower.includes('/games/monogame/')) return 'monogame-game';
+      if (pathLower.includes('/games/minecraft/')) return 'minecraft-mod';
+      if (pathLower.includes('/games/rust/')) return 'rust-game';
+      if (pathLower.includes('/games/web/')) return 'web-game';
+      if (pathLower.includes('/website/')) return 'website';
+      if (pathLower.includes('/writing/')) return 'writing';
+      if (pathLower.includes('/tools/')) return 'tool-project';
+
+      // Fallback detection
+      if (pathLower.includes('/games/')) return 'hytopia-game'; // Default game type
+      return 'tool-project';
+    }
+
+    // Helper: Get category for grouping
+    function getCategoryFromPath(fullPath) {
+      const pathLower = fullPath.toLowerCase();
+
+      if (pathLower.includes('/games/hytopia/')) return 'Hytopia Games';
+      if (pathLower.includes('/games/monogame/')) return 'MonoGame Games';
+      if (pathLower.includes('/games/')) return 'Other Games';
+      if (pathLower.includes('/website/')) return 'Websites';
+      if (pathLower.includes('/writing/')) return 'Writing';
+      if (pathLower.includes('/tools/')) return 'Tools';
+
+      return 'Other';
+    }
+
+    // Start deep scan
+    await scanDirectory(gitHubPath);
+
+    // Sort by category then name
+    projects.sort((a, b) => {
+      if (a.category !== b.category) {
+        return a.category.localeCompare(b.category);
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    logger.info(`Found ${projects.length} projects across ${new Set(projects.map(p => p.category)).size} categories`);
+    res.json(projects);
+  } catch (error) {
+    logger.error('Failed to scan repositories', { error: error.message });
+    res.status(500).json({ error: 'Failed to scan repositories' });
+  }
+});
+
+app.post('/api/workspaces/create-worktree', async (req, res) => {
+  try {
+    const { workspaceId, repositoryPath, worktreeNumber } = req.body;
+    logger.info('Creating individual worktree', { workspaceId, worktreeNumber, repositoryPath });
+
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Use provided repository path or workspace default
+    const repoPath = repositoryPath || workspace.repository?.path;
+    if (!repoPath) {
+      return res.status(400).json({ error: 'Repository path not found' });
+    }
+
+    // Create temporary workspace config for worktree creation
+    const tempWorkspace = {
+      repository: {
+        path: repoPath,
+        masterBranch: 'master' // Always use master for consistency
+      },
+      worktrees: {
+        enabled: true,
+        namingPattern: 'work{n}',
+        autoCreate: true
+      }
+    };
+
+    // Create the specific worktree
+    const worktreeId = `work${worktreeNumber}`;
+    await worktreeHelper.createWorktree(tempWorkspace, worktreeId);
+
+    // Update workspace config to include new terminal pair
+    const updatedWorkspace = {
+      ...workspace,
+      terminals: {
+        ...workspace.terminals,
+        pairs: Math.max(workspace.terminals.pairs, worktreeNumber)
+      }
+    };
+
+    await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+
+    res.json({ success: true, worktreeId, path: `${workspace.repository.path}/work${worktreeNumber}` });
+  } catch (error) {
+    logger.error('Failed to create worktree', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
+  try {
+    const { workspaceId, repositoryPath, repositoryType, repositoryName, worktreeId } = req.body;
+    logger.info('Adding mixed worktree to workspace', {
+      workspaceId,
+      repositoryName,
+      worktreeId
+    });
+
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Convert to mixed-repo workspace if it's single-repo
+    let updatedWorkspace = workspace;
+    if (workspace.workspaceType !== 'mixed-repo') {
+      logger.info('Converting single-repo workspace to mixed-repo');
+      const { convertSingleToMixed } = require('./workspaceSchemas');
+      updatedWorkspace = convertSingleToMixed(workspace);
+    }
+
+    // Add new terminal pair to the workspace
+    const terminalIdBase = `${repositoryName.toLowerCase()}-${worktreeId}`;
+    const newTerminals = [
+      {
+        id: `${terminalIdBase}-claude`,
+        repository: {
+          name: repositoryName,
+          path: repositoryPath,
+          type: repositoryType,
+          masterBranch: 'master'
+        },
+        worktree: worktreeId,
+        terminalType: 'claude',
+        visible: true
+      },
+      {
+        id: `${terminalIdBase}-server`,
+        repository: {
+          name: repositoryName,
+          path: repositoryPath,
+          type: repositoryType,
+          masterBranch: 'master'
+        },
+        worktree: worktreeId,
+        terminalType: 'server',
+        visible: true
+      }
+    ];
+
+    updatedWorkspace.terminals = updatedWorkspace.terminals.concat(newTerminals);
+
+    // Ensure the worktree exists
+    const tempWorkspace = {
+      repository: { path: repositoryPath, masterBranch: 'master' },
+      worktrees: { enabled: true, namingPattern: 'work{n}', autoCreate: true }
+    };
+    await worktreeHelper.createWorktree(tempWorkspace, worktreeId);
+
+    // Save updated workspace
+    await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+
+    // Refresh the SessionManager with the updated workspace
+    const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
+    sessionManager.setWorkspace(refreshedWorkspace);
+
+    // Reinitialize sessions to include the new terminals
+    await sessionManager.initializeSessions();
+
+    res.json({ success: true, terminalIds: newTerminals.map(t => t.id) });
+  } catch (error) {
+    logger.error('Failed to add mixed worktree', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete workspace
+app.delete('/api/workspaces/:id', async (req, res) => {
+  try {
+    const workspaceId = req.params.id;
+    logger.info('Deleting workspace', { workspaceId });
+
+    // Stop all sessions for this workspace first
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (workspace && workspaceManager.activeWorkspace?.id === workspaceId) {
+      // Clean up sessions if this is the active workspace
+      sessionManager.cleanupAllSessions();
+      sessionManager.setWorkspace(null);
+      workspaceManager.activeWorkspace = null;
+    }
+
+    // Delete the workspace
+    await workspaceManager.deleteWorkspace(workspaceId);
+
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to delete workspace', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Claude hook endpoints

@@ -30,6 +30,7 @@
             <button id="view-all" class="button-secondary">View All</button>
             <button id="view-claude-only" class="button-secondary">Claude Only</button>
             <button id="view-servers-only" class="button-secondary">Servers Only</button>
+            <button id="add-worktree" class="button-primary" onclick="window.orchestrator.showAddWorktreeModal()" title="Add New Worktree">+ Add Worktree</button>
         </div>
     </aside>
     
@@ -238,6 +239,9 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
     
     <!-- Our scripts -->
+    <script src="dashboard.js"></script>
+    <script src="workspace-switcher.js"></script>
+    <script src="workspace-wizard.js"></script>
     <script src="app.js"></script>
     <!-- Focus Overlay -->
     <div id="focus-overlay" class="focus-overlay">

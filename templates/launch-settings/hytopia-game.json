@@ -1,0 +1,53 @@
+{
+  "id": "hytopia-game",
+  "name": "Hytopia Game Launch Settings",
+  "tabs": [
+    {
+      "id": "quick-setup",
+      "label": "⚡ Quick Setup",
+      "presets": [
+        {
+          "id": "casual",
+          "name": "Casual",
+          "icon": "🎮",
+          "description": "Standard casual game",
+          "settings": {
+            "mode": "casual",
+            "maxRounds": 13,
+            "teamSize": 5,
+            "roundTime": 60,
+            "buyTime": 10,
+            "autoBots": true,
+            "nodeEnv": "development"
+          }
+        },
+        {
+          "id": "deathmatch",
+          "name": "Deathmatch",
+          "icon": "💀",
+          "description": "Free-for-all",
+          "settings": {
+            "mode": "deathmatch",
+            "maxRounds": 10,
+            "teamSize": 1,
+            "roundTime": 300,
+            "buyTime": 0,
+            "autoBots": true,
+            "nodeEnv": "development"
+          }
+        },
+        {
+          "id": "performance",
+          "name": "Performance",
+          "icon": "📊",
+          "description": "With profiling",
+          "settings": {
+            "mode": "casual",
+            "nodeOptions": "--inspect --prof",
+            "extraEnv": "ENABLE_PROFILING=true"
+          }
+        }
+      ]
+    }
+  ]
+}

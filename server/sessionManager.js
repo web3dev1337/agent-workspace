@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 const { UserSettingsService } = require('./userSettingsService');
+const { WorktreeHelper } = require('./worktreeHelper');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -27,30 +28,23 @@ class SessionManager extends EventEmitter {
     this.gitHelper = null; // Will be set later
     this.fileWatchers = new Map(); // Store file watchers for .git/HEAD files
     this.userSettings = UserSettingsService.getInstance();
-    
+    this.workspace = null; // Will be set by WorkspaceManager
+    this.worktreeHelper = new WorktreeHelper();
+    this.isWorkspaceSwitching = false; // Flag to prevent auto-restart during workspace switch
+
     // Load configuration
     this.config = this.loadConfig();
-    
-    // Configuration with env overrides
-    this.worktreeBasePath = process.env.WORKTREE_BASE_PATH || 
-      (this.config.worktrees.basePath === 'auto' ? process.env.HOME : this.config.worktrees.basePath);
-    this.worktreeCount = parseInt(process.env.WORKTREE_COUNT || this.config.worktrees.count.toString());
+
+    // Session timeouts
     this.sessionTimeout = parseInt(process.env.SESSION_TIMEOUT || this.config.sessions.timeoutMs.toString());
-    // Per-session-type timeouts. 0 disables auto-termination for that type.
     this.claudeSessionTimeout = parseInt(process.env.CLAUDE_SESSION_TIMEOUT || this.config.sessions.claudeTimeoutMs?.toString() || '0');
     this.serverSessionTimeout = parseInt(process.env.SERVER_SESSION_TIMEOUT || this.config.sessions.serverTimeoutMs?.toString() || '43200000');
     this.branchRefreshInterval = null;
     this.maxProcessesPerSession = parseInt(process.env.MAX_PROCESSES_PER_SESSION || this.config.sessions.maxProcessesPerSession.toString());
     this.maxBufferSize = parseInt(process.env.MAX_BUFFER_SIZE || this.config.sessions.maxBufferSize.toString());
-    
-    // Build worktree configuration
+
+    // Worktrees will be built when workspace is set
     this.worktrees = [];
-    for (let i = 1; i <= this.worktreeCount; i++) {
-      this.worktrees.push({
-        id: `work${i}`,
-        path: `${this.worktreeBasePath}/HyFire2-work${i}`
-      });
-    }
   }
 
   // Determine effective inactivity timeout per session (ms)
@@ -85,33 +79,116 @@ class SessionManager extends EventEmitter {
   setGitHelper(helper) {
     this.gitHelper = helper;
   }
-  
-  async initializeSessions() {
-    logger.info('Initializing sessions', { count: this.worktrees.length });
-    
-    // Log configuration for debugging
-    logger.info('SessionManager configuration:', {
-      worktreeBasePath: this.worktreeBasePath,
-      worktreeCount: this.worktreeCount,
-      usingDefault: !process.env.WORKTREE_BASE_PATH
-    });
-    
-    // Check if worktrees exist
-    const fs = require('fs').promises;
-    let missingWorktrees = [];
-    for (let i = 1; i <= this.worktreeCount; i++) {
-      const worktreePath = `${this.worktreeBasePath}/HyFire2-work${i}`;
-      try {
-        await fs.access(worktreePath);
-      } catch (error) {
-        missingWorktrees.push(worktreePath);
+
+  setWorkspace(workspace) {
+    logger.info('Setting workspace for SessionManager', { workspace: workspace.name });
+    this.workspace = workspace;
+    this.buildWorktreesFromWorkspace();
+  }
+
+  buildWorktreesFromWorkspace() {
+    if (!this.workspace) {
+      logger.warn('No workspace set, cannot build worktrees');
+      return;
+    }
+
+    this.worktrees = [];
+    const { repository, worktrees: worktreeConfig, terminals } = this.workspace;
+
+    // Check if workspace has mixed-repo terminals array
+    if (Array.isArray(terminals)) {
+      // Mixed-repo workspace: Extract unique worktrees from terminals array
+      const worktreeSet = new Set();
+
+      terminals.forEach(terminal => {
+        const repoPath = terminal.repository.path;
+        const worktreeId = terminal.worktree;
+        const worktreePath = path.join(repoPath, worktreeId);
+
+        // Use a unique key to avoid duplicate worktrees (same repo + worktree)
+        const worktreeKey = `${terminal.repository.name}-${worktreeId}`;
+        if (!worktreeSet.has(worktreeKey)) {
+          worktreeSet.add(worktreeKey);
+          this.worktrees.push({
+            id: worktreeKey, // Use consistent worktree identifier
+            worktreeId: worktreeId,
+            repositoryName: terminal.repository.name,
+            repositoryPath: repoPath,
+            path: worktreePath
+          });
+        }
+      });
+    } else {
+      // Traditional single-repo workspace: Use terminals.pairs pattern
+      const terminalPairs = terminals.pairs || 1; // Default to 1 pair, not 8
+
+      for (let i = 1; i <= terminalPairs; i++) {
+        const worktreeId = worktreeConfig.namingPattern.replace('{n}', i);
+        // ALL workspace types use worktree pattern - no special cases
+        const worktreePath = path.join(repository.path, worktreeId);
+
+        this.worktrees.push({
+          id: worktreeId,
+          path: worktreePath
+        });
       }
     }
+
+    logger.info('Built worktrees from workspace', {
+      workspace: this.workspace.name,
+      count: this.worktrees.length
+    });
+  }
+  
+  async initializeSessions() {
+    // Set flag to prevent auto-restart during initialization
+    this.isWorkspaceSwitching = true;
+
+    // Clear ALL existing sessions first
+    logger.info('Clearing existing sessions before workspace initialization');
+    this.cleanupAllSessions();
+
+    logger.info('Initializing sessions', { count: this.worktrees.length });
+
+    // Log configuration for debugging
+    logger.info('SessionManager configuration:', {
+      workspace: this.workspace?.name || 'none',
+      worktreeCount: this.worktrees.length,
+      worktreesEnabled: this.workspace?.worktrees.enabled || false
+    });
     
+    // Auto-create worktrees if enabled
+    if (this.workspace.worktrees.enabled && this.workspace.worktrees.autoCreate) {
+      logger.info('Auto-creating worktrees for workspace');
+      try {
+        await this.worktreeHelper.ensureWorktreesExist(this.workspace);
+      } catch (error) {
+        logger.error('Failed to auto-create worktrees', { error: error.message });
+      }
+    }
+
+    // Filter worktrees to only existing ones
+    const fs = require('fs').promises;
+    const existingWorktrees = [];
+    const missingWorktrees = [];
+
+    for (const worktree of this.worktrees) {
+      try {
+        await fs.access(worktree.path);
+        existingWorktrees.push(worktree);
+      } catch (error) {
+        missingWorktrees.push(worktree.path);
+      }
+    }
+
+    // Only use existing worktrees for session creation
+    this.worktrees = existingWorktrees;
+
     if (missingWorktrees.length > 0) {
-      logger.warn('Missing worktrees detected. Please ensure all worktrees are created:', {
+      logger.info('Skipping missing worktrees (will be created on-demand):', {
         missing: missingWorktrees,
-        hint: 'Set WORKTREE_BASE_PATH in .env file or create worktrees in your home directory'
+        existing: existingWorktrees.length,
+        workspace: this.workspace.name
       });
     }
     
@@ -128,52 +205,116 @@ class SessionManager extends EventEmitter {
     // Create all sessions in parallel for faster startup
     const sessionPromises = [];
     
-    for (const worktree of this.worktrees) {
-      // Add Claude session creation to promises array
-      sessionPromises.push(
-        Promise.resolve().then(() => {
-          this.createSession(`${worktree.id}-claude`, {
-            command: 'bash',
-            args: ['-c', `cd "${worktree.path}" && exec bash`],
-            cwd: worktree.path,
-            type: 'claude',
-            worktreeId: worktree.id
-          });
-        }).catch(error => {
-          logger.error('Failed to initialize Claude session', { 
-            worktree: worktree.id, 
-            error: error.message 
-          });
-        })
-      );
-      
-      // Add server session creation to promises array
-      sessionPromises.push(
-        Promise.resolve().then(() => {
-          this.createSession(`${worktree.id}-server`, {
-            command: 'bash',
-            args: ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
-            cwd: worktree.path,
-            type: 'server',
-            worktreeId: worktree.id
-          });
-        }).catch(error => {
-          logger.error('Failed to initialize server session', { 
-            worktree: worktree.id, 
-            error: error.message 
-          });
-        })
-      );
-      
-      // Add git branch update to promises array
-      if (this.gitHelper) {
+    // Create sessions based on workspace type
+    if (Array.isArray(this.workspace.terminals)) {
+      // Mixed-repo workspace: Create sessions from terminals array
+      const terminalsToCreate = this.workspace.terminals.filter(terminal => {
+        // Check if worktree exists for this terminal's repo + worktree combination
+        const worktreeKey = `${terminal.repository.name}-${terminal.worktree}`;
+        return this.worktrees.some(w => w.id === worktreeKey);
+      });
+
+      for (const terminal of terminalsToCreate) {
+        const worktreeKey = `${terminal.repository.name}-${terminal.worktree}`;
+        const worktree = this.worktrees.find(w => w.id === worktreeKey);
+        if (!worktree) continue;
+
         sessionPromises.push(
           Promise.resolve().then(() => {
-            this.updateGitBranch(worktree.id, worktree.path);
+            const sessionId = terminal.id;
+            let command, args;
+
+            if (terminal.terminalType === 'claude') {
+              command = 'bash';
+              args = ['-c', `cd "${worktree.path}" && exec bash`];
+            } else {
+              // Server terminal
+              command = 'bash';
+              args = ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${terminal.repository.name}/${terminal.worktree} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`];
+            }
+
+            this.createSession(sessionId, {
+              command,
+              args,
+              cwd: worktree.path,
+              type: terminal.terminalType,
+              worktreeId: terminal.worktree,
+              repositoryName: terminal.repository.name
+            });
           }).catch(error => {
-            logger.error('Failed to update git branch', { 
-              worktree: worktree.id, 
-              error: error.message 
+            logger.error(`Failed to initialize ${terminal.terminalType} session`, {
+              terminal: terminal.id,
+              error: error.message
+            });
+          })
+        );
+      }
+    } else {
+      // Traditional single-repo workspace: Use old logic
+      for (const worktree of this.worktrees) {
+        // Add Claude session creation to promises array
+        sessionPromises.push(
+          Promise.resolve().then(() => {
+            this.createSession(`${worktree.id}-claude`, {
+              command: 'bash',
+              args: ['-c', `cd "${worktree.path}" && exec bash`],
+              cwd: worktree.path,
+              type: 'claude',
+              worktreeId: worktree.id
+            });
+          }).catch(error => {
+            logger.error('Failed to initialize Claude session', {
+              worktree: worktree.id,
+              error: error.message
+            });
+          })
+        );
+
+        // Add server session creation to promises array
+        sessionPromises.push(
+          Promise.resolve().then(() => {
+            this.createSession(`${worktree.id}-server`, {
+              command: 'bash',
+              args: ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
+              cwd: worktree.path,
+              type: 'server',
+              worktreeId: worktree.id
+            });
+          }).catch(error => {
+            logger.error('Failed to initialize server session', {
+              worktree: worktree.id,
+              error: error.message
+            });
+          })
+        );
+
+        // Add git branch update to promises array
+        if (this.gitHelper) {
+          sessionPromises.push(
+            Promise.resolve().then(() => {
+              this.updateGitBranch(worktree.id, worktree.path);
+            }).catch(error => {
+              logger.error('Failed to update git branch', {
+                worktree: worktree.id,
+                error: error.message
+              });
+            })
+          );
+        }
+      }
+    }
+
+    // Git branch updates for all worktrees (both traditional and mixed-repo)
+    if (this.gitHelper) {
+      for (const worktree of this.worktrees) {
+        sessionPromises.push(
+          Promise.resolve().then(() => {
+            const worktreeIdForGit = worktree.worktreeId || worktree.id;
+            this.updateGitBranch(worktreeIdForGit, worktree.path);
+          }).catch(error => {
+            logger.error('Failed to update git branch', {
+              worktree: worktree.id,
+              error: error.message
             });
           })
         );
@@ -183,6 +324,9 @@ class SessionManager extends EventEmitter {
     // Wait for all sessions to be created in parallel
     await Promise.all(sessionPromises);
     logger.info('All sessions initialized', { count: sessionPromises.length });
+
+    // Clear workspace switching flag
+    this.isWorkspaceSwitching = false;
     
     // Start periodic branch refresh (every 30 seconds)
     this.startBranchRefresh();
@@ -482,11 +626,11 @@ class SessionManager extends EventEmitter {
         
         // Auto-restart Claude sessions that exit from CTRL+C or other interrupts
         // This ensures the terminal remains usable after CTRL+C
-        if (config.type === 'claude') {
-          logger.info('Claude session exited, auto-restarting for usability', { 
-            sessionId, 
+        if (config.type === 'claude' && !this.isWorkspaceSwitching) {
+          logger.info('Claude session exited, auto-restarting for usability', {
+            sessionId,
             signal,
-            exitCode 
+            exitCode
           });
           
           // Remove the old session
@@ -522,6 +666,8 @@ class SessionManager extends EventEmitter {
         }
       });
       
+      // Add workspace ID to session
+      session.workspace = this.workspace?.id || null;
       this.sessions.set(sessionId, session);
       
       // Monitor for fork bombs (every 5 seconds)
@@ -945,6 +1091,38 @@ class SessionManager extends EventEmitter {
     this.sessions.clear();
     this.stopBranchRefresh();
     this.cleanupGitWatchers();
+  }
+
+  cleanupAllSessions() {
+    logger.info('Cleaning up all sessions for workspace switch');
+
+    // Kill all PTY processes
+    for (const [sessionId, session] of this.sessions) {
+      try {
+        if (session.pty) {
+          session.pty.kill();
+          logger.debug(`Killed session: ${sessionId}`);
+        }
+
+        // Clear process monitor
+        if (session.processMonitor) {
+          clearInterval(session.processMonitor);
+        }
+      } catch (error) {
+        logger.error('Error cleaning up session', {
+          sessionId,
+          error: error.message
+        });
+      }
+    }
+
+    // Clear all session data
+    this.sessions.clear();
+
+    // Clear git watchers
+    this.cleanupGitWatchers();
+
+    logger.info('All sessions cleaned up');
   }
 }
 

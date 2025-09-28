@@ -16,7 +16,15 @@ class ClaudeOrchestrator {
     this.sessionActivity = new Map(); // Track which sessions have been used
     this.showActiveOnly = false; // Filter toggle
     this.serverLaunchSettings = this.loadServerLaunchSettings(); // Server launch flags
-    
+
+    // Workspace management
+    this.currentWorkspace = null;
+    this.availableWorkspaces = [];
+    this.orchestratorConfig = {};
+    this.dashboard = null;
+    this.workspaceSwitcher = null;
+    this.isDashboardMode = false;
+
     this.init();
   }
   
@@ -169,6 +177,74 @@ class ClaudeOrchestrator {
         console.log('User settings updated:', settings);
         this.userSettings = settings;
         this.syncUserSettingsUI();
+      });
+
+      // Workspace events
+      this.socket.on('workspace-info', ({ active, available, config }) => {
+        console.log('Received workspace info:', { active, available, config });
+        this.currentWorkspace = active;
+        this.availableWorkspaces = available;
+        this.orchestratorConfig = config;
+
+        // Initialize workspace switcher
+        this.workspaceSwitcher = new WorkspaceSwitcher(this);
+        this.workspaceSwitcher.render();
+
+        // Initialize dashboard if configured
+        if (config.ui.startupDashboard && !active) {
+          this.showDashboard();
+        }
+      });
+
+      this.socket.on('workspace-changed', ({ workspace, sessions }) => {
+        console.log('Workspace changed:', workspace.name);
+        this.currentWorkspace = workspace;
+        this.isDashboardMode = false;
+
+        // Hide dashboard if showing
+        if (this.dashboard) {
+          this.dashboard.hide();
+        }
+
+        // Show main UI
+        const mainContainer = document.querySelector('.main-container');
+        const sidebar = document.querySelector('.sidebar');
+        if (mainContainer) mainContainer.classList.remove('hidden');
+        if (sidebar) sidebar.classList.remove('hidden');
+
+        // Clear ALL existing state completely
+        this.sessions.clear();
+        this.visibleTerminals.clear();
+        this.sessionActivity.clear();
+        this.serverStatuses.clear();
+        this.serverPorts.clear();
+        this.githubLinks.clear();
+
+        // Clear terminal manager terminals
+        if (this.terminalManager) {
+          this.terminalManager.clearAll();
+        }
+
+        // Clear terminal grid completely
+        const grid = document.getElementById('terminal-grid');
+        if (grid) {
+          grid.innerHTML = '';
+          grid.removeAttribute('data-visible-count');
+        }
+
+        // Clear sidebar
+        const worktreeList = document.getElementById('worktree-list');
+        if (worktreeList) {
+          worktreeList.innerHTML = '';
+        }
+
+        // Rebuild with new workspace sessions
+        this.handleInitialSessions(sessions);
+
+        // Update workspace switcher to show correct workspace
+        if (this.workspaceSwitcher) {
+          this.workspaceSwitcher.updateCurrentWorkspace();
+        }
       });
 
       this.socket.on('git-updated', (result) => {
@@ -536,11 +612,14 @@ class ClaudeOrchestrator {
         console.log('Loaded existing PR for session:', sessionId, state.existingPR);
       }
       
-      // All fresh sessions start as inactive - they need user interaction to become active
-      this.sessionActivity.set(sessionId, 'inactive');
-      
+      // For mixed-repo workspaces, set terminals as active immediately so they show by default
+      // For traditional workspaces, they start as inactive until user interacts
+      const isComplexSessionId = sessionId.includes('-') && sessionId.split('-').length > 2;
+      this.sessionActivity.set(sessionId, isComplexSessionId ? 'active' : 'inactive');
+
       // Add all terminals to visible set by default
       this.visibleTerminals.add(sessionId);
+      // Debug: console.log(`Added terminal ${sessionId} to visible set, activity: ${this.sessionActivity.get(sessionId)}`);
     }
     
     // Hide loading message FIRST
@@ -601,31 +680,53 @@ class ClaudeOrchestrator {
       }
     }
   }
-  
+
+  extractRepositoryName(sessionId) {
+    // Find repository name by looking for the work pattern
+    const parts = sessionId.split('-');
+    const workIndex = parts.findIndex(part => part.startsWith('work'));
+
+    if (workIndex > 0) {
+      return parts.slice(0, workIndex).join('-');
+    }
+    return null; // Traditional workspace
+  }
+
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
-    
+
     // Always ensure filter toggle exists and is updated FIRST
     this.ensureFilterToggleExists();
     
     // Clear and rebuild the worktree list
     worktreeList.innerHTML = '';
     
-    // Group sessions by worktree
+    // Group sessions by worktree and repository for mixed-repo support
     const worktrees = new Map();
-    
+
     for (const [sessionId, session] of this.sessions) {
+      // Only show sessions that belong to current workspace
+      if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) {
+        continue; // Skip sessions from other workspaces
+      }
+
       const worktreeId = session.worktreeId || sessionId.split('-')[0];
-      
-      if (!worktrees.has(worktreeId)) {
-        worktrees.set(worktreeId, {
+
+      // Extract repository name from session ID for mixed-repo workspaces
+      const repositoryName = this.extractRepositoryName(sessionId);
+      const key = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+
+      if (!worktrees.has(key)) {
+        worktrees.set(key, {
           id: worktreeId,
+          repositoryName: repositoryName,
+          displayName: repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId,
           claude: null,
           server: null
         });
       }
-      
-      const worktree = worktrees.get(worktreeId);
+
+      const worktree = worktrees.get(key);
       if (session.type === 'claude') {
         worktree.claude = session;
       } else if (session.type === 'server') {
@@ -644,27 +745,26 @@ class ClaudeOrchestrator {
       }
       
       // Check if any session in this worktree is visible
-      const claudeId = `${worktreeId}-claude`;
-      const serverId = `${worktreeId}-server`;
-      const isVisible = this.visibleTerminals.has(claudeId) || this.visibleTerminals.has(serverId);
+      const isVisible = (worktree.claude && this.visibleTerminals.has(worktree.claude.sessionId)) ||
+                       (worktree.server && this.visibleTerminals.has(worktree.server.sessionId));
       
       const item = document.createElement('div');
       // Only show visibility state, not activity state (activity filtering is handled separately)
       item.className = `worktree-item ${!isVisible ? 'hidden-terminal' : ''}`;
-      item.dataset.worktreeId = worktreeId;
+      item.dataset.worktreeId = worktree.id;
       item.title = 'Click to toggle • Ctrl+Click to show only this worktree';
-      
+
       const branch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
-      const worktreeNumber = worktreeId.replace('work', '');
-      
+      const displayName = worktree.displayName;
+
       // Convert claude status for display (waiting -> ready for green color)
       const claudeDisplayStatus = worktree.claude?.status === 'waiting' ? 'ready' : worktree.claude?.status;
-      
+
       item.innerHTML = `
         <div class="worktree-header">
           <div class="worktree-title">
             <span class="visibility-indicator">${isVisible ? '👁' : '🚫'}</span>
-            ${worktreeNumber} - ${branch}
+            ${displayName} - ${branch}
           </div>
         </div>
         <div class="worktree-sessions">
@@ -722,11 +822,13 @@ class ClaudeOrchestrator {
   
   isWorktreeActive(worktreeId) {
     // Check if any session in this worktree has been marked as active
-    const claudeSessionId = `${worktreeId}-claude`;
-    const serverSessionId = `${worktreeId}-server`;
-    
-    return this.sessionActivity.get(claudeSessionId) === 'active' || 
-           this.sessionActivity.get(serverSessionId) === 'active';
+    // For mixed-repo workspaces, find sessions by worktreeId instead of simple concatenation
+    for (const [sessionId, session] of this.sessions) {
+      if (session.worktreeId === worktreeId && this.sessionActivity.get(sessionId) === 'active') {
+        return true;
+      }
+    }
+    return false;
   }
   
   toggleActivityFilter() {
@@ -782,15 +884,11 @@ class ClaudeOrchestrator {
     // Clear all visible terminals first
     this.visibleTerminals.clear();
 
-    // Add only this worktree's sessions
-    const claudeId = `${worktreeId}-claude`;
-    const serverId = `${worktreeId}-server`;
-
-    if (this.sessions.has(claudeId)) {
-      this.visibleTerminals.add(claudeId);
-    }
-    if (this.sessions.has(serverId)) {
-      this.visibleTerminals.add(serverId);
+    // Add only this worktree's sessions (works for both traditional and mixed-repo)
+    for (const [sessionId, session] of this.sessions) {
+      if (session.worktreeId === worktreeId) {
+        this.visibleTerminals.add(sessionId);
+      }
     }
 
     // Update the grid to show only these terminals
@@ -801,13 +899,25 @@ class ClaudeOrchestrator {
   toggleWorktreeVisibility(worktreeId) {
     console.log(`Toggling visibility for worktree: ${worktreeId}`);
 
-    // Find Claude and server sessions for this worktree
-    const claudeId = `${worktreeId}-claude`;
-    const serverId = `${worktreeId}-server`;
+    // Find all sessions that match this worktree ID
     const sessions = [];
 
-    if (this.sessions.has(claudeId)) sessions.push(claudeId);
-    if (this.sessions.has(serverId)) sessions.push(serverId);
+    // For mixed-repo workspaces, session IDs are complex like "repo-name-worktree-type"
+    // For traditional workspaces, session IDs are simple like "worktree-type"
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (session.worktreeId === worktreeId) {
+        sessions.push(sessionId);
+      }
+    }
+
+    // Fallback to old logic for traditional workspaces
+    if (sessions.length === 0) {
+      const claudeId = `${worktreeId}-claude`;
+      const serverId = `${worktreeId}-server`;
+
+      if (this.sessions.has(claudeId)) sessions.push(claudeId);
+      if (this.sessions.has(serverId)) sessions.push(serverId);
+    }
 
     if (sessions.length === 0) {
       console.warn(`No sessions found for worktree ${worktreeId}`);
@@ -818,8 +928,9 @@ class ClaudeOrchestrator {
     const anyVisible = sessions.some(id => this.visibleTerminals.has(id));
 
     // Log current state for debugging
-    const claudeSession = this.sessions.get(claudeId);
-    console.log(`Toggling ${worktreeId}: currently ${anyVisible ? 'visible' : 'hidden'}, Claude status: ${claudeSession?.status || 'unknown'}`);
+    const claudeSessionId = sessions.find(id => id.includes('claude'));
+    const claudeSession = claudeSessionId ? this.sessions.get(claudeSessionId) : null;
+    console.log(`Toggling ${worktreeId}: currently ${anyVisible ? 'visible' : 'hidden'}, Claude status: ${claudeSession?.status || 'unknown'}, sessions: ${sessions.join(', ')}`);
 
     if (anyVisible) {
       // Hide terminals - allow hiding even if Claude is running (user wants to focus elsewhere)
@@ -866,21 +977,11 @@ class ClaudeOrchestrator {
   }
   
   updateTerminalGrid() {
-    // Get ALL sessions in proper order
-    const allSessions = [];
-    for (let i = 1; i <= 8; i++) {
-      const claudeId = `work${i}-claude`;
-      const serverId = `work${i}-server`;
-      
-      if (this.sessions.has(claudeId)) {
-        allSessions.push(claudeId);
-      }
-      if (this.sessions.has(serverId)) {
-        allSessions.push(serverId);
-      }
-    }
-    
-    console.log('Rendering all terminals, will hide non-visible ones');
+    // Get ALL sessions (works for both traditional and mixed-repo workspaces)
+    const allSessions = Array.from(this.sessions.keys());
+
+    // Debug: console.log('Rendering all terminals, will hide non-visible ones');
+    // Debug: console.log('📋 All sessions found:', allSessions);
     this.renderTerminalsWithVisibility(allSessions);
   }
   
@@ -888,6 +989,13 @@ class ClaudeOrchestrator {
     // Render all terminals but apply visibility
     this.activeView = sessionIds.filter(id => this.visibleTerminals.has(id));
     const grid = document.getElementById('terminal-grid');
+
+    console.log('🎨 RENDER DEBUG:', {
+      totalSessions: sessionIds.length,
+      visibleTerminals: Array.from(this.visibleTerminals),
+      activeViewCount: this.activeView.length,
+      gridExists: !!grid
+    });
 
     // Set the data attribute for dynamic layout based on visible count
     const visibleCount = this.activeView.length;
@@ -900,9 +1008,18 @@ class ClaudeOrchestrator {
     // This ensures CSS nth-child selectors work correctly
     sessionIds.forEach((sessionId) => {
       const session = this.sessions.get(sessionId);
-      if (session && this.visibleTerminals.has(sessionId)) {
+      const isVisible = this.visibleTerminals.has(sessionId);
+      console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}`);
+
+      if (session && isVisible) {
+        console.log(`✅ Creating terminal element for: ${sessionId}`);
         const wrapper = this.createTerminalElement(sessionId, session);
-        grid.appendChild(wrapper);
+        if (wrapper) {
+          grid.appendChild(wrapper);
+          console.log(`✅ Appended terminal to grid: ${sessionId}`);
+        } else {
+          console.error(`❌ Failed to create terminal element: ${sessionId}`);
+        }
       }
     });
     
@@ -1086,13 +1203,17 @@ class ClaudeOrchestrator {
     
     const isClaudeSession = session.type === 'claude';
     const isServerSession = session.type === 'server';
-    const worktreeNumber = session.worktreeId.replace('work', '');
-    
+
+    // Build display name with repository info for mixed-repo workspaces
+    const repositoryName = this.extractRepositoryName(sessionId);
+    const worktreeId = session.worktreeId;
+    const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
+
     wrapper.innerHTML = `
       <div class="terminal-header">
         <div class="terminal-title">
           <span class="status-indicator ${session.status}" id="status-${sessionId}"></span>
-          <span>${isClaudeSession ? '🤖 Claude' : '💻 Server'} ${worktreeNumber}</span>
+          <span>${isClaudeSession ? '🤖 Claude' : '💻 Server'} ${displayName}</span>
           <span class="terminal-branch ${(session.branch === 'master' || session.branch === 'main' || session.branch?.startsWith('master-') || session.branch?.startsWith('main-')) ? 'master-branch' : ''}">${session.branch || ''}</span>
         </div>
         <div class="terminal-controls">
@@ -3895,6 +4016,237 @@ class ClaudeOrchestrator {
       console.error('Error pulling latest changes:', error);
       this.showTemporaryMessage('Error pulling latest changes', 'error');
     }
+  }
+
+  // Workspace management methods
+  showDashboard() {
+    console.log('Showing dashboard...');
+    this.isDashboardMode = true;
+
+    // Initialize dashboard if not already created
+    if (!this.dashboard) {
+      this.dashboard = new Dashboard(this);
+    }
+
+    // Hide main UI
+    const mainContainer = document.querySelector('.main-container');
+    const sidebar = document.querySelector('.sidebar');
+    if (mainContainer) mainContainer.classList.add('hidden');
+    if (sidebar) sidebar.classList.add('hidden');
+
+    // Show dashboard
+    this.dashboard.show();
+  }
+
+  hideDashboard() {
+    console.log('Hiding dashboard...');
+    this.isDashboardMode = false;
+
+    if (this.dashboard) {
+      this.dashboard.hide();
+    }
+
+    // Show main UI
+    const mainContainer = document.querySelector('.main-container');
+    const sidebar = document.querySelector('.sidebar');
+    if (mainContainer) mainContainer.classList.remove('hidden');
+    if (sidebar) sidebar.classList.remove('hidden');
+  }
+
+  switchToWorkspace(workspaceId) {
+    console.log('Switching to workspace:', workspaceId);
+    this.socket.emit('switch-workspace', { workspaceId });
+  }
+
+  async showAddWorktreeModal() {
+    console.log('Opening Add Worktree modal...');
+
+    // Fetch available repositories
+    try {
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
+      const allRepos = await response.json();
+      this.showAdvancedAddWorktreeModal(allRepos);
+    } catch (error) {
+      console.error('Failed to fetch repositories:', error);
+      this.showSimpleAddWorktreeModal();
+    }
+  }
+
+  showSimpleAddWorktreeModal() {
+    if (!this.currentWorkspace) return;
+    const currentRepo = this.currentWorkspace.repository;
+    const nextNumber = (this.currentWorkspace.terminals?.pairs || 1) + 1;
+    if (confirm(`Create work${nextNumber} worktree from ${currentRepo.masterBranch} branch?`)) {
+      this.createWorktree(currentRepo.path, nextNumber);
+    }
+  }
+
+  showAdvancedAddWorktreeModal(allRepos) {
+    const existing = document.getElementById('add-worktree-modal');
+    if (existing) existing.remove();
+
+    const categories = {};
+    allRepos.forEach(repo => {
+      if (!categories[repo.category]) categories[repo.category] = [];
+      categories[repo.category].push(repo);
+    });
+
+    const modal = document.createElement('div');
+    modal.id = 'add-worktree-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content large-modal">
+        <div class="modal-header">
+          <h3>Add Worktree to "${this.currentWorkspace.name}"</h3>
+          <button class="close-btn" onclick="this.closest('.modal').remove()">✕</button>
+        </div>
+        <div class="modal-body">
+          ${Object.entries(categories).map(([category, repos]) => `
+            <div class="repo-category">
+              <h4>${category}</h4>
+              ${repos.map(repo => this.renderRepoWorktreeOptions(repo)).join('')}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  renderRepoWorktreeOptions(repo) {
+    const getIcon = (type) => this.getProjectIcon(type);
+    const worktreeOptions = [];
+    for (let i = 1; i <= 8; i++) {
+      const worktreeId = `work${i}`;
+      const isInUse = this.isWorktreeInUse(repo.path, worktreeId);
+      const statusIcon = isInUse ? '⚠️' : '✅';
+      const statusText = isInUse ? 'In use' : 'Available';
+
+      worktreeOptions.push(`
+        <button class="worktree-option ${isInUse ? 'in-use' : 'available'}"
+                onclick="window.orchestrator.addWorktreeToWorkspace('${repo.path}', '${worktreeId}', '${repo.type}', '${repo.name}')"
+                ${isInUse ? 'disabled' : ''}>
+          <span class="worktree-id">${worktreeId}</span>
+          <span class="worktree-status">${statusIcon} ${statusText}</span>
+        </button>
+      `);
+    }
+
+    return `
+      <div class="repo-section">
+        <div class="repo-header">
+          <span class="repo-icon">${getIcon(repo.type)}</span>
+          <span class="repo-name">${repo.name}</span>
+          <span class="repo-path">~/${repo.relativePath}</span>
+        </div>
+        <div class="worktree-grid">
+          ${worktreeOptions.join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  isWorktreeInUse(repoPath, worktreeId) {
+    // Check if worktree is in use by scanning current workspace
+    for (const workspace of this.availableWorkspaces) {
+      if (workspace.repository?.path === repoPath) {
+        const currentPairs = workspace.terminals?.pairs || 1;
+        const worktreeNum = parseInt(worktreeId.replace('work', ''));
+        if (worktreeNum <= currentPairs) return true;
+      }
+    }
+    return false;
+  }
+
+  async addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName) {
+    try {
+      console.log(`Adding ${worktreeId} from ${repoName} to workspace...`);
+
+      const response = await fetch('/api/workspaces/add-mixed-worktree', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: this.currentWorkspace.id,
+          repositoryPath: repoPath,
+          repositoryType: repoType,
+          repositoryName: repoName,
+          worktreeId: worktreeId
+        })
+      });
+
+      if (response.ok) {
+        this.showTemporaryMessage(`Added ${repoName} ${worktreeId} to workspace!`, 'success');
+        document.getElementById('add-worktree-modal').remove();
+        setTimeout(() => {
+          console.log('🔄 Refreshing workspace after adding worktree...');
+          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
+        }, 1500);
+      } else {
+        const error = await response.text();
+        this.showTemporaryMessage('Failed to add worktree: ' + error, 'error');
+      }
+    } catch (error) {
+      console.error('Error adding worktree:', error);
+      this.showTemporaryMessage('Error: ' + error.message, 'error');
+    }
+  }
+
+  async createWorktree(worktreeNumber) {
+    try {
+      console.log(`Creating work${worktreeNumber} worktree...`);
+
+      const response = await fetch('/api/workspaces/create-worktree', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: this.currentWorkspace.id,
+          worktreeNumber: worktreeNumber
+        })
+      });
+
+      if (response.ok) {
+        this.showTemporaryMessage(`Worktree work${worktreeNumber} created successfully!`, 'success');
+
+        // Update workspace config to include new terminal pair
+        this.currentWorkspace.terminals.pairs = worktreeNumber;
+
+        // Refresh the workspace to show new worktree
+        setTimeout(() => {
+          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
+        }, 1000);
+      } else {
+        const error = await response.text();
+        console.error('Failed to create worktree:', error);
+        this.showTemporaryMessage('Failed to create worktree: ' + error, 'error');
+      }
+    } catch (error) {
+      console.error('Error creating worktree:', error);
+      this.showTemporaryMessage('Error creating worktree: ' + error.message, 'error');
+    }
+  }
+
+  showSettings() {
+    // Toggle settings panel
+    const settingsPanel = document.getElementById('settings-panel');
+    if (settingsPanel) {
+      settingsPanel.classList.toggle('hidden');
+    }
+  }
+
+  getProjectIcon(type) {
+    const icons = {
+      'hytopia-game': '🎮',
+      'monogame-game': '🕹️',
+      'website': '🌐',
+      'writing': '📖',
+      'tool-project': '🛠️',
+      'minecraft-mod': '⛏️',
+      'rust-game': '🦀',
+      'web-game': '🎯',
+      'ruby-rails': '💎'
+    };
+    return icons[type] || '📁';
   }
 }
 
