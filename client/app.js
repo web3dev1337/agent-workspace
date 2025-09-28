@@ -681,16 +681,6 @@ class ClaudeOrchestrator {
     }
   }
   
-  getRepositoryNameFromSessionId(sessionId) {
-    // Extract repository name from complex session IDs like "hytopia-2d-game-test-work1-claude"
-    // For traditional sessions like "work1-claude", return null
-    const parts = sessionId.split('-');
-    if (parts.length > 3) {
-      // Mixed-repo: "repo-name-work1-claude" -> "repo-name"
-      return parts.slice(0, -2).join('-');
-    }
-    return null; // Traditional workspace
-  }
 
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
@@ -712,8 +702,8 @@ class ClaudeOrchestrator {
 
       const worktreeId = session.worktreeId || sessionId.split('-')[0];
 
-      // For mixed-repo workspaces, get repository name from session ID
-      const repositoryName = this.getRepositoryNameFromSessionId(sessionId);
+      // For mixed-repo workspaces, get repository name from session data (much better!)
+      const repositoryName = session.repositoryName || null;
       const key = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
 
       if (!worktrees.has(key)) {
@@ -1203,13 +1193,17 @@ class ClaudeOrchestrator {
     
     const isClaudeSession = session.type === 'claude';
     const isServerSession = session.type === 'server';
-    const worktreeNumber = session.worktreeId.replace('work', '');
-    
+
+    // Build display name with repository info for mixed-repo workspaces
+    const repositoryName = session.repositoryName;
+    const worktreeId = session.worktreeId;
+    const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
+
     wrapper.innerHTML = `
       <div class="terminal-header">
         <div class="terminal-title">
           <span class="status-indicator ${session.status}" id="status-${sessionId}"></span>
-          <span>${isClaudeSession ? '🤖 Claude' : '💻 Server'} ${worktreeNumber}</span>
+          <span>${isClaudeSession ? '🤖 Claude' : '💻 Server'} ${displayName}</span>
           <span class="terminal-branch ${(session.branch === 'master' || session.branch === 'main' || session.branch?.startsWith('master-') || session.branch?.startsWith('main-')) ? 'master-branch' : ''}">${session.branch || ''}</span>
         </div>
         <div class="terminal-controls">
