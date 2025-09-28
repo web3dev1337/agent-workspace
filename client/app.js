@@ -4264,14 +4264,30 @@ class ClaudeOrchestrator {
   }
 
   isWorktreeInUse(repoPath, worktreeId) {
-    // Check if worktree is in use by scanning current workspace
-    for (const workspace of this.availableWorkspaces) {
-      if (workspace.repository?.path === repoPath) {
-        const currentPairs = workspace.terminals?.pairs || 1;
-        const worktreeNum = parseInt(worktreeId.replace('work', ''));
-        if (worktreeNum <= currentPairs) return true;
-      }
+    // Only check if this worktree is in use by the CURRENTLY ACTIVE workspace
+    // Since only one workspace can be active at a time, and switching workspaces
+    // kills all sessions, worktrees from inactive workspaces are available
+
+    if (!this.currentWorkspace) return false;
+
+    // Check if this worktree is currently being used in the active workspace
+    if (this.currentWorkspace.repository?.path === repoPath) {
+      const currentPairs = this.currentWorkspace.terminals?.pairs || 1;
+      const worktreeNum = parseInt(worktreeId.replace('work', ''));
+      if (worktreeNum <= currentPairs) return true;
     }
+
+    // Check mixed-repo workspaces (if current workspace uses multiple repos)
+    if (this.currentWorkspace.repositories && Array.isArray(this.currentWorkspace.repositories)) {
+      return this.currentWorkspace.repositories.some(repo => {
+        if (repo.path === repoPath && repo.worktreeId === worktreeId) {
+          return true; // This specific worktree is actively used in current workspace
+        }
+        return false;
+      });
+    }
+
+    // If not in current active workspace, it's available
     return false;
   }
 
