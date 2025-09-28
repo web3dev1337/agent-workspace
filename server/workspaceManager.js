@@ -203,19 +203,20 @@ class WorkspaceManager {
     // 3. First available workspace
     // 4. None (show dashboard)
 
-    if (this.config.activeWorkspace && this.workspaces.has(this.config.activeWorkspace)) {
-      this.activeWorkspace = this.workspaces.get(this.config.activeWorkspace);
-      logger.info(`Set active workspace from config: ${this.activeWorkspace.name}`);
-      return;
-    }
+    // Don't auto-select workspace - let user choose from dashboard
+    // if (this.config.activeWorkspace && this.workspaces.has(this.config.activeWorkspace)) {
+    //   this.activeWorkspace = this.workspaces.get(this.config.activeWorkspace);
+    //   logger.info(`Set active workspace from config: ${this.activeWorkspace.name}`);
+    //   return;
+    // }
 
-    // Try first available workspace
-    if (this.workspaces.size > 0) {
-      const firstWorkspace = Array.from(this.workspaces.values())[0];
-      this.activeWorkspace = firstWorkspace;
-      logger.info(`Set active workspace (first available): ${this.activeWorkspace.name}`);
-      return;
-    }
+    // Don't auto-select first workspace - show dashboard instead
+    // if (this.workspaces.size > 0) {
+    //   const firstWorkspace = Array.from(this.workspaces.values())[0];
+    //   this.activeWorkspace = firstWorkspace;
+    //   logger.info(`Set active workspace (first available): ${this.activeWorkspace.name}`);
+    //   return;
+    // }
 
     logger.info('No active workspace set (no workspaces available)');
   }

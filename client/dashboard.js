@@ -127,6 +127,9 @@ class Dashboard {
           <button class="btn-primary workspace-open-btn">
             Open Workspace
           </button>
+          <button class="btn-danger workspace-delete-btn" title="Delete workspace (keeps worktrees)">
+            🗑️
+          </button>
         </div>
       </div>
     `;
@@ -180,6 +183,17 @@ class Dashboard {
         const card = e.target.closest('.workspace-card');
         const workspaceId = card.dataset.workspaceId;
         this.openWorkspace(workspaceId);
+      });
+    });
+
+    // Workspace delete handlers
+    document.querySelectorAll('.workspace-delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const card = e.target.closest('.workspace-card');
+        const workspaceId = card.dataset.workspaceId;
+        const workspace = this.workspaces.find(ws => ws.id === workspaceId);
+        this.confirmDeleteWorkspace(workspace);
       });
     });
 
@@ -297,6 +311,51 @@ class Dashboard {
       'public': '🌍'
     };
     return icons[access] || '🔒';
+  }
+
+  confirmDeleteWorkspace(workspace) {
+    const confirmed = confirm(
+      `⚠️ DELETE WORKSPACE?\n\n` +
+      `Workspace: ${workspace.name}\n` +
+      `Type: ${workspace.type}\n\n` +
+      `This will:\n` +
+      `✅ Delete the workspace configuration\n` +
+      `✅ Keep all git worktrees and code intact\n` +
+      `✅ Stop any running sessions\n\n` +
+      `Are you sure?`
+    );
+
+    if (confirmed) {
+      this.deleteWorkspace(workspace.id);
+    }
+  }
+
+  async deleteWorkspace(workspaceId) {
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        console.log(`Deleted workspace: ${workspaceId}`);
+
+        // Remove from local array
+        this.workspaces = this.workspaces.filter(ws => ws.id !== workspaceId);
+
+        // Refresh dashboard
+        this.show();
+
+        // Show success message
+        window.orchestrator?.showTemporaryMessage(`Workspace deleted successfully`, 'success');
+      } else {
+        const error = await response.text();
+        console.error('Delete failed:', error);
+        window.orchestrator?.showTemporaryMessage(`Failed to delete workspace: ${error}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error deleting workspace:', error);
+      window.orchestrator?.showTemporaryMessage(`Error: ${error.message}`, 'error');
+    }
   }
 }
 

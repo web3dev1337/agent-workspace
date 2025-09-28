@@ -735,6 +735,31 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
   }
 });
 
+// Delete workspace
+app.delete('/api/workspaces/:id', async (req, res) => {
+  try {
+    const workspaceId = req.params.id;
+    logger.info('Deleting workspace', { workspaceId });
+
+    // Stop all sessions for this workspace first
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (workspace && workspaceManager.activeWorkspace?.id === workspaceId) {
+      // Clean up sessions if this is the active workspace
+      sessionManager.cleanupAllSessions();
+      sessionManager.setWorkspace(null);
+      workspaceManager.activeWorkspace = null;
+    }
+
+    // Delete the workspace
+    await workspaceManager.deleteWorkspace(workspaceId);
+
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to delete workspace', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Claude hook endpoints
 app.post('/api/claude-ready', express.json(), (req, res) => {
   const { worktree, sessionId } = req.body;
