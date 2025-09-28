@@ -105,17 +105,16 @@ class SessionManager extends EventEmitter {
         const worktreeId = terminal.worktree;
         const worktreePath = path.join(repoPath, worktreeId);
 
-        // Use a unique key to avoid duplicates
-        const key = `${terminal.repository.name}-${worktreeId}`;
-        if (!worktreeSet.has(key)) {
-          worktreeSet.add(key);
+        // Use a unique key to avoid duplicate worktrees (same repo + worktree)
+        const worktreeKey = `${terminal.repository.name}-${worktreeId}`;
+        if (!worktreeSet.has(worktreeKey)) {
+          worktreeSet.add(worktreeKey);
           this.worktrees.push({
-            id: terminal.id,
+            id: worktreeKey, // Use consistent worktree identifier
             worktreeId: worktreeId,
             repositoryName: terminal.repository.name,
             repositoryPath: repoPath,
-            path: worktreePath,
-            terminalType: terminal.terminalType
+            path: worktreePath
           });
         }
       });
@@ -210,12 +209,14 @@ class SessionManager extends EventEmitter {
     if (Array.isArray(this.workspace.terminals)) {
       // Mixed-repo workspace: Create sessions from terminals array
       const terminalsToCreate = this.workspace.terminals.filter(terminal => {
-        // Only create for existing worktrees
-        return this.worktrees.some(w => w.id === terminal.id);
+        // Check if worktree exists for this terminal's repo + worktree combination
+        const worktreeKey = `${terminal.repository.name}-${terminal.worktree}`;
+        return this.worktrees.some(w => w.id === worktreeKey);
       });
 
       for (const terminal of terminalsToCreate) {
-        const worktree = this.worktrees.find(w => w.id === terminal.id);
+        const worktreeKey = `${terminal.repository.name}-${terminal.worktree}`;
+        const worktree = this.worktrees.find(w => w.id === worktreeKey);
         if (!worktree) continue;
 
         sessionPromises.push(
