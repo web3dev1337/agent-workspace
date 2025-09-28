@@ -612,11 +612,14 @@ class ClaudeOrchestrator {
         console.log('Loaded existing PR for session:', sessionId, state.existingPR);
       }
       
-      // All fresh sessions start as inactive - they need user interaction to become active
-      this.sessionActivity.set(sessionId, 'inactive');
-      
+      // For mixed-repo workspaces, set terminals as active immediately so they show by default
+      // For traditional workspaces, they start as inactive until user interacts
+      const isComplexSessionId = sessionId.includes('-') && sessionId.split('-').length > 2;
+      this.sessionActivity.set(sessionId, isComplexSessionId ? 'active' : 'inactive');
+
       // Add all terminals to visible set by default
       this.visibleTerminals.add(sessionId);
+      console.log(`Added terminal ${sessionId} to visible set, activity: ${this.sessionActivity.get(sessionId)}`);
     }
     
     // Hide loading message FIRST
@@ -803,11 +806,13 @@ class ClaudeOrchestrator {
   
   isWorktreeActive(worktreeId) {
     // Check if any session in this worktree has been marked as active
-    const claudeSessionId = `${worktreeId}-claude`;
-    const serverSessionId = `${worktreeId}-server`;
-    
-    return this.sessionActivity.get(claudeSessionId) === 'active' || 
-           this.sessionActivity.get(serverSessionId) === 'active';
+    // For mixed-repo workspaces, find sessions by worktreeId instead of simple concatenation
+    for (const [sessionId, session] of this.sessions) {
+      if (session.worktreeId === worktreeId && this.sessionActivity.get(sessionId) === 'active') {
+        return true;
+      }
+    }
+    return false;
   }
   
   toggleActivityFilter() {
@@ -863,15 +868,11 @@ class ClaudeOrchestrator {
     // Clear all visible terminals first
     this.visibleTerminals.clear();
 
-    // Add only this worktree's sessions
-    const claudeId = `${worktreeId}-claude`;
-    const serverId = `${worktreeId}-server`;
-
-    if (this.sessions.has(claudeId)) {
-      this.visibleTerminals.add(claudeId);
-    }
-    if (this.sessions.has(serverId)) {
-      this.visibleTerminals.add(serverId);
+    // Add only this worktree's sessions (works for both traditional and mixed-repo)
+    for (const [sessionId, session] of this.sessions) {
+      if (session.worktreeId === worktreeId) {
+        this.visibleTerminals.add(sessionId);
+      }
     }
 
     // Update the grid to show only these terminals
