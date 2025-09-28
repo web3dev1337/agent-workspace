@@ -984,6 +984,13 @@ class ClaudeOrchestrator {
     this.activeView = sessionIds.filter(id => this.visibleTerminals.has(id));
     const grid = document.getElementById('terminal-grid');
 
+    console.log('🎨 RENDER DEBUG:', {
+      totalSessions: sessionIds.length,
+      visibleTerminals: Array.from(this.visibleTerminals),
+      activeViewCount: this.activeView.length,
+      gridExists: !!grid
+    });
+
     // Set the data attribute for dynamic layout based on visible count
     const visibleCount = this.activeView.length;
     grid.setAttribute('data-visible-count', visibleCount);
@@ -995,9 +1002,18 @@ class ClaudeOrchestrator {
     // This ensures CSS nth-child selectors work correctly
     sessionIds.forEach((sessionId) => {
       const session = this.sessions.get(sessionId);
-      if (session && this.visibleTerminals.has(sessionId)) {
+      const isVisible = this.visibleTerminals.has(sessionId);
+      console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}`);
+
+      if (session && isVisible) {
+        console.log(`✅ Creating terminal element for: ${sessionId}`);
         const wrapper = this.createTerminalElement(sessionId, session);
-        grid.appendChild(wrapper);
+        if (wrapper) {
+          grid.appendChild(wrapper);
+          console.log(`✅ Appended terminal to grid: ${sessionId}`);
+        } else {
+          console.error(`❌ Failed to create terminal element: ${sessionId}`);
+        }
       }
     });
     
