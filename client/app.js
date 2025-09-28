@@ -672,8 +672,8 @@ class ClaudeOrchestrator {
             this.startClaudeWithOptions(sessionId, mode, skipPermissions);
           }, delay);
         } else {
-          // Use centralized logic to determine if UI should show
-          this.showStartupUIIfNeeded(sessionId, status, previousStatus);
+          // Use centralized logic to determine if UI should show (no previous status in auto-start)
+          this.showStartupUIIfNeeded(sessionId, 'waiting', 'idle');
         }
       }
     }

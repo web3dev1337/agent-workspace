@@ -780,14 +780,34 @@ class SessionManager extends EventEmitter {
     if (!session || !session.pty) {
       return false;
     }
-    
+
     try {
+      // Check if PTY is still valid before resizing
+      if (session.pty.killed || !session.pty.writable) {
+        logger.warn('PTY session is dead, skipping resize', { sessionId });
+        return false;
+      }
+
       session.pty.resize(cols, rows);
       return true;
     } catch (error) {
-      logger.error('Failed to resize session', { 
-        sessionId, 
-        error: error.message 
+      // Handle ENOTTY/EBADF errors gracefully - these mean the PTY is dead
+      if (error.code === 'ENOTTY' || error.code === 'EBADF') {
+        logger.warn('PTY session has invalid file descriptor, cleaning up', {
+          sessionId,
+          error: error.code
+        });
+
+        // Mark session as dead and clean up
+        session.status = 'dead';
+        this.io.emit('session-status', { sessionId, status: 'dead' });
+
+        return false;
+      }
+
+      logger.error('Failed to resize session', {
+        sessionId,
+        error: error.message
       });
       return false;
     }
