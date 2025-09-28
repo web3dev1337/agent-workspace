@@ -619,7 +619,7 @@ class ClaudeOrchestrator {
 
       // Add all terminals to visible set by default
       this.visibleTerminals.add(sessionId);
-      console.log(`Added terminal ${sessionId} to visible set, activity: ${this.sessionActivity.get(sessionId)}`);
+      // Debug: console.log(`Added terminal ${sessionId} to visible set, activity: ${this.sessionActivity.get(sessionId)}`);
     }
     
     // Hide loading message FIRST
@@ -980,8 +980,8 @@ class ClaudeOrchestrator {
     // Get ALL sessions (works for both traditional and mixed-repo workspaces)
     const allSessions = Array.from(this.sessions.keys());
 
-    console.log('Rendering all terminals, will hide non-visible ones');
-    console.log('📋 All sessions found:', allSessions);
+    // Debug: console.log('Rendering all terminals, will hide non-visible ones');
+    // Debug: console.log('📋 All sessions found:', allSessions);
     this.renderTerminalsWithVisibility(allSessions);
   }
   
