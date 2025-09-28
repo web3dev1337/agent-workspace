@@ -439,13 +439,39 @@ class TerminalManager {
   handleOutput(sessionId, data) {
     const terminal = this.terminals.get(sessionId);
     if (!terminal) {
-      // Create terminal if it doesn't exist
+      // Check if DOM element exists before trying to create terminal
+      const terminalElement = document.getElementById(`terminal-${sessionId}`);
+      if (!terminalElement) {
+        // Buffer early output instead of ignoring it
+        if (!this.pendingOutput) this.pendingOutput = new Map();
+        if (!this.pendingOutput.has(sessionId)) {
+          this.pendingOutput.set(sessionId, []);
+        }
+        this.pendingOutput.get(sessionId).push(data);
+
+        // Try again in a short while
+        setTimeout(() => this.handleOutput(sessionId, ''), 100);
+        return;
+      }
+
+      // Create terminal if DOM element exists
       const sessionInfo = this.orchestrator.sessions.get(sessionId) || {};
       this.createTerminal(sessionId, sessionInfo);
-      
-      // Try again
+
+      // Apply any buffered output
+      if (this.pendingOutput && this.pendingOutput.has(sessionId)) {
+        const bufferedOutput = this.pendingOutput.get(sessionId);
+        this.pendingOutput.delete(sessionId);
+
+        const newTerminal = this.terminals.get(sessionId);
+        if (newTerminal) {
+          bufferedOutput.forEach(output => newTerminal.write(output));
+        }
+      }
+
+      // Try again with current data
       const newTerminal = this.terminals.get(sessionId);
-      if (newTerminal) {
+      if (newTerminal && data) {
         newTerminal.write(data);
       }
       return;
@@ -707,5 +733,16 @@ class TerminalManager {
     }
     
     return lines.join('\n');
+  }
+
+  clearAll() {
+    console.log('Clearing all terminals for workspace switch');
+
+    // Destroy all terminals
+    for (const sessionId of this.terminals.keys()) {
+      this.destroyTerminal(sessionId);
+    }
+
+    console.log('All terminals cleared');
   }
 }

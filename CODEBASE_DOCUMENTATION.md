@@ -50,6 +50,28 @@ server/gitHelper.js                - Git operations wrapper
 server/notificationService.js      - System notification manager
 server/claudeVersionChecker.js     - Claude Code version detection
 server/tokenCounter.js             - Token usage tracking (if applicable)
+server/userSettingsService.js      - User preferences and settings management
+```
+
+### Multi-Workspace System (Core Feature)
+```
+server/workspaceManager.js          - Workspace lifecycle management
+├─ Manages: Workspace creation, switching, mixed-repo support
+├─ Features: Dynamic terminal creation, worktree integration
+└─ Storage: JSON-based workspace persistence
+
+server/workspaceSchemas.js          - Workspace configuration validation
+├─ Schemas: JSON schema definitions for workspace types
+└─ Validation: Ensures workspace integrity and structure
+
+server/workspaceTypes.js            - Workspace type definitions
+├─ Types: Single-repo, mixed-repo, custom configurations
+└─ Templates: Default settings for different workspace types
+
+server/worktreeHelper.js            - Git worktree operations wrapper
+├─ Operations: Create, delete, manage git worktrees
+├─ Integration: Seamless workspace-worktree coordination
+└─ Safety: Path validation and cleanup handling
 ```
 
 ## Frontend Applications
@@ -65,6 +87,15 @@ client/terminal.js                 - Terminal component implementation
 client/terminal-manager.js         - Terminal lifecycle management
 client/file-watcher-adapter.js     - File watching integration
 client/notifications.js            - Browser notification handling
+
+client/workspace-switcher.js       - Workspace switching interface
+├─ Features: Quick workspace switching, status display
+└─ UI: Dropdown selector with workspace metadata
+
+client/workspace-wizard.js         - Workspace creation wizard
+├─ Features: Step-by-step workspace setup, repo selection
+├─ Types: Single-repo, mixed-repo, and custom configurations
+└─ Integration: Worktree creation and template application
 ```
 
 ### Native Desktop App (Tauri)
@@ -85,6 +116,21 @@ src-tauri/tauri.conf.json          - Tauri app configuration
 src-tauri/Cargo.toml               - Rust dependencies
 config.json                        - Shared application configuration
 package.json                       - Node.js dependencies and scripts
+
+user-settings.json                 - User preferences and workspace settings
+user-settings.default.json         - Default user settings template
+```
+
+### Workspace Templates & Scripts
+```
+templates/launch-settings/         - Workspace configuration templates
+├─ hytopia-game.json              - Gaming project workspace template
+├─ website.json                   - Web development workspace template
+└─ writing.json                   - Writing/documentation workspace template
+
+scripts/migrate-to-workspaces.js   - Migration script for legacy workspaces
+├─ Converts: Old workspace format to new multi-workspace format
+└─ Safety: Backup and rollback capabilities
 ```
 
 ## Advanced Diff Viewer Component
@@ -124,6 +170,8 @@ session-destroyed: {sessionId}                 - Session cleanup
 status-change: {type, data}                    - Claude status updates
 git-change: {branch, status, commits}          - Git repository changes
 notification: {type, message, level}           - System notifications
+workspace-changed: {workspaceId, sessions}     - Workspace switch completed
+workspace-list: {workspaces}                   - Available workspaces update
 ```
 
 ### Client → Server Events
@@ -133,6 +181,9 @@ destroy-session: {sessionId}                   - Close session
 terminal-input: {sessionId, input}             - Send input to terminal
 request-status: {}                             - Request status update
 git-command: {command, args}                   - Execute git command
+switch-workspace: {workspaceId}                - Switch to different workspace
+create-workspace: {config}                     - Create new workspace
+get-workspaces: {}                             - Request workspace list
 ```
 
 ## Configuration System
@@ -211,11 +262,19 @@ NotificationService.send()       - Send system notification
 ### REST Endpoints
 ```
 GET /api/status                    - Server and session status
-GET /api/sessions                  - List active sessions  
+GET /api/sessions                  - List active sessions
 POST /api/sessions                 - Create new session
 DELETE /api/sessions/:id           - Destroy session
 GET /api/git/status               - Git repository status
 GET /api/git/branches             - Available branches
+
+GET /api/workspaces               - List all workspaces
+POST /api/workspaces              - Create new workspace
+PUT /api/workspaces/:id           - Update workspace configuration
+DELETE /api/workspaces/:id        - Delete workspace
+POST /api/workspaces/:id/switch   - Switch to workspace
+GET /api/user-settings            - Get user preferences
+PUT /api/user-settings            - Update user preferences
 ```
 
 ### WebSocket Events
@@ -269,6 +328,10 @@ LOGGING:      Winston-based structured logging with rotation
 4. Terminal output can be high-frequency - use throttling
 5. Native app requires different event handling than web client
 6. File watching can be resource intensive - use efficient patterns
+7. **Workspace switching**: Ensure all sessions are properly cleaned up before switch
+8. **Worktree creation**: Validate paths and handle existing worktree conflicts
+9. **Mixed-repo workspaces**: Terminal naming must avoid conflicts between repos
+10. **Template validation**: Always validate workspace templates against schemas
 
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
