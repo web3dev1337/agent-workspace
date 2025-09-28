@@ -4122,22 +4122,109 @@ class ClaudeOrchestrator {
     modal.id = 'add-worktree-modal';
     modal.className = 'modal';
     modal.innerHTML = `
-      <div class="modal-content large-modal">
+      <div class="modal-content worktree-modal">
         <div class="modal-header">
           <h3>Add Worktree to "${this.currentWorkspace.name}"</h3>
           <button class="close-btn" onclick="this.closest('.modal').remove()">✕</button>
         </div>
-        <div class="modal-body">
+        <div class="worktree-modal-toolbar">
+          <input type="text" id="worktree-search" placeholder="🔍 Search repositories..." class="search-input">
+          <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="available">Available Only</button>
+            <button class="filter-btn" data-filter="hytopia">Hytopia Games</button>
+            <button class="filter-btn" data-filter="monogame">MonoGame</button>
+          </div>
+        </div>
+        <div class="modal-body worktree-modal-body">
           ${Object.entries(categories).map(([category, repos]) => `
-            <div class="repo-category">
-              <h4>${category}</h4>
-              ${repos.map(repo => this.renderRepoWorktreeOptions(repo)).join('')}
+            <div class="repo-category" data-category="${category.toLowerCase().replace(/\s+/g, '-')}">
+              <div class="category-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <span class="category-toggle">▼</span>
+                <h4>${category} <span class="repo-count">(${repos.length})</span></h4>
+              </div>
+              <div class="category-content">
+                ${repos.map(repo => this.renderRepoWorktreeOptions(repo)).join('')}
+              </div>
             </div>
           `).join('')}
         </div>
       </div>
     `;
+
     document.body.appendChild(modal);
+    this.setupWorktreeModalInteractions();
+  }
+
+  setupWorktreeModalInteractions() {
+    const searchInput = document.getElementById('worktree-search');
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    const repoSections = document.querySelectorAll('.repo-section');
+    const categories = document.querySelectorAll('.repo-category');
+
+    // Search functionality
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        repoSections.forEach(section => {
+          const repoName = section.dataset.repoName || '';
+          const matches = repoName.includes(searchTerm);
+          section.style.display = matches ? 'block' : 'none';
+        });
+
+        // Hide empty categories
+        categories.forEach(category => {
+          const visibleRepos = category.querySelectorAll('.repo-section[style="display: block"], .repo-section:not([style])').length;
+          category.style.display = visibleRepos > 0 ? 'block' : 'none';
+        });
+      });
+    }
+
+    // Filter buttons
+    filterButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Update active button
+        filterButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const filter = btn.dataset.filter;
+
+        repoSections.forEach(section => {
+          let shouldShow = true;
+
+          if (filter === 'available') {
+            // Show only repos with available worktrees
+            const availableWorktrees = section.querySelectorAll('.worktree-option.available').length;
+            shouldShow = availableWorktrees > 0;
+          } else if (filter === 'hytopia') {
+            const repoType = section.dataset.repoType || '';
+            shouldShow = repoType.includes('hytopia') || section.dataset.repoName.includes('hyfire');
+          } else if (filter === 'monogame') {
+            const repoType = section.dataset.repoType || '';
+            shouldShow = repoType.includes('monogame');
+          }
+          // 'all' filter shows everything
+
+          section.style.display = shouldShow ? 'block' : 'none';
+        });
+
+        // Hide empty categories after filtering
+        categories.forEach(category => {
+          const visibleRepos = category.querySelectorAll('.repo-section[style="display: block"], .repo-section:not([style*="none"])').length;
+          category.style.display = visibleRepos > 0 ? 'block' : 'none';
+        });
+      });
+    });
+
+    // Collapse/expand categories by default (start with smaller categories collapsed)
+    categories.forEach(category => {
+      const repoCount = category.querySelectorAll('.repo-section').length;
+      if (repoCount > 5) {
+        category.classList.add('collapsed');
+        const toggle = category.querySelector('.category-toggle');
+        if (toggle) toggle.textContent = '▶';
+      }
+    });
   }
 
   renderRepoWorktreeOptions(repo) {
@@ -4160,11 +4247,14 @@ class ClaudeOrchestrator {
     }
 
     return `
-      <div class="repo-section">
+      <div class="repo-section" data-repo-name="${repo.name.toLowerCase()}" data-repo-type="${repo.type}">
         <div class="repo-header">
           <span class="repo-icon">${getIcon(repo.type)}</span>
-          <span class="repo-name">${repo.name}</span>
-          <span class="repo-path">~/${repo.relativePath}</span>
+          <div class="repo-info">
+            <span class="repo-name">${repo.name}</span>
+            <span class="repo-path">~/${repo.relativePath}</span>
+          </div>
+          <span class="available-count">${worktreeOptions.filter(w => !w.includes('in-use')).length}/8 available</span>
         </div>
         <div class="worktree-grid">
           ${worktreeOptions.join('')}
