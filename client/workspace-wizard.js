@@ -21,7 +21,7 @@ class WorkspaceWizard {
 
   async scanProjects() {
     try {
-      const response = await fetch('/api/workspaces/scan-repos');
+      const response = await fetch('http://localhost:4000/api/workspaces/scan-repos');
       if (response.ok) {
         this.discoveredProjects = await response.json();
         console.log('Discovered projects:', this.discoveredProjects);
