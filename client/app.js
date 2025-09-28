@@ -680,7 +680,17 @@ class ClaudeOrchestrator {
       }
     }
   }
-  
+
+  extractRepositoryName(sessionId) {
+    // Find repository name by looking for the work pattern
+    const parts = sessionId.split('-');
+    const workIndex = parts.findIndex(part => part.startsWith('work'));
+
+    if (workIndex > 0) {
+      return parts.slice(0, workIndex).join('-');
+    }
+    return null; // Traditional workspace
+  }
 
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
@@ -702,8 +712,8 @@ class ClaudeOrchestrator {
 
       const worktreeId = session.worktreeId || sessionId.split('-')[0];
 
-      // For mixed-repo workspaces, get repository name from session data (much better!)
-      const repositoryName = session.repositoryName || null;
+      // Extract repository name from session ID for mixed-repo workspaces
+      const repositoryName = this.extractRepositoryName(sessionId);
       const key = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
 
       if (!worktrees.has(key)) {
@@ -1195,7 +1205,7 @@ class ClaudeOrchestrator {
     const isServerSession = session.type === 'server';
 
     // Build display name with repository info for mixed-repo workspaces
-    const repositoryName = session.repositoryName;
+    const repositoryName = this.extractRepositoryName(sessionId);
     const worktreeId = session.worktreeId;
     const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
 
