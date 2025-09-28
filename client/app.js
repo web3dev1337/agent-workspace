@@ -15,6 +15,9 @@ class ClaudeOrchestrator {
     this.serverPorts = new Map(); // Track server ports
     this.githubLinks = new Map(); // Track GitHub PR/branch links per session
     this.sessionActivity = new Map(); // Track which sessions have been used
+    this.dismissedStartupUI = new Map(); // Track which sessions have dismissed startup UI
+    this.startupUIDebounce = new Map(); // Debounce startup UI showing
+    this.sessionAgentPreferences = new Map(); // Track agent preferences per session
     this.showActiveOnly = false; // Filter toggle
     this.serverLaunchSettings = this.loadServerLaunchSettings(); // Server launch flags
 
@@ -656,11 +659,8 @@ class ClaudeOrchestrator {
         if (effectiveSettings && effectiveSettings.autoStart && effectiveSettings.autoStart.enabled) {
           console.log(`Auto-start enabled for ${sessionId}`, effectiveSettings.autoStart);
 
-          // Hide the startup UI
-          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-          if (startupUI) {
-            startupUI.style.display = 'none';
-          }
+          // Hide the startup UI since auto-start will handle it
+          this.hideStartupUI(sessionId);
 
           // Apply auto-start with configured delay
           const delay = effectiveSettings.autoStart.delay || 500;
@@ -672,12 +672,8 @@ class ClaudeOrchestrator {
             this.startClaudeWithOptions(sessionId, mode, skipPermissions);
           }, delay);
         } else {
-          // Show the startup UI if auto-start is not enabled
-          console.log(`Auto-start disabled for ${sessionId}, showing UI`);
-          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-          if (startupUI) {
-            startupUI.style.display = 'block';
-          }
+          // Use centralized logic to determine if UI should show
+          this.showStartupUIIfNeeded(sessionId, status, previousStatus);
         }
       }
     }
@@ -1256,25 +1252,39 @@ class ClaudeOrchestrator {
         <div class="terminal" id="terminal-${sessionId}"></div>
         ${isClaudeSession ? `
           <div class="terminal-startup-ui" id="startup-ui-${sessionId}">
-            <div class="startup-ui-simple">
-              <div class="startup-buttons-inline">
-                <button class="startup-btn-inline" id="btn-fresh-${sessionId}" onclick="window.orchestrator.quickStartClaude('${sessionId}', 'fresh')">
+            <div class="startup-ui-compact">
+              <!-- Agent Selection -->
+              <div class="inline-agent-selector">
+                <select id="inline-agent-${sessionId}" class="agent-dropdown" onchange="window.orchestrator.updateInlineAgent('${sessionId}', this.value)">
+                  <option value="claude">🤖 Claude</option>
+                  <option value="codex">⚡ Codex</option>
+                </select>
+              </div>
+
+              <!-- Dynamic Mode Buttons -->
+              <div class="inline-mode-buttons" id="inline-modes-${sessionId}">
+                <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'fresh')">
                   <span class="btn-icon">🆕</span>
                   <span>Fresh</span>
                 </button>
-                <button class="startup-btn-inline" id="btn-continue-${sessionId}" onclick="window.orchestrator.quickStartClaude('${sessionId}', 'continue')">
+                <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'continue')">
                   <span class="btn-icon">➡️</span>
                   <span>Continue</span>
                 </button>
-                <button class="startup-btn-inline" id="btn-resume-${sessionId}" onclick="window.orchestrator.quickStartClaude('${sessionId}', 'resume')">
+                <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'resume')">
                   <span class="btn-icon">⏸️</span>
                   <span>Resume</span>
                 </button>
               </div>
-              <label class="yolo-toggle">
-                <input type="checkbox" id="yolo-${sessionId}" onchange="window.orchestrator.updateYoloState('${sessionId}', this.checked)">
-                <span class="yolo-label">🚀 YOLO Mode</span>
-              </label>
+
+              <!-- Quick Presets -->
+              <div class="inline-presets">
+                <label class="preset-toggle">
+                  <input type="checkbox" id="powerful-${sessionId}" onchange="window.orchestrator.updateInlinePreset('${sessionId}', this.checked)">
+                  <span class="preset-label">🚀 Powerful</span>
+                </label>
+                <button class="advanced-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="More Options">⚙️</button>
+              </div>
             </div>
           </div>
         ` : ''}
@@ -1324,14 +1334,8 @@ class ClaudeOrchestrator {
             startupUI.style.display = 'none';
           }
         } else {
-          // Only show the startup UI if auto-start is not enabled AND Claude is not already running
-          // Check if this is the first time (not a status change from busy->waiting)
-          if (previousStatus === 'idle' || !previousStatus) {
-            const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-            if (startupUI) {
-              startupUI.style.display = 'block';
-            }
-          }
+          // Use centralized logic for startup UI display
+          this.showStartupUIIfNeeded(sessionId, status, previousStatus);
         }
       }
 
@@ -1821,11 +1825,9 @@ class ClaudeOrchestrator {
         startBtn.disabled = false;
       }
 
-      // Also show the startup UI again
-      const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-      if (startupUI) {
-        startupUI.style.display = 'block';
-      }
+      // Reset dismissed state and show startup UI if appropriate
+      this.dismissedStartupUI.delete(sessionId);
+      this.showStartupUIIfNeeded(sessionId, 'waiting', 'busy');
     }
 
     // If it's a server session, update status and restore controls
@@ -1854,10 +1856,8 @@ class ClaudeOrchestrator {
 
       // Only show startup UI if Claude is NOT running
       if (!isClaudeRunning) {
-        const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-        if (startupUI) {
-          startupUI.style.display = 'block';
-        }
+        // Use centralized logic
+        this.showStartupUIIfNeeded(sessionId, 'waiting', 'idle');
 
         // Enable the start button in menu strip
         const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
@@ -3410,21 +3410,193 @@ class ClaudeOrchestrator {
       sessionId: sessionId,
       config: config
     });
+
+    // Hide startup UI when agent starts
+    this.hideStartupUI(sessionId);
+  }
+
+  /**
+   * Centralized startup UI management to fix reappearing bug
+   */
+  shouldShowStartupUI(sessionId, currentStatus, previousStatus) {
+    // Don't show if user explicitly dismissed it
+    if (this.dismissedStartupUI.get(sessionId)) {
+      return false;
+    }
+
+    // Don't show if not a Claude session
+    if (!sessionId.includes('-claude')) {
+      return false;
+    }
+
+    // Don't show if Claude is currently running (busy status)
+    if (currentStatus === 'busy') {
+      return false;
+    }
+
+    // Don't show if auto-start is enabled (it will handle startup)
+    const effectiveSettings = this.getEffectiveSettings(sessionId);
+    if (effectiveSettings && effectiveSettings.autoStart && effectiveSettings.autoStart.enabled) {
+      return false;
+    }
+
+    // Only show for legitimate transitions to waiting (not rapid cycling)
+    if (currentStatus === 'waiting') {
+      // Show only on first transition from idle->waiting, not busy->waiting cycles
+      return previousStatus === 'idle' || !previousStatus;
+    }
+
+    return false;
+  }
+
+  hideStartupUI(sessionId) {
+    const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+    if (startupUI) {
+      startupUI.style.display = 'none';
+      // Mark as dismissed by user action
+      this.dismissedStartupUI.set(sessionId, true);
+    }
+  }
+
+  showStartupUIIfNeeded(sessionId, currentStatus, previousStatus) {
+    // Debounce to prevent rapid showing/hiding
+    clearTimeout(this.startupUIDebounce.get(sessionId));
+
+    this.startupUIDebounce.set(sessionId, setTimeout(() => {
+      if (this.shouldShowStartupUI(sessionId, currentStatus, previousStatus)) {
+        const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+        if (startupUI) {
+          console.log(`Showing startup UI for ${sessionId} (${previousStatus} → ${currentStatus})`);
+          startupUI.style.display = 'block';
+        }
+      }
+    }, 300)); // 300ms debounce
   }
   
   quickStartClaude(sessionId, mode) {
     // Check if YOLO mode is enabled
     const yoloCheckbox = document.getElementById(`yolo-${sessionId}`);
     const skipPermissions = yoloCheckbox ? yoloCheckbox.checked : false;
-    
-    // Hide the startup UI
-    const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-    if (startupUI) {
-      startupUI.style.display = 'none';
-    }
-    
+
+    // Hide the startup UI and mark as dismissed
+    this.hideStartupUI(sessionId);
+
     // Start Claude with selected options
     this.startClaudeWithOptions(sessionId, mode, skipPermissions);
+  }
+
+  /**
+   * Quick start agent from inline UI (new agent-agnostic method)
+   */
+  quickStartAgent(sessionId, mode) {
+    const agentDropdown = document.getElementById(`inline-agent-${sessionId}`);
+    const powerfulCheckbox = document.getElementById(`powerful-${sessionId}`);
+
+    const selectedAgent = agentDropdown ? agentDropdown.value : 'claude';
+    const usePowerfulPreset = powerfulCheckbox ? powerfulCheckbox.checked : false;
+
+    // Build configuration based on selections
+    let config;
+    if (selectedAgent === 'claude') {
+      config = {
+        agentId: 'claude',
+        mode: mode,
+        flags: usePowerfulPreset ? ['skipPermissions'] : []
+      };
+    } else if (selectedAgent === 'codex') {
+      config = {
+        agentId: 'codex',
+        mode: mode === 'fresh' ? 'search' : mode === 'continue' ? 'create' : 'analyze',
+        flags: usePowerfulPreset ? ['gpt5Model', 'highReasoning', 'bypassAll'] : ['gpt5Model', 'highReasoning', 'workspaceWrite']
+      };
+    }
+
+    console.log(`Quick starting ${selectedAgent} with config:`, config);
+
+    // Hide the startup UI and mark as dismissed
+    this.hideStartupUI(sessionId);
+
+    // Start the selected agent
+    this.startAgentWithConfig(sessionId, config);
+  }
+
+  /**
+   * Update inline agent selection
+   */
+  updateInlineAgent(sessionId, agentId) {
+    const modesContainer = document.getElementById(`inline-modes-${sessionId}`);
+    if (!modesContainer) return;
+
+    // Save preference
+    const prefs = this.sessionAgentPreferences.get(sessionId) || { agentId: 'claude', powerful: false };
+    prefs.agentId = agentId;
+    this.sessionAgentPreferences.set(sessionId, prefs);
+
+    // Update mode buttons based on selected agent
+    if (agentId === 'claude') {
+      modesContainer.innerHTML = `
+        <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'fresh')">
+          <span class="btn-icon">🆕</span>
+          <span>Fresh</span>
+        </button>
+        <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'continue')">
+          <span class="btn-icon">➡️</span>
+          <span>Continue</span>
+        </button>
+        <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'resume')">
+          <span class="btn-icon">⏸️</span>
+          <span>Resume</span>
+        </button>
+      `;
+    } else if (agentId === 'codex') {
+      modesContainer.innerHTML = `
+        <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'fresh')">
+          <span class="btn-icon">🔍</span>
+          <span>Search</span>
+        </button>
+        <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'continue')">
+          <span class="btn-icon">✨</span>
+          <span>Create</span>
+        </button>
+        <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'resume')">
+          <span class="btn-icon">🔍</span>
+          <span>Analyze</span>
+        </button>
+      `;
+    }
+  }
+
+  /**
+   * Update inline preset (powerful mode toggle)
+   */
+  updateInlinePreset(sessionId, isPowerful) {
+    // Save preference
+    const prefs = this.sessionAgentPreferences.get(sessionId) || { agentId: 'claude', powerful: false };
+    prefs.powerful = isPowerful;
+    this.sessionAgentPreferences.set(sessionId, prefs);
+
+    // Visual feedback
+    const checkbox = document.getElementById(`powerful-${sessionId}`);
+    if (checkbox) {
+      checkbox.checked = isPowerful;
+    }
+  }
+
+  /**
+   * Get saved agent preferences for session
+   */
+  getSessionAgentPreference(sessionId) {
+    return this.sessionAgentPreferences.get(sessionId) || {
+      agentId: 'claude',
+      powerful: false
+    };
+  }
+
+  /**
+   * Save agent preference for session
+   */
+  saveSessionAgentPreference(sessionId, agentId, powerful = false) {
+    this.sessionAgentPreferences.set(sessionId, { agentId, powerful });
   }
   
   updateYoloState(sessionId, checked) {
