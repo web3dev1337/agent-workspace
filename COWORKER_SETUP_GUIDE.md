@@ -8,16 +8,17 @@
 ## 📋 Table of Contents
 
 1. [Overview](#overview)
-2. [Folder Structure Convention](#folder-structure-convention)
-3. [Git Repository Hierarchy](#git-repository-hierarchy)
-4. [Initial System Setup](#initial-system-setup)
-5. [Orchestrator Installation](#orchestrator-installation)
-6. [Creating Your First Workspace](#creating-your-first-workspace)
-7. [Understanding Worktrees](#understanding-worktrees)
-8. [Workspace Types](#workspace-types)
-9. [Mixed-Repository Workspaces](#mixed-repository-workspaces)
-10. [Daily Workflow](#daily-workflow)
-11. [Troubleshooting](#troubleshooting)
+2. [AI Agent Configuration System](#ai-agent-configuration-system)
+3. [Folder Structure Convention](#folder-structure-convention)
+4. [Git Repository Hierarchy](#git-repository-hierarchy)
+5. [Initial System Setup](#initial-system-setup)
+6. [Orchestrator Installation](#orchestrator-installation)
+7. [Creating Your First Workspace](#creating-your-first-workspace)
+8. [Understanding Worktrees](#understanding-worktrees)
+9. [Workspace Types](#workspace-types)
+10. [Mixed-Repository Workspaces](#mixed-repository-workspaces)
+11. [Daily Workflow](#daily-workflow)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -29,6 +30,201 @@ Claude Orchestrator is a revolutionary multi-workspace system for managing unlim
 - **Dynamic terminal management** (1-16 terminal pairs per workspace)
 - **Mixed-repository support** (multiple repos in one workspace)
 - **Zero-friction startup** (one command launches everything)
+
+---
+
+## 🤖 AI Agent Configuration System
+
+### Overview
+
+This system manages AI agent instructions (CLAUDE.md files) across all projects using a **centralized repository + symlink** approach.
+
+### Why This System Exists
+
+**Problem**: Every project needs Claude instructions, but:
+- ❌ Copying CLAUDE.md to 50+ projects is unmaintainable
+- ❌ Updates need to be synced across all projects manually
+- ❌ Different projects (Hytopia games, MonoGame, websites) need different guidelines
+
+**Solution**: Central repos with automatic symlinking
+- ✅ One source of truth per project type
+- ✅ Updates propagate automatically via git pull + sync
+- ✅ Category-level AND project-level configurations
+- ✅ Works with any AI tool (Claude, Cursor, Aider)
+
+### Architecture
+
+```
+~/.claude/                              # Central configuration hub
+├── CLAUDE.md                           # Global Claude instructions
+├── shared-repos.yml                    # Registry of agent config repos
+├── installed/                          # Cloned agent repos
+│   ├── ai-standards/                  # This repo (global config)
+│   ├── hytopia/                       # Hytopia-specific guidelines
+│   │   ├── AGENTS.md                  # Source file
+│   │   ├── .ai-install.yml           # Install metadata
+│   │   └── .orchestrator-config.json # Orchestrator settings
+│   ├── monogame/                      # MonoGame guidelines
+│   ├── github/                        # GitHub workflow guidelines
+│   └── website/                       # Website dev guidelines
+├── scripts/
+│   ├── bootstrap.sh                   # Initial setup (clone + symlink)
+│   └── sync.sh                        # Update all repos + refresh symlinks
+└── hooks/                             # Safety and automation hooks
+
+~/GitHub/                               # Your projects
+├── games/
+│   ├── hytopia/
+│   │   ├── CLAUDE.md → ~/.claude/installed/hytopia/AGENTS.md  # SYMLINK
+│   │   ├── .orchestrator-config.json → ~/.claude/installed/hytopia/.orchestrator-config.json
+│   │   └── games/
+│   │       └── HyFire2/
+│   │           └── master/
+│   │               └── CLAUDE.md      # Project-specific (optional)
+│   └── monogame/
+│       ├── CLAUDE.md → ~/.claude/installed/monogame/AGENTS.md  # SYMLINK
+│       └── epic-survivors/
+│           └── master/
+│               └── CLAUDE.md          # Project-specific (optional)
+```
+
+### Configuration Hierarchy (How Claude Reads Instructions)
+
+When Claude starts in a project, it reads CLAUDE.md files from **most specific to most general**:
+
+1. **Project level**: `~/GitHub/games/hytopia/games/HyFire2/master/CLAUDE.md`
+   - Project-specific guidelines (game modes, specific architecture, etc.)
+
+2. **Category level**: `~/GitHub/games/hytopia/CLAUDE.md` → `~/.claude/installed/hytopia/AGENTS.md`
+   - Framework-specific guidelines (Hytopia SDK, commands, patterns)
+
+3. **Super-category level**: `~/GitHub/games/CLAUDE.md` (if exists)
+   - Shared guidelines for all games
+
+4. **Global level**: `~/GitHub/CLAUDE.md` → `~/.claude/CLAUDE.md`
+   - Git workflow, branch management, universal standards
+
+This creates a **3-tier hierarchy**:
+- **Global** → **Framework** → **Specific Project**
+
+### Shared Agent Configuration Repos
+
+Listed in `~/.claude/shared-repos.yml`:
+
+| Repo | Target Folder | Purpose |
+|------|--------------|---------|
+| `ai-claude-standards` | `~/.claude/` | Global standards, git workflow, hooks, scripts |
+| `agents-hytopia` | `~/GitHub/games/hytopia/` | Hytopia game development guidelines |
+| `agents-monogame` | `~/GitHub/games/monogame/` | MonoGame C# game development |
+| `agents-github` | `~/GitHub/` | GitHub workflow, PR standards |
+| `agents-website` | `~/GitHub/website/` | Website development guidelines |
+
+### How Symlinks Work
+
+Each agent repo has `.ai-install.yml`:
+
+```yaml
+name: hytopia
+description: HyTopia game development guidelines
+source: AGENTS.md
+
+targets:
+  claude:
+    - ~/GitHub/games/hytopia/CLAUDE.md
+  aider:
+    - ~/GitHub/games/hytopia/.aider.md
+  orchestrator:
+    - ~/GitHub/games/hytopia/.orchestrator-config.json
+```
+
+When you run `bootstrap.sh` or `sync.sh`:
+1. Script reads `.ai-install.yml`
+2. Creates parent folders if needed
+3. Creates symlink: `~/GitHub/games/hytopia/CLAUDE.md` → `~/.claude/installed/hytopia/AGENTS.md`
+
+### Initial Setup (New Machine)
+
+```bash
+# 1. Clone the AI standards repo
+git clone https://github.com/web3dev1337/ai-claude-standards ~/.claude
+cd ~/.claude
+
+# 2. Run bootstrap (clones all agent repos + creates symlinks)
+bash scripts/bootstrap.sh
+```
+
+**Output you'll see:**
+```
+🚀 AI Agent Configuration Bootstrap
+====================================
+Active AI tools: claude
+
+📦 Processing shared repos...
+
+Processing: ai-standards
+  📥 Updating existing repo...
+  ✅ Created symlink: ~/GitHub/CLAUDE.md -> AGENTS.md
+
+Processing: hytopia
+  📥 Cloning repo...
+  ✅ Cloned successfully
+  ✅ Created symlink: ~/GitHub/games/hytopia/CLAUDE.md -> AGENTS.md
+  ✅ Created symlink: ~/GitHub/games/hytopia/.orchestrator-config.json -> .orchestrator-config.json
+
+Processing: monogame
+  📥 Cloning repo...
+  ✅ Cloned successfully
+  ✅ Created symlink: ~/GitHub/games/monogame/CLAUDE.md -> AGENTS.md
+
+✅ Bootstrap complete!
+```
+
+### Updating Agent Configurations
+
+```bash
+# Update ALL repos and refresh symlinks
+cd ~/.claude
+bash scripts/sync.sh
+
+# Or update specific repo manually
+cd ~/.claude/installed/hytopia
+git pull
+```
+
+When anyone on the team updates `agents-hytopia`, you just run `sync.sh` and get the latest!
+
+### Adding a New Agent Repo
+
+1. **Create the repo**: `agents-newframework`
+2. **Add files**:
+   ```
+   agents-newframework/
+   ├── AGENTS.md              # Main instructions
+   ├── .ai-install.yml        # Install metadata
+   └── README.md              # Documentation
+   ```
+
+3. **Update `~/.claude/shared-repos.yml`**:
+   ```yaml
+   - url: https://github.com/web3dev1337/agents-newframework
+     name: newframework
+     description: New framework guidelines
+   ```
+
+4. **Team members sync**:
+   ```bash
+   cd ~/.claude
+   bash scripts/sync.sh
+   ```
+
+### Benefits
+
+✅ **Single source of truth**: Update once, propagate everywhere
+✅ **Type-safe**: Different guidelines for different project types
+✅ **Team collaboration**: Shared repos = shared knowledge
+✅ **Version controlled**: All guidelines tracked in git
+✅ **AI tool agnostic**: Works with Claude, Cursor, Aider, etc.
+✅ **Hierarchical**: Global → Framework → Project specificity
 
 ---
 
@@ -204,7 +400,27 @@ node --version  # Should be v18+
 git --version   # Should be v2.30+
 ```
 
-### 2. Create Base Folder Structure
+### 2. **CRITICAL FIRST STEP**: Install AI Agent Configuration System
+
+**This must be done BEFORE creating folders or cloning projects!**
+
+```bash
+# Clone the AI standards repo to ~/.claude
+git clone https://github.com/web3dev1337/ai-claude-standards ~/.claude
+cd ~/.claude
+
+# Run bootstrap to install all agent configurations
+bash scripts/bootstrap.sh
+```
+
+**What bootstrap.sh does:**
+- ✅ Reads `shared-repos.yml` (registry of available agent configs)
+- ✅ Clones agent repos: `agents-hytopia`, `agents-monogame`, `agents-github`, `agents-website`
+- ✅ Creates symlinks at category levels: `~/GitHub/games/hytopia/CLAUDE.md` → `~/.claude/installed/hytopia/AGENTS.md`
+- ✅ Sets up orchestrator configs at project levels
+- ✅ Installs safety hooks, scripts, and commands
+
+### 3. Create Base Folder Structure
 
 ```bash
 # Create the GitHub root
@@ -219,7 +435,21 @@ mkdir -p ~/GitHub/docs
 mkdir -p ~/GitHub/website
 ```
 
-### 3. Clone Your Projects (Following the Convention)
+### 4. Update Agent Configurations (Triggers Symlink Creation)
+
+```bash
+# This creates symlinks at category levels automatically
+cd ~/.claude
+bash scripts/sync.sh
+```
+
+After this step, you should see:
+```bash
+ls -la ~/GitHub/games/hytopia/CLAUDE.md
+# Should be a symlink to ~/.claude/installed/hytopia/AGENTS.md
+```
+
+### 5. Clone Your Projects (Following the Convention)
 
 **Example: Cloning a Hytopia game project**
 
@@ -768,19 +998,21 @@ Located in `master/scripts/`:
 
 ## 🎯 Quick Start Checklist
 
-For a new co-worker:
+For a new co-worker (in this EXACT order):
 
-- [ ] Install Node.js v18+
-- [ ] Install Git v2.30+
-- [ ] Create folder structure: `~/GitHub/{games,tools,web,writing,docs}/...`
-- [ ] Clone projects into `master/` folders
-- [ ] Clone orchestrator to `~/GitHub/tools/automation/claude-orchestrator/`
-- [ ] Run `npm install` in orchestrator
-- [ ] Run `bash scripts/install-startup.sh`
-- [ ] Launch orchestrator: `orchestrator` or `npm run dev:all`
-- [ ] Create first workspace using wizard
-- [ ] Switch to workspace and verify worktrees auto-create
-- [ ] Start coding!
+- [ ] **Step 1**: Install Node.js v18+ and Git v2.30+
+- [ ] **Step 2**: Clone AI standards: `git clone https://github.com/web3dev1337/ai-claude-standards ~/.claude`
+- [ ] **Step 3**: Run bootstrap: `cd ~/.claude && bash scripts/bootstrap.sh`
+- [ ] **Step 4**: Create folder structure: `mkdir -p ~/GitHub/{games,tools,web,writing,docs}/...`
+- [ ] **Step 5**: Verify symlinks created: `ls -la ~/GitHub/games/hytopia/CLAUDE.md`
+- [ ] **Step 6**: Clone projects into `PROJECT/master/` folders
+- [ ] **Step 7**: Clone orchestrator to `~/GitHub/tools/automation/claude-orchestrator/`
+- [ ] **Step 8**: Run `npm install` in orchestrator/master
+- [ ] **Step 9**: Run `bash scripts/install-startup.sh`
+- [ ] **Step 10**: Launch orchestrator: `orchestrator` or `npm run dev:all`
+- [ ] **Step 11**: Create first workspace using wizard
+- [ ] **Step 12**: Switch to workspace and verify worktrees auto-create
+- [ ] **Step 13**: Start coding!
 
 ---
 
