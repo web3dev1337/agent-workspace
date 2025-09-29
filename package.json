@@ -7,15 +7,12 @@
     "start": "node server/index.js",
     "dev:server": "nodemon server/index.js",
     "dev:client": "node client/dev-server.js",
-    "dev:diff": "cd diff-viewer && DIFF_VIEWER_PORT=7655 npm run dev",
-    "dev:diff:isolated": "cd diff-viewer && DIFF_VIEWER_PORT=7656 npm run dev",
+    "dev:diff": "cd diff-viewer && npm run dev",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "dev:all": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run tauri:dev\"",
-    "dev:all-with-diff": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run tauri:dev\" \"npm run dev:diff\"",
-    "prod": "npm run dev:all",
-    "dev": "PORT=4000 CLIENT_PORT=2081 DIFF_VIEWER_PORT=7656 concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run tauri:dev\" \"npm run dev:diff:isolated\"",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run tauri:dev\" \"npm run dev:diff\"",
+    "prod": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run tauri:dev\" \"npm run dev:diff\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
