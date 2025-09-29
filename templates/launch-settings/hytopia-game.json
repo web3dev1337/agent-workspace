@@ -37,6 +37,24 @@
           }
         },
         {
+          "id": "zombies",
+          "name": "Zombies Horde",
+          "icon": "🧟",
+          "description": "Cooperative PvE zombies survival mode",
+          "settings": {
+            "mode": "zombies_horde",
+            "port": 8082,
+            "gameMode": "zombies_horde",
+            "maxRounds": 20,
+            "teamSize": 4,
+            "roundTime": 180,
+            "buyTime": 15,
+            "autoBots": false,
+            "nodeEnv": "development",
+            "extraEnv": "GAME_MODE=zombies_horde"
+          }
+        },
+        {
           "id": "performance",
           "name": "Performance",
           "icon": "📊",
