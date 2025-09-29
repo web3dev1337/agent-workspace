@@ -31,6 +31,8 @@ class WorkspaceManager {
     // Dynamic config discovery
     this.discoveryService = new ConfigDiscoveryService();
     this.discoveredWorkspaceTypes = null;
+    this.discoveryInProgress = false;
+    this.discoveryComplete = false;
   }
 
   static getInstance() {
@@ -127,6 +129,7 @@ class WorkspaceManager {
    */
   async discoverWorkspaceTypes() {
     logger.info('Discovering dynamic workspace types from GitHub hierarchy');
+    this.discoveryInProgress = true;
 
     try {
       this.discoveredWorkspaceTypes = await this.discoveryService.discoverWorkspaceTypes();
@@ -137,9 +140,14 @@ class WorkspaceManager {
         games: Object.keys(this.discoveredWorkspaceTypes.games || {}).length
       });
 
+      this.discoveryComplete = true;
+
     } catch (error) {
       logger.warn('Dynamic workspace discovery failed, using fallbacks', { error: error.message });
       // Service will return fallback types on failure
+      this.discoveryComplete = true; // Mark as complete even on failure (fallbacks loaded)
+    } finally {
+      this.discoveryInProgress = false;
     }
   }
 
