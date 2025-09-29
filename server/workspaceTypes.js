@@ -1,13 +1,171 @@
-// Workspace type definitions and validation
+// 3-Level Workspace Hierarchy: GAME → FRAMEWORK → SPECIFIC_GAME
 
-const WORKSPACE_TYPES = {
-  'hytopia-game': {
-    id: 'hytopia-game',
-    name: 'Hytopia Game',
-    description: 'Full game development environment for Hytopia SDK games',
-    defaultTerminalPairs: 8,
+// Level 1: Base Game Category
+const GAME_CATEGORY = {
+  id: 'game',
+  name: 'Game Development',
+  description: 'Game development projects',
+  icon: '🎮'
+};
+
+// Level 2: Framework/Engine Types
+const FRAMEWORK_TYPES = {
+  'hytopia-framework': {
+    id: 'hytopia-framework',
+    name: 'Hytopia SDK',
+    description: 'Voxel-based game framework',
+    category: 'game',
+    baseCommand: 'hytopia start',
+    commonFlags: {
+      'NODE_ENV': {
+        type: 'select',
+        options: ['development', 'production'],
+        default: 'development'
+      },
+      'AUTO_START_WITH_BOTS': {
+        type: 'boolean',
+        default: true
+      },
+      'DEBUG': {
+        type: 'boolean',
+        default: false
+      },
+      'LOG_LEVEL': {
+        type: 'select',
+        options: ['debug', 'info', 'warn', 'error'],
+        default: 'info'
+      }
+    },
+    defaultTerminalPairs: 6,
     maxTerminalPairs: 16,
     requiresServer: true,
+    icon: '🎮',
+    detectPatterns: {
+      files: ['package.json'],
+      content: { 'package.json': ['hytopia'] }
+    }
+  },
+  'monogame-framework': {
+    id: 'monogame-framework',
+    name: 'MonoGame Framework',
+    description: 'Cross-platform C# game framework',
+    category: 'game',
+    baseCommand: 'dotnet run',
+    commonFlags: {
+      'Configuration': {
+        type: 'select',
+        options: ['Debug', 'Release'],
+        default: 'Debug'
+      },
+      'Platform': {
+        type: 'select',
+        options: ['AnyCPU', 'x64', 'x86'],
+        default: 'AnyCPU'
+      },
+      'Verbosity': {
+        type: 'select',
+        options: ['minimal', 'normal', 'detailed'],
+        default: 'normal'
+      }
+    },
+    defaultTerminalPairs: 4,
+    maxTerminalPairs: 8,
+    requiresServer: false,
+    icon: '🕹️',
+    detectPatterns: {
+      files: ['*.csproj'],
+      content: { '*.csproj': ['MonoGame'] }
+    }
+  }
+};
+
+// Level 3: Specific Game Types (inherit from frameworks)
+const WORKSPACE_TYPES = {
+  // === HYTOPIA GAMES === (inherit from hytopia-framework)
+  'voxfire-game': {
+    id: 'voxfire-game',
+    name: 'VoxFire (HyFire2)',
+    description: 'Tactical 5v5 shooter with multiple game modes',
+    inherits: 'hytopia-framework',
+    gameSpecificModes: ['competitive', 'casual', 'team_deathmatch', 'ffa_deathmatch', 'zombies_horde'],
+    defaultTerminalPairs: 8,
+    maxTerminalPairs: 16,
+    launchSettingsTemplate: 'voxfire-game',
+    icon: '🔥',
+    detectPatterns: {
+      files: ['src/config/gameConfig.ts'],
+      content: { 'src/config/gameConfig.ts': ['competitive', 'casual'] },
+      path: '/games/hytopia/games/HyFire2'
+    }
+  },
+  'zombies-fps-game': {
+    id: 'zombies-fps-game',
+    name: 'Zombies FPS',
+    description: 'Zombie survival FPS game',
+    inherits: 'hytopia-framework',
+    gameSpecificModes: ['survival', 'waves', 'hardcore'],
+    defaultTerminalPairs: 4,
+    maxTerminalPairs: 8,
+    launchSettingsTemplate: 'zombies-fps-game',
+    icon: '🧟',
+    detectPatterns: {
+      path: '/games/hytopia/games/zombies-fps'
+    }
+  },
+  'hytopia-2d-game': {
+    id: 'hytopia-2d-game',
+    name: 'Hytopia 2D Game',
+    description: '2D game development with Hytopia SDK',
+    inherits: 'hytopia-framework',
+    gameSpecificModes: ['arcade', 'puzzle'],
+    defaultTerminalPairs: 3,
+    maxTerminalPairs: 6,
+    launchSettingsTemplate: 'hytopia-2d-game',
+    icon: '🎯',
+    detectPatterns: {
+      path: '/games/hytopia/games/hytopia-2d-game-test'
+    }
+  },
+  'astro-breaker-game': {
+    id: 'astro-breaker-game',
+    name: 'Astro Breaker',
+    description: 'Space-themed arcade game',
+    inherits: 'hytopia-framework',
+    gameSpecificModes: ['classic', 'endless'],
+    defaultTerminalPairs: 3,
+    maxTerminalPairs: 6,
+    launchSettingsTemplate: 'astro-breaker-game',
+    icon: '🚀',
+    detectPatterns: {
+      path: '/games/hytopia/games/astro-breaker'
+    }
+  },
+
+  // === MONOGAME GAMES === (inherit from monogame-framework)
+  'epic-survivors-game': {
+    id: 'epic-survivors-game',
+    name: 'Epic Survivors',
+    description: 'Survivors-like game with MonoGame',
+    inherits: 'monogame-framework',
+    gameSpecificModes: ['debug', 'release', 'profiling'],
+    defaultTerminalPairs: 4,
+    maxTerminalPairs: 8,
+    launchSettingsTemplate: 'epic-survivors-game',
+    icon: '⚔️',
+    detectPatterns: {
+      files: ['EpicSurvivors.csproj'],
+      path: '/games/monogame/epic-survivors'
+    }
+  },
+
+  // === LEGACY COMPATIBILITY === (for existing workspaces)
+  'hytopia-game': {
+    id: 'hytopia-game',
+    name: 'Hytopia Game (Generic)',
+    description: 'Generic Hytopia SDK game',
+    inherits: 'hytopia-framework',
+    defaultTerminalPairs: 6,
+    maxTerminalPairs: 16,
     launchSettingsTemplate: 'hytopia-game',
     icon: '🎮',
     detectPatterns: {
@@ -15,27 +173,13 @@ const WORKSPACE_TYPES = {
       content: { 'package.json': ['hytopia'] }
     }
   },
-  'voxfire-game': {
-    id: 'voxfire-game',
-    name: 'VoxFire Game',
-    description: 'VoxFire (HyFire2) tactical shooter with multiple game modes',
-    defaultTerminalPairs: 8,
-    maxTerminalPairs: 16,
-    requiresServer: true,
-    launchSettingsTemplate: 'voxfire-game',
-    icon: '🔥',
-    detectPatterns: {
-      files: ['package.json', 'src/config/gameConfig.ts'],
-      content: { 'package.json': ['hytopia'], 'src/config/gameConfig.ts': ['competitive', 'casual'] }
-    }
-  },
   'monogame-game': {
     id: 'monogame-game',
-    name: 'MonoGame Game',
-    description: 'C# game development with MonoGame framework',
-    defaultTerminalPairs: 6,
+    name: 'MonoGame Game (Generic)',
+    description: 'Generic MonoGame framework game',
+    inherits: 'monogame-framework',
+    defaultTerminalPairs: 4,
     maxTerminalPairs: 8,
-    requiresServer: true,
     launchSettingsTemplate: 'monogame-game',
     icon: '🕹️',
     detectPatterns: {
@@ -306,10 +450,86 @@ function getDefaultWorkspaceConfig(type) {
   };
 }
 
+/**
+ * Resolve workspace type with inheritance from framework
+ */
+function resolveWorkspaceType(workspaceTypeId) {
+  const workspaceType = WORKSPACE_TYPES[workspaceTypeId];
+  if (!workspaceType) return null;
+
+  // If no inheritance, return as-is
+  if (!workspaceType.inherits) return workspaceType;
+
+  // Merge with framework type
+  const frameworkType = FRAMEWORK_TYPES[workspaceType.inherits];
+  if (!frameworkType) {
+    console.warn(`Framework ${workspaceType.inherits} not found for ${workspaceTypeId}`);
+    return workspaceType;
+  }
+
+  // Merge framework and game-specific settings
+  return {
+    ...frameworkType,
+    ...workspaceType,
+    // Merge common flags with game-specific ones
+    commonFlags: {
+      ...frameworkType.commonFlags,
+      ...(workspaceType.commonFlags || {})
+    },
+    // Keep both framework and game-specific detection patterns
+    detectPatterns: {
+      ...frameworkType.detectPatterns,
+      ...workspaceType.detectPatterns
+    }
+  };
+}
+
+/**
+ * Get workspace type info with inheritance resolved
+ */
+function getWorkspaceTypeInfoWithInheritance(workspaceTypeId) {
+  return resolveWorkspaceType(workspaceTypeId);
+}
+
+/**
+ * Get all workspace types organized by framework
+ */
+function getWorkspaceTypesByFramework() {
+  const byFramework = {};
+
+  // Add framework categories
+  Object.values(FRAMEWORK_TYPES).forEach(framework => {
+    byFramework[framework.id] = {
+      framework: framework,
+      games: []
+    };
+  });
+
+  // Add games to their frameworks
+  Object.values(WORKSPACE_TYPES).forEach(gameType => {
+    if (gameType.inherits && byFramework[gameType.inherits]) {
+      byFramework[gameType.inherits].games.push(gameType);
+    } else {
+      // Standalone types (website, tool-project, etc.)
+      if (!byFramework['standalone']) {
+        byFramework['standalone'] = { framework: null, games: [] };
+      }
+      byFramework['standalone'].games.push(gameType);
+    }
+  });
+
+  return byFramework;
+}
+
 module.exports = {
+  GAME_CATEGORY,
+  FRAMEWORK_TYPES,
   WORKSPACE_TYPES,
   WORKSPACE_SCHEMA,
   validateWorkspace,
   getWorkspaceTypeInfo,
-  getDefaultWorkspaceConfig
+  getDefaultWorkspaceConfig,
+  resolveWorkspaceType,
+  getWorkspaceTypeInfoWithInheritance,
+  getWorkspaceTypesByFramework
 };
