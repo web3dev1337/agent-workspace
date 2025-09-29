@@ -29,6 +29,11 @@ class ClaudeOrchestrator {
     this.workspaceSwitcher = null;
     this.isDashboardMode = false;
 
+    // Dynamic workspace types
+    this.workspaceTypes = {};
+    this.frameworks = {};
+    this.workspaceHierarchy = {};
+
     this.init();
   }
   
@@ -185,11 +190,19 @@ class ClaudeOrchestrator {
       });
 
       // Workspace events
-      this.socket.on('workspace-info', ({ active, available, config }) => {
-        console.log('Received workspace info:', { active, available, config });
+      this.socket.on('workspace-info', ({ active, available, config, workspaceTypes, frameworks }) => {
+        console.log('Received workspace info:', { active, available, config, workspaceTypes, frameworks });
         this.currentWorkspace = active;
         this.availableWorkspaces = available;
         this.orchestratorConfig = config;
+
+        // Store dynamic workspace types
+        this.workspaceTypes = workspaceTypes || {};
+        this.frameworks = frameworks || {};
+        console.log('🎯 Dynamic workspace types loaded:', {
+          totalTypes: Object.keys(this.workspaceTypes).length,
+          frameworks: Object.keys(this.frameworks)
+        });
 
         // Initialize workspace switcher
         this.workspaceSwitcher = new WorkspaceSwitcher(this);
@@ -716,7 +729,8 @@ class ClaudeOrchestrator {
 
       if (!worktrees.has(key)) {
         worktrees.set(key, {
-          id: worktreeId,
+          id: key, // Use full key (repo-work1) not just work1 for uniqueness in mixed workspaces
+          worktreeId: worktreeId, // Keep original worktree ID (work1) for session matching
           repositoryName: repositoryName,
           displayName: repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId,
           claude: null,
@@ -764,6 +778,11 @@ class ClaudeOrchestrator {
             <span class="visibility-indicator">${isVisible ? '👁' : '🚫'}</span>
             ${displayName} - ${branch}
           </div>
+          <button class="delete-worktree-btn"
+                  onclick="event.stopPropagation(); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
+                  title="Delete worktree from workspace">
+            ✕
+          </button>
         </div>
         <div class="worktree-sessions">
           ${worktree.claude ? `
@@ -818,14 +837,14 @@ class ClaudeOrchestrator {
     return 'idle';
   }
   
-  isWorktreeActive(worktreeId) {
-    // Check if any session in this worktree has been marked as active
-    // For mixed-repo workspaces, find sessions by worktreeId instead of simple concatenation
-    for (const [sessionId, session] of this.sessions) {
-      if (session.worktreeId === worktreeId && this.sessionActivity.get(sessionId) === 'active') {
-        return true;
-      }
-    }
+  isWorktreeActive(worktreeIdOrKey) {
+    // Check if any session for this EXACT worktree key has been marked as active
+    const claudeId = `${worktreeIdOrKey}-claude`;
+    const serverId = `${worktreeIdOrKey}-server`;
+
+    if (this.sessionActivity.get(claudeId) === 'active') return true;
+    if (this.sessionActivity.get(serverId) === 'active') return true;
+
     return false;
   }
   
@@ -876,49 +895,43 @@ class ClaudeOrchestrator {
     });
   }
 
-  showOnlyWorktree(worktreeId) {
-    console.log(`Showing only worktree: ${worktreeId}`);
+  showOnlyWorktree(worktreeIdOrKey) {
+    console.log(`Showing only worktree: ${worktreeIdOrKey}`);
 
     // Clear all visible terminals first
     this.visibleTerminals.clear();
 
-    // Add only this worktree's sessions (works for both traditional and mixed-repo)
-    for (const [sessionId, session] of this.sessions) {
-      if (session.worktreeId === worktreeId) {
-        this.visibleTerminals.add(sessionId);
-      }
-    }
+    // Add only this EXACT worktree's sessions
+    const claudeId = `${worktreeIdOrKey}-claude`;
+    const serverId = `${worktreeIdOrKey}-server`;
+
+    if (this.sessions.has(claudeId)) this.visibleTerminals.add(claudeId);
+    if (this.sessions.has(serverId)) this.visibleTerminals.add(serverId);
 
     // Update the grid to show only these terminals
     this.updateTerminalGrid();
     this.buildSidebar();
   }
 
-  toggleWorktreeVisibility(worktreeId) {
-    console.log(`Toggling visibility for worktree: ${worktreeId}`);
+  toggleWorktreeVisibility(worktreeIdOrKey) {
+    console.log(`Toggling visibility for worktree: ${worktreeIdOrKey}`);
 
-    // Find all sessions that match this worktree ID
+    // Find all sessions that match this EXACT worktree key
     const sessions = [];
 
-    // For mixed-repo workspaces, session IDs are complex like "repo-name-worktree-type"
-    // For traditional workspaces, session IDs are simple like "worktree-type"
-    for (const [sessionId, session] of this.sessions.entries()) {
-      if (session.worktreeId === worktreeId) {
-        sessions.push(sessionId);
-      }
-    }
+    // For mixed-repo workspaces: worktreeIdOrKey = "repo-name-work1"
+    // Session IDs will be: "repo-name-work1-claude", "repo-name-work1-server"
+    // For traditional workspaces: worktreeIdOrKey = "work1"
+    // Session IDs will be: "work1-claude", "work1-server"
 
-    // Fallback to old logic for traditional workspaces
-    if (sessions.length === 0) {
-      const claudeId = `${worktreeId}-claude`;
-      const serverId = `${worktreeId}-server`;
+    const claudeId = `${worktreeIdOrKey}-claude`;
+    const serverId = `${worktreeIdOrKey}-server`;
 
-      if (this.sessions.has(claudeId)) sessions.push(claudeId);
-      if (this.sessions.has(serverId)) sessions.push(serverId);
-    }
+    if (this.sessions.has(claudeId)) sessions.push(claudeId);
+    if (this.sessions.has(serverId)) sessions.push(serverId);
 
     if (sessions.length === 0) {
-      console.warn(`No sessions found for worktree ${worktreeId}`);
+      console.warn(`No sessions found for worktree ${worktreeIdOrKey}`);
       return;
     }
 
@@ -928,20 +941,20 @@ class ClaudeOrchestrator {
     // Log current state for debugging
     const claudeSessionId = sessions.find(id => id.includes('claude'));
     const claudeSession = claudeSessionId ? this.sessions.get(claudeSessionId) : null;
-    console.log(`Toggling ${worktreeId}: currently ${anyVisible ? 'visible' : 'hidden'}, Claude status: ${claudeSession?.status || 'unknown'}, sessions: ${sessions.join(', ')}`);
+    console.log(`Toggling ${worktreeIdOrKey}: currently ${anyVisible ? 'visible' : 'hidden'}, Claude status: ${claudeSession?.status || 'unknown'}, sessions: ${sessions.join(', ')}`);
 
     if (anyVisible) {
       // Hide terminals - allow hiding even if Claude is running (user wants to focus elsewhere)
       sessions.forEach(id => {
         this.visibleTerminals.delete(id);
       });
-      console.log(`Hidden worktree ${worktreeId}`);
+      console.log(`Hidden worktree ${worktreeIdOrKey}`);
     } else {
       // Show terminals - add back to visible set
       sessions.forEach(id => {
         this.visibleTerminals.add(id);
       });
-      console.log(`Shown worktree ${worktreeId}`);
+      console.log(`Shown worktree ${worktreeIdOrKey}`);
     }
 
     // IMPORTANT: Must update the entire grid to recalculate layout
@@ -950,16 +963,14 @@ class ClaudeOrchestrator {
     this.buildSidebar();
   }
   
-  showWorktree(worktreeId) {
-    // Legacy function - now just ensures worktree is visible
-    const sessions = [];
-    for (const [sessionId, session] of this.sessions) {
-      if (session.worktreeId === worktreeId || sessionId.startsWith(worktreeId)) {
-        sessions.push(sessionId);
-        this.visibleTerminals.add(sessionId);
-      }
-    }
-    
+  showWorktree(worktreeIdOrKey) {
+    // Show terminals for this EXACT worktree key
+    const claudeId = `${worktreeIdOrKey}-claude`;
+    const serverId = `${worktreeIdOrKey}-server`;
+
+    if (this.sessions.has(claudeId)) this.visibleTerminals.add(claudeId);
+    if (this.sessions.has(serverId)) this.visibleTerminals.add(serverId);
+
     this.updateTerminalGrid();
     this.buildSidebar();
   }
@@ -1734,6 +1745,48 @@ class ClaudeOrchestrator {
     }
   }
   
+  /**
+   * Get dynamic launch options based on current workspace
+   */
+  getDynamicLaunchOptions(sessionId) {
+    if (!this.currentWorkspace) {
+      return '<option value="development">Dev</option><option value="production">Prod</option>';
+    }
+
+    const workspaceType = this.currentWorkspace.type;
+    const typeInfo = this.workspaceTypes[workspaceType];
+
+    if (!typeInfo) {
+      return '<option value="development">Dev</option><option value="production">Prod</option>';
+    }
+
+    // If this workspace type has game modes, show them
+    if (typeInfo.gameModes) {
+      const modes = Object.entries(typeInfo.gameModes)
+        .sort((a, b) => (a[1].priority || 999) - (b[1].priority || 999))
+        .map(([key, mode]) => `<option value="${key}" title="${mode.description || ''}">${mode.name || key}</option>`)
+        .join('');
+      return modes;
+    }
+
+    // If this inherits from a framework, get framework modes
+    if (typeInfo.inherits && this.frameworks[typeInfo.inherits]) {
+      const framework = this.frameworks[typeInfo.inherits];
+      if (framework.commonFlags) {
+        const modes = Object.entries(framework.commonFlags)
+          .filter(([key, flag]) => flag.type === 'select')
+          .map(([key, flag]) =>
+            flag.options.map(option =>
+              `<option value="${key}_${option}" title="${flag.description || ''}">${flag.name || key}: ${option}</option>`
+            ).join('')
+          ).join('');
+        return modes || '<option value="development">Dev</option><option value="production">Prod</option>';
+      }
+    }
+
+    return '<option value="development">Dev</option><option value="production">Prod</option>';
+  }
+
   updateServerControls(sessionId) {
     const wrapper = document.getElementById(`wrapper-${sessionId}`);
     if (!wrapper) return;
@@ -1751,8 +1804,7 @@ class ClaudeOrchestrator {
         `<div class="server-launch-group">
           <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
             <option value="">▶</option>
-            <option value="development">Dev</option>
-            <option value="production">Prod</option>
+            ${this.getDynamicLaunchOptions(sessionId)}
             <option value="custom" selected>Custom...</option>
           </select>
           <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
@@ -2046,17 +2098,81 @@ class ClaudeOrchestrator {
 
   loadServerLaunchSettings() {
     const stored = localStorage.getItem('server-launch-settings');
-    const defaults = {
+    const defaults = this.getDynamicLaunchDefaults();
+
+    if (stored) {
+      return { ...defaults, ...JSON.parse(stored) };
+    }
+
+    return defaults;
+  }
+
+  /**
+   * Get dynamic launch defaults based on current workspace
+   */
+  getDynamicLaunchDefaults() {
+    // Default fallback
+    let defaults = {
       global: {
-        envVars: 'AUTO_START_WITH_BOTS=true NODE_ENV=development',
+        envVars: 'NODE_ENV=development',
         nodeOptions: '--max-old-space-size=4096',
-        gameArgs: '--mode=casual --roundtime=60 --buytime=10 --warmup=5 --maxrounds=13 --teamsize=5'
+        gameArgs: ''
       },
       perWorktree: {}
     };
 
-    if (stored) {
-      return { ...defaults, ...JSON.parse(stored) };
+    if (!this.currentWorkspace) {
+      return defaults;
+    }
+
+    const workspaceType = this.currentWorkspace.type;
+    const typeInfo = this.workspaceTypes[workspaceType];
+
+    if (!typeInfo) {
+      return defaults;
+    }
+
+    // If this inherits from a framework, get framework defaults
+    if (typeInfo.inherits && this.frameworks[typeInfo.inherits]) {
+      const framework = this.frameworks[typeInfo.inherits];
+
+      // Build environment variables from framework common flags
+      const envVars = [];
+      const nodeOptions = ['--max-old-space-size=4096'];
+      let gameArgs = '';
+
+      if (framework.commonFlags) {
+        Object.entries(framework.commonFlags).forEach(([key, flag]) => {
+          if (flag.type === 'boolean' && flag.default) {
+            envVars.push(`${key}=${flag.default}`);
+          } else if (flag.type === 'select' && flag.default) {
+            if (key === 'NODE_ENV') {
+              envVars.push(`NODE_ENV=${flag.default}`);
+            } else {
+              envVars.push(`${key}=${flag.default}`);
+            }
+          }
+        });
+      }
+
+      // Add game-specific defaults if available
+      if (typeInfo.gameModes) {
+        // Find the first/default game mode
+        const defaultMode = Object.entries(typeInfo.gameModes)
+          .sort((a, b) => (a[1].priority || 999) - (b[1].priority || 999))[0];
+
+        if (defaultMode && defaultMode[1].env) {
+          // Parse env string into individual variables
+          const modeEnvVars = defaultMode[1].env.split(' ')
+            .filter(v => v.includes('='))
+            .filter(v => !envVars.some(existing => existing.startsWith(v.split('=')[0])));
+          envVars.push(...modeEnvVars);
+        }
+      }
+
+      defaults.global.envVars = envVars.join(' ') || 'NODE_ENV=development';
+      defaults.global.nodeOptions = nodeOptions.join(' ');
+      defaults.global.gameArgs = gameArgs;
     }
 
     return defaults;
@@ -3597,6 +3713,128 @@ class ClaudeOrchestrator {
    */
   saveSessionAgentPreference(sessionId, agentId, powerful = false) {
     this.sessionAgentPreferences.set(sessionId, { agentId, powerful });
+  }
+
+  /**
+   * Delete worktree from workspace with confirmation
+   */
+  async deleteWorktree(worktreeId, displayName) {
+    // Show confirmation dialog
+    const confirmed = await this.showConfirmationDialog(
+      'Delete Worktree',
+      `Are you sure you want to delete "${displayName}" from this workspace?\n\nThis will:\n• Remove the worktree from the workspace\n• Close any active terminals\n• NOT delete the actual git worktree files`,
+      'Delete',
+      'Cancel'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      console.log(`Deleting worktree ${worktreeId} from workspace...`);
+
+      // Close associated terminals first
+      this.closeWorktreeSessions(worktreeId);
+
+      // Call backend API to remove from workspace
+      const response = await fetch('/api/workspaces/remove-worktree', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: this.currentWorkspace.id,
+          worktreeId: worktreeId
+        })
+      });
+
+      if (response.ok) {
+        this.showTemporaryMessage(`Removed "${displayName}" from workspace`, 'success');
+
+        // Refresh workspace to show updated configuration
+        setTimeout(() => {
+          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
+        }, 1000);
+      } else {
+        const error = await response.text();
+        this.showError(`Failed to delete worktree: ${error}`);
+      }
+
+    } catch (error) {
+      console.error('Error deleting worktree:', error);
+      this.showError('Failed to delete worktree');
+    }
+  }
+
+  /**
+   * Close all sessions associated with a worktree
+   */
+  closeWorktreeSessions(worktreeIdOrKey) {
+    // Close sessions for this EXACT worktree key
+    const claudeId = `${worktreeIdOrKey}-claude`;
+    const serverId = `${worktreeIdOrKey}-server`;
+
+    const sessionsToClose = [];
+    if (this.sessions.has(claudeId)) sessionsToClose.push(claudeId);
+    if (this.sessions.has(serverId)) sessionsToClose.push(serverId);
+
+    sessionsToClose.forEach(sessionId => {
+      console.log(`Closing session: ${sessionId}`);
+      this.socket.emit('destroy-session', { sessionId });
+    });
+  }
+
+  /**
+   * Show confirmation dialog
+   */
+  async showConfirmationDialog(title, message, confirmText = 'OK', cancelText = 'Cancel') {
+    return new Promise((resolve) => {
+      const existing = document.getElementById('confirmation-dialog');
+      if (existing) existing.remove();
+
+      const dialog = document.createElement('div');
+      dialog.id = 'confirmation-dialog';
+      dialog.className = 'modal';
+      dialog.innerHTML = `
+        <div class="modal-content confirmation-dialog">
+          <div class="modal-header">
+            <h3>${title}</h3>
+          </div>
+          <div class="modal-body">
+            <p style="white-space: pre-line; line-height: 1.5;">${message}</p>
+          </div>
+          <div class="modal-actions">
+            <button id="confirm-btn" class="button-danger">${confirmText}</button>
+            <button id="cancel-btn" class="button-secondary">${cancelText}</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(dialog);
+
+      // Handle button clicks
+      const confirmBtn = dialog.querySelector('#confirm-btn');
+      const cancelBtn = dialog.querySelector('#cancel-btn');
+
+      confirmBtn.onclick = () => {
+        dialog.remove();
+        resolve(true);
+      };
+
+      cancelBtn.onclick = () => {
+        dialog.remove();
+        resolve(false);
+      };
+
+      // ESC key to cancel
+      const handleEsc = (e) => {
+        if (e.key === 'Escape') {
+          dialog.remove();
+          document.removeEventListener('keydown', handleEsc);
+          resolve(false);
+        }
+      };
+      document.addEventListener('keydown', handleEsc);
+    });
   }
   
   updateYoloState(sessionId, checked) {

@@ -113,6 +113,54 @@ body {
   margin-bottom: var(--space-sm);
 }
 
+.delete-worktree-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.worktree-item:hover .delete-worktree-btn {
+  opacity: 1;
+}
+
+.delete-worktree-btn:hover {
+  background: var(--accent-danger);
+  color: white;
+  transform: scale(1.1);
+}
+
+.confirmation-dialog {
+  max-width: 450px;
+  text-align: center;
+}
+
+.confirmation-dialog .modal-body p {
+  text-align: left;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.button-danger {
+  background: var(--accent-danger);
+  color: white;
+  border: 1px solid var(--accent-danger);
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.button-danger:hover {
+  background: #ff4444;
+  border-color: #ff4444;
+}
+
 .worktree-title {
   font-weight: 600;
   font-size: 0.9rem;
