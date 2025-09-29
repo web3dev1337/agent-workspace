@@ -1,6 +1,27 @@
-const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+
+// Try better-sqlite3 first, fallback to sqlite3
+let Database, isAsyncSqlite = false;
+try {
+  // Test if better-sqlite3 actually works by creating a temp instance
+  const TestDB = require('better-sqlite3');
+  const testDb = new TestDB(':memory:');
+  testDb.close();
+
+  Database = TestDB;
+  console.log('Using better-sqlite3 (synchronous)');
+} catch (error) {
+  console.log('better-sqlite3 failed, falling back to sqlite3:', error.message);
+  try {
+    Database = require('sqlite3').Database;
+    isAsyncSqlite = true;
+    console.log('Using sqlite3 (asynchronous fallback)');
+  } catch (fallbackError) {
+    console.error('Both SQLite packages failed:', fallbackError.message);
+    throw new Error('No working SQLite package found. Install either better-sqlite3 or sqlite3.');
+  }
+}
 
 class DiffCache {
   constructor() {
@@ -12,7 +33,22 @@ class DiffCache {
 
     // Initialize database
     const dbPath = path.join(cacheDir, 'diffs.db');
-    this.db = new Database(dbPath);
+
+    if (isAsyncSqlite) {
+      // sqlite3 package (async)
+      this.db = new Database(dbPath, (err) => {
+        if (err) {
+          console.error('Error opening database:', err.message);
+          throw err;
+        }
+        console.log('Connected to SQLite database (async mode)');
+      });
+      this.isAsync = true;
+    } else {
+      // better-sqlite3 package (sync)
+      this.db = new Database(dbPath);
+      this.isAsync = false;
+    }
     
     // Create tables
     this.initializeTables();
