@@ -29,6 +29,11 @@ class ClaudeOrchestrator {
     this.workspaceSwitcher = null;
     this.isDashboardMode = false;
 
+    // Dynamic workspace types
+    this.workspaceTypes = {};
+    this.frameworks = {};
+    this.workspaceHierarchy = {};
+
     this.init();
   }
   
@@ -185,11 +190,19 @@ class ClaudeOrchestrator {
       });
 
       // Workspace events
-      this.socket.on('workspace-info', ({ active, available, config }) => {
-        console.log('Received workspace info:', { active, available, config });
+      this.socket.on('workspace-info', ({ active, available, config, workspaceTypes, frameworks }) => {
+        console.log('Received workspace info:', { active, available, config, workspaceTypes, frameworks });
         this.currentWorkspace = active;
         this.availableWorkspaces = available;
         this.orchestratorConfig = config;
+
+        // Store dynamic workspace types
+        this.workspaceTypes = workspaceTypes || {};
+        this.frameworks = frameworks || {};
+        console.log('🎯 Dynamic workspace types loaded:', {
+          totalTypes: Object.keys(this.workspaceTypes).length,
+          frameworks: Object.keys(this.frameworks)
+        });
 
         // Initialize workspace switcher
         this.workspaceSwitcher = new WorkspaceSwitcher(this);
@@ -1739,6 +1752,48 @@ class ClaudeOrchestrator {
     }
   }
   
+  /**
+   * Get dynamic launch options based on current workspace
+   */
+  getDynamicLaunchOptions(sessionId) {
+    if (!this.currentWorkspace) {
+      return '<option value="development">Dev</option><option value="production">Prod</option>';
+    }
+
+    const workspaceType = this.currentWorkspace.type;
+    const typeInfo = this.workspaceTypes[workspaceType];
+
+    if (!typeInfo) {
+      return '<option value="development">Dev</option><option value="production">Prod</option>';
+    }
+
+    // If this workspace type has game modes, show them
+    if (typeInfo.gameModes) {
+      const modes = Object.entries(typeInfo.gameModes)
+        .sort((a, b) => (a[1].priority || 999) - (b[1].priority || 999))
+        .map(([key, mode]) => `<option value="${key}" title="${mode.description || ''}">${mode.name || key}</option>`)
+        .join('');
+      return modes;
+    }
+
+    // If this inherits from a framework, get framework modes
+    if (typeInfo.inherits && this.frameworks[typeInfo.inherits]) {
+      const framework = this.frameworks[typeInfo.inherits];
+      if (framework.commonFlags) {
+        const modes = Object.entries(framework.commonFlags)
+          .filter(([key, flag]) => flag.type === 'select')
+          .map(([key, flag]) =>
+            flag.options.map(option =>
+              `<option value="${key}_${option}" title="${flag.description || ''}">${flag.name || key}: ${option}</option>`
+            ).join('')
+          ).join('');
+        return modes || '<option value="development">Dev</option><option value="production">Prod</option>';
+      }
+    }
+
+    return '<option value="development">Dev</option><option value="production">Prod</option>';
+  }
+
   updateServerControls(sessionId) {
     const wrapper = document.getElementById(`wrapper-${sessionId}`);
     if (!wrapper) return;
@@ -1756,8 +1811,7 @@ class ClaudeOrchestrator {
         `<div class="server-launch-group">
           <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
             <option value="">▶</option>
-            <option value="development">Dev</option>
-            <option value="production">Prod</option>
+            ${this.getDynamicLaunchOptions(sessionId)}
             <option value="custom" selected>Custom...</option>
           </select>
           <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
@@ -2051,17 +2105,81 @@ class ClaudeOrchestrator {
 
   loadServerLaunchSettings() {
     const stored = localStorage.getItem('server-launch-settings');
-    const defaults = {
+    const defaults = this.getDynamicLaunchDefaults();
+
+    if (stored) {
+      return { ...defaults, ...JSON.parse(stored) };
+    }
+
+    return defaults;
+  }
+
+  /**
+   * Get dynamic launch defaults based on current workspace
+   */
+  getDynamicLaunchDefaults() {
+    // Default fallback
+    let defaults = {
       global: {
-        envVars: 'AUTO_START_WITH_BOTS=true NODE_ENV=development',
+        envVars: 'NODE_ENV=development',
         nodeOptions: '--max-old-space-size=4096',
-        gameArgs: '--mode=casual --roundtime=60 --buytime=10 --warmup=5 --maxrounds=13 --teamsize=5'
+        gameArgs: ''
       },
       perWorktree: {}
     };
 
-    if (stored) {
-      return { ...defaults, ...JSON.parse(stored) };
+    if (!this.currentWorkspace) {
+      return defaults;
+    }
+
+    const workspaceType = this.currentWorkspace.type;
+    const typeInfo = this.workspaceTypes[workspaceType];
+
+    if (!typeInfo) {
+      return defaults;
+    }
+
+    // If this inherits from a framework, get framework defaults
+    if (typeInfo.inherits && this.frameworks[typeInfo.inherits]) {
+      const framework = this.frameworks[typeInfo.inherits];
+
+      // Build environment variables from framework common flags
+      const envVars = [];
+      const nodeOptions = ['--max-old-space-size=4096'];
+      let gameArgs = '';
+
+      if (framework.commonFlags) {
+        Object.entries(framework.commonFlags).forEach(([key, flag]) => {
+          if (flag.type === 'boolean' && flag.default) {
+            envVars.push(`${key}=${flag.default}`);
+          } else if (flag.type === 'select' && flag.default) {
+            if (key === 'NODE_ENV') {
+              envVars.push(`NODE_ENV=${flag.default}`);
+            } else {
+              envVars.push(`${key}=${flag.default}`);
+            }
+          }
+        });
+      }
+
+      // Add game-specific defaults if available
+      if (typeInfo.gameModes) {
+        // Find the first/default game mode
+        const defaultMode = Object.entries(typeInfo.gameModes)
+          .sort((a, b) => (a[1].priority || 999) - (b[1].priority || 999))[0];
+
+        if (defaultMode && defaultMode[1].env) {
+          // Parse env string into individual variables
+          const modeEnvVars = defaultMode[1].env.split(' ')
+            .filter(v => v.includes('='))
+            .filter(v => !envVars.some(existing => existing.startsWith(v.split('=')[0])));
+          envVars.push(...modeEnvVars);
+        }
+      }
+
+      defaults.global.envVars = envVars.join(' ') || 'NODE_ENV=development';
+      defaults.global.nodeOptions = nodeOptions.join(' ');
+      defaults.global.gameArgs = gameArgs;
     }
 
     return defaults;
