@@ -4,6 +4,7 @@ const path = require('path');
 const os = require('os');
 const winston = require('winston');
 const { validateWorkspace, getWorkspaceTypeInfo, getDefaultWorkspaceConfig } = require('./workspaceTypes');
+const { ConfigDiscoveryService } = require('./configDiscoveryService');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -26,6 +27,10 @@ class WorkspaceManager {
     this.workspacesPath = path.join(this.configPath, 'workspaces');
     this.templatesPath = path.join(this.configPath, 'templates');
     this.sessionStatesPath = path.join(this.configPath, 'session-states');
+
+    // Dynamic config discovery
+    this.discoveryService = new ConfigDiscoveryService();
+    this.discoveredWorkspaceTypes = null;
   }
 
   static getInstance() {
@@ -44,6 +49,9 @@ class WorkspaceManager {
 
       // Load workspaces from disk
       await this.loadWorkspaces();
+
+      // Discover dynamic workspace types from GitHub folder structure
+      await this.discoverWorkspaceTypes();
 
       // Load or create master config
       await this.loadConfig();
@@ -112,6 +120,53 @@ class WorkspaceManager {
       logger.error('Failed to read workspaces directory', { error: error.message });
       return 0;
     }
+  }
+
+  /**
+   * Discover dynamic workspace types from GitHub folder structure
+   */
+  async discoverWorkspaceTypes() {
+    logger.info('Discovering dynamic workspace types from GitHub hierarchy');
+
+    try {
+      this.discoveredWorkspaceTypes = await this.discoveryService.discoverWorkspaceTypes();
+
+      logger.info('Dynamic workspace discovery complete', {
+        categories: Object.keys(this.discoveredWorkspaceTypes.categories || {}).length,
+        frameworks: Object.keys(this.discoveredWorkspaceTypes.frameworks || {}).length,
+        games: Object.keys(this.discoveredWorkspaceTypes.games || {}).length
+      });
+
+    } catch (error) {
+      logger.warn('Dynamic workspace discovery failed, using fallbacks', { error: error.message });
+      // Service will return fallback types on failure
+    }
+  }
+
+  /**
+   * Get workspace type info with dynamic discovery support
+   */
+  getWorkspaceTypeInfo(workspaceTypeId) {
+    // First try discovered types
+    if (this.discoveredWorkspaceTypes?.games?.[workspaceTypeId]) {
+      return this.discoveredWorkspaceTypes.games[workspaceTypeId];
+    }
+
+    // Fallback to static types
+    return getWorkspaceTypeInfo(workspaceTypeId);
+  }
+
+  /**
+   * Get all available workspace types (static + discovered)
+   */
+  getAllWorkspaceTypes() {
+    const staticTypes = require('./workspaceTypes').WORKSPACE_TYPES;
+    const discoveredTypes = this.discoveredWorkspaceTypes?.games || {};
+
+    return {
+      ...staticTypes,
+      ...discoveredTypes
+    };
   }
 
   async loadConfig() {
