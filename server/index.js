@@ -744,6 +744,75 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
   }
 });
 
+// Remove worktree from workspace
+app.post('/api/workspaces/remove-worktree', async (req, res) => {
+  try {
+    const { workspaceId, worktreeId } = req.body;
+    logger.info('Removing worktree from workspace', { workspaceId, worktreeId });
+
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Remove terminals associated with this worktree
+    const updatedWorkspace = { ...workspace };
+    const originalTerminalCount = updatedWorkspace.terminals.length;
+
+    updatedWorkspace.terminals = updatedWorkspace.terminals.filter(terminal => {
+      // Remove terminals that match this worktree ID
+      return !terminal.id.includes(worktreeId);
+    });
+
+    const removedCount = originalTerminalCount - updatedWorkspace.terminals.length;
+
+    if (removedCount === 0) {
+      return res.status(404).json({ error: 'Worktree not found in workspace' });
+    }
+
+    // For single-repo workspaces, also update the pairs count
+    if (workspace.workspaceType !== 'mixed-repo' && workspace.terminals?.pairs) {
+      const worktreeNum = parseInt(worktreeId.replace(/.*work/, ''));
+      if (workspace.terminals.pairs >= worktreeNum) {
+        updatedWorkspace.terminals.pairs = workspace.terminals.pairs - 1;
+      }
+    }
+
+    // Save updated workspace
+    await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+
+    // If this is the active workspace, refresh sessions
+    if (workspaceManager.getActiveWorkspace()?.id === workspaceId) {
+      // Close sessions for removed worktree
+      const sessionsToClose = sessionManager.getSessionsForWorktree(worktreeId);
+      sessionsToClose.forEach(sessionId => {
+        sessionManager.destroySession(sessionId);
+      });
+
+      // Refresh the SessionManager with updated workspace
+      const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
+      sessionManager.setWorkspace(refreshedWorkspace);
+      await sessionManager.initializeSessions();
+    }
+
+    logger.info('Worktree removed from workspace', {
+      workspaceId,
+      worktreeId,
+      removedTerminals: removedCount
+    });
+
+    res.json({
+      success: true,
+      removedTerminals: removedCount,
+      updatedWorkspace: updatedWorkspace
+    });
+
+  } catch (error) {
+    logger.error('Failed to remove worktree', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete workspace
 app.delete('/api/workspaces/:id', async (req, res) => {
   try {

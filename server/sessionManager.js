@@ -1141,9 +1141,22 @@ class SessionManager extends EventEmitter {
     }
   }
 
+  /**
+   * Get sessions associated with a specific worktree
+   */
+  getSessionsForWorktree(worktreeId) {
+    const sessions = [];
+    for (const [sessionId, session] of this.sessions) {
+      if (sessionId.includes(worktreeId)) {
+        sessions.push(sessionId);
+      }
+    }
+    return sessions;
+  }
+
   cleanup() {
     logger.info('Cleaning up all sessions');
-    
+
     for (const [sessionId, session] of this.sessions) {
       clearTimeout(session.inactivityTimer);
       clearInterval(session.processMonitor);
