@@ -331,33 +331,28 @@ class ConfigDiscoveryService {
   }
 
   /**
-   * Detect game modes from source files
+   * Detect game modes from source files (fallback only - prefer config files)
    */
   async detectGameModes(gamePath, gameName) {
     const modes = {};
 
     try {
-      // Check for VoxFire-specific modes
-      if (gameName === 'HyFire2') {
-        const gameConfigPath = path.join(gamePath, 'src/config/gameConfig.ts');
-        const exists = await fs.access(gameConfigPath).then(() => true).catch(() => false);
-
-        if (exists) {
-          modes.competitive = { name: 'Competitive', port: 8080 };
-          modes.casual = { name: 'Casual', port: 8081 };
-          modes.zombies_horde = { name: 'Zombies Horde', port: 8084, env: 'GAME_MODE=zombies_horde' };
-          modes.team_deathmatch = { name: 'Team Deathmatch', port: 8082, env: 'GAME_MODE=team_deathmatch' };
-          modes.ffa_deathmatch = { name: 'FFA Deathmatch', port: 8083, env: 'GAME_MODE=ffa_deathmatch' };
-        }
-      }
-
-      // Check for MonoGame-specific modes
+      // Check for MonoGame projects - add basic modes
       const csprojFiles = await fs.readdir(gamePath);
       const hasCsproj = csprojFiles.some(f => f.endsWith('.csproj'));
 
       if (hasCsproj) {
         modes.debug = { name: 'Debug', args: '--configuration Debug' };
         modes.release = { name: 'Release', args: '--configuration Release' };
+      }
+
+      // For Hytopia games without config, add basic mode
+      const packageJson = await fs.readFile(path.join(gamePath, 'package.json'), 'utf8')
+        .then(data => JSON.parse(data))
+        .catch(() => null);
+
+      if (packageJson?.dependencies?.hytopia || packageJson?.devDependencies?.hytopia) {
+        modes.development = { name: 'Development', env: 'NODE_ENV=development' };
       }
 
     } catch (error) {
