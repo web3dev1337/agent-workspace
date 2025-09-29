@@ -15,6 +15,20 @@ const WORKSPACE_TYPES = {
       content: { 'package.json': ['hytopia'] }
     }
   },
+  'voxfire-game': {
+    id: 'voxfire-game',
+    name: 'VoxFire Game',
+    description: 'VoxFire (HyFire2) tactical shooter with multiple game modes',
+    defaultTerminalPairs: 8,
+    maxTerminalPairs: 16,
+    requiresServer: true,
+    launchSettingsTemplate: 'voxfire-game',
+    icon: '🔥',
+    detectPatterns: {
+      files: ['package.json', 'src/config/gameConfig.ts'],
+      content: { 'package.json': ['hytopia'], 'src/config/gameConfig.ts': ['competitive', 'casual'] }
+    }
+  },
   'monogame-game': {
     id: 'monogame-game',
     name: 'MonoGame Game',
