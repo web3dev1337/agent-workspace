@@ -838,18 +838,13 @@ class ClaudeOrchestrator {
   }
   
   isWorktreeActive(worktreeIdOrKey) {
-    // worktreeIdOrKey can be "work1" or "hyfire2-work1"
-    // Extract the actual worktree ID if it's a composite key
-    const actualWorktreeId = worktreeIdOrKey.includes('-') && worktreeIdOrKey.match(/work\d+$/)
-      ? worktreeIdOrKey.match(/(work\d+)$/)[1]
-      : worktreeIdOrKey;
+    // Check if any session for this EXACT worktree key has been marked as active
+    const claudeId = `${worktreeIdOrKey}-claude`;
+    const serverId = `${worktreeIdOrKey}-server`;
 
-    // Check if any session in this worktree has been marked as active
-    for (const [sessionId, session] of this.sessions) {
-      if (session.worktreeId === actualWorktreeId && this.sessionActivity.get(sessionId) === 'active') {
-        return true;
-      }
-    }
+    if (this.sessionActivity.get(claudeId) === 'active') return true;
+    if (this.sessionActivity.get(serverId) === 'active') return true;
+
     return false;
   }
   
@@ -901,22 +896,17 @@ class ClaudeOrchestrator {
   }
 
   showOnlyWorktree(worktreeIdOrKey) {
-    console.log(`Showing only worktree: ${worktreeId}`);
-
-    // Extract actual worktree ID from composite key if needed
-    const actualWorktreeId = worktreeIdOrKey.includes('-') && worktreeIdOrKey.match(/work\d+$/)
-      ? worktreeIdOrKey.match(/(work\d+)$/)[1]
-      : worktreeIdOrKey;
+    console.log(`Showing only worktree: ${worktreeIdOrKey}`);
 
     // Clear all visible terminals first
     this.visibleTerminals.clear();
 
-    // Add only this worktree's sessions (works for both traditional and mixed-repo)
-    for (const [sessionId, session] of this.sessions) {
-      if (session.worktreeId === worktreeId) {
-        this.visibleTerminals.add(sessionId);
-      }
-    }
+    // Add only this EXACT worktree's sessions
+    const claudeId = `${worktreeIdOrKey}-claude`;
+    const serverId = `${worktreeIdOrKey}-server`;
+
+    if (this.sessions.has(claudeId)) this.visibleTerminals.add(claudeId);
+    if (this.sessions.has(serverId)) this.visibleTerminals.add(serverId);
 
     // Update the grid to show only these terminals
     this.updateTerminalGrid();
@@ -926,33 +916,22 @@ class ClaudeOrchestrator {
   toggleWorktreeVisibility(worktreeIdOrKey) {
     console.log(`Toggling visibility for worktree: ${worktreeIdOrKey}`);
 
-    // Extract actual worktree ID from composite key if needed
-    const actualWorktreeId = worktreeIdOrKey.includes('-') && worktreeIdOrKey.match(/work\d+$/)
-      ? worktreeIdOrKey.match(/(work\d+)$/)[1]
-      : worktreeIdOrKey;
-
-    // Find all sessions that match this worktree ID
+    // Find all sessions that match this EXACT worktree key
     const sessions = [];
 
-    // For mixed-repo workspaces, session IDs are complex like "repo-name-worktree-type"
-    // For traditional workspaces, session IDs are simple like "worktree-type"
-    for (const [sessionId, session] of this.sessions.entries()) {
-      if (session.worktreeId === actualWorktreeId) {
-        sessions.push(sessionId);
-      }
-    }
+    // For mixed-repo workspaces: worktreeIdOrKey = "repo-name-work1"
+    // Session IDs will be: "repo-name-work1-claude", "repo-name-work1-server"
+    // For traditional workspaces: worktreeIdOrKey = "work1"
+    // Session IDs will be: "work1-claude", "work1-server"
 
-    // Fallback to old logic for traditional workspaces
-    if (sessions.length === 0) {
-      const claudeId = `${actualWorktreeId}-claude`;
-      const serverId = `${actualWorktreeId}-server`;
+    const claudeId = `${worktreeIdOrKey}-claude`;
+    const serverId = `${worktreeIdOrKey}-server`;
 
-      if (this.sessions.has(claudeId)) sessions.push(claudeId);
-      if (this.sessions.has(serverId)) sessions.push(serverId);
-    }
+    if (this.sessions.has(claudeId)) sessions.push(claudeId);
+    if (this.sessions.has(serverId)) sessions.push(serverId);
 
     if (sessions.length === 0) {
-      console.warn(`No sessions found for worktree ${actualWorktreeId}`);
+      console.warn(`No sessions found for worktree ${worktreeIdOrKey}`);
       return;
     }
 
@@ -962,20 +941,20 @@ class ClaudeOrchestrator {
     // Log current state for debugging
     const claudeSessionId = sessions.find(id => id.includes('claude'));
     const claudeSession = claudeSessionId ? this.sessions.get(claudeSessionId) : null;
-    console.log(`Toggling ${actualWorktreeId}: currently ${anyVisible ? 'visible' : 'hidden'}, Claude status: ${claudeSession?.status || 'unknown'}, sessions: ${sessions.join(', ')}`);
+    console.log(`Toggling ${worktreeIdOrKey}: currently ${anyVisible ? 'visible' : 'hidden'}, Claude status: ${claudeSession?.status || 'unknown'}, sessions: ${sessions.join(', ')}`);
 
     if (anyVisible) {
       // Hide terminals - allow hiding even if Claude is running (user wants to focus elsewhere)
       sessions.forEach(id => {
         this.visibleTerminals.delete(id);
       });
-      console.log(`Hidden worktree ${actualWorktreeId}`);
+      console.log(`Hidden worktree ${worktreeIdOrKey}`);
     } else {
       // Show terminals - add back to visible set
       sessions.forEach(id => {
         this.visibleTerminals.add(id);
       });
-      console.log(`Shown worktree ${actualWorktreeId}`);
+      console.log(`Shown worktree ${worktreeIdOrKey}`);
     }
 
     // IMPORTANT: Must update the entire grid to recalculate layout
@@ -985,20 +964,12 @@ class ClaudeOrchestrator {
   }
   
   showWorktree(worktreeIdOrKey) {
-    // Extract actual worktree ID from composite key if needed
-    const actualWorktreeId = worktreeIdOrKey.includes('-') && worktreeIdOrKey.match(/work\d+$/)
-      ? worktreeIdOrKey.match(/(work\d+)$/)[1]
-      : worktreeIdOrKey;
+    // Show terminals for this EXACT worktree key
+    const claudeId = `${worktreeIdOrKey}-claude`;
+    const serverId = `${worktreeIdOrKey}-server`;
 
-    // Legacy function - now just ensures worktree is visible
-    const sessions = [];
-    for (const [sessionId, session] of this.sessions) {
-      // Only match by session.worktreeId (NOT sessionId) to avoid cross-repo collisions
-      if (session.worktreeId === actualWorktreeId) {
-        sessions.push(sessionId);
-        this.visibleTerminals.add(sessionId);
-      }
-    }
+    if (this.sessions.has(claudeId)) this.visibleTerminals.add(claudeId);
+    if (this.sessions.has(serverId)) this.visibleTerminals.add(serverId);
 
     this.updateTerminalGrid();
     this.buildSidebar();
@@ -3798,20 +3769,13 @@ class ClaudeOrchestrator {
    * Close all sessions associated with a worktree
    */
   closeWorktreeSessions(worktreeIdOrKey) {
-    // Extract actual worktree ID from composite key if needed
-    const actualWorktreeId = worktreeIdOrKey.includes('-') && worktreeIdOrKey.match(/work\d+$/)
-      ? worktreeIdOrKey.match(/(work\d+)$/)[1]
-      : worktreeIdOrKey;
+    // Close sessions for this EXACT worktree key
+    const claudeId = `${worktreeIdOrKey}-claude`;
+    const serverId = `${worktreeIdOrKey}-server`;
 
     const sessionsToClose = [];
-
-    for (const [sessionId, session] of this.sessions) {
-      // Use session.worktreeId for proper matching (not sessionId.includes)
-      // This prevents closing work1 in repo A when deleting work1 in repo B
-      if (session.worktreeId === actualWorktreeId) {
-        sessionsToClose.push(sessionId);
-      }
-    }
+    if (this.sessions.has(claudeId)) sessionsToClose.push(claudeId);
+    if (this.sessions.has(serverId)) sessionsToClose.push(serverId);
 
     sessionsToClose.forEach(sessionId => {
       console.log(`Closing session: ${sessionId}`);
