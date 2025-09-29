@@ -217,6 +217,45 @@ When anyone on the team updates `agents-hytopia`, you just run `sync.sh` and get
    bash scripts/sync.sh
    ```
 
+### Orchestrator Integration
+
+Each agent repo can include `.orchestrator-config.json` for Claude Orchestrator integration:
+
+**Example: `~/.claude/installed/hytopia/.orchestrator-config.json`**
+
+```json
+{
+  "type": "framework",
+  "id": "hytopia-framework",
+  "name": "Hytopia SDK",
+  "description": "Voxel-based game development framework",
+  "category": "games",
+  "baseCommand": "hytopia start",
+  "commonFlags": {
+    "NODE_ENV": {
+      "type": "select",
+      "options": ["development", "production"],
+      "default": "development"
+    },
+    "AUTO_START_WITH_BOTS": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "defaultTerminalPairs": 6,
+  "maxTerminalPairs": 16,
+  "icon": "🎮"
+}
+```
+
+This config:
+- ✅ Defines default workspace settings for all Hytopia projects
+- ✅ Provides UI hints for launch settings modal
+- ✅ Sets recommended terminal pair counts
+- ✅ Specifies common environment variables and flags
+
+The orchestrator wizard reads these configs to pre-fill workspace settings!
+
 ### Benefits
 
 ✅ **Single source of truth**: Update once, propagate everywhere
@@ -225,6 +264,7 @@ When anyone on the team updates `agents-hytopia`, you just run `sync.sh` and get
 ✅ **Version controlled**: All guidelines tracked in git
 ✅ **AI tool agnostic**: Works with Claude, Cursor, Aider, etc.
 ✅ **Hierarchical**: Global → Framework → Project specificity
+✅ **Orchestrator-aware**: Auto-configures workspace defaults
 
 ---
 
