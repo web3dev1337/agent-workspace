@@ -149,7 +149,9 @@ io.on('connection', (socket) => {
   socket.emit('workspace-info', {
     active: activeWorkspace,
     available: workspaces,
-    config: workspaceManager.getConfig()
+    config: workspaceManager.getConfig(),
+    workspaceTypes: workspaceManager.getAllWorkspaceTypes(),
+    frameworks: workspaceManager.discoveredWorkspaceTypes?.frameworks || {}
   });
 
   // Send initial session states
@@ -461,6 +463,23 @@ app.get('/api/workspaces', (req, res) => {
   } catch (error) {
     logger.error('Failed to list workspaces', { error: error.message });
     res.status(500).json({ error: 'Failed to list workspaces' });
+  }
+});
+
+// Get dynamic workspace types for frontend
+app.get('/api/workspace-types', (req, res) => {
+  try {
+    const allTypes = workspaceManager.getAllWorkspaceTypes();
+    const frameworks = workspaceManager.discoveredWorkspaceTypes?.frameworks || {};
+
+    res.json({
+      workspaceTypes: allTypes,
+      frameworks: frameworks,
+      hierarchy: workspaceManager.discoveredWorkspaceTypes?.categories || {}
+    });
+  } catch (error) {
+    logger.error('Failed to get workspace types', { error: error.message });
+    res.status(500).json({ error: 'Failed to get workspace types' });
   }
 });
 
