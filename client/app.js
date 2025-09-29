@@ -764,6 +764,11 @@ class ClaudeOrchestrator {
             <span class="visibility-indicator">${isVisible ? '👁' : '🚫'}</span>
             ${displayName} - ${branch}
           </div>
+          <button class="delete-worktree-btn"
+                  onclick="event.stopPropagation(); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
+                  title="Delete worktree from workspace">
+            ✕
+          </button>
         </div>
         <div class="worktree-sessions">
           ${worktree.claude ? `
@@ -3597,6 +3602,128 @@ class ClaudeOrchestrator {
    */
   saveSessionAgentPreference(sessionId, agentId, powerful = false) {
     this.sessionAgentPreferences.set(sessionId, { agentId, powerful });
+  }
+
+  /**
+   * Delete worktree from workspace with confirmation
+   */
+  async deleteWorktree(worktreeId, displayName) {
+    // Show confirmation dialog
+    const confirmed = await this.showConfirmationDialog(
+      'Delete Worktree',
+      `Are you sure you want to delete "${displayName}" from this workspace?\n\nThis will:\n• Remove the worktree from the workspace\n• Close any active terminals\n• NOT delete the actual git worktree files`,
+      'Delete',
+      'Cancel'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      console.log(`Deleting worktree ${worktreeId} from workspace...`);
+
+      // Close associated terminals first
+      this.closeWorktreeSessions(worktreeId);
+
+      // Call backend API to remove from workspace
+      const response = await fetch('/api/workspaces/remove-worktree', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: this.currentWorkspace.id,
+          worktreeId: worktreeId
+        })
+      });
+
+      if (response.ok) {
+        this.showTemporaryMessage(`Removed "${displayName}" from workspace`, 'success');
+
+        // Refresh workspace to show updated configuration
+        setTimeout(() => {
+          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
+        }, 1000);
+      } else {
+        const error = await response.text();
+        this.showError(`Failed to delete worktree: ${error}`);
+      }
+
+    } catch (error) {
+      console.error('Error deleting worktree:', error);
+      this.showError('Failed to delete worktree');
+    }
+  }
+
+  /**
+   * Close all sessions associated with a worktree
+   */
+  closeWorktreeSessions(worktreeId) {
+    const sessionsToClose = [];
+
+    for (const [sessionId, session] of this.sessions) {
+      if (sessionId.includes(worktreeId)) {
+        sessionsToClose.push(sessionId);
+      }
+    }
+
+    sessionsToClose.forEach(sessionId => {
+      console.log(`Closing session: ${sessionId}`);
+      this.socket.emit('destroy-session', { sessionId });
+    });
+  }
+
+  /**
+   * Show confirmation dialog
+   */
+  async showConfirmationDialog(title, message, confirmText = 'OK', cancelText = 'Cancel') {
+    return new Promise((resolve) => {
+      const existing = document.getElementById('confirmation-dialog');
+      if (existing) existing.remove();
+
+      const dialog = document.createElement('div');
+      dialog.id = 'confirmation-dialog';
+      dialog.className = 'modal';
+      dialog.innerHTML = `
+        <div class="modal-content confirmation-dialog">
+          <div class="modal-header">
+            <h3>${title}</h3>
+          </div>
+          <div class="modal-body">
+            <p style="white-space: pre-line; line-height: 1.5;">${message}</p>
+          </div>
+          <div class="modal-actions">
+            <button id="confirm-btn" class="button-danger">${confirmText}</button>
+            <button id="cancel-btn" class="button-secondary">${cancelText}</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(dialog);
+
+      // Handle button clicks
+      const confirmBtn = dialog.querySelector('#confirm-btn');
+      const cancelBtn = dialog.querySelector('#cancel-btn');
+
+      confirmBtn.onclick = () => {
+        dialog.remove();
+        resolve(true);
+      };
+
+      cancelBtn.onclick = () => {
+        dialog.remove();
+        resolve(false);
+      };
+
+      // ESC key to cancel
+      const handleEsc = (e) => {
+        if (e.key === 'Escape') {
+          dialog.remove();
+          document.removeEventListener('keydown', handleEsc);
+          resolve(false);
+        }
+      };
+      document.addEventListener('keydown', handleEsc);
+    });
   }
   
   updateYoloState(sessionId, checked) {
