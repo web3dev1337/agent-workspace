@@ -11,8 +11,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run tauri:dev\" \"npm run dev:diff\"",
-    "prod": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run tauri:dev\" \"npm run dev:diff\"",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run tauri:dev\"",
+    "prod": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run tauri:dev\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
