@@ -4,7 +4,7 @@
   "description": "Multi-terminal orchestrator for Claude Code sessions",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js",
+    "start": "npm run dev",
     "dev:server": "nodemon server/index.js",
     "dev:client": "node client/dev-server.js",
     "dev:diff": "cd diff-viewer && npm run dev",
