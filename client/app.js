@@ -1242,8 +1242,7 @@ class ClaudeOrchestrator {
               `<div class="server-launch-group">
                 <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
                   <option value="">▶</option>
-                  <option value="development">Dev</option>
-                  <option value="production">Prod</option>
+                  ${this.getDynamicLaunchOptions(sessionId)}
                   <option value="custom" selected>Custom...</option>
                 </select>
                 <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
