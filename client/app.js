@@ -34,6 +34,7 @@ class ClaudeOrchestrator {
     this.frameworks = {};
     this.workspaceHierarchy = {};
     this.cascadedConfigs = {};  // Fully merged configs (Global → Category → Framework → Project)
+    this.worktreeConfigs = new Map(); // Worktree-specific configs (sessionId → config)
 
     // Button registry - all available buttons with their implementations
     this.buttonRegistry = this.initButtonRegistry();
@@ -220,7 +221,7 @@ class ClaudeOrchestrator {
         }
       });
 
-      this.socket.on('workspace-changed', ({ workspace, sessions }) => {
+      this.socket.on('workspace-changed', async ({ workspace, sessions }) => {
         console.log('Workspace changed:', workspace.name);
         this.currentWorkspace = workspace;
         this.isDashboardMode = false;
@@ -239,6 +240,10 @@ class ClaudeOrchestrator {
         // Clear ALL existing state completely
         this.sessions.clear();
         this.visibleTerminals.clear();
+        this.worktreeConfigs.clear();
+
+        // Pre-fetch worktree-specific configs for all terminals
+        await this.prefetchWorktreeConfigs(workspace, sessions);
         this.sessionActivity.clear();
         this.serverStatuses.clear();
         this.serverPorts.clear();
@@ -838,11 +843,11 @@ class ClaudeOrchestrator {
       return this.getDefaultButtons(terminalType);
     }
 
-    // Get cascaded config
-    const cascadedConfig = this.cascadedConfigs[repositoryType];
-    console.log(`Looking up cascaded config for ${sessionId} (type: ${repositoryType}):`, cascadedConfig);
+    // Get worktree-specific cascaded config (pre-fetched)
+    const cascadedConfig = this.worktreeConfigs.get(sessionId);
+    console.log(`Looking up worktree config for ${sessionId} (type: ${repositoryType}):`, cascadedConfig);
     if (!cascadedConfig || !cascadedConfig.buttons) {
-      console.log(`No cascaded config or buttons found for ${repositoryType}, using defaults`);
+      console.log(`No worktree config or buttons found for ${sessionId}, using defaults`);
       return this.getDefaultButtons(terminalType);
     }
 
@@ -913,6 +918,76 @@ class ClaudeOrchestrator {
         this.renderButton('build', this.buttonRegistry.build, ''),
         this.renderButton('kill', this.buttonRegistry.kill, '')
       ];
+    }
+  }
+
+  /**
+   * Pre-fetch worktree-specific configs for all terminals
+   * @param {object} workspace
+   * @param {array} sessions
+   */
+  async prefetchWorktreeConfigs(workspace, sessions) {
+    console.log('Pre-fetching worktree configs...');
+    const fetchPromises = [];
+
+    for (const [sessionId, session] of Object.entries(sessions)) {
+      // Extract worktree path
+      let repositoryType = null;
+      let worktreePath = null;
+
+      if (workspace.workspaceType === 'mixed-repo') {
+        const terminals = Array.isArray(workspace.terminals)
+          ? workspace.terminals
+          : workspace.terminals?.pairs;
+
+        if (terminals) {
+          const terminal = terminals.find(t => t.id === sessionId);
+          if (terminal && terminal.repository) {
+            repositoryType = terminal.repository.type;
+            worktreePath = `${terminal.repository.path}/${terminal.worktree}`;
+          }
+        }
+      } else {
+        repositoryType = workspace.type;
+        if (session.worktreeId) {
+          worktreePath = `${workspace.repository.path}/${session.worktreeId}`;
+        }
+      }
+
+      if (repositoryType && worktreePath) {
+        fetchPromises.push(
+          this.fetchCascadedConfig(repositoryType, worktreePath)
+            .then(config => {
+              this.worktreeConfigs.set(sessionId, config);
+              console.log(`Cached config for ${sessionId} from ${worktreePath}`);
+            })
+        );
+      }
+    }
+
+    await Promise.all(fetchPromises);
+    console.log(`Pre-fetched ${this.worktreeConfigs.size} worktree configs`);
+  }
+
+  /**
+   * Fetch cascaded config from server for a specific worktree
+   * @param {string} repositoryType
+   * @param {string} worktreePath - Full path to worktree directory
+   * @returns {Promise<object>}
+   */
+  async fetchCascadedConfig(repositoryType, worktreePath) {
+    try {
+      const url = worktreePath
+        ? `/api/cascaded-config/${repositoryType}?worktreePath=${encodeURIComponent(worktreePath)}`
+        : `/api/cascaded-config/${repositoryType}`;
+
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch config');
+
+      return await response.json();
+    } catch (error) {
+      console.error(`Failed to fetch cascaded config for ${repositoryType}:`, error);
+      return null;
     }
   }
 
