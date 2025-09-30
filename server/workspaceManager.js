@@ -163,8 +163,8 @@ class WorkspaceManager {
         // Merge modes/flags (override can add new ones or override existing)
         result[key] = { ...result[key], ...override[key] };
       } else if (key === 'buttons' || key === 'actions') {
-        // Concatenate button/action arrays
-        result[key] = [...(result[key] || []), ...(override[key] || [])];
+        // Deep merge button/action objects (merge per terminal type, then per button)
+        result[key] = this.mergeConfigs(result[key] || {}, override[key]);
       } else if (typeof override[key] === 'object' && !Array.isArray(override[key])) {
         // Recursively merge objects
         result[key] = this.mergeConfigs(result[key] || {}, override[key]);
