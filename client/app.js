@@ -935,33 +935,40 @@ class ClaudeOrchestrator {
       let repositoryType = null;
       let worktreePath = null;
 
-      if (workspace.workspaceType === 'mixed-repo') {
-        const terminals = Array.isArray(workspace.terminals)
-          ? workspace.terminals
-          : workspace.terminals?.pairs;
+      try {
+        if (workspace.workspaceType === 'mixed-repo') {
+          const terminals = Array.isArray(workspace.terminals)
+            ? workspace.terminals
+            : workspace.terminals?.pairs;
 
-        if (terminals) {
-          const terminal = terminals.find(t => t.id === sessionId);
-          if (terminal && terminal.repository) {
-            repositoryType = terminal.repository.type;
-            worktreePath = `${terminal.repository.path}/${terminal.worktree}`;
+          if (terminals) {
+            const terminal = terminals.find(t => t.id === sessionId);
+            if (terminal && terminal.repository && terminal.worktree) {
+              repositoryType = terminal.repository.type;
+              worktreePath = `${terminal.repository.path}/${terminal.worktree}`;
+            }
+          }
+        } else {
+          repositoryType = workspace.type;
+          if (session.worktreeId && workspace.repository && workspace.repository.path) {
+            worktreePath = `${workspace.repository.path}/${session.worktreeId}`;
           }
         }
-      } else {
-        repositoryType = workspace.type;
-        if (session.worktreeId) {
-          worktreePath = `${workspace.repository.path}/${session.worktreeId}`;
-        }
-      }
 
-      if (repositoryType && worktreePath) {
-        fetchPromises.push(
-          this.fetchCascadedConfig(repositoryType, worktreePath)
-            .then(config => {
-              this.worktreeConfigs.set(sessionId, config);
-              console.log(`Cached config for ${sessionId} from ${worktreePath}`);
-            })
-        );
+        if (repositoryType && worktreePath) {
+          fetchPromises.push(
+            this.fetchCascadedConfig(repositoryType, worktreePath)
+              .then(config => {
+                this.worktreeConfigs.set(sessionId, config);
+                console.log(`Cached config for ${sessionId} from ${worktreePath}`);
+              })
+              .catch(error => {
+                console.warn(`Failed to fetch config for ${sessionId}:`, error);
+              })
+          );
+        }
+      } catch (error) {
+        console.error(`Error processing session ${sessionId}:`, error);
       }
     }
 
