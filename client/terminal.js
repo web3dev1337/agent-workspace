@@ -409,13 +409,16 @@ class TerminalManager {
   setupResizeObserver(sessionId) {
     const terminalElement = document.getElementById(`terminal-${sessionId}`);
     if (!terminalElement) return;
-    
+
     const resizeObserver = new ResizeObserver(() => {
-      this.fitTerminal(sessionId);
+      // Use requestAnimationFrame to ensure renderer is ready before fitting
+      requestAnimationFrame(() => {
+        this.fitTerminal(sessionId);
+      });
     });
-    
+
     resizeObserver.observe(terminalElement);
-    
+
     // Store observer for cleanup
     terminalElement._resizeObserver = resizeObserver;
   }
