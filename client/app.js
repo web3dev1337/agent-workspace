@@ -1744,11 +1744,19 @@ class ClaudeOrchestrator {
    * Get dynamic launch options based on current workspace
    */
   getDynamicLaunchOptions(sessionId) {
-    if (!this.currentWorkspace) {
+    // Get the session to check for repositoryType (mixed-repo workspaces)
+    const session = this.sessions.get(sessionId);
+
+    // For mixed-repo workspaces, use session's repositoryType
+    // For single-repo workspaces, use workspace type
+    const workspaceType = (session && session.repositoryType)
+      ? session.repositoryType
+      : (this.currentWorkspace ? this.currentWorkspace.type : null);
+
+    if (!workspaceType) {
       return '<option value="development">Dev</option><option value="production">Prod</option>';
     }
 
-    const workspaceType = this.currentWorkspace.type;
     const typeInfo = this.workspaceTypes[workspaceType];
 
     if (!typeInfo) {
