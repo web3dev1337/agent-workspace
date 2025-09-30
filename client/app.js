@@ -704,10 +704,23 @@ class ClaudeOrchestrator {
   }
 
   extractRepositoryName(sessionId) {
-    // Find repository name by looking for the work pattern
+    // For mixed-repo workspaces, get repository name from workspace config
+    if (this.currentWorkspace?.workspaceType === 'mixed-repo') {
+      const terminals = Array.isArray(this.currentWorkspace.terminals)
+        ? this.currentWorkspace.terminals
+        : this.currentWorkspace.terminals?.pairs;
+
+      if (terminals) {
+        const terminal = terminals.find(t => t.id === sessionId);
+        if (terminal?.repository?.name) {
+          return terminal.repository.name;
+        }
+      }
+    }
+
+    // Fallback: parse from session ID (for backwards compatibility)
     const parts = sessionId.split('-');
     const workIndex = parts.findIndex(part => part.startsWith('work'));
-
     if (workIndex > 0) {
       return parts.slice(0, workIndex).join('-');
     }
