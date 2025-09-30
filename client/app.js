@@ -817,8 +817,13 @@ class ClaudeOrchestrator {
     if (this.currentWorkspace) {
       if (this.currentWorkspace.workspaceType === 'mixed-repo') {
         const repositoryName = this.extractRepositoryName(sessionId);
-        if (repositoryName && this.currentWorkspace.terminals?.pairs) {
-          const terminal = this.currentWorkspace.terminals.pairs.find(t =>
+        // terminals can be either an array or {pairs: array}
+        const terminals = Array.isArray(this.currentWorkspace.terminals)
+          ? this.currentWorkspace.terminals
+          : this.currentWorkspace.terminals?.pairs;
+
+        if (repositoryName && terminals) {
+          const terminal = terminals.find(t =>
             t.id === sessionId || t.repository?.name === repositoryName
           );
           repositoryType = terminal?.repository?.type || null;
@@ -828,11 +833,16 @@ class ClaudeOrchestrator {
       }
     }
 
-    if (!repositoryType) return this.getDefaultButtons(terminalType);
+    if (!repositoryType) {
+      console.log(`No repositoryType found for session ${sessionId}, using defaults`);
+      return this.getDefaultButtons(terminalType);
+    }
 
     // Get cascaded config
     const cascadedConfig = this.cascadedConfigs[repositoryType];
+    console.log(`Looking up cascaded config for ${sessionId} (type: ${repositoryType}):`, cascadedConfig);
     if (!cascadedConfig || !cascadedConfig.buttons) {
+      console.log(`No cascaded config or buttons found for ${repositoryType}, using defaults`);
       return this.getDefaultButtons(terminalType);
     }
 
