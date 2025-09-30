@@ -1124,7 +1124,12 @@ class SessionManager extends EventEmitter {
 
     try {
       // Build command using AgentManager
-      const command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, finalConfig.flags);
+      // Pass full config for Codex (with model/reasoning/verbosity), or just flags for Claude
+      const commandInput = finalConfig.model || finalConfig.reasoning || finalConfig.verbosity
+        ? finalConfig  // Pass full config object for Codex
+        : finalConfig.flags;  // Pass just flags for Claude (backwards compat)
+
+      const command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, commandInput);
 
       logger.info('Executing agent command', { sessionId, command });
 
