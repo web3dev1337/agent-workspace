@@ -240,7 +240,8 @@ class SessionManager extends EventEmitter {
               cwd: worktree.path,
               type: terminal.terminalType,
               worktreeId: terminal.worktree,
-              repositoryName: terminal.repository.name
+              repositoryName: terminal.repository.name,
+              repositoryType: terminal.repository.type  // Add repository type for dynamic launch options
             });
           }).catch(error => {
             logger.error(`Failed to initialize ${terminal.terminalType} session`, {
@@ -520,6 +521,8 @@ class SessionManager extends EventEmitter {
         pty: ptyProcess,
         type: config.type,
         worktreeId: config.worktreeId,
+        repositoryName: config.repositoryName,  // For mixed-repo workspaces
+        repositoryType: config.repositoryType,  // For dynamic launch options
         status: 'idle',
         branch: 'unknown',
         buffer: '',
@@ -882,6 +885,8 @@ class SessionManager extends EventEmitter {
         existingPR: session.existingPR,
         type: session.type,
         worktreeId: session.worktreeId,
+        repositoryName: session.repositoryName,  // For mixed-repo workspaces
+        repositoryType: session.repositoryType,  // For dynamic launch options
         lastActivity: session.lastActivity
       };
     }
@@ -1124,7 +1129,12 @@ class SessionManager extends EventEmitter {
 
     try {
       // Build command using AgentManager
-      const command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, finalConfig.flags);
+      // Pass full config for Codex (with model/reasoning/verbosity), or just flags for Claude
+      const commandInput = finalConfig.model || finalConfig.reasoning || finalConfig.verbosity
+        ? finalConfig  // Pass full config object for Codex
+        : finalConfig.flags;  // Pass just flags for Claude (backwards compat)
+
+      const command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, commandInput);
 
       logger.info('Executing agent command', { sessionId, command });
 

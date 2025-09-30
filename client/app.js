@@ -33,6 +33,11 @@ class ClaudeOrchestrator {
     this.workspaceTypes = {};
     this.frameworks = {};
     this.workspaceHierarchy = {};
+    this.cascadedConfigs = {};  // Fully merged configs (Global → Category → Framework → Project)
+    this.worktreeConfigs = new Map(); // Worktree-specific configs (sessionId → config)
+
+    // Button registry - all available buttons with their implementations
+    this.buttonRegistry = this.initButtonRegistry();
 
     this.init();
   }
@@ -190,8 +195,8 @@ class ClaudeOrchestrator {
       });
 
       // Workspace events
-      this.socket.on('workspace-info', ({ active, available, config, workspaceTypes, frameworks }) => {
-        console.log('Received workspace info:', { active, available, config, workspaceTypes, frameworks });
+      this.socket.on('workspace-info', ({ active, available, config, workspaceTypes, frameworks, cascadedConfigs }) => {
+        console.log('Received workspace info:', { active, available, config, workspaceTypes, frameworks, cascadedConfigs });
         this.currentWorkspace = active;
         this.availableWorkspaces = available;
         this.orchestratorConfig = config;
@@ -199,9 +204,11 @@ class ClaudeOrchestrator {
         // Store dynamic workspace types
         this.workspaceTypes = workspaceTypes || {};
         this.frameworks = frameworks || {};
+        this.cascadedConfigs = cascadedConfigs || {};
         console.log('🎯 Dynamic workspace types loaded:', {
           totalTypes: Object.keys(this.workspaceTypes).length,
-          frameworks: Object.keys(this.frameworks)
+          frameworks: Object.keys(this.frameworks),
+          cascadedConfigs: Object.keys(this.cascadedConfigs).length
         });
 
         // Initialize workspace switcher
@@ -214,7 +221,7 @@ class ClaudeOrchestrator {
         }
       });
 
-      this.socket.on('workspace-changed', ({ workspace, sessions }) => {
+      this.socket.on('workspace-changed', async ({ workspace, sessions }) => {
         console.log('Workspace changed:', workspace.name);
         this.currentWorkspace = workspace;
         this.isDashboardMode = false;
@@ -233,6 +240,10 @@ class ClaudeOrchestrator {
         // Clear ALL existing state completely
         this.sessions.clear();
         this.visibleTerminals.clear();
+        this.worktreeConfigs.clear();
+
+        // Pre-fetch worktree-specific configs for all terminals
+        await this.prefetchWorktreeConfigs(workspace, sessions);
         this.sessionActivity.clear();
         this.serverStatuses.clear();
         this.serverPorts.clear();
@@ -693,14 +704,353 @@ class ClaudeOrchestrator {
   }
 
   extractRepositoryName(sessionId) {
-    // Find repository name by looking for the work pattern
+    // For mixed-repo workspaces, get repository name from workspace config
+    if (this.currentWorkspace?.workspaceType === 'mixed-repo') {
+      const terminals = Array.isArray(this.currentWorkspace.terminals)
+        ? this.currentWorkspace.terminals
+        : this.currentWorkspace.terminals?.pairs;
+
+      if (terminals) {
+        const terminal = terminals.find(t => t.id === sessionId);
+        if (terminal?.repository?.name) {
+          return terminal.repository.name;
+        }
+      }
+    }
+
+    // Fallback: parse from session ID (for backwards compatibility)
     const parts = sessionId.split('-');
     const workIndex = parts.findIndex(part => part.startsWith('work'));
-
     if (workIndex > 0) {
       return parts.slice(0, workIndex).join('-');
     }
     return null; // Traditional workspace
+  }
+
+  /**
+   * Initialize button registry with all available buttons
+   * Maps button IDs to their implementations
+   */
+  initButtonRegistry() {
+    return {
+      // Common buttons (Global level - all projects)
+      focus: {
+        icon: '🔍',
+        title: 'Show Only This Worktree',
+        action: 'focusTerminal',
+        showWhen: 'always',
+        terminalType: 'both'
+      },
+
+      // Claude terminal buttons
+      replay: {
+        icon: '📹',
+        title: 'Open Replay Viewer',
+        action: 'openReplayViewer',
+        showWhen: 'always',
+        terminalType: 'claude'
+      },
+      claudeStart: {
+        icon: '🚀',
+        title: 'Start Claude with Settings',
+        action: 'autoStartClaude',
+        showWhen: 'always',
+        terminalType: 'claude',
+        special: 'disabled-until-ready'
+      },
+      claudeModal: {
+        icon: '↻',
+        title: 'Start Claude with Options',
+        action: 'showClaudeStartupModal',
+        showWhen: 'always',
+        terminalType: 'claude'
+      },
+      refresh: {
+        icon: '🔄',
+        title: 'Refresh Terminal Display',
+        action: 'refreshTerminal',
+        showWhen: 'always',
+        terminalType: 'claude'
+      },
+      review: {
+        icon: '👥',
+        title: 'Assign Code Review',
+        action: 'showCodeReviewDropdown',
+        showWhen: 'always',
+        terminalType: 'claude'
+      },
+
+      // Server terminal buttons
+      play: {
+        icon: '🎮',
+        title: 'Play in Hytopia',
+        action: 'playInHytopia',
+        showWhen: 'running',
+        terminalType: 'server'
+      },
+      copyUrl: {
+        icon: '📋',
+        title: 'Copy HTTPS localhost URL',
+        action: 'copyLocalhostUrl',
+        showWhen: 'running',
+        terminalType: 'server'
+      },
+      website: {
+        icon: '🌐',
+        title: 'Open Hytopia Website',
+        action: 'openHytopiaWebsite',
+        showWhen: 'always',
+        terminalType: 'server'
+      },
+      build: {
+        icon: '📦',
+        title: 'Build Production ZIP',
+        action: 'buildProduction',
+        showWhen: 'always',
+        terminalType: 'both'
+      },
+      kill: {
+        icon: '✕',
+        title: 'Force Kill',
+        action: 'killServer',
+        showWhen: 'always',
+        terminalType: 'server',
+        className: 'danger'
+      }
+    };
+  }
+
+  /**
+   * Get buttons for a session based on cascaded config
+   * @param {string} sessionId
+   * @param {string} terminalType - 'claude' or 'server'
+   * @returns {Array} Array of button HTML strings
+   */
+  getButtonsForSession(sessionId, terminalType) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return this.getDefaultButtons(terminalType);
+
+    // Get repository type for this session
+    let repositoryType = null;
+    if (this.currentWorkspace) {
+      if (this.currentWorkspace.workspaceType === 'mixed-repo') {
+        const repositoryName = this.extractRepositoryName(sessionId);
+        // terminals can be either an array or {pairs: array}
+        const terminals = Array.isArray(this.currentWorkspace.terminals)
+          ? this.currentWorkspace.terminals
+          : this.currentWorkspace.terminals?.pairs;
+
+        if (repositoryName && terminals) {
+          const terminal = terminals.find(t =>
+            t.id === sessionId || t.repository?.name === repositoryName
+          );
+          repositoryType = terminal?.repository?.type || null;
+        }
+      } else {
+        repositoryType = this.currentWorkspace.type;
+      }
+    }
+
+    if (!repositoryType) {
+      console.log(`No repositoryType found for session ${sessionId}, using defaults`);
+      return this.getDefaultButtons(terminalType);
+    }
+
+    // Get worktree-specific cascaded config (pre-fetched)
+    const cascadedConfig = this.worktreeConfigs.get(sessionId);
+    console.log(`Looking up worktree config for ${sessionId} (type: ${repositoryType}):`, cascadedConfig);
+    if (!cascadedConfig || !cascadedConfig.buttons) {
+      console.log(`No worktree config or buttons found for ${sessionId}, using defaults`);
+      return this.getDefaultButtons(terminalType);
+    }
+
+    // Get button definitions for this terminal type
+    const buttonDefs = cascadedConfig.buttons[terminalType] || {};
+    const buttons = [];
+
+    // Always add focus button first
+    buttons.push(this.renderButton('focus', this.buttonRegistry.focus, sessionId));
+
+    // Render configured buttons
+    for (const [buttonId, buttonConfig] of Object.entries(buttonDefs)) {
+      const registryEntry = this.buttonRegistry[buttonId];
+      if (!registryEntry) continue;
+
+      // Merge config with registry
+      const mergedButton = { ...registryEntry, ...buttonConfig };
+      buttons.push(this.renderButton(buttonId, mergedButton, sessionId));
+    }
+
+    return buttons;
+  }
+
+  /**
+   * Render a single button
+   */
+  renderButton(buttonId, buttonDef, sessionId) {
+    const className = `control-btn ${buttonDef.className || ''}`;
+    const disabled = buttonDef.special === 'disabled-until-ready' ? 'disabled' : '';
+    const id = buttonDef.special === 'disabled-until-ready' ? `id="claude-start-btn-${sessionId}"` : '';
+
+    // Map action name to actual method call
+    const actionMap = {
+      focusTerminal: `window.orchestrator.focusTerminal('${sessionId}')`,
+      openReplayViewer: `window.orchestrator.openReplayViewer('${sessionId}')`,
+      autoStartClaude: `window.orchestrator.autoStartClaude('${sessionId}')`,
+      showClaudeStartupModal: `window.orchestrator.showClaudeStartupModal('${sessionId}')`,
+      refreshTerminal: `window.orchestrator.refreshTerminal('${sessionId}')`,
+      showCodeReviewDropdown: `window.orchestrator.showCodeReviewDropdown('${sessionId}')`,
+      playInHytopia: `window.orchestrator.playInHytopia('${sessionId}')`,
+      copyLocalhostUrl: `window.orchestrator.copyLocalhostUrl('${sessionId}')`,
+      openHytopiaWebsite: `window.orchestrator.openHytopiaWebsite()`,
+      buildProduction: `window.orchestrator.buildProduction('${sessionId}')`,
+      killServer: `window.orchestrator.killServer('${sessionId}')`
+    };
+
+    const onclick = actionMap[buttonDef.action] || buttonDef.action;
+
+    return `<button class="${className}" ${id} ${disabled} onclick="${onclick}" title="${buttonDef.title}">${buttonDef.icon}</button>`;
+  }
+
+  /**
+   * Get default buttons (fallback when no config)
+   */
+  getDefaultButtons(terminalType) {
+    if (terminalType === 'claude') {
+      return [
+        this.renderButton('focus', this.buttonRegistry.focus, ''),
+        this.renderButton('claudeStart', this.buttonRegistry.claudeStart, ''),
+        this.renderButton('claudeModal', this.buttonRegistry.claudeModal, ''),
+        this.renderButton('refresh', this.buttonRegistry.refresh, ''),
+        this.renderButton('review', this.buttonRegistry.review, ''),
+        this.renderButton('build', this.buttonRegistry.build, '')
+      ];
+    } else {
+      return [
+        this.renderButton('focus', this.buttonRegistry.focus, ''),
+        this.renderButton('build', this.buttonRegistry.build, ''),
+        this.renderButton('kill', this.buttonRegistry.kill, '')
+      ];
+    }
+  }
+
+  /**
+   * Pre-fetch worktree-specific configs for all terminals
+   * @param {object} workspace
+   * @param {array} sessions
+   */
+  async prefetchWorktreeConfigs(workspace, sessions) {
+    console.log('Pre-fetching worktree configs...');
+    const fetchPromises = [];
+
+    for (const [sessionId, session] of Object.entries(sessions)) {
+      // Extract worktree path
+      let repositoryType = null;
+      let worktreePath = null;
+
+      try {
+        if (workspace.workspaceType === 'mixed-repo') {
+          const terminals = Array.isArray(workspace.terminals)
+            ? workspace.terminals
+            : workspace.terminals?.pairs;
+
+          if (terminals) {
+            const terminal = terminals.find(t => t.id === sessionId);
+            if (terminal && terminal.repository && terminal.worktree) {
+              repositoryType = terminal.repository.type;
+              worktreePath = `${terminal.repository.path}/${terminal.worktree}`;
+            }
+          }
+        } else {
+          repositoryType = workspace.type;
+          if (session.worktreeId && workspace.repository && workspace.repository.path) {
+            worktreePath = `${workspace.repository.path}/${session.worktreeId}`;
+          }
+        }
+
+        if (repositoryType && worktreePath) {
+          fetchPromises.push(
+            this.fetchCascadedConfig(repositoryType, worktreePath)
+              .then(config => {
+                this.worktreeConfigs.set(sessionId, config);
+                console.log(`Cached config for ${sessionId} from ${worktreePath}`);
+              })
+              .catch(error => {
+                console.warn(`Failed to fetch config for ${sessionId}:`, error);
+              })
+          );
+        }
+      } catch (error) {
+        console.error(`Error processing session ${sessionId}:`, error);
+      }
+    }
+
+    await Promise.all(fetchPromises);
+    console.log(`Pre-fetched ${this.worktreeConfigs.size} worktree configs`);
+  }
+
+  /**
+   * Fetch cascaded config from server for a specific worktree
+   * @param {string} repositoryType
+   * @param {string} worktreePath - Full path to worktree directory
+   * @returns {Promise<object>}
+   */
+  async fetchCascadedConfig(repositoryType, worktreePath) {
+    try {
+      const url = worktreePath
+        ? `/api/cascaded-config/${repositoryType}?worktreePath=${encodeURIComponent(worktreePath)}`
+        : `/api/cascaded-config/${repositoryType}`;
+
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch config');
+
+      return await response.json();
+    } catch (error) {
+      console.error(`Failed to fetch cascaded config for ${repositoryType}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get server controls HTML including start/stop and dynamic buttons
+   */
+  getServerControlsHTML(sessionId) {
+    const isRunning = this.serverStatuses.get(sessionId) === 'running';
+
+    // Start with server control (start/stop/launch)
+    let html = '';
+
+    if (isRunning) {
+      html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>`;
+    } else {
+      html += `<div class="server-launch-group">
+        <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+          <option value="">▶</option>
+          ${this.getDynamicLaunchOptions(sessionId)}
+          <option value="custom" selected>Custom...</option>
+        </select>
+        <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
+      </div>`;
+    }
+
+    // Add dynamic buttons from config
+    const buttons = this.getButtonsForSession(sessionId, 'server');
+
+    // Filter buttons based on showWhen and server state
+    const filteredButtons = buttons.filter(buttonHTML => {
+      // Simple heuristic: if button contains specific actions, check state
+      if (isRunning && (buttonHTML.includes('playInHytopia') || buttonHTML.includes('copyLocalhostUrl'))) {
+        return true; // Show these only when running
+      }
+      if (!isRunning && (buttonHTML.includes('playInHytopia') || buttonHTML.includes('copyLocalhostUrl'))) {
+        return false; // Hide when not running
+      }
+      return true; // Show all other buttons always
+    });
+
+    html += '\n' + filteredButtons.join('\n');
+
+    return html;
   }
 
   buildSidebar() {
@@ -1226,36 +1576,12 @@ class ClaudeOrchestrator {
           <span class="terminal-branch ${(session.branch === 'master' || session.branch === 'main' || session.branch?.startsWith('master-') || session.branch?.startsWith('main-')) ? 'master-branch' : ''}">${session.branch || ''}</span>
         </div>
         <div class="terminal-controls">
-          <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Show Only This Worktree">🔍</button>
-          <button class="control-btn" onclick="window.orchestrator.openReplayViewer('${sessionId}')" title="Open Replay Viewer">📹</button>
           ${isClaudeSession ? `
-            <button class="control-btn claude-start-btn" id="claude-start-btn-${sessionId}" disabled onclick="window.orchestrator.autoStartClaude('${sessionId}')" title="Start Claude with Settings">🚀</button>
-            <button class="control-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude with Options">↻</button>
-            <button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>
-            <button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>
-            <button class="control-btn" onclick="window.orchestrator.buildProduction('${sessionId}')" title="Build Production ZIP">📦</button>
+            ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
             ${this.getGitHubButtons(sessionId)}
           ` : ''}
           ${isServerSession ? `
-            ${this.serverStatuses.get(sessionId) === 'running' ?
-              `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
-              `<div class="server-launch-group">
-                <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
-                  <option value="">▶</option>
-                  <option value="development">Dev</option>
-                  <option value="production">Prod</option>
-                  <option value="custom" selected>Custom...</option>
-                </select>
-                <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
-              </div>`
-            }
-            ${this.serverStatuses.get(sessionId) === 'running' ? `
-              <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
-              <button class="control-btn" onclick="window.orchestrator.copyLocalhostUrl('${sessionId}')" title="Copy HTTPS localhost URL">📋</button>
-            ` : ''}
-            <button class="control-btn" onclick="window.orchestrator.openHytopiaWebsite()" title="Open Hytopia Website">🌐</button>
-            <button class="control-btn" onclick="window.orchestrator.buildProduction('${sessionId}')" title="Build Production ZIP">📦</button>
-            <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
+            ${this.getServerControlsHTML(sessionId)}
           ` : ''}
         </div>
       </div>
@@ -1288,13 +1614,9 @@ class ClaudeOrchestrator {
                 </button>
               </div>
 
-              <!-- Quick Presets -->
+              <!-- Advanced Settings Button -->
               <div class="inline-presets">
-                <label class="preset-toggle">
-                  <input type="checkbox" id="powerful-${sessionId}" onchange="window.orchestrator.updateInlinePreset('${sessionId}', this.checked)">
-                  <span class="preset-label">🚀 Powerful</span>
-                </label>
-                <button class="advanced-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="More Options">⚙️</button>
+                <button class="advanced-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Advanced Options">⚙️ Advanced</button>
               </div>
             </div>
           </div>
@@ -1749,39 +2071,57 @@ class ClaudeOrchestrator {
    * Get dynamic launch options based on current workspace
    */
   getDynamicLaunchOptions(sessionId) {
-    if (!this.currentWorkspace) {
+    // Derive repository type on-demand from workspace config
+    // This handles: config changes, worktree additions/removals, existing sessions
+    let repositoryType = null;
+
+    if (this.currentWorkspace) {
+      if (this.currentWorkspace.workspaceType === 'mixed-repo') {
+        // Mixed-repo: Extract repository name from sessionId and lookup in workspace config
+        const repositoryName = this.extractRepositoryName(sessionId);
+        if (repositoryName && this.currentWorkspace.terminals?.pairs) {
+          // Find matching terminal in workspace config
+          const terminal = this.currentWorkspace.terminals.pairs.find(t =>
+            t.id === sessionId || t.repository?.name === repositoryName
+          );
+          repositoryType = terminal?.repository?.type || null;
+        }
+      } else {
+        // Single-repo: Use workspace type
+        repositoryType = this.currentWorkspace.type;
+      }
+    }
+
+    if (!repositoryType) {
       return '<option value="development">Dev</option><option value="production">Prod</option>';
     }
 
-    const workspaceType = this.currentWorkspace.type;
-    const typeInfo = this.workspaceTypes[workspaceType];
+    // Use cascaded config (includes Global → Category → Framework → Project)
+    const cascadedConfig = this.cascadedConfigs[repositoryType];
 
-    if (!typeInfo) {
+    if (!cascadedConfig) {
       return '<option value="development">Dev</option><option value="production">Prod</option>';
     }
 
-    // If this workspace type has game modes, show them
-    if (typeInfo.gameModes) {
-      const modes = Object.entries(typeInfo.gameModes)
+    // Check for game modes in cascaded config (from any level: global, category, framework, or project)
+    if (cascadedConfig.gameModes) {
+      const modes = Object.entries(cascadedConfig.gameModes)
         .sort((a, b) => (a[1].priority || 999) - (b[1].priority || 999))
         .map(([key, mode]) => `<option value="${key}" title="${mode.description || ''}">${mode.name || key}</option>`)
         .join('');
       return modes;
     }
 
-    // If this inherits from a framework, get framework modes
-    if (typeInfo.inherits && this.frameworks[typeInfo.inherits]) {
-      const framework = this.frameworks[typeInfo.inherits];
-      if (framework.commonFlags) {
-        const modes = Object.entries(framework.commonFlags)
-          .filter(([key, flag]) => flag.type === 'select')
-          .map(([key, flag]) =>
-            flag.options.map(option =>
-              `<option value="${key}_${option}" title="${flag.description || ''}">${flag.name || key}: ${option}</option>`
-            ).join('')
-          ).join('');
-        return modes || '<option value="development">Dev</option><option value="production">Prod</option>';
-      }
+    // Check for common flags in cascaded config (from framework or category level)
+    if (cascadedConfig.commonFlags) {
+      const modes = Object.entries(cascadedConfig.commonFlags)
+        .filter(([key, flag]) => flag.type === 'select')
+        .map(([key, flag]) =>
+          flag.options.map(option =>
+            `<option value="${key}_${option}" title="${flag.description || ''}">${flag.name || key}: ${option}</option>`
+          ).join('')
+        ).join('');
+      return modes || '<option value="development">Dev</option><option value="production">Prod</option>';
     }
 
     return '<option value="development">Dev</option><option value="production">Prod</option>';
@@ -1794,30 +2134,8 @@ class ClaudeOrchestrator {
     const controlsDiv = wrapper.querySelector('.terminal-controls');
     if (!controlsDiv) return;
 
-    const isRunning = this.serverStatuses.get(sessionId) === 'running';
-
-    // Update controls HTML - restore full control set including settings button
-    controlsDiv.innerHTML = `
-      <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Show Only This Worktree">🔍</button>
-      ${isRunning ?
-        `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
-        `<div class="server-launch-group">
-          <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
-            <option value="">▶</option>
-            ${this.getDynamicLaunchOptions(sessionId)}
-            <option value="custom" selected>Custom...</option>
-          </select>
-          <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
-        </div>`
-      }
-      ${isRunning ? `
-        <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
-        <button class="control-btn" onclick="window.orchestrator.copyLocalhostUrl('${sessionId}')" title="Copy HTTPS localhost URL">📋</button>
-      ` : ''}
-      <button class="control-btn" onclick="window.orchestrator.openHytopiaWebsite()" title="Open Hytopia Website">🌐</button>
-      <button class="control-btn" onclick="window.orchestrator.buildProduction('${sessionId}')" title="Build Production ZIP">📦</button>
-      <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
-    `;
+    // Use dynamic button system
+    controlsDiv.innerHTML = this.getServerControlsHTML(sessionId);
   }
   
   handleServerError(sessionId, output) {
@@ -3606,24 +3924,28 @@ class ClaudeOrchestrator {
    */
   quickStartAgent(sessionId, mode) {
     const agentDropdown = document.getElementById(`inline-agent-${sessionId}`);
-    const powerfulCheckbox = document.getElementById(`powerful-${sessionId}`);
-
     const selectedAgent = agentDropdown ? agentDropdown.value : 'claude';
-    const usePowerfulPreset = powerfulCheckbox ? powerfulCheckbox.checked : false;
 
-    // Build configuration based on selections
+    // Build configuration with BEST settings by default (no more "powerful" checkbox)
     let config;
     if (selectedAgent === 'claude') {
       config = {
         agentId: 'claude',
         mode: mode,
-        flags: usePowerfulPreset ? ['skipPermissions'] : []
+        flags: ['skipPermissions']  // Always use best settings
       };
     } else if (selectedAgent === 'codex') {
       config = {
         agentId: 'codex',
-        mode: mode, // Use same modes as Claude: fresh/continue/resume
-        flags: usePowerfulPreset ? ['gpt5Model', 'highReasoning', 'bypassAll'] : ['gpt5Model', 'highReasoning', 'workspaceWrite']
+        mode: mode,
+        model: 'gpt-5-codex',  // Best model
+        reasoning: 'high',      // High reasoning
+        verbosity: 'high',      // Detailed output
+        flags: [
+          'yolo',               // --yolo: no approvals + full access
+          'networkAccess',      // Enable network for package installs
+          'search'              // Enable web search tool
+        ]
       };
     }
 
@@ -3685,26 +4007,13 @@ class ClaudeOrchestrator {
   /**
    * Update inline preset (powerful mode toggle)
    */
-  updateInlinePreset(sessionId, isPowerful) {
-    // Save preference
-    const prefs = this.sessionAgentPreferences.get(sessionId) || { agentId: 'claude', powerful: false };
-    prefs.powerful = isPowerful;
-    this.sessionAgentPreferences.set(sessionId, prefs);
-
-    // Visual feedback
-    const checkbox = document.getElementById(`powerful-${sessionId}`);
-    if (checkbox) {
-      checkbox.checked = isPowerful;
-    }
-  }
-
   /**
    * Get saved agent preferences for session
    */
   getSessionAgentPreference(sessionId) {
     return this.sessionAgentPreferences.get(sessionId) || {
-      agentId: 'claude',
-      powerful: false
+      agentId: 'claude'
+      // Note: "powerful" removed - we always use best settings by default
     };
   }
 
