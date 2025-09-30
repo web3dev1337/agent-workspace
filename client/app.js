@@ -1396,14 +1396,14 @@ class ClaudeOrchestrator {
             const term = this.terminalManager.terminals.get(sessionId);
             terminalEl.innerHTML = '';
             term.open(terminalEl);
-            
+
             // Only fit if visible
             if (this.visibleTerminals.has(sessionId)) {
-              // Add a small delay to ensure CSS grid has applied
-              setTimeout(() => {
+              // Use requestAnimationFrame to ensure renderer is ready before fitting
+              requestAnimationFrame(() => {
                 this.terminalManager.fitTerminal(sessionId);
                 term.refresh(0, term.rows - 1);
-              }, 100);
+              });
             }
           } else {
             this.terminalManager.createTerminal(sessionId, session);
