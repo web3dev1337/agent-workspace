@@ -271,12 +271,31 @@ class ConfigDiscoveryService {
    * Load game configuration
    */
   async loadGameConfig(gamePath, gameName, framework) {
-    const configPath = path.join(gamePath, '.orchestrator-config.json');
+    // Try multiple locations for config file:
+    // 1. gamePath/.orchestrator-config.json (flat structure)
+    // 2. gamePath/master/.orchestrator-config.json (worktree structure)
+    const configPaths = [
+      path.join(gamePath, '.orchestrator-config.json'),
+      path.join(gamePath, 'master', '.orchestrator-config.json')
+    ];
 
-    try {
-      const configData = await fs.readFile(configPath, 'utf8');
-      const config = JSON.parse(configData);
+    let config = null;
+    let configData = null;
 
+    // Try each path until we find a config
+    for (const configPath of configPaths) {
+      try {
+        configData = await fs.readFile(configPath, 'utf8');
+        config = JSON.parse(configData);
+        logger.debug(`Found game config at ${configPath}`, { gameName });
+        break;
+      } catch (error) {
+        // Config not found at this path, try next
+        continue;
+      }
+    }
+
+    if (config) {
       // Merge with auto-generated values
       const generatedConfig = {
         id: `${gameName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-game`,
@@ -292,8 +311,8 @@ class ConfigDiscoveryService {
         ...generatedConfig,
         ...config
       };
-    } catch (error) {
-      // Auto-generate game config
+    } else {
+      // No config found, auto-generate game config
       return this.autoDetectGame(gamePath, gameName, framework);
     }
   }
