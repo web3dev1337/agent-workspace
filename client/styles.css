@@ -283,14 +283,14 @@ header h1 {
 .terminal-grid {
   flex: 1;
   padding: var(--space-md);
-  overflow: hidden;
+  overflow: auto;  /* Changed from hidden to auto to allow scrolling if needed */
   display: grid;
   gap: var(--space-md);
   /* Dynamic grid - automatically adjusts based on visible terminals */
   grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  height: calc(100vh - var(--header-height) - 2 * var(--space-md));
-  contain: layout size;
+  grid-template-rows: repeat(2, minmax(300px, 1fr));  /* Added min height of 300px */
+  max-height: calc(100vh - var(--header-height) - 2 * var(--space-md));  /* Changed to max-height */
+  contain: layout;  /* Removed size containment to allow scrolling */
 }
 
 /* Dynamic layouts for different terminal counts - Pair-aware (Claude + Server) */
@@ -414,6 +414,7 @@ header h1 {
   display: flex;
   flex-direction: column;
   min-height: 300px;
+  max-height: 100%;  /* Added to respect grid cell height */
   height: 100%;
   position: relative;
   isolation: isolate;
@@ -1280,15 +1281,17 @@ header h1 {
 /* Compact Inline Agent UI */
 .startup-ui-compact {
   text-align: center;
-  padding: var(--space-lg);
+  padding: var(--space-md);  /* Reduced from lg to md for smaller screens */
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--space-sm);  /* Reduced from md to sm */
   max-width: 400px;
+  max-height: 100%;  /* Respect parent container height */
   margin: 0 auto;
+  overflow-y: auto;  /* Add scroll if content is too tall */
 }
 
 .inline-agent-selector {
@@ -1381,14 +1384,16 @@ header h1 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--space-md) var(--space-lg);
+  padding: var(--space-sm) var(--space-md);  /* Reduced padding for smaller screens */
   background: var(--bg-secondary);
   border: 2px solid var(--border-color);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
-  min-width: 90px;
-  min-height: 70px;
+  min-width: 80px;  /* Reduced from 90px */
+  min-height: 60px;  /* Reduced from 70px */
+  flex: 1;  /* Allow buttons to shrink if needed */
+  max-width: 120px;  /* Prevent buttons from getting too wide */
   color: var(--text-primary);
 }
 
@@ -4179,4 +4184,189 @@ header h1 {
 .repo-section.current-repo .repo-name {
   color: var(--accent-primary);
   font-weight: 600;
+}
+
+/* ========================================
+   RESPONSIVE MEDIA QUERIES
+   ======================================== */
+
+/* Smaller desktop screens and landscape tablets */
+@media (max-height: 900px) {
+  .terminal-grid {
+    grid-template-rows: repeat(2, minmax(250px, 1fr));  /* Reduced min height */
+  }
+
+  .terminal-wrapper {
+    min-height: 250px;  /* Match grid min height */
+  }
+
+  .startup-ui-compact {
+    padding: var(--space-sm);
+    gap: 6px;
+  }
+
+  .startup-btn-inline {
+    min-height: 50px;
+    min-width: 70px;
+    padding: var(--space-xs) var(--space-sm);
+  }
+
+  .startup-btn-inline .btn-icon {
+    font-size: 1.2rem;
+  }
+
+  .startup-btn-inline span:last-child {
+    font-size: 0.75rem;
+    margin-top: var(--space-xs);
+  }
+}
+
+/* Portrait tablets and small laptop screens */
+@media (max-height: 768px) {
+  :root {
+    --header-height: 50px;  /* Reduced header height */
+  }
+
+  .terminal-grid {
+    grid-template-rows: repeat(2, minmax(220px, 1fr));
+    padding: var(--space-sm);
+    gap: var(--space-sm);
+  }
+
+  .terminal-wrapper {
+    min-height: 220px;
+  }
+
+  .terminal-header {
+    padding: 6px var(--space-sm);
+  }
+
+  .terminal-title {
+    font-size: 0.8rem;
+  }
+
+  .startup-ui-compact {
+    padding: 8px;
+    gap: 4px;
+  }
+
+  .inline-mode-buttons {
+    gap: 4px;
+  }
+
+  .startup-btn-inline {
+    min-height: 45px;
+    min-width: 65px;
+    padding: 4px 8px;
+  }
+
+  .startup-btn-inline .btn-icon {
+    font-size: 1.1rem;
+    margin-bottom: 2px;
+  }
+
+  .startup-btn-inline span:last-child {
+    font-size: 0.7rem;
+    margin-top: 2px;
+  }
+}
+
+/* Very small screens / portrait orientation */
+@media (max-height: 600px) {
+  :root {
+    --header-height: 45px;
+  }
+
+  .terminal-grid {
+    grid-template-rows: repeat(2, minmax(200px, 1fr));
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .terminal-wrapper {
+    min-height: 200px;
+  }
+
+  .terminal-header {
+    padding: 4px var(--space-sm);
+  }
+
+  .startup-ui-compact {
+    padding: 6px;
+    gap: 3px;
+  }
+
+  .inline-agent-selector {
+    margin-bottom: 4px;
+  }
+
+  .agent-dropdown {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+  }
+
+  .inline-mode-buttons {
+    gap: 3px;
+  }
+
+  .startup-btn-inline {
+    min-height: 40px;
+    min-width: 60px;
+    padding: 3px 6px;
+  }
+
+  .startup-btn-inline .btn-icon {
+    font-size: 1rem;
+    margin-bottom: 1px;
+  }
+
+  .startup-btn-inline span:last-child {
+    font-size: 0.65rem;
+    margin-top: 1px;
+  }
+
+  .inline-presets {
+    margin-top: 4px;
+    gap: 4px;
+  }
+
+  .preset-label {
+    font-size: 0.7rem;
+    padding: 3px 6px;
+  }
+}
+
+/* Ultra-compact for very constrained heights */
+@media (max-height: 480px) {
+  .terminal-grid {
+    grid-template-rows: repeat(2, minmax(180px, 1fr));
+  }
+
+  .terminal-wrapper {
+    min-height: 180px;
+  }
+
+  .startup-ui-compact {
+    padding: 4px;
+  }
+
+  .inline-mode-buttons {
+    flex-direction: row;  /* Force horizontal layout */
+  }
+
+  .startup-btn-inline {
+    min-height: 35px;
+    min-width: 55px;
+    flex-direction: row;
+    gap: 4px;
+  }
+
+  .startup-btn-inline .btn-icon {
+    font-size: 0.9rem;
+    margin-bottom: 0;
+  }
+
+  .startup-btn-inline span:last-child {
+    margin-top: 0;
+  }
 }
