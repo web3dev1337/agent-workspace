@@ -145,8 +145,23 @@ class WorkspaceManager {
   }
 
   /**
-   * Deep merge two config objects
-   * Arrays are concatenated, objects are merged, primitives are overridden
+   * Deep merge two config objects with smart handling by key type
+   *
+   * Merge Strategies:
+   * - gameModes/commonFlags: Shallow merge (child can override parent modes/flags)
+   * - buttons/actions: Deep recursive merge (merge per terminal type, then per button)
+   * - Other objects: Deep recursive merge
+   * - Arrays: Override (child replaces parent)
+   * - Primitives: Override (child replaces parent)
+   *
+   * Example button merge:
+   *   Base:     { buttons: { server: { play: {...} } } }
+   *   Override: { buttons: { server: { stop: {...} }, claude: { review: {...} } } }
+   *   Result:   { buttons: { server: { play: {...}, stop: {...} }, claude: { review: {...} } } }
+   *
+   * @param {object} base - Base config object
+   * @param {object} override - Override config object
+   * @returns {object} Merged config with all properties from both configs
    */
   mergeConfigs(base, override) {
     const result = { ...base };
