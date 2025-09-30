@@ -906,6 +906,48 @@ class ClaudeOrchestrator {
     }
   }
 
+  /**
+   * Get server controls HTML including start/stop and dynamic buttons
+   */
+  getServerControlsHTML(sessionId) {
+    const isRunning = this.serverStatuses.get(sessionId) === 'running';
+
+    // Start with server control (start/stop/launch)
+    let html = '';
+
+    if (isRunning) {
+      html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>`;
+    } else {
+      html += `<div class="server-launch-group">
+        <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+          <option value="">▶</option>
+          ${this.getDynamicLaunchOptions(sessionId)}
+          <option value="custom" selected>Custom...</option>
+        </select>
+        <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
+      </div>`;
+    }
+
+    // Add dynamic buttons from config
+    const buttons = this.getButtonsForSession(sessionId, 'server');
+
+    // Filter buttons based on showWhen and server state
+    const filteredButtons = buttons.filter(buttonHTML => {
+      // Simple heuristic: if button contains specific actions, check state
+      if (isRunning && (buttonHTML.includes('playInHytopia') || buttonHTML.includes('copyLocalhostUrl'))) {
+        return true; // Show these only when running
+      }
+      if (!isRunning && (buttonHTML.includes('playInHytopia') || buttonHTML.includes('copyLocalhostUrl'))) {
+        return false; // Hide when not running
+      }
+      return true; // Show all other buttons always
+    });
+
+    html += '\n' + filteredButtons.join('\n');
+
+    return html;
+  }
+
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
 
@@ -1429,35 +1471,12 @@ class ClaudeOrchestrator {
           <span class="terminal-branch ${(session.branch === 'master' || session.branch === 'main' || session.branch?.startsWith('master-') || session.branch?.startsWith('main-')) ? 'master-branch' : ''}">${session.branch || ''}</span>
         </div>
         <div class="terminal-controls">
-          <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Show Only This Worktree">🔍</button>
-          <button class="control-btn" onclick="window.orchestrator.openReplayViewer('${sessionId}')" title="Open Replay Viewer">📹</button>
           ${isClaudeSession ? `
-            <button class="control-btn claude-start-btn" id="claude-start-btn-${sessionId}" disabled onclick="window.orchestrator.autoStartClaude('${sessionId}')" title="Start Claude with Settings">🚀</button>
-            <button class="control-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Start Claude with Options">↻</button>
-            <button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>
-            <button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>
-            <button class="control-btn" onclick="window.orchestrator.buildProduction('${sessionId}')" title="Build Production ZIP">📦</button>
+            ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
             ${this.getGitHubButtons(sessionId)}
           ` : ''}
           ${isServerSession ? `
-            ${this.serverStatuses.get(sessionId) === 'running' ?
-              `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
-              `<div class="server-launch-group">
-                <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
-                  <option value="">▶</option>
-                  ${this.getDynamicLaunchOptions(sessionId)}
-                  <option value="custom" selected>Custom...</option>
-                </select>
-                <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
-              </div>`
-            }
-            ${this.serverStatuses.get(sessionId) === 'running' ? `
-              <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
-              <button class="control-btn" onclick="window.orchestrator.copyLocalhostUrl('${sessionId}')" title="Copy HTTPS localhost URL">📋</button>
-            ` : ''}
-            <button class="control-btn" onclick="window.orchestrator.openHytopiaWebsite()" title="Open Hytopia Website">🌐</button>
-            <button class="control-btn" onclick="window.orchestrator.buildProduction('${sessionId}')" title="Build Production ZIP">📦</button>
-            <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
+            ${this.getServerControlsHTML(sessionId)}
           ` : ''}
         </div>
       </div>
@@ -2010,30 +2029,8 @@ class ClaudeOrchestrator {
     const controlsDiv = wrapper.querySelector('.terminal-controls');
     if (!controlsDiv) return;
 
-    const isRunning = this.serverStatuses.get(sessionId) === 'running';
-
-    // Update controls HTML - restore full control set including settings button
-    controlsDiv.innerHTML = `
-      <button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Show Only This Worktree">🔍</button>
-      ${isRunning ?
-        `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>` :
-        `<div class="server-launch-group">
-          <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
-            <option value="">▶</option>
-            ${this.getDynamicLaunchOptions(sessionId)}
-            <option value="custom" selected>Custom...</option>
-          </select>
-          <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
-        </div>`
-      }
-      ${isRunning ? `
-        <button class="control-btn" onclick="window.orchestrator.playInHytopia('${sessionId}')" title="Play in Hytopia">🎮</button>
-        <button class="control-btn" onclick="window.orchestrator.copyLocalhostUrl('${sessionId}')" title="Copy HTTPS localhost URL">📋</button>
-      ` : ''}
-      <button class="control-btn" onclick="window.orchestrator.openHytopiaWebsite()" title="Open Hytopia Website">🌐</button>
-      <button class="control-btn" onclick="window.orchestrator.buildProduction('${sessionId}')" title="Build Production ZIP">📦</button>
-      <button class="control-btn danger" onclick="window.orchestrator.killServer('${sessionId}')" title="Force Kill">✕</button>
-    `;
+    // Use dynamic button system
+    controlsDiv.innerHTML = this.getServerControlsHTML(sessionId);
   }
   
   handleServerError(sessionId, output) {
