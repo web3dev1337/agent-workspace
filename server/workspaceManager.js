@@ -90,12 +90,81 @@ class WorkspaceManager {
   }
 
   /**
-   * Get full cascaded config for a repository type
+   * Get cascaded config for a specific worktree path
+   * This loads the config from the actual worktree directory (work1, work2, master, etc.)
+   * Merges: Global → Category → Framework → Worktree-specific config
+   * @param {string} repositoryType - e.g., "hyfire2-game"
+   * @param {string} worktreePath - Full path to worktree, e.g., "/home/<user>/GitHub/games/hytopia/games/HyFire2/work1"
+   * @returns {object} Fully merged config with worktree-specific overrides
+   */
+  async getCascadedConfigForWorktree(repositoryType, worktreePath) {
+    // Get base cascaded config (Global → Category → Framework)
+    const baseConfig = this.getCascadedConfigBase(repositoryType);
+    if (!baseConfig) return null;
+
+    // Load worktree-specific config
+    const worktreeConfigPath = path.join(worktreePath, '.orchestrator-config.json');
+    try {
+      const configData = await fs.readFile(worktreeConfigPath, 'utf8');
+      const worktreeConfig = JSON.parse(configData);
+
+      // Merge worktree config on top of base
+      return this.mergeConfigs(baseConfig, worktreeConfig);
+    } catch (error) {
+      // No worktree-specific config, return base
+      return baseConfig;
+    }
+  }
+
+  /**
+   * Get base cascaded config (Global → Category → Framework)
+   * WITHOUT the project-specific layer
+   * @param {string} repositoryType
+   * @returns {object} Base config before project-specific overrides
+   */
+  getCascadedConfigBase(repositoryType) {
+    if (!this.discoveredWorkspaceTypes) {
+      return null;
+    }
+
+    // Find the specific project config to get framework/category info
+    const specificConfig = this.discoveredWorkspaceTypes.games?.[repositoryType];
+    if (!specificConfig) {
+      return null;
+    }
+
+    // Start with empty base
+    let mergedConfig = {};
+
+    // Layer 1: Global config (if exists)
+    const globalConfig = {};
+    mergedConfig = this.mergeConfigs(mergedConfig, globalConfig);
+
+    // Layer 2 & 3: Get framework first (to find category)
+    const frameworkId = specificConfig.inherits;
+    const frameworkConfig = frameworkId && this.discoveredWorkspaceTypes.frameworks?.[frameworkId];
+
+    // Layer 2: Category config
+    if (frameworkConfig && frameworkConfig.category) {
+      const categoryId = frameworkConfig.category;
+      const categoryConfig = this.discoveredWorkspaceTypes.categories?.[categoryId];
+      if (categoryConfig) {
+        mergedConfig = this.mergeConfigs(mergedConfig, categoryConfig);
+      }
+    }
+
+    // Layer 3: Framework config
+    if (frameworkConfig) {
+      mergedConfig = this.mergeConfigs(mergedConfig, frameworkConfig);
+    }
+
+    return mergedConfig;
+  }
+
+  /**
+   * Get full cascaded config for a repository type (legacy method)
    * Merges: Global → Category → Framework → Specific Project
-   * Examples:
-   *   - Game: Global → games → hytopia → HyFire2
-   *   - Book: Global → writing → book → PatternPlayers
-   *   - Tool: Global → tools → cli → orchestrator
+   * NOTE: This uses the project config from discovery, not worktree-specific
    * @param {string} repositoryType - e.g., "hyfire2-game", "patternplayers-book"
    * @returns {object} Fully merged config with all inherited properties
    */

@@ -505,6 +505,27 @@ app.get('/api/workspace-types', (req, res) => {
   }
 });
 
+// Get cascaded config for a specific worktree
+app.get('/api/cascaded-config/:repositoryType', async (req, res) => {
+  try {
+    const { repositoryType } = req.params;
+    const { worktreePath } = req.query;
+
+    if (worktreePath) {
+      // Get worktree-specific config
+      const config = await workspaceManager.getCascadedConfigForWorktree(repositoryType, worktreePath);
+      res.json(config || {});
+    } else {
+      // Get generic config (for backward compatibility)
+      const config = workspaceManager.getCascadedConfig(repositoryType);
+      res.json(config || {});
+    }
+  } catch (error) {
+    logger.error('Failed to get cascaded config', { error: error.message });
+    res.status(500).json({ error: 'Failed to get cascaded config' });
+  }
+});
+
 app.post('/api/workspaces', async (req, res) => {
   try {
     const workspaceData = req.body;
