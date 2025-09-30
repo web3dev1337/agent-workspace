@@ -220,45 +220,69 @@ SERVICES:     Modular service architecture with clear interfaces
 ### Why Two Instances?
 To avoid conflicts when developing the Orchestrator itself while using it for other work.
 
-### 🎯 SIMPLE COMMANDS:
+### 🎯 COMPLETE SETUP FOR NEW TEAM MEMBERS:
+
+**Full installation (Production + Dev instances):**
+
+```bash
+# 1. Production instance (port 3000)
+git clone https://github.com/web3dev1337/claude-orchestrator.git ~/GitHub/tools/automation/claude-orchestrator/master
+cd ~/GitHub/tools/automation/claude-orchestrator/master
+
+cat > .env << 'EOF'
+PORT=3000
+CLIENT_PORT=2080
+TAURI_DEV_PORT=1420
+DIFF_VIEWER_PORT=7655
+LOG_LEVEL=info
+NODE_ENV=development
+ENABLE_FILE_WATCHING=true
+EOF
+
+npm install
+cd diff-viewer && npm install && cd ..
+
+# 2. Dev instance (port 4000)
+git clone https://github.com/web3dev1337/claude-orchestrator.git ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
+cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
+
+cat > .env << 'EOF'
+PORT=4000
+CLIENT_PORT=2081
+TAURI_DEV_PORT=1421
+DIFF_VIEWER_PORT=7656
+LOG_LEVEL=info
+NODE_ENV=development
+ENABLE_FILE_WATCHING=true
+EOF
+
+npm install
+cd diff-viewer && npm install && cd ..
+```
+
+### 🎯 RUNNING THE INSTANCES:
 
 #### Production Instance (Your Daily Work):
 ```bash
-cd ~/claude-orchestrator
-npm run prod           # Runs on ports 3000/2080
+cd ~/GitHub/tools/automation/claude-orchestrator/master
+npm start           # Runs on ports 3000/2080/7655
 ```
 
 #### Development Instance (Modifying the Orchestrator):
 ```bash
-cd ~/claude-orchestrator-dev
-npm run dev   # Runs on ports 4000/2081 (override ports)
-# OR just use: npm run dev:all (since .env already sets ports to 4000/2081)
+cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
+npm start           # Runs on ports 4000/2081/7656
 ```
-
-### Setup Details:
-
-Both directories are already configured with different `.env` files:
-
-**~/claude-orchestrator/.env** (Production)
-- PORT=3000
-- Default client port 2080
-- For your actual Claude sessions
-
-**~/claude-orchestrator-dev/.env** (Development)
-- PORT=4000
-- CLIENT_PORT=2081
-- TAURI_DEV_PORT=1421
-- For developing/testing the Orchestrator
 
 ### Quick Reference:
 
 | Purpose | Directory | Command | Ports | Use Case |
 |---------|-----------|---------|-------|----------|
-| **Production** | ~/claude-orchestrator | `npm run prod` | 3000/2080/7655 | Your daily Claude work |
-| **Development** | ~/claude-orchestrator-dev | `npm run dev` or `dev:all` | 4000/2081/7656 | Modifying Orchestrator |
+| **Production** | ~/GitHub/tools/automation/claude-orchestrator/master | `npm start` | 3000/2080/7655 | Your daily Claude work |
+| **Development** | ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev | `npm start` | 4000/2081/7656 | Modifying Orchestrator |
 
 ### What Gets Started:
-All commands (`prod`, `dev:all`, `dev`) run these 4 services:
+All commands run these 4 services:
 - **Server** (Express backend with hot-reload)
 - **Client** (Web UI dev server)
 - **Tauri** (Native desktop app)
@@ -266,9 +290,9 @@ All commands (`prod`, `dev:all`, `dev`) run these 4 services:
 
 ### Important Notes:
 - Both instances can run simultaneously without conflicts
-- The `.env` files control which ports are used (no need to override)
-- `dev` command explicitly sets ports to 4000/2081 (redundant in dev folder since .env has them)
-- In `claude-orchestrator-dev`, you can just use `npm run dev:all` since .env already has the right ports
+- The `.env` files control which ports are used
+- `npm start`, `npm run dev`, and `npm run prod` are all equivalent
+- Each instance needs its own `node_modules` and `diff-viewer/node_modules`
 
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
