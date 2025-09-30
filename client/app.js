@@ -85,11 +85,13 @@ class ClaudeOrchestrator {
       console.log('Attempting to connect to server...');
       const authToken = this.getAuthToken();
       const socketOptions = authToken ? { auth: { token: authToken } } : {};
-      
-      // Connect to server - detect correct port
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+
+      // Connect to server - client dev-server proxies to correct backend port from .env
+      // Production: client on 2080 proxies to server on 3000
+      // Development: client on 2081 proxies to server on 4000
+      const serverUrl = window.location.origin;
       this.socket = io(serverUrl, socketOptions);
-      console.log('Socket created, waiting for connection...');
+      console.log(`Socket connecting to ${serverUrl}...`);
       
       // Connection events
       this.socket.on('connect', () => {
