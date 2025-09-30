@@ -223,12 +223,14 @@ class TerminalManager {
     
     // Clear any existing content first
     terminalElement.innerHTML = '';
-    
+
     // Open terminal in DOM
     terminal.open(terminalElement);
-    
-    // Initial fit
-    this.fitTerminal(sessionId);
+
+    // Defer initial fit to ensure terminal renderer is ready
+    requestAnimationFrame(() => {
+      this.fitTerminal(sessionId);
+    });
     
     // Focus terminal when clicked
     terminalElement.addEventListener('click', () => {
