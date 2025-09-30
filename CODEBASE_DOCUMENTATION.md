@@ -74,6 +74,46 @@ server/worktreeHelper.js            - Git worktree operations wrapper
 └─ Safety: Path validation and cleanup handling
 ```
 
+### Cascaded Configuration System (NEW)
+```
+server/workspaceManager.js          - Config cascade implementation
+├─ Hierarchy: Global → Category → Framework → Project → Worktree
+├─ Methods: getCascadedConfig(), getCascadedConfigForWorktree(), mergeConfigs()
+├─ Features: Deep merge, worktree-specific overrides, cache prevention
+└─ API: /api/cascaded-config/:type?worktreePath=...
+
+server/configDiscoveryService.js    - Dynamic config discovery
+├─ Discovers: Game/framework/category configs from file hierarchy
+├─ Structure: ~/GitHub/games/hytopia/.orchestrator-config.json
+└─ Auto-detection: Scans master/ subdirectory for worktree-based projects
+
+Config File Hierarchy:
+  ~/GitHub/.orchestrator-config.json              (Global)
+  ~/GitHub/games/.orchestrator-config.json        (Category)
+  ~/GitHub/games/hytopia/.orchestrator-config.json (Framework)
+  ~/GitHub/games/hytopia/games/HyFire2/.orchestrator-config.json (Project)
+  ~/GitHub/games/hytopia/games/HyFire2/work1/.orchestrator-config.json (Worktree)
+
+Config Structure:
+{
+  "buttons": {
+    "claude": { "review": {...}, "replay": {...} },
+    "server": { "play": {...}, "build": {...}, "kill": {...} }
+  },
+  "gameModes": {
+    "deathmatch": { "flag": "--mode=deathmatch", "label": "Deathmatch" }
+  },
+  "commonFlags": {
+    "unlockAll": { "flag": "--unlock-all", "label": "Unlock All" }
+  }
+}
+
+client/app.js                       - Config pre-fetching & caching
+├─ Methods: prefetchWorktreeConfigs(), fetchCascadedConfig()
+├─ Cache: Map<sessionId, config> for worktree-specific configs
+└─ Extract: extractRepositoryName() from workspace config
+```
+
 ## Frontend Applications
 
 ### Web Client

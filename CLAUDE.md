@@ -106,6 +106,96 @@ git checkout -b fix/your-feature-name main
 - `server/worktreeHelper.js`: Git worktree integration
 - `client/workspace-wizard.js`: UI for workspace creation
 
+## Cascaded Configuration System
+
+### Overview
+The orchestrator uses a 5-layer cascading configuration system that allows project-specific button configurations, game modes, and common flags to be defined at different hierarchy levels and merged intelligently.
+
+### Configuration Hierarchy (Priority: Bottom → Top)
+1. **Global**: `~/GitHub/.orchestrator-config.json`
+2. **Category**: `~/GitHub/games/.orchestrator-config.json`
+3. **Framework**: `~/GitHub/games/hytopia/.orchestrator-config.json`
+4. **Project**: `~/GitHub/games/hytopia/games/HyFire2/.orchestrator-config.json`
+5. **Worktree**: `~/GitHub/games/hytopia/games/HyFire2/work1/.orchestrator-config.json` (highest priority)
+
+### Configuration File Structure
+```json
+{
+  "buttons": {
+    "claude": {
+      "review": {
+        "label": "Review",
+        "command": "gh pr view --web",
+        "description": "Open PR in browser"
+      }
+    },
+    "server": {
+      "play": {
+        "label": "Play",
+        "command": "npm run dev -- {{gameMode}} {{commonFlags}}",
+        "description": "Start game server"
+      }
+    }
+  },
+  "gameModes": {
+    "deathmatch": {
+      "flag": "--mode=deathmatch",
+      "label": "Deathmatch"
+    }
+  },
+  "commonFlags": {
+    "unlockAll": {
+      "flag": "--unlock-all",
+      "label": "Unlock All"
+    }
+  }
+}
+```
+
+### How Configs Merge
+- **Buttons**: Deep merge by terminal type (claude/server) and button ID
+- **Game Modes**: Object merge - child overrides parent with same key
+- **Common Flags**: Object merge - child overrides parent with same key
+- **Arrays**: Child completely replaces parent (no array merge)
+- **Primitives**: Child overrides parent
+
+### Using Cascaded Configs
+
+#### API Endpoint
+```bash
+# Get base config for a repository type
+GET /api/cascaded-config/:type
+
+# Get config with worktree overrides
+GET /api/cascaded-config/:type?worktreePath=/path/to/worktree
+```
+
+#### In Code
+```javascript
+// Get base cascaded config
+const config = workspaceManager.getCascadedConfigBase('hytopia-game');
+
+// Get config with worktree-specific overrides
+const worktreeConfig = await workspaceManager.getCascadedConfigForWorktree(
+  'hytopia-game',
+  '/home/user/GitHub/games/hytopia/games/HyFire2/work1'
+);
+```
+
+### Key Implementation Details
+- **Config Discovery**: `server/configDiscoveryService.js` automatically scans file hierarchy for `.orchestrator-config.json` files
+- **Deep Cloning**: All configs are deep cloned before merging to prevent cache mutation
+- **Error Handling**: Missing config files at any level are gracefully handled (no crashes)
+- **Cache Prevention**: Uses `JSON.parse(JSON.stringify())` to ensure cached configs aren't mutated
+- **Undefined Handling**: mergeConfigs uses `{ ...(result[key] || {}), ...override[key] }` pattern to safely handle undefined values
+
+### Common Gotchas
+1. **Config Mutation**: Always deep clone before merging - shallow spread operators (`{ ...obj }`) still share nested references
+2. **Undefined Spread**: Use `|| {}` when spreading to handle undefined gameModes/commonFlags
+3. **Master Directory Discovery**: For worktree-based projects, configs are discovered in `master/` subdirectory
+4. **Terminal-Specific Buttons**: Each terminal type (claude/server) has its own button namespace
+5. **Array Replacement**: Unlike objects, arrays don't merge - child completely replaces parent array
+
 ## Common Commands
 ```bash
 # Development
@@ -214,6 +304,10 @@ SERVICES:     Modular service architecture with clear interfaces
 10. **Worktree paths**: Validate worktree paths to avoid conflicts with existing directories
 11. **Mixed-repo terminal naming**: Use consistent patterns to avoid terminal ID conflicts
 12. **Workspace templates**: Always validate against schemas to prevent invalid configurations
+13. **Config cache mutation**: Always deep clone configs before merging - use `JSON.parse(JSON.stringify())` not shallow spread
+14. **Undefined config spread**: Handle missing gameModes/commonFlags with `{ ...(result[key] || {}), ...override[key] }` pattern
+15. **XTerm rendering race**: Wrap fitTerminal() in requestAnimationFrame() to allow renderer initialization
+16. **Repository name extraction**: For mixed-repo workspaces, use workspace config's terminal.repository.name, not session ID parsing
 
 ## Development Setup - Two Isolated Instances
 
