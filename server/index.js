@@ -146,12 +146,24 @@ io.on('connection', (socket) => {
   // Send workspace info
   const activeWorkspace = workspaceManager.getActiveWorkspace();
   const workspaces = workspaceManager.listWorkspaces();
+
+  // Build cascaded configs for all workspace types
+  const allTypes = workspaceManager.getAllWorkspaceTypes();
+  const cascadedConfigs = {};
+  for (const typeId in allTypes) {
+    const cascaded = workspaceManager.getCascadedConfig(typeId);
+    if (cascaded) {
+      cascadedConfigs[typeId] = cascaded;
+    }
+  }
+
   socket.emit('workspace-info', {
     active: activeWorkspace,
     available: workspaces,
     config: workspaceManager.getConfig(),
-    workspaceTypes: workspaceManager.getAllWorkspaceTypes(),
-    frameworks: workspaceManager.discoveredWorkspaceTypes?.frameworks || {}
+    workspaceTypes: allTypes,
+    frameworks: workspaceManager.discoveredWorkspaceTypes?.frameworks || {},
+    cascadedConfigs: cascadedConfigs  // Pre-computed cascaded configs
   });
 
   // Send initial session states
@@ -472,10 +484,20 @@ app.get('/api/workspace-types', (req, res) => {
     const allTypes = workspaceManager.getAllWorkspaceTypes();
     const frameworks = workspaceManager.discoveredWorkspaceTypes?.frameworks || {};
 
+    // Build cascaded configs for all workspace types
+    const cascadedConfigs = {};
+    for (const typeId in allTypes) {
+      const cascaded = workspaceManager.getCascadedConfig(typeId);
+      if (cascaded) {
+        cascadedConfigs[typeId] = cascaded;
+      }
+    }
+
     res.json({
       workspaceTypes: allTypes,
       frameworks: frameworks,
-      hierarchy: workspaceManager.discoveredWorkspaceTypes?.categories || {}
+      hierarchy: workspaceManager.discoveredWorkspaceTypes?.categories || {},
+      cascadedConfigs: cascadedConfigs  // Pre-computed cascaded configs
     });
   } catch (error) {
     logger.error('Failed to get workspace types', { error: error.message });

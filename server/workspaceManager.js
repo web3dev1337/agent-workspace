@@ -89,6 +89,155 @@ class WorkspaceManager {
     }
   }
 
+  /**
+   * Get full cascaded config for a repository type
+   * Merges: Global → Category → Framework → Specific Project
+   * Examples:
+   *   - Game: Global → games → hytopia → HyFire2
+   *   - Book: Global → writing → book → PatternPlayers
+   *   - Tool: Global → tools → cli → orchestrator
+   * @param {string} repositoryType - e.g., "hyfire2-game", "patternplayers-book"
+   * @returns {object} Fully merged config with all inherited properties
+   */
+  getCascadedConfig(repositoryType) {
+    if (!this.discoveredWorkspaceTypes) {
+      return null;
+    }
+
+    // Find the specific project config (game, book, script, plugin, tool, etc.)
+    const specificConfig = this.discoveredWorkspaceTypes.games?.[repositoryType];
+    if (!specificConfig) {
+      return null;
+    }
+
+    // Start with empty base
+    let mergedConfig = {};
+
+    // Layer 1: Global config (if exists)
+    // TODO: Load from ~/GitHub/.orchestrator-config.json when it exists
+    const globalConfig = {};
+    mergedConfig = this.mergeConfigs(mergedConfig, globalConfig);
+
+    // Layer 2 & 3: Get framework first (to find category)
+    const frameworkId = specificConfig.inherits;
+    const frameworkConfig = frameworkId && this.discoveredWorkspaceTypes.frameworks?.[frameworkId];
+
+    // Layer 2: Category config (derived from framework's category)
+    // e.g., framework is "hytopia-framework" with category: "games"
+    // or "book-framework" with category: "writing"
+    if (frameworkConfig && frameworkConfig.category) {
+      const categoryId = frameworkConfig.category;
+      const categoryConfig = this.discoveredWorkspaceTypes.categories?.[categoryId];
+      if (categoryConfig) {
+        mergedConfig = this.mergeConfigs(mergedConfig, categoryConfig);
+      }
+    }
+
+    // Layer 3: Framework config (e.g., "hytopia-framework", "monogame-framework", "book-framework")
+    if (frameworkConfig) {
+      mergedConfig = this.mergeConfigs(mergedConfig, frameworkConfig);
+    }
+
+    // Layer 4: Specific project config (game, book, script, plugin, tool, etc.)
+    mergedConfig = this.mergeConfigs(mergedConfig, specificConfig);
+
+    return mergedConfig;
+  }
+
+  /**
+   * Deep merge two config objects
+   * Arrays are concatenated, objects are merged, primitives are overridden
+   */
+  mergeConfigs(base, override) {
+    const result = { ...base };
+
+    for (const key in override) {
+      if (!override.hasOwnProperty(key)) continue;
+
+      if (override[key] === null || override[key] === undefined) {
+        continue;
+      }
+
+      // Special handling for specific keys
+      if (key === 'gameModes' || key === 'commonFlags') {
+        // Merge modes/flags (override can add new ones or override existing)
+        result[key] = { ...result[key], ...override[key] };
+      } else if (key === 'buttons' || key === 'actions') {
+        // Concatenate button/action arrays
+        result[key] = [...(result[key] || []), ...(override[key] || [])];
+      } else if (typeof override[key] === 'object' && !Array.isArray(override[key])) {
+        // Recursively merge objects
+        result[key] = this.mergeConfigs(result[key] || {}, override[key]);
+      } else {
+        // Override primitives and arrays
+        result[key] = override[key];
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Enrich workspace terminals with missing repository.type from path
+   * This handles old workspace configs that don't have repository.type set
+   */
+  async enrichWorkspaceRepositoryTypes(workspace) {
+    // Only process workspaces with terminals (mixed-repo or array format)
+    if (!workspace.terminals) {
+      return;
+    }
+
+    const terminals = workspace.terminals.pairs || workspace.terminals;
+    if (!Array.isArray(terminals)) {
+      return;
+    }
+
+    for (const terminal of terminals) {
+      // Skip if already has type
+      if (terminal.repository?.type) {
+        continue;
+      }
+
+      // Skip if no path to lookup
+      if (!terminal.repository?.path) {
+        continue;
+      }
+
+      // Check for .orchestrator-config.json in repository path
+      const configPath = path.join(terminal.repository.path, '.orchestrator-config.json');
+      try {
+        if (fsSync.existsSync(configPath)) {
+          // Use the discovered game ID format: {gamename}-game
+          // This matches how ConfigDiscoveryService generates IDs
+          const repoName = path.basename(terminal.repository.path)
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '-');
+          terminal.repository.type = `${repoName}-game`;
+
+          logger.info(`Auto-populated repository.type for terminal ${terminal.id}`, {
+            path: terminal.repository.path,
+            type: terminal.repository.type
+          });
+        } else {
+          // Fallback: derive from path (e.g., /path/to/HyFire2 -> "hyfire2-game")
+          const repoName = path.basename(terminal.repository.path)
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '-');
+          terminal.repository.type = `${repoName}-game`;
+
+          logger.info(`Derived repository.type from path for terminal ${terminal.id}`, {
+            path: terminal.repository.path,
+            type: terminal.repository.type
+          });
+        }
+      } catch (error) {
+        logger.warn(`Failed to enrich repository type for terminal ${terminal.id}`, {
+          error: error.message
+        });
+      }
+    }
+  }
+
   async loadWorkspaces() {
     try {
       const files = await fs.readdir(this.workspacesPath);
@@ -108,6 +257,9 @@ class WorkspaceManager {
             logger.error(`Invalid workspace config: ${file}`, { errors: validation.errors });
             continue;
           }
+
+          // Enrich workspace with missing repository types (for old configs)
+          await this.enrichWorkspaceRepositoryTypes(workspace);
 
           // Add to workspaces map
           this.workspaces.set(workspace.id, workspace);

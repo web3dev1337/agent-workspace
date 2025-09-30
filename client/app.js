@@ -33,6 +33,7 @@ class ClaudeOrchestrator {
     this.workspaceTypes = {};
     this.frameworks = {};
     this.workspaceHierarchy = {};
+    this.cascadedConfigs = {};  // Fully merged configs (Global → Category → Framework → Project)
 
     this.init();
   }
@@ -190,8 +191,8 @@ class ClaudeOrchestrator {
       });
 
       // Workspace events
-      this.socket.on('workspace-info', ({ active, available, config, workspaceTypes, frameworks }) => {
-        console.log('Received workspace info:', { active, available, config, workspaceTypes, frameworks });
+      this.socket.on('workspace-info', ({ active, available, config, workspaceTypes, frameworks, cascadedConfigs }) => {
+        console.log('Received workspace info:', { active, available, config, workspaceTypes, frameworks, cascadedConfigs });
         this.currentWorkspace = active;
         this.availableWorkspaces = available;
         this.orchestratorConfig = config;
@@ -199,9 +200,11 @@ class ClaudeOrchestrator {
         // Store dynamic workspace types
         this.workspaceTypes = workspaceTypes || {};
         this.frameworks = frameworks || {};
+        this.cascadedConfigs = cascadedConfigs || {};
         console.log('🎯 Dynamic workspace types loaded:', {
           totalTypes: Object.keys(this.workspaceTypes).length,
-          frameworks: Object.keys(this.frameworks)
+          frameworks: Object.keys(this.frameworks),
+          cascadedConfigs: Object.keys(this.cascadedConfigs).length
         });
 
         // Initialize workspace switcher
@@ -1746,7 +1749,7 @@ class ClaudeOrchestrator {
   getDynamicLaunchOptions(sessionId) {
     // Derive repository type on-demand from workspace config
     // This handles: config changes, worktree additions/removals, existing sessions
-    let workspaceType = null;
+    let repositoryType = null;
 
     if (this.currentWorkspace) {
       if (this.currentWorkspace.workspaceType === 'mixed-repo') {
@@ -1757,46 +1760,44 @@ class ClaudeOrchestrator {
           const terminal = this.currentWorkspace.terminals.pairs.find(t =>
             t.id === sessionId || t.repository?.name === repositoryName
           );
-          workspaceType = terminal?.repository?.type || null;
+          repositoryType = terminal?.repository?.type || null;
         }
       } else {
         // Single-repo: Use workspace type
-        workspaceType = this.currentWorkspace.type;
+        repositoryType = this.currentWorkspace.type;
       }
     }
 
-    if (!workspaceType) {
+    if (!repositoryType) {
       return '<option value="development">Dev</option><option value="production">Prod</option>';
     }
 
-    const typeInfo = this.workspaceTypes[workspaceType];
+    // Use cascaded config (includes Global → Category → Framework → Project)
+    const cascadedConfig = this.cascadedConfigs[repositoryType];
 
-    if (!typeInfo) {
+    if (!cascadedConfig) {
       return '<option value="development">Dev</option><option value="production">Prod</option>';
     }
 
-    // If this workspace type has game modes, show them
-    if (typeInfo.gameModes) {
-      const modes = Object.entries(typeInfo.gameModes)
+    // Check for game modes in cascaded config (from any level: global, category, framework, or project)
+    if (cascadedConfig.gameModes) {
+      const modes = Object.entries(cascadedConfig.gameModes)
         .sort((a, b) => (a[1].priority || 999) - (b[1].priority || 999))
         .map(([key, mode]) => `<option value="${key}" title="${mode.description || ''}">${mode.name || key}</option>`)
         .join('');
       return modes;
     }
 
-    // If this inherits from a framework, get framework modes
-    if (typeInfo.inherits && this.frameworks[typeInfo.inherits]) {
-      const framework = this.frameworks[typeInfo.inherits];
-      if (framework.commonFlags) {
-        const modes = Object.entries(framework.commonFlags)
-          .filter(([key, flag]) => flag.type === 'select')
-          .map(([key, flag]) =>
-            flag.options.map(option =>
-              `<option value="${key}_${option}" title="${flag.description || ''}">${flag.name || key}: ${option}</option>`
-            ).join('')
-          ).join('');
-        return modes || '<option value="development">Dev</option><option value="production">Prod</option>';
-      }
+    // Check for common flags in cascaded config (from framework or category level)
+    if (cascadedConfig.commonFlags) {
+      const modes = Object.entries(cascadedConfig.commonFlags)
+        .filter(([key, flag]) => flag.type === 'select')
+        .map(([key, flag]) =>
+          flag.options.map(option =>
+            `<option value="${key}_${option}" title="${flag.description || ''}">${flag.name || key}: ${option}</option>`
+          ).join('')
+        ).join('');
+      return modes || '<option value="development">Dev</option><option value="production">Prod</option>';
     }
 
     return '<option value="development">Dev</option><option value="production">Prod</option>';
