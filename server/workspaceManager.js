@@ -102,17 +102,20 @@ class WorkspaceManager {
     const baseConfig = this.getCascadedConfigBase(repositoryType);
     if (!baseConfig) return null;
 
+    // Deep clone to avoid mutating cached configs
+    const baseConfigCopy = JSON.parse(JSON.stringify(baseConfig));
+
     // Load worktree-specific config
     const worktreeConfigPath = path.join(worktreePath, '.orchestrator-config.json');
     try {
       const configData = await fs.readFile(worktreeConfigPath, 'utf8');
       const worktreeConfig = JSON.parse(configData);
 
-      // Merge worktree config on top of base
-      return this.mergeConfigs(baseConfig, worktreeConfig);
+      // Merge worktree config on top of base copy
+      return this.mergeConfigs(baseConfigCopy, worktreeConfig);
     } catch (error) {
-      // No worktree-specific config, return base
-      return baseConfig;
+      // No worktree-specific config, return base copy
+      return baseConfigCopy;
     }
   }
 
@@ -245,7 +248,7 @@ class WorkspaceManager {
       // Special handling for specific keys
       if (key === 'gameModes' || key === 'commonFlags') {
         // Merge modes/flags (override can add new ones or override existing)
-        result[key] = { ...result[key], ...override[key] };
+        result[key] = { ...(result[key] || {}), ...override[key] };
       } else if (key === 'buttons' || key === 'actions') {
         // Deep merge button/action objects (merge per terminal type, then per button)
         result[key] = this.mergeConfigs(result[key] || {}, override[key]);
