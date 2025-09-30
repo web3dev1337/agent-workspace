@@ -71,7 +71,7 @@ class AgentManager {
       id: 'codex',
       name: 'Codex',
       icon: '⚡',
-      description: 'OpenAI Codex',
+      description: 'OpenAI Codex CLI',
       baseCommand: 'codex',
       modes: {
         fresh: {
@@ -87,86 +87,89 @@ class AgentManager {
           description: 'Resume interrupted session'
         }
       },
+      // Supported models
+      models: ['gpt-4', 'gpt-5', 'gpt-5-codex'],
+      defaultModel: 'gpt-5-codex',
+
+      // Reasoning levels
+      reasoningLevels: ['low', 'medium', 'high'],
+      defaultReasoning: 'high',
+
+      // Verbosity levels
+      verbosityLevels: ['low', 'medium', 'high'],
+      defaultVerbosity: 'high',
+
       flags: {
-        // Model Selection
-        gpt5Model: {
-          flag: '--model=gpt-5-codex',
-          description: 'Use GPT-5 Codex model',
-          label: '🔥 GPT-5 Model',
-          category: 'model',
-          default: true
-        },
-        gpt6Model: {
-          flag: '--model=gpt-6-codex',
-          description: 'Use GPT-6 Codex model (future)',
-          label: '🚀 GPT-6 Model',
-          category: 'model',
-          default: false
+        // YOLO Mode (replaces old bypassAll)
+        yolo: {
+          flag: '--yolo',
+          description: 'Full automation: no approvals + full system access',
+          label: '🚀 YOLO Mode',
+          category: 'sandbox',
+          default: true  // Now default!
         },
 
-        // Reasoning Level
-        highReasoning: {
-          flag: '-c model_reasoning_effort="high"',
-          description: 'High reasoning effort',
-          label: '🧠 High Reasoning',
-          category: 'reasoning',
+        // Network Access
+        networkAccess: {
+          flag: '-c sandbox_workspace_write.network_access=true',
+          description: 'Enable network access for package installs/API calls',
+          label: '🌐 Network Access',
+          category: 'network',
           default: true
         },
-        mediumReasoning: {
-          flag: '-c model_reasoning_effort="medium"',
-          description: 'Medium reasoning effort',
-          label: '🤔 Medium Reasoning',
-          category: 'reasoning',
-          default: false
-        },
-        lowReasoning: {
-          flag: '-c model_reasoning_effort="low"',
-          description: 'Low reasoning effort (faster)',
-          label: '⚡ Low Reasoning',
-          category: 'reasoning',
-          default: false
+
+        // Web Search
+        search: {
+          flag: '--search',
+          description: 'Enable safe web search tool for documentation',
+          label: '🔍 Web Search',
+          category: 'network',
+          default: true
         },
 
-        // Sandbox & Permissions
+        // Workspace Write (alternative to YOLO)
         workspaceWrite: {
-          flag: '--sandbox workspace-write -c sandbox_workspace_write.network_access=true',
-          description: 'Workspace write with network access',
-          label: '📝 Workspace + Network',
-          category: 'sandbox',
-          default: true
-        },
-        bypassAll: {
-          flag: '--dangerously-bypass-approvals-and-sandbox',
-          description: 'Bypass all safety (maximum power)',
-          label: '🚀 Full Bypass',
+          flag: '--sandbox workspace-write',
+          description: 'Write files in workspace only (safer than YOLO)',
+          label: '📝 Workspace Write',
           category: 'sandbox',
           default: false
         },
 
-        // Performance
-        fastMode: {
-          flag: '--fast',
-          description: 'Prioritize speed over accuracy',
-          label: '⚡ Fast Mode',
-          category: 'performance',
+        // Read Only (safest)
+        readOnly: {
+          flag: '--sandbox read-only',
+          description: 'Read-only access (safest, no modifications)',
+          label: '👀 Read Only',
+          category: 'sandbox',
           default: false
         },
-        thoroughMode: {
-          flag: '--thorough',
-          description: 'Prioritize accuracy over speed',
-          label: '🔍 Thorough Mode',
-          category: 'performance',
+
+        // Approval policies (alternatives to YOLO)
+        neverAsk: {
+          flag: '--ask-for-approval never',
+          description: 'Never ask for permission',
+          label: '⚡ Never Ask',
+          category: 'approvals',
+          default: false
+        },
+
+        askOnRequest: {
+          flag: '--ask-for-approval on-request',
+          description: 'Ask only on risky operations',
+          label: '🛡️ Ask on Risk',
+          category: 'approvals',
           default: false
         }
       },
       defaultMode: 'fresh',
-      // Default flags for "most powerful" configuration
-      defaultFlags: ['gpt5Model', 'highReasoning', 'workspaceWrite'],
+      // Default flags for "maximum power" configuration
+      defaultFlags: ['yolo', 'networkAccess', 'search'],
+      availableFlags: ['yolo', 'networkAccess', 'search', 'workspaceWrite', 'readOnly', 'neverAsk', 'askOnRequest'],
       flagCategories: {
-        model: { name: 'Model', mutuallyExclusive: true },
-        reasoning: { name: 'Reasoning Level', mutuallyExclusive: true },
-        sandbox: { name: 'Permissions', mutuallyExclusive: true },
-        performance: { name: 'Performance', mutuallyExclusive: true }
+        sandbox: { name: 'Sandbox Mode', mutuallyExclusive: true },
+        network: { name: 'Network & Search', mutuallyExclusive: false },
+        approvals: { name: 'Approval Policy', mutuallyExclusive: true }
       }
     });
   }
@@ -186,9 +189,10 @@ class AgentManager {
   }
 
   /**
-   * Build command for specific agent, mode, and flags
+   * Build command for specific agent, mode, and configuration
+   * Supports both config object and enabledFlags array for backwards compatibility
    */
-  buildCommand(agentId, mode, enabledFlags = []) {
+  buildCommand(agentId, mode, configOrFlags = []) {
     const agent = this.agentConfigs.get(agentId);
     if (!agent) {
       throw new Error(`Unknown agent: ${agentId}`);
@@ -201,13 +205,43 @@ class AgentManager {
 
     let command = modeConfig.command;
 
-    // Add enabled flags
-    enabledFlags.forEach(flagId => {
-      const flag = agent.flags[flagId];
-      if (flag) {
-        command += ` ${flag.flag}`;
+    // Handle new config object format (for Codex with model/reasoning/verbosity)
+    if (typeof configOrFlags === 'object' && !Array.isArray(configOrFlags)) {
+      const config = configOrFlags;
+
+      // Add model if specified (Codex)
+      if (config.model && agent.models) {
+        command += ` -m ${config.model}`;
       }
-    });
+
+      // Add reasoning level if specified (Codex)
+      if (config.reasoning) {
+        command += ` -c model_reasoning_effort="${config.reasoning}"`;
+      }
+
+      // Add verbosity level if specified (Codex)
+      if (config.verbosity) {
+        command += ` -c model_verbosity="${config.verbosity}"`;
+      }
+
+      // Add flags
+      const enabledFlags = config.flags || [];
+      enabledFlags.forEach(flagId => {
+        const flag = agent.flags[flagId];
+        if (flag) {
+          command += ` ${flag.flag}`;
+        }
+      });
+    } else {
+      // Backwards compatibility: treat as array of flags
+      const enabledFlags = Array.isArray(configOrFlags) ? configOrFlags : [];
+      enabledFlags.forEach(flagId => {
+        const flag = agent.flags[flagId];
+        if (flag) {
+          command += ` ${flag.flag}`;
+        }
+      });
+    }
 
     return command;
   }

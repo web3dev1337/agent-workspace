@@ -1288,13 +1288,9 @@ class ClaudeOrchestrator {
                 </button>
               </div>
 
-              <!-- Quick Presets -->
+              <!-- Advanced Settings Button -->
               <div class="inline-presets">
-                <label class="preset-toggle">
-                  <input type="checkbox" id="powerful-${sessionId}" onchange="window.orchestrator.updateInlinePreset('${sessionId}', this.checked)">
-                  <span class="preset-label">🚀 Powerful</span>
-                </label>
-                <button class="advanced-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="More Options">⚙️</button>
+                <button class="advanced-btn" onclick="window.orchestrator.showClaudeStartupModal('${sessionId}')" title="Advanced Options">⚙️ Advanced</button>
               </div>
             </div>
           </div>
@@ -3606,24 +3602,28 @@ class ClaudeOrchestrator {
    */
   quickStartAgent(sessionId, mode) {
     const agentDropdown = document.getElementById(`inline-agent-${sessionId}`);
-    const powerfulCheckbox = document.getElementById(`powerful-${sessionId}`);
-
     const selectedAgent = agentDropdown ? agentDropdown.value : 'claude';
-    const usePowerfulPreset = powerfulCheckbox ? powerfulCheckbox.checked : false;
 
-    // Build configuration based on selections
+    // Build configuration with BEST settings by default (no more "powerful" checkbox)
     let config;
     if (selectedAgent === 'claude') {
       config = {
         agentId: 'claude',
         mode: mode,
-        flags: usePowerfulPreset ? ['skipPermissions'] : []
+        flags: ['skipPermissions']  // Always use best settings
       };
     } else if (selectedAgent === 'codex') {
       config = {
         agentId: 'codex',
-        mode: mode, // Use same modes as Claude: fresh/continue/resume
-        flags: usePowerfulPreset ? ['gpt5Model', 'highReasoning', 'bypassAll'] : ['gpt5Model', 'highReasoning', 'workspaceWrite']
+        mode: mode,
+        model: 'gpt-5-codex',  // Best model
+        reasoning: 'high',      // High reasoning
+        verbosity: 'high',      // Detailed output
+        flags: [
+          'yolo',               // --yolo: no approvals + full access
+          'networkAccess',      // Enable network for package installs
+          'search'              // Enable web search tool
+        ]
       };
     }
 
@@ -3685,26 +3685,13 @@ class ClaudeOrchestrator {
   /**
    * Update inline preset (powerful mode toggle)
    */
-  updateInlinePreset(sessionId, isPowerful) {
-    // Save preference
-    const prefs = this.sessionAgentPreferences.get(sessionId) || { agentId: 'claude', powerful: false };
-    prefs.powerful = isPowerful;
-    this.sessionAgentPreferences.set(sessionId, prefs);
-
-    // Visual feedback
-    const checkbox = document.getElementById(`powerful-${sessionId}`);
-    if (checkbox) {
-      checkbox.checked = isPowerful;
-    }
-  }
-
   /**
    * Get saved agent preferences for session
    */
   getSessionAgentPreference(sessionId) {
     return this.sessionAgentPreferences.get(sessionId) || {
-      agentId: 'claude',
-      powerful: false
+      agentId: 'claude'
+      // Note: "powerful" removed - we always use best settings by default
     };
   }
 
