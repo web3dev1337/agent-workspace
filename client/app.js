@@ -35,6 +35,9 @@ class ClaudeOrchestrator {
     this.workspaceHierarchy = {};
     this.cascadedConfigs = {};  // Fully merged configs (Global → Category → Framework → Project)
 
+    // Button registry - all available buttons with their implementations
+    this.buttonRegistry = this.initButtonRegistry();
+
     this.init();
   }
   
@@ -704,6 +707,203 @@ class ClaudeOrchestrator {
       return parts.slice(0, workIndex).join('-');
     }
     return null; // Traditional workspace
+  }
+
+  /**
+   * Initialize button registry with all available buttons
+   * Maps button IDs to their implementations
+   */
+  initButtonRegistry() {
+    return {
+      // Common buttons (Global level - all projects)
+      focus: {
+        icon: '🔍',
+        title: 'Show Only This Worktree',
+        action: 'focusTerminal',
+        showWhen: 'always',
+        terminalType: 'both'
+      },
+
+      // Claude terminal buttons
+      replay: {
+        icon: '📹',
+        title: 'Open Replay Viewer',
+        action: 'openReplayViewer',
+        showWhen: 'always',
+        terminalType: 'claude'
+      },
+      claudeStart: {
+        icon: '🚀',
+        title: 'Start Claude with Settings',
+        action: 'autoStartClaude',
+        showWhen: 'always',
+        terminalType: 'claude',
+        special: 'disabled-until-ready'
+      },
+      claudeModal: {
+        icon: '↻',
+        title: 'Start Claude with Options',
+        action: 'showClaudeStartupModal',
+        showWhen: 'always',
+        terminalType: 'claude'
+      },
+      refresh: {
+        icon: '🔄',
+        title: 'Refresh Terminal Display',
+        action: 'refreshTerminal',
+        showWhen: 'always',
+        terminalType: 'claude'
+      },
+      review: {
+        icon: '👥',
+        title: 'Assign Code Review',
+        action: 'showCodeReviewDropdown',
+        showWhen: 'always',
+        terminalType: 'claude'
+      },
+
+      // Server terminal buttons
+      play: {
+        icon: '🎮',
+        title: 'Play in Hytopia',
+        action: 'playInHytopia',
+        showWhen: 'running',
+        terminalType: 'server'
+      },
+      copyUrl: {
+        icon: '📋',
+        title: 'Copy HTTPS localhost URL',
+        action: 'copyLocalhostUrl',
+        showWhen: 'running',
+        terminalType: 'server'
+      },
+      website: {
+        icon: '🌐',
+        title: 'Open Hytopia Website',
+        action: 'openHytopiaWebsite',
+        showWhen: 'always',
+        terminalType: 'server'
+      },
+      build: {
+        icon: '📦',
+        title: 'Build Production ZIP',
+        action: 'buildProduction',
+        showWhen: 'always',
+        terminalType: 'both'
+      },
+      kill: {
+        icon: '✕',
+        title: 'Force Kill',
+        action: 'killServer',
+        showWhen: 'always',
+        terminalType: 'server',
+        className: 'danger'
+      }
+    };
+  }
+
+  /**
+   * Get buttons for a session based on cascaded config
+   * @param {string} sessionId
+   * @param {string} terminalType - 'claude' or 'server'
+   * @returns {Array} Array of button HTML strings
+   */
+  getButtonsForSession(sessionId, terminalType) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return this.getDefaultButtons(terminalType);
+
+    // Get repository type for this session
+    let repositoryType = null;
+    if (this.currentWorkspace) {
+      if (this.currentWorkspace.workspaceType === 'mixed-repo') {
+        const repositoryName = this.extractRepositoryName(sessionId);
+        if (repositoryName && this.currentWorkspace.terminals?.pairs) {
+          const terminal = this.currentWorkspace.terminals.pairs.find(t =>
+            t.id === sessionId || t.repository?.name === repositoryName
+          );
+          repositoryType = terminal?.repository?.type || null;
+        }
+      } else {
+        repositoryType = this.currentWorkspace.type;
+      }
+    }
+
+    if (!repositoryType) return this.getDefaultButtons(terminalType);
+
+    // Get cascaded config
+    const cascadedConfig = this.cascadedConfigs[repositoryType];
+    if (!cascadedConfig || !cascadedConfig.buttons) {
+      return this.getDefaultButtons(terminalType);
+    }
+
+    // Get button definitions for this terminal type
+    const buttonDefs = cascadedConfig.buttons[terminalType] || {};
+    const buttons = [];
+
+    // Always add focus button first
+    buttons.push(this.renderButton('focus', this.buttonRegistry.focus, sessionId));
+
+    // Render configured buttons
+    for (const [buttonId, buttonConfig] of Object.entries(buttonDefs)) {
+      const registryEntry = this.buttonRegistry[buttonId];
+      if (!registryEntry) continue;
+
+      // Merge config with registry
+      const mergedButton = { ...registryEntry, ...buttonConfig };
+      buttons.push(this.renderButton(buttonId, mergedButton, sessionId));
+    }
+
+    return buttons;
+  }
+
+  /**
+   * Render a single button
+   */
+  renderButton(buttonId, buttonDef, sessionId) {
+    const className = `control-btn ${buttonDef.className || ''}`;
+    const disabled = buttonDef.special === 'disabled-until-ready' ? 'disabled' : '';
+    const id = buttonDef.special === 'disabled-until-ready' ? `id="claude-start-btn-${sessionId}"` : '';
+
+    // Map action name to actual method call
+    const actionMap = {
+      focusTerminal: `window.orchestrator.focusTerminal('${sessionId}')`,
+      openReplayViewer: `window.orchestrator.openReplayViewer('${sessionId}')`,
+      autoStartClaude: `window.orchestrator.autoStartClaude('${sessionId}')`,
+      showClaudeStartupModal: `window.orchestrator.showClaudeStartupModal('${sessionId}')`,
+      refreshTerminal: `window.orchestrator.refreshTerminal('${sessionId}')`,
+      showCodeReviewDropdown: `window.orchestrator.showCodeReviewDropdown('${sessionId}')`,
+      playInHytopia: `window.orchestrator.playInHytopia('${sessionId}')`,
+      copyLocalhostUrl: `window.orchestrator.copyLocalhostUrl('${sessionId}')`,
+      openHytopiaWebsite: `window.orchestrator.openHytopiaWebsite()`,
+      buildProduction: `window.orchestrator.buildProduction('${sessionId}')`,
+      killServer: `window.orchestrator.killServer('${sessionId}')`
+    };
+
+    const onclick = actionMap[buttonDef.action] || buttonDef.action;
+
+    return `<button class="${className}" ${id} ${disabled} onclick="${onclick}" title="${buttonDef.title}">${buttonDef.icon}</button>`;
+  }
+
+  /**
+   * Get default buttons (fallback when no config)
+   */
+  getDefaultButtons(terminalType) {
+    if (terminalType === 'claude') {
+      return [
+        this.renderButton('focus', this.buttonRegistry.focus, ''),
+        this.renderButton('claudeStart', this.buttonRegistry.claudeStart, ''),
+        this.renderButton('claudeModal', this.buttonRegistry.claudeModal, ''),
+        this.renderButton('refresh', this.buttonRegistry.refresh, ''),
+        this.renderButton('review', this.buttonRegistry.review, ''),
+        this.renderButton('build', this.buttonRegistry.build, '')
+      ];
+    } else {
+      return [
+        this.renderButton('focus', this.buttonRegistry.focus, ''),
+        this.renderButton('build', this.buttonRegistry.build, ''),
+        this.renderButton('kill', this.buttonRegistry.kill, '')
+      ];
+    }
   }
 
   buildSidebar() {
