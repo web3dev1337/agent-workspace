@@ -849,10 +849,12 @@ class SessionManager extends EventEmitter {
       if (this.sessions.has(claudeId)) sessionsToUpdate.push(claudeId);
       if (this.sessions.has(serverId)) sessionsToUpdate.push(serverId);
 
-      // If no direct match, search by worktreeId (mixed-repo workspaces)
+      // If no direct match, search by worktreeId AND path (mixed-repo workspaces)
+      // Important: Must match both worktreeId AND path to avoid cross-contamination
       if (sessionsToUpdate.length === 0) {
         for (const [sessionId, session] of this.sessions) {
-          if (session.worktreeId === worktreeId) {
+          // Check if this session belongs to the same worktree by comparing paths
+          if (session.worktreeId === worktreeId && session.config && session.config.cwd === path) {
             sessionsToUpdate.push(sessionId);
           }
         }
