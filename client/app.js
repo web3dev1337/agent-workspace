@@ -1268,19 +1268,39 @@ class ClaudeOrchestrator {
   toggleWorktreeVisibility(worktreeIdOrKey) {
     console.log(`Toggling visibility for worktree: ${worktreeIdOrKey}`);
 
-    // Find all sessions that match this EXACT worktree key
+    // Find all sessions that match this worktree key by searching through sessions
+    // The worktreeIdOrKey might be constructed from repository name (e.g., "HyFire2-work2")
+    // but the actual session ID might have a workspace prefix (e.g., "mixed-terminals-work2-claude")
     const sessions = [];
 
-    // For mixed-repo workspaces: worktreeIdOrKey = "repo-name-work1"
-    // Session IDs will be: "repo-name-work1-claude", "repo-name-work1-server"
-    // For traditional workspaces: worktreeIdOrKey = "work1"
-    // Session IDs will be: "work1-claude", "work1-server"
-
+    // First try direct match (for backwards compatibility and simple cases)
     const claudeId = `${worktreeIdOrKey}-claude`;
     const serverId = `${worktreeIdOrKey}-server`;
 
     if (this.sessions.has(claudeId)) sessions.push(claudeId);
     if (this.sessions.has(serverId)) sessions.push(serverId);
+
+    // If no direct match found, search by extracting repository name and worktree ID from the key
+    if (sessions.length === 0) {
+      // Extract the worktree part (e.g., "work2" from "HyFire2-work2")
+      const parts = worktreeIdOrKey.split('-');
+      const workIndex = parts.findIndex(part => part.startsWith('work'));
+
+      if (workIndex >= 0) {
+        const worktreeId = parts.slice(workIndex).join('-'); // e.g., "work2"
+        const repositoryName = parts.slice(0, workIndex).join('-'); // e.g., "HyFire2"
+
+        // Search through all sessions to find ones matching this repository + worktree
+        for (const [sessionId, session] of this.sessions) {
+          if (session.worktreeId === worktreeId) {
+            const sessionRepoName = this.extractRepositoryName(sessionId);
+            if (sessionRepoName === repositoryName) {
+              sessions.push(sessionId);
+            }
+          }
+        }
+      }
+    }
 
     if (sessions.length === 0) {
       console.warn(`No sessions found for worktree ${worktreeIdOrKey}`);

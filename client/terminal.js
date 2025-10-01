@@ -224,12 +224,16 @@ class TerminalManager {
     // Clear any existing content first
     terminalElement.innerHTML = '';
 
-    // Open terminal in DOM
-    terminal.open(terminalElement);
-
-    // Defer initial fit to ensure terminal renderer is ready
+    // Use requestAnimationFrame to ensure renderer is ready before opening
+    // This prevents "Cannot read properties of undefined (reading 'dimensions')" errors
     requestAnimationFrame(() => {
-      this.fitTerminal(sessionId);
+      // Open terminal in DOM
+      terminal.open(terminalElement);
+
+      // Fit terminal after opening
+      requestAnimationFrame(() => {
+        this.fitTerminal(sessionId);
+      });
     });
     
     // Focus terminal when clicked
@@ -409,13 +413,16 @@ class TerminalManager {
   setupResizeObserver(sessionId) {
     const terminalElement = document.getElementById(`terminal-${sessionId}`);
     if (!terminalElement) return;
-    
+
     const resizeObserver = new ResizeObserver(() => {
-      this.fitTerminal(sessionId);
+      // Use requestAnimationFrame to ensure renderer is ready before fitting
+      requestAnimationFrame(() => {
+        this.fitTerminal(sessionId);
+      });
     });
-    
+
     resizeObserver.observe(terminalElement);
-    
+
     // Store observer for cleanup
     terminalElement._resizeObserver = resizeObserver;
   }
