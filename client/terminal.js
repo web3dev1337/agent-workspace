@@ -200,7 +200,8 @@ class TerminalManager {
       tabStopWidth: 4,
       bellStyle: 'none',
       allowTransparency: false,
-      windowsMode: false,
+      // Remove windowsMode to let xterm.js auto-detect and handle \r correctly
+      // windowsMode: false,
       wordSeparator: ' ()[]{}\'"',
       rightClickSelectsWord: true,
       rendererType: 'canvas',
