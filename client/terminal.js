@@ -515,20 +515,6 @@ class TerminalManager {
       terminal.scrollToBottom();
     }
 
-    // Schedule a refresh to fix rendering corruption from rapid output
-    // Debounce to avoid excessive refreshes
-    if (!this.refreshTimers) this.refreshTimers = new Map();
-    if (this.refreshTimers.has(sessionId)) {
-      clearTimeout(this.refreshTimers.get(sessionId));
-    }
-    this.refreshTimers.set(sessionId, setTimeout(() => {
-      // Force a full refresh to fix any rendering artifacts
-      if (terminal && !terminal._core?.disposed) {
-        terminal.refresh(0, terminal.rows - 1);
-      }
-      this.refreshTimers.delete(sessionId);
-    }, 50)); // Refresh 50ms after last output
-
     // Check for special patterns (optional enhancement)
     this.checkOutputPatterns(sessionId, data);
   }
