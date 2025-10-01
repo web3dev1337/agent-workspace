@@ -294,7 +294,7 @@ class SessionManager extends EventEmitter {
         if (this.gitHelper) {
           sessionPromises.push(
             Promise.resolve().then(() => {
-              this.updateGitBranch(worktree.id, worktree.path);
+              return this.updateGitBranch(worktree.id, worktree.path);
             }).catch(error => {
               logger.error('Failed to update git branch', {
                 worktree: worktree.id,
@@ -312,7 +312,7 @@ class SessionManager extends EventEmitter {
         sessionPromises.push(
           Promise.resolve().then(() => {
             const worktreeIdForGit = worktree.worktreeId || worktree.id;
-            this.updateGitBranch(worktreeIdForGit, worktree.path);
+            return this.updateGitBranch(worktreeIdForGit, worktree.path);
           }).catch(error => {
             logger.error('Failed to update git branch', {
               worktree: worktree.id,
@@ -838,7 +838,27 @@ class SessionManager extends EventEmitter {
       const existingPR = await this.gitHelper.checkForExistingPR(remoteUrl, branch);
       
       // Update both claude and server sessions for this worktree
-      [`${worktreeId}-claude`, `${worktreeId}-server`].forEach(sessionId => {
+      // For mixed-repo workspaces, session IDs have workspace prefix (e.g., "mixed-terminals-work1-claude")
+      // For traditional workspaces, session IDs are just worktreeId-type (e.g., "work1-claude")
+      // So we need to search through sessions to find matching ones
+      const sessionsToUpdate = [];
+
+      // First try direct match (traditional workspaces)
+      const claudeId = `${worktreeId}-claude`;
+      const serverId = `${worktreeId}-server`;
+      if (this.sessions.has(claudeId)) sessionsToUpdate.push(claudeId);
+      if (this.sessions.has(serverId)) sessionsToUpdate.push(serverId);
+
+      // If no direct match, search by worktreeId (mixed-repo workspaces)
+      if (sessionsToUpdate.length === 0) {
+        for (const [sessionId, session] of this.sessions) {
+          if (session.worktreeId === worktreeId) {
+            sessionsToUpdate.push(sessionId);
+          }
+        }
+      }
+
+      sessionsToUpdate.forEach(sessionId => {
         const session = this.sessions.get(sessionId);
         if (session) {
           const oldBranch = session.branch;
@@ -846,9 +866,9 @@ class SessionManager extends EventEmitter {
           session.remoteUrl = remoteUrl;
           session.defaultBranch = defaultBranch;
           session.existingPR = existingPR;
-          
-          logger.info('📡 Emitting branch-update', { 
-            sessionId, 
+
+          logger.info('📡 Emitting branch-update', {
+            sessionId,
             oldBranch,
             newBranch: branch,
             remoteUrl: remoteUrl ? 'present' : 'none',
@@ -856,7 +876,7 @@ class SessionManager extends EventEmitter {
             existingPR: existingPR ? 'found' : 'none',
             timestamp: new Date().toISOString()
           });
-          
+
           this.io.emit('branch-update', { sessionId, branch, remoteUrl, defaultBranch, existingPR });
         }
       });
