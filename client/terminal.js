@@ -429,20 +429,38 @@ class TerminalManager {
   
   fitTerminal(sessionId) {
     const fitAddon = this.fitAddons.get(sessionId);
-    if (fitAddon) {
+    if (!fitAddon) return;
+
+    // Throttle fit operations to prevent dimension mismatch glitches
+    if (!this.fitTimers) this.fitTimers = new Map();
+    if (this.fitTimers.has(sessionId)) {
+      clearTimeout(this.fitTimers.get(sessionId));
+    }
+
+    this.fitTimers.set(sessionId, setTimeout(() => {
       try {
-        fitAddon.fit();
-        
-        // Get dimensions and notify server
         const terminal = this.terminals.get(sessionId);
+        if (!terminal || terminal._core?.disposed) return;
+
+        fitAddon.fit();
+
+        // Get dimensions and notify server
         if (terminal) {
           const dimensions = { cols: terminal.cols, rows: terminal.rows };
           this.orchestrator.resizeTerminal(sessionId, dimensions.cols, dimensions.rows);
+
+          // Force refresh after resize to prevent rendering artifacts
+          requestAnimationFrame(() => {
+            if (terminal && !terminal._core?.disposed) {
+              terminal.refresh(0, terminal.rows - 1);
+            }
+          });
         }
       } catch (err) {
         console.error(`Failed to fit terminal ${sessionId}:`, err);
       }
-    }
+      this.fitTimers.delete(sessionId);
+    }, 100)); // Wait 100ms for size to stabilize
   }
   
   handleOutput(sessionId, data) {
@@ -485,18 +503,32 @@ class TerminalManager {
       }
       return;
     }
-    
+
     // Check if user is manually scrolling
     const isUserScrolling = this.userScrolling.get(sessionId) || false;
-    
+
     // Write data to terminal
     terminal.write(data);
-    
+
     // Only auto-scroll if user is not manually scrolling and autoScroll is enabled
     if (this.orchestrator.settings.autoScroll && !isUserScrolling) {
       terminal.scrollToBottom();
     }
-    
+
+    // Schedule a refresh to fix rendering corruption from rapid output
+    // Debounce to avoid excessive refreshes
+    if (!this.refreshTimers) this.refreshTimers = new Map();
+    if (this.refreshTimers.has(sessionId)) {
+      clearTimeout(this.refreshTimers.get(sessionId));
+    }
+    this.refreshTimers.set(sessionId, setTimeout(() => {
+      // Force a full refresh to fix any rendering artifacts
+      if (terminal && !terminal._core?.disposed) {
+        terminal.refresh(0, terminal.rows - 1);
+      }
+      this.refreshTimers.delete(sessionId);
+    }, 50)); // Refresh 50ms after last output
+
     // Check for special patterns (optional enhancement)
     this.checkOutputPatterns(sessionId, data);
   }
