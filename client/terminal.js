@@ -200,8 +200,6 @@ class TerminalManager {
       tabStopWidth: 4,
       bellStyle: 'none',
       allowTransparency: false,
-      // Remove windowsMode to let xterm.js auto-detect and handle \r correctly
-      // windowsMode: false,
       wordSeparator: ' ()[]{}\'"',
       rightClickSelectsWord: true,
       rendererType: 'canvas',
@@ -511,8 +509,13 @@ class TerminalManager {
     // Write data to terminal
     terminal.write(data);
 
+    // Check if this is a carriage return update (like a spinner)
+    // Don't auto-scroll for CR updates to avoid breaking the overwrite behavior
+    const hasCarriageReturn = data.includes('\r') && !data.includes('\n');
+
     // Only auto-scroll if user is not manually scrolling and autoScroll is enabled
-    if (this.orchestrator.settings.autoScroll && !isUserScrolling) {
+    // AND this isn't a carriage return update (spinner)
+    if (this.orchestrator.settings.autoScroll && !isUserScrolling && !hasCarriageReturn) {
       terminal.scrollToBottom();
     }
 
