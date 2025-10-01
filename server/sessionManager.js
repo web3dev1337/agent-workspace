@@ -294,7 +294,7 @@ class SessionManager extends EventEmitter {
         if (this.gitHelper) {
           sessionPromises.push(
             Promise.resolve().then(() => {
-              this.updateGitBranch(worktree.id, worktree.path);
+              return this.updateGitBranch(worktree.id, worktree.path);
             }).catch(error => {
               logger.error('Failed to update git branch', {
                 worktree: worktree.id,
@@ -312,7 +312,7 @@ class SessionManager extends EventEmitter {
         sessionPromises.push(
           Promise.resolve().then(() => {
             const worktreeIdForGit = worktree.worktreeId || worktree.id;
-            this.updateGitBranch(worktreeIdForGit, worktree.path);
+            return this.updateGitBranch(worktreeIdForGit, worktree.path);
           }).catch(error => {
             logger.error('Failed to update git branch', {
               worktree: worktree.id,
