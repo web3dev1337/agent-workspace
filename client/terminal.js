@@ -516,24 +516,18 @@ class TerminalManager {
     }
 
     // Schedule a refresh to fix rendering corruption from rapid output
-    // Only refresh for Codex or if we detect rendering issues
-    // Don't refresh for Claude's spinner/status updates to avoid duplication
-    const isCodex = sessionId.includes('codex'); // Codex needs more aggressive refresh
-    const hasRenderingIssue = data.length > 1000; // Long lines can cause corruption
-
-    if (isCodex || hasRenderingIssue) {
-      if (!this.refreshTimers) this.refreshTimers = new Map();
-      if (this.refreshTimers.has(sessionId)) {
-        clearTimeout(this.refreshTimers.get(sessionId));
-      }
-      this.refreshTimers.set(sessionId, setTimeout(() => {
-        // Force a full refresh to fix any rendering artifacts
-        if (terminal && !terminal._core?.disposed) {
-          terminal.refresh(0, terminal.rows - 1);
-        }
-        this.refreshTimers.delete(sessionId);
-      }, 100)); // Refresh 100ms after last output (increased from 50ms)
+    // Debounce to avoid excessive refreshes
+    if (!this.refreshTimers) this.refreshTimers = new Map();
+    if (this.refreshTimers.has(sessionId)) {
+      clearTimeout(this.refreshTimers.get(sessionId));
     }
+    this.refreshTimers.set(sessionId, setTimeout(() => {
+      // Force a full refresh to fix any rendering artifacts
+      if (terminal && !terminal._core?.disposed) {
+        terminal.refresh(0, terminal.rows - 1);
+      }
+      this.refreshTimers.delete(sessionId);
+    }, 50)); // Refresh 50ms after last output
 
     // Check for special patterns (optional enhancement)
     this.checkOutputPatterns(sessionId, data);
