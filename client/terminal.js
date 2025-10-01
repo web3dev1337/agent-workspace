@@ -200,6 +200,7 @@ class TerminalManager {
       tabStopWidth: 4,
       bellStyle: 'none',
       allowTransparency: false,
+      convertEol: false,  // CRITICAL: Don't convert \r to \r\n - needed for spinner animations
       wordSeparator: ' ()[]{}\'"',
       rightClickSelectsWord: true,
       rendererType: 'canvas',
