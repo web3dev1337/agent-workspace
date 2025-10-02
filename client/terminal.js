@@ -429,9 +429,35 @@ class TerminalManager {
   
   fitTerminal(sessionId) {
     const fitAddon = this.fitAddons.get(sessionId);
-    if (!fitAddon) return;
+    const terminal = this.terminals.get(sessionId);
 
-    // Throttle fit operations to prevent dimension mismatch glitches
+    if (!fitAddon || !terminal || terminal._core?.disposed) return;
+
+    // Initialize resize tracking if needed
+    if (!this.resizeState) {
+      this.resizeState = new Map();
+    }
+
+    // Check if we're already processing a resize for this terminal
+    const state = this.resizeState.get(sessionId) || { processing: false, queued: false };
+
+    if (state.processing) {
+      // Mark that another resize is queued
+      state.queued = true;
+      this.resizeState.set(sessionId, state);
+      return;
+    }
+
+    // Mark as processing
+    state.processing = true;
+    state.queued = false;
+    this.resizeState.set(sessionId, state);
+
+    // Use a longer debounce time to prevent rapid successive fits
+    // and ensure the DOM has fully settled
+    const RESIZE_DEBOUNCE_MS = 250;
+
+    // Clear any existing timer
     if (!this.fitTimers) this.fitTimers = new Map();
     if (this.fitTimers.has(sessionId)) {
       clearTimeout(this.fitTimers.get(sessionId));
@@ -439,28 +465,74 @@ class TerminalManager {
 
     this.fitTimers.set(sessionId, setTimeout(() => {
       try {
-        const terminal = this.terminals.get(sessionId);
-        if (!terminal || terminal._core?.disposed) return;
+        // Double-check terminal is still valid
+        if (!terminal || terminal._core?.disposed) {
+          state.processing = false;
+          this.resizeState.set(sessionId, state);
+          return;
+        }
 
+        // Get the container element to check its actual size
+        const terminalElement = document.getElementById(`terminal-${sessionId}`);
+        if (!terminalElement) {
+          state.processing = false;
+          this.resizeState.set(sessionId, state);
+          return;
+        }
+
+        // Check if container has reasonable dimensions
+        const rect = terminalElement.getBoundingClientRect();
+        if (rect.width < 100 || rect.height < 50) {
+          // Container too small, skip fit to avoid calculation errors
+          console.warn(`Terminal ${sessionId} container too small (${rect.width}x${rect.height}), skipping fit`);
+          state.processing = false;
+          this.resizeState.set(sessionId, state);
+
+          // Process queued resize after delay
+          if (state.queued) {
+            setTimeout(() => this.fitTerminal(sessionId), 100);
+          }
+          return;
+        }
+
+        // Store previous dimensions to detect if resize actually changed anything
+        const prevCols = terminal.cols;
+        const prevRows = terminal.rows;
+
+        // Perform the fit
         fitAddon.fit();
 
-        // Get dimensions and notify server
-        if (terminal) {
-          const dimensions = { cols: terminal.cols, rows: terminal.rows };
-          this.orchestrator.resizeTerminal(sessionId, dimensions.cols, dimensions.rows);
+        // Check if dimensions actually changed
+        if (terminal.cols !== prevCols || terminal.rows !== prevRows) {
+          // Dimensions changed, notify server
+          this.orchestrator.resizeTerminal(sessionId, terminal.cols, terminal.rows);
 
-          // Force refresh after resize to prevent rendering artifacts
-          requestAnimationFrame(() => {
+          // Only refresh if dimensions actually changed to avoid unnecessary redraws
+          // Use a longer delay to let the resize fully settle
+          setTimeout(() => {
             if (terminal && !terminal._core?.disposed) {
               terminal.refresh(0, terminal.rows - 1);
             }
-          });
+          }, 100);
         }
+
+        // Mark processing complete
+        state.processing = false;
+        this.resizeState.set(sessionId, state);
+
+        // If there was a queued resize, process it now
+        if (state.queued) {
+          setTimeout(() => this.fitTerminal(sessionId), 50);
+        }
+
       } catch (err) {
         console.error(`Failed to fit terminal ${sessionId}:`, err);
+        state.processing = false;
+        this.resizeState.set(sessionId, state);
       }
+
       this.fitTimers.delete(sessionId);
-    }, 100)); // Wait 100ms for size to stabilize
+    }, RESIZE_DEBOUNCE_MS));
   }
   
   handleOutput(sessionId, data) {
@@ -717,20 +789,33 @@ class TerminalManager {
       terminal.dispose();
       this.terminals.delete(sessionId);
     }
-    
+
     // Clean up paste tracking
     this.lastPasteTimes.delete(sessionId);
     this.lastWordDeleteTimes.delete(sessionId);
-    
+
     // Clean up scroll state
     this.terminalScrollStates.delete(sessionId);
     this.userScrolling.delete(sessionId);
-    
+
+    // Clean up resize state
+    if (this.resizeState) {
+      this.resizeState.delete(sessionId);
+    }
+    if (this.fitTimers && this.fitTimers.has(sessionId)) {
+      clearTimeout(this.fitTimers.get(sessionId));
+      this.fitTimers.delete(sessionId);
+    }
+    if (this.refreshTimers && this.refreshTimers.has(sessionId)) {
+      clearTimeout(this.refreshTimers.get(sessionId));
+      this.refreshTimers.delete(sessionId);
+    }
+
     // Clean up addons
     this.fitAddons.delete(sessionId);
     this.searchAddons.delete(sessionId);
     this.webLinksAddons.delete(sessionId);
-    
+
     // Clean up resize observer
     const terminalElement = document.getElementById(`terminal-${sessionId}`);
     if (terminalElement) {
