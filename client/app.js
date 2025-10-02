@@ -603,19 +603,17 @@ class ClaudeOrchestrator {
     });
     
     // Handle window resize to fix blank terminals
+    // Use a longer debounce and let fitTerminal handle the refresh
     let resizeTimeout;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
-        // Refit all visible terminals
+        // Only refit visible terminals, let fitTerminal handle everything
         this.activeView.forEach(sessionId => {
+          // fitTerminal now handles all the logic including refresh
           this.terminalManager.fitTerminal(sessionId);
-          const term = this.terminalManager.terminals.get(sessionId);
-          if (term) {
-            term.refresh(0, term.rows - 1);
-          }
         });
-      }, 250);
+      }, 350); // Slightly longer than fitTerminal's debounce to avoid conflicts
     });
   }
   
