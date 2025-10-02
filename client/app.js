@@ -417,9 +417,15 @@ class ClaudeOrchestrator {
     // Sidebar worktree clicks - use toggle instead of show
     if (elements['worktree-list']) {
       elements['worktree-list'].addEventListener('click', (e) => {
+        // Check if click was on delete button
+        if (e.target.closest('.delete-worktree-btn')) {
+          return; // Let the button's onclick handler deal with it
+        }
+
         const item = e.target.closest('.worktree-item');
         if (item) {
           const worktreeId = item.dataset.worktreeId;
+          console.log(`Tab clicked: ${worktreeId}, Ctrl: ${e.ctrlKey}, Meta: ${e.metaKey}`);
 
           // Ctrl+Click or Cmd+Click = solo mode (show only this worktree)
           if (e.ctrlKey || e.metaKey) {
@@ -1253,12 +1259,38 @@ class ClaudeOrchestrator {
     // Clear all visible terminals first
     this.visibleTerminals.clear();
 
-    // Add only this EXACT worktree's sessions
+    // Strategy 1: Direct match (for simple workspace types)
     const claudeId = `${worktreeIdOrKey}-claude`;
     const serverId = `${worktreeIdOrKey}-server`;
 
-    if (this.sessions.has(claudeId)) this.visibleTerminals.add(claudeId);
-    if (this.sessions.has(serverId)) this.visibleTerminals.add(serverId);
+    let foundSessions = false;
+    if (this.sessions.has(claudeId)) {
+      this.visibleTerminals.add(claudeId);
+      foundSessions = true;
+    }
+    if (this.sessions.has(serverId)) {
+      this.visibleTerminals.add(serverId);
+      foundSessions = true;
+    }
+
+    // Strategy 2: Search all sessions for matching worktreeId or complex keys
+    if (!foundSessions) {
+      for (const [sessionId, session] of this.sessions) {
+        // Check if this session belongs to the current workspace
+        if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) {
+          continue; // Skip sessions from other workspaces
+        }
+
+        // For mixed-repo workspaces, build the same key used in buildSidebar
+        const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+        const repositoryName = this.extractRepositoryName(sessionId);
+        const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
+
+        if (sessionKey === worktreeIdOrKey) {
+          this.visibleTerminals.add(sessionId);
+        }
+      }
+    }
 
     // Update the grid to show only these terminals
     this.updateTerminalGrid();
@@ -1268,36 +1300,33 @@ class ClaudeOrchestrator {
   toggleWorktreeVisibility(worktreeIdOrKey) {
     console.log(`Toggling visibility for worktree: ${worktreeIdOrKey}`);
 
-    // Find all sessions that match this worktree key by searching through sessions
-    // The worktreeIdOrKey might be constructed from repository name (e.g., "HyFire2-work2")
-    // but the actual session ID might have a workspace prefix (e.g., "mixed-terminals-work2-claude")
+    // Find all sessions that match this worktree key
     const sessions = [];
 
-    // First try direct match (for backwards compatibility and simple cases)
+    // Strategy 1: Direct match (for simple workspace types like "work1")
     const claudeId = `${worktreeIdOrKey}-claude`;
     const serverId = `${worktreeIdOrKey}-server`;
 
     if (this.sessions.has(claudeId)) sessions.push(claudeId);
     if (this.sessions.has(serverId)) sessions.push(serverId);
 
-    // If no direct match found, search by extracting repository name and worktree ID from the key
+    // Strategy 2: Search all sessions for matching worktreeId or complex keys
     if (sessions.length === 0) {
-      // Extract the worktree part (e.g., "work2" from "HyFire2-work2")
-      const parts = worktreeIdOrKey.split('-');
-      const workIndex = parts.findIndex(part => part.startsWith('work'));
+      // For mixed-repo workspaces, worktreeIdOrKey might be like "HyFire2-work2"
+      // We need to find sessions that match this pattern
+      for (const [sessionId, session] of this.sessions) {
+        // Check if this session belongs to the current workspace
+        if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) {
+          continue; // Skip sessions from other workspaces
+        }
 
-      if (workIndex >= 0) {
-        const worktreeId = parts.slice(workIndex).join('-'); // e.g., "work2"
-        const repositoryName = parts.slice(0, workIndex).join('-'); // e.g., "HyFire2"
+        // For mixed-repo workspaces, build the same key used in buildSidebar
+        const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+        const repositoryName = this.extractRepositoryName(sessionId);
+        const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
 
-        // Search through all sessions to find ones matching this repository + worktree
-        for (const [sessionId, session] of this.sessions) {
-          if (session.worktreeId === worktreeId) {
-            const sessionRepoName = this.extractRepositoryName(sessionId);
-            if (sessionRepoName === repositoryName) {
-              sessions.push(sessionId);
-            }
-          }
+        if (sessionKey === worktreeIdOrKey) {
+          sessions.push(sessionId);
         }
       }
     }
@@ -1306,6 +1335,8 @@ class ClaudeOrchestrator {
       console.warn(`No sessions found for worktree ${worktreeIdOrKey}`);
       return;
     }
+
+    console.log(`Found sessions for ${worktreeIdOrKey}:`, sessions);
 
     // Check if ANY session from this worktree is currently visible
     const anyVisible = sessions.some(id => this.visibleTerminals.has(id));
@@ -1404,31 +1435,29 @@ class ClaudeOrchestrator {
       }
     });
     
-    // Initialize terminals
-    sessionIds.forEach((sessionId, index) => {
+    // Initialize terminals - ONLY for visible terminals that have DOM elements
+    this.activeView.forEach((sessionId, index) => {
       const session = this.sessions.get(sessionId);
       if (session) {
         setTimeout(() => {
           const terminalEl = document.getElementById(`terminal-${sessionId}`);
           if (!terminalEl) return;
-          
+
           if (this.terminalManager.terminals.has(sessionId)) {
             const term = this.terminalManager.terminals.get(sessionId);
             terminalEl.innerHTML = '';
             term.open(terminalEl);
 
-            // Only fit if visible
-            if (this.visibleTerminals.has(sessionId)) {
-              // Use requestAnimationFrame to ensure renderer is ready before fitting
-              requestAnimationFrame(() => {
-                this.terminalManager.fitTerminal(sessionId);
-                term.refresh(0, term.rows - 1);
-              });
-            }
+            // Fit terminal since it's visible
+            // Use requestAnimationFrame to ensure renderer is ready before fitting
+            requestAnimationFrame(() => {
+              this.terminalManager.fitTerminal(sessionId);
+              term.refresh(0, term.rows - 1);
+            });
           } else {
             this.terminalManager.createTerminal(sessionId, session);
           }
-          
+
           // Don't auto-start Claude - let user choose via modal or button
         }, 50 + (index * 25));
       }
