@@ -414,11 +414,36 @@ class TerminalManager {
     const terminalElement = document.getElementById(`terminal-${sessionId}`);
     if (!terminalElement) return;
 
-    const resizeObserver = new ResizeObserver(() => {
-      // Use requestAnimationFrame to ensure renderer is ready before fitting
-      requestAnimationFrame(() => {
-        this.fitTerminal(sessionId);
-      });
+    // Store last known size to detect significant changes only
+    let lastWidth = terminalElement.offsetWidth;
+    let lastHeight = terminalElement.offsetHeight;
+
+    // Minimum size change threshold (in pixels) to trigger resize
+    const SIZE_CHANGE_THRESHOLD = 5;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      // Get the current size
+      const entry = entries[0];
+      if (!entry) return;
+
+      const currentWidth = entry.contentRect.width;
+      const currentHeight = entry.contentRect.height;
+
+      // Calculate the size change
+      const widthChange = Math.abs(currentWidth - lastWidth);
+      const heightChange = Math.abs(currentHeight - lastHeight);
+
+      // Only trigger resize if change is significant (more than threshold pixels)
+      if (widthChange >= SIZE_CHANGE_THRESHOLD || heightChange >= SIZE_CHANGE_THRESHOLD) {
+        // Update last known size
+        lastWidth = currentWidth;
+        lastHeight = currentHeight;
+
+        // Use requestAnimationFrame to ensure renderer is ready before fitting
+        requestAnimationFrame(() => {
+          this.fitTerminal(sessionId);
+        });
+      }
     });
 
     resizeObserver.observe(terminalElement);
@@ -587,19 +612,23 @@ class TerminalManager {
       terminal.scrollToBottom();
     }
 
-    // Schedule a refresh to fix rendering corruption from rapid output
-    // Debounce to avoid excessive refreshes
-    if (!this.refreshTimers) this.refreshTimers = new Map();
-    if (this.refreshTimers.has(sessionId)) {
-      clearTimeout(this.refreshTimers.get(sessionId));
-    }
-    this.refreshTimers.set(sessionId, setTimeout(() => {
-      // Force a full refresh to fix any rendering artifacts
-      if (terminal && !terminal._core?.disposed) {
-        terminal.refresh(0, terminal.rows - 1);
+    // Only schedule refresh for large outputs or if we detect corruption
+    // This prevents unnecessary refreshes on every small output
+    if (data.length > 1000 || data.includes('\x1b[2J')) {
+      // Schedule a refresh to fix rendering corruption from rapid output
+      // Debounce to avoid excessive refreshes
+      if (!this.refreshTimers) this.refreshTimers = new Map();
+      if (this.refreshTimers.has(sessionId)) {
+        clearTimeout(this.refreshTimers.get(sessionId));
       }
-      this.refreshTimers.delete(sessionId);
-    }, 50)); // Refresh 50ms after last output
+      this.refreshTimers.set(sessionId, setTimeout(() => {
+        // Force a full refresh to fix any rendering artifacts
+        if (terminal && !terminal._core?.disposed) {
+          terminal.refresh(0, terminal.rows - 1);
+        }
+        this.refreshTimers.delete(sessionId);
+      }, 100)); // Increased to 100ms and only for large outputs
+    }
 
     // Check for special patterns (optional enhancement)
     this.checkOutputPatterns(sessionId, data);
