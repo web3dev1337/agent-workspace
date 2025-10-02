@@ -252,9 +252,18 @@ class TerminalManager {
       this.orchestrator.sendTerminalInput(sessionId, data);
     });
     
-    // Handle resize
+    // Track last reported dimensions to avoid duplicate resize events
+    let lastReportedCols = terminal.cols;
+    let lastReportedRows = terminal.rows;
+
+    // Handle resize - but only notify server if dimensions actually changed
     terminal.onResize(({ cols, rows }) => {
-      this.orchestrator.resizeTerminal(sessionId, cols, rows);
+      // Only notify server if dimensions really changed
+      if (cols !== lastReportedCols || rows !== lastReportedRows) {
+        lastReportedCols = cols;
+        lastReportedRows = rows;
+        this.orchestrator.resizeTerminal(sessionId, cols, rows);
+      }
     });
     
     // Handle selection for copy
@@ -529,8 +538,8 @@ class TerminalManager {
 
         // Check if dimensions actually changed
         if (terminal.cols !== prevCols || terminal.rows !== prevRows) {
-          // Dimensions changed, notify server
-          this.orchestrator.resizeTerminal(sessionId, terminal.cols, terminal.rows);
+          // Don't notify server here - terminal.onResize will handle it
+          // This prevents duplicate resize events to the PTY
 
           // Only refresh if dimensions actually changed to avoid unnecessary redraws
           // Use a longer delay to let the resize fully settle
