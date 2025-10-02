@@ -427,9 +427,6 @@ class TerminalManager {
     let lastWidth = terminalElement.offsetWidth;
     let lastHeight = terminalElement.offsetHeight;
 
-    // Minimum size change threshold (in pixels) to trigger resize
-    const SIZE_CHANGE_THRESHOLD = 5;
-
     const resizeObserver = new ResizeObserver((entries) => {
       // Get the current size
       const entry = entries[0];
@@ -438,12 +435,21 @@ class TerminalManager {
       const currentWidth = entry.contentRect.width;
       const currentHeight = entry.contentRect.height;
 
+      // Dynamic threshold based on current size
+      // Use larger threshold when terminal is small to prevent reflow issues
+      let sizeChangeThreshold = 5;
+      if (currentWidth < 300 || currentHeight < 200) {
+        sizeChangeThreshold = 20; // Much larger threshold for small terminals
+      } else if (currentWidth < 500 || currentHeight < 300) {
+        sizeChangeThreshold = 10; // Medium threshold for medium-small terminals
+      }
+
       // Calculate the size change
       const widthChange = Math.abs(currentWidth - lastWidth);
       const heightChange = Math.abs(currentHeight - lastHeight);
 
       // Only trigger resize if change is significant (more than threshold pixels)
-      if (widthChange >= SIZE_CHANGE_THRESHOLD || heightChange >= SIZE_CHANGE_THRESHOLD) {
+      if (widthChange >= sizeChangeThreshold || heightChange >= sizeChangeThreshold) {
         // Update last known size
         lastWidth = currentWidth;
         lastHeight = currentHeight;
@@ -516,16 +522,18 @@ class TerminalManager {
 
         // Check if container has reasonable dimensions
         const rect = terminalElement.getBoundingClientRect();
-        if (rect.width < 100 || rect.height < 50) {
-          // Container too small, skip fit to avoid calculation errors
-          console.warn(`Terminal ${sessionId} container too small (${rect.width}x${rect.height}), skipping fit`);
+        // Calculate minimum viable size based on font size (12px) and minimum character requirements
+        // Minimum: 20 columns x 5 rows worth of space
+        const minWidth = 20 * 7; // ~20 chars at ~7px per char
+        const minHeight = 5 * 16; // ~5 lines at ~16px line height
+
+        if (rect.width < minWidth || rect.height < minHeight) {
+          // Container too small, skip fit to avoid calculation errors and reflow issues
+          console.warn(`Terminal ${sessionId} too small (${Math.round(rect.width)}x${Math.round(rect.height)}), min is ${minWidth}x${minHeight}`);
           state.processing = false;
           this.resizeState.set(sessionId, state);
 
-          // Process queued resize after delay
-          if (state.queued) {
-            setTimeout(() => this.fitTerminal(sessionId), 100);
-          }
+          // Don't queue resize when too small - wait for significant size change
           return;
         }
 
@@ -534,7 +542,26 @@ class TerminalManager {
         const prevRows = terminal.rows;
 
         // Perform the fit
-        fitAddon.fit();
+        try {
+          fitAddon.fit();
+        } catch (fitError) {
+          console.error(`Fit error for ${sessionId}:`, fitError);
+          state.processing = false;
+          this.resizeState.set(sessionId, state);
+          return;
+        }
+
+        // Validate the fit didn't result in invalid dimensions
+        if (terminal.cols < 10 || terminal.rows < 2) {
+          console.warn(`Terminal ${sessionId} fit resulted in invalid size: ${terminal.cols}x${terminal.rows}`);
+          // Try to restore previous dimensions if they were valid
+          if (prevCols >= 10 && prevRows >= 2) {
+            terminal.resize(prevCols, prevRows);
+          }
+          state.processing = false;
+          this.resizeState.set(sessionId, state);
+          return;
+        }
 
         // Check if dimensions actually changed
         if (terminal.cols !== prevCols || terminal.rows !== prevRows) {
