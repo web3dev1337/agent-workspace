@@ -1639,7 +1639,7 @@ class ClaudeOrchestrator {
       <div class="terminal-body">
         <div class="terminal" id="terminal-${sessionId}"></div>
         ${isClaudeSession ? `
-          <div class="terminal-startup-ui" id="startup-ui-${sessionId}">
+          <div class="terminal-startup-ui" id="startup-ui-${sessionId}" style="display: none;">
             <div class="startup-ui-compact">
               <!-- Agent Selection -->
               <div class="inline-agent-selector">
