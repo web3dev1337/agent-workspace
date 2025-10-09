@@ -31,7 +31,7 @@ server/index.js                    - Express server with Socket.IO
 
 server/sessionManager.js           - Terminal session lifecycle management
 ├─ Manages: PTY processes, session tracking, cleanup
-├─ Key methods: createSession(), destroySession(), getActiveSessions()
+├─ Key methods: createSession(), terminateSession(), getActiveSessions()
 └─ Uses: node-pty for terminal emulation
 
 server/statusDetector.js           - Claude Code session monitoring

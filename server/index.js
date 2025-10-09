@@ -848,7 +848,7 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
       // Close sessions for removed worktree
       const sessionsToClose = sessionManager.getSessionsForWorktree(worktreeId);
       sessionsToClose.forEach(sessionId => {
-        sessionManager.destroySession(sessionId);
+        sessionManager.terminateSession(sessionId);
       });
 
       // Refresh the SessionManager with updated workspace
