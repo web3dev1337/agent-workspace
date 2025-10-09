@@ -449,6 +449,82 @@ io.on('connection', (socket) => {
     socket.emit('workspaces-list', workspaces);
   });
 
+  // Add sessions for newly created worktree without destroying existing ones
+  socket.on('add-worktree-sessions', async ({ worktreeNumber }) => {
+    try {
+      logger.info('Adding sessions for new worktree', { worktreeNumber });
+
+      const workspace = workspaceManager.getActiveWorkspace();
+      if (!workspace) {
+        return socket.emit('error', { message: 'No active workspace' });
+      }
+
+      // Get the worktree ID
+      const worktreeId = `work${worktreeNumber}`;
+      const worktreePath = path.join(workspace.repository.path, worktreeId);
+
+      // Check if worktree exists
+      const fs = require('fs').promises;
+      try {
+        await fs.access(worktreePath);
+      } catch (error) {
+        logger.error('Worktree path does not exist', { worktreePath });
+        return socket.emit('error', { message: 'Worktree path does not exist' });
+      }
+
+      // Create Claude session
+      const claudeSessionId = `${worktreeId}-claude`;
+      sessionManager.createSession(claudeSessionId, {
+        command: 'bash',
+        args: ['-c', `cd "${worktreePath}" && exec bash`],
+        cwd: worktreePath,
+        type: 'claude',
+        worktreeId: worktreeId
+      });
+
+      // Create Server session
+      const serverSessionId = `${worktreeId}-server`;
+      sessionManager.createSession(serverSessionId, {
+        command: 'bash',
+        args: ['-c', `cd "${worktreePath}" && echo "=== Server Terminal for ${worktreeId} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
+        cwd: worktreePath,
+        type: 'server',
+        worktreeId: worktreeId
+      });
+
+      // Update git branches for the new sessions
+      if (sessionManager.gitHelper) {
+        await sessionManager.updateGitBranch(worktreeId, worktreePath);
+      }
+
+      // Emit the new sessions to all clients
+      const newSessions = {
+        [claudeSessionId]: {
+          status: sessionManager.sessions.get(claudeSessionId)?.status || 'idle',
+          branch: sessionManager.sessions.get(claudeSessionId)?.branch || 'unknown',
+          type: 'claude',
+          worktreeId: worktreeId
+        },
+        [serverSessionId]: {
+          status: sessionManager.sessions.get(serverSessionId)?.status || 'idle',
+          branch: sessionManager.sessions.get(serverSessionId)?.branch || 'unknown',
+          type: 'server',
+          worktreeId: worktreeId
+        }
+      };
+
+      io.emit('worktree-sessions-added', {
+        worktreeId,
+        sessions: newSessions
+      });
+
+      logger.info('Successfully added sessions for new worktree', { worktreeId });
+    } catch (error) {
+      logger.error('Failed to add worktree sessions', { error: error.message });
+      socket.emit('error', { message: 'Failed to add worktree sessions', error: error.message });
+    }
+  });
+
   socket.on('disconnect', () => {
     logger.info('Client disconnected', { socketId: socket.id });
   });

@@ -278,6 +278,38 @@ class ClaudeOrchestrator {
         }
       });
 
+      // Handle new worktree sessions being added without destroying existing ones
+      this.socket.on('worktree-sessions-added', async ({ worktreeId, sessions }) => {
+        console.log('New worktree sessions added:', worktreeId, sessions);
+
+        // Add the new sessions to our sessions map
+        for (const [sessionId, sessionState] of Object.entries(sessions)) {
+          this.sessions.set(sessionId, sessionState);
+        }
+
+        // Create terminal UI elements for the new sessions
+        const sessionIds = Object.keys(sessions);
+        const claudeSessionId = sessionIds.find(id => id.includes('claude'));
+        const serverSessionId = sessionIds.find(id => id.includes('server'));
+
+        if (claudeSessionId && serverSessionId) {
+          // Create terminal containers
+          this.createTerminalPair(claudeSessionId, serverSessionId, sessions[claudeSessionId], sessions[serverSessionId]);
+
+          // Connect terminals to backend sessions
+          if (this.terminalManager) {
+            this.terminalManager.connectTerminal(claudeSessionId);
+            this.terminalManager.connectTerminal(serverSessionId);
+          }
+
+          // Add to sidebar
+          this.updateWorktreeList();
+
+          // Show success message
+          this.showTemporaryMessage(`Worktree ${worktreeId} terminals ready!`, 'success');
+        }
+      });
+
       this.socket.on('git-updated', (result) => {
         console.log('Git updated:', result);
         this.showTemporaryMessage(`Repository updated successfully! ${result.wasUpToDate ? 'Already up to date.' : 'Changes pulled.'}`, 'success');
@@ -5113,9 +5145,9 @@ class ClaudeOrchestrator {
         // Update workspace config to include new terminal pair
         this.currentWorkspace.terminals.pairs = worktreeNumber;
 
-        // Refresh the workspace to show new worktree
+        // Add sessions for the new worktree without destroying existing ones
         setTimeout(() => {
-          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
+          this.socket.emit('add-worktree-sessions', { worktreeNumber });
         }, 1000);
       } else {
         const error = await response.text();
