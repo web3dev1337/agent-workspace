@@ -32,6 +32,7 @@ class SessionManager extends EventEmitter {
     this.workspace = null; // Will be set by WorkspaceManager
     this.worktreeHelper = new WorktreeHelper();
     this.isWorkspaceSwitching = false; // Flag to prevent auto-restart during workspace switch
+    this.deletingSessions = new Set(); // Track sessions being intentionally deleted
 
     // Load configuration
     this.config = this.loadConfig();
@@ -630,7 +631,8 @@ class SessionManager extends EventEmitter {
         
         // Auto-restart Claude sessions that exit from CTRL+C or other interrupts
         // This ensures the terminal remains usable after CTRL+C
-        if (config.type === 'claude' && !this.isWorkspaceSwitching) {
+        // Don't auto-restart if: workspace is switching OR session is being intentionally deleted
+        if (config.type === 'claude' && !this.isWorkspaceSwitching && !this.deletingSessions.has(sessionId)) {
           logger.info('Claude session exited, auto-restarting for usability', {
             sessionId,
             signal,
@@ -996,29 +998,37 @@ class SessionManager extends EventEmitter {
   terminateSession(sessionId) {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    
+
     logger.info('Terminating session', { sessionId });
-    
+
+    // Mark session as being intentionally deleted to prevent auto-restart
+    this.deletingSessions.add(sessionId);
+
     // Clear the inactivity timer to prevent infinite loops
     if (session.inactivityTimer) {
       clearTimeout(session.inactivityTimer);
       session.inactivityTimer = null;
     }
-    
+
     // Kill the PTY process if it exists
     if (session.pty) {
       try {
         session.pty.kill();
       } catch (error) {
-        logger.error('Failed to kill PTY', { 
-          sessionId, 
-          error: error.message 
+        logger.error('Failed to kill PTY', {
+          sessionId,
+          error: error.message
         });
       }
     }
-    
+
     // Remove from sessions map
     this.sessions.delete(sessionId);
+
+    // Clean up deletingSessions flag after a delay (after exit handler runs)
+    setTimeout(() => {
+      this.deletingSessions.delete(sessionId);
+    }, 1000);
   }
   
   restartSession(sessionId) {
