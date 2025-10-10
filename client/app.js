@@ -322,12 +322,6 @@ class ClaudeOrchestrator {
             this.terminalManager.destroyTerminal(sessionId);
           }
 
-          // Remove terminal DOM element from grid
-          const containerElement = document.getElementById(`container-${sessionId}`);
-          if (containerElement) {
-            containerElement.remove();
-          }
-
           // Remove from sessions map
           this.sessions.delete(sessionId);
 
@@ -339,11 +333,9 @@ class ClaudeOrchestrator {
           this.githubLinks.delete(sessionId);
         }
 
-        // Remove worktree item from sidebar
-        const worktreeItem = document.querySelector(`[data-worktree-id="${worktreeId}"]`);
-        if (worktreeItem) {
-          worktreeItem.remove();
-        }
+        // Rebuild the UI properly (same way toggle works)
+        this.updateTerminalGrid();
+        this.buildSidebar();
 
         console.log(`Successfully removed worktree ${worktreeId} from UI`);
       });
