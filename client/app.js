@@ -290,6 +290,13 @@ class ClaudeOrchestrator {
             hasUserInput: false
           });
 
+          // If there's an existing PR, add it to GitHub links
+          if (sessionState.existingPR) {
+            const links = this.githubLinks.get(sessionId) || {};
+            links.pr = sessionState.existingPR;
+            this.githubLinks.set(sessionId, links);
+          }
+
           // Mark as active for mixed-repo workspaces
           const isComplexSessionId = sessionId.includes('-') && sessionId.split('-').length > 2;
           this.sessionActivity.set(sessionId, isComplexSessionId ? 'active' : 'inactive');
@@ -298,35 +305,19 @@ class ClaudeOrchestrator {
           this.visibleTerminals.add(sessionId);
         }
 
-        // Create terminal UI elements for the new sessions
-        const sessionIds = Object.keys(sessions);
-        const claudeSessionId = sessionIds.find(id => id.includes('claude'));
-        const serverSessionId = sessionIds.find(id => id.includes('server'));
+        // Rebuild sidebar to show new worktree
+        this.buildSidebar();
 
-        if (claudeSessionId && serverSessionId) {
-          // Create terminal containers
-          this.createTerminalPair(claudeSessionId, serverSessionId, sessions[claudeSessionId], sessions[serverSessionId]);
+        // Update terminal grid to display new terminals (this creates the terminals)
+        this.updateTerminalGrid();
 
-          // Connect terminals to backend sessions
-          if (this.terminalManager) {
-            this.terminalManager.connectTerminal(claudeSessionId);
-            this.terminalManager.connectTerminal(serverSessionId);
-          }
+        // Auto-start Claude after a delay to let terminals initialize
+        setTimeout(() => {
+          this.checkAndApplyAutoStart();
+        }, 2000);
 
-          // Rebuild sidebar to show new worktree
-          this.buildSidebar();
-
-          // Update terminal grid to display new terminals
-          this.updateTerminalGrid();
-
-          // Auto-start Claude after a delay to let terminals initialize
-          setTimeout(() => {
-            this.checkAndApplyAutoStart();
-          }, 2000);
-
-          // Show success message
-          this.showTemporaryMessage(`Worktree ${worktreeId} terminals ready!`, 'success');
-        }
+        // Show success message
+        this.showTemporaryMessage(`Worktree ${worktreeId} terminals ready!`, 'success');
       });
 
       this.socket.on('git-updated', (result) => {
