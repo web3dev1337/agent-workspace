@@ -294,7 +294,11 @@ class ClaudeOrchestrator {
       });
 
       this.socket.on('worktree-removed', ({ workspaceId, worktreeId, updatedWorkspace }) => {
-        console.log(`Worktree removed: ${worktreeId} from workspace ${workspaceId}`);
+        console.log('🗑️ [WORKTREE-REMOVED EVENT RECEIVED]', {
+          workspaceId,
+          worktreeId,
+          currentSessions: Array.from(this.sessions.keys())
+        });
 
         // Update current workspace
         this.currentWorkspace = updatedWorkspace;

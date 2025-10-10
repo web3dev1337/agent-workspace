@@ -863,6 +863,10 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
     });
 
     // Notify all clients to update their UI
+    logger.info('Emitting worktree-removed event to all clients', {
+      workspaceId,
+      worktreeId
+    });
     io.emit('worktree-removed', {
       workspaceId,
       worktreeId,
