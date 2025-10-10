@@ -868,12 +868,62 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
     // Save updated workspace
     await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
 
-    // Refresh the SessionManager with the updated workspace
-    const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
-    sessionManager.setWorkspace(refreshedWorkspace);
+    // Create sessions ONLY for the new terminals without destroying existing ones
+    for (const terminal of newTerminals) {
+      const worktreePath = path.join(repositoryPath, terminal.worktree);
 
-    // Reinitialize sessions to include the new terminals
-    await sessionManager.initializeSessions();
+      // Check if worktree exists
+      const fs = require('fs');
+      if (!fs.existsSync(worktreePath)) {
+        logger.warn(`Worktree does not exist, skipping session creation`, { worktreePath });
+        continue;
+      }
+
+      let command, args;
+      if (terminal.terminalType === 'claude') {
+        command = 'bash';
+        args = ['-c', `cd "${worktreePath}" && exec bash`];
+      } else {
+        // Server terminal
+        command = 'bash';
+        args = ['-c', `cd "${worktreePath}" && echo "=== Server Terminal for ${terminal.repository.name}/${terminal.worktree} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && exec bash`];
+      }
+
+      sessionManager.createSession(terminal.id, {
+        command,
+        args,
+        cwd: worktreePath,
+        type: terminal.terminalType,
+        worktreeId: terminal.worktree,
+        repositoryName: terminal.repository.name,
+        repositoryType: terminal.repository.type
+      });
+
+      // Update git branch for the new session
+      if (sessionManager.gitHelper) {
+        await sessionManager.updateGitBranch(terminal.worktree, worktreePath);
+      }
+    }
+
+    // Emit the new sessions to all clients
+    const newSessions = {};
+    for (const terminal of newTerminals) {
+      const session = sessionManager.sessions.get(terminal.id);
+      if (session) {
+        newSessions[terminal.id] = {
+          status: session.status || 'idle',
+          branch: session.branch || 'unknown',
+          type: terminal.terminalType,
+          worktreeId: terminal.worktree,
+          repositoryName: terminal.repository.name
+        };
+      }
+    }
+
+    io.emit('worktree-sessions-added', {
+      worktreeId: worktreeId,
+      sessions: newSessions
+    });
 
     res.json({ success: true, terminalIds: newTerminals.map(t => t.id) });
   } catch (error) {
