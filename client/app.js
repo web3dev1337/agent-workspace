@@ -284,7 +284,18 @@ class ClaudeOrchestrator {
 
         // Add the new sessions to our sessions map
         for (const [sessionId, sessionState] of Object.entries(sessions)) {
-          this.sessions.set(sessionId, sessionState);
+          this.sessions.set(sessionId, {
+            sessionId,
+            ...sessionState,
+            hasUserInput: false
+          });
+
+          // Mark as active for mixed-repo workspaces
+          const isComplexSessionId = sessionId.includes('-') && sessionId.split('-').length > 2;
+          this.sessionActivity.set(sessionId, isComplexSessionId ? 'active' : 'inactive');
+
+          // Add to visible terminals set
+          this.visibleTerminals.add(sessionId);
         }
 
         // Create terminal UI elements for the new sessions
@@ -302,8 +313,16 @@ class ClaudeOrchestrator {
             this.terminalManager.connectTerminal(serverSessionId);
           }
 
-          // Add to sidebar
-          this.updateWorktreeList();
+          // Rebuild sidebar to show new worktree
+          this.buildSidebar();
+
+          // Update terminal grid to display new terminals
+          this.updateTerminalGrid();
+
+          // Auto-start Claude after a delay to let terminals initialize
+          setTimeout(() => {
+            this.checkAndApplyAutoStart();
+          }, 2000);
 
           // Show success message
           this.showTemporaryMessage(`Worktree ${worktreeId} terminals ready!`, 'success');
