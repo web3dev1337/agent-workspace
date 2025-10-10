@@ -4106,10 +4106,8 @@ class ClaudeOrchestrator {
 
       if (response.ok) {
         this.showTemporaryMessage(`Removed "${displayName}" from workspace`, 'success');
-
-        // Just refresh the UI - the server already handled closing sessions
-        // No need for full workspace switch which would reset all terminals
-        this.updateWorkspaceDisplay();
+        // Note: UI will update on next workspace load/refresh
+        // Server already handled closing sessions and updating workspace config
       } else {
         const error = await response.text();
         this.showError(`Failed to delete worktree: ${error}`);
