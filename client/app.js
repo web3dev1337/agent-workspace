@@ -281,7 +281,7 @@ class ClaudeOrchestrator {
       this.socket.on('git-updated', (result) => {
         console.log('Git updated:', result);
         this.showTemporaryMessage(`Repository updated successfully! ${result.wasUpToDate ? 'Already up to date.' : 'Changes pulled.'}`, 'success');
-        
+
         // Refresh the page after successful update
         if (!result.wasUpToDate) {
           setTimeout(() => {
@@ -292,7 +292,62 @@ class ClaudeOrchestrator {
           }, 3000);
         }
       });
-      
+
+      this.socket.on('worktree-removed', ({ workspaceId, worktreeId, updatedWorkspace }) => {
+        console.log(`Worktree removed: ${worktreeId} from workspace ${workspaceId}`);
+
+        // Update current workspace
+        this.currentWorkspace = updatedWorkspace;
+
+        // Find all sessions that belong to this worktree
+        const sessionsToRemove = [];
+        for (const [sessionId, session] of this.sessions) {
+          // Match sessions by worktree ID - handle both single-repo and mixed-repo formats
+          const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+
+          // For mixed-repo workspaces, worktreeId might be "repo-work1"
+          // For single-repo, it's just "work1"
+          // Check if this session belongs to the deleted worktree
+          if (sessionId.startsWith(worktreeId + '-') || sessionWorktreeId === worktreeId) {
+            sessionsToRemove.push(sessionId);
+          }
+        }
+
+        console.log(`Removing ${sessionsToRemove.length} sessions for worktree ${worktreeId}`);
+
+        // Remove each session
+        for (const sessionId of sessionsToRemove) {
+          // Destroy terminal
+          if (this.terminalManager) {
+            this.terminalManager.destroyTerminal(sessionId);
+          }
+
+          // Remove terminal DOM element from grid
+          const containerElement = document.getElementById(`container-${sessionId}`);
+          if (containerElement) {
+            containerElement.remove();
+          }
+
+          // Remove from sessions map
+          this.sessions.delete(sessionId);
+
+          // Clean up related data
+          this.visibleTerminals.delete(sessionId);
+          this.sessionActivity.delete(sessionId);
+          this.serverStatuses.delete(sessionId);
+          this.serverPorts.delete(sessionId);
+          this.githubLinks.delete(sessionId);
+        }
+
+        // Remove worktree item from sidebar
+        const worktreeItem = document.querySelector(`[data-worktree-id="${worktreeId}"]`);
+        if (worktreeItem) {
+          worktreeItem.remove();
+        }
+
+        console.log(`Successfully removed worktree ${worktreeId} from UI`);
+      });
+
       // Build production events
       this.socket.on('build-started', ({ sessionId, worktreeNum }) => {
         console.log(`Build started for worktree ${worktreeNum}`);

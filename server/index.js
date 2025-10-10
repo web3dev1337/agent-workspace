@@ -862,6 +862,13 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
       removedTerminals: removedCount
     });
 
+    // Notify all clients to update their UI
+    io.emit('worktree-removed', {
+      workspaceId,
+      worktreeId,
+      updatedWorkspace
+    });
+
     res.json({
       success: true,
       removedTerminals: removedCount,
