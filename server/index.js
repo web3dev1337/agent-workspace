@@ -843,7 +843,7 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
     // Save updated workspace
     await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
 
-    // If this is the active workspace, refresh sessions
+    // If this is the active workspace, terminate only the removed worktree's sessions
     if (workspaceManager.getActiveWorkspace()?.id === workspaceId) {
       // Close sessions for removed worktree
       const sessionsToClose = sessionManager.getSessionsForWorktree(worktreeId);
@@ -851,10 +851,9 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
         sessionManager.terminateSession(sessionId);
       });
 
-      // Refresh the SessionManager with updated workspace
+      // Update the workspace reference (but don't reinitialize all sessions)
       const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
       sessionManager.setWorkspace(refreshedWorkspace);
-      await sessionManager.initializeSessions();
     }
 
     logger.info('Worktree removed from workspace', {
