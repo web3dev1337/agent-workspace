@@ -4094,10 +4094,7 @@ class ClaudeOrchestrator {
     try {
       console.log(`Deleting worktree ${worktreeId} from workspace...`);
 
-      // Close associated terminals first
-      this.closeWorktreeSessions(worktreeId);
-
-      // Call backend API to remove from workspace
+      // Call backend API to remove from workspace (server will handle closing sessions)
       const response = await fetch('/api/workspaces/remove-worktree', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4110,10 +4107,9 @@ class ClaudeOrchestrator {
       if (response.ok) {
         this.showTemporaryMessage(`Removed "${displayName}" from workspace`, 'success');
 
-        // Refresh workspace to show updated configuration
-        setTimeout(() => {
-          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
-        }, 1000);
+        // Just refresh the UI - the server already handled closing sessions
+        // No need for full workspace switch which would reset all terminals
+        this.updateWorkspaceDisplay();
       } else {
         const error = await response.text();
         this.showError(`Failed to delete worktree: ${error}`);
