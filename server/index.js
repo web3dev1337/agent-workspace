@@ -851,9 +851,9 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
         sessionManager.terminateSession(sessionId);
       });
 
-      // Update the workspace reference (but don't reinitialize all sessions)
+      // Update workspace reference directly without rebuilding worktrees (avoids side effects)
       const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
-      sessionManager.setWorkspace(refreshedWorkspace);
+      sessionManager.workspace = refreshedWorkspace;
     }
 
     logger.info('Worktree removed from workspace', {
