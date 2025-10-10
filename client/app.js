@@ -299,21 +299,36 @@ class ClaudeOrchestrator {
         // Update current workspace
         this.currentWorkspace = updatedWorkspace;
 
-        // Find all sessions that belong to this worktree
+        // Find all sessions that belong to this worktree using the SAME pattern as toggleWorktreeVisibility
         const sessionsToRemove = [];
-        for (const [sessionId, session] of this.sessions) {
-          // Match sessions by worktree ID - handle both single-repo and mixed-repo formats
-          const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
 
-          // For mixed-repo workspaces, worktreeId might be "repo-work1"
-          // For single-repo, it's just "work1"
-          // Check if this session belongs to the deleted worktree
-          if (sessionId.startsWith(worktreeId + '-') || sessionWorktreeId === worktreeId) {
-            sessionsToRemove.push(sessionId);
+        // Strategy 1: Try direct match first (simple workspace types like "work1")
+        const claudeId = `${worktreeId}-claude`;
+        const serverId = `${worktreeId}-server`;
+
+        if (this.sessions.has(claudeId)) sessionsToRemove.push(claudeId);
+        if (this.sessions.has(serverId)) sessionsToRemove.push(serverId);
+
+        // Strategy 2: Search all sessions for matching worktreeId or complex keys (mixed-repo)
+        if (sessionsToRemove.length === 0) {
+          for (const [sessionId, session] of this.sessions) {
+            // Check if this session belongs to the current workspace
+            if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) {
+              continue; // Skip sessions from other workspaces
+            }
+
+            // Build the same key used in buildSidebar
+            const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+            const repositoryName = this.extractRepositoryName(sessionId);
+            const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
+
+            if (sessionKey === worktreeId) {
+              sessionsToRemove.push(sessionId);
+            }
           }
         }
 
-        console.log(`Removing ${sessionsToRemove.length} sessions for worktree ${worktreeId}`);
+        console.log(`Removing ${sessionsToRemove.length} sessions for worktree ${worktreeId}:`, sessionsToRemove);
 
         // Remove each session
         for (const sessionId of sessionsToRemove) {
