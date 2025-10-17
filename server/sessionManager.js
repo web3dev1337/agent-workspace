@@ -189,23 +189,30 @@ class SessionManager extends EventEmitter {
       logger.info('Skipping missing worktrees (will be created on-demand):', {
         missing: missingWorktrees,
         existing: existingWorktrees.length,
-        workspace: this.workspace.name
+        workspace: this.workspace?.name || 'none'
       });
     }
-    
+
+    // If no workspace is set, skip session creation
+    if (!this.workspace) {
+      logger.warn('No workspace set, skipping session initialization');
+      this.isWorkspaceSwitching = false;
+      return;
+    }
+
     // Check Claude CLI version before starting sessions
     const versionInfo = await ClaudeVersionChecker.checkVersion();
     if (!versionInfo.isCompatible) {
       const updateInfo = ClaudeVersionChecker.generateUpdateInstructions(versionInfo);
       logger.error('Claude CLI version incompatible', updateInfo);
-      
+
       // Emit update requirement to clients
       this.io.emit('claude-update-required', updateInfo);
     }
-    
+
     // Create all sessions in parallel for faster startup
     const sessionPromises = [];
-    
+
     // Create sessions based on workspace type
     if (Array.isArray(this.workspace.terminals)) {
       // Mixed-repo workspace: Create sessions from terminals array
