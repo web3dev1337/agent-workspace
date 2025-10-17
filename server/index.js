@@ -860,17 +860,26 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
 
     // If this is the active workspace, close sessions but DON'T reinitialize all
     if (workspaceManager.getActiveWorkspace()?.id === workspaceId) {
-      // Close sessions for removed worktree
-      const sessionsToClose = sessionManager.getSessionsForWorktree(worktreeId);
-      sessionsToClose.forEach(sessionId => {
-        sessionManager.terminateSession(sessionId);
-        // Emit session-closed event to remove from client UI
-        io.emit('session-closed', { sessionId });
-      });
+      // Set flag to prevent auto-restart of Claude sessions during deletion
+      const previousFlag = sessionManager.isWorkspaceSwitching;
+      sessionManager.isWorkspaceSwitching = true;
 
-      // Update the SessionManager workspace reference without reinitializing all sessions
-      const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
-      sessionManager.setWorkspace(refreshedWorkspace);
+      try {
+        // Close sessions for removed worktree
+        const sessionsToClose = sessionManager.getSessionsForWorktree(worktreeId);
+        sessionsToClose.forEach(sessionId => {
+          sessionManager.terminateSession(sessionId);
+          // Emit session-closed event to remove from client UI
+          io.emit('session-closed', { sessionId });
+        });
+
+        // Update the SessionManager workspace reference without reinitializing all sessions
+        const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
+        sessionManager.setWorkspace(refreshedWorkspace);
+      } finally {
+        // Restore the previous flag state after deletion completes
+        sessionManager.isWorkspaceSwitching = previousFlag;
+      }
     }
 
     logger.info('Worktree removed from workspace configuration (folder preserved)', {
