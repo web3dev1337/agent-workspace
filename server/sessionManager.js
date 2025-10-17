@@ -157,9 +157,9 @@ class SessionManager extends EventEmitter {
       worktreeCount: this.worktrees.length,
       worktreesEnabled: this.workspace?.worktrees.enabled || false
     });
-    
-    // Auto-create worktrees if enabled
-    if (this.workspace.worktrees.enabled && this.workspace.worktrees.autoCreate) {
+
+    // Auto-create worktrees if enabled (only if workspace is set)
+    if (this.workspace && this.workspace.worktrees && this.workspace.worktrees.enabled && this.workspace.worktrees.autoCreate) {
       logger.info('Auto-creating worktrees for workspace');
       try {
         await this.worktreeHelper.ensureWorktreesExist(this.workspace);
