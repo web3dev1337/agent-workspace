@@ -167,9 +167,38 @@ class ClaudeOrchestrator {
       this.socket.on('session-exited', ({ sessionId, exitCode }) => {
         this.handleSessionExit(sessionId, exitCode);
       });
-      
+
       this.socket.on('session-restarted', ({ sessionId }) => {
         this.handleSessionRestart(sessionId);
+      });
+
+      this.socket.on('session-closed', ({ sessionId }) => {
+        console.log(`Session closed by server: ${sessionId}`);
+        // Remove session from local state
+        this.sessions.delete(sessionId);
+        this.visibleTerminals.delete(sessionId);
+
+        // Remove terminal from UI
+        const terminalElement = document.getElementById(`terminal-${sessionId}`);
+        if (terminalElement) {
+          console.log(`Removing terminal element from DOM: ${sessionId}`);
+          terminalElement.remove();
+        }
+
+        // Remove from terminal manager
+        if (this.terminalManager) {
+          this.terminalManager.destroyTerminal(sessionId);
+        }
+
+        // Rebuild sidebar to reflect changes
+        this.buildSidebar();
+
+        // Reflow the grid after removing terminal
+        if (this.terminalManager && this.terminalManager.fitAllTerminals) {
+          setTimeout(() => {
+            this.terminalManager.fitAllTerminals();
+          }, 100);
+        }
       });
       
       this.socket.on('claude-started', ({ sessionId }) => {
@@ -704,8 +733,15 @@ class ClaudeOrchestrator {
             this.startClaudeWithOptions(sessionId, mode, skipPermissions);
           }, delay);
         } else {
-          // Use centralized logic to determine if UI should show (no previous status in auto-start)
-          this.showStartupUIIfNeeded(sessionId, 'waiting', 'idle');
+          // Only show startup UI if session is actually in waiting status
+          // Don't force it to waiting if it's in a different status
+          const currentStatus = session.status || 'idle';
+          if (currentStatus === 'waiting') {
+            this.showStartupUIIfNeeded(sessionId, 'waiting', 'idle');
+          } else {
+            // Hide startup UI for sessions not in waiting status
+            this.hideStartupUI(sessionId);
+          }
         }
       }
     }
@@ -1138,7 +1174,7 @@ class ClaudeOrchestrator {
           </div>
           <button class="delete-worktree-btn"
                   onclick="event.stopPropagation(); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
-                  title="Delete worktree from workspace">
+                  title="Remove worktree from workspace (keeps files intact)">
             ✕
           </button>
         </div>
@@ -4079,11 +4115,11 @@ class ClaudeOrchestrator {
    * Delete worktree from workspace with confirmation
    */
   async deleteWorktree(worktreeId, displayName) {
-    // Show confirmation dialog
+    // Show confirmation dialog with clear messaging about what gets deleted
     const confirmed = await this.showConfirmationDialog(
-      'Delete Worktree',
-      `Are you sure you want to delete "${displayName}" from this workspace?\n\nThis will:\n• Remove the worktree from the workspace\n• Close any active terminals\n• NOT delete the actual git worktree files`,
-      'Delete',
+      'Remove Worktree from Workspace',
+      `Are you sure you want to remove "${displayName}" from this workspace?\n\nThis will:\n✅ Remove the worktree from the workspace configuration\n✅ Close any active terminals for this worktree\n✅ Keep all git worktree files and folders intact\n\nℹ️ Your code and git history will NOT be deleted.\nYou can add this worktree back to the workspace later.`,
+      'Remove from Workspace',
       'Cancel'
     );
 
@@ -4092,12 +4128,10 @@ class ClaudeOrchestrator {
     }
 
     try {
-      console.log(`Deleting worktree ${worktreeId} from workspace...`);
+      console.log(`Removing worktree ${worktreeId} from workspace configuration (keeping folder)...`);
 
-      // Close associated terminals first
-      this.closeWorktreeSessions(worktreeId);
-
-      // Call backend API to remove from workspace
+      // Call backend API to remove from workspace configuration only
+      // Backend will handle closing sessions and emitting session-closed events
       const response = await fetch('/api/workspaces/remove-worktree', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4108,20 +4142,24 @@ class ClaudeOrchestrator {
       });
 
       if (response.ok) {
-        this.showTemporaryMessage(`Removed "${displayName}" from workspace`, 'success');
+        const result = await response.json();
+        this.showTemporaryMessage(`Removed "${displayName}" from workspace (files preserved)`, 'success');
 
-        // Refresh workspace to show updated configuration
-        setTimeout(() => {
-          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
-        }, 1000);
+        // Update local workspace reference with the updated configuration
+        if (result.updatedWorkspace) {
+          this.currentWorkspace = result.updatedWorkspace;
+        }
+
+        // Rebuild sidebar to reflect removal (without clearing terminal content)
+        this.buildSidebar();
       } else {
         const error = await response.text();
-        this.showError(`Failed to delete worktree: ${error}`);
+        this.showError(`Failed to remove worktree: ${error}`);
       }
 
     } catch (error) {
-      console.error('Error deleting worktree:', error);
-      this.showError('Failed to delete worktree');
+      console.error('Error removing worktree from workspace:', error);
+      this.showError('Failed to remove worktree from workspace');
     }
   }
 
@@ -5080,10 +5118,9 @@ class ClaudeOrchestrator {
       if (response.ok) {
         this.showTemporaryMessage(`Added ${repoName} ${worktreeId} to workspace!`, 'success');
         document.getElementById('add-worktree-modal').remove();
-        setTimeout(() => {
-          console.log('🔄 Refreshing workspace after adding worktree...');
-          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
-        }, 1500);
+
+        // workspace-config-updated event will be emitted by server
+        // No need to refresh entire workspace - new terminals will be initialized automatically
       } else {
         const error = await response.text();
         this.showTemporaryMessage('Failed to add worktree: ' + error, 'error');
