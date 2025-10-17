@@ -792,12 +792,23 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
     // Save updated workspace
     await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
 
-    // Refresh the SessionManager with the updated workspace
+    // Update the SessionManager workspace reference and rebuild worktrees list
     const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
     sessionManager.setWorkspace(refreshedWorkspace);
+    sessionManager.buildWorktreesFromWorkspace();
 
-    // Reinitialize sessions to include the new terminals
+    // Re-initialize sessions to create the new terminals
+    // NOTE: This currently clears all existing sessions.
+    // TODO: Future improvement - only initialize NEW sessions without clearing existing ones
     await sessionManager.initializeSessions();
+
+    // Emit updated session states to all clients
+    const updatedSessions = sessionManager.getSessionStates();
+    io.emit('sessions', updatedSessions);
+
+    logger.info('New worktree sessions initialized (all terminals refreshed)', {
+      totalSessions: Object.keys(updatedSessions).length
+    });
 
     res.json({ success: true, terminalIds: newTerminals.map(t => t.id) });
   } catch (error) {
@@ -847,18 +858,19 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
     // Save updated workspace configuration
     await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
 
-    // If this is the active workspace, refresh sessions
+    // If this is the active workspace, close sessions but DON'T reinitialize all
     if (workspaceManager.getActiveWorkspace()?.id === workspaceId) {
       // Close sessions for removed worktree
       const sessionsToClose = sessionManager.getSessionsForWorktree(worktreeId);
       sessionsToClose.forEach(sessionId => {
         sessionManager.destroySession(sessionId);
+        // Emit session-closed event to remove from client UI
+        io.emit('session-closed', { sessionId });
       });
 
-      // Refresh the SessionManager with updated workspace
+      // Update the SessionManager workspace reference without reinitializing all sessions
       const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
       sessionManager.setWorkspace(refreshedWorkspace);
-      await sessionManager.initializeSessions();
     }
 
     logger.info('Worktree removed from workspace configuration (folder preserved)', {
