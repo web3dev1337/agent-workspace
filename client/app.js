@@ -1138,7 +1138,7 @@ class ClaudeOrchestrator {
           </div>
           <button class="delete-worktree-btn"
                   onclick="event.stopPropagation(); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
-                  title="Delete worktree from workspace">
+                  title="Remove worktree from workspace (keeps files intact)">
             ✕
           </button>
         </div>
@@ -4079,11 +4079,11 @@ class ClaudeOrchestrator {
    * Delete worktree from workspace with confirmation
    */
   async deleteWorktree(worktreeId, displayName) {
-    // Show confirmation dialog
+    // Show confirmation dialog with clear messaging about what gets deleted
     const confirmed = await this.showConfirmationDialog(
-      'Delete Worktree',
-      `Are you sure you want to delete "${displayName}" from this workspace?\n\nThis will:\n• Remove the worktree from the workspace\n• Close any active terminals\n• NOT delete the actual git worktree files`,
-      'Delete',
+      'Remove Worktree from Workspace',
+      `Are you sure you want to remove "${displayName}" from this workspace?\n\nThis will:\n✅ Remove the worktree from the workspace configuration\n✅ Close any active terminals for this worktree\n✅ Keep all git worktree files and folders intact\n\nℹ️ Your code and git history will NOT be deleted.\nYou can add this worktree back to the workspace later.`,
+      'Remove from Workspace',
       'Cancel'
     );
 
@@ -4092,12 +4092,12 @@ class ClaudeOrchestrator {
     }
 
     try {
-      console.log(`Deleting worktree ${worktreeId} from workspace...`);
+      console.log(`Removing worktree ${worktreeId} from workspace configuration (keeping folder)...`);
 
       // Close associated terminals first
       this.closeWorktreeSessions(worktreeId);
 
-      // Call backend API to remove from workspace
+      // Call backend API to remove from workspace configuration only
       const response = await fetch('/api/workspaces/remove-worktree', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4108,7 +4108,7 @@ class ClaudeOrchestrator {
       });
 
       if (response.ok) {
-        this.showTemporaryMessage(`Removed "${displayName}" from workspace`, 'success');
+        this.showTemporaryMessage(`Removed "${displayName}" from workspace (files preserved)`, 'success');
 
         // Refresh workspace to show updated configuration
         setTimeout(() => {
@@ -4116,12 +4116,12 @@ class ClaudeOrchestrator {
         }, 1000);
       } else {
         const error = await response.text();
-        this.showError(`Failed to delete worktree: ${error}`);
+        this.showError(`Failed to remove worktree: ${error}`);
       }
 
     } catch (error) {
-      console.error('Error deleting worktree:', error);
-      this.showError('Failed to delete worktree');
+      console.error('Error removing worktree from workspace:', error);
+      this.showError('Failed to remove worktree from workspace');
     }
   }
 
