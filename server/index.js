@@ -806,18 +806,22 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
   }
 });
 
-// Remove worktree from workspace
+// Remove worktree from workspace (config only - does NOT delete git worktree folder)
 app.post('/api/workspaces/remove-worktree', async (req, res) => {
   try {
     const { workspaceId, worktreeId } = req.body;
-    logger.info('Removing worktree from workspace', { workspaceId, worktreeId });
+    logger.info('Removing worktree from workspace configuration (keeping folder intact)', { workspaceId, worktreeId });
 
     const workspace = workspaceManager.getWorkspace(workspaceId);
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
-    // Remove terminals associated with this worktree
+    // IMPORTANT: This only removes the worktree from the workspace configuration.
+    // The actual git worktree folder and all its files remain untouched on disk.
+    // This allows users to safely remove a worktree from the UI without losing work.
+
+    // Remove terminals associated with this worktree from configuration
     const updatedWorkspace = { ...workspace };
     const originalTerminalCount = updatedWorkspace.terminals.length;
 
@@ -840,7 +844,7 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
       }
     }
 
-    // Save updated workspace
+    // Save updated workspace configuration
     await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
 
     // If this is the active workspace, refresh sessions
@@ -857,7 +861,7 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
       await sessionManager.initializeSessions();
     }
 
-    logger.info('Worktree removed from workspace', {
+    logger.info('Worktree removed from workspace configuration (folder preserved)', {
       workspaceId,
       worktreeId,
       removedTerminals: removedCount
@@ -870,7 +874,7 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Failed to remove worktree', { error: error.message });
+    logger.error('Failed to remove worktree from workspace', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
