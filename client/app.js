@@ -191,9 +191,6 @@ class ClaudeOrchestrator {
 
         // Rebuild sidebar to reflect changes
         this.buildSidebar();
-
-        // Adjust grid layout if needed
-        this.adjustGridLayout();
       });
       
       this.socket.on('claude-started', ({ sessionId }) => {
