@@ -181,6 +181,7 @@ class ClaudeOrchestrator {
         // Remove terminal from UI
         const terminalElement = document.getElementById(`terminal-${sessionId}`);
         if (terminalElement) {
+          console.log(`Removing terminal element from DOM: ${sessionId}`);
           terminalElement.remove();
         }
 
@@ -191,6 +192,13 @@ class ClaudeOrchestrator {
 
         // Rebuild sidebar to reflect changes
         this.buildSidebar();
+
+        // Reflow the grid after removing terminal
+        if (this.terminalManager && this.terminalManager.fitAllTerminals) {
+          setTimeout(() => {
+            this.terminalManager.fitAllTerminals();
+          }, 100);
+        }
       });
       
       this.socket.on('claude-started', ({ sessionId }) => {
@@ -4115,10 +4123,8 @@ class ClaudeOrchestrator {
     try {
       console.log(`Removing worktree ${worktreeId} from workspace configuration (keeping folder)...`);
 
-      // Close associated terminals first
-      this.closeWorktreeSessions(worktreeId);
-
       // Call backend API to remove from workspace configuration only
+      // Backend will handle closing sessions and emitting session-closed events
       const response = await fetch('/api/workspaces/remove-worktree', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
