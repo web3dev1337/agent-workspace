@@ -837,8 +837,8 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
     const originalTerminalCount = updatedWorkspace.terminals.length;
 
     updatedWorkspace.terminals = updatedWorkspace.terminals.filter(terminal => {
-      // Remove terminals that match this worktree ID
-      return !terminal.id.includes(worktreeId);
+      // Remove terminals that match this worktree ID (case-insensitive comparison)
+      return !terminal.id.toLowerCase().includes(worktreeId.toLowerCase());
     });
 
     const removedCount = originalTerminalCount - updatedWorkspace.terminals.length;
