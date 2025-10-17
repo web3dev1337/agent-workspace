@@ -733,15 +733,8 @@ class ClaudeOrchestrator {
             this.startClaudeWithOptions(sessionId, mode, skipPermissions);
           }, delay);
         } else {
-          // Only show startup UI if session is actually in waiting status
-          // Don't force it to waiting if it's in a different status
-          const currentStatus = session.status || 'idle';
-          if (currentStatus === 'waiting') {
-            this.showStartupUIIfNeeded(sessionId, 'waiting', 'idle');
-          } else {
-            // Hide startup UI for sessions not in waiting status
-            this.hideStartupUI(sessionId);
-          }
+          // Use centralized logic to determine if UI should show (no previous status in auto-start)
+          this.showStartupUIIfNeeded(sessionId, 'waiting', 'idle');
         }
       }
     }
