@@ -167,9 +167,33 @@ class ClaudeOrchestrator {
       this.socket.on('session-exited', ({ sessionId, exitCode }) => {
         this.handleSessionExit(sessionId, exitCode);
       });
-      
+
       this.socket.on('session-restarted', ({ sessionId }) => {
         this.handleSessionRestart(sessionId);
+      });
+
+      this.socket.on('session-closed', ({ sessionId }) => {
+        console.log(`Session closed by server: ${sessionId}`);
+        // Remove session from local state
+        this.sessions.delete(sessionId);
+        this.visibleTerminals.delete(sessionId);
+
+        // Remove terminal from UI
+        const terminalElement = document.getElementById(`terminal-${sessionId}`);
+        if (terminalElement) {
+          terminalElement.remove();
+        }
+
+        // Remove from terminal manager
+        if (this.terminalManager) {
+          this.terminalManager.destroyTerminal(sessionId);
+        }
+
+        // Rebuild sidebar to reflect changes
+        this.buildSidebar();
+
+        // Adjust grid layout if needed
+        this.adjustGridLayout();
       });
       
       this.socket.on('claude-started', ({ sessionId }) => {
@@ -4108,12 +4132,16 @@ class ClaudeOrchestrator {
       });
 
       if (response.ok) {
+        const result = await response.json();
         this.showTemporaryMessage(`Removed "${displayName}" from workspace (files preserved)`, 'success');
 
-        // Refresh workspace to show updated configuration
-        setTimeout(() => {
-          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
-        }, 1000);
+        // Update local workspace reference with the updated configuration
+        if (result.updatedWorkspace) {
+          this.currentWorkspace = result.updatedWorkspace;
+        }
+
+        // Rebuild sidebar to reflect removal (without clearing terminal content)
+        this.buildSidebar();
       } else {
         const error = await response.text();
         this.showError(`Failed to remove worktree: ${error}`);
@@ -5080,10 +5108,9 @@ class ClaudeOrchestrator {
       if (response.ok) {
         this.showTemporaryMessage(`Added ${repoName} ${worktreeId} to workspace!`, 'success');
         document.getElementById('add-worktree-modal').remove();
-        setTimeout(() => {
-          console.log('🔄 Refreshing workspace after adding worktree...');
-          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
-        }, 1500);
+
+        // workspace-config-updated event will be emitted by server
+        // No need to refresh entire workspace - new terminals will be initialized automatically
       } else {
         const error = await response.text();
         this.showTemporaryMessage('Failed to add worktree: ' + error, 'error');
