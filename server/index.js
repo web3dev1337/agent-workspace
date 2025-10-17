@@ -792,12 +792,23 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
     // Save updated workspace
     await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
 
-    // Refresh the SessionManager with the updated workspace
+    // Update the SessionManager workspace reference and rebuild worktrees list
     const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
     sessionManager.setWorkspace(refreshedWorkspace);
+    sessionManager.buildWorktreesFromWorkspace();
 
-    // Reinitialize sessions to include the new terminals
+    // Re-initialize sessions to create the new terminals
+    // NOTE: This currently clears all existing sessions.
+    // TODO: Future improvement - only initialize NEW sessions without clearing existing ones
     await sessionManager.initializeSessions();
+
+    // Emit updated session states to all clients
+    const updatedSessions = sessionManager.getSessionStates();
+    io.emit('sessions', updatedSessions);
+
+    logger.info('New worktree sessions initialized (all terminals refreshed)', {
+      totalSessions: Object.keys(updatedSessions).length
+    });
 
     res.json({ success: true, terminalIds: newTerminals.map(t => t.id) });
   } catch (error) {
@@ -806,24 +817,28 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
   }
 });
 
-// Remove worktree from workspace
+// Remove worktree from workspace (config only - does NOT delete git worktree folder)
 app.post('/api/workspaces/remove-worktree', async (req, res) => {
   try {
     const { workspaceId, worktreeId } = req.body;
-    logger.info('Removing worktree from workspace', { workspaceId, worktreeId });
+    logger.info('Removing worktree from workspace configuration (keeping folder intact)', { workspaceId, worktreeId });
 
     const workspace = workspaceManager.getWorkspace(workspaceId);
     if (!workspace) {
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
-    // Remove terminals associated with this worktree
+    // IMPORTANT: This only removes the worktree from the workspace configuration.
+    // The actual git worktree folder and all its files remain untouched on disk.
+    // This allows users to safely remove a worktree from the UI without losing work.
+
+    // Remove terminals associated with this worktree from configuration
     const updatedWorkspace = { ...workspace };
     const originalTerminalCount = updatedWorkspace.terminals.length;
 
     updatedWorkspace.terminals = updatedWorkspace.terminals.filter(terminal => {
-      // Remove terminals that match this worktree ID
-      return !terminal.id.includes(worktreeId);
+      // Remove terminals that match this worktree ID (case-insensitive comparison)
+      return !terminal.id.toLowerCase().includes(worktreeId.toLowerCase());
     });
 
     const removedCount = originalTerminalCount - updatedWorkspace.terminals.length;
@@ -840,24 +855,34 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
       }
     }
 
-    // Save updated workspace
+    // Save updated workspace configuration
     await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
 
-    // If this is the active workspace, refresh sessions
+    // If this is the active workspace, close sessions but DON'T reinitialize all
     if (workspaceManager.getActiveWorkspace()?.id === workspaceId) {
-      // Close sessions for removed worktree
-      const sessionsToClose = sessionManager.getSessionsForWorktree(worktreeId);
-      sessionsToClose.forEach(sessionId => {
-        sessionManager.destroySession(sessionId);
-      });
+      // Set flag to prevent auto-restart of Claude sessions during deletion
+      const previousFlag = sessionManager.isWorkspaceSwitching;
+      sessionManager.isWorkspaceSwitching = true;
 
-      // Refresh the SessionManager with updated workspace
-      const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
-      sessionManager.setWorkspace(refreshedWorkspace);
-      await sessionManager.initializeSessions();
+      try {
+        // Close sessions for removed worktree
+        const sessionsToClose = sessionManager.getSessionsForWorktree(worktreeId);
+        sessionsToClose.forEach(sessionId => {
+          sessionManager.terminateSession(sessionId);
+          // Emit session-closed event to remove from client UI
+          io.emit('session-closed', { sessionId });
+        });
+
+        // Update the SessionManager workspace reference without reinitializing all sessions
+        const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
+        sessionManager.setWorkspace(refreshedWorkspace);
+      } finally {
+        // Restore the previous flag state after deletion completes
+        sessionManager.isWorkspaceSwitching = previousFlag;
+      }
     }
 
-    logger.info('Worktree removed from workspace', {
+    logger.info('Worktree removed from workspace configuration (folder preserved)', {
       workspaceId,
       worktreeId,
       removedTerminals: removedCount
@@ -870,7 +895,7 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Failed to remove worktree', { error: error.message });
+    logger.error('Failed to remove worktree from workspace', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
