@@ -462,6 +462,13 @@ class TerminalManager {
       this.fitTimers.delete(sessionId);
     }, 100)); // Wait 100ms for size to stabilize
   }
+
+  fitAllTerminals() {
+    console.log('Fitting all active terminals...');
+    for (const sessionId of this.terminals.keys()) {
+      this.fitTerminal(sessionId);
+    }
+  }
   
   handleOutput(sessionId, data) {
     const terminal = this.terminals.get(sessionId);
