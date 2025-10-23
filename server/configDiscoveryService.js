@@ -117,6 +117,7 @@ class ConfigDiscoveryService {
   generateDefaultCategoryConfig(categoryPath, categoryName) {
     const icons = {
       'games': '🎮',
+      'board-games': '🎲',
       'writing': '📖',
       'tools': '🛠️',
       'web': '🌐',
@@ -138,7 +139,8 @@ class ConfigDiscoveryService {
    * Scan frameworks within a category
    */
   async scanFrameworks(category) {
-    if (category.discoveredName !== 'games') return; // Only scan games for frameworks
+    // Scan frameworks for games and board-games categories
+    if (category.discoveredName !== 'games' && category.discoveredName !== 'board-games') return;
 
     try {
       const entries = await fs.readdir(category.path);
@@ -184,6 +186,32 @@ class ConfigDiscoveryService {
     try {
       // Check for common framework indicators
       const entries = await fs.readdir(frameworkPath);
+
+      // Board game detection - check if this is a direct board game project
+      // Board games typically have a master/ subdirectory (worktree structure)
+      if (entries.includes('master')) {
+        const masterPath = path.join(frameworkPath, 'master');
+        try {
+          const masterStat = await fs.stat(masterPath);
+          if (masterStat.isDirectory()) {
+            // This looks like a board game with worktree structure
+            return {
+              id: `${frameworkName}-boardgame`,
+              name: frameworkName.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+              type: 'framework',
+              category: 'board-games',
+              baseCommand: 'python main.py',
+              commonFlags: ['MODE', 'EPISODES', 'RENDER'],
+              icon: '🎲',
+              path: frameworkPath,
+              discoveredName: frameworkName,
+              isBoardGame: true
+            };
+          }
+        } catch (error) {
+          // master/ exists but isn't a directory, continue to other detection
+        }
+      }
 
       // Hytopia framework detection
       if (frameworkName === 'hytopia') {
@@ -242,6 +270,18 @@ class ConfigDiscoveryService {
    */
   async scanGames(framework) {
     try {
+      // For board games, the framework path IS the game path
+      // (each board game is its own self-contained project)
+      if (framework.isBoardGame) {
+        const gamePath = framework.path;
+        const gameName = framework.discoveredName;
+        const gameConfig = await this.loadGameConfig(gamePath, gameName, framework);
+        if (gameConfig) {
+          this.gameTypes.set(gameConfig.id, gameConfig);
+        }
+        return;
+      }
+
       let gamesPath = framework.path;
 
       // For hytopia, games are in a subdirectory
