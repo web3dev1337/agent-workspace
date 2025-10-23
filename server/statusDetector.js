@@ -12,6 +12,9 @@ const logger = winston.createLogger({
   ]
 });
 
+// Configuration constants
+const STATUS_DETECTION_WINDOW_MS = 2000; // 2 seconds for detection debouncing
+
 class StatusDetector {
   constructor() {
     // Patterns that indicate Claude is waiting for user input
@@ -81,7 +84,7 @@ class StatusDetector {
     
     // Track recent detections to avoid flip-flopping
     this.recentDetections = new Map();
-    this.detectionWindow = 2000; // 2 seconds
+    this.detectionWindow = STATUS_DETECTION_WINDOW_MS;
     this.lastBufferLength = 0; // For debug logging
   }
   

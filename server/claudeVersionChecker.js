@@ -71,7 +71,7 @@ class ClaudeVersionChecker {
       });
 
       process.on('error', (error) => {
-        logger.error('Claude version check error', { error: error.message });
+        logger.error('Claude version check error', { error: error.message, stack: error.stack });
         resolve({
           version: null,
           isCompatible: false,

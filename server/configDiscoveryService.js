@@ -62,7 +62,7 @@ class ConfigDiscoveryService {
       return this.buildWorkspaceTypes();
 
     } catch (error) {
-      logger.error('Discovery failed', { error: error.message });
+      logger.error('Discovery failed', { error: error.message, stack: error.stack });
       return this.getFallbackTypes();
     }
   }
@@ -86,7 +86,7 @@ class ConfigDiscoveryService {
         }
       }
     } catch (error) {
-      logger.warn('Failed to scan categories', { error: error.message });
+      logger.warn('Failed to scan categories', { error: error.message, stack: error.stack });
     }
 
     return categories;
@@ -155,7 +155,7 @@ class ConfigDiscoveryService {
         }
       }
     } catch (error) {
-      logger.warn('Failed to scan frameworks', { category: category.name, error: error.message });
+      logger.warn('Failed to scan frameworks', { category: category.name, error: error.message, stack: error.stack });
     }
   }
 
@@ -232,7 +232,7 @@ class ConfigDiscoveryService {
 
       return null;
     } catch (error) {
-      logger.warn('Framework auto-detection failed', { frameworkName, error: error.message });
+      logger.warn('Framework auto-detection failed', { frameworkName, error: error.message, stack: error.stack });
       return null;
     }
   }
@@ -263,7 +263,7 @@ class ConfigDiscoveryService {
         }
       }
     } catch (error) {
-      logger.warn('Failed to scan games', { framework: framework.name, error: error.message });
+      logger.warn('Failed to scan games', { framework: framework.name, error: error.message, stack: error.stack });
     }
   }
 
@@ -375,7 +375,7 @@ class ConfigDiscoveryService {
       }
 
     } catch (error) {
-      logger.warn('Mode detection failed', { gameName, error: error.message });
+      logger.warn('Mode detection failed', { gameName, error: error.message, stack: error.stack });
     }
 
     return modes;
