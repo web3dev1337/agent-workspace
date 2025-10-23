@@ -188,7 +188,7 @@ class GitUpdateService {
       });
 
     } catch (error) {
-      logger.error('Error during pull operation', { error: error.message });
+      logger.error('Error during pull operation', { error: error.message, stack: error.stack });
       return {
         success: false,
         error: error.message
@@ -225,7 +225,7 @@ class GitUpdateService {
       });
 
     } catch (error) {
-      logger.error('Error checking for updates', { error: error.message });
+      logger.error('Error checking for updates', { error: error.message, stack: error.stack });
       return {
         hasUpdates: null,
         error: error.message

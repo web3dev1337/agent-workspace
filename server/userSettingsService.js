@@ -118,7 +118,7 @@ class UserSettingsService {
       }
       return saved;
     } catch (error) {
-      logger.error('Failed to reset to defaults', { error: error.message });
+      logger.error('Failed to reset to defaults', { error: error.message, stack: error.stack });
       return false;
     }
   }
@@ -152,7 +152,7 @@ class UserSettingsService {
       };
       fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
     } catch (error) {
-      logger.warn('Failed to update default metadata', { error: error.message });
+      logger.warn('Failed to update default metadata', { error: error.message, stack: error.stack });
     }
   }
 
@@ -181,7 +181,7 @@ class UserSettingsService {
       
       return { hasUpdates: false };
     } catch (error) {
-      logger.error('Failed to check for default updates', { error: error.message });
+      logger.error('Failed to check for default updates', { error: error.message, stack: error.stack });
       return null;
     }
   }
@@ -285,7 +285,7 @@ class UserSettingsService {
       
       return saved;
     } catch (error) {
-      logger.error('Failed to update global settings', { error: error.message });
+      logger.error('Failed to update global settings', { error: error.message, stack: error.stack });
       return false;
     }
   }

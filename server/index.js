@@ -128,7 +128,7 @@ async function initializeWorkspaceSystem() {
       logger.warn('No active workspace found');
     }
   } catch (error) {
-    logger.error('Failed to initialize workspace system', { error: error.message });
+    logger.error('Failed to initialize workspace system', { error: error.message, stack: error.stack });
   }
 }
 
@@ -136,7 +136,7 @@ async function initializeWorkspaceSystem() {
 initializeWorkspaceSystem().then(() => {
   logger.info('Workspace system initialized');
 }).catch(error => {
-  logger.error('Workspace system initialization failed', { error: error.message });
+  logger.error('Workspace system initialization failed', { error: error.message, stack: error.stack });
 });
 
 // WebSocket connection handling
@@ -308,7 +308,7 @@ io.on('connection', (socket) => {
     });
     
     buildProcess.on('error', (error) => {
-      logger.error('Build process error', { worktreeNum, error: error.message });
+      logger.error('Build process error', { worktreeNum, error: error.message, stack: error.stack });
       socket.emit('build-failed', { 
         sessionId, 
         worktreeNum, 
@@ -439,8 +439,8 @@ io.on('connection', (socket) => {
 
       logger.info('Workspace switched successfully', { workspace: newWorkspace.name });
     } catch (error) {
-      logger.error('Failed to switch workspace', { error: error.message });
-      socket.emit('error', { message: 'Failed to switch workspace', error: error.message });
+      logger.error('Failed to switch workspace', { error: error.message, stack: error.stack });
+      socket.emit('error', { message: 'Failed to switch workspace', error: error.message, stack: error.stack });
     }
   });
 
@@ -473,7 +473,7 @@ app.get('/api/workspaces', (req, res) => {
     const workspaces = workspaceManager.listWorkspaces();
     res.json(workspaces);
   } catch (error) {
-    logger.error('Failed to list workspaces', { error: error.message });
+    logger.error('Failed to list workspaces', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to list workspaces' });
   }
 });
@@ -500,7 +500,7 @@ app.get('/api/workspace-types', (req, res) => {
       cascadedConfigs: cascadedConfigs  // Pre-computed cascaded configs
     });
   } catch (error) {
-    logger.error('Failed to get workspace types', { error: error.message });
+    logger.error('Failed to get workspace types', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get workspace types' });
   }
 });
@@ -521,7 +521,7 @@ app.get('/api/cascaded-config/:repositoryType', async (req, res) => {
       res.json(config || {});
     }
   } catch (error) {
-    logger.error('Failed to get cascaded config', { error: error.message });
+    logger.error('Failed to get cascaded config', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get cascaded config' });
   }
 });
@@ -534,8 +534,8 @@ app.post('/api/workspaces', async (req, res) => {
     const workspace = await workspaceManager.createWorkspace(workspaceData);
     res.json(workspace);
   } catch (error) {
-    logger.error('Failed to create workspace', { error: error.message });
-    res.status(400).json({ error: error.message });
+    logger.error('Failed to create workspace', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message, stack: error.stack });
   }
 });
 
@@ -673,7 +673,7 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
     logger.info(`Found ${projects.length} projects across ${new Set(projects.map(p => p.category)).size} categories`);
     res.json(projects);
   } catch (error) {
-    logger.error('Failed to scan repositories', { error: error.message });
+    logger.error('Failed to scan repositories', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to scan repositories' });
   }
 });
@@ -724,8 +724,8 @@ app.post('/api/workspaces/create-worktree', async (req, res) => {
 
     res.json({ success: true, worktreeId, path: `${workspace.repository.path}/work${worktreeNumber}` });
   } catch (error) {
-    logger.error('Failed to create worktree', { error: error.message });
-    res.status(500).json({ error: error.message });
+    logger.error('Failed to create worktree', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 
@@ -812,8 +812,8 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
 
     res.json({ success: true, terminalIds: newTerminals.map(t => t.id) });
   } catch (error) {
-    logger.error('Failed to add mixed worktree', { error: error.message });
-    res.status(500).json({ error: error.message });
+    logger.error('Failed to add mixed worktree', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 
@@ -895,8 +895,8 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Failed to remove worktree from workspace', { error: error.message });
-    res.status(500).json({ error: error.message });
+    logger.error('Failed to remove worktree from workspace', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 
@@ -920,8 +920,8 @@ app.delete('/api/workspaces/:id', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    logger.error('Failed to delete workspace', { error: error.message });
-    res.status(500).json({ error: error.message });
+    logger.error('Failed to delete workspace', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 
@@ -973,7 +973,7 @@ app.get('/api/user-settings', (req, res) => {
     const settings = userSettingsService.getAllSettings();
     res.json(settings);
   } catch (error) {
-    logger.error('Failed to get user settings', { error: error.message });
+    logger.error('Failed to get user settings', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get user settings' });
   }
 });
@@ -994,7 +994,7 @@ app.put('/api/user-settings/global', express.json(), (req, res) => {
       res.status(500).json({ error: 'Failed to save settings' });
     }
   } catch (error) {
-    logger.error('Failed to update global settings', { error: error.message });
+    logger.error('Failed to update global settings', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to update global settings' });
   }
 });
@@ -1069,7 +1069,7 @@ app.get('/api/user-settings/default', (req, res) => {
     const defaultTemplate = userSettingsService.getDefaultTemplate();
     res.json(defaultTemplate);
   } catch (error) {
-    logger.error('Failed to get default template', { error: error.message });
+    logger.error('Failed to get default template', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get default template' });
   }
 });
@@ -1089,7 +1089,7 @@ app.post('/api/user-settings/reset', (req, res) => {
       res.status(500).json({ error: 'Failed to reset settings' });
     }
   } catch (error) {
-    logger.error('Failed to reset settings', { error: error.message });
+    logger.error('Failed to reset settings', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to reset settings' });
   }
 });
@@ -1105,7 +1105,7 @@ app.post('/api/user-settings/save-as-default', (req, res) => {
       res.status(500).json({ error: 'Failed to save as default template' });
     }
   } catch (error) {
-    logger.error('Failed to save as default template', { error: error.message });
+    logger.error('Failed to save as default template', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to save as default template' });
   }
 });
@@ -1116,7 +1116,7 @@ app.get('/api/user-settings/check-updates', (req, res) => {
     const updateCheck = userSettingsService.checkForDefaultUpdates();
     res.json(updateCheck);
   } catch (error) {
-    logger.error('Failed to check for settings updates', { error: error.message });
+    logger.error('Failed to check for settings updates', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to check for settings updates' });
   }
 });
@@ -1126,7 +1126,7 @@ app.get('/api/git/status', (req, res) => {
   gitUpdateService.getStatus()
     .then(status => res.json(status))
     .catch(error => {
-      logger.error('Failed to get git status', { error: error.message });
+      logger.error('Failed to get git status', { error: error.message, stack: error.stack });
       res.status(500).json({ error: 'Failed to get git status' });
     });
 });
@@ -1135,7 +1135,7 @@ app.get('/api/git/check-updates', (req, res) => {
   gitUpdateService.checkForUpdates()
     .then(result => res.json(result))
     .catch(error => {
-      logger.error('Failed to check for git updates', { error: error.message });
+      logger.error('Failed to check for git updates', { error: error.message, stack: error.stack });
       res.status(500).json({ error: 'Failed to check for git updates' });
     });
 });
@@ -1150,7 +1150,7 @@ app.post('/api/git/pull', (req, res) => {
       res.json(result);
     })
     .catch(error => {
-      logger.error('Failed to pull latest changes', { error: error.message });
+      logger.error('Failed to pull latest changes', { error: error.message, stack: error.stack });
       res.status(500).json({ error: 'Failed to pull latest changes' });
     });
 });
@@ -1161,7 +1161,7 @@ app.get('/api/agents', (req, res) => {
     const agents = agentManager.getAllAgents().map(agent => agentManager.getUIConfig(agent.id));
     res.json(agents);
   } catch (error) {
-    logger.error('Failed to get agent configurations', { error: error.message });
+    logger.error('Failed to get agent configurations', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get agent configurations' });
   }
 });
@@ -1176,7 +1176,7 @@ app.get('/api/worktrees/config', (req, res) => {
     };
     res.json(config);
   } catch (error) {
-    logger.error('Failed to get worktree config', { error: error.message });
+    logger.error('Failed to get worktree config', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get worktree config' });
   }
 });
@@ -1198,7 +1198,7 @@ app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
       res.status(404).send(`Replay viewer file not found: ${requestedFile}`);
     }
   } catch (error) {
-    logger.error('Error serving replay viewer', { error: error.message });
+    logger.error('Error serving replay viewer', { error: error.message, stack: error.stack });
     res.status(500).send('Error loading replay viewer');
   }
 });
@@ -1218,7 +1218,7 @@ httpServer.listen(PORT, HOST, () => {
   
   // Initialize sessions
   sessionManager.initializeSessions().catch(error => {
-    logger.error('Failed to initialize sessions', { error: error.message });
+    logger.error('Failed to initialize sessions', { error: error.message, stack: error.stack });
   });
 });
 

@@ -64,7 +64,7 @@ class WorkspaceManager {
       logger.info(`WorkspaceManager initialized with ${this.workspaces.size} workspaces`);
       return true;
     } catch (error) {
-      logger.error('Failed to initialize WorkspaceManager', { error: error.message });
+      logger.error('Failed to initialize WorkspaceManager', { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -83,7 +83,7 @@ class WorkspaceManager {
         await fs.mkdir(dir, { recursive: true });
       } catch (error) {
         if (error.code !== 'EEXIST') {
-          logger.error(`Failed to create directory ${dir}`, { error: error.message });
+          logger.error(`Failed to create directory ${dir}`, { error: error.message, stack: error.stack });
         }
       }
     }
@@ -352,13 +352,13 @@ class WorkspaceManager {
           this.workspaces.set(workspace.id, workspace);
           logger.info(`Loaded workspace: ${workspace.name} (${workspace.id})`);
         } catch (error) {
-          logger.error(`Failed to load workspace config: ${file}`, { error: error.message });
+          logger.error(`Failed to load workspace config: ${file}`, { error: error.message, stack: error.stack });
         }
       }
 
       return this.workspaces.size;
     } catch (error) {
-      logger.error('Failed to read workspaces directory', { error: error.message });
+      logger.error('Failed to read workspaces directory', { error: error.message, stack: error.stack });
       return 0;
     }
   }
@@ -382,7 +382,7 @@ class WorkspaceManager {
       this.discoveryComplete = true;
 
     } catch (error) {
-      logger.warn('Dynamic workspace discovery failed, using fallbacks', { error: error.message });
+      logger.warn('Dynamic workspace discovery failed, using fallbacks', { error: error.message, stack: error.stack });
       // Service will return fallback types on failure
       this.discoveryComplete = true; // Mark as complete even on failure (fallbacks loaded)
     } finally {
@@ -430,7 +430,7 @@ class WorkspaceManager {
         await this.saveConfig();
         logger.info('Created default orchestrator config');
       } else {
-        logger.error('Failed to load config', { error: error.message });
+        logger.error('Failed to load config', { error: error.message, stack: error.stack });
         this.config = this.getDefaultConfig();
       }
     }
@@ -494,7 +494,7 @@ class WorkspaceManager {
       await fs.writeFile(configFile, JSON.stringify(this.config, null, 2));
       logger.info('Saved orchestrator config');
     } catch (error) {
-      logger.error('Failed to save config', { error: error.message });
+      logger.error('Failed to save config', { error: error.message, stack: error.stack });
     }
   }
 

@@ -17,15 +17,20 @@ const logger = winston.createLogger({
   ]
 });
 
+// Configuration constants
+const GIT_CACHE_TIMEOUT_MS = 30000; // 30 seconds
+const GIT_COMMAND_TIMEOUT_MS = 5000; // 5 seconds
+const GIT_LONG_COMMAND_TIMEOUT_MS = 10000; // 10 seconds for slow operations
+
 class GitHelper {
   constructor() {
     // Cache branch names to reduce git calls
     this.branchCache = new Map();
-    this.cacheTimeout = 30000; // 30 seconds
-    
+    this.cacheTimeout = GIT_CACHE_TIMEOUT_MS;
+
     // Store base path for validation
     this.basePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
-    
+
     // If specific worktree pattern is needed, it can be configured
     this.worktreePattern = process.env.WORKTREE_PATTERN || null;
   }
@@ -65,7 +70,7 @@ class GitHelper {
       // Use git to get current branch
       const { stdout, stderr } = await execAsync('git rev-parse --abbrev-ref HEAD', {
         cwd: worktreePath,
-        timeout: 5000, // 5 second timeout
+        timeout: GIT_COMMAND_TIMEOUT_MS,
         env: {
           ...process.env,
           GIT_CONFIG_NOSYSTEM: '1', // Ignore system git config for security
@@ -225,7 +230,7 @@ class GitHelper {
     try {
       const { stdout } = await execAsync('git remote get-url origin', {
         cwd: worktreePath,
-        timeout: 5000,
+        timeout: GIT_COMMAND_TIMEOUT_MS,
         env: {
           ...process.env,
           GIT_CONFIG_NOSYSTEM: '1',
@@ -275,7 +280,7 @@ class GitHelper {
       // Use GitHub CLI if available, otherwise use GitHub API directly
       try {
         const { stdout } = await execAsync(`gh pr list --head ${branch} --json url --jq '.[0].url'`, {
-          timeout: 10000,
+          timeout: GIT_LONG_COMMAND_TIMEOUT_MS,
           env: {
             ...process.env,
             GH_REPO: `${owner}/${repo}`
@@ -322,7 +327,7 @@ class GitHelper {
           });
           
           req.on('error', (error) => {
-            logger.debug('GitHub API request failed', { error: error.message });
+            logger.debug('GitHub API request failed', { error: error.message, stack: error.stack });
             resolve(null);
           });
           
