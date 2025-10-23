@@ -62,7 +62,7 @@ class SessionManager extends EventEmitter {
       const configData = fs.readFileSync(configPath, 'utf8');
       return JSON.parse(configData);
     } catch (error) {
-      logger.warn('Could not load config.json, using defaults', { error: error.message });
+      logger.warn('Could not load config.json, using defaults', { error: error.message, stack: error.stack });
       return {
         server: { port: 3000, host: "0.0.0.0" },
         worktrees: { basePath: "auto", count: 8 },
@@ -82,6 +82,13 @@ class SessionManager extends EventEmitter {
   }
 
   setWorkspace(workspace) {
+    if (!workspace) {
+      logger.info('Clearing workspace from SessionManager');
+      this.workspace = null;
+      this.worktrees = [];
+      return;
+    }
+
     logger.info('Setting workspace for SessionManager', { workspace: workspace.name });
     this.workspace = workspace;
     this.buildWorktreesFromWorkspace();
@@ -164,7 +171,7 @@ class SessionManager extends EventEmitter {
       try {
         await this.worktreeHelper.ensureWorktreesExist(this.workspace);
       } catch (error) {
-        logger.error('Failed to auto-create worktrees', { error: error.message });
+        logger.error('Failed to auto-create worktrees', { error: error.message, stack: error.stack });
       }
     }
 
@@ -1003,27 +1010,33 @@ class SessionManager extends EventEmitter {
   terminateSession(sessionId) {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    
+
     logger.info('Terminating session', { sessionId });
-    
+
     // Clear the inactivity timer to prevent infinite loops
     if (session.inactivityTimer) {
       clearTimeout(session.inactivityTimer);
       session.inactivityTimer = null;
     }
-    
+
+    // Clear the process monitor interval to prevent memory leaks
+    if (session.processMonitor) {
+      clearInterval(session.processMonitor);
+      session.processMonitor = null;
+    }
+
     // Kill the PTY process if it exists
     if (session.pty) {
       try {
         session.pty.kill();
       } catch (error) {
-        logger.error('Failed to kill PTY', { 
-          sessionId, 
-          error: error.message 
+        logger.error('Failed to kill PTY', {
+          sessionId,
+          error: error.message
         });
       }
     }
-    
+
     // Remove from sessions map
     this.sessions.delete(sessionId);
   }
@@ -1175,7 +1188,7 @@ class SessionManager extends EventEmitter {
 
       return true;
     } catch (error) {
-      logger.error('Failed to start agent', { sessionId, config, error: error.message });
+      logger.error('Failed to start agent', { sessionId, config, error: error.message, stack: error.stack });
       return false;
     }
   }
