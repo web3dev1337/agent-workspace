@@ -307,10 +307,21 @@ class TerminalManager {
     
     // Store terminal reference
     this.terminals.set(sessionId, terminal);
-    
+
+    // Register with tab manager if available
+    if (this.orchestrator.tabManager && this.orchestrator.currentTabId) {
+      this.orchestrator.tabManager.registerTerminal(
+        this.orchestrator.currentTabId,
+        sessionId,
+        terminal,
+        fitAddon
+      );
+      console.log(`Registered terminal ${sessionId} with tab ${this.orchestrator.currentTabId}`);
+    }
+
     // Setup resize observer
     this.setupResizeObserver(sessionId);
-    
+
     return terminal;
   }
   

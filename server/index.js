@@ -449,6 +449,21 @@ io.on('connection', (socket) => {
     socket.emit('workspaces-list', workspaces);
   });
 
+  // Handle tab closure - cleanup all sessions for the tab
+  socket.on('close-tab', ({ tabId }) => {
+    try {
+      logger.info('Tab close requested', { tabId });
+
+      // Get all sessions and close those belonging to this tab
+      // Note: In the current implementation, we don't track tabId on the backend
+      // This would require backend changes to associate sessions with tabs
+      // For now, this event is acknowledged but sessions are managed by client
+      logger.info('Tab closed', { tabId });
+    } catch (error) {
+      logger.error('Failed to close tab', { tabId, error: error.message });
+    }
+  });
+
   socket.on('disconnect', () => {
     logger.info('Client disconnected', { socketId: socket.id });
   });
