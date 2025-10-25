@@ -308,9 +308,9 @@ class ClaudeOrchestrator {
             const tabId = this.tabManager.createTab(workspace, sessions);
             console.log(`Created new tab ${tabId} for workspace ${workspace.name}`);
 
-            // CRITICAL: Switch to the new tab so it becomes active
-            // This must happen BEFORE we try to render terminals
-            await this.tabManager.switchTab(tabId);
+            // CRITICAL: Set currentTabId FIRST before anything else
+            // Terminals need this to register to the correct tab
+            this.currentTabId = tabId;
 
             // Clear state for new tab context
             this.sessions.clear();
@@ -321,17 +321,18 @@ class ClaudeOrchestrator {
             this.serverPorts.clear();
             this.githubLinks.clear();
 
+            // Switch to the new tab so it becomes active
+            await this.tabManager.switchTab(tabId);
+
             // Pre-fetch worktree-specific configs for all terminals
             await this.prefetchWorktreeConfigs(workspace, sessions);
-
-            // Store current tab context
-            this.currentTabId = tabId;
 
             // Set current workspace
             this.currentWorkspace = workspace;
             this.isDashboardMode = false;
 
             // Rebuild with new workspace sessions
+            // Terminals will now register to the correct tab via currentTabId
             this.handleInitialSessions(sessions);
 
             // Update workspace switcher
