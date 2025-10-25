@@ -29,6 +29,9 @@ class ClaudeOrchestrator {
     this.workspaceSwitcher = null;
     this.isDashboardMode = false;
 
+    // Tab management for multiple workspaces
+    this.tabManager = null;
+
     // Dynamic workspace types
     this.workspaceTypes = {};
     this.frameworks = {};
@@ -48,6 +51,12 @@ class ClaudeOrchestrator {
       this.terminalManager = new TerminalManager(this);
       this.notificationManager = new NotificationManager(this);
       this.agentModalManager = new AgentModalManager(this);
+
+      // Initialize tab manager for multi-workspace support
+      if (typeof WorkspaceTabManager !== 'undefined') {
+        this.tabManager = new WorkspaceTabManager(this);
+        console.log('Tab manager initialized');
+      }
       
       // Request notification permission if enabled
       if (this.settings.notifications) {
@@ -123,29 +132,42 @@ class ClaudeOrchestrator {
       
       this.socket.on('terminal-output', ({ sessionId, data }) => {
         this.terminalManager.handleOutput(sessionId, data);
-        
+
+        // Notify inactive tabs if tab manager is enabled
+        if (this.tabManager && this.currentTabId) {
+          const activeTab = this.tabManager.getActiveTab();
+          // If this session belongs to an inactive tab, show notification
+          for (const [tabId, tab] of this.tabManager.tabs) {
+            if (tab.sessions.has(sessionId) && tabId !== this.currentTabId) {
+              const eventType = data.includes('[Error]') || data.includes('error') ? 'error' : 'output';
+              this.tabManager.notifyTab(tabId, eventType);
+              break;
+            }
+          }
+        }
+
         // Check for server errors
         if (sessionId.includes('-server') && data.includes('[Error]')) {
           this.handleServerError(sessionId, data);
         }
-        
+
         // Update server status based on output
         if (sessionId.includes('-server')) {
           this.updateServerStatus(sessionId, data);
         }
-        
+
         // Detect GitHub URLs in Claude sessions
         if (sessionId.includes('-claude')) {
           this.detectGitHubLinks(sessionId, data);
         }
-        
+
         // Detect clear commands to reset PR links and activity
         if (data.includes('/clear') || data.includes('clear')) {
           this.clearGitHubLinks(sessionId);
           this.sessionActivity.delete(sessionId);
           this.buildSidebar();
         }
-        
+
         // Mark session as active when there's terminal activity
         if (data.trim().length > 0) {
           this.sessionActivity.set(sessionId, 'active');
@@ -254,56 +276,118 @@ class ClaudeOrchestrator {
 
       this.socket.on('workspace-changed', async ({ workspace, sessions }) => {
         console.log('Workspace changed:', workspace.name);
-        this.currentWorkspace = workspace;
-        this.isDashboardMode = false;
 
-        // Hide dashboard if showing
-        if (this.dashboard) {
-          this.dashboard.hide();
-        }
+        // If tab manager is enabled, create a new tab for this workspace
+        if (this.tabManager) {
+          // Hide dashboard if showing
+          if (this.dashboard) {
+            this.dashboard.hide();
+          }
 
-        // Show main UI
-        const mainContainer = document.querySelector('.main-container');
-        const sidebar = document.querySelector('.sidebar');
-        if (mainContainer) mainContainer.classList.remove('hidden');
-        if (sidebar) sidebar.classList.remove('hidden');
+          // Show main UI
+          const mainContainer = document.querySelector('.main-container');
+          const sidebar = document.querySelector('.sidebar');
+          if (mainContainer) mainContainer.classList.remove('hidden');
+          if (sidebar) sidebar.classList.remove('hidden');
 
-        // Clear ALL existing state completely
-        this.sessions.clear();
-        this.visibleTerminals.clear();
-        this.worktreeConfigs.clear();
+          // Check if this workspace is already open in a tab
+          let existingTab = null;
+          for (const [tabId, tab] of this.tabManager.tabs) {
+            if (tab.workspaceId === workspace.id) {
+              existingTab = tab;
+              break;
+            }
+          }
 
-        // Pre-fetch worktree-specific configs for all terminals
-        await this.prefetchWorktreeConfigs(workspace, sessions);
-        this.sessionActivity.clear();
-        this.serverStatuses.clear();
-        this.serverPorts.clear();
-        this.githubLinks.clear();
+          if (existingTab) {
+            // Switch to existing tab
+            console.log(`Workspace ${workspace.name} already open, switching to tab`);
+            await this.tabManager.switchTab(existingTab.id);
+          } else {
+            // Create new tab for this workspace
+            const tabId = this.tabManager.createTab(workspace, sessions);
+            console.log(`Created new tab ${tabId} for workspace ${workspace.name}`);
 
-        // Clear terminal manager terminals
-        if (this.terminalManager) {
-          this.terminalManager.clearAll();
-        }
+            // Clear state for new tab context
+            this.sessions.clear();
+            this.visibleTerminals.clear();
+            this.worktreeConfigs.clear();
+            this.sessionActivity.clear();
+            this.serverStatuses.clear();
+            this.serverPorts.clear();
+            this.githubLinks.clear();
 
-        // Clear terminal grid completely
-        const grid = document.getElementById('terminal-grid');
-        if (grid) {
-          grid.innerHTML = '';
-          grid.removeAttribute('data-visible-count');
-        }
+            // Pre-fetch worktree-specific configs for all terminals
+            await this.prefetchWorktreeConfigs(workspace, sessions);
 
-        // Clear sidebar
-        const worktreeList = document.getElementById('worktree-list');
-        if (worktreeList) {
-          worktreeList.innerHTML = '';
-        }
+            // Store current tab context
+            this.currentTabId = tabId;
 
-        // Rebuild with new workspace sessions
-        this.handleInitialSessions(sessions);
+            // Set current workspace
+            this.currentWorkspace = workspace;
+            this.isDashboardMode = false;
 
-        // Update workspace switcher to show correct workspace
-        if (this.workspaceSwitcher) {
-          this.workspaceSwitcher.updateCurrentWorkspace();
+            // Rebuild with new workspace sessions
+            this.handleInitialSessions(sessions);
+
+            // Update workspace switcher
+            if (this.workspaceSwitcher) {
+              this.workspaceSwitcher.updateCurrentWorkspace();
+            }
+          }
+        } else {
+          // Original behavior (no tabs) - for backwards compatibility
+          this.currentWorkspace = workspace;
+          this.isDashboardMode = false;
+
+          // Hide dashboard if showing
+          if (this.dashboard) {
+            this.dashboard.hide();
+          }
+
+          // Show main UI
+          const mainContainer = document.querySelector('.main-container');
+          const sidebar = document.querySelector('.sidebar');
+          if (mainContainer) mainContainer.classList.remove('hidden');
+          if (sidebar) sidebar.classList.remove('hidden');
+
+          // Clear ALL existing state completely
+          this.sessions.clear();
+          this.visibleTerminals.clear();
+          this.worktreeConfigs.clear();
+
+          // Pre-fetch worktree-specific configs for all terminals
+          await this.prefetchWorktreeConfigs(workspace, sessions);
+          this.sessionActivity.clear();
+          this.serverStatuses.clear();
+          this.serverPorts.clear();
+          this.githubLinks.clear();
+
+          // Clear terminal manager terminals
+          if (this.terminalManager) {
+            this.terminalManager.clearAll();
+          }
+
+          // Clear terminal grid completely
+          const grid = document.getElementById('terminal-grid');
+          if (grid) {
+            grid.innerHTML = '';
+            grid.removeAttribute('data-visible-count');
+          }
+
+          // Clear sidebar
+          const worktreeList = document.getElementById('worktree-list');
+          if (worktreeList) {
+            worktreeList.innerHTML = '';
+          }
+
+          // Rebuild with new workspace sessions
+          this.handleInitialSessions(sessions);
+
+          // Update workspace switcher to show correct workspace
+          if (this.workspaceSwitcher) {
+            this.workspaceSwitcher.updateCurrentWorkspace();
+          }
         }
       });
 
@@ -664,12 +748,21 @@ class ClaudeOrchestrator {
     
     // Process sessions
     for (const [sessionId, state] of Object.entries(sessionStates)) {
-      this.sessions.set(sessionId, {
+      const sessionData = {
         sessionId,
         ...state,
         hasUserInput: false
-      });
-      
+      };
+      this.sessions.set(sessionId, sessionData);
+
+      // Register session with current tab if tab manager is enabled
+      if (this.tabManager && this.currentTabId) {
+        const tab = this.tabManager.getTab(this.currentTabId);
+        if (tab) {
+          tab.sessions.set(sessionId, sessionData);
+        }
+      }
+
       // If there's an existing PR, add it to GitHub links automatically
       if (state.existingPR) {
         const links = this.githubLinks.get(sessionId) || {};
@@ -677,7 +770,7 @@ class ClaudeOrchestrator {
         this.githubLinks.set(sessionId, links);
         console.log('Loaded existing PR for session:', sessionId, state.existingPR);
       }
-      
+
       // For mixed-repo workspaces, set terminals as active immediately so they show by default
       // For traditional workspaces, they start as inactive until user interacts
       const isComplexSessionId = sessionId.includes('-') && sessionId.split('-').length > 2;
