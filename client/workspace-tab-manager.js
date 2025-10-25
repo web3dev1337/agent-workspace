@@ -228,8 +228,9 @@ class WorkspaceTabManager {
     // Clear notifications for this tab
     this.clearNotifications(tabId);
 
-    // Update orchestrator's current workspace
+    // Update orchestrator's current workspace AND currentTabId
     this.orchestrator.currentWorkspace = targetTab.workspace;
+    this.orchestrator.currentTabId = tabId; // CRITICAL: Keep in sync
     this.orchestrator.isDashboardMode = false;
 
     // Rebuild sidebar for new workspace
