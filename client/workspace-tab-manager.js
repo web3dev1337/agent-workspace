@@ -553,38 +553,38 @@ class WorkspaceTabManager {
   }
 
   /**
-   * Set up keyboard shortcuts
+   * Set up keyboard shortcuts (Alt-based to avoid browser conflicts)
    */
   setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
-      // Ctrl/Cmd + Tab - Next tab
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Tab' && !e.shiftKey) {
-        e.preventDefault();
-        this.nextTab();
-      }
-
-      // Ctrl/Cmd + Shift + Tab - Previous tab
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Tab' && e.shiftKey) {
+      // Alt + Arrow Left - Previous tab
+      if (e.altKey && e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         e.preventDefault();
         this.previousTab();
       }
 
-      // Ctrl/Cmd + W - Close current tab
-      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+      // Alt + Arrow Right - Next tab
+      if (e.altKey && e.key === 'ArrowRight' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        e.preventDefault();
+        this.nextTab();
+      }
+
+      // Alt + W - Close current tab
+      if (e.altKey && e.key === 'w' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         if (this.activeTabId) {
           e.preventDefault();
           this.closeTab(this.activeTabId);
         }
       }
 
-      // Ctrl/Cmd + T - New tab
-      if ((e.ctrlKey || e.metaKey) && e.key === 't') {
+      // Alt + N - New tab
+      if (e.altKey && e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         e.preventDefault();
         this.showWorkspaceWizard();
       }
 
-      // Ctrl/Cmd + 1-9 - Switch to tab by index
-      if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '9') {
+      // Alt + 1-9 - Switch to tab by index
+      if (e.altKey && e.key >= '1' && e.key <= '9' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         e.preventDefault();
         const index = parseInt(e.key) - 1;
         const tabs = Array.from(this.tabs.values());
