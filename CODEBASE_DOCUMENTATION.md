@@ -193,10 +193,10 @@ TabState Structure:
 - Click "+" button to open new workspace
 - Click tab to switch
 - Click "×" to close tab (confirms if terminals active)
-- Ctrl+Tab / Ctrl+Shift+Tab to cycle tabs
-- Ctrl+1-9 to jump to specific tab
-- Ctrl+T for new workspace
-- Ctrl+W to close current tab
+- Alt+← / Alt+→ to cycle tabs (previous/next)
+- Alt+1-9 to jump to specific tab
+- Alt+N for new workspace
+- Alt+W to close current tab
 
 ```
 
