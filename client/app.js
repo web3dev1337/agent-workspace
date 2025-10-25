@@ -308,6 +308,10 @@ class ClaudeOrchestrator {
             const tabId = this.tabManager.createTab(workspace, sessions);
             console.log(`Created new tab ${tabId} for workspace ${workspace.name}`);
 
+            // CRITICAL: Switch to the new tab so it becomes active
+            // This must happen BEFORE we try to render terminals
+            await this.tabManager.switchTab(tabId);
+
             // Clear state for new tab context
             this.sessions.clear();
             this.visibleTerminals.clear();
@@ -1510,6 +1514,27 @@ class ClaudeOrchestrator {
     this.buildSidebar();
   }
   
+  /**
+   * Get the terminal grid container for the current tab
+   */
+  getTerminalGrid() {
+    // If tab manager is enabled, get the active tab's container
+    if (this.tabManager && this.currentTabId) {
+      const tab = this.tabManager.getActiveTab();
+      if (tab && tab.containerElement) {
+        console.log(`Using tab container for tab ${tab.id}`);
+        return tab.containerElement;
+      }
+    }
+
+    // Fallback to default terminal-grid
+    const defaultGrid = document.getElementById('terminal-grid');
+    if (!defaultGrid) {
+      console.error('Terminal grid not found!');
+    }
+    return defaultGrid;
+  }
+
   updateTerminalGrid() {
     // Get ALL sessions (works for both traditional and mixed-repo workspaces)
     const allSessions = Array.from(this.sessions.keys());
@@ -1522,7 +1547,7 @@ class ClaudeOrchestrator {
   renderTerminalsWithVisibility(sessionIds) {
     // Render all terminals but apply visibility
     this.activeView = sessionIds.filter(id => this.visibleTerminals.has(id));
-    const grid = document.getElementById('terminal-grid');
+    const grid = this.getTerminalGrid();
 
     console.log('🎨 RENDER DEBUG:', {
       totalSessions: sessionIds.length,
@@ -1666,7 +1691,7 @@ class ClaudeOrchestrator {
   renderTerminals(sessionIds) {
     // Core rendering function - just displays terminals without updating state
     this.activeView = sessionIds;
-    const grid = document.getElementById('terminal-grid');
+    const grid = this.getTerminalGrid();
     
     // Sort sessionIds to ensure proper ordering: work1-claude, work1-server, work2-claude, work2-server, etc.
     const sortedSessionIds = sessionIds.slice().sort((a, b) => {
