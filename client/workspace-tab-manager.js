@@ -233,6 +233,14 @@ class WorkspaceTabManager {
     this.orchestrator.currentTabId = tabId; // CRITICAL: Keep in sync
     this.orchestrator.isDashboardMode = false;
 
+    // CRITICAL: Restore session data from this tab
+    // The sidebar and other UI elements depend on orchestrator.sessions
+    this.orchestrator.sessions.clear();
+    targetTab.sessions.forEach((sessionData, sessionId) => {
+      this.orchestrator.sessions.set(sessionId, sessionData);
+    });
+    console.log(`Restored ${targetTab.sessions.size} sessions to orchestrator`);
+
     // Rebuild sidebar for new workspace
     if (this.orchestrator.buildSidebar) {
       this.orchestrator.buildSidebar();
@@ -249,21 +257,39 @@ class WorkspaceTabManager {
 
     console.log(`Hiding workspace ${tabState.displayName}`);
 
-    // Save terminal scroll positions
-    tabState.terminals.forEach((termData, sessionId) => {
-      if (termData.xtermInstance) {
-        try {
-          const xterm = termData.xtermInstance;
-          termData.lastScrollPos = xterm.buffer.active.viewportY;
-          termData.cursorState = {
-            x: xterm.buffer.active.cursorX,
-            y: xterm.buffer.active.cursorY
-          };
-        } catch (err) {
-          console.warn(`Failed to save scroll position for ${sessionId}:`, err);
-        }
-      }
+    // CRITICAL: Save session data from orchestrator to this tab
+    // This prevents session data from being lost when switching tabs
+    this.orchestrator.sessions.forEach((sessionData, sessionId) => {
+      tabState.sessions.set(sessionId, sessionData);
     });
+    console.log(`Saved ${tabState.sessions.size} sessions from orchestrator to tab`);
+
+    // CRITICAL: Save terminal instances from global manager to this tab
+    // This prevents them from being overwritten when another tab loads
+    const terminalManager = this.orchestrator.terminalManager;
+    if (terminalManager) {
+      tabState.terminals.forEach((termData, sessionId) => {
+        // Update with current instance from global manager
+        const currentInstance = terminalManager.terminals.get(sessionId);
+        if (currentInstance) {
+          termData.xtermInstance = currentInstance;
+          termData.fitAddon = terminalManager.fitAddons.get(sessionId);
+        }
+
+        if (termData.xtermInstance) {
+          try {
+            const xterm = termData.xtermInstance;
+            termData.lastScrollPos = xterm.buffer.active.viewportY;
+            termData.cursorState = {
+              x: xterm.buffer.active.cursorX,
+              y: xterm.buffer.active.cursorY
+            };
+          } catch (err) {
+            console.warn(`Failed to save scroll position for ${sessionId}:`, err);
+          }
+        }
+      });
+    }
 
     // Disconnect resize observer
     if (tabState.resizeObserver) {
@@ -271,7 +297,7 @@ class WorkspaceTabManager {
       tabState.resizeObserver = null;
     }
 
-    // Hide container - XTerm instances stay in memory
+    // Hide container - XTerm instances stay in tab.terminals
     tabState.containerElement.classList.add('hidden');
     tabState.isActive = false;
   }
@@ -283,6 +309,28 @@ class WorkspaceTabManager {
     if (!tabState || !tabState.containerElement) return;
 
     console.log(`Showing workspace ${tabState.displayName}`);
+
+    // CRITICAL: Restore terminal instances from this tab to global manager
+    // This ensures the correct terminals are active
+    const terminalManager = this.orchestrator.terminalManager;
+    if (terminalManager) {
+      console.log(`Restoring ${tabState.terminals.size} terminals to global manager`);
+
+      // Clear global manager first
+      terminalManager.terminals.clear();
+      terminalManager.fitAddons.clear();
+
+      // Restore this tab's terminals
+      tabState.terminals.forEach((termData, sessionId) => {
+        if (termData.xtermInstance) {
+          terminalManager.terminals.set(sessionId, termData.xtermInstance);
+          if (termData.fitAddon) {
+            terminalManager.fitAddons.set(sessionId, termData.fitAddon);
+          }
+          console.log(`Restored terminal ${sessionId} to global manager`);
+        }
+      });
+    }
 
     // Show container first
     tabState.containerElement.classList.remove('hidden');
@@ -302,7 +350,7 @@ class WorkspaceTabManager {
           if (terminalElement && terminalElement.offsetWidth > 0) {
             try {
               // Fit terminal to container
-              const fitAddon = xterm._fitAddon;
+              const fitAddon = termData.fitAddon || xterm._fitAddon;
               if (fitAddon && typeof fitAddon.fit === 'function') {
                 fitAddon.fit();
               }
