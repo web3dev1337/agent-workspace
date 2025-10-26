@@ -307,10 +307,21 @@ class TerminalManager {
     
     // Store terminal reference
     this.terminals.set(sessionId, terminal);
-    
+
+    // Register with tab manager if available
+    if (this.orchestrator.tabManager && this.orchestrator.currentTabId) {
+      this.orchestrator.tabManager.registerTerminal(
+        this.orchestrator.currentTabId,
+        sessionId,
+        terminal,
+        fitAddon
+      );
+      console.log(`Registered terminal ${sessionId} with tab ${this.orchestrator.currentTabId}`);
+    }
+
     // Setup resize observer
     this.setupResizeObserver(sessionId);
-    
+
     return terminal;
   }
   
@@ -724,15 +735,23 @@ class TerminalManager {
       terminal.dispose();
       this.terminals.delete(sessionId);
     }
-    
+
+    // Unregister from tab manager if available
+    if (this.orchestrator.tabManager && this.orchestrator.currentTabId) {
+      this.orchestrator.tabManager.unregisterTerminal(
+        this.orchestrator.currentTabId,
+        sessionId
+      );
+    }
+
     // Clean up paste tracking
     this.lastPasteTimes.delete(sessionId);
     this.lastWordDeleteTimes.delete(sessionId);
-    
+
     // Clean up scroll state
     this.terminalScrollStates.delete(sessionId);
     this.userScrolling.delete(sessionId);
-    
+
     // Clean up addons
     this.fitAddons.delete(sessionId);
     this.searchAddons.delete(sessionId);
