@@ -1546,9 +1546,14 @@ class ClaudeOrchestrator {
   }
   
   renderTerminalsWithVisibility(sessionIds) {
-    // Render all terminals but apply visibility
+    // Render all terminals but apply visibility using CSS (don't destroy DOM)
     this.activeView = sessionIds.filter(id => this.visibleTerminals.has(id));
     const grid = this.getTerminalGrid();
+
+    if (!grid) {
+      console.error('Terminal grid not found!');
+      return;
+    }
 
     console.log('🎨 RENDER DEBUG:', {
       totalSessions: sessionIds.length,
@@ -1561,60 +1566,55 @@ class ClaudeOrchestrator {
     const visibleCount = this.activeView.length;
     grid.setAttribute('data-visible-count', visibleCount);
 
-    // Clear grid
-    grid.innerHTML = '';
+    // CRITICAL: Don't destroy terminals with innerHTML = ''
+    // Instead, create missing terminals and hide/show existing ones
 
-    // Only create and add VISIBLE terminal elements to the grid
-    // This ensures CSS nth-child selectors work correctly
     sessionIds.forEach((sessionId) => {
       const session = this.sessions.get(sessionId);
       const isVisible = this.visibleTerminals.has(sessionId);
-      console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}`);
+      const wrapperId = `wrapper-${sessionId}`;
+      let wrapper = document.getElementById(wrapperId);
+
+      console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}, exists=${!!wrapper}`);
 
       if (session && isVisible) {
-        console.log(`✅ Creating terminal element for: ${sessionId}`);
-        const wrapper = this.createTerminalElement(sessionId, session);
-        if (wrapper) {
-          grid.appendChild(wrapper);
-          console.log(`✅ Appended terminal to grid: ${sessionId}`);
+        // Create wrapper if it doesn't exist
+        if (!wrapper) {
+          console.log(`✅ Creating terminal element for: ${sessionId}`);
+          wrapper = this.createTerminalElement(sessionId, session);
+          if (wrapper) {
+            grid.appendChild(wrapper);
+            console.log(`✅ Appended terminal to grid: ${sessionId}`);
+
+            // Initialize terminal for newly created element
+            setTimeout(() => {
+              const terminalEl = document.getElementById(`terminal-${sessionId}`);
+              if (terminalEl && !this.terminalManager.terminals.has(sessionId)) {
+                this.terminalManager.createTerminal(sessionId, session);
+              }
+            }, 50);
+          }
         } else {
-          console.error(`❌ Failed to create terminal element: ${sessionId}`);
-        }
-      }
-    });
-    
-    // Initialize terminals - ONLY for visible terminals that have DOM elements
-    this.activeView.forEach((sessionId, index) => {
-      const session = this.sessions.get(sessionId);
-      if (session) {
-        setTimeout(() => {
-          const terminalEl = document.getElementById(`terminal-${sessionId}`);
-          if (!terminalEl) return;
+          // Show existing wrapper
+          wrapper.style.display = '';
 
+          // Refit terminal if it exists
           if (this.terminalManager.terminals.has(sessionId)) {
-            const term = this.terminalManager.terminals.get(sessionId);
-            terminalEl.innerHTML = '';
-            term.open(terminalEl);
-
-            // Fit terminal since it's visible
-            // Use requestAnimationFrame to ensure renderer is ready before fitting
             requestAnimationFrame(() => {
               this.terminalManager.fitTerminal(sessionId);
-              term.refresh(0, term.rows - 1);
             });
-          } else {
-            this.terminalManager.createTerminal(sessionId, session);
           }
-
-          // Don't auto-start Claude - let user choose via modal or button
-        }, 50 + (index * 25));
+        }
+      } else if (wrapper) {
+        // Hide wrapper if not visible
+        wrapper.style.display = 'none';
       }
     });
 
     // Force a resize after everything is rendered to ensure terminals fit properly
     setTimeout(() => {
       this.resizeAllVisibleTerminals();
-    }, 500);
+    }, 200);
   }
   
   showClaudeOnly() {
