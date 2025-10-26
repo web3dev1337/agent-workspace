@@ -106,6 +106,61 @@ git checkout -b fix/your-feature-name main
 - `server/worktreeHelper.js`: Git worktree integration
 - `client/workspace-wizard.js`: UI for workspace creation
 
+## Tabbed Workspace System (NEW)
+
+### Overview
+The orchestrator now supports **browser-like tabs** for working with multiple workspaces simultaneously. Each tab maintains its own complete state including terminals, sessions, and UI.
+
+### Using Tabs
+
+**Opening Multiple Workspaces:**
+- Click the **+** button in the tab bar to open a new workspace
+- Each workspace opens in a separate tab
+- Tabs persist their complete state when switching
+
+**Switching Between Tabs:**
+- **Click** any tab to switch to it
+- **Alt+←** / **Alt+→** - Navigate to previous/next tab
+- **Alt+1-9** - Jump directly to tab 1-9
+- **Alt+N** - Open new workspace tab
+- **Alt+W** - Close current tab
+
+**Tab Features:**
+- Terminal content fully preserved when switching tabs
+- Notification badges show activity in background tabs (e.g., "Epic Survivors (3)")
+- Each tab has its own sidebar showing that workspace's worktrees
+- Terminals continue running in background tabs
+- No visual glitches or layout shifts when switching
+
+### Architecture Notes
+
+**State Isolation:**
+Each tab maintains complete isolation with its own:
+- Terminal instances (XTerm.js) and scrollback buffers
+- Session data (branch info, status, etc.)
+- Sidebar worktree list
+- Scroll positions and cursor positions
+
+**State Swapping:**
+When switching tabs, the system swaps state between tabs:
+1. **Hide tab:** Save terminals/sessions from global manager → tab storage
+2. **Show tab:** Restore terminals/sessions from tab storage → global manager
+
+This ensures each tab sees only its own data without cross-contamination.
+
+**Critical Implementation:**
+- Terminals are NEVER destroyed on visibility toggle (use CSS display instead)
+- XTerm instances stay attached to same DOM elements
+- Global `terminalManager.terminals` is swapped per tab
+- `orchestrator.sessions` is swapped per tab
+
+### Common Gotchas
+
+1. **Don't destroy terminal DOM elements** - Use `display: none` instead of `innerHTML = ''`
+2. **State must be swapped** - Can't rely on global state persisting across tabs
+3. **Each tab needs its own container** - Use `getTerminalGrid()` to get correct container
+4. **Tab ID must be set before creating terminals** - So they register to correct tab
+
 ## Cascaded Configuration System
 
 ### Overview
