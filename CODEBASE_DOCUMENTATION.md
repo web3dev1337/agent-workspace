@@ -136,6 +136,68 @@ client/workspace-wizard.js         - Workspace creation wizard
 ├─ Features: Step-by-step workspace setup, repo selection
 ├─ Types: Single-repo, mixed-repo, and custom configurations
 └─ Integration: Worktree creation and template application
+
+client/workspace-tab-manager.js    - Multi-workspace tab management (NEW)
+├─ Features: Browser-like tabs for multiple workspaces
+├─ Manages: Tab creation, switching, state preservation
+├─ XTerm lifecycle: Proper hide/show with fit() handling
+├─ Notifications: Badge counts for inactive tabs
+└─ Keyboard shortcuts: Ctrl+Tab, Ctrl+W, Ctrl+T, Ctrl+1-9
+
+client/styles/tabs.css             - Tab bar styling
+├─ Features: Tab UI, badges, animations
+└─ Responsive: Mobile and desktop layouts
+```
+
+### Tabbed Workspace System (NEW)
+The orchestrator now supports having multiple workspaces open simultaneously in browser-like tabs:
+
+**Key Features:**
+- Open multiple workspaces without closing others
+- Seamless tab switching with preserved terminal state
+- XTerm instances remain alive when switching tabs
+- Notification badges show activity in inactive tabs
+- Keyboard shortcuts for power users
+- No visual glitches or layout shifts on switch
+
+**Architecture:**
+```
+WorkspaceTabManager
+├─ Tab Registry: Map<tabId, TabState>
+├─ Active Tab Tracking: Current visible workspace
+├─ XTerm Lifecycle: Hide/show with proper fit() timing
+└─ Event Routing: Notifications for inactive tabs
+
+TabState Structure:
+{
+  id: 'tab-uuid',
+  workspaceId: 'workspace-id',
+  workspace: {...},
+  isActive: boolean,
+  notifications: number,
+  sessions: Map<sessionId, sessionData>,
+  terminals: Map<sessionId, xtermInstance>,
+  containerElement: DOMElement,
+  resizeObserver: ResizeObserver
+}
+```
+
+**Critical Implementation Details:**
+- Double `requestAnimationFrame()` before fitting terminals (prevents race conditions)
+- Resize observers disconnected when hiding tabs
+- Scroll positions and cursor states preserved
+- Terminal output continues in background tabs
+- Tab-aware session management in app.js
+
+**Usage:**
+- Click "+" button to open new workspace
+- Click tab to switch
+- Click "×" to close tab (confirms if terminals active)
+- Alt+← / Alt+→ to cycle tabs (previous/next)
+- Alt+1-9 to jump to specific tab
+- Alt+N for new workspace
+- Alt+W to close current tab
+
 ```
 
 ### Native Desktop App (Tauri)
@@ -224,6 +286,7 @@ git-command: {command, args}                   - Execute git command
 switch-workspace: {workspaceId}                - Switch to different workspace
 create-workspace: {config}                     - Create new workspace
 get-workspaces: {}                             - Request workspace list
+close-tab: {tabId}                             - Close workspace tab and cleanup sessions (NEW)
 ```
 
 ## Configuration System

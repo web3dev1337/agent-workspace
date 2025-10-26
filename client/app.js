@@ -29,6 +29,9 @@ class ClaudeOrchestrator {
     this.workspaceSwitcher = null;
     this.isDashboardMode = false;
 
+    // Tab management for multiple workspaces
+    this.tabManager = null;
+
     // Dynamic workspace types
     this.workspaceTypes = {};
     this.frameworks = {};
@@ -48,6 +51,12 @@ class ClaudeOrchestrator {
       this.terminalManager = new TerminalManager(this);
       this.notificationManager = new NotificationManager(this);
       this.agentModalManager = new AgentModalManager(this);
+
+      // Initialize tab manager for multi-workspace support
+      if (typeof WorkspaceTabManager !== 'undefined') {
+        this.tabManager = new WorkspaceTabManager(this);
+        console.log('Tab manager initialized');
+      }
       
       // Request notification permission if enabled
       if (this.settings.notifications) {
@@ -123,29 +132,42 @@ class ClaudeOrchestrator {
       
       this.socket.on('terminal-output', ({ sessionId, data }) => {
         this.terminalManager.handleOutput(sessionId, data);
-        
+
+        // Notify inactive tabs if tab manager is enabled
+        if (this.tabManager && this.currentTabId) {
+          const activeTab = this.tabManager.getActiveTab();
+          // If this session belongs to an inactive tab, show notification
+          for (const [tabId, tab] of this.tabManager.tabs) {
+            if (tab.sessions.has(sessionId) && tabId !== this.currentTabId) {
+              const eventType = data.includes('[Error]') || data.includes('error') ? 'error' : 'output';
+              this.tabManager.notifyTab(tabId, eventType);
+              break;
+            }
+          }
+        }
+
         // Check for server errors
         if (sessionId.includes('-server') && data.includes('[Error]')) {
           this.handleServerError(sessionId, data);
         }
-        
+
         // Update server status based on output
         if (sessionId.includes('-server')) {
           this.updateServerStatus(sessionId, data);
         }
-        
+
         // Detect GitHub URLs in Claude sessions
         if (sessionId.includes('-claude')) {
           this.detectGitHubLinks(sessionId, data);
         }
-        
+
         // Detect clear commands to reset PR links and activity
         if (data.includes('/clear') || data.includes('clear')) {
           this.clearGitHubLinks(sessionId);
           this.sessionActivity.delete(sessionId);
           this.buildSidebar();
         }
-        
+
         // Mark session as active when there's terminal activity
         if (data.trim().length > 0) {
           this.sessionActivity.set(sessionId, 'active');
@@ -254,56 +276,123 @@ class ClaudeOrchestrator {
 
       this.socket.on('workspace-changed', async ({ workspace, sessions }) => {
         console.log('Workspace changed:', workspace.name);
-        this.currentWorkspace = workspace;
-        this.isDashboardMode = false;
 
-        // Hide dashboard if showing
-        if (this.dashboard) {
-          this.dashboard.hide();
-        }
+        // If tab manager is enabled, create a new tab for this workspace
+        if (this.tabManager) {
+          // Hide dashboard if showing
+          if (this.dashboard) {
+            this.dashboard.hide();
+          }
 
-        // Show main UI
-        const mainContainer = document.querySelector('.main-container');
-        const sidebar = document.querySelector('.sidebar');
-        if (mainContainer) mainContainer.classList.remove('hidden');
-        if (sidebar) sidebar.classList.remove('hidden');
+          // Show main UI
+          const mainContainer = document.querySelector('.main-container');
+          const sidebar = document.querySelector('.sidebar');
+          if (mainContainer) mainContainer.classList.remove('hidden');
+          if (sidebar) sidebar.classList.remove('hidden');
 
-        // Clear ALL existing state completely
-        this.sessions.clear();
-        this.visibleTerminals.clear();
-        this.worktreeConfigs.clear();
+          // Check if this workspace is already open in a tab
+          let existingTab = null;
+          for (const [tabId, tab] of this.tabManager.tabs) {
+            if (tab.workspaceId === workspace.id) {
+              existingTab = tab;
+              break;
+            }
+          }
 
-        // Pre-fetch worktree-specific configs for all terminals
-        await this.prefetchWorktreeConfigs(workspace, sessions);
-        this.sessionActivity.clear();
-        this.serverStatuses.clear();
-        this.serverPorts.clear();
-        this.githubLinks.clear();
+          if (existingTab) {
+            // Switch to existing tab
+            console.log(`Workspace ${workspace.name} already open, switching to tab`);
+            await this.tabManager.switchTab(existingTab.id);
+          } else {
+            // Create new tab for this workspace
+            const tabId = this.tabManager.createTab(workspace, sessions);
+            console.log(`Created new tab ${tabId} for workspace ${workspace.name}`);
 
-        // Clear terminal manager terminals
-        if (this.terminalManager) {
-          this.terminalManager.clearAll();
-        }
+            // CRITICAL: Set currentTabId FIRST before anything else
+            // Terminals need this to register to the correct tab
+            this.currentTabId = tabId;
 
-        // Clear terminal grid completely
-        const grid = document.getElementById('terminal-grid');
-        if (grid) {
-          grid.innerHTML = '';
-          grid.removeAttribute('data-visible-count');
-        }
+            // Clear state for new tab context
+            this.sessions.clear();
+            this.visibleTerminals.clear();
+            this.worktreeConfigs.clear();
+            this.sessionActivity.clear();
+            this.serverStatuses.clear();
+            this.serverPorts.clear();
+            this.githubLinks.clear();
 
-        // Clear sidebar
-        const worktreeList = document.getElementById('worktree-list');
-        if (worktreeList) {
-          worktreeList.innerHTML = '';
-        }
+            // Switch to the new tab so it becomes active
+            await this.tabManager.switchTab(tabId);
 
-        // Rebuild with new workspace sessions
-        this.handleInitialSessions(sessions);
+            // Pre-fetch worktree-specific configs for all terminals
+            await this.prefetchWorktreeConfigs(workspace, sessions);
 
-        // Update workspace switcher to show correct workspace
-        if (this.workspaceSwitcher) {
-          this.workspaceSwitcher.updateCurrentWorkspace();
+            // Set current workspace
+            this.currentWorkspace = workspace;
+            this.isDashboardMode = false;
+
+            // Rebuild with new workspace sessions
+            // Terminals will now register to the correct tab via currentTabId
+            this.handleInitialSessions(sessions);
+
+            // Update workspace switcher
+            if (this.workspaceSwitcher) {
+              this.workspaceSwitcher.updateCurrentWorkspace();
+            }
+          }
+        } else {
+          // Original behavior (no tabs) - for backwards compatibility
+          this.currentWorkspace = workspace;
+          this.isDashboardMode = false;
+
+          // Hide dashboard if showing
+          if (this.dashboard) {
+            this.dashboard.hide();
+          }
+
+          // Show main UI
+          const mainContainer = document.querySelector('.main-container');
+          const sidebar = document.querySelector('.sidebar');
+          if (mainContainer) mainContainer.classList.remove('hidden');
+          if (sidebar) sidebar.classList.remove('hidden');
+
+          // Clear ALL existing state completely
+          this.sessions.clear();
+          this.visibleTerminals.clear();
+          this.worktreeConfigs.clear();
+
+          // Pre-fetch worktree-specific configs for all terminals
+          await this.prefetchWorktreeConfigs(workspace, sessions);
+          this.sessionActivity.clear();
+          this.serverStatuses.clear();
+          this.serverPorts.clear();
+          this.githubLinks.clear();
+
+          // Clear terminal manager terminals
+          if (this.terminalManager) {
+            this.terminalManager.clearAll();
+          }
+
+          // Clear terminal grid completely
+          const grid = document.getElementById('terminal-grid');
+          if (grid) {
+            grid.innerHTML = '';
+            grid.removeAttribute('data-visible-count');
+          }
+
+          // Clear sidebar
+          const worktreeList = document.getElementById('worktree-list');
+          if (worktreeList) {
+            worktreeList.innerHTML = '';
+          }
+
+          // Rebuild with new workspace sessions
+          this.handleInitialSessions(sessions);
+
+          // Update workspace switcher to show correct workspace
+          if (this.workspaceSwitcher) {
+            this.workspaceSwitcher.updateCurrentWorkspace();
+          }
         }
       });
 
@@ -664,12 +753,21 @@ class ClaudeOrchestrator {
     
     // Process sessions
     for (const [sessionId, state] of Object.entries(sessionStates)) {
-      this.sessions.set(sessionId, {
+      const sessionData = {
         sessionId,
         ...state,
         hasUserInput: false
-      });
-      
+      };
+      this.sessions.set(sessionId, sessionData);
+
+      // Register session with current tab if tab manager is enabled
+      if (this.tabManager && this.currentTabId) {
+        const tab = this.tabManager.getTab(this.currentTabId);
+        if (tab) {
+          tab.sessions.set(sessionId, sessionData);
+        }
+      }
+
       // If there's an existing PR, add it to GitHub links automatically
       if (state.existingPR) {
         const links = this.githubLinks.get(sessionId) || {};
@@ -677,7 +775,7 @@ class ClaudeOrchestrator {
         this.githubLinks.set(sessionId, links);
         console.log('Loaded existing PR for session:', sessionId, state.existingPR);
       }
-      
+
       // For mixed-repo workspaces, set terminals as active immediately so they show by default
       // For traditional workspaces, they start as inactive until user interacts
       const isComplexSessionId = sessionId.includes('-') && sessionId.split('-').length > 2;
@@ -1417,6 +1515,27 @@ class ClaudeOrchestrator {
     this.buildSidebar();
   }
   
+  /**
+   * Get the terminal grid container for the current tab
+   */
+  getTerminalGrid() {
+    // If tab manager is enabled, get the active tab's container
+    if (this.tabManager && this.currentTabId) {
+      const tab = this.tabManager.getActiveTab();
+      if (tab && tab.containerElement) {
+        console.log(`Using tab container for tab ${tab.id}`);
+        return tab.containerElement;
+      }
+    }
+
+    // Fallback to default terminal-grid
+    const defaultGrid = document.getElementById('terminal-grid');
+    if (!defaultGrid) {
+      console.error('Terminal grid not found!');
+    }
+    return defaultGrid;
+  }
+
   updateTerminalGrid() {
     // Get ALL sessions (works for both traditional and mixed-repo workspaces)
     const allSessions = Array.from(this.sessions.keys());
@@ -1427,9 +1546,14 @@ class ClaudeOrchestrator {
   }
   
   renderTerminalsWithVisibility(sessionIds) {
-    // Render all terminals but apply visibility
+    // Render all terminals but apply visibility using CSS (don't destroy DOM)
     this.activeView = sessionIds.filter(id => this.visibleTerminals.has(id));
-    const grid = document.getElementById('terminal-grid');
+    const grid = this.getTerminalGrid();
+
+    if (!grid) {
+      console.error('Terminal grid not found!');
+      return;
+    }
 
     console.log('🎨 RENDER DEBUG:', {
       totalSessions: sessionIds.length,
@@ -1442,60 +1566,55 @@ class ClaudeOrchestrator {
     const visibleCount = this.activeView.length;
     grid.setAttribute('data-visible-count', visibleCount);
 
-    // Clear grid
-    grid.innerHTML = '';
+    // CRITICAL: Don't destroy terminals with innerHTML = ''
+    // Instead, create missing terminals and hide/show existing ones
 
-    // Only create and add VISIBLE terminal elements to the grid
-    // This ensures CSS nth-child selectors work correctly
     sessionIds.forEach((sessionId) => {
       const session = this.sessions.get(sessionId);
       const isVisible = this.visibleTerminals.has(sessionId);
-      console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}`);
+      const wrapperId = `wrapper-${sessionId}`;
+      let wrapper = document.getElementById(wrapperId);
+
+      console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}, exists=${!!wrapper}`);
 
       if (session && isVisible) {
-        console.log(`✅ Creating terminal element for: ${sessionId}`);
-        const wrapper = this.createTerminalElement(sessionId, session);
-        if (wrapper) {
-          grid.appendChild(wrapper);
-          console.log(`✅ Appended terminal to grid: ${sessionId}`);
+        // Create wrapper if it doesn't exist
+        if (!wrapper) {
+          console.log(`✅ Creating terminal element for: ${sessionId}`);
+          wrapper = this.createTerminalElement(sessionId, session);
+          if (wrapper) {
+            grid.appendChild(wrapper);
+            console.log(`✅ Appended terminal to grid: ${sessionId}`);
+
+            // Initialize terminal for newly created element
+            setTimeout(() => {
+              const terminalEl = document.getElementById(`terminal-${sessionId}`);
+              if (terminalEl && !this.terminalManager.terminals.has(sessionId)) {
+                this.terminalManager.createTerminal(sessionId, session);
+              }
+            }, 50);
+          }
         } else {
-          console.error(`❌ Failed to create terminal element: ${sessionId}`);
-        }
-      }
-    });
-    
-    // Initialize terminals - ONLY for visible terminals that have DOM elements
-    this.activeView.forEach((sessionId, index) => {
-      const session = this.sessions.get(sessionId);
-      if (session) {
-        setTimeout(() => {
-          const terminalEl = document.getElementById(`terminal-${sessionId}`);
-          if (!terminalEl) return;
+          // Show existing wrapper
+          wrapper.style.display = '';
 
+          // Refit terminal if it exists
           if (this.terminalManager.terminals.has(sessionId)) {
-            const term = this.terminalManager.terminals.get(sessionId);
-            terminalEl.innerHTML = '';
-            term.open(terminalEl);
-
-            // Fit terminal since it's visible
-            // Use requestAnimationFrame to ensure renderer is ready before fitting
             requestAnimationFrame(() => {
               this.terminalManager.fitTerminal(sessionId);
-              term.refresh(0, term.rows - 1);
             });
-          } else {
-            this.terminalManager.createTerminal(sessionId, session);
           }
-
-          // Don't auto-start Claude - let user choose via modal or button
-        }, 50 + (index * 25));
+        }
+      } else if (wrapper) {
+        // Hide wrapper if not visible
+        wrapper.style.display = 'none';
       }
     });
 
     // Force a resize after everything is rendered to ensure terminals fit properly
     setTimeout(() => {
       this.resizeAllVisibleTerminals();
-    }, 500);
+    }, 200);
   }
   
   showClaudeOnly() {
@@ -1573,7 +1692,7 @@ class ClaudeOrchestrator {
   renderTerminals(sessionIds) {
     // Core rendering function - just displays terminals without updating state
     this.activeView = sessionIds;
-    const grid = document.getElementById('terminal-grid');
+    const grid = this.getTerminalGrid();
     
     // Sort sessionIds to ensure proper ordering: work1-claude, work1-server, work2-claude, work2-server, etc.
     const sortedSessionIds = sessionIds.slice().sort((a, b) => {
