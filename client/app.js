@@ -125,8 +125,14 @@ class ClaudeOrchestrator {
       });
       
       // Session events
-      this.socket.on('sessions', (sessionStates) => {
+      this.socket.on('sessions', async (sessionStates) => {
         console.log('Received sessions event:', sessionStates);
+
+        // Pre-fetch worktree configs if we have an active workspace
+        if (this.currentWorkspace) {
+          await this.prefetchWorktreeConfigs(this.currentWorkspace, sessionStates);
+        }
+
         this.handleInitialSessions(sessionStates);
       });
       
@@ -248,7 +254,7 @@ class ClaudeOrchestrator {
       });
 
       // Workspace events
-      this.socket.on('workspace-info', ({ active, available, config, workspaceTypes, frameworks, cascadedConfigs }) => {
+      this.socket.on('workspace-info', async ({ active, available, config, workspaceTypes, frameworks, cascadedConfigs }) => {
         console.log('Received workspace info:', { active, available, config, workspaceTypes, frameworks, cascadedConfigs });
         this.currentWorkspace = active;
         this.availableWorkspaces = available;
@@ -267,6 +273,36 @@ class ClaudeOrchestrator {
         // Initialize workspace switcher
         this.workspaceSwitcher = new WorkspaceSwitcher(this);
         this.workspaceSwitcher.render();
+
+        // If there's an active workspace and tabManager is initialized,
+        // create a tab for it (handles page refresh scenario)
+        if (active && this.tabManager) {
+          console.log('Creating initial tab for active workspace after page load');
+
+          // Hide dashboard if showing
+          if (this.dashboard) {
+            this.dashboard.hide();
+          }
+
+          // Show main UI
+          const mainContainer = document.querySelector('.main-container');
+          const sidebar = document.querySelector('.sidebar');
+          if (mainContainer) mainContainer.classList.remove('hidden');
+          if (sidebar) sidebar.classList.remove('hidden');
+
+          // Create tab for the active workspace
+          // Note: sessions will come later in the 'sessions' event
+          const tabId = this.tabManager.createTab(active, []);
+          console.log(`Created initial tab ${tabId} for workspace ${active.name}`);
+
+          // Set currentTabId so subsequent sessions event knows which tab to use
+          this.currentTabId = tabId;
+
+          // Switch to the new tab
+          await this.tabManager.switchTab(tabId);
+
+          this.isDashboardMode = false;
+        }
 
         // Initialize dashboard if configured
         if (config.ui.startupDashboard && !active) {
