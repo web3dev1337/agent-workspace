@@ -45,9 +45,13 @@ class WorkspaceTabManager {
       <div class="workspace-tabs" id="workspace-tabs"></div>
     `;
 
-    // Insert before header
+    // Insert into header, after the h1 title
     const header = mainContainer.querySelector('header');
-    mainContainer.insertBefore(tabsContainer, header);
+    const headerContent = header.querySelector('.header-content');
+    const title = headerContent.querySelector('h1');
+
+    // Insert tabs after the title in header-content
+    title.insertAdjacentElement('afterend', tabsContainer);
 
     this.tabsContainer = document.getElementById('workspace-tabs');
 
