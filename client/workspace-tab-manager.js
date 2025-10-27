@@ -339,47 +339,50 @@ class WorkspaceTabManager {
     // Show container first
     tabState.containerElement.classList.remove('hidden');
 
-    // CRITICAL: Wait for render before fitting terminals
-    // Use double requestAnimationFrame to ensure DOM is fully painted
+    // CRITICAL: Wait for CSS grid layout to complete before fitting terminals
+    // Grid layout needs time to calculate cell dimensions
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        // Refit all terminals
-        tabState.terminals.forEach((termData, sessionId) => {
-          if (!termData.xtermInstance) return;
+        // Additional delay for grid layout calculation
+        setTimeout(() => {
+          // Refit all terminals
+          tabState.terminals.forEach((termData, sessionId) => {
+            if (!termData.xtermInstance) return;
 
-          const xterm = termData.xtermInstance;
-          const terminalElement = document.getElementById(`terminal-${sessionId}`);
+            const xterm = termData.xtermInstance;
+            const terminalElement = document.getElementById(`terminal-${sessionId}`);
 
-          // Ensure container is rendered (has dimensions)
-          if (terminalElement && terminalElement.offsetWidth > 0) {
-            try {
-              // Fit terminal to container
-              const fitAddon = termData.fitAddon || xterm._fitAddon;
-              if (fitAddon && typeof fitAddon.fit === 'function') {
-                fitAddon.fit();
+            // Ensure container is rendered (has dimensions)
+            if (terminalElement && terminalElement.offsetWidth > 0) {
+              try {
+                // Fit terminal to container
+                const fitAddon = termData.fitAddon || xterm._fitAddon;
+                if (fitAddon && typeof fitAddon.fit === 'function') {
+                  fitAddon.fit();
+                }
+
+                // Restore scroll position
+                if (termData.lastScrollPos !== undefined) {
+                  xterm.scrollToLine(termData.lastScrollPos);
+                }
+              } catch (err) {
+                console.error(`Failed to fit terminal ${sessionId}:`, err);
               }
-
-              // Restore scroll position
-              if (termData.lastScrollPos !== undefined) {
-                xterm.scrollToLine(termData.lastScrollPos);
-              }
-            } catch (err) {
-              console.error(`Failed to fit terminal ${sessionId}:`, err);
             }
-          }
-        });
+          });
 
-        // Set up resize observer
-        tabState.resizeObserver = new ResizeObserver(() => {
-          if (tabState.isActive) {
-            // Only fit terminals if this tab is still active
-            this.fitTabTerminals(tabState.id);
-          }
-        });
+          // Set up resize observer
+          tabState.resizeObserver = new ResizeObserver(() => {
+            if (tabState.isActive) {
+              // Only fit terminals if this tab is still active
+              this.fitTabTerminals(tabState.id);
+            }
+          });
 
-        if (tabState.containerElement) {
-          tabState.resizeObserver.observe(tabState.containerElement);
-        }
+          if (tabState.containerElement) {
+            tabState.resizeObserver.observe(tabState.containerElement);
+          }
+        }, 50); // Small delay for grid layout
       });
     });
 
