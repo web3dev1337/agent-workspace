@@ -182,6 +182,11 @@
   height: 100%;
 }
 
+/* CRITICAL: When workspace-view has terminal-grid class, use grid display */
+.workspace-view.terminal-grid {
+  display: grid;
+}
+
 .workspace-view.hidden {
   display: none;
 }
