@@ -163,8 +163,12 @@ class WorkspaceTabManager {
       newBtn.className = 'tab-new';
       newBtn.title = 'New workspace';
       newBtn.innerHTML = '+';
-      newBtn.addEventListener('click', () => this.showWorkspaceWizard());
+      newBtn.addEventListener('click', (e) => {
+        console.log('New tab button clicked!', e);
+        this.showWorkspaceWizard();
+      });
       this.tabsContainer.appendChild(newBtn);
+      console.log('New tab button created and appended to:', this.tabsContainer);
     }
 
     tabState.tabElement = tabEl;
@@ -585,9 +589,14 @@ class WorkspaceTabManager {
    * Show workspace wizard for new tab
    */
   showWorkspaceWizard() {
+    console.log('showWorkspaceWizard called');
+    console.log('dashboard exists:', !!this.orchestrator.dashboard);
     if (this.orchestrator.dashboard) {
+      console.log('Showing dashboard');
       this.orchestrator.dashboard.show();
       this.orchestrator.isDashboardMode = true;
+    } else {
+      console.warn('Dashboard not available - cannot show workspace wizard');
     }
   }
 
