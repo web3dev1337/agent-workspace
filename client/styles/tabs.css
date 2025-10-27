@@ -185,6 +185,15 @@
 /* CRITICAL: When workspace-view has terminal-grid class, use grid display */
 .workspace-view.terminal-grid {
   display: grid;
+  /* Inherit terminal-grid properties for proper stretching */
+  flex: 1;
+  padding: var(--space-md);
+  overflow: auto;
+  gap: var(--space-md);
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(2, minmax(300px, 1fr));
+  max-height: calc(100vh - var(--header-height) - 2 * var(--space-md));
+  contain: layout;
 }
 
 .workspace-view.hidden {
