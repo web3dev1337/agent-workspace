@@ -311,7 +311,12 @@ class ClaudeOrchestrator {
       });
 
       this.socket.on('workspace-changed', async ({ workspace, sessions }) => {
-        console.log('Workspace changed:', workspace.name);
+        console.log('🔔 WORKSPACE-CHANGED EVENT:', {
+          workspaceName: workspace.name,
+          sessionCount: Object.keys(sessions).length,
+          sessionIds: Object.keys(sessions),
+          tabManagerExists: !!this.tabManager
+        });
 
         // If tab manager is enabled, create a new tab for this workspace
         if (this.tabManager) {
@@ -780,7 +785,11 @@ class ClaudeOrchestrator {
   }
   
   handleInitialSessions(sessionStates) {
-    console.log('Received initial sessions:', sessionStates);
+    console.log('📥 handleInitialSessions START:', {
+      sessionCount: Object.keys(sessionStates).length,
+      sessionIds: Object.keys(sessionStates),
+      currentTabId: this.currentTabId
+    });
     
     // Clear existing sessions and activity tracking
     this.sessions.clear();
@@ -832,7 +841,9 @@ class ClaudeOrchestrator {
     this.buildSidebar();
 
     // Show all visible terminals
+    console.log('📥 handleInitialSessions: About to call updateTerminalGrid()');
     this.updateTerminalGrid();
+    console.log('📥 handleInitialSessions COMPLETE');
 
     // Check for auto-start after a delay to let terminals initialize
     setTimeout(() => {
@@ -1559,7 +1570,7 @@ class ClaudeOrchestrator {
     if (this.tabManager && this.currentTabId) {
       const tab = this.tabManager.getActiveTab();
       if (tab && tab.containerElement) {
-        console.log(`Using tab container for tab ${tab.id}`);
+        console.log(`🎯 Using tab container for tab ${tab.id}, element ID: ${tab.containerElement.id}, current data-visible-count: ${tab.containerElement.getAttribute('data-visible-count')}`);
         return tab.containerElement;
       }
     }
@@ -1567,7 +1578,9 @@ class ClaudeOrchestrator {
     // Fallback to default terminal-grid
     const defaultGrid = document.getElementById('terminal-grid');
     if (!defaultGrid) {
-      console.error('Terminal grid not found!');
+      console.error('❌ Terminal grid not found!');
+    } else {
+      console.log(`🎯 Using default terminal-grid, current data-visible-count: ${defaultGrid.getAttribute('data-visible-count')}`);
     }
     return defaultGrid;
   }
@@ -1576,8 +1589,13 @@ class ClaudeOrchestrator {
     // Get ALL sessions (works for both traditional and mixed-repo workspaces)
     const allSessions = Array.from(this.sessions.keys());
 
-    // Debug: console.log('Rendering all terminals, will hide non-visible ones');
-    // Debug: console.log('📋 All sessions found:', allSessions);
+    console.log('🔄 updateTerminalGrid called:', {
+      allSessionsCount: allSessions.length,
+      visibleTerminalsCount: this.visibleTerminals.size,
+      visibleTerminals: Array.from(this.visibleTerminals),
+      currentTabId: this.currentTabId
+    });
+
     this.renderTerminalsWithVisibility(allSessions);
   }
   
@@ -1595,12 +1613,16 @@ class ClaudeOrchestrator {
       totalSessions: sessionIds.length,
       visibleTerminals: Array.from(this.visibleTerminals),
       activeViewCount: this.activeView.length,
-      gridExists: !!grid
+      gridExists: !!grid,
+      gridId: grid?.id,
+      gridClasses: grid?.className
     });
 
     // Set the data attribute for dynamic layout based on visible count
     const visibleCount = this.activeView.length;
+    console.log(`🔢 Setting data-visible-count="${visibleCount}" on grid element:`, grid?.id);
     grid.setAttribute('data-visible-count', visibleCount);
+    console.log(`✅ data-visible-count set! Current value:`, grid.getAttribute('data-visible-count'));
 
     // CRITICAL: Don't destroy terminals with innerHTML = ''
     // Instead, create missing terminals and hide/show existing ones
