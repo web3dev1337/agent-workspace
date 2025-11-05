@@ -246,6 +246,12 @@ class WorkspaceTabManager {
       this.orchestrator.buildSidebar();
     }
 
+    // CRITICAL: Update terminal grid to ensure data-visible-count is set
+    // This ensures proper grid layout (side-by-side) when switching workspaces
+    if (this.orchestrator.updateTerminalGrid) {
+      this.orchestrator.updateTerminalGrid();
+    }
+
     console.log(`Switched to tab ${tabId} (${targetTab.displayName})`);
   }
 
