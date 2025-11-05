@@ -1987,9 +1987,9 @@ header h1 {
   }
 }
 
-/* Responsive */
+/* Responsive - ONLY apply if data-visible-count is not set */
 @media (max-width: 1200px) {
-  .terminal-grid {
+  .terminal-grid:not([data-visible-count]) {
     grid-template-columns: repeat(2, 1fr);
   }
 }
@@ -1998,8 +1998,8 @@ header h1 {
   .sidebar {
     width: 200px;
   }
-  
-  .terminal-grid {
+
+  .terminal-grid:not([data-visible-count]) {
     grid-template-columns: 1fr;
   }
 }
