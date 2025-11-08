@@ -67,6 +67,17 @@ class WorkspaceTabManager {
   }
 
   /**
+   * Create default UI state for a new tab
+   */
+  createDefaultUIState() {
+    return {
+      visibleTerminals: null,
+      sessionActivity: null,
+      showActiveOnly: false
+    };
+  }
+
+  /**
    * Create a new tab for a workspace
    */
   createTab(workspace, sessions = []) {
@@ -91,6 +102,9 @@ class WorkspaceTabManager {
 
       // XTerm state
       terminals: new Map(), // sessionId -> { xtermInstance, lastScrollPos, etc }
+
+      // UI/filter state
+      uiState: this.createDefaultUIState(),
 
       // Observer for resize handling
       resizeObserver: null,
@@ -246,11 +260,8 @@ class WorkspaceTabManager {
       this.orchestrator.buildSidebar();
     }
 
-    // CRITICAL: Update terminal grid to ensure data-visible-count is set
-    // This ensures proper grid layout (side-by-side) when switching workspaces
-    if (this.orchestrator.updateTerminalGrid) {
-      this.orchestrator.updateTerminalGrid();
-    }
+    // Restore UI/filter state and update terminal grid
+    this.restoreTabUIState(targetTab);
 
     console.log(`Switched to tab ${tabId} (${targetTab.displayName})`);
   }
@@ -262,6 +273,9 @@ class WorkspaceTabManager {
     if (!tabState || !tabState.containerElement) return;
 
     console.log(`Hiding workspace ${tabState.displayName}`);
+
+    // Persist UI/filter state (visible terminals, filters, etc.) for later restoration
+    this.saveTabUIState(tabState);
 
     // CRITICAL: Save session data from orchestrator to this tab
     // This prevents session data from being lost when switching tabs
@@ -674,6 +688,57 @@ class WorkspaceTabManager {
     const prevIndex = currentIndex === 0 ? tabs.length - 1 : currentIndex - 1;
 
     this.switchTab(tabs[prevIndex].id);
+  }
+
+  /**
+   * Save UI/filter state for a tab (visible terminals, filters, etc.)
+   */
+  saveTabUIState(tabState) {
+    if (!tabState || !this.orchestrator) return;
+
+    const { visibleTerminals, sessionActivity, showActiveOnly } = this.orchestrator;
+    tabState.uiState = {
+      visibleTerminals: visibleTerminals ? new Set(visibleTerminals) : null,
+      sessionActivity: sessionActivity ? new Map(sessionActivity) : null,
+      showActiveOnly: !!showActiveOnly
+    };
+  }
+
+  /**
+   * Restore UI/filter state for a tab and redraw the terminal grid
+   */
+  restoreTabUIState(tabState) {
+    if (!tabState || !this.orchestrator) return;
+
+    const orchestrator = this.orchestrator;
+    const savedVisible = tabState.uiState?.visibleTerminals;
+    const fallbackVisible = new Set(tabState.sessions ? tabState.sessions.keys() : []);
+
+    let nextVisible;
+    if (savedVisible instanceof Set) {
+      nextVisible = new Set(savedVisible);
+    } else if (savedVisible && typeof savedVisible[Symbol.iterator] === 'function') {
+      nextVisible = new Set(savedVisible);
+    } else {
+      nextVisible = fallbackVisible;
+    }
+
+    if ((!nextVisible || nextVisible.size === 0) && fallbackVisible.size > 0) {
+      nextVisible = fallbackVisible;
+    }
+
+    orchestrator.visibleTerminals = nextVisible || new Set();
+    orchestrator.showActiveOnly = !!(tabState.uiState && tabState.uiState.showActiveOnly);
+
+    if (tabState.uiState?.sessionActivity) {
+      orchestrator.sessionActivity = new Map(tabState.uiState.sessionActivity);
+    } else {
+      orchestrator.sessionActivity = new Map();
+    }
+
+    if (typeof orchestrator.updateTerminalGrid === 'function') {
+      orchestrator.updateTerminalGrid();
+    }
   }
 }
 
