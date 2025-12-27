@@ -413,8 +413,9 @@ header h1 {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  height: 100%;  /* Fill grid cell completely */
-  width: 100%;
+  min-height: 300px;
+  max-height: 100%;  /* Added to respect grid cell height */
+  height: 100%;
   position: relative;
   isolation: isolate;
 }
