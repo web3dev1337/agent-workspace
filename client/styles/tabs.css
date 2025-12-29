@@ -174,12 +174,30 @@
   color: var(--accent-primary);
 }
 
-/* Workspace View Containers */
-.workspace-view {
+/* Workspace Views Container - wraps all workspace view elements */
+.workspace-views-container {
+  flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  min-height: 0;  /* Critical for nested flex containers */
+}
+
+/* Individual Workspace View Containers */
+.workspace-view {
   width: 100%;
   height: 100%;
+}
+
+/* Only use flex for non-grid workspace views */
+.workspace-view:not(.terminal-grid) {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure terminal-grid keeps its grid display even with workspace-view class */
+.workspace-view.terminal-grid {
+  display: grid;
 }
 
 .workspace-view.hidden {

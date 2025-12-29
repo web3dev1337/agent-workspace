@@ -281,16 +281,16 @@ header h1 {
 
 /* Terminal Grid */
 .terminal-grid {
-  flex: 1;
   padding: var(--space-md);
-  overflow: auto;  /* Changed from hidden to auto to allow scrolling if needed */
+  overflow: hidden;
   display: grid;
   gap: var(--space-md);
   /* Dynamic grid - automatically adjusts based on visible terminals */
   grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(2, minmax(300px, 1fr));  /* Added min height of 300px */
-  max-height: calc(100vh - var(--header-height) - 2 * var(--space-md));  /* Changed to max-height */
-  contain: layout;  /* Removed size containment to allow scrolling */
+  grid-template-rows: repeat(4, 1fr);  /* Default 4x4 grid */
+  /* Fill all available space - account for header (60px) + tab bar (48px) + padding */
+  height: calc(100vh - var(--header-height) - 48px - 2 * var(--space-md));
+  contain: layout;
 }
 
 /* Dynamic layouts for different terminal counts - Pair-aware (Claude + Server) */
@@ -413,9 +413,8 @@ header h1 {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 300px;
-  max-height: 100%;  /* Added to respect grid cell height */
-  height: 100%;
+  height: 100%;  /* Fill grid cell completely */
+  width: 100%;
   position: relative;
   isolation: isolate;
 }
