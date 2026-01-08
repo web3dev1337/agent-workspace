@@ -781,7 +781,7 @@ class ClaudeOrchestrator {
   
   handleInitialSessions(sessionStates) {
     console.log('Received initial sessions:', sessionStates);
-    
+
     // Clear existing sessions and activity tracking
     this.sessions.clear();
     this.sessionActivity.clear();
@@ -1559,7 +1559,6 @@ class ClaudeOrchestrator {
     if (this.tabManager && this.currentTabId) {
       const tab = this.tabManager.getActiveTab();
       if (tab && tab.containerElement) {
-        console.log(`Using tab container for tab ${tab.id}`);
         return tab.containerElement;
       }
     }
@@ -1575,9 +1574,6 @@ class ClaudeOrchestrator {
   updateTerminalGrid() {
     // Get ALL sessions (works for both traditional and mixed-repo workspaces)
     const allSessions = Array.from(this.sessions.keys());
-
-    // Debug: console.log('Rendering all terminals, will hide non-visible ones');
-    // Debug: console.log('📋 All sessions found:', allSessions);
     this.renderTerminalsWithVisibility(allSessions);
   }
   
@@ -1590,13 +1586,6 @@ class ClaudeOrchestrator {
       console.error('Terminal grid not found!');
       return;
     }
-
-    console.log('🎨 RENDER DEBUG:', {
-      totalSessions: sessionIds.length,
-      visibleTerminals: Array.from(this.visibleTerminals),
-      activeViewCount: this.activeView.length,
-      gridExists: !!grid
-    });
 
     // Set the data attribute for dynamic layout based on visible count
     const visibleCount = this.activeView.length;
