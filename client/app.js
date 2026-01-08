@@ -5209,30 +5209,47 @@ class ClaudeOrchestrator {
   }
 
   isWorktreeInUse(repoPath, worktreeId) {
-    // Only check if this worktree is in use by the CURRENTLY ACTIVE workspace
-    // Since only one workspace can be active at a time, and switching workspaces
-    // kills all sessions, worktrees from inactive workspaces are available
+    // Check if this worktree has ACTIVE SESSIONS, not just workspace config
+    // A worktree is "in use" only if there are actual terminal sessions for it
 
     if (!this.currentWorkspace) return false;
 
-    // Check if this worktree is currently being used in the active workspace
-    if (this.currentWorkspace.repository?.path === repoPath) {
-      const currentPairs = this.currentWorkspace.terminals?.pairs || 1;
-      const worktreeNum = parseInt(worktreeId.replace('work', ''));
-      if (worktreeNum <= currentPairs) return true;
+    // Extract repo name from path for session matching
+    const repoName = repoPath.split('/').pop();
+
+    // Check if any session is using this worktree
+    // Session IDs follow patterns like: "work1-claude", "work1-server",
+    // or for mixed-repo: "repoName-work1-claude", "repoName-work1-server"
+    for (const [sessionId, session] of this.sessions) {
+      const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+      const sessionRepoName = this.extractRepositoryName(sessionId);
+
+      // For single-repo workspaces (no repo name in session)
+      if (!sessionRepoName && this.currentWorkspace.repository?.path === repoPath) {
+        if (sessionWorktreeId === worktreeId) {
+          return true;
+        }
+      }
+
+      // For mixed-repo workspaces (repo name in session)
+      if (sessionRepoName && sessionRepoName.toLowerCase() === repoName.toLowerCase()) {
+        if (sessionWorktreeId === worktreeId) {
+          return true;
+        }
+      }
     }
 
-    // Check mixed-repo workspaces (if current workspace uses multiple repos)
-    if (this.currentWorkspace.repositories && Array.isArray(this.currentWorkspace.repositories)) {
-      return this.currentWorkspace.repositories.some(repo => {
-        if (repo.path === repoPath && repo.worktreeId === worktreeId) {
-          return true; // This specific worktree is actively used in current workspace
+    // Also check mixed-repo workspace config for explicitly assigned worktrees
+    if (this.currentWorkspace.terminals && Array.isArray(this.currentWorkspace.terminals)) {
+      return this.currentWorkspace.terminals.some(terminal => {
+        if (terminal.repository?.path === repoPath && terminal.worktree === worktreeId) {
+          return true; // This worktree is assigned in workspace config
         }
         return false;
       });
     }
 
-    // If not in current active workspace, it's available
+    // No active sessions for this worktree - it's available
     return false;
   }
 

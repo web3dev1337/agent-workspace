@@ -359,7 +359,41 @@ class WorkspaceWizard {
       // Generate workspace ID
       const workspaceId = this.data.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
-      // Build workspace config
+      // Build workspace config with mixed-repo format
+      const terminalPairs = this.data.terminalPairs || 8;
+      const terminals = [];
+
+      // Generate terminal array for mixed-repo format
+      for (let i = 1; i <= terminalPairs; i++) {
+        // Claude terminal
+        terminals.push({
+          id: `${workspaceId}-work${i}-claude`,
+          repository: {
+            name: workspaceId,
+            path: this.data.repositoryPath,
+            type: this.data.type,
+            masterBranch: 'master'
+          },
+          worktree: `work${i}`,
+          terminalType: 'claude',
+          visible: i === 1 // Only first pair visible by default
+        });
+
+        // Server terminal
+        terminals.push({
+          id: `${workspaceId}-work${i}-server`,
+          repository: {
+            name: workspaceId,
+            path: this.data.repositoryPath,
+            type: this.data.type,
+            masterBranch: 'master'
+          },
+          worktree: `work${i}`,
+          terminalType: 'server',
+          visible: i === 1 // Only first pair visible by default
+        });
+      }
+
       const workspaceConfig = {
         id: workspaceId,
         name: this.data.name,
@@ -378,11 +412,7 @@ class WorkspaceWizard {
           namingPattern: 'work{n}',
           autoCreate: true
         },
-        terminals: {
-          pairs: this.data.terminalPairs,
-          defaultVisible: [1],
-          layout: 'dynamic'
-        },
+        terminals: terminals,
         launchSettings: {
           type: this.data.type,
           defaults: {
@@ -403,6 +433,11 @@ class WorkspaceWizard {
           background: true,
           types: {},
           priority: 'normal'
+        },
+        workspaceType: 'mixed-repo',
+        layout: {
+          type: 'dynamic',
+          arrangement: 'auto'
         }
       };
 
