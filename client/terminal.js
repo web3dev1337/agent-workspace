@@ -200,7 +200,7 @@ class TerminalManager {
       tabStopWidth: 4,
       bellStyle: 'none',
       allowTransparency: false,
-      windowsMode: false,
+      convertEol: false,  // CRITICAL: Don't convert \r to \r\n - needed for spinner animations
       wordSeparator: ' ()[]{}\'"',
       rightClickSelectsWord: true,
       rendererType: 'canvas',
@@ -528,24 +528,15 @@ class TerminalManager {
     // Write data to terminal
     terminal.write(data);
 
+    // Check if this is a carriage return update (like a spinner)
+    // Don't auto-scroll for CR updates to avoid breaking the overwrite behavior
+    const hasCarriageReturn = data.includes('\r') && !data.includes('\n');
+
     // Only auto-scroll if user is not manually scrolling and autoScroll is enabled
-    if (this.orchestrator.settings.autoScroll && !isUserScrolling) {
+    // AND this isn't a carriage return update (spinner)
+    if (this.orchestrator.settings.autoScroll && !isUserScrolling && !hasCarriageReturn) {
       terminal.scrollToBottom();
     }
-
-    // Schedule a refresh to fix rendering corruption from rapid output
-    // Debounce to avoid excessive refreshes
-    if (!this.refreshTimers) this.refreshTimers = new Map();
-    if (this.refreshTimers.has(sessionId)) {
-      clearTimeout(this.refreshTimers.get(sessionId));
-    }
-    this.refreshTimers.set(sessionId, setTimeout(() => {
-      // Force a full refresh to fix any rendering artifacts
-      if (terminal && !terminal._core?.disposed) {
-        terminal.refresh(0, terminal.rows - 1);
-      }
-      this.refreshTimers.delete(sessionId);
-    }, 50)); // Refresh 50ms after last output
 
     // Check for special patterns (optional enhancement)
     this.checkOutputPatterns(sessionId, data);
