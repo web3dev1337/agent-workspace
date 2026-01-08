@@ -1,43 +1,105 @@
-# Claude Orchestrator - Quick Start
+# 🚀 Claude Orchestrator - Quick Start Guide
 
-## 🚀 Just Two Commands You Need to Know:
+## One-Click Launch Options
 
-### 1. For Your Normal Work:
+You now have **THREE** ways to launch the Claude Orchestrator with full automation:
+
+### Option 1: Windows Desktop Batch File (Simplest)
+**Location:** `Desktop/Launch-Orchestrator.bat`
+
+1. Double-click `Launch-Orchestrator.bat` on your desktop
+2. VS Code will open to the orchestrator workspace
+3. The server will auto-start (`npm start`)
+4. Chrome will open to `http://localhost:2080` after 10 seconds
+
+**Pros:** Simple, no permissions needed, works immediately
+
+### Option 2: PowerShell Script (Most Flexible)
+**Location:** `Desktop/Launch-Orchestrator.ps1`
+
+1. Right-click `Launch-Orchestrator.ps1` → "Run with PowerShell"
+2. Same auto-magic as Option 1
+
+**Pros:** More customizable, better error messages
+
+### Option 3: Windows Shortcut (Cleanest)
+**To create the shortcut:**
+
+1. Double-click `Desktop/create-orchestrator-shortcut.vbs`
+2. A new shortcut `🚀 Claude Orchestrator` will appear on your desktop
+3. Double-click the shortcut to launch
+
+**Pros:** Professional-looking icon, can pin to taskbar/Start menu
+
+## What Happens When You Launch?
+
+1. **VS Code Opens** to the orchestrator workspace in WSL
+2. **Terminal Opens** automatically in the correct folder
+3. **`npm start` runs** automatically (starts all 4 services)
+4. **Chrome Opens** to `http://localhost:2080` after a few seconds
+5. **You're ready to work!** Everything is running
+
+## Manual Launch (If Needed)
+
+If you want to launch without auto-start:
+
 ```bash
-cd ~/claude-orchestrator
-npm run prod
+# From WSL terminal
+cd ~/GitHub/tools/automation/claude-orchestrator/master
+code orchestrator.code-workspace
 ```
-**This runs your production Orchestrator on ports 3000/2080**
 
-### 2. For Claude to Modify Orchestrator:
-```bash
-cd ~/claude-orchestrator-dev
-npm run dev
-# OR just: npm run dev:all (since .env already has dev ports)
+Then manually run `npm start` in the integrated terminal if auto-start didn't work.
+
+## Pinning to Taskbar/Start Menu
+
+**For the Batch File:**
+1. Right-click `Launch-Orchestrator.bat` → "Pin to taskbar"
+
+**For the Shortcut:**
+1. Create shortcut using Option 3
+2. Right-click `🚀 Claude Orchestrator` → "Pin to Start" or "Pin to taskbar"
+
+## Troubleshooting
+
+### Auto-start doesn't work
+- Make sure you're opening the `orchestrator.code-workspace` file
+- Check that VS Code trusts the workspace (you'll see a prompt on first open)
+- Manually run Task: "Auto-Start Orchestrator" from Command Palette (Ctrl+Shift+P)
+
+### Browser doesn't open
+- Chrome might not be in your PATH
+- The script waits 8-10 seconds - give it time
+- Manually navigate to `http://localhost:2080` in any browser
+
+### Permission errors with PowerShell
+```powershell
+# Run this in PowerShell as Administrator (one time only):
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
-**This runs a dev copy on ports 4000/2081 that Claude can modify without affecting your work**
+
+## Files Created
+
+**On Windows Desktop:**
+- `Launch-Orchestrator.bat` - Simple batch launcher
+- `Launch-Orchestrator.ps1` - PowerShell launcher
+- `create-orchestrator-shortcut.vbs` - Shortcut creator
+- `🚀 Claude Orchestrator.lnk` - Desktop shortcut (after running VBS)
+
+**In Orchestrator Folder:**
+- `orchestrator.code-workspace` - VS Code workspace config
+- `.vscode/tasks.json` - Auto-run tasks (updated)
+
+## What's Running?
+
+When `npm start` executes, it launches:
+1. **Express Server** (backend) - Port 3000
+2. **Client Dev Server** (web UI) - Port 2080
+3. **Tauri App** (native desktop app)
+4. **Diff Viewer** (PR review tool) - Port 7655
+
+You can access the web UI at `http://localhost:2080` or use the native Tauri app.
 
 ---
 
-## That's it!
-
-- Both commands do the same thing (run the Orchestrator)
-- They just use different ports so they don't conflict
-- You can run both at the same time if needed
-
-## First Time Setup for Dev (one-time only):
-```bash
-cd ~
-git clone https://github.com/web3dev1337/claude-orchestrator.git claude-orchestrator-dev
-cd claude-orchestrator-dev
-npm install
-npm rebuild node-pty
-```
-
-Then create `.env` file with:
-```
-PORT=4000
-CLIENT_PORT=2081
-WORKTREE_BASE_PATH=/home/ab
-WORKTREE_COUNT=8
-```
+**Need help?** Check the main README.md or CLAUDE.md for more details.
