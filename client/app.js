@@ -228,7 +228,56 @@ class ClaudeOrchestrator {
           }, 100);
         }
       });
-      
+
+      // Handle new worktree sessions being added without destroying existing ones
+      this.socket.on('worktree-sessions-added', ({ worktreeId, sessions }) => {
+        console.log('New worktree sessions added:', worktreeId, sessions);
+
+        // Add the new sessions to our sessions map (don't clear existing!)
+        for (const [sessionId, sessionState] of Object.entries(sessions)) {
+          this.sessions.set(sessionId, {
+            sessionId,
+            ...sessionState,
+            hasUserInput: false
+          });
+
+          // If there's an existing PR, add it to GitHub links
+          if (sessionState.existingPR) {
+            const links = this.githubLinks.get(sessionId) || {};
+            links.pr = sessionState.existingPR;
+            this.githubLinks.set(sessionId, links);
+          }
+
+          // Mark new sessions as active so they show in the grid
+          this.sessionActivity.set(sessionId, 'active');
+
+          // Add to visible terminals set
+          this.visibleTerminals.add(sessionId);
+
+          // Register with current tab if tab manager is enabled
+          if (this.tabManager && this.currentTabId) {
+            const tab = this.tabManager.getTab(this.currentTabId);
+            if (tab) {
+              tab.sessions.set(sessionId, this.sessions.get(sessionId));
+            }
+          }
+        }
+
+        // Rebuild sidebar to show new worktree
+        this.buildSidebar();
+
+        // Update terminal grid to display new terminals
+        this.updateTerminalGrid();
+
+        // Show success message
+        this.showTemporaryMessage(`Worktree ${worktreeId} terminals ready!`, 'success');
+
+        // Auto-start Claude after a delay to let terminals initialize
+        setTimeout(() => {
+          this.checkAndApplyAutoStart();
+        }, 2000);
+      });
+
       this.socket.on('claude-started', ({ sessionId }) => {
         // Hide the startup UI when Claude starts
         const startupUI = document.getElementById(`startup-ui-${sessionId}`);
@@ -5289,15 +5338,22 @@ class ClaudeOrchestrator {
       });
 
       if (response.ok) {
+        const result = await response.json();
         this.showTemporaryMessage(`Worktree work${worktreeNumber} created successfully!`, 'success');
 
         // Update workspace config to include new terminal pair
         this.currentWorkspace.terminals.pairs = worktreeNumber;
 
-        // Refresh the workspace to show new worktree
+        // Add sessions for the new worktree WITHOUT destroying existing sessions
+        // Server will emit 'worktree-sessions-added' which is handled by our socket listener
         setTimeout(() => {
-          this.socket.emit('switch-workspace', { workspaceId: this.currentWorkspace.id });
-        }, 1000);
+          this.socket.emit('add-worktree-sessions', {
+            worktreeId: result.worktreeId,
+            worktreePath: result.path,
+            repositoryName: null,  // Traditional workspace, no repo name needed
+            repositoryType: this.currentWorkspace.repository?.type
+          });
+        }, 500);
       } else {
         const error = await response.text();
         console.error('Failed to create worktree:', error);

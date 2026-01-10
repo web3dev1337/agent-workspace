@@ -928,6 +928,105 @@ class SessionManager extends EventEmitter {
     }
     return states;
   }
+
+  /**
+   * Create sessions for a single worktree without destroying existing sessions.
+   * Used when adding a new worktree to an existing workspace.
+   * @param {Object} worktreeInfo - Info about the worktree to add
+   * @param {string} worktreeInfo.worktreeId - e.g., 'work5'
+   * @param {string} worktreeInfo.worktreePath - Full path to worktree
+   * @param {string} [worktreeInfo.repositoryName] - For mixed-repo workspaces
+   * @param {string} [worktreeInfo.repositoryType] - For dynamic launch options
+   * @returns {Object} Map of sessionId -> sessionState for the new sessions
+   */
+  async createSessionsForWorktree(worktreeInfo) {
+    const { worktreeId, worktreePath, repositoryName, repositoryType } = worktreeInfo;
+    const newSessions = {};
+
+    logger.info('Creating sessions for new worktree', { worktreeId, worktreePath, repositoryName });
+
+    // Determine session IDs based on workspace type
+    let claudeSessionId, serverSessionId;
+    if (repositoryName) {
+      // Mixed-repo workspace
+      claudeSessionId = `${repositoryName}-${worktreeId}-claude`;
+      serverSessionId = `${repositoryName}-${worktreeId}-server`;
+    } else {
+      // Traditional workspace
+      claudeSessionId = `${worktreeId}-claude`;
+      serverSessionId = `${worktreeId}-server`;
+    }
+
+    // Create Claude session
+    try {
+      this.createSession(claudeSessionId, {
+        command: 'bash',
+        args: ['-c', `cd "${worktreePath}" && exec bash`],
+        cwd: worktreePath,
+        type: 'claude',
+        worktreeId: worktreeId,
+        repositoryName: repositoryName,
+        repositoryType: repositoryType
+      });
+
+      const claudeSession = this.sessions.get(claudeSessionId);
+      if (claudeSession) {
+        newSessions[claudeSessionId] = {
+          status: claudeSession.status,
+          branch: claudeSession.branch,
+          type: claudeSession.type,
+          worktreeId: claudeSession.worktreeId,
+          repositoryName: claudeSession.repositoryName,
+          repositoryType: claudeSession.repositoryType
+        };
+      }
+    } catch (error) {
+      logger.error('Failed to create Claude session for worktree', { worktreeId, error: error.message });
+    }
+
+    // Create Server session
+    try {
+      const serverWelcome = repositoryName
+        ? `=== Server Terminal for ${repositoryName}/${worktreeId} ===`
+        : `=== Server Terminal for ${worktreeId} ===`;
+
+      this.createSession(serverSessionId, {
+        command: 'bash',
+        args: ['-c', `cd "${worktreePath}" && echo "${serverWelcome}" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && exec bash`],
+        cwd: worktreePath,
+        type: 'server',
+        worktreeId: worktreeId,
+        repositoryName: repositoryName,
+        repositoryType: repositoryType
+      });
+
+      const serverSession = this.sessions.get(serverSessionId);
+      if (serverSession) {
+        newSessions[serverSessionId] = {
+          status: serverSession.status,
+          branch: serverSession.branch,
+          type: serverSession.type,
+          worktreeId: serverSession.worktreeId,
+          repositoryName: serverSession.repositoryName,
+          repositoryType: serverSession.repositoryType
+        };
+      }
+    } catch (error) {
+      logger.error('Failed to create server session for worktree', { worktreeId, error: error.message });
+    }
+
+    // Update git branch info for the new sessions
+    if (this.gitHelper) {
+      try {
+        await this.updateGitBranch(worktreeId, worktreePath, repositoryName);
+      } catch (error) {
+        logger.error('Failed to update git branch for new worktree', { worktreeId, error: error.message });
+      }
+    }
+
+    logger.info('Created sessions for worktree', { worktreeId, sessionCount: Object.keys(newSessions).length });
+    return newSessions;
+  }
   
   getIdleClaudeSessions() {
     const idle = [];
