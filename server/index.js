@@ -451,6 +451,35 @@ io.on('connection', (socket) => {
     socket.emit('workspaces-list', workspaces);
   });
 
+  // Add sessions for a new worktree without destroying existing sessions
+  socket.on('add-worktree-sessions', async ({ worktreeId, worktreePath, repositoryName, repositoryType }) => {
+    try {
+      logger.info('Adding sessions for new worktree', { worktreeId, worktreePath, repositoryName });
+
+      // Create sessions for just this worktree
+      const newSessions = await sessionManager.createSessionsForWorktree({
+        worktreeId,
+        worktreePath,
+        repositoryName,
+        repositoryType
+      });
+
+      // Emit the new sessions to the requesting client only
+      socket.emit('worktree-sessions-added', {
+        worktreeId,
+        sessions: newSessions
+      });
+
+      logger.info('Worktree sessions added successfully', {
+        worktreeId,
+        sessionCount: Object.keys(newSessions).length
+      });
+    } catch (error) {
+      logger.error('Failed to add worktree sessions', { worktreeId, error: error.message });
+      socket.emit('error', { message: 'Failed to add worktree sessions', error: error.message });
+    }
+  });
+
   // Handle tab closure - cleanup all sessions for the tab
   socket.on('close-tab', ({ tabId }) => {
     try {
