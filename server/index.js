@@ -432,7 +432,9 @@ io.on('connection', (socket) => {
         sessionCount: Object.keys(newSessions).length
       });
 
-      io.emit('workspace-changed', {
+      // IMPORTANT: Only emit to the requesting client, not all clients
+      // Using io.emit would cause all connected clients to create duplicate tabs
+      socket.emit('workspace-changed', {
         workspace: newWorkspace,
         sessions: newSessions
       });
