@@ -359,31 +359,53 @@ class WorkspaceTabManager {
     // Use double requestAnimationFrame to ensure DOM is fully painted
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        // Get terminal manager for robust fitting with retry logic
+        const terminalManager = this.orchestrator?.terminalManager;
+
         // Refit all terminals
         tabState.terminals.forEach((termData, sessionId) => {
           if (!termData.xtermInstance) return;
 
           const xterm = termData.xtermInstance;
-          const terminalElement = document.getElementById(`terminal-${sessionId}`);
 
-          // Ensure container is rendered (has dimensions)
-          if (terminalElement && terminalElement.offsetWidth > 0) {
+          // Use terminalManager's fitTerminal for robust fitting with retry logic
+          if (terminalManager && terminalManager.fitTerminal) {
+            terminalManager.fitTerminal(sessionId);
+          } else {
+            // Fallback: direct fit
+            const terminalElement = document.getElementById(`terminal-${sessionId}`);
+            if (terminalElement && terminalElement.offsetWidth > 0) {
+              try {
+                const fitAddon = termData.fitAddon || xterm._fitAddon;
+                if (fitAddon && typeof fitAddon.fit === 'function') {
+                  fitAddon.fit();
+                }
+              } catch (err) {
+                console.error(`Failed to fit terminal ${sessionId}:`, err);
+              }
+            }
+          }
+
+          // Restore scroll position
+          if (termData.lastScrollPos !== undefined) {
             try {
-              // Fit terminal to container
-              const fitAddon = termData.fitAddon || xterm._fitAddon;
-              if (fitAddon && typeof fitAddon.fit === 'function') {
-                fitAddon.fit();
-              }
-
-              // Restore scroll position
-              if (termData.lastScrollPos !== undefined) {
-                xterm.scrollToLine(termData.lastScrollPos);
-              }
+              xterm.scrollToLine(termData.lastScrollPos);
             } catch (err) {
-              console.error(`Failed to fit terminal ${sessionId}:`, err);
+              // Ignore scroll errors
             }
           }
         });
+
+        // Schedule a secondary fit pass to catch any missed terminals
+        setTimeout(() => {
+          if (tabState.isActive && terminalManager) {
+            tabState.terminals.forEach((termData, sessionId) => {
+              if (termData.xtermInstance) {
+                terminalManager.fitTerminal(sessionId);
+              }
+            });
+          }
+        }, 300);
 
         // Set up resize observer
         tabState.resizeObserver = new ResizeObserver(() => {
