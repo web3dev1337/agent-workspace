@@ -491,20 +491,10 @@ class ClaudeOrchestrator {
           }
         }, 2000); // Wait 2 seconds for server to fully start
       });
-      
-      this.socket.on('branch-update', ({ sessionId, branch, remoteUrl, defaultBranch }) => {
-        const session = this.sessions.get(sessionId);
-        if (session) {
-          session.branch = branch;
-          session.remoteUrl = remoteUrl;
-          session.defaultBranch = defaultBranch;
-          console.log(`Branch updated for ${sessionId}: ${branch}`);
-          
-          // Update sidebar display
-          this.buildSidebar();
-        }
-      });
-      
+
+      // NOTE: branch-update handler is registered earlier (line ~187) via updateSessionBranch()
+      // Don't register duplicate handler here - it causes double processing
+
       // Set timeout for connection
       const timeoutId = setTimeout(() => {
         if (!this.socket.connected) {
