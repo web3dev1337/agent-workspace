@@ -2435,9 +2435,8 @@ class ClaudeOrchestrator {
     if (data.length > 0 && !data.match(/^[\x1b\x7f\r\n]/) && data.trim().length > 0) {
       const currentActivity = this.sessionActivity.get(sessionId);
       if (currentActivity !== 'active') {
-        console.log(`Marking ${sessionId} as active due to user input`);
         this.sessionActivity.set(sessionId, 'active');
-        this.buildSidebar(); // Refresh to update grey/active state
+        this.buildSidebar();
       }
     }
     
@@ -2636,8 +2635,6 @@ class ClaudeOrchestrator {
         tag: `claude-ready-${sessionId}` // Prevent duplicates
       });
     }
-    
-    console.log(`🎉 Claude ${worktreeId} is ready for input!`);
   }
 
   showNotification(title, message) {
