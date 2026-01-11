@@ -51,9 +51,14 @@ const io = new Server(httpServer, {
   }
 });
 
-// Log all requests for debugging
+// Log requests only in debug mode (reduces console spam)
 app.use((req, res, next) => {
-  logger.info(`Request: ${req.method} ${req.path}`);
+  // Skip noisy static file requests
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+    logger.debug(`Request: ${req.method} ${req.path}`);
+  } else if (req.path.startsWith('/api')) {
+    logger.info(`API: ${req.method} ${req.path}`);
+  }
   next();
 });
 
