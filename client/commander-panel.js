@@ -200,6 +200,60 @@ class CommanderPanel {
 
     // Click backdrop to close
     document.getElementById('commander-backdrop')?.addEventListener('click', () => this.hide());
+
+    // Setup dragging
+    this.setupDragging();
+  }
+
+  /**
+   * Setup drag functionality for the panel header
+   */
+  setupDragging() {
+    const panel = document.getElementById('commander-panel');
+    const header = panel?.querySelector('.commander-header');
+    if (!panel || !header) return;
+
+    let isDragging = false;
+    let startX, startY, startLeft, startTop;
+
+    header.addEventListener('mousedown', (e) => {
+      // Don't drag if clicking on buttons
+      if (e.target.closest('button')) return;
+
+      isDragging = true;
+      panel.classList.add('dragging');
+
+      // Get current position
+      const rect = panel.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      startLeft = rect.left;
+      startTop = rect.top;
+
+      // Reset transform so we can use left/top positioning
+      panel.style.transform = 'none';
+      panel.style.left = `${startLeft}px`;
+      panel.style.top = `${startTop}px`;
+
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+
+      const deltaX = e.clientX - startX;
+      const deltaY = e.clientY - startY;
+
+      panel.style.left = `${startLeft + deltaX}px`;
+      panel.style.top = `${startTop + deltaY}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        panel.classList.remove('dragging');
+      }
+    });
   }
 
   /**
