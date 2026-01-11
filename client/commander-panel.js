@@ -340,18 +340,18 @@ class CommanderPanel {
       backdrop?.classList.remove('hidden');
       this.isVisible = true;
 
-      // Auto-start Commander if not running
-      if (!this.isRunning) {
+      // Check Commander status from server
+      const status = await this.checkStatus();
+
+      if (!status.running) {
+        // Commander terminal not running - start everything
         await this.startCommander();
-        // Give it a moment to be ready, then start Claude
         setTimeout(() => {
           this.startClaude('fresh');
         }, 1500);
-      } else {
-        // Already running, just init terminal if needed
-        if (!this.terminal) {
-          this.initTerminal();
-        }
+      } else if (!this.terminal) {
+        // Terminal not initialized locally - set it up
+        this.initTerminal();
       }
 
       // Fit and focus terminal
