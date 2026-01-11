@@ -4634,6 +4634,8 @@ header h1 {
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   cursor: grab;
   user-select: none;
+  flex-shrink: 0;
+  z-index: 10;
 }
 
 .commander-titlebar:active {
@@ -4876,6 +4878,8 @@ header h1 {
   padding: var(--space-sm) var(--space-md);
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  z-index: 10;
 }
 
 .commander-btn {
@@ -4911,8 +4915,10 @@ header h1 {
 /* Commander Terminal Container */
 .commander-terminal {
   flex: 1;
+  min-height: 0;
   background: #0d1117;
   overflow: hidden;
+  position: relative;
 }
 
 .commander-placeholder {

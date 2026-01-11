@@ -478,6 +478,24 @@ class CommanderPanel {
   }
 
   /**
+   * Check Commander status from server
+   */
+  async checkStatus() {
+    try {
+      const response = await fetch(`${this.serverUrl}/api/commander/status`);
+      if (response.ok) {
+        const status = await response.json();
+        this.isRunning = status.running;
+        this.updateStatusBadge();
+        return status;
+      }
+    } catch (error) {
+      console.error('Failed to check status:', error);
+    }
+    return { running: false, ready: false };
+  }
+
+  /**
    * Clear the terminal
    */
   clearTerminal() {
