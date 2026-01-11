@@ -4,6 +4,9 @@
 
 const { test, expect } = require('@playwright/test');
 
+// Use dev instance ports (server: 4000, client: 2081)
+const SERVER_URL = process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:4000';
+
 test.describe('Orchestrator UI', () => {
   test('should load the dashboard', async ({ page }) => {
     await page.goto('/');
@@ -83,7 +86,7 @@ test.describe('Terminal Interactions', () => {
 
 test.describe('API Health', () => {
   test('health endpoint should return ok', async ({ request }) => {
-    const response = await request.get('http://localhost:3000/health');
+    const response = await request.get(`${SERVER_URL}/health`);
 
     expect(response.ok()).toBeTruthy();
 
@@ -92,11 +95,217 @@ test.describe('API Health', () => {
   });
 
   test('workspaces endpoint should return array', async ({ request }) => {
-    const response = await request.get('http://localhost:3000/api/workspaces');
+    const response = await request.get(`${SERVER_URL}/api/workspaces`);
 
     expect(response.ok()).toBeTruthy();
 
     const body = await response.json();
     expect(Array.isArray(body)).toBe(true);
+  });
+});
+
+test.describe('Quick Links API', () => {
+  test('should get quick links data', async ({ request }) => {
+    const response = await request.get(`${SERVER_URL}/api/quick-links`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const body = await response.json();
+    expect(body).toHaveProperty('favorites');
+    expect(body).toHaveProperty('recentSessions');
+    expect(body).toHaveProperty('customLinks');
+    expect(Array.isArray(body.favorites)).toBe(true);
+  });
+
+  test('should add a favorite link', async ({ request }) => {
+    const testUrl = `https://test-${Date.now()}.com`;
+
+    const response = await request.post(`${SERVER_URL}/api/quick-links/favorites`, {
+      data: {
+        name: 'Test Link',
+        url: testUrl,
+        icon: 'link'
+      }
+    });
+
+    expect(response.ok()).toBeTruthy();
+
+    const favorites = await response.json();
+    expect(favorites.some(f => f.url === testUrl)).toBe(true);
+
+    // Cleanup - remove the test favorite
+    await request.delete(`${SERVER_URL}/api/quick-links/favorites`, {
+      data: { url: testUrl }
+    });
+  });
+
+  test('should track session access', async ({ request }) => {
+    const response = await request.post(`${SERVER_URL}/api/quick-links/track-session`, {
+      data: {
+        workspaceId: 'test-ws',
+        worktreeId: 'test-work1',
+        sessionId: 'test-session',
+        branch: 'test-branch'
+      }
+    });
+
+    expect(response.ok()).toBeTruthy();
+  });
+
+  test('should get recent sessions', async ({ request }) => {
+    const response = await request.get(`${SERVER_URL}/api/quick-links/recent-sessions`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const sessions = await response.json();
+    expect(Array.isArray(sessions)).toBe(true);
+  });
+});
+
+test.describe('Port Registry API', () => {
+  test('should get all port assignments', async ({ request }) => {
+    const response = await request.get(`${SERVER_URL}/api/ports`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const body = await response.json();
+    expect(body).toBeDefined();
+  });
+
+  test('should get port for specific worktree', async ({ request }) => {
+    const repoPath = encodeURIComponent('/test/repo');
+    const worktreeId = 'work1';
+
+    const response = await request.get(`${SERVER_URL}/api/ports/${repoPath}/${worktreeId}`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const body = await response.json();
+    expect(body).toHaveProperty('port');
+    expect(typeof body.port).toBe('number');
+  });
+});
+
+test.describe('Greenfield API', () => {
+  test('should get available templates', async ({ request }) => {
+    const response = await request.get(`${SERVER_URL}/api/greenfield/templates`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const templates = await response.json();
+    expect(Array.isArray(templates)).toBe(true);
+    expect(templates.length).toBeGreaterThan(0);
+
+    // Each template should have required fields
+    templates.forEach(template => {
+      expect(template).toHaveProperty('id');
+      expect(template).toHaveProperty('name');
+      expect(template).toHaveProperty('description');
+    });
+  });
+
+  test('should validate project creation config', async ({ request }) => {
+    // This should fail validation due to invalid path
+    const response = await request.post(`${SERVER_URL}/api/greenfield/create`, {
+      data: {
+        name: '',
+        templateId: 'empty',
+        basePath: '/invalid/path'
+      }
+    });
+
+    // Should return validation error
+    expect(response.status()).toBe(400);
+  });
+});
+
+test.describe('Continuity API', () => {
+  test('should return ledger or 404', async ({ request }) => {
+    const worktreePath = encodeURIComponent('/test/worktree');
+    const response = await request.get(`${SERVER_URL}/api/continuity/ledger?worktreePath=${worktreePath}`);
+
+    // Either returns ledger data or 404 if not found
+    expect([200, 404]).toContain(response.status());
+  });
+
+  test('should get workspace ledgers', async ({ request }) => {
+    const response = await request.get(`${SERVER_URL}/api/continuity/workspace`);
+
+    // Should return array (possibly empty) or error if no workspace
+    const status = response.status();
+    expect([200, 400, 404]).toContain(status);
+  });
+});
+
+test.describe('Cascaded Config API', () => {
+  test('should get cascaded config for type', async ({ request }) => {
+    const response = await request.get(`${SERVER_URL}/api/cascaded-config/hytopia-game`);
+
+    // Should return config or empty object
+    expect(response.ok()).toBeTruthy();
+
+    const config = await response.json();
+    expect(typeof config).toBe('object');
+  });
+
+  test('should merge config with worktree overrides', async ({ request }) => {
+    const worktreePath = encodeURIComponent('/some/worktree/path');
+    const response = await request.get(`${SERVER_URL}/api/cascaded-config/hytopia-game?worktreePath=${worktreePath}`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const config = await response.json();
+    expect(typeof config).toBe('object');
+  });
+});
+
+test.describe('Settings Panel', () => {
+  test('should open settings panel', async ({ page }) => {
+    await page.goto('/');
+
+    // Wait for page to load
+    await page.waitForTimeout(2000);
+
+    // Click settings button
+    const settingsButton = page.locator('#settings-toggle, [title="Settings"]');
+    if (await settingsButton.count() > 0) {
+      await settingsButton.click();
+
+      // Settings panel should be visible
+      const settingsPanel = page.locator('#settings-panel, .settings-panel');
+      await expect(settingsPanel).toBeVisible({ timeout: 5000 });
+    }
+  });
+
+  test('should have notification toggle', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(2000);
+
+    // Open settings
+    const settingsButton = page.locator('#settings-toggle, [title="Settings"]');
+    if (await settingsButton.count() > 0) {
+      await settingsButton.click();
+
+      const notificationToggle = page.locator('#enable-notifications');
+      if (await notificationToggle.count() > 0) {
+        await expect(notificationToggle).toBeVisible();
+      }
+    }
+  });
+});
+
+test.describe('Socket.IO Connection', () => {
+  test('should establish socket connection', async ({ page }) => {
+    await page.goto('/');
+
+    // Wait for connection
+    await page.waitForTimeout(3000);
+
+    // Check connection status indicator
+    const statusDot = page.locator('.status-dot');
+    if (await statusDot.count() > 0) {
+      // Should be connected (not disconnected)
+      await expect(statusDot).not.toHaveClass(/disconnected/);
+    }
   });
 });
