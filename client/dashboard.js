@@ -6,10 +6,22 @@ class Dashboard {
     this.workspaces = [];
     this.config = {};
     this.isVisible = false;
+    this.quickLinks = null;
   }
 
   async show() {
     console.log('Showing dashboard...');
+
+    // Initialize Quick Links if available
+    if (window.QuickLinks && !this.quickLinks) {
+      this.quickLinks = new QuickLinks(this.orchestrator);
+      window.quickLinks = this.quickLinks; // Make available globally for onclick handlers
+    }
+
+    // Fetch quick links data in parallel with workspaces
+    if (this.quickLinks) {
+      this.quickLinks.fetchData().catch(() => {});
+    }
 
     // Request workspaces from server
     this.orchestrator.socket.emit('list-workspaces');
@@ -160,6 +172,12 @@ class Dashboard {
   }
 
   generateQuickLinksHTML() {
+    // Use QuickLinks component if available
+    if (this.quickLinks) {
+      return this.quickLinks.generateDashboardHTML();
+    }
+
+    // Fallback to legacy globalShortcuts
     const globalShortcuts = this.orchestrator.orchestratorConfig?.globalShortcuts || [];
 
     return globalShortcuts.map(shortcut => `
