@@ -5054,3 +5054,51 @@ header h1 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Voice Backend Menu */
+.voice-backend-menu {
+  font-size: 13px;
+}
+
+.voice-backend-menu .menu-title {
+  padding: 6px 12px;
+  color: #a0aec0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-color, #444);
+  margin-bottom: 4px;
+}
+
+.voice-backend-menu .menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e2e8f0;
+}
+
+.voice-backend-menu .menu-item:hover:not(.disabled) {
+  background: rgba(99, 179, 237, 0.15);
+}
+
+.voice-backend-menu .menu-item.active {
+  color: #63b3ed;
+}
+
+.voice-backend-menu .menu-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-backend-menu .menu-item .check {
+  width: 16px;
+  color: #48bb78;
+}
+
+.voice-backend-menu .menu-item .unavailable {
+  font-size: 10px;
+  color: #f56565;
+  margin-left: auto;
+}

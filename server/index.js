@@ -48,6 +48,22 @@ const { QuickLinksService } = require('./quickLinksService');
 const { CommanderService } = require('./commanderService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
+const whisperService = require('./whisperService');
+const multer = require('multer');
+
+// Configure multer for audio file uploads
+const audioUpload = multer({
+  dest: '/tmp/orchestrator-audio/',
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = ['audio/webm', 'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/ogg', 'audio/x-wav'];
+    if (allowed.includes(file.mimetype) || file.originalname.match(/\.(wav|webm|mp3|ogg)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid audio format'));
+    }
+  }
+});
 
 const app = express();
 const httpServer = createServer(app);
@@ -1714,6 +1730,95 @@ app.post('/api/voice/context', (req, res) => {
   } catch (error) {
     logger.error('Failed to update voice context', { error: error.message });
     res.status(500).json({ error: 'Failed to update voice context' });
+  }
+});
+
+// ============ WHISPER TRANSCRIPTION ENDPOINTS ============
+
+// Get Whisper status
+app.get('/api/whisper/status', (req, res) => {
+  try {
+    const status = whisperService.getStatus();
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to get Whisper status', { error: error.message });
+    res.status(500).json({ error: 'Failed to get Whisper status' });
+  }
+});
+
+// Transcribe audio file with Whisper
+app.post('/api/whisper/transcribe', audioUpload.single('audio'), async (req, res) => {
+  const fs = require('fs');
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    if (!whisperService.isAvailable()) {
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+      return res.status(503).json({
+        error: 'Whisper not available',
+        hint: 'Install whisper.cpp or openai-whisper'
+      });
+    }
+
+    const result = await whisperService.transcribe(req.file.path);
+
+    // Clean up uploaded file
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+      text: result.text,
+      duration: result.duration,
+      backend: whisperService.backend
+    });
+  } catch (error) {
+    // Clean up uploaded file on error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    logger.error('Whisper transcription failed', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Full voice command with Whisper (transcribe + parse + execute)
+app.post('/api/whisper/command', audioUpload.single('audio'), async (req, res) => {
+  const fs = require('fs');
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    if (!whisperService.isAvailable()) {
+      fs.unlinkSync(req.file.path);
+      return res.status(503).json({
+        error: 'Whisper not available',
+        hint: 'Install whisper.cpp or openai-whisper'
+      });
+    }
+
+    // Step 1: Transcribe
+    const transcription = await whisperService.transcribe(req.file.path);
+    fs.unlinkSync(req.file.path);
+
+    // Step 2: Parse and execute
+    const result = await voiceCommandService.processVoiceCommand(transcription.text);
+
+    res.json({
+      ...result,
+      transcript: transcription.text,
+      transcriptionTime: transcription.duration,
+      transcriptionBackend: whisperService.backend
+    });
+  } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    logger.error('Whisper command failed', { error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
