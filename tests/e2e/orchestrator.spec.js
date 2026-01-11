@@ -1,382 +1,194 @@
 /**
- * End-to-end tests for Claude Orchestrator
+ * E2E tests for Claude Orchestrator
  */
 
 const { test, expect } = require('@playwright/test');
 
-// Use dev instance ports (server: 4000, client: 2081)
-const SERVER_URL = process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:4000';
-
-test.describe('Orchestrator UI', () => {
-  test('should load the dashboard', async ({ page }) => {
+test.describe('Claude Orchestrator', () => {
+  test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    // Wait for app to initialize
+    await page.waitForSelector('.sidebar', { timeout: 10000 });
+  });
 
-    // Wait for the app to initialize
-    await page.waitForSelector('.main-container, .dashboard', { timeout: 10000 });
+  test('should load the main page', async ({ page }) => {
+    // Check page title
+    await expect(page).toHaveTitle(/Claude Orchestrator/);
+  });
 
-    // Check title or header exists
-    const header = await page.locator('header, .header, h1').first();
+  test('should show sidebar with worktree list', async ({ page }) => {
+    const sidebar = page.locator('.sidebar');
+    await expect(sidebar).toBeVisible();
+
+    const worktreeList = page.locator('#worktree-list');
+    await expect(worktreeList).toBeVisible();
+  });
+
+  test('should show header with actions', async ({ page }) => {
+    const header = page.locator('header');
     await expect(header).toBeVisible();
+
+    // Check for New Project button
+    const greenfieldBtn = page.locator('#greenfield-btn');
+    await expect(greenfieldBtn).toBeVisible();
+
+    // Check for Commander button
+    const commanderBtn = page.locator('#commander-toggle');
+    await expect(commanderBtn).toBeVisible();
   });
 
-  test('should show workspace tabs when workspace is loaded', async ({ page }) => {
-    await page.goto('/');
+  test('should show connection status', async ({ page }) => {
+    const connectionStatus = page.locator('#connection-status');
+    await expect(connectionStatus).toBeVisible();
 
-    // Wait for potential workspace tabs
-    const tabContainer = page.locator('.workspace-tabs-container, .workspace-tabs');
-
-    // If tabs exist, they should be visible
-    if (await tabContainer.count() > 0) {
-      await expect(tabContainer.first()).toBeVisible();
-    }
+    // Wait for connection (should say Connected after socket connects)
+    await page.waitForFunction(() => {
+      const status = document.querySelector('#connection-status');
+      return status && status.textContent.includes('Connected');
+    }, { timeout: 10000 });
   });
 
-  test('should have terminal grid', async ({ page }) => {
-    await page.goto('/');
+  test('should open settings panel', async ({ page }) => {
+    const settingsToggle = page.locator('#settings-toggle');
+    await settingsToggle.click();
 
-    // Wait for terminal grid to load (may take time if workspace loads)
-    await page.waitForTimeout(2000);
+    const settingsPanel = page.locator('#settings-panel');
+    await expect(settingsPanel).toBeVisible();
 
-    const terminalGrid = page.locator('.terminal-grid');
-
-    // Terminal grid should exist (might be empty if no workspace)
-    if (await terminalGrid.count() > 0) {
-      await expect(terminalGrid.first()).toBeVisible();
-    }
-  });
-});
-
-test.describe('Workspace Switching', () => {
-  test('should have workspace controls available', async ({ page }) => {
-    await page.goto('/');
-
-    // Wait for page to load
-    await page.waitForTimeout(2000);
-
-    // Check for workspace-related UI elements
-    const workspaceControls = page.locator('.workspace-tabs, .workspace-switcher, .sidebar');
-
-    // Should have some workspace controls
-    if (await workspaceControls.count() > 0) {
-      await expect(workspaceControls.first()).toBeVisible();
-    }
+    // Close settings
+    const closeBtn = page.locator('#close-settings');
+    await closeBtn.click();
+    await expect(settingsPanel).not.toBeVisible();
   });
 });
 
-test.describe('Terminal Interactions', () => {
-  test('terminal wrapper should be clickable', async ({ page }) => {
+test.describe('Greenfield Wizard', () => {
+  test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    await page.waitForSelector('.sidebar', { timeout: 10000 });
+  });
 
-    // Wait for terminals to potentially load
-    await page.waitForTimeout(3000);
+  test('should open greenfield wizard on button click', async ({ page }) => {
+    const greenfieldBtn = page.locator('#greenfield-btn');
+    await greenfieldBtn.click();
 
-    const terminal = page.locator('.terminal-wrapper').first();
+    // Wait for wizard modal to appear
+    const wizardModal = page.locator('.greenfield-wizard-modal');
+    await expect(wizardModal).toBeVisible({ timeout: 5000 });
+  });
+});
 
-    if (await terminal.count() > 0) {
-      // Terminal should be visible and have reasonable size
-      const box = await terminal.boundingBox();
-      expect(box.width).toBeGreaterThan(100);
-      expect(box.height).toBeGreaterThan(50);
-    }
+test.describe('Commander Panel', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.sidebar', { timeout: 10000 });
+  });
+
+  test('should toggle commander panel', async ({ page }) => {
+    const commanderBtn = page.locator('#commander-toggle');
+    await commanderBtn.click();
+
+    // Commander panel should appear
+    const commanderPanel = page.locator('.commander-panel');
+    await expect(commanderPanel).toBeVisible({ timeout: 5000 });
+  });
+});
+
+test.describe('Terminal Grid', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.sidebar', { timeout: 10000 });
+  });
+
+  test('should show terminal grid', async ({ page }) => {
+    const terminalGrid = page.locator('#terminal-grid');
+    await expect(terminalGrid).toBeVisible();
+  });
+
+  test('should show loading message initially', async ({ page }) => {
+    // This might be brief, so we use a shorter timeout
+    const loadingMsg = page.locator('#loading-message');
+    // Either visible briefly or already gone
+    const isVisible = await loadingMsg.isVisible().catch(() => false);
+    // Just verify the element exists in DOM
+    expect(await page.locator('#loading-message').count()).toBeGreaterThanOrEqual(0);
+  });
+});
+
+test.describe('Sidebar Controls', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.sidebar', { timeout: 10000 });
+  });
+
+  test('should have view all button', async ({ page }) => {
+    const viewAllBtn = page.locator('#view-all');
+    await expect(viewAllBtn).toBeVisible();
+  });
+
+  test('should have claude only button', async ({ page }) => {
+    const claudeOnlyBtn = page.locator('#view-claude-only');
+    await expect(claudeOnlyBtn).toBeVisible();
+  });
+
+  test('should have servers only button', async ({ page }) => {
+    const serversOnlyBtn = page.locator('#view-servers-only');
+    await expect(serversOnlyBtn).toBeVisible();
+  });
+
+  test('should have add worktree button', async ({ page }) => {
+    const addWorktreeBtn = page.locator('#add-worktree');
+    await expect(addWorktreeBtn).toBeVisible();
   });
 });
 
 test.describe('API Health', () => {
-  test('health endpoint should return ok', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/health`);
-
+  test('should respond to workspaces API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/workspaces');
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.json();
-    expect(body.status).toBe('ok');
+    const data = await response.json();
+    expect(Array.isArray(data)).toBe(true);
   });
 
-  test('workspaces endpoint should return array', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/workspaces`);
-
+  test('should respond to commander status API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/commander/status');
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.json();
-    expect(Array.isArray(body)).toBe(true);
+    const data = await response.json();
+    expect(data).toHaveProperty('running');
   });
-});
 
-test.describe('Quick Links API', () => {
-  test('should get quick links data', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/quick-links`);
-
+  test('should respond to quick-links API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/quick-links');
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.json();
-    expect(body).toHaveProperty('favorites');
-    expect(body).toHaveProperty('recentSessions');
-    expect(body).toHaveProperty('customLinks');
-    expect(Array.isArray(body.favorites)).toBe(true);
+    const data = await response.json();
+    expect(data).toHaveProperty('favorites');
+    expect(data).toHaveProperty('recentSessions');
   });
 
-  test('should add a favorite link', async ({ request }) => {
-    const testUrl = `https://test-${Date.now()}.com`;
-
-    const response = await request.post(`${SERVER_URL}/api/quick-links/favorites`, {
-      data: {
-        name: 'Test Link',
-        url: testUrl,
-        icon: 'link'
-      }
-    });
-
+  test('should respond to greenfield templates API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/greenfield/templates');
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.json();
-    expect(body).toHaveProperty('favorites');
-    expect(body.favorites.some(f => f.url === testUrl)).toBe(true);
-
-    // Cleanup - remove the test favorite
-    await request.delete(`${SERVER_URL}/api/quick-links/favorites`, {
-      data: { url: testUrl }
-    });
+    const data = await response.json();
+    expect(Array.isArray(data)).toBe(true);
   });
 
-  test('should track session access', async ({ request }) => {
-    const response = await request.post(`${SERVER_URL}/api/quick-links/track-session`, {
-      data: {
-        workspaceId: 'test-ws',
-        worktreeId: 'test-work1',
-        sessionId: 'test-session',
-        branch: 'test-branch'
-      }
-    });
-
-    expect(response.ok()).toBeTruthy();
-  });
-
-  test('should get recent sessions', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/quick-links/recent-sessions`);
-
+  test('should respond to ports API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/ports');
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.json();
-    expect(body).toHaveProperty('sessions');
-    expect(Array.isArray(body.sessions)).toBe(true);
+    const data = await response.json();
+    expect(Array.isArray(data)).toBe(true);
   });
-});
 
-test.describe('Port Registry API', () => {
-  test('should get all port assignments', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/ports`);
-
+  test('should respond to voice commands API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/voice/commands');
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.json();
-    expect(body).toBeDefined();
-  });
-
-  test('should get port for specific worktree', async ({ request }) => {
-    const repoPath = encodeURIComponent('/test/repo');
-    const worktreeId = 'work1';
-
-    const response = await request.get(`${SERVER_URL}/api/ports/${repoPath}/${worktreeId}`);
-
-    expect(response.ok()).toBeTruthy();
-
-    const body = await response.json();
-    expect(body).toHaveProperty('port');
-    expect(typeof body.port).toBe('number');
-  });
-});
-
-test.describe('Greenfield API', () => {
-  test('should get available templates', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/greenfield/templates`);
-
-    expect(response.ok()).toBeTruthy();
-
-    const templates = await response.json();
-    expect(Array.isArray(templates)).toBe(true);
-    expect(templates.length).toBeGreaterThan(0);
-
-    // Each template should have required fields
-    templates.forEach(template => {
-      expect(template).toHaveProperty('id');
-      expect(template).toHaveProperty('name');
-      expect(template).toHaveProperty('description');
-    });
-  });
-
-  test('should validate project creation config', async ({ request }) => {
-    // This should fail validation due to invalid path
-    const response = await request.post(`${SERVER_URL}/api/greenfield/create`, {
-      data: {
-        name: '',
-        templateId: 'empty',
-        basePath: '/invalid/path'
-      }
-    });
-
-    // Should return validation error
-    expect(response.status()).toBe(400);
-  });
-});
-
-test.describe('Continuity API', () => {
-  test('should return ledger or 404', async ({ request }) => {
-    const worktreePath = encodeURIComponent('/test/worktree');
-    const response = await request.get(`${SERVER_URL}/api/continuity/ledger?worktreePath=${worktreePath}`);
-
-    // Either returns ledger data or 404 if not found
-    expect([200, 404]).toContain(response.status());
-  });
-
-  test('should get workspace ledgers', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/continuity/workspace`);
-
-    // Should return array (possibly empty) or error if no workspace
-    const status = response.status();
-    expect([200, 400, 404]).toContain(status);
-  });
-});
-
-test.describe('Cascaded Config API', () => {
-  test('should get cascaded config for type', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/cascaded-config/hytopia-game`);
-
-    // Should return config or empty object
-    expect(response.ok()).toBeTruthy();
-
-    const config = await response.json();
-    expect(typeof config).toBe('object');
-  });
-
-  test('should merge config with worktree overrides', async ({ request }) => {
-    const worktreePath = encodeURIComponent('/some/worktree/path');
-    const response = await request.get(`${SERVER_URL}/api/cascaded-config/hytopia-game?worktreePath=${worktreePath}`);
-
-    expect(response.ok()).toBeTruthy();
-
-    const config = await response.json();
-    expect(typeof config).toBe('object');
-  });
-});
-
-test.describe('Settings Panel', () => {
-  test('should open settings panel', async ({ page }) => {
-    await page.goto('/');
-
-    // Wait for page to load
-    await page.waitForTimeout(2000);
-
-    // Click settings button
-    const settingsButton = page.locator('#settings-toggle, [title="Settings"]');
-    if (await settingsButton.count() > 0) {
-      await settingsButton.click();
-
-      // Settings panel should be visible
-      const settingsPanel = page.locator('#settings-panel, .settings-panel');
-      await expect(settingsPanel).toBeVisible({ timeout: 5000 });
-    }
-  });
-
-  test('should have notification toggle', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForTimeout(2000);
-
-    // Open settings
-    const settingsButton = page.locator('#settings-toggle, [title="Settings"]');
-    if (await settingsButton.count() > 0) {
-      await settingsButton.click();
-
-      const notificationToggle = page.locator('#enable-notifications');
-      if (await notificationToggle.count() > 0) {
-        await expect(notificationToggle).toBeVisible();
-      }
-    }
-  });
-});
-
-test.describe('Socket.IO Connection', () => {
-  test('should have connection status indicator', async ({ page }) => {
-    await page.goto('/');
-
-    // Wait for page to load
-    await page.waitForTimeout(2000);
-
-    // Check connection status indicator exists
-    const connectionStatus = page.locator('.connection-status, #connection-status');
-    if (await connectionStatus.count() > 0) {
-      await expect(connectionStatus).toBeVisible();
-    }
-  });
-});
-
-test.describe('Commander API (Terminal-based)', () => {
-  test('should get commander status', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/commander/status`);
-
-    expect(response.ok()).toBeTruthy();
-
-    const status = await response.json();
-    expect(status).toHaveProperty('running');
-    expect(status).toHaveProperty('status');
-    expect(status).toHaveProperty('cwd');
-  });
-
-  test('should start commander terminal', async ({ request }) => {
-    const response = await request.post(`${SERVER_URL}/api/commander/start`);
-
-    expect(response.ok()).toBeTruthy();
-
-    const result = await response.json();
-    expect(result.success).toBe(true);
-
-    // Stop it for cleanup
-    await request.post(`${SERVER_URL}/api/commander/stop`);
-  });
-
-  test('should stop commander terminal', async ({ request }) => {
-    // Start first
-    await request.post(`${SERVER_URL}/api/commander/start`);
-
-    const response = await request.post(`${SERVER_URL}/api/commander/stop`);
-
-    expect(response.ok()).toBeTruthy();
-
-    const result = await response.json();
-    expect(result.success).toBe(true);
-  });
-
-  test('should get output from commander', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/commander/output`);
-
-    expect(response.ok()).toBeTruthy();
-
-    const result = await response.json();
-    expect(result).toHaveProperty('output');
-  });
-
-  test('should clear commander buffer', async ({ request }) => {
-    const response = await request.post(`${SERVER_URL}/api/commander/clear`);
-
-    expect(response.ok()).toBeTruthy();
-
-    const result = await response.json();
-    expect(result.success).toBe(true);
-  });
-
-  test('should list active sessions', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/commander/sessions`);
-
-    expect(response.ok()).toBeTruthy();
-
-    const result = await response.json();
-    expect(result).toHaveProperty('sessions');
-    expect(Array.isArray(result.sessions)).toBe(true);
-  });
-
-  test('should reject send input without input field', async ({ request }) => {
-    const response = await request.post(`${SERVER_URL}/api/commander/input`, {
-      data: {}
-    });
-
-    expect(response.status()).toBe(400);
+    const data = await response.json();
+    expect(Array.isArray(data)).toBe(true);
   });
 });

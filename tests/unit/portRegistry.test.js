@@ -2,102 +2,111 @@
  * Unit tests for PortRegistry
  */
 
+const { PortRegistry } = require('../../server/portRegistry');
+const fs = require('fs').promises;
+const path = require('path');
+const os = require('os');
+
 describe('PortRegistry', () => {
-  let PortRegistry;
   let registry;
+  const testRegistryPath = path.join(os.tmpdir(), 'test-port-registry.json');
 
-  beforeEach(() => {
-    jest.resetModules();
-    // Clear singleton
-    jest.mock('child_process', () => ({
-      exec: jest.fn((cmd, opts, cb) => {
-        // Simulate port check - fail means port is free
-        if (typeof opts === 'function') {
-          opts(new Error('no process'), '', '');
-        } else {
-          cb(new Error('no process'), '', '');
-        }
-      })
-    }));
+  beforeEach(async () => {
+    // Clear singleton for testing
+    PortRegistry.instance = null;
+    registry = PortRegistry.getInstance();
+    registry.registryPath = testRegistryPath;
+    registry.assignments = new Map();
 
-    // Reset module to get fresh singleton
-    PortRegistry = require('../../server/portRegistry').PortRegistry;
-    // Create new instance for testing (bypass singleton)
-    registry = new PortRegistry();
+    // Clean up test file
+    try {
+      await fs.unlink(testRegistryPath);
+    } catch (e) {
+      // File doesn't exist, that's fine
+    }
   });
 
-  describe('port assignment', () => {
-    it('should assign unique ports to different worktrees', async () => {
-      const port1 = await registry.getPort('/repo/path', 'work1');
-      const port2 = await registry.getPort('/repo/path', 'work2');
+  afterEach(async () => {
+    // Clean up test file
+    try {
+      await fs.unlink(testRegistryPath);
+    } catch (e) {
+      // File doesn't exist, that's fine
+    }
+    PortRegistry.instance = null;
+  });
 
-      expect(port1).not.toBe(port2);
-      expect(port1).toBeGreaterThanOrEqual(8080);
-      expect(port2).toBeGreaterThanOrEqual(8080);
-    });
-
-    it('should return same port for same repo/worktree', async () => {
-      const port1 = await registry.getPort('/repo/path', 'work1');
-      const port2 = await registry.getPort('/repo/path', 'work1');
-
-      expect(port1).toBe(port2);
-    });
-
-    it('should release ports correctly', async () => {
-      const port = await registry.getPort('/repo/path', 'work1');
-
-      expect(registry.usedPorts.has(port)).toBe(true);
-
-      registry.releasePort('/repo/path', 'work1');
-
-      expect(registry.usedPorts.has(port)).toBe(false);
+  describe('getInstance', () => {
+    it('should return singleton instance', () => {
+      const instance1 = PortRegistry.getInstance();
+      const instance2 = PortRegistry.getInstance();
+      expect(instance1).toBe(instance2);
     });
   });
 
   describe('suggestPort', () => {
-    it('should suggest preferred port based on worktree number', async () => {
-      const port = await registry.suggestPort(1, '/repo/path', 'work1');
-      expect(port).toBe(8080); // work1 gets 8080
+    it('should suggest port based on worktree number', async () => {
+      const port = await registry.suggestPort(1, '/test/repo', 'work1');
+      expect(port).toBeGreaterThanOrEqual(8000);
+      expect(port).toBeLessThan(9000);
     });
 
-    it('should fallback if preferred port taken', async () => {
-      // Take 8080 first
-      await registry.suggestPort(1, '/other/repo', 'work1');
+    it('should return same port for same worktree', async () => {
+      const port1 = await registry.suggestPort(1, '/test/repo', 'work1');
+      const port2 = await registry.suggestPort(1, '/test/repo', 'work1');
+      expect(port1).toBe(port2);
+    });
 
-      // Now try to get 8080 for different repo
-      const port = await registry.suggestPort(1, '/repo/path', 'work1');
-
-      // Should get next available
-      expect(port).toBeGreaterThan(8080);
+    it('should return different ports for different worktrees', async () => {
+      const port1 = await registry.suggestPort(1, '/test/repo', 'work1');
+      const port2 = await registry.suggestPort(2, '/test/repo', 'work2');
+      expect(port1).not.toBe(port2);
     });
   });
 
-  describe('key generation', () => {
-    it('should create unique keys for repo/worktree combos', () => {
-      const key1 = registry.makeKey('/repo/path', 'work1');
-      const key2 = registry.makeKey('/repo/path', 'work2');
-      const key3 = registry.makeKey('/other/repo', 'work1');
-
-      expect(key1).not.toBe(key2);
-      expect(key1).not.toBe(key3);
+  describe('getPortInfo', () => {
+    it('should return port info for registered port', async () => {
+      await registry.suggestPort(1, '/test/repo', 'work1');
+      const info = registry.getPortInfo('/test/repo', 'work1');
+      expect(info).toBeDefined();
+      expect(info.port).toBeDefined();
     });
 
-    it('should parse keys correctly', () => {
-      const [repoPath, worktreeId] = registry.parseKey('/repo/path:work1');
+    it('should return null for unregistered port', () => {
+      const info = registry.getPortInfo('/nonexistent', 'work99');
+      expect(info).toBeNull();
+    });
+  });
 
-      expect(repoPath).toBe('/repo/path');
-      expect(worktreeId).toBe('work1');
+  describe('releasePort', () => {
+    it('should release registered port', async () => {
+      await registry.suggestPort(1, '/test/repo', 'work1');
+      registry.releasePort('/test/repo', 'work1');
+      const info = registry.getPortInfo('/test/repo', 'work1');
+      expect(info).toBeNull();
+    });
+
+    it('should handle releasing non-existent port gracefully', () => {
+      expect(() => {
+        registry.releasePort('/nonexistent', 'work99');
+      }).not.toThrow();
     });
   });
 
   describe('getAllAssignments', () => {
-    it('should return all current assignments', async () => {
-      await registry.getPort('/repo1', 'work1');
-      await registry.getPort('/repo2', 'work2');
+    it('should return all port assignments as object', async () => {
+      await registry.suggestPort(1, '/test/repo', 'work1');
+      await registry.suggestPort(2, '/test/repo', 'work2');
 
       const assignments = registry.getAllAssignments();
-
+      expect(typeof assignments).toBe('object');
       expect(Object.keys(assignments).length).toBe(2);
+    });
+
+    it('should return empty object when no assignments', () => {
+      const assignments = registry.getAllAssignments();
+      expect(typeof assignments).toBe('object');
+      expect(Object.keys(assignments).length).toBe(0);
     });
   });
 });

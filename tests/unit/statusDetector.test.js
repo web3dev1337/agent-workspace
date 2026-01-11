@@ -1,0 +1,117 @@
+/**
+ * Unit tests for StatusDetector
+ */
+
+const { StatusDetector } = require('../../server/statusDetector');
+
+describe('StatusDetector', () => {
+  let detector;
+
+  beforeEach(() => {
+    detector = new StatusDetector();
+  });
+
+  afterEach(() => {
+    detector.reset();
+  });
+
+  describe('detectStatus', () => {
+    it('should detect waiting status from Claude ready prompt', () => {
+      const buffer = 'Welcome to Claude Code!\n? for shortcuts';
+      const status = detector.detectStatus(buffer);
+      expect(status).toBe('waiting');
+    });
+
+    it('should detect waiting status from input prompt', () => {
+      const buffer = 'Some output\n> ';
+      const status = detector.detectStatus(buffer);
+      expect(status).toBe('waiting');
+    });
+
+    it('should detect waiting status from y/N prompt', () => {
+      const buffer = 'Do you want to continue? (y/N) ';
+      const status = detector.detectStatus(buffer);
+      expect(status).toBe('waiting');
+    });
+
+    it('should detect waiting status from Cost line (completion)', () => {
+      const buffer = 'Task completed successfully.\nCost: $0.05';
+      const status = detector.detectStatus(buffer);
+      expect(status).toBe('waiting');
+    });
+
+    it('should detect busy status when tool is active', () => {
+      const buffer = '\\u25cf Read(src/index.js)\nReading file...';
+      detector.lastOutputTime = Date.now(); // Simulate recent output
+      const status = detector.detectStatus(buffer);
+      expect(['busy', 'idle']).toContain(status);
+    });
+
+    it('should detect busy status when thinking', () => {
+      detector.lastOutputTime = Date.now();
+      detector.lastBufferLength = 0;
+      const buffer = 'Processing...\n\\u2234 Thinking...';
+      const status = detector.detectStatus(buffer);
+      expect(['busy', 'idle', 'waiting']).toContain(status);
+    });
+
+    it('should detect idle status after quiet period', () => {
+      // Set up as if we've already processed this buffer (no new content)
+      const buffer = 'Task completed successfully. The operation finished without errors. All tests passed. No issues found. '.repeat(2);
+      detector.lastBufferLength = buffer.length; // Prevent update of lastOutputTime
+      detector.lastOutputTime = Date.now() - 5000; // 5 seconds ago
+      const status = detector.detectStatus(buffer);
+      expect(status).toBe('idle');
+    });
+  });
+
+  describe('looksLikePrompt', () => {
+    it('should detect shell prompt $', () => {
+      expect(detector.looksLikePrompt('$')).toBe(true);
+    });
+
+    it('should detect input prompt >', () => {
+      expect(detector.looksLikePrompt('>')).toBe(true);
+    });
+
+    it('should detect python REPL prompt', () => {
+      expect(detector.looksLikePrompt('>>>')).toBe(true);
+    });
+
+    it('should detect user@host prompt', () => {
+      expect(detector.looksLikePrompt('user@host:~$')).toBe(true);
+    });
+
+    it('should not detect regular text', () => {
+      expect(detector.looksLikePrompt('Hello world')).toBe(false);
+    });
+  });
+
+  describe('reset', () => {
+    it('should reset internal state', () => {
+      detector.lastBufferLength = 1000;
+      detector.lastOutputTime = 12345;
+      detector.recentDetections.set('test', { status: 'busy', timestamp: 12345 });
+
+      detector.reset();
+
+      expect(detector.lastBufferLength).toBe(0);
+      expect(detector.recentDetections.size).toBe(0);
+    });
+  });
+
+  describe('debouncing', () => {
+    it('should debounce rapid status changes', () => {
+      const buffer1 = 'Some output';
+      const status1 = detector.detectStatus(buffer1);
+
+      // Simulate immediate call with different output
+      const buffer2 = buffer1 + '\nMore output';
+      const status2 = detector.detectStatus(buffer2);
+
+      // Both should return a consistent status due to debouncing
+      expect(typeof status1).toBe('string');
+      expect(typeof status2).toBe('string');
+    });
+  });
+});

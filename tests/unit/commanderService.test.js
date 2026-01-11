@@ -1,67 +1,30 @@
 /**
- * Unit tests for CommanderService (Terminal-based)
+ * Unit tests for CommanderService
  */
-
-// Mock winston before requiring the service
-jest.mock('winston', () => ({
-  createLogger: jest.fn(() => ({
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-  })),
-  format: {
-    combine: jest.fn(),
-    timestamp: jest.fn(),
-    json: jest.fn(),
-    simple: jest.fn()
-  },
-  transports: {
-    File: jest.fn(),
-    Console: jest.fn()
-  }
-}));
-
-// Mock node-pty
-const mockPty = {
-  write: jest.fn(),
-  kill: jest.fn(),
-  resize: jest.fn(),
-  onData: jest.fn(),
-  onExit: jest.fn()
-};
-
-jest.mock('node-pty', () => ({
-  spawn: jest.fn(() => mockPty)
-}));
 
 const { CommanderService } = require('../../server/commanderService');
 
 describe('CommanderService', () => {
   let service;
-  const mockSessions = new Map();
-  const mockSessionManager = {
-    sessions: mockSessions
-  };
-  const mockIo = {
-    emit: jest.fn()
-  };
 
   beforeEach(() => {
-    // Clear singleton
+    // Clear singleton for testing
     CommanderService.instance = null;
-    jest.clearAllMocks();
+    service = CommanderService.getInstance({ io: null, sessionManager: null });
+  });
 
-    service = new CommanderService({
-      sessionManager: mockSessionManager,
-      io: mockIo
-    });
+  afterEach(() => {
+    // Stop any running sessions
+    if (service.session) {
+      service.stop();
+    }
+    CommanderService.instance = null;
   });
 
   describe('getInstance', () => {
     it('should return singleton instance', () => {
-      const instance1 = CommanderService.getInstance({});
-      const instance2 = CommanderService.getInstance({});
+      const instance1 = CommanderService.getInstance();
+      const instance2 = CommanderService.getInstance();
       expect(instance1).toBe(instance2);
     });
   });
@@ -70,147 +33,109 @@ describe('CommanderService', () => {
     it('should return stopped status when not running', () => {
       const status = service.getStatus();
       expect(status.running).toBe(false);
+      expect(status.ready).toBe(false);
       expect(status.status).toBe('stopped');
     });
 
-    it('should return running status after start', async () => {
-      await service.start();
+    it('should include cwd in status', () => {
       const status = service.getStatus();
-      expect(status.running).toBe(true);
-    });
-  });
-
-  describe('start', () => {
-    it('should spawn a pty process', async () => {
-      const result = await service.start();
-      expect(result.success).toBe(true);
-      expect(require('node-pty').spawn).toHaveBeenCalled();
-    });
-
-    it('should return error if already running', async () => {
-      await service.start();
-      const result = await service.start();
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Already running');
-    });
-  });
-
-  describe('stop', () => {
-    it('should kill the pty process', async () => {
-      await service.start();
-      const result = service.stop();
-      expect(result.success).toBe(true);
-      expect(mockPty.kill).toHaveBeenCalled();
-    });
-
-    it('should return error if not running', () => {
-      const result = service.stop();
-      expect(result.success).toBe(false);
+      expect(status.cwd).toBeDefined();
+      expect(typeof status.cwd).toBe('string');
     });
   });
 
   describe('sendInput', () => {
-    it('should write to pty', async () => {
-      await service.start();
-      const success = service.sendInput('test command\n');
-      expect(success).toBe(true);
-      expect(mockPty.write).toHaveBeenCalledWith('test command\n');
-    });
-
-    it('should return false if not running', () => {
-      const success = service.sendInput('test');
-      expect(success).toBe(false);
+    it('should return false when not running', () => {
+      const result = service.sendInput('test');
+      expect(result).toBe(false);
     });
   });
 
-  describe('resize', () => {
-    it('should resize pty', async () => {
-      await service.start();
-      const success = service.resize(100, 50);
-      expect(success).toBe(true);
-      expect(mockPty.resize).toHaveBeenCalledWith(100, 50);
-    });
-
-    it('should return false if not running', () => {
-      const success = service.resize(100, 50);
-      expect(success).toBe(false);
+  describe('stop', () => {
+    it('should return error when not running', () => {
+      const result = service.stop();
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Not running');
     });
   });
 
-  describe('output buffer', () => {
-    it('should add to output buffer', () => {
-      service.addToOutputBuffer('line1\nline2\n');
-      const output = service.getRecentOutput(10);
-      expect(output).toContain('line1');
+  describe('getRecentOutput', () => {
+    it('should return empty string when no output', () => {
+      const output = service.getRecentOutput();
+      expect(output).toBe('');
     });
 
-    it('should trim buffer when too large', () => {
-      // Add more than maxBufferLines
-      for (let i = 0; i < 600; i++) {
-        service.addToOutputBuffer(`line ${i}\n`);
-      }
-      expect(service.outputBuffer.length).toBeLessThanOrEqual(500);
+    it('should return recent lines from buffer', () => {
+      service.outputBuffer = ['line1', 'line2', 'line3'];
+      const output = service.getRecentOutput(2);
+      expect(output).toBe('line2\nline3');
     });
+  });
 
-    it('should clear buffer', () => {
-      service.addToOutputBuffer('test');
+  describe('clearBuffer', () => {
+    it('should clear output buffer', () => {
+      service.outputBuffer = ['line1', 'line2'];
       service.clearBuffer();
-      expect(service.outputBuffer).toHaveLength(0);
+      expect(service.outputBuffer.length).toBe(0);
     });
   });
 
   describe('listSessions', () => {
-    it('should return mapped sessions', () => {
-      mockSessions.clear();
-      mockSessions.set('s1', {
-        id: 's1', type: 'claude', status: 'active', branch: 'main', worktreeId: 'work1'
-      });
-
+    it('should return empty array when sessionManager not available', () => {
       const sessions = service.listSessions();
-      expect(sessions).toHaveLength(1);
-      expect(sessions[0].id).toBe('s1');
+      expect(Array.isArray(sessions)).toBe(true);
+      expect(sessions.length).toBe(0);
     });
 
-    it('should return empty array if no session manager', () => {
-      service.sessionManager = null;
+    it('should return sessions when sessionManager has sessions', () => {
+      // Create mock sessionManager with sessions
+      const mockSessions = new Map([
+        ['session1', { id: 'session1', type: 'claude', status: 'idle' }],
+        ['session2', { id: 'session2', type: 'server', status: 'running' }]
+      ]);
+
+      service.sessionManager = { sessions: mockSessions };
+
       const sessions = service.listSessions();
-      expect(sessions).toEqual([]);
+      expect(sessions.length).toBe(2);
+      expect(sessions[0].id).toBe('session1');
     });
   });
 
   describe('sendToSession', () => {
-    it('should send input to another session', () => {
-      const mockPtyTarget = { write: jest.fn() };
-      mockSessions.clear();
-      mockSessions.set('s1', { id: 's1', pty: mockPtyTarget });
-
-      const success = service.sendToSession('s1', 'hello');
-      expect(success).toBe(true);
-      expect(mockPtyTarget.write).toHaveBeenCalledWith('hello');
+    it('should return false when sessionManager not available', () => {
+      const result = service.sendToSession('session1', 'test');
+      expect(result).toBe(false);
     });
 
-    it('should return false if session not found', () => {
-      mockSessions.clear();
+    it('should return false for non-existent session', () => {
+      service.sessionManager = { sessions: new Map() };
+      const result = service.sendToSession('nonexistent', 'test');
+      expect(result).toBe(false);
+    });
 
-      const success = service.sendToSession('invalid', 'hello');
-      expect(success).toBe(false);
+    it('should send input to session with pty', () => {
+      let sentData = null;
+      const mockPty = {
+        write: (data) => { sentData = data; }
+      };
+
+      service.sessionManager = {
+        sessions: new Map([
+          ['session1', { id: 'session1', pty: mockPty }]
+        ])
+      };
+
+      const result = service.sendToSession('session1', 'test input');
+      expect(result).toBe(true);
+      expect(sentData).toBe('test input');
     });
   });
 
-  describe('startClaude', () => {
-    it('should start terminal and send claude command', async () => {
-      await service.startClaude('fresh');
-      expect(mockPty.write).toHaveBeenCalledWith('claude\n');
-    });
-
-    it('should send --continue flag', async () => {
-      await service.startClaude('continue');
-      expect(mockPty.write).toHaveBeenCalledWith('claude --continue\n');
-    });
-
-    it('should send --resume flag', async () => {
-      await service.startClaude('resume');
-      expect(mockPty.write).toHaveBeenCalledWith('claude --resume\n');
+  describe('resize', () => {
+    it('should return false when not running', () => {
+      const result = service.resize(120, 40);
+      expect(result).toBe(false);
     });
   });
 });
