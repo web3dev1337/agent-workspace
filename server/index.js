@@ -46,6 +46,8 @@ const { GreenfieldService } = require('./greenfieldService');
 const { ContinuityService } = require('./continuityService');
 const { QuickLinksService } = require('./quickLinksService');
 const { CommanderService } = require('./commanderService');
+const { ConversationService } = require('./conversationService');
+const { WorktreeMetadataService } = require('./worktreeMetadataService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
@@ -141,6 +143,8 @@ greenfieldService.setSessionManager(sessionManager);
 greenfieldService.setIO(io);
 const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
+const conversationService = ConversationService.getInstance();
+const worktreeMetadataService = WorktreeMetadataService.getInstance();
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -1462,6 +1466,178 @@ app.post('/api/greenfield/detect-category', (req, res) => {
     category,
     path: categoryConfig.path
   });
+});
+
+// ============================================
+// Conversation History API
+// ============================================
+
+// Search conversations
+app.get('/api/conversations/search', async (req, res) => {
+  try {
+    const { q, project, branch, folder, startDate, endDate, limit, offset } = req.query;
+
+    const results = await conversationService.search(q, {
+      project,
+      branch,
+      folder,
+      startDate,
+      endDate,
+      limit: limit ? parseInt(limit) : undefined,
+      offset: offset ? parseInt(offset) : undefined
+    });
+
+    res.json(results);
+  } catch (error) {
+    logger.error('Failed to search conversations', { error: error.message });
+    res.status(500).json({ error: 'Failed to search conversations' });
+  }
+});
+
+// Autocomplete for conversation search
+app.get('/api/conversations/autocomplete', async (req, res) => {
+  try {
+    const { q, limit } = req.query;
+    const suggestions = await conversationService.autocomplete(q, limit ? parseInt(limit) : undefined);
+    res.json(suggestions);
+  } catch (error) {
+    logger.error('Failed to get autocomplete', { error: error.message });
+    res.status(500).json({ error: 'Failed to get autocomplete suggestions' });
+  }
+});
+
+// Get recent conversations
+app.get('/api/conversations/recent', async (req, res) => {
+  try {
+    const { limit } = req.query;
+    const recent = await conversationService.getRecent(limit ? parseInt(limit) : undefined);
+    res.json(recent);
+  } catch (error) {
+    logger.error('Failed to get recent conversations', { error: error.message });
+    res.status(500).json({ error: 'Failed to get recent conversations' });
+  }
+});
+
+// Get conversation details
+app.get('/api/conversations/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { project } = req.query;
+    const conversation = await conversationService.getConversation(id, project);
+
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    res.json(conversation);
+  } catch (error) {
+    logger.error('Failed to get conversation', { error: error.message });
+    res.status(500).json({ error: 'Failed to get conversation' });
+  }
+});
+
+// Get conversations by folder
+app.get('/api/conversations/by-folder', async (req, res) => {
+  try {
+    const { path: folderPath } = req.query;
+    if (!folderPath) {
+      return res.status(400).json({ error: 'path query parameter is required' });
+    }
+
+    const conversations = await conversationService.getByFolder(folderPath);
+    res.json(conversations);
+  } catch (error) {
+    logger.error('Failed to get conversations by folder', { error: error.message });
+    res.status(500).json({ error: 'Failed to get conversations' });
+  }
+});
+
+// Get list of projects
+app.get('/api/conversations/projects', async (req, res) => {
+  try {
+    const projects = await conversationService.getProjects();
+    res.json(projects);
+  } catch (error) {
+    logger.error('Failed to get projects', { error: error.message });
+    res.status(500).json({ error: 'Failed to get projects' });
+  }
+});
+
+// Get conversation stats
+app.get('/api/conversations/stats', async (req, res) => {
+  try {
+    const stats = await conversationService.getStats();
+    res.json(stats);
+  } catch (error) {
+    logger.error('Failed to get stats', { error: error.message });
+    res.status(500).json({ error: 'Failed to get stats' });
+  }
+});
+
+// Refresh conversation index
+app.post('/api/conversations/refresh', async (req, res) => {
+  try {
+    const index = await conversationService.refresh();
+    res.json({
+      success: true,
+      stats: index.stats
+    });
+  } catch (error) {
+    logger.error('Failed to refresh index', { error: error.message });
+    res.status(500).json({ error: 'Failed to refresh index' });
+  }
+});
+
+// ============================================
+// Worktree Metadata API
+// ============================================
+
+// Get metadata for a worktree
+app.get('/api/worktree-metadata', async (req, res) => {
+  try {
+    const { path: worktreePath } = req.query;
+    if (!worktreePath) {
+      return res.status(400).json({ error: 'path query parameter is required' });
+    }
+
+    const metadata = await worktreeMetadataService.getMetadata(worktreePath);
+    res.json(metadata);
+  } catch (error) {
+    logger.error('Failed to get worktree metadata', { error: error.message });
+    res.status(500).json({ error: 'Failed to get metadata' });
+  }
+});
+
+// Get metadata for multiple worktrees
+app.post('/api/worktree-metadata/batch', async (req, res) => {
+  try {
+    const { paths } = req.body;
+    if (!paths || !Array.isArray(paths)) {
+      return res.status(400).json({ error: 'paths array is required' });
+    }
+
+    const metadata = await worktreeMetadataService.getMultipleMetadata(paths);
+    res.json(metadata);
+  } catch (error) {
+    logger.error('Failed to get batch worktree metadata', { error: error.message });
+    res.status(500).json({ error: 'Failed to get metadata' });
+  }
+});
+
+// Refresh worktree metadata
+app.post('/api/worktree-metadata/refresh', async (req, res) => {
+  try {
+    const { path: worktreePath } = req.body;
+    if (!worktreePath) {
+      return res.status(400).json({ error: 'path is required' });
+    }
+
+    const metadata = await worktreeMetadataService.refresh(worktreePath);
+    res.json(metadata);
+  } catch (error) {
+    logger.error('Failed to refresh worktree metadata', { error: error.message });
+    res.status(500).json({ error: 'Failed to refresh metadata' });
+  }
 });
 
 // Continuity ledger API endpoints
