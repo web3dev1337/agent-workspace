@@ -267,6 +267,23 @@ class WorkspaceTabManager {
   }
 
   /**
+   * Switch to a workspace by name (for voice commands / Commander)
+   */
+  switchToWorkspace(workspaceName) {
+    // Find tab by workspace name (case-insensitive)
+    const searchName = workspaceName.toLowerCase();
+    for (const [tabId, tabState] of this.tabs) {
+      if (tabState.displayName.toLowerCase().includes(searchName) ||
+          tabState.workspace?.name?.toLowerCase().includes(searchName)) {
+        this.switchTab(tabId);
+        return true;
+      }
+    }
+    console.warn(`Workspace not found: ${workspaceName}`);
+    return false;
+  }
+
+  /**
    * Hide a workspace (preserve state)
    */
   hideWorkspace(tabState) {

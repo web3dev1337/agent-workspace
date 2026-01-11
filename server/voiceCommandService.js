@@ -44,8 +44,8 @@ class VoiceCommandService {
       // Switch workspace
       {
         patterns: [
-          /switch\s+(?:to\s+)?(?:workspace\s+)?(.+)/i,
-          /open\s+(?:workspace\s+)?(.+)/i,
+          /switch\s+(?:to\s+)?workspace\s+(.+)/i,
+          /open\s+workspace\s+(.+)/i,
           /go\s+to\s+(.+)/i,
         ],
         command: 'switch-workspace',
