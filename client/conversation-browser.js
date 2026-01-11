@@ -113,6 +113,8 @@ class ConversationBrowser {
       this.renderList();
       this.updateStats();
       this.updateResultCount(this.filteredConversations.length);
+      // Load filters AFTER conversations are loaded
+      this.loadFilters();
     } catch (error) {
       console.error('Failed to load conversations:', error);
       this.showError('Failed to load conversations');
@@ -160,18 +162,48 @@ class ConversationBrowser {
 
   extractRepoFromPath(path) {
     if (!path) return null;
+    const info = this.parseProjectPath(path);
+    return info?.project || null;
+  }
 
-    // Look for GitHub pattern
+  /**
+   * Parse a path into its components:
+   * /home/<user>/GitHub/games/hytopia/zoo-game/work2
+   * -> { category: 'games', project: 'hytopia/zoo-game', worktree: 'work2' }
+   */
+  parseProjectPath(path) {
+    if (!path) return null;
+
     const githubIdx = path.indexOf('GitHub/');
-    if (githubIdx >= 0) {
-      const afterGitHub = path.slice(githubIdx + 7);
-      const parts = afterGitHub.split('/').filter(p => p && p !== 'master' && !p.startsWith('work'));
-      // Return up to 3 levels for repo identification (e.g., "games/hytopia/zoo-game")
-      if (parts.length >= 3) return parts.slice(0, 3).join('/');
-      if (parts.length >= 2) return parts.slice(0, 2).join('/');
-      if (parts.length >= 1) return parts[0];
+    if (githubIdx < 0) return null;
+
+    const afterGitHub = path.slice(githubIdx + 7);
+    const parts = afterGitHub.split('/').filter(p => p);
+
+    if (parts.length === 0) return null;
+
+    // Detect worktree (work1, work2, master, main, etc.)
+    let worktree = null;
+    const lastPart = parts[parts.length - 1];
+    if (lastPart === 'master' || lastPart === 'main' || /^work\d+$/.test(lastPart)) {
+      worktree = lastPart;
+      parts.pop();
     }
-    return null;
+
+    // First part is usually category (games, tools, websites, etc.)
+    // Skip common category names to get to actual project
+    const categories = ['games', 'tools', 'websites', 'monogame', 'automation'];
+    let category = null;
+
+    if (parts.length > 0 && categories.includes(parts[0])) {
+      category = parts.shift();
+    }
+
+    // Remaining parts form the project name
+    // For nested projects like hytopia/zoo-game, join them
+    const project = parts.length > 0 ? parts.join('/') : null;
+
+    return { category, project, worktree };
   }
 
   async loadProjects() {
@@ -346,36 +378,29 @@ class ConversationBrowser {
     const startedStr = startDate ? `${startDate.toLocaleDateString()} ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : 'Unknown';
     const lastStr = lastDate ? this.timeAgo(lastDate) : 'Unknown';
 
-    // Extract folder path components
+    // Parse path into components
     const fullPath = conv.cwd || '';
-    const pathParts = fullPath.split('/').filter(p => p);
-    const folderName = pathParts.slice(-2).join('/') || 'Unknown';
+    const pathInfo = this.parseProjectPath(fullPath) || {};
+    const projectName = pathInfo.project || fullPath.split('/').slice(-2).join('/') || 'Unknown';
+    const worktree = pathInfo.worktree;
 
-    // Extract repo name from path (look for GitHub pattern)
-    let repoName = '';
-    const githubIdx = fullPath.indexOf('GitHub/');
-    if (githubIdx >= 0) {
-      const afterGitHub = fullPath.slice(githubIdx + 7);
-      const repoParts = afterGitHub.split('/').filter(p => p && p !== 'master' && !p.startsWith('work'));
-      repoName = repoParts.slice(0, 2).join('/'); // e.g., "games/hytopia/zoo-game"
-    }
-
-    // Display name - prefer repo name over project path
-    const displayName = repoName || folderName || conv.project;
+    // Clean preview - remove system messages and commands
+    const preview = this.cleanPreview(conv.preview || conv.summary || '');
 
     return `
-      <div class="conversation-item" data-id="${conv.id}" data-project="${conv.project}" data-repo="${repoName}">
+      <div class="conversation-item" data-id="${conv.id}" data-project="${conv.project}" data-repo="${projectName}">
         <div class="conv-header">
-          <span class="conv-repo">${displayName}</span>
+          <span class="conv-project-name">${projectName}</span>
+          ${worktree ? `<span class="conv-worktree">${worktree}</span>` : ''}
           ${conv.branch ? `<span class="conv-branch">${conv.branch}</span>` : ''}
           <span class="conv-date">${lastStr}</span>
         </div>
 
-        <div class="conv-preview">${this.escapeHtml((conv.preview || conv.summary || '(No preview)').slice(0, 200))}</div>
+        <div class="conv-preview">${preview || '(No preview)'}</div>
 
         <div class="conv-details-section">
           <div class="detail-row-full">
-            <span class="detail-label">Started from:</span>
+            <span class="detail-label">Full path:</span>
             <span class="detail-value folder-path-full">${fullPath || 'Unknown'}</span>
           </div>
         </div>
@@ -409,6 +434,32 @@ class ConversationBrowser {
         </div>
       </div>
     `;
+  }
+
+  /**
+   * Clean preview text - remove system messages, commands, and XML tags
+   */
+  cleanPreview(text) {
+    if (!text) return '';
+
+    // Remove XML-like tags and their content
+    let cleaned = text
+      .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/gi, '')
+      .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, '')
+      .replace(/<command-name>[\s\S]*?<\/command-name>/gi, '')
+      .replace(/<command-message>[\s\S]*?<\/command-message>/gi, '')
+      .replace(/<command-args>[\s\S]*?<\/command-args>/gi, '')
+      .replace(/<[^>]+>/g, '') // Remove any remaining tags
+      .replace(/Caveat:.*?consider them in your response[^.]*\./gi, '')
+      .trim();
+
+    // If cleaned is empty or very short, return original (truncated)
+    if (cleaned.length < 10) {
+      cleaned = text.replace(/<[^>]+>/g, '').trim();
+    }
+
+    // Escape HTML and truncate
+    return this.escapeHtml(cleaned.slice(0, 200));
   }
 
   timeAgo(date) {

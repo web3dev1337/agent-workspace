@@ -5240,8 +5240,9 @@ header h1 {
   margin-bottom: var(--space-xs);
 }
 
-.conv-repo {
+.conv-project-name {
   font-weight: 600;
+  font-size: 1rem;
   color: #9f7aea;
   flex: 1;
   overflow: hidden;
@@ -5249,18 +5250,34 @@ header h1 {
   white-space: nowrap;
 }
 
-.conv-branch {
-  font-size: 0.7rem;
-  color: #48bb78;
-  background: rgba(72, 187, 120, 0.15);
-  padding: 2px 8px;
-  border-radius: 10px;
-  margin: 0 var(--space-sm);
+.conv-worktree {
+  font-size: 0.75rem;
+  color: #f6ad55;
+  background: rgba(246, 173, 85, 0.15);
+  padding: 3px 10px;
+  border-radius: 12px;
+  margin: 0 var(--space-xs);
   flex-shrink: 0;
+  font-weight: 500;
+}
+
+.conv-branch {
+  font-size: 0.75rem;
+  color: #48bb78;
+  background: rgba(72, 187, 120, 0.2);
+  padding: 3px 10px;
+  border-radius: 12px;
+  margin: 0 var(--space-xs);
+  flex-shrink: 0;
+  font-weight: 500;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .conv-date {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
   flex-shrink: 0;
   margin-left: auto;
@@ -5321,10 +5338,13 @@ header h1 {
 }
 
 .folder-path-full {
-  color: #63b3ed;
+  color: #90cdf4;
   word-break: break-all;
   font-family: monospace;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
+  background: rgba(99, 179, 237, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 
 /* Conversation details grid */
