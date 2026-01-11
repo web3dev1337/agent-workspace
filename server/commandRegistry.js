@@ -364,6 +364,329 @@ class CommandRegistry {
         return { results };
       }
     });
+
+    // ============ SESSION LIFECYCLE ============
+
+    this.register('restart-session', {
+      category: 'terminals',
+      description: 'Restart a terminal session',
+      params: [
+        { name: 'sessionId', required: true, description: 'Session to restart' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-claude' }, description: 'Restart Claude in work1' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'restart-session', ...params });
+        return { message: `Restarting ${params.sessionId}` };
+      }
+    });
+
+    this.register('kill-session', {
+      category: 'terminals',
+      description: 'Kill/terminate a terminal session completely',
+      params: [
+        { name: 'sessionId', required: true, description: 'Session to kill' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-server' }, description: 'Kill the server terminal in work1' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'kill-session', ...params });
+        return { message: `Killing ${params.sessionId}` };
+      }
+    });
+
+    this.register('destroy-session', {
+      category: 'terminals',
+      description: 'Destroy a session and remove it from the UI',
+      params: [
+        { name: 'sessionId', required: true, description: 'Session to destroy' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-claude' }, description: 'Destroy work1 claude session' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'destroy-session', ...params });
+        return { message: `Destroying ${params.sessionId}` };
+      }
+    });
+
+    // ============ SERVER CONTROL ============
+
+    this.register('stop-server', {
+      category: 'servers',
+      description: 'Stop the dev server in a worktree',
+      params: [
+        { name: 'sessionId', required: true, description: 'Server session to stop (e.g., work1-server)' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-server' }, description: 'Stop server in work1' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'server-control', sessionId: params.sessionId, controlAction: 'stop' });
+        return { message: `Stopping server ${params.sessionId}` };
+      }
+    });
+
+    this.register('restart-server', {
+      category: 'servers',
+      description: 'Restart the dev server in a worktree',
+      params: [
+        { name: 'sessionId', required: true, description: 'Server session to restart' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-server' }, description: 'Restart server in work1' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'server-control', sessionId: params.sessionId, controlAction: 'restart' });
+        return { message: `Restarting server ${params.sessionId}` };
+      }
+    });
+
+    this.register('kill-server', {
+      category: 'servers',
+      description: 'Force kill the dev server',
+      params: [
+        { name: 'sessionId', required: true, description: 'Server session to kill' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-server' }, description: 'Force kill server in work1' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'server-control', sessionId: params.sessionId, controlAction: 'kill' });
+        return { message: `Killing server ${params.sessionId}` };
+      }
+    });
+
+    this.register('build-production', {
+      category: 'servers',
+      description: 'Build production version of a project',
+      params: [
+        { name: 'sessionId', required: true, description: 'Session/worktree to build' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-server' }, description: 'Build production in work1' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'build-production', ...params });
+        return { message: `Building production for ${params.sessionId}` };
+      }
+    });
+
+    // ============ AGENT CONTROL ============
+
+    this.register('start-agent', {
+      category: 'agents',
+      description: 'Start an AI agent (Aider, etc.) in a session',
+      params: [
+        { name: 'sessionId', required: true, description: 'Session to start agent in' },
+        { name: 'agentType', required: false, description: 'Agent type (aider, cursor, etc.)' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-claude', agentType: 'aider' }, description: 'Start Aider in work1' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'start-agent', ...params });
+        return { message: `Starting agent in ${params.sessionId}` };
+      }
+    });
+
+    // ============ WORKTREE MANAGEMENT ============
+
+    this.register('add-worktree', {
+      category: 'worktrees',
+      description: 'Add a new worktree to the current workspace',
+      params: [
+        { name: 'worktreeId', required: false, description: 'New worktree ID (auto-generated if not provided)' }
+      ],
+      examples: [
+        { params: {}, description: 'Add a new worktree' },
+        { params: { worktreeId: 'work5' }, description: 'Add worktree with specific ID' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'add-worktree', ...params });
+        return { message: 'Adding new worktree' };
+      }
+    });
+
+    this.register('remove-worktree', {
+      category: 'worktrees',
+      description: 'Remove a worktree from the workspace',
+      params: [
+        { name: 'worktreeId', required: true, description: 'Worktree to remove' }
+      ],
+      examples: [
+        { params: { worktreeId: 'work3' }, description: 'Remove work3' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'remove-worktree', ...params });
+        return { message: `Removing worktree ${params.worktreeId}` };
+      }
+    });
+
+    // ============ TAB MANAGEMENT ============
+
+    this.register('close-tab', {
+      category: 'tabs',
+      description: 'Close the current workspace tab',
+      params: [
+        { name: 'tabId', required: false, description: 'Tab ID to close (current if not specified)' }
+      ],
+      examples: [
+        { params: {}, description: 'Close current tab' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'close-tab', ...params });
+        return { message: 'Closing tab' };
+      }
+    });
+
+    this.register('new-tab', {
+      category: 'tabs',
+      description: 'Open a new workspace tab',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'new-tab' });
+        return { message: 'Opening new tab' };
+      }
+    });
+
+    // ============ FILE OPERATIONS ============
+
+    this.register('open-folder', {
+      category: 'files',
+      description: 'Open a folder in the file explorer',
+      params: [
+        { name: 'path', required: false, description: 'Path to open (current worktree if not specified)' },
+        { name: 'sessionId', required: false, description: 'Session to get path from' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-claude' }, description: 'Open work1 folder in explorer' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-folder', ...params });
+        return { message: 'Opening folder in explorer' };
+      }
+    });
+
+    this.register('open-diff-viewer', {
+      category: 'files',
+      description: 'Open the diff viewer for code review',
+      params: [
+        { name: 'sessionId', required: false, description: 'Session to view diff for' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-claude' }, description: 'Open diff viewer for work1' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-diff-viewer', ...params });
+        return { message: 'Opening diff viewer' };
+      }
+    });
+
+    // ============ NAVIGATION ============
+
+    this.register('scroll-to-top', {
+      category: 'navigation',
+      description: 'Scroll terminal to top',
+      params: [
+        { name: 'sessionId', required: true, description: 'Session to scroll' }
+      ],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'scroll-to-top', ...params });
+        return { message: `Scrolling ${params.sessionId} to top` };
+      }
+    });
+
+    this.register('scroll-to-bottom', {
+      category: 'navigation',
+      description: 'Scroll terminal to bottom',
+      params: [
+        { name: 'sessionId', required: true, description: 'Session to scroll' }
+      ],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'scroll-to-bottom', ...params });
+        return { message: `Scrolling ${params.sessionId} to bottom` };
+      }
+    });
+
+    this.register('clear-terminal', {
+      category: 'navigation',
+      description: 'Clear terminal output',
+      params: [
+        { name: 'sessionId', required: true, description: 'Session to clear' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-claude' }, description: 'Clear work1 claude terminal' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'clear-terminal', ...params });
+        return { message: `Clearing ${params.sessionId}` };
+      }
+    });
+
+    // ============ QUICK ACTIONS ============
+
+    this.register('git-pull-all', {
+      category: 'git',
+      description: 'Pull latest changes in all worktrees',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'git-pull-all' });
+        return { message: 'Pulling in all worktrees' };
+      }
+    });
+
+    this.register('git-status-all', {
+      category: 'git',
+      description: 'Show git status for all worktrees',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'git-status-all' });
+        return { message: 'Getting status for all worktrees' };
+      }
+    });
+
+    this.register('stop-all-claudes', {
+      category: 'coordination',
+      description: 'Stop Claude in all sessions',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'stop-all-claudes' });
+        return { message: 'Stopping all Claude sessions' };
+      }
+    });
+
+    this.register('start-all-claudes', {
+      category: 'coordination',
+      description: 'Start Claude in all sessions',
+      params: [
+        { name: 'yolo', required: false, description: 'Use YOLO mode (default: true)' }
+      ],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'start-all-claudes', ...params });
+        return { message: 'Starting Claude in all sessions' };
+      }
+    });
+
+    this.register('refresh-all', {
+      category: 'coordination',
+      description: 'Refresh all terminal connections',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'refresh-all' });
+        return { message: 'Refreshing all terminals' };
+      }
+    });
   }
 }
 
