@@ -127,13 +127,7 @@ class CommanderService {
       await this.start();
     }
 
-    // Gather session info first for fresh starts
-    let sessionsInfo = '';
-    if (mode === 'fresh') {
-      sessionsInfo = await this.gatherSessionsInfo();
-    }
-
-    // Build the claude command with initial prompt for fresh starts
+    // Build the claude command
     let cmd = 'claude';
 
     // Add flags based on mode
@@ -148,10 +142,9 @@ class CommanderService {
       cmd += ' --dangerously-skip-permissions';
     }
 
-    // For fresh starts, pass initial prompt via -p flag (runs silently then becomes interactive)
+    // For fresh starts, pass simple greeting prompt
     if (mode === 'fresh') {
-      const initPrompt = `You are Commander Claude. Say "Commander Claude reporting for duty, sir!" then list these sessions: ${sessionsInfo}`;
-      cmd += ` -p "${initPrompt.replace(/"/g, '\\"')}"`;
+      cmd += ' -p "You are Commander Claude. Say: Commander Claude reporting for duty, sir!"';
     }
 
     logger.info('Starting Claude in Commander', { mode, yolo, cmd });
