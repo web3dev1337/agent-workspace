@@ -2519,6 +2519,14 @@ class ClaudeOrchestrator {
         this.stopSession(params.sessionId);
         break;
 
+      case 'focus-worktree':
+        this.showOnlyWorktree(params.worktreeId);
+        break;
+
+      case 'show-all-worktrees':
+        this.showAllWorktrees();
+        break;
+
       default:
         console.warn('Unknown commander action:', action);
     }
