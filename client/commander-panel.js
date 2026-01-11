@@ -52,20 +52,21 @@ class CommanderPanel {
     panel.id = 'commander-panel';
     panel.className = 'commander-panel hidden';
     panel.innerHTML = `
-      <div class="commander-header">
-        <div class="commander-title">
-          <span class="commander-icon">🎖️</span>
-          <h3>Commander Claude</h3>
+      <div class="commander-titlebar">
+        <div class="commander-titlebar-drag">
+          <span class="commander-titlebar-icon">🎖️</span>
+          <span class="commander-titlebar-text">Commander Claude</span>
           <span class="commander-status" id="commander-status-badge">Stopped</span>
         </div>
-        <div class="commander-actions">
-          <button id="commander-start" class="icon-button" title="Start Commander">▶️</button>
-          <button id="commander-stop" class="icon-button" title="Stop Commander">⏹️</button>
-          <button id="commander-clear" class="icon-button" title="Clear terminal">🗑️</button>
-          <button id="commander-close" class="icon-button" title="Close">✕</button>
+        <div class="commander-titlebar-controls">
+          <button id="commander-minimize" class="commander-window-btn minimize" title="Minimize">─</button>
+          <button id="commander-close" class="commander-window-btn close" title="Close">✕</button>
         </div>
       </div>
       <div class="commander-toolbar">
+        <button id="commander-start" class="commander-btn" title="Start terminal">▶️ Start</button>
+        <button id="commander-stop" class="commander-btn" title="Stop terminal">⏹️ Stop</button>
+        <div class="commander-toolbar-divider"></div>
         <button id="commander-start-claude" class="commander-btn" title="Start Claude Code">
           Start Claude
         </button>
@@ -170,17 +171,13 @@ class CommanderPanel {
     // Toggle button
     document.getElementById('commander-toggle')?.addEventListener('click', () => this.toggle());
 
-    // Close button
+    // Window controls
     document.getElementById('commander-close')?.addEventListener('click', () => this.hide());
+    document.getElementById('commander-minimize')?.addEventListener('click', () => this.hide());
 
-    // Start button
+    // Terminal controls
     document.getElementById('commander-start')?.addEventListener('click', () => this.startCommander());
-
-    // Stop button
     document.getElementById('commander-stop')?.addEventListener('click', () => this.stopCommander());
-
-    // Clear button
-    document.getElementById('commander-clear')?.addEventListener('click', () => this.clearTerminal());
 
     // Start Claude button
     document.getElementById('commander-start-claude')?.addEventListener('click', () => {
@@ -210,13 +207,13 @@ class CommanderPanel {
    */
   setupDragging() {
     const panel = document.getElementById('commander-panel');
-    const header = panel?.querySelector('.commander-header');
-    if (!panel || !header) return;
+    const titlebar = panel?.querySelector('.commander-titlebar');
+    if (!panel || !titlebar) return;
 
     let isDragging = false;
     let startX, startY, startLeft, startTop;
 
-    header.addEventListener('mousedown', (e) => {
+    titlebar.addEventListener('mousedown', (e) => {
       // Don't drag if clicking on buttons
       if (e.target.closest('button')) return;
 

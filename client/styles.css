@@ -4623,36 +4623,72 @@ header h1 {
   pointer-events: none;
 }
 
-.commander-header {
+/* Window-style titlebar */
+.commander-titlebar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-md);
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #2d333b 0%, #22272e 100%);
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   cursor: grab;
   user-select: none;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
-.commander-header:active {
+.commander-titlebar:active {
   cursor: grabbing;
 }
 
-.commander-title {
+.commander-titlebar-drag {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 8px;
+  flex: 1;
 }
 
-.commander-title h3 {
-  margin: 0;
+.commander-titlebar-icon {
   font-size: 1rem;
-  font-weight: 600;
 }
 
-.commander-icon {
-  font-size: 1.2rem;
+.commander-titlebar-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.commander-titlebar-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.commander-window-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.commander-window-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.commander-window-btn.close:hover {
+  background: #da3633;
+  color: white;
+}
+
+.commander-window-btn.minimize:hover {
+  background: var(--bg-tertiary);
 }
 
 .commander-status {
@@ -4855,6 +4891,12 @@ header h1 {
 .commander-btn:hover {
   background: var(--bg-secondary);
   border-color: var(--accent-primary);
+}
+
+.commander-toolbar-divider {
+  width: 1px;
+  background: var(--border-color);
+  margin: 0 4px;
 }
 
 .commander-toolbar select {
