@@ -3277,21 +3277,34 @@ header h1 {
 }
 
 .quick-links-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-start;
 }
 
 .quick-link {
   display: flex;
   align-items: center;
-  padding: 1rem;
+  padding: 0.5rem 0.75rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   text-decoration: none;
   color: var(--text-primary);
   transition: all 0.2s ease;
+  cursor: grab;
+  user-select: none;
+}
+
+.quick-link.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.quick-link.drag-over {
+  border-color: var(--accent-primary);
+  transform: scale(1.02);
 }
 
 .quick-link:hover {
@@ -3306,8 +3319,8 @@ header h1 {
 }
 
 .quick-link-icon {
-  font-size: 1.5rem;
-  margin-right: 0.75rem;
+  font-size: 1.1rem;
+  margin-right: 0.5rem;
 }
 
 .quick-link-label {
@@ -4569,24 +4582,49 @@ header h1 {
   background: #dc2626;
 }
 
-/* Commander Panel Styles */
+/* Commander Panel Styles - Modal Layout */
 .commander-panel {
   position: fixed;
-  right: 0;
-  top: 0;
-  width: 400px;
-  height: 100vh;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  max-width: 900px;
+  height: 70vh;
+  max-height: 700px;
   background: var(--bg-secondary);
-  border-left: 1px solid var(--border-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
-  z-index: 1000;
-  transform: translateX(0);
-  transition: transform 0.3s ease;
+  z-index: 1001;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  opacity: 1;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .commander-panel.hidden {
-  transform: translateX(100%);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.95);
+  pointer-events: none;
+}
+
+/* Backdrop for Commander Panel */
+.commander-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.commander-backdrop.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .commander-header {

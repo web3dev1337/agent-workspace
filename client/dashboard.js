@@ -70,6 +70,11 @@ class Dashboard {
 
     // Set up event listeners
     this.setupEventListeners();
+
+    // Set up quick links drag and drop
+    if (this.quickLinks) {
+      this.quickLinks.setupDragAndDrop();
+    }
   }
 
   generateDashboardHTML() {

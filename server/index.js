@@ -1430,6 +1430,17 @@ app.delete('/api/quick-links/favorites', async (req, res) => {
   }
 });
 
+app.post('/api/quick-links/favorites/reorder', async (req, res) => {
+  try {
+    const { urls } = req.body;
+    const favorites = await quickLinksService.reorderFavorites(urls);
+    res.json({ favorites });
+  } catch (error) {
+    logger.error('Failed to reorder favorites', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
+  }
+});
+
 app.post('/api/quick-links/track-session', async (req, res) => {
   try {
     const recentSessions = await quickLinksService.trackSession(req.body);

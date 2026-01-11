@@ -41,6 +41,12 @@ class CommanderPanel {
       headerActions.insertBefore(toggleBtn, headerActions.firstChild);
     }
 
+    // Create backdrop
+    const backdrop = document.createElement('div');
+    backdrop.id = 'commander-backdrop';
+    backdrop.className = 'commander-backdrop hidden';
+    document.body.appendChild(backdrop);
+
     // Create panel
     const panel = document.createElement('div');
     panel.id = 'commander-panel';
@@ -170,6 +176,9 @@ class CommanderPanel {
         this.hide();
       }
     });
+
+    // Click backdrop to close
+    document.getElementById('commander-backdrop')?.addEventListener('click', () => this.hide());
   }
 
   /**
@@ -241,8 +250,10 @@ class CommanderPanel {
    */
   show() {
     const panel = document.getElementById('commander-panel');
+    const backdrop = document.getElementById('commander-backdrop');
     if (panel) {
       panel.classList.remove('hidden');
+      backdrop?.classList.remove('hidden');
       this.isVisible = true;
 
       // Initialize terminal if not already
@@ -262,8 +273,10 @@ class CommanderPanel {
    */
   hide() {
     const panel = document.getElementById('commander-panel');
+    const backdrop = document.getElementById('commander-backdrop');
     if (panel) {
       panel.classList.add('hidden');
+      backdrop?.classList.add('hidden');
       this.isVisible = false;
     }
   }
