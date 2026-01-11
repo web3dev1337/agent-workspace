@@ -42,6 +42,7 @@ const { WorkspaceManager } = require('./workspaceManager');
 const { WorktreeHelper } = require('./worktreeHelper');
 const AgentManager = require('./agentManager');
 const { PortRegistry } = require('./portRegistry');
+const { GreenfieldService } = require('./greenfieldService');
 
 const app = express();
 const httpServer = createServer(app);
@@ -114,6 +115,7 @@ const gitHelper = new GitHelper();
 const notificationService = new NotificationService(io);
 const worktreeHelper = new WorktreeHelper();
 const portRegistry = PortRegistry.getInstance();
+const greenfieldService = GreenfieldService.getInstance();
 
 // Connect services
 sessionManager.setStatusDetector(statusDetector);
@@ -1269,6 +1271,77 @@ app.get('/api/ports/:repoPath/:worktreeId', async (req, res) => {
   } catch (error) {
     logger.error('Failed to get port info', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get port info' });
+  }
+});
+
+// Greenfield project API endpoints
+app.get('/api/greenfield/templates', (req, res) => {
+  try {
+    const templates = greenfieldService.getTemplates();
+    res.json(templates);
+  } catch (error) {
+    logger.error('Failed to get greenfield templates', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get templates' });
+  }
+});
+
+app.post('/api/greenfield/validate-path', async (req, res) => {
+  try {
+    const { path: projectPath } = req.body;
+    const result = await greenfieldService.validatePath(projectPath);
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to validate path', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to validate path' });
+  }
+});
+
+app.post('/api/greenfield/create', async (req, res) => {
+  try {
+    const { name, template, path, initGit, worktreeCount } = req.body;
+    logger.info('Creating greenfield project', { name, template, path, initGit, worktreeCount });
+
+    const result = await greenfieldService.createProject({
+      name,
+      template,
+      path,
+      initGit,
+      worktreeCount
+    });
+
+    // Optionally create a workspace for the new project
+    if (req.body.createWorkspace) {
+      const workspaceData = {
+        id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        name: name,
+        repository: {
+          path: result.projectPath,
+          masterBranch: 'master'
+        },
+        worktrees: {
+          enabled: true,
+          namingPattern: 'work{n}',
+          autoCreate: false
+        },
+        terminals: {
+          pairs: worktreeCount || 1
+        }
+      };
+
+      try {
+        await workspaceManager.createWorkspace(workspaceData);
+        result.workspace = workspaceData;
+        logger.info('Created workspace for greenfield project', { workspaceId: workspaceData.id });
+      } catch (wsError) {
+        logger.warn('Failed to create workspace', { error: wsError.message });
+        result.workspaceError = wsError.message;
+      }
+    }
+
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to create greenfield project', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
   }
 });
 
