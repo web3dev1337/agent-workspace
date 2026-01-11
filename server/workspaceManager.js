@@ -236,7 +236,12 @@ class WorkspaceManager {
    * @returns {object} Merged config with all properties from both configs
    */
   mergeConfigs(base, override) {
-    const result = { ...base };
+    // CRITICAL: Deep clone base to prevent cache mutation
+    // Shallow spread ({ ...base }) shares nested object references,
+    // causing cached configs to be modified when we merge
+    const result = JSON.parse(JSON.stringify(base || {}));
+
+    if (!override) return result;
 
     for (const key in override) {
       if (!override.hasOwnProperty(key)) continue;
@@ -248,7 +253,9 @@ class WorkspaceManager {
       // Special handling for specific keys
       if (key === 'gameModes' || key === 'commonFlags') {
         // Merge modes/flags (override can add new ones or override existing)
-        result[key] = { ...(result[key] || {}), ...override[key] };
+        // Deep clone override[key] too to prevent mutation
+        const overrideValue = JSON.parse(JSON.stringify(override[key]));
+        result[key] = { ...(result[key] || {}), ...overrideValue };
       } else if (key === 'buttons' || key === 'actions') {
         // Deep merge button/action objects (merge per terminal type, then per button)
         result[key] = this.mergeConfigs(result[key] || {}, override[key]);
@@ -256,8 +263,10 @@ class WorkspaceManager {
         // Recursively merge objects
         result[key] = this.mergeConfigs(result[key] || {}, override[key]);
       } else {
-        // Override primitives and arrays
-        result[key] = override[key];
+        // Override primitives and arrays (deep clone arrays too)
+        result[key] = Array.isArray(override[key])
+          ? JSON.parse(JSON.stringify(override[key]))
+          : override[key];
       }
     }
 

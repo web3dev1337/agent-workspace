@@ -52,18 +52,9 @@ class GitHelper {
     if (!skipCache) {
       const cached = this.getCachedBranch(worktreePath);
       if (cached) {
-        logger.info('📦 Using cached branch', { 
-          path: worktreePath, 
-          branch: cached,
-          cacheAge: this.branchCache.has(worktreePath) ? 
-            Date.now() - this.branchCache.get(worktreePath).timestamp : 'unknown'
-        });
+        logger.debug('Using cached branch', { path: worktreePath, branch: cached });
         return cached;
-      } else {
-        logger.info('🚫 No cache found', { path: worktreePath });
       }
-    } else {
-      logger.info('⏭️ Skipping cache as requested', { path: worktreePath });
     }
     
     try {
@@ -86,11 +77,7 @@ class GitHelper {
       }
       
       const branch = stdout.trim();
-      logger.info('🌿 Git command returned branch', { 
-        path: worktreePath, 
-        branch,
-        timestamp: new Date().toISOString()
-      });
+      logger.debug('Git returned branch', { path: worktreePath, branch });
       
       // Handle detached HEAD state
       if (branch === 'HEAD') {
@@ -107,8 +94,6 @@ class GitHelper {
       
       // Cache the result
       this.setCachedBranch(worktreePath, branch);
-      
-      logger.info('Retrieved git branch', { path: worktreePath, branch });
       return branch;
       
     } catch (error) {

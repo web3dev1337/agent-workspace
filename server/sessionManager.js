@@ -395,10 +395,7 @@ class SessionManager extends EventEmitter {
               
               // Small delay to ensure the file write is complete
               setTimeout(() => {
-                logger.info('⏰ Triggering branch update from file watcher', { 
-                  worktree: worktree.id,
-                  delay: '50ms'
-                });
+                logger.debug('File watcher triggered branch update', { worktree: worktree.id });
                 this.updateGitBranch(worktree.id, worktree.path, true);
               }, 50);
             }
@@ -883,15 +880,8 @@ class SessionManager extends EventEmitter {
           session.defaultBranch = defaultBranch;
           session.existingPR = existingPR;
 
-          logger.info('📡 Emitting branch-update', {
-            sessionId,
-            oldBranch,
-            newBranch: branch,
-            remoteUrl: remoteUrl ? 'present' : 'none',
-            defaultBranch,
-            existingPR: existingPR ? 'found' : 'none',
-            timestamp: new Date().toISOString()
-          });
+          // Only log at debug level to reduce spam (fires frequently)
+          logger.debug('Branch update', { sessionId, oldBranch, newBranch: branch });
 
           this.io.emit('branch-update', { sessionId, branch, remoteUrl, defaultBranch, existingPR });
         }
