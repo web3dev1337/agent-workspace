@@ -30,16 +30,7 @@ class CommanderPanel {
    * Create the panel HTML structure
    */
   createPanelHTML() {
-    // Create toggle button in header
-    const headerActions = document.querySelector('.header-actions');
-    if (headerActions) {
-      const toggleBtn = document.createElement('button');
-      toggleBtn.id = 'commander-toggle';
-      toggleBtn.className = 'icon-button';
-      toggleBtn.title = 'Commander (Top-Level Claude)';
-      toggleBtn.innerHTML = '🎖️';
-      headerActions.insertBefore(toggleBtn, headerActions.firstChild);
-    }
+    // Toggle button is now in index.html
 
     // Create backdrop
     const backdrop = document.createElement('div');
