@@ -127,9 +127,6 @@ class CommanderService {
       await this.start();
     }
 
-    // Path to Commander's special CLAUDE.md with orchestration instructions
-    const commanderMdPath = path.join(__dirname, '..', 'COMMANDER_CLAUDE.md');
-
     // Build the claude command
     let cmd = 'claude';
 
@@ -148,14 +145,7 @@ class CommanderService {
     logger.info('Starting Claude in Commander', { mode, yolo, cmd });
     this.sendInput(cmd + '\n');
 
-    // After a brief delay, send initial context about Commander capabilities
-    if (mode === 'fresh') {
-      setTimeout(() => {
-        const initPrompt = `Read the Commander instructions at ${commanderMdPath} to understand your orchestration capabilities. You are Commander Claude - the top-level AI for this development environment.`;
-        this.sendInput(initPrompt + '\n');
-      }, 3000);
-    }
-
+    // Claude will read ~/CLAUDE.md which has Commander instructions
     return { success: true, message: `Starting Claude (${mode})` };
   }
 
