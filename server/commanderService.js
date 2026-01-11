@@ -82,6 +82,9 @@ class CommanderService {
 
       // Handle output
       ptyProcess.onData((data) => {
+        // Guard against data arriving after stop() nullifies session
+        if (!this.session) return;
+
         this.session.buffer += data;
         this.session.lastActivity = Date.now();
 
