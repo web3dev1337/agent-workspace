@@ -373,11 +373,14 @@ class ConversationBrowser {
 
         <div class="conv-preview">${this.escapeHtml((conv.preview || conv.summary || '(No preview)').slice(0, 200))}</div>
 
-        <div class="conv-details-grid">
-          <div class="detail-row">
-            <span class="detail-label">Path:</span>
-            <span class="detail-value folder-path" title="${fullPath}">${folderName}</span>
+        <div class="conv-details-section">
+          <div class="detail-row-full">
+            <span class="detail-label">Started from:</span>
+            <span class="detail-value folder-path-full">${fullPath || 'Unknown'}</span>
           </div>
+        </div>
+
+        <div class="conv-details-grid">
           <div class="detail-row">
             <span class="detail-label">Model:</span>
             <span class="detail-value model-name">${conv.model || 'Unknown'}</span>

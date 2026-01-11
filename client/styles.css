@@ -5299,6 +5299,34 @@ header h1 {
   color: #63b3ed;
 }
 
+/* Full-width details section */
+.conv-details-section {
+  margin: var(--space-sm) 0;
+  padding: var(--space-sm);
+  background: var(--bg-primary);
+  border-radius: var(--radius-xs);
+  font-size: 0.75rem;
+}
+
+.detail-row-full {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+}
+
+.detail-row-full .detail-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.folder-path-full {
+  color: #63b3ed;
+  word-break: break-all;
+  font-family: monospace;
+  font-size: 0.7rem;
+}
+
 /* Conversation details grid */
 .conv-details-grid {
   display: grid;
