@@ -283,4 +283,95 @@ test.describe('Conversation Browser', () => {
 
     await expect(browserModal).not.toBeVisible();
   });
+
+  test('should have date filter dropdown', async ({ page }) => {
+    const historyBtn = page.locator('#conversations-btn');
+    await historyBtn.click();
+
+    const dateFilter = page.locator('#conv-date-filter');
+    await expect(dateFilter).toBeVisible({ timeout: 5000 });
+
+    // Check filter options exist
+    const options = await dateFilter.locator('option').count();
+    expect(options).toBeGreaterThanOrEqual(6); // All Time + 5 presets
+  });
+
+  test('should have repo filter dropdown', async ({ page }) => {
+    const historyBtn = page.locator('#conversations-btn');
+    await historyBtn.click();
+
+    const repoFilter = page.locator('#conv-repo-filter');
+    await expect(repoFilter).toBeVisible({ timeout: 5000 });
+  });
+
+  test('should have load all checkbox', async ({ page }) => {
+    const historyBtn = page.locator('#conversations-btn');
+    await historyBtn.click();
+
+    const loadAllCheckbox = page.locator('#load-all-checkbox');
+    await expect(loadAllCheckbox).toBeVisible({ timeout: 5000 });
+  });
+
+  test('should show total indexed count', async ({ page }) => {
+    const historyBtn = page.locator('#conversations-btn');
+    await historyBtn.click();
+
+    const totalIndexed = page.locator('#total-indexed');
+    await expect(totalIndexed).toBeVisible({ timeout: 5000 });
+
+    // Wait for stats to load
+    await page.waitForTimeout(1000);
+    const text = await totalIndexed.textContent();
+    expect(text).not.toBe('0');
+  });
+});
+
+test.describe('Conversation API Performance', () => {
+  test('recent API should respond within 500ms', async ({ request }) => {
+    const start = Date.now();
+    const response = await request.get('http://localhost:4000/api/conversations/recent?limit=100');
+    const duration = Date.now() - start;
+
+    expect(response.ok()).toBeTruthy();
+    expect(duration).toBeLessThan(500);
+  });
+
+  test('search API should respond within 1000ms', async ({ request }) => {
+    const start = Date.now();
+    const response = await request.get('http://localhost:4000/api/conversations/search?q=test&limit=100');
+    const duration = Date.now() - start;
+
+    expect(response.ok()).toBeTruthy();
+    expect(duration).toBeLessThan(1000);
+  });
+
+  test('stats API should respond within 200ms', async ({ request }) => {
+    const start = Date.now();
+    const response = await request.get('http://localhost:4000/api/conversations/stats');
+    const duration = Date.now() - start;
+
+    expect(response.ok()).toBeTruthy();
+    expect(duration).toBeLessThan(200);
+  });
+
+  test('should handle large limit parameter', async ({ request }) => {
+    const start = Date.now();
+    const response = await request.get('http://localhost:4000/api/conversations/recent?limit=5000');
+    const duration = Date.now() - start;
+
+    expect(response.ok()).toBeTruthy();
+    expect(duration).toBeLessThan(3000); // 3 seconds max for large loads
+  });
+
+  test('search with date range should work', async ({ request }) => {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const response = await request.get(`http://localhost:4000/api/conversations/search?startDate=${weekAgo}&limit=50`);
+    expect(response.ok()).toBeTruthy();
+
+    const data = await response.json();
+    expect(data).toHaveProperty('results');
+    expect(data).toHaveProperty('total');
+  });
 });
