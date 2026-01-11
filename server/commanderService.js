@@ -145,8 +145,67 @@ class CommanderService {
     logger.info('Starting Claude in Commander', { mode, yolo, cmd });
     this.sendInput(cmd + '\n');
 
-    // Claude will read ~/CLAUDE.md which has Commander instructions
+    // After Claude starts, inject context and request greeting
+    if (mode === 'fresh') {
+      setTimeout(async () => {
+        try {
+          // Gather current session info
+          const sessionsInfo = await this.gatherSessionsInfo();
+
+          const initPrompt = `You are Commander Claude. First, say: "Commander Claude reporting for duty, sir!"
+
+Then briefly acknowledge these active sessions:
+${sessionsInfo}
+
+Read ~/CLAUDE.md for your full orchestration capabilities.`;
+
+          this.sendInput(initPrompt + '\n');
+        } catch (err) {
+          logger.error('Failed to inject Commander context', { error: err.message });
+        }
+      }, 4000); // Wait for Claude to initialize
+    }
+
     return { success: true, message: `Starting Claude (${mode})` };
+  }
+
+  /**
+   * Gather current sessions info for Commander context
+   */
+  async gatherSessionsInfo() {
+    try {
+      const http = require('http');
+      const port = process.env.PORT || 4000;
+
+      return new Promise((resolve) => {
+        const req = http.get(`http://localhost:${port}/api/commander/sessions`, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            try {
+              const { sessions } = JSON.parse(data);
+              if (!sessions || sessions.length === 0) {
+                resolve('No active sessions.');
+                return;
+              }
+              const summary = sessions.map(s =>
+                `- ${s.id}: ${s.status} ${s.branch ? `(${s.branch})` : ''}`
+              ).join('\n');
+              resolve(summary);
+            } catch {
+              resolve('Could not fetch sessions.');
+            }
+          });
+        });
+        req.on('error', () => resolve('Could not fetch sessions.'));
+        req.setTimeout(2000, () => {
+          req.destroy();
+          resolve('Sessions request timed out.');
+        });
+      });
+    } catch {
+      return 'Could not fetch sessions.';
+    }
   }
 
   /**
