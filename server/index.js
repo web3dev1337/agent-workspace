@@ -47,6 +47,7 @@ const { ContinuityService } = require('./continuityService');
 const { QuickLinksService } = require('./quickLinksService');
 const { CommanderService } = require('./commanderService');
 const commandRegistry = require('./commandRegistry');
+const voiceCommandService = require('./voiceCommandService');
 
 const app = express();
 const httpServer = createServer(app);
@@ -1636,6 +1637,49 @@ app.post('/api/commander/execute', async (req, res) => {
   } catch (error) {
     logger.error('Failed to execute command', { error: error.message });
     res.status(500).json({ error: 'Failed to execute command' });
+  }
+});
+
+// ============ VOICE COMMAND ENDPOINTS ============
+
+// Process voice command (parse + execute)
+app.post('/api/voice/command', async (req, res) => {
+  try {
+    const { transcript } = req.body;
+    if (!transcript) {
+      return res.status(400).json({ error: 'transcript is required' });
+    }
+    const result = await voiceCommandService.processVoiceCommand(transcript);
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to process voice command', { error: error.message });
+    res.status(500).json({ error: 'Failed to process voice command' });
+  }
+});
+
+// Parse voice command without executing
+app.post('/api/voice/parse', async (req, res) => {
+  try {
+    const { transcript } = req.body;
+    if (!transcript) {
+      return res.status(400).json({ error: 'transcript is required' });
+    }
+    const result = await voiceCommandService.parseCommand(transcript);
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to parse voice command', { error: error.message });
+    res.status(500).json({ error: 'Failed to parse voice command' });
+  }
+});
+
+// Get available voice commands
+app.get('/api/voice/commands', (req, res) => {
+  try {
+    const commands = voiceCommandService.getVoiceCommands();
+    res.json(commands);
+  } catch (error) {
+    logger.error('Failed to get voice commands', { error: error.message });
+    res.status(500).json({ error: 'Failed to get voice commands' });
   }
 });
 

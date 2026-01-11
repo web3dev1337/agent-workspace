@@ -65,6 +65,12 @@ class ClaudeOrchestrator {
         console.log('Commander panel initialized');
       }
 
+      // Initialize Voice Control (push-to-talk voice commands)
+      if (typeof VoiceControl !== 'undefined') {
+        this.voiceControl = new VoiceControl(this);
+        console.log('Voice control initialized (press V or click mic button)');
+      }
+
       // Initialize Greenfield wizard for new project creation
       if (typeof GreenfieldWizard !== 'undefined') {
         this.greenfieldWizard = new GreenfieldWizard(this);
@@ -2525,7 +2531,7 @@ class ClaudeOrchestrator {
         break;
 
       case 'show-all-worktrees':
-        this.showAllWorktrees();
+        this.showAllTerminals();
         break;
 
       default:
