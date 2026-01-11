@@ -137,6 +137,8 @@ const notificationService = new NotificationService(io);
 const worktreeHelper = new WorktreeHelper();
 const portRegistry = PortRegistry.getInstance();
 const greenfieldService = GreenfieldService.getInstance();
+greenfieldService.setSessionManager(sessionManager);
+greenfieldService.setIO(io);
 const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
 
@@ -1379,6 +1381,87 @@ app.post('/api/greenfield/create', async (req, res) => {
     logger.error('Failed to create greenfield project', { error: error.message, stack: error.stack });
     res.status(400).json({ error: error.message });
   }
+});
+
+// Full greenfield project creation with GitHub repo and Claude spawning
+app.post('/api/greenfield/create-full', async (req, res) => {
+  try {
+    const {
+      name,
+      description,
+      category,
+      isPrivate = true,
+      worktreeCount = 8,
+      spawnClaude = true,
+      yolo = true
+    } = req.body;
+
+    logger.info('Creating full greenfield project', { name, description, category });
+
+    const result = await greenfieldService.createFullProject({
+      name,
+      description,
+      category,
+      isPrivate,
+      worktreeCount,
+      spawnClaude,
+      yolo
+    });
+
+    // Also create a workspace configuration
+    if (result.success) {
+      const workspaceData = {
+        id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        name: name,
+        repository: {
+          path: result.projectPath,
+          masterBranch: 'master'
+        },
+        worktrees: {
+          enabled: true,
+          namingPattern: 'work{n}',
+          autoCreate: false
+        },
+        terminals: {
+          pairs: worktreeCount
+        }
+      };
+
+      try {
+        await workspaceManager.createWorkspace(workspaceData);
+        result.workspace = workspaceData;
+        logger.info('Created workspace for greenfield project', { workspaceId: workspaceData.id });
+      } catch (wsError) {
+        logger.warn('Failed to create workspace', { error: wsError.message });
+        result.workspaceError = wsError.message;
+      }
+    }
+
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to create full greenfield project', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Get greenfield categories
+app.get('/api/greenfield/categories', (req, res) => {
+  const categories = greenfieldService.getCategories();
+  res.json(categories);
+});
+
+// Detect category from description
+app.post('/api/greenfield/detect-category', (req, res) => {
+  const { description } = req.body;
+  if (!description) {
+    return res.status(400).json({ error: 'description is required' });
+  }
+  const category = greenfieldService.detectCategory(description);
+  const categoryConfig = greenfieldService.categories[category];
+  res.json({
+    category,
+    path: categoryConfig.path
+  });
 });
 
 // Continuity ledger API endpoints
