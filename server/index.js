@@ -44,6 +44,7 @@ const AgentManager = require('./agentManager');
 const { PortRegistry } = require('./portRegistry');
 const { GreenfieldService } = require('./greenfieldService');
 const { ContinuityService } = require('./continuityService');
+const { QuickLinksService } = require('./quickLinksService');
 
 const app = express();
 const httpServer = createServer(app);
@@ -118,6 +119,7 @@ const worktreeHelper = new WorktreeHelper();
 const portRegistry = PortRegistry.getInstance();
 const greenfieldService = GreenfieldService.getInstance();
 const continuityService = ContinuityService.getInstance();
+const quickLinksService = QuickLinksService.getInstance();
 
 // Connect services
 sessionManager.setStatusDetector(statusDetector);
@@ -1385,6 +1387,73 @@ app.get('/api/continuity/workspace', async (req, res) => {
   } catch (error) {
     logger.error('Failed to get workspace ledgers', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get workspace ledgers' });
+  }
+});
+
+// Quick Links API endpoints
+app.get('/api/quick-links', async (req, res) => {
+  try {
+    const data = await quickLinksService.getAll();
+    res.json(data);
+  } catch (error) {
+    logger.error('Failed to get quick links', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get quick links' });
+  }
+});
+
+app.post('/api/quick-links/favorites', async (req, res) => {
+  try {
+    const { name, url, icon } = req.body;
+    const favorites = await quickLinksService.addFavorite({ name, url, icon });
+    res.json({ favorites });
+  } catch (error) {
+    logger.error('Failed to add favorite', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete('/api/quick-links/favorites', async (req, res) => {
+  try {
+    const { url } = req.body;
+    const favorites = await quickLinksService.removeFavorite(url);
+    res.json({ favorites });
+  } catch (error) {
+    logger.error('Failed to remove favorite', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/quick-links/track-session', async (req, res) => {
+  try {
+    const recentSessions = await quickLinksService.trackSession(req.body);
+    res.json({ recentSessions });
+  } catch (error) {
+    logger.error('Failed to track session', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to track session' });
+  }
+});
+
+app.get('/api/quick-links/recent-sessions', (req, res) => {
+  try {
+    const { workspaceId, limit } = req.query;
+    const sessions = quickLinksService.getRecentSessions({
+      workspaceId,
+      limit: limit ? parseInt(limit) : undefined
+    });
+    res.json({ sessions });
+  } catch (error) {
+    logger.error('Failed to get recent sessions', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get recent sessions' });
+  }
+});
+
+app.delete('/api/quick-links/recent-sessions', async (req, res) => {
+  try {
+    await quickLinksService.clearRecentSessions();
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to clear recent sessions', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to clear recent sessions' });
   }
 });
 
