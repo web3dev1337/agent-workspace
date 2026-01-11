@@ -279,6 +279,35 @@ header h1 {
   gap: var(--space-md);
 }
 
+.header-btn {
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+
+.header-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent-primary);
+}
+
+.header-btn.commander-btn {
+  background: linear-gradient(135deg, #2d333b 0%, #1c2128 100%);
+  border-color: #f0883e;
+}
+
+.header-btn.commander-btn:hover {
+  background: linear-gradient(135deg, #3d434b 0%, #2c3138 100%);
+  box-shadow: 0 0 8px rgba(240, 136, 62, 0.3);
+}
+
 /* Terminal Grid */
 .terminal-grid {
   padding: var(--space-md);

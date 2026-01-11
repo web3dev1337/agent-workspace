@@ -65,6 +65,15 @@ class ClaudeOrchestrator {
         console.log('Commander panel initialized');
       }
 
+      // Initialize Greenfield wizard for new project creation
+      if (typeof GreenfieldWizard !== 'undefined') {
+        this.greenfieldWizard = new GreenfieldWizard(this);
+        document.getElementById('greenfield-btn')?.addEventListener('click', () => {
+          this.greenfieldWizard.show();
+        });
+        console.log('Greenfield wizard initialized');
+      }
+
       // Request notification permission if enabled
       if (this.settings.notifications) {
         this.notificationManager.requestPermission();
