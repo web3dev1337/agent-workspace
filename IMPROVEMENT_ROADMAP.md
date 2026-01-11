@@ -616,4 +616,125 @@ class VoiceCommandManager {
 
 ---
 
+## Key Insight: Multi-Project Workspaces
+
+**Important:** A workspace can have 8 worktrees, each working on a DIFFERENT project/task:
+
+```
+Workspace: "HyFire Development"
+├── work1 → Feature: New weapon system
+├── work2 → Bugfix: Player collision
+├── work3 → Experiment: AI pathfinding
+├── work4 → Docs: API reference
+├── work5 → (available)
+├── work6 → Greenfield: Totally different project!
+├── work7 → (available)
+├── work8 → (available)
+```
+
+This means:
+- **Each worktree needs its own ledger** (session continuity)
+- **Dashboard shows per-worktree status**, not per-workspace
+- **Recent sessions are per-worktree**
+- **Greenfield projects can be started in any available worktree**
+
+---
+
+## Integration: Continuous-Claude-Lite
+
+### Existing System
+Located at: `/home/<user>/GitHub/tools/continuous-claude-lite/`
+
+Provides:
+- **Ledgers** (`thoughts/ledgers/CONTINUITY_CLAUDE-*.md`) - Session state per worktree
+- **Handoffs** (`thoughts/shared/handoffs/`) - Transfer work between sessions
+- **Auto-handoffs** - Created before context compaction
+- **Hooks** - Automatic loading on session start/resume
+
+### Integration Plan
+
+**1. Read Ledgers in Orchestrator:**
+```javascript
+// server/continuityService.js
+class ContinuityService {
+  async getWorktreeLedger(worktreePath) {
+    const ledgerPath = path.join(worktreePath, 'thoughts/ledgers');
+    const files = await fs.readdir(ledgerPath);
+    const ledger = files.find(f => f.startsWith('CONTINUITY_CLAUDE'));
+
+    if (ledger) {
+      const content = await fs.readFile(path.join(ledgerPath, ledger), 'utf8');
+      return this.parseLedger(content);
+    }
+    return null;
+  }
+
+  parseLedger(content) {
+    // Extract: Goal, Current State, Next Steps
+    return {
+      goal: this.extractSection(content, 'Goal'),
+      currentState: this.extractSection(content, 'Current State'),
+      nextSteps: this.extractSection(content, 'Next Steps'),
+      lastUpdated: this.extractDate(content)
+    };
+  }
+}
+```
+
+**2. Show in Orchestrator UI:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ work1 - claude                           [feature/weapons]  │
+├─────────────────────────────────────────────────────────────┤
+│ GOAL: Implement new weapon system                           │
+│ STATE: Added base weapon class, working on projectiles      │
+│ NEXT: Add particle effects, test with player                │
+│ Last active: 2 hours ago                                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**3. Auto-Create Structure for New Worktrees:**
+```javascript
+async initializeWorktreeContinuity(worktreePath) {
+  const thoughtsDir = path.join(worktreePath, 'thoughts');
+  await fs.mkdir(path.join(thoughtsDir, 'ledgers'), { recursive: true });
+  await fs.mkdir(path.join(thoughtsDir, 'shared/handoffs'), { recursive: true });
+  await fs.mkdir(path.join(thoughtsDir, 'shared/plans'), { recursive: true });
+
+  // Copy hooks from continuous-claude-lite template
+  await this.copyHooks(worktreePath);
+}
+```
+
+**4. Dashboard "Recent Work" from Ledgers:**
+```javascript
+async getRecentWork() {
+  const allLedgers = [];
+
+  for (const workspace of this.workspaces) {
+    for (const worktree of workspace.worktrees) {
+      const ledger = await this.getWorktreeLedger(worktree.path);
+      if (ledger) {
+        allLedgers.push({
+          workspace: workspace.name,
+          worktree: worktree.id,
+          ...ledger
+        });
+      }
+    }
+  }
+
+  // Sort by lastUpdated, most recent first
+  return allLedgers.sort((a, b) => b.lastUpdated - a.lastUpdated);
+}
+```
+
+### Benefits
+- **No more "what was I working on?"** - Ledger tells you
+- **Easy resume** - Click worktree, ledger loads automatically
+- **Cross-session persistence** - Survives crashes, restarts
+- **Per-worktree context** - 8 independent projects per workspace
+
+---
+
 *This roadmap is a living document. Update as implementation progresses.*
