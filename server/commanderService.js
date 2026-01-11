@@ -127,7 +127,13 @@ class CommanderService {
       await this.start();
     }
 
-    // Build the claude command
+    // Gather session info first for fresh starts
+    let sessionsInfo = '';
+    if (mode === 'fresh') {
+      sessionsInfo = await this.gatherSessionsInfo();
+    }
+
+    // Build the claude command with initial prompt for fresh starts
     let cmd = 'claude';
 
     // Add flags based on mode
@@ -142,29 +148,14 @@ class CommanderService {
       cmd += ' --dangerously-skip-permissions';
     }
 
+    // For fresh starts, pass initial prompt via -p flag (runs silently then becomes interactive)
+    if (mode === 'fresh') {
+      const initPrompt = `You are Commander Claude. Say "Commander Claude reporting for duty, sir!" then list these sessions: ${sessionsInfo}`;
+      cmd += ` -p "${initPrompt.replace(/"/g, '\\"')}"`;
+    }
+
     logger.info('Starting Claude in Commander', { mode, yolo, cmd });
     this.sendInput(cmd + '\n');
-
-    // After Claude starts, inject context and request greeting
-    if (mode === 'fresh') {
-      setTimeout(async () => {
-        try {
-          // Gather current session info
-          const sessionsInfo = await this.gatherSessionsInfo();
-
-          const initPrompt = `You are Commander Claude. First, say: "Commander Claude reporting for duty, sir!"
-
-Then briefly acknowledge these active sessions:
-${sessionsInfo}
-
-Read ~/CLAUDE.md for your full orchestration capabilities.`;
-
-          this.sendInput(initPrompt + '\n');
-        } catch (err) {
-          logger.error('Failed to inject Commander context', { error: err.message });
-        }
-      }, 4000); // Wait for Claude to initialize
-    }
 
     return { success: true, message: `Starting Claude (${mode})` };
   }
