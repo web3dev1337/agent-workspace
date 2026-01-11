@@ -4582,12 +4582,12 @@ header h1 {
   background: #dc2626;
 }
 
-/* Commander Panel Styles - Modal Layout */
+/* Commander Panel Styles - Draggable Floating Window */
 .commander-panel {
   position: fixed;
-  top: 50%;
+  top: 10%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   width: 80%;
   max-width: 900px;
   height: 70vh;
@@ -4600,26 +4600,22 @@ header h1 {
   z-index: 1001;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   opacity: 1;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.15s ease;
+}
+
+.commander-panel.dragging {
+  transition: none;
+  transform: none;
 }
 
 .commander-panel.hidden {
   opacity: 0;
-  transform: translate(-50%, -50%) scale(0.95);
   pointer-events: none;
 }
 
-/* Backdrop for Commander Panel */
+/* Backdrop for Commander Panel - transparent to not block UI */
 .commander-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 1000;
-  opacity: 1;
-  transition: opacity 0.2s ease;
+  display: none; /* Completely hidden - no overlay */
 }
 
 .commander-backdrop.hidden {
@@ -4634,6 +4630,13 @@ header h1 {
   padding: var(--space-md);
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-tertiary);
+  cursor: grab;
+  user-select: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.commander-header:active {
+  cursor: grabbing;
 }
 
 .commander-title {

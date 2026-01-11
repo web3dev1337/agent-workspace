@@ -23,9 +23,9 @@ const logger = winston.createLogger({
   ]
 });
 
-// Commander runs from the same directory as this orchestrator instance
-// This ensures it uses the correct CLAUDE.md for system context
-const COMMANDER_CWD = process.env.COMMANDER_CWD || path.resolve(__dirname, '..');
+// Commander runs from the home directory by default
+// This gives it a neutral starting point from which to orchestrate all projects
+const COMMANDER_CWD = process.env.COMMANDER_CWD || os.homedir();
 
 class CommanderService {
   constructor(options = {}) {
