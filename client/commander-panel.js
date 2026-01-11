@@ -132,6 +132,15 @@ class CommanderPanel {
     requestAnimationFrame(() => {
       this.fitAddon.fit();
       this.terminal.focus();
+
+      // Write any pending output that was buffered before terminal was ready
+      if (this.pendingOutput) {
+        this.terminal.write(this.pendingOutput);
+        this.pendingOutput = '';
+      }
+
+      // Fetch and display existing output from Commander
+      this.fetchInitialOutput();
     });
 
     // Handle input - send to Commander service
@@ -197,15 +206,27 @@ class CommanderPanel {
    * Setup Socket.IO listeners for Commander output
    */
   setupSocketListeners() {
-    if (!this.orchestrator?.socket) return;
+    const socket = this.orchestrator?.socket;
+    if (!socket) {
+      // Retry when socket becomes available
+      setTimeout(() => this.setupSocketListeners(), 500);
+      return;
+    }
 
-    this.orchestrator.socket.on('commander-output', ({ data }) => {
+    // Remove any existing listeners to avoid duplicates
+    socket.off('commander-output');
+    socket.off('commander-exit');
+
+    socket.on('commander-output', ({ data }) => {
       if (this.terminal) {
         this.terminal.write(data);
+      } else {
+        // Buffer output if terminal not ready
+        this.pendingOutput = (this.pendingOutput || '') + data;
       }
     });
 
-    this.orchestrator.socket.on('commander-exit', ({ exitCode }) => {
+    socket.on('commander-exit', ({ exitCode }) => {
       this.isRunning = false;
       this.updateStatusBadge();
       if (this.terminal) {
@@ -384,6 +405,24 @@ class CommanderPanel {
       });
     } catch (error) {
       console.error('Failed to send input:', error);
+    }
+  }
+
+  /**
+   * Fetch and display initial output from Commander
+   * Called when terminal is first created to show existing buffer
+   */
+  async fetchInitialOutput() {
+    try {
+      const response = await fetch(`${this.serverUrl}/api/commander/output?lines=500`);
+      if (response.ok) {
+        const { output } = await response.json();
+        if (output && this.terminal) {
+          this.terminal.write(output);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch initial output:', error);
     }
   }
 
