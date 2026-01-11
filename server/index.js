@@ -43,6 +43,7 @@ const { WorktreeHelper } = require('./worktreeHelper');
 const AgentManager = require('./agentManager');
 const { PortRegistry } = require('./portRegistry');
 const { GreenfieldService } = require('./greenfieldService');
+const { ContinuityService } = require('./continuityService');
 
 const app = express();
 const httpServer = createServer(app);
@@ -116,6 +117,7 @@ const notificationService = new NotificationService(io);
 const worktreeHelper = new WorktreeHelper();
 const portRegistry = PortRegistry.getInstance();
 const greenfieldService = GreenfieldService.getInstance();
+const continuityService = ContinuityService.getInstance();
 
 // Connect services
 sessionManager.setStatusDetector(statusDetector);
@@ -1342,6 +1344,47 @@ app.post('/api/greenfield/create', async (req, res) => {
   } catch (error) {
     logger.error('Failed to create greenfield project', { error: error.message, stack: error.stack });
     res.status(400).json({ error: error.message });
+  }
+});
+
+// Continuity ledger API endpoints
+app.get('/api/continuity/ledger', async (req, res) => {
+  try {
+    const { worktreePath } = req.query;
+    if (!worktreePath) {
+      return res.status(400).json({ error: 'worktreePath is required' });
+    }
+
+    const ledger = await continuityService.getLedger(worktreePath);
+    if (ledger) {
+      const summary = continuityService.getSummary(ledger);
+      res.json({ ledger, summary });
+    } else {
+      res.json({ ledger: null, summary: null });
+    }
+  } catch (error) {
+    logger.error('Failed to get continuity ledger', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get ledger' });
+  }
+});
+
+app.get('/api/continuity/workspace', async (req, res) => {
+  try {
+    const activeWorkspace = workspaceManager.getActiveWorkspace();
+    if (!activeWorkspace) {
+      return res.json({ ledgers: [] });
+    }
+
+    const ledgers = await continuityService.getWorkspaceLedgers(activeWorkspace);
+    const summaries = ledgers.map(l => ({
+      ...l,
+      summary: continuityService.getSummary(l.ledger)
+    }));
+
+    res.json({ ledgers: summaries });
+  } catch (error) {
+    logger.error('Failed to get workspace ledgers', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get workspace ledgers' });
   }
 });
 
