@@ -307,3 +307,62 @@ test.describe('Socket.IO Connection', () => {
     }
   });
 });
+
+test.describe('Commander API', () => {
+  test('should get commander status', async ({ request }) => {
+    const response = await request.get(`${SERVER_URL}/api/commander/status`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const status = await response.json();
+    expect(status).toHaveProperty('enabled');
+    expect(status).toHaveProperty('historyLength');
+    expect(status).toHaveProperty('apiKeyConfigured');
+  });
+
+  test('should get available tools', async ({ request }) => {
+    const response = await request.get(`${SERVER_URL}/api/commander/tools`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const data = await response.json();
+    expect(data).toHaveProperty('tools');
+    expect(Array.isArray(data.tools)).toBe(true);
+    expect(data.tools.length).toBeGreaterThan(0);
+
+    // Check that tools have required properties
+    data.tools.forEach(tool => {
+      expect(tool).toHaveProperty('name');
+      expect(tool).toHaveProperty('description');
+      expect(tool).toHaveProperty('input_schema');
+    });
+  });
+
+  test('should process command (simulation mode without API key)', async ({ request }) => {
+    const response = await request.post(`${SERVER_URL}/api/commander/command`, {
+      data: { input: 'list workspaces' }
+    });
+
+    expect(response.ok()).toBeTruthy();
+
+    const result = await response.json();
+    expect(result).toHaveProperty('response');
+  });
+
+  test('should clear history', async ({ request }) => {
+    const response = await request.post(`${SERVER_URL}/api/commander/clear`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const result = await response.json();
+    expect(result.success).toBe(true);
+  });
+
+  test('should reject empty input', async ({ request }) => {
+    const response = await request.post(`${SERVER_URL}/api/commander/command`, {
+      data: {}
+    });
+
+    expect(response.status()).toBe(400);
+  });
+});

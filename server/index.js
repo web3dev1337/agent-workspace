@@ -45,6 +45,7 @@ const { PortRegistry } = require('./portRegistry');
 const { GreenfieldService } = require('./greenfieldService');
 const { ContinuityService } = require('./continuityService');
 const { QuickLinksService } = require('./quickLinksService');
+const { CommanderService } = require('./commanderService');
 
 const app = express();
 const httpServer = createServer(app);
@@ -120,6 +121,16 @@ const portRegistry = PortRegistry.getInstance();
 const greenfieldService = GreenfieldService.getInstance();
 const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
+
+// Initialize Commander service (Top-Level AI)
+const commanderService = CommanderService.getInstance({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  sessionManager,
+  workspaceManager,
+  portRegistry,
+  greenfieldService,
+  io
+});
 
 // Connect services
 sessionManager.setStatusDetector(statusDetector);
@@ -1454,6 +1465,59 @@ app.delete('/api/quick-links/recent-sessions', async (req, res) => {
   } catch (error) {
     logger.error('Failed to clear recent sessions', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to clear recent sessions' });
+  }
+});
+
+// ============================================
+// Commander Service API (Top-Level AI)
+// ============================================
+
+// Get Commander status
+app.get('/api/commander/status', (req, res) => {
+  try {
+    const status = commanderService.getStatus();
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to get commander status', { error: error.message });
+    res.status(500).json({ error: 'Failed to get commander status' });
+  }
+});
+
+// Process a command through Commander
+app.post('/api/commander/command', async (req, res) => {
+  try {
+    const { input } = req.body;
+    if (!input) {
+      return res.status(400).json({ error: 'Input is required' });
+    }
+
+    const result = await commanderService.processCommand(input);
+    res.json(result);
+  } catch (error) {
+    logger.error('Commander command failed', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Clear Commander conversation history
+app.post('/api/commander/clear', (req, res) => {
+  try {
+    commanderService.clearHistory();
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to clear commander history', { error: error.message });
+    res.status(500).json({ error: 'Failed to clear history' });
+  }
+});
+
+// Get available Commander tools
+app.get('/api/commander/tools', (req, res) => {
+  try {
+    const tools = commanderService.getTools();
+    res.json({ tools });
+  } catch (error) {
+    logger.error('Failed to get commander tools', { error: error.message });
+    res.status(500).json({ error: 'Failed to get tools' });
   }
 });
 
