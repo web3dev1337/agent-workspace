@@ -4568,3 +4568,226 @@ header h1 {
 .button-danger:hover {
   background: #dc2626;
 }
+
+/* Commander Panel Styles */
+.commander-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 400px;
+  height: 100vh;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  transform: translateX(0);
+  transition: transform 0.3s ease;
+}
+
+.commander-panel.hidden {
+  transform: translateX(100%);
+}
+
+.commander-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.commander-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.commander-title h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.commander-icon {
+  font-size: 1.2rem;
+}
+
+.commander-status {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.commander-status.online {
+  background: rgba(63, 185, 80, 0.2);
+  color: var(--accent-success);
+}
+
+.commander-status.offline {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--accent-danger);
+}
+
+.commander-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.commander-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.commander-welcome {
+  padding: var(--space-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.commander-welcome ul {
+  margin: var(--space-sm) 0;
+  padding-left: 20px;
+}
+
+.commander-welcome li {
+  margin: var(--space-xs) 0;
+}
+
+.commander-message {
+  max-width: 90%;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.commander-message.user {
+  align-self: flex-end;
+  background: var(--accent-primary);
+  color: white;
+}
+
+.commander-message.assistant {
+  align-self: flex-start;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.commander-message.error {
+  align-self: flex-start;
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--accent-danger);
+}
+
+.commander-message.tool {
+  align-self: flex-start;
+  background: transparent;
+  padding: var(--space-xs);
+}
+
+.tool-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  background: rgba(31, 111, 235, 0.1);
+  border-radius: var(--radius-sm);
+  color: var(--accent-primary);
+}
+
+.commander-message.loading {
+  align-self: flex-start;
+  background: var(--bg-tertiary);
+  padding: var(--space-md);
+}
+
+.loading-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.loading-dots span {
+  width: 8px;
+  height: 8px;
+  background: var(--text-tertiary);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+.loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+.commander-message code {
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+.commander-message pre {
+  background: var(--bg-primary);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: var(--space-xs) 0;
+}
+
+.commander-message pre code {
+  background: none;
+  padding: 0;
+}
+
+.commander-input-area {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+
+.commander-input-area textarea {
+  flex: 1;
+  resize: none;
+  padding: var(--space-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+}
+
+.commander-input-area textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.commander-input-area button {
+  width: 40px;
+  height: 40px;
+  align-self: flex-end;
+  border-radius: var(--radius-sm);
+}
+
+.commander-input-area button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.send-icon {
+  font-size: 1.1rem;
+}
