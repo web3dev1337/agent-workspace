@@ -23,8 +23,9 @@ const logger = winston.createLogger({
   ]
 });
 
-// Commander runs from orchestrator directory with system prompt
-const COMMANDER_CWD = process.env.COMMANDER_CWD || path.join(os.homedir(), 'GitHub/tools/automation/claude-orchestrator');
+// Commander runs from the same directory as this orchestrator instance
+// This ensures it uses the correct CLAUDE.md for system context
+const COMMANDER_CWD = process.env.COMMANDER_CWD || path.resolve(__dirname, '..');
 
 class CommanderService {
   constructor(options = {}) {
