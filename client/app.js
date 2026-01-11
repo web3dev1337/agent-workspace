@@ -1511,7 +1511,8 @@ class ClaudeOrchestrator {
         const repositoryName = this.extractRepositoryName(sessionId);
         const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
 
-        if (sessionKey === worktreeIdOrKey) {
+        // Match full key OR just the worktreeId part (e.g., "work1" matches "zoo-game-work1")
+        if (sessionKey === worktreeIdOrKey || sessionWorktreeId === worktreeIdOrKey) {
           this.visibleTerminals.add(sessionId);
         }
       }
