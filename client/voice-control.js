@@ -113,6 +113,25 @@ class VoiceControl {
     return true;
   }
 
+  /**
+   * Update voice command context with current workspace/worktree info
+   * This helps the LLM understand commands like "focus on zoo game work 1"
+   */
+  async updateContext(contextData) {
+    try {
+      const response = await fetch('/api/voice/context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: contextData })
+      });
+      if (response.ok) {
+        console.log('[Voice] Context updated:', contextData);
+      }
+    } catch (err) {
+      console.error('[Voice] Failed to update context:', err);
+    }
+  }
+
   createUI() {
     // Create voice control container
     const container = document.createElement('div');

@@ -267,13 +267,23 @@ class VoiceCommandService {
         commands.map(c => `${c.name}: ${c.description}`).join('\n')
       ).join('\n');
 
-    // Build context string
+    // Build context string with detailed worktree info
     const ctx = this.context;
+
+    // Format worktrees with branches for better matching
+    let worktreeList = '';
+    if (ctx.worktreeDetails?.length) {
+      worktreeList = ctx.worktreeDetails
+        .map(w => `  ${w.id} (branch: ${w.branch})`)
+        .join('\n');
+    } else if (ctx.worktrees?.length) {
+      worktreeList = ctx.worktrees.map(w => `  ${w}`).join('\n');
+    }
+
     const contextStr = [
-      ctx.currentWorkspace ? `Workspace: ${ctx.currentWorkspace}` : null,
-      ctx.currentWorktree ? `Worktree: ${ctx.currentWorktree}` : null,
-      ctx.worktrees?.length ? `Available worktrees: ${ctx.worktrees.join(', ')}` : null,
+      ctx.currentWorkspace ? `Current workspace: ${ctx.currentWorkspace}` : null,
       ctx.workspaces?.length ? `Available workspaces: ${ctx.workspaces.join(', ')}` : null,
+      worktreeList ? `Available worktrees:\n${worktreeList}` : null,
     ].filter(Boolean).join('\n');
 
     return `Classify this voice command for a developer orchestrator tool.
@@ -284,15 +294,18 @@ ${contextStr ? `Context:\n${contextStr}\n` : ''}
 Available commands:
 ${commandList}
 
-Command naming patterns:
-- focus-worktree: Show only one worktree's terminals
-- show-all-worktrees: Reset view to show all worktrees
-- switch-workspace: Change to a different workspace
-- start-claude: Launch Claude in a terminal
-- stop-session: Stop a running terminal
-- open-commander: Open the Commander AI panel
-- open-settings: Open settings panel
-- highlight-worktree: Scroll to a worktree in sidebar
+Command patterns:
+- "focus on X" or "show X" → focus-worktree with worktreeId
+- "show all" or "view all" → show-all-worktrees
+- "switch to X" or "open X workspace" → switch-workspace with name
+- "start claude in X" → start-claude with sessionId
+- "open commander" → open-commander
+- "open settings" → open-settings
+
+Worktree matching:
+- "zoo game work 1" → worktreeId: "zoo-game-work1"
+- "work 3" → worktreeId: "work3" (if single project)
+- Match partial names: "zoo" could match "zoo-game"
 
 Return JSON: {"command": "command-name", "params": {"key": "value"}}
 Return {"command": null} if unclear.
