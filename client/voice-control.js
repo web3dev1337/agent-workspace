@@ -91,10 +91,8 @@ class VoiceControl {
     try {
       const response = await fetch('/api/voice/commands');
       const commands = await response.json();
-      const tooltip = 'Voice Commands (hold or press V):
-' + 
-        commands.map(c => '• ' + c.command.replace(/-/g, ' ')).join('
-');
+      const tooltip = 'Voice Commands (hold or press V):\n' + 
+        commands.map(c => '• ' + c.command.replace(/-/g, ' ')).join('\n');
       this.button.title = tooltip;
     } catch (err) {
       this.button.title = 'Voice Commands (hold or press V)';
