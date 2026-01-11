@@ -248,7 +248,6 @@ class TerminalManager {
     
     // Handle input
     terminal.onData((data) => {
-      console.log(`Terminal input for ${sessionId}:`, data);
       this.orchestrator.sendTerminalInput(sessionId, data);
     });
     
