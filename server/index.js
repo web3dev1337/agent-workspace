@@ -1683,6 +1683,40 @@ app.get('/api/voice/commands', (req, res) => {
   }
 });
 
+// Get LLM backend status for voice commands
+app.get('/api/voice/status', (req, res) => {
+  try {
+    const status = voiceCommandService.getLLMStatus();
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to get voice LLM status', { error: error.message });
+    res.status(500).json({ error: 'Failed to get voice LLM status' });
+  }
+});
+
+// Refresh LLM availability check
+app.post('/api/voice/refresh-llm', async (req, res) => {
+  try {
+    const status = await voiceCommandService.refreshLLMStatus();
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to refresh LLM status', { error: error.message });
+    res.status(500).json({ error: 'Failed to refresh LLM status' });
+  }
+});
+
+// Update voice command context
+app.post('/api/voice/context', (req, res) => {
+  try {
+    const { context } = req.body;
+    voiceCommandService.setContext(context);
+    res.json({ success: true, context: voiceCommandService.context });
+  } catch (error) {
+    logger.error('Failed to update voice context', { error: error.message });
+    res.status(500).json({ error: 'Failed to update voice context' });
+  }
+});
+
 // Get worktree configuration for frontend
 app.get('/api/worktrees/config', (req, res) => {
   try {
