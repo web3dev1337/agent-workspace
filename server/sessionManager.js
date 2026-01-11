@@ -1136,21 +1136,31 @@ class SessionManager extends EventEmitter {
       logger.warn('Cannot restart session - not found', { sessionId });
       return false;
     }
-    
+
     logger.info('Manually restarting session', { sessionId });
-    
+
     // Save config before terminating
     const config = { ...session.config };
-    
-    // For Claude sessions, use proper bash wrapper
+
+    // For Claude sessions, restart as a clean bash shell
+    // This allows user to use the agent selection UI to choose how to start
     if (config.type === 'claude') {
       config.command = 'bash';
-      config.args = ['-c', `cd "${config.cwd}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`];
+      config.args = ['-c', `cd "${config.cwd}" && exec bash`];
     }
-    
+
+    // For server sessions, restart with welcome message
+    if (config.type === 'server') {
+      const worktreeLabel = config.repositoryName
+        ? `${config.repositoryName}/${config.worktreeId}`
+        : config.worktreeId;
+      config.command = 'bash';
+      config.args = ['-c', `cd "${config.cwd}" && echo "=== Server Terminal for ${worktreeLabel} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && exec bash`];
+    }
+
     // Terminate existing session
     this.terminateSession(sessionId);
-    
+
     // Wait a moment then recreate
     setTimeout(() => {
       try {
@@ -1159,14 +1169,14 @@ class SessionManager extends EventEmitter {
         logger.info('Session restarted successfully', { sessionId });
         return true;
       } catch (error) {
-        logger.error('Failed to restart session', { 
-          sessionId, 
-          error: error.message 
+        logger.error('Failed to restart session', {
+          sessionId,
+          error: error.message
         });
         return false;
       }
     }, 1000);
-    
+
     return true;
   }
   
