@@ -438,7 +438,7 @@ class TerminalManager {
     terminalElement._resizeObserver = resizeObserver;
   }
   
-  fitTerminal(sessionId) {
+  fitTerminal(sessionId, retryCount = 0) {
     const fitAddon = this.fitAddons.get(sessionId);
     if (!fitAddon) return;
 
@@ -453,7 +453,38 @@ class TerminalManager {
         const terminal = this.terminals.get(sessionId);
         if (!terminal || terminal._core?.disposed) return;
 
+        // Check that container has valid dimensions before fitting
+        const terminalElement = document.getElementById(`terminal-${sessionId}`);
+        const terminalBody = terminalElement?.closest('.terminal-body');
+
+        if (terminalBody) {
+          const bodyRect = terminalBody.getBoundingClientRect();
+
+          // If container is too small (hidden or not laid out yet), retry
+          if (bodyRect.width < 100 || bodyRect.height < 50) {
+            if (retryCount < 5) {
+              // Schedule retry with increasing delay
+              const retryDelay = 100 * (retryCount + 1);
+              console.log(`Terminal ${sessionId} container too small (${bodyRect.width}x${bodyRect.height}), retrying in ${retryDelay}ms (attempt ${retryCount + 1}/5)`);
+              this.fitTimers.delete(sessionId);
+              setTimeout(() => this.fitTerminal(sessionId, retryCount + 1), retryDelay);
+              return;
+            } else {
+              console.warn(`Terminal ${sessionId} container still too small after 5 retries, fitting anyway`);
+            }
+          }
+        }
+
         fitAddon.fit();
+
+        // Verify fit produced reasonable dimensions
+        if (terminal.cols < 10 || terminal.rows < 3) {
+          console.warn(`Terminal ${sessionId} fit resulted in small dimensions: ${terminal.cols}x${terminal.rows}`);
+          // Schedule another fit attempt
+          if (retryCount < 3) {
+            setTimeout(() => this.fitTerminal(sessionId, retryCount + 1), 200);
+          }
+        }
 
         // Get dimensions and notify server
         if (terminal) {
