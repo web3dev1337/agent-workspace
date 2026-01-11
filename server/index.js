@@ -1518,24 +1518,6 @@ app.get('/api/conversations/recent', async (req, res) => {
   }
 });
 
-// Get conversation details
-app.get('/api/conversations/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { project } = req.query;
-    const conversation = await conversationService.getConversation(id, project);
-
-    if (!conversation) {
-      return res.status(404).json({ error: 'Conversation not found' });
-    }
-
-    res.json(conversation);
-  } catch (error) {
-    logger.error('Failed to get conversation', { error: error.message });
-    res.status(500).json({ error: 'Failed to get conversation' });
-  }
-});
-
 // Get conversations by folder
 app.get('/api/conversations/by-folder', async (req, res) => {
   try {
@@ -1585,6 +1567,24 @@ app.post('/api/conversations/refresh', async (req, res) => {
   } catch (error) {
     logger.error('Failed to refresh index', { error: error.message });
     res.status(500).json({ error: 'Failed to refresh index' });
+  }
+});
+
+// Get conversation details (MUST be last to not catch other routes)
+app.get('/api/conversations/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { project } = req.query;
+    const conversation = await conversationService.getConversation(id, project);
+
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    res.json(conversation);
+  } catch (error) {
+    logger.error('Failed to get conversation', { error: error.message });
+    res.status(500).json({ error: 'Failed to get conversation' });
   }
 });
 

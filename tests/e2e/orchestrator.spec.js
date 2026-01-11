@@ -191,4 +191,96 @@ test.describe('API Health', () => {
     const data = await response.json();
     expect(Array.isArray(data)).toBe(true);
   });
+
+  test('should respond to conversations recent API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/conversations/recent?limit=10');
+    expect(response.ok()).toBeTruthy();
+
+    const data = await response.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test('should respond to conversations search API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/conversations/search?q=test');
+    expect(response.ok()).toBeTruthy();
+
+    const data = await response.json();
+    expect(data).toHaveProperty('results');
+    expect(data).toHaveProperty('total');
+  });
+
+  test('should respond to conversations stats API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/conversations/stats');
+    expect(response.ok()).toBeTruthy();
+
+    const data = await response.json();
+    expect(data).toHaveProperty('totalConversations');
+  });
+
+  test('should respond to conversations projects API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/conversations/projects');
+    expect(response.ok()).toBeTruthy();
+
+    const data = await response.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test('should respond to greenfield categories API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/greenfield/categories');
+    expect(response.ok()).toBeTruthy();
+
+    const data = await response.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test('should respond to worktree metadata API', async ({ request }) => {
+    const response = await request.get('http://localhost:4000/api/worktree-metadata?path=' + encodeURIComponent(process.cwd()));
+    expect(response.ok()).toBeTruthy();
+
+    const data = await response.json();
+    expect(data).toHaveProperty('git');
+    expect(data).toHaveProperty('pr');
+  });
+});
+
+test.describe('Conversation Browser', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.sidebar', { timeout: 10000 });
+  });
+
+  test('should have history button in header', async ({ page }) => {
+    const historyBtn = page.locator('#conversations-btn');
+    await expect(historyBtn).toBeVisible();
+  });
+
+  test('should open conversation browser on button click', async ({ page }) => {
+    const historyBtn = page.locator('#conversations-btn');
+    await historyBtn.click();
+
+    // Wait for browser modal to appear
+    const browserModal = page.locator('.conversation-browser-modal');
+    await expect(browserModal).toBeVisible({ timeout: 5000 });
+  });
+
+  test('should show search input in browser', async ({ page }) => {
+    const historyBtn = page.locator('#conversations-btn');
+    await historyBtn.click();
+
+    const searchInput = page.locator('#conv-search');
+    await expect(searchInput).toBeVisible({ timeout: 5000 });
+  });
+
+  test('should close browser on X click', async ({ page }) => {
+    const historyBtn = page.locator('#conversations-btn');
+    await historyBtn.click();
+
+    const browserModal = page.locator('.conversation-browser-modal');
+    await expect(browserModal).toBeVisible({ timeout: 5000 });
+
+    const closeBtn = page.locator('.conversation-browser-modal .close-btn');
+    await closeBtn.click();
+
+    await expect(browserModal).not.toBeVisible();
+  });
 });

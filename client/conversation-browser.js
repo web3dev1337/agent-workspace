@@ -21,7 +21,7 @@ class ConversationBrowser {
     this.currentSort = 'date';
     this.sortDirection = 'desc';
     this.filters = {
-      project: '',
+      repo: '',
       branch: '',
       folder: '',
       query: ''
@@ -61,8 +61,12 @@ class ConversationBrowser {
           </div>
 
           <div class="filter-container">
-            <select id="conv-project-filter" onchange="window.conversationBrowser.applyFilter('project', this.value)">
-              <option value="">All Projects</option>
+            <select id="conv-repo-filter" onchange="window.conversationBrowser.applyFilter('repo', this.value)">
+              <option value="">All Repositories</option>
+            </select>
+
+            <select id="conv-branch-filter" onchange="window.conversationBrowser.applyFilter('branch', this.value)">
+              <option value="">All Branches</option>
             </select>
 
             <select id="conv-sort" onchange="window.conversationBrowser.handleSort(this.value)">
@@ -101,36 +105,78 @@ class ConversationBrowser {
 
   async loadRecent() {
     try {
-      const response = await fetch(`${this.serverUrl}/api/conversations/recent?limit=100`);
+      const response = await fetch(`${this.serverUrl}/api/conversations/recent?limit=500`);
       if (!response.ok) throw new Error('Failed to load conversations');
 
       this.conversations = await response.json();
       this.filteredConversations = [...this.conversations];
       this.renderList();
       this.updateStats();
+      this.updateResultCount(this.filteredConversations.length);
     } catch (error) {
       console.error('Failed to load conversations:', error);
       this.showError('Failed to load conversations');
     }
   }
 
-  async loadProjects() {
-    try {
-      const response = await fetch(`${this.serverUrl}/api/conversations/projects`);
-      if (!response.ok) return;
+  async loadFilters() {
+    // Extract repos and branches from loaded conversations
+    const repos = new Set();
+    const branches = new Set();
 
-      const projects = await response.json();
-      const select = document.getElementById('conv-project-filter');
+    for (const conv of this.conversations) {
+      // Extract repo from path
+      const repo = this.extractRepoFromPath(conv.cwd);
+      if (repo) repos.add(repo);
 
-      for (const project of projects) {
-        const option = document.createElement('option');
-        option.value = project;
-        option.textContent = project;
-        select.appendChild(option);
-      }
-    } catch (error) {
-      console.error('Failed to load projects:', error);
+      // Extract branch
+      if (conv.branch) branches.add(conv.branch);
     }
+
+    // Populate repo filter
+    const repoSelect = document.getElementById('conv-repo-filter');
+    if (repoSelect) {
+      const sortedRepos = Array.from(repos).sort();
+      for (const repo of sortedRepos) {
+        const option = document.createElement('option');
+        option.value = repo;
+        option.textContent = repo;
+        repoSelect.appendChild(option);
+      }
+    }
+
+    // Populate branch filter
+    const branchSelect = document.getElementById('conv-branch-filter');
+    if (branchSelect) {
+      const sortedBranches = Array.from(branches).sort();
+      for (const branch of sortedBranches) {
+        const option = document.createElement('option');
+        option.value = branch;
+        option.textContent = branch;
+        branchSelect.appendChild(option);
+      }
+    }
+  }
+
+  extractRepoFromPath(path) {
+    if (!path) return null;
+
+    // Look for GitHub pattern
+    const githubIdx = path.indexOf('GitHub/');
+    if (githubIdx >= 0) {
+      const afterGitHub = path.slice(githubIdx + 7);
+      const parts = afterGitHub.split('/').filter(p => p && p !== 'master' && !p.startsWith('work'));
+      // Return up to 3 levels for repo identification (e.g., "games/hytopia/zoo-game")
+      if (parts.length >= 3) return parts.slice(0, 3).join('/');
+      if (parts.length >= 2) return parts.slice(0, 2).join('/');
+      if (parts.length >= 1) return parts[0];
+    }
+    return null;
+  }
+
+  async loadProjects() {
+    // Deprecated - now using loadFilters
+    this.loadFilters();
   }
 
   async handleSearch(query) {
@@ -188,13 +234,16 @@ class ConversationBrowser {
   selectSuggestion(type, value) {
     this.hideAutocomplete();
 
-    if (type === 'project') {
-      document.getElementById('conv-project-filter').value = value;
-      this.applyFilter('project', value);
+    if (type === 'repo') {
+      document.getElementById('conv-repo-filter').value = value;
+      this.applyFilter('repo', value);
+    } else if (type === 'branch') {
+      document.getElementById('conv-branch-filter').value = value;
+      this.applyFilter('branch', value);
     } else {
       document.getElementById('conv-search').value = value;
       this.filters.query = value;
-      this.serverSearch();
+      this.applyFilters();
     }
   }
 
@@ -221,15 +270,23 @@ class ConversationBrowser {
 
   applyFilter(type, value) {
     this.filters[type] = value;
-    this.serverSearch();
+    // Use client-side filtering for quick response
+    this.applyFilters();
   }
 
   applyFilters() {
     // Client-side filtering
     this.filteredConversations = this.conversations.filter(conv => {
-      if (this.filters.project && conv.project !== this.filters.project) return false;
-      if (this.filters.branch && (!conv.branch || !conv.branch.includes(this.filters.branch))) return false;
+      // Repo filter - extract repo from path and compare
+      if (this.filters.repo) {
+        const convRepo = this.extractRepoFromPath(conv.cwd);
+        if (!convRepo || convRepo !== this.filters.repo) return false;
+      }
+      // Branch filter
+      if (this.filters.branch && conv.branch !== this.filters.branch) return false;
+      // Folder filter
       if (this.filters.folder && (!conv.cwd || !conv.cwd.includes(this.filters.folder))) return false;
+      // Text search
       if (this.filters.query) {
         const q = this.filters.query.toLowerCase();
         const matches = (conv.summary && conv.summary.toLowerCase().includes(q)) ||
@@ -284,36 +341,89 @@ class ConversationBrowser {
   }
 
   renderConversationItem(conv) {
-    const date = conv.lastTimestamp ? new Date(conv.lastTimestamp).toLocaleDateString() : 'Unknown';
-    const time = conv.lastTimestamp ? new Date(conv.lastTimestamp).toLocaleTimeString() : '';
-    const folder = conv.cwd ? conv.cwd.split('/').slice(-2).join('/') : '';
+    const startDate = conv.firstTimestamp ? new Date(conv.firstTimestamp) : null;
+    const lastDate = conv.lastTimestamp ? new Date(conv.lastTimestamp) : null;
+    const startedStr = startDate ? `${startDate.toLocaleDateString()} ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : 'Unknown';
+    const lastStr = lastDate ? this.timeAgo(lastDate) : 'Unknown';
+
+    // Extract folder path components
+    const fullPath = conv.cwd || '';
+    const pathParts = fullPath.split('/').filter(p => p);
+    const folderName = pathParts.slice(-2).join('/') || 'Unknown';
+
+    // Extract repo name from path (look for GitHub pattern)
+    let repoName = '';
+    const githubIdx = fullPath.indexOf('GitHub/');
+    if (githubIdx >= 0) {
+      const afterGitHub = fullPath.slice(githubIdx + 7);
+      const repoParts = afterGitHub.split('/').filter(p => p && p !== 'master' && !p.startsWith('work'));
+      repoName = repoParts.slice(0, 2).join('/'); // e.g., "games/hytopia/zoo-game"
+    }
+
+    // Display name - prefer repo name over project path
+    const displayName = repoName || folderName || conv.project;
 
     return `
-      <div class="conversation-item" data-id="${conv.id}" data-project="${conv.project}">
+      <div class="conversation-item" data-id="${conv.id}" data-project="${conv.project}" data-repo="${repoName}">
         <div class="conv-header">
-          <span class="conv-project">${conv.project}</span>
-          <span class="conv-date">${date} ${time}</span>
+          <span class="conv-repo">${displayName}</span>
+          ${conv.branch ? `<span class="conv-branch">${conv.branch}</span>` : ''}
+          <span class="conv-date">${lastStr}</span>
         </div>
 
-        <div class="conv-preview">${conv.preview || conv.summary || '(No preview)'}</div>
+        <div class="conv-preview">${this.escapeHtml((conv.preview || conv.summary || '(No preview)').slice(0, 200))}</div>
 
-        <div class="conv-meta">
-          ${conv.branch ? `<span class="meta-item branch">${conv.branch}</span>` : ''}
-          ${folder ? `<span class="meta-item folder">${folder}</span>` : ''}
-          <span class="meta-item tokens">${this.formatTokens(conv.totalTokens)} tokens</span>
-          <span class="meta-item messages">${conv.messageCount} msgs</span>
+        <div class="conv-details-grid">
+          <div class="detail-row">
+            <span class="detail-label">Path:</span>
+            <span class="detail-value folder-path" title="${fullPath}">${folderName}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Model:</span>
+            <span class="detail-value model-name">${conv.model || 'Unknown'}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Started:</span>
+            <span class="detail-value">${startedStr}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Messages:</span>
+            <span class="detail-value">${conv.messageCount || 0} (${conv.userMessageCount || 0} user)</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Tokens:</span>
+            <span class="detail-value">${this.formatTokens(conv.totalTokens)}</span>
+          </div>
         </div>
 
         <div class="conv-actions">
           <button class="btn-small" onclick="window.conversationBrowser.resumeConversation('${conv.id}', '${conv.project}', '${conv.cwd || ''}')">
             Resume
           </button>
-          <button class="btn-small secondary" onclick="window.conversationBrowser.showDetails('${conv.id}', '${conv.project}')">
-            Details
+          <button class="btn-small secondary" onclick="window.conversationBrowser.copyPath('${fullPath}')">
+            Copy Path
           </button>
         </div>
       </div>
     `;
+  }
+
+  timeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
+  }
+
+  copyPath(path) {
+    navigator.clipboard.writeText(path).then(() => {
+      console.log('Path copied:', path);
+    });
   }
 
   formatTokens(tokens) {
