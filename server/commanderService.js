@@ -142,13 +142,15 @@ class CommanderService {
       cmd += ' --dangerously-skip-permissions';
     }
 
-    // For fresh starts, pass simple greeting prompt
-    if (mode === 'fresh') {
-      cmd += ' -p "You are Commander Claude. Say: Commander Claude reporting for duty, sir!"';
-    }
-
     logger.info('Starting Claude in Commander', { mode, yolo, cmd });
     this.sendInput(cmd + '\n');
+
+    // For fresh starts, send greeting after Claude initializes
+    if (mode === 'fresh') {
+      setTimeout(() => {
+        this.sendInput('Say: Commander Claude reporting for duty, sir!\n');
+      }, 3000);
+    }
 
     return { success: true, message: `Starting Claude (${mode})` };
   }
