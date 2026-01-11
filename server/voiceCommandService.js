@@ -132,6 +132,250 @@ class VoiceCommandService {
         command: 'list-sessions',
         extractParams: () => ({})
       },
+      // Restart session
+      {
+        patterns: [
+          /restart\s+(?:work\s*)?(\d+)/i,
+          /restart\s+claude\s+(?:in\s+)?(?:work\s*)?(\d+)/i,
+          /reboot\s+(?:work\s*)?(\d+)/i,
+        ],
+        command: 'restart-session',
+        extractParams: (match) => {
+          const num = match[1].replace(/\D/g, '');
+          return { sessionId: `work${num}-claude` };
+        }
+      },
+      // Kill session
+      {
+        patterns: [
+          /kill\s+(?:work\s*)?(\d+)/i,
+          /terminate\s+(?:work\s*)?(\d+)/i,
+          /force\s+kill\s+(?:work\s*)?(\d+)/i,
+        ],
+        command: 'kill-session',
+        extractParams: (match) => {
+          const num = match[1].replace(/\D/g, '');
+          return { sessionId: `work${num}-claude` };
+        }
+      },
+      // Destroy session
+      {
+        patterns: [
+          /destroy\s+(?:work\s*)?(\d+)(?:\s+session)?/i,
+          /nuke\s+(?:work\s*)?(\d+)/i,
+        ],
+        command: 'destroy-session',
+        extractParams: (match) => {
+          const num = match[1].replace(/\D/g, '');
+          return { sessionId: `work${num}-claude` };
+        }
+      },
+      // Stop server
+      {
+        patterns: [
+          /stop\s+server/i,
+          /stop\s+server\s+(?:in\s+)?(?:work\s*)?(\d+)/i,
+          /halt\s+server/i,
+        ],
+        command: 'stop-server',
+        extractParams: (match) => {
+          if (match[1]) {
+            const num = match[1].replace(/\D/g, '');
+            return { sessionId: `work${num}-server` };
+          }
+          return {};
+        }
+      },
+      // Restart server
+      {
+        patterns: [
+          /restart\s+server/i,
+          /restart\s+server\s+(?:in\s+)?(?:work\s*)?(\d+)/i,
+          /reboot\s+server/i,
+        ],
+        command: 'restart-server',
+        extractParams: (match) => {
+          if (match[1]) {
+            const num = match[1].replace(/\D/g, '');
+            return { sessionId: `work${num}-server` };
+          }
+          return {};
+        }
+      },
+      // Kill server
+      {
+        patterns: [
+          /kill\s+server/i,
+          /force\s+kill\s+server/i,
+          /terminate\s+server/i,
+        ],
+        command: 'kill-server',
+        extractParams: () => ({})
+      },
+      // Build production
+      {
+        patterns: [
+          /build\s+prod(?:uction)?/i,
+          /production\s+build/i,
+          /make\s+prod(?:uction)?/i,
+        ],
+        command: 'build-production',
+        extractParams: () => ({})
+      },
+      // Start agent
+      {
+        patterns: [
+          /start\s+agent/i,
+          /start\s+aider/i,
+          /launch\s+agent/i,
+          /launch\s+aider/i,
+        ],
+        command: 'start-agent',
+        extractParams: () => ({})
+      },
+      // Add worktree
+      {
+        patterns: [
+          /add\s+work\s*tree/i,
+          /new\s+work\s*tree/i,
+          /create\s+work\s*tree/i,
+        ],
+        command: 'add-worktree',
+        extractParams: () => ({})
+      },
+      // Remove worktree
+      {
+        patterns: [
+          /remove\s+work\s*tree/i,
+          /delete\s+work\s*tree/i,
+          /destroy\s+work\s*tree/i,
+        ],
+        command: 'remove-worktree',
+        extractParams: () => ({})
+      },
+      // Close tab
+      {
+        patterns: [
+          /close\s+tab/i,
+          /close\s+this\s+tab/i,
+          /close\s+current\s+tab/i,
+        ],
+        command: 'close-tab',
+        extractParams: () => ({})
+      },
+      // New tab
+      {
+        patterns: [
+          /new\s+tab/i,
+          /open\s+new\s+tab/i,
+          /add\s+tab/i,
+        ],
+        command: 'new-tab',
+        extractParams: () => ({})
+      },
+      // Open folder
+      {
+        patterns: [
+          /open\s+folder/i,
+          /show\s+(?:in\s+)?explorer/i,
+          /open\s+(?:in\s+)?file\s+manager/i,
+          /reveal\s+(?:in\s+)?folder/i,
+        ],
+        command: 'open-folder',
+        extractParams: () => ({})
+      },
+      // Open diff viewer
+      {
+        patterns: [
+          /open\s+diff/i,
+          /show\s+diff/i,
+          /code\s+review/i,
+          /diff\s+viewer/i,
+          /review\s+changes/i,
+        ],
+        command: 'open-diff-viewer',
+        extractParams: () => ({})
+      },
+      // Scroll to top
+      {
+        patterns: [
+          /scroll\s+(?:to\s+)?top/i,
+          /go\s+(?:to\s+)?top/i,
+          /jump\s+(?:to\s+)?top/i,
+        ],
+        command: 'scroll-to-top',
+        extractParams: () => ({})
+      },
+      // Scroll to bottom
+      {
+        patterns: [
+          /scroll\s+(?:to\s+)?bottom/i,
+          /go\s+(?:to\s+)?bottom/i,
+          /jump\s+(?:to\s+)?bottom/i,
+        ],
+        command: 'scroll-to-bottom',
+        extractParams: () => ({})
+      },
+      // Clear terminal
+      {
+        patterns: [
+          /clear\s+terminal/i,
+          /clear\s+screen/i,
+          /clear\s+console/i,
+        ],
+        command: 'clear-terminal',
+        extractParams: () => ({})
+      },
+      // Git pull all
+      {
+        patterns: [
+          /pull\s+all/i,
+          /git\s+pull\s+all/i,
+          /update\s+all\s+repos/i,
+        ],
+        command: 'git-pull-all',
+        extractParams: () => ({})
+      },
+      // Git status all
+      {
+        patterns: [
+          /status\s+all/i,
+          /git\s+status\s+all/i,
+          /show\s+all\s+status/i,
+        ],
+        command: 'git-status-all',
+        extractParams: () => ({})
+      },
+      // Stop all claudes
+      {
+        patterns: [
+          /stop\s+all\s+claudes?/i,
+          /kill\s+all\s+claudes?/i,
+          /terminate\s+all\s+claudes?/i,
+        ],
+        command: 'stop-all-claudes',
+        extractParams: () => ({})
+      },
+      // Start all claudes
+      {
+        patterns: [
+          /start\s+all\s+claudes?/i,
+          /launch\s+all\s+claudes?/i,
+          /boot\s+all\s+claudes?/i,
+        ],
+        command: 'start-all-claudes',
+        extractParams: () => ({})
+      },
+      // Refresh all
+      {
+        patterns: [
+          /refresh\s+all/i,
+          /refresh\s+terminals?/i,
+          /reload\s+all/i,
+        ],
+        command: 'refresh-all',
+        extractParams: () => ({})
+      },
     ];
 
     this.checkLLMAvailability();
