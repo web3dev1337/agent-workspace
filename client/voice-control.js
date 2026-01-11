@@ -44,14 +44,7 @@ class VoiceControl {
     container.id = 'voice-control';
     container.className = 'voice-control';
     container.innerHTML = `
-      <button id="voice-btn" class="voice-btn" title="Voice Commands (hold or press V):
-• Focus work 1-8
-• Show all / Unfocus
-• Switch workspace [name]
-• Start Claude work 1-8
-• Open settings
-• Open commander
-• Highlight work 1-8">
+      <button id="voice-btn" class="voice-btn" title="Loading voice commands...">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
           <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
           <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
@@ -61,7 +54,7 @@ class VoiceControl {
       <div id="voice-transcript" class="voice-transcript"></div>
     `;
 
-    // Add to header (next to Commander button)
+    // Add to header
     const header = document.querySelector('.header-buttons') || document.querySelector('header');
     if (header) {
       header.appendChild(container);
@@ -72,6 +65,9 @@ class VoiceControl {
     this.button = document.getElementById('voice-btn');
     this.statusEl = document.getElementById('voice-status');
     this.transcriptEl = document.getElementById('voice-transcript');
+
+    // Fetch commands for tooltip dynamically
+    this.loadCommandsTooltip();
 
     // Mouse events for push-to-talk
     this.button.addEventListener('mousedown', () => this.startListening());
@@ -89,6 +85,20 @@ class VoiceControl {
       e.preventDefault();
       this.stopListening();
     });
+  }
+
+  async loadCommandsTooltip() {
+    try {
+      const response = await fetch('/api/voice/commands');
+      const commands = await response.json();
+      const tooltip = 'Voice Commands (hold or press V):
+' + 
+        commands.map(c => '• ' + c.command.replace(/-/g, ' ')).join('
+');
+      this.button.title = tooltip;
+    } catch (err) {
+      this.button.title = 'Voice Commands (hold or press V)';
+    }
   }
 
   setupKeyboardShortcut() {
