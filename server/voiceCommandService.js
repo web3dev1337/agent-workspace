@@ -1,19 +1,36 @@
 /**
  * VoiceCommandService - Parse voice commands and execute orchestrator actions
  *
- * Supports:
- * 1. Rule-based parsing (fast, no external deps)
- * 2. Local LLM via Ollama (smarter parsing)
- * 3. Direct API execution
+ * Parsing strategy (inspired by start-finishing-guide):
+ * 1. Rule-based parsing first (instant, 0 tokens)
+ * 2. LLM fallback for fuzzy matching:
+ *    - Ollama (local, private, free) - preferred
+ *    - Claude API (fast, cheap ~$0.00025/call) - fallback
+ * 3. Context-aware parsing with workspace/session info
  */
 
 const commandRegistry = require('./commandRegistry');
 
 class VoiceCommandService {
   constructor() {
+    // Ollama config (local LLM)
     this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
     this.ollamaModel = process.env.OLLAMA_MODEL || 'llama3.2:1b'; // Small, fast model
-    this.useOllama = false; // Will be set to true if Ollama is available
+    this.useOllama = false;
+
+    // Claude API config (external, fast)
+    this.claudeApiKey = process.env.ANTHROPIC_API_KEY || null;
+    this.claudeModel = process.env.CLAUDE_VOICE_MODEL || 'claude-3-haiku-20240307';
+    this.useClaude = false;
+
+    // Current context (set by orchestrator)
+    this.context = {
+      currentWorkspace: null,
+      currentWorktree: null,
+      activeSession: null,
+      workspaces: [],
+      worktrees: []
+    };
 
     // Command patterns for rule-based parsing
     this.patterns = [
@@ -117,13 +134,22 @@ class VoiceCommandService {
       },
     ];
 
-    this.checkOllamaAvailability();
+    this.checkLLMAvailability();
   }
 
   /**
-   * Check if Ollama is running locally
+   * Set current context for better command parsing
    */
-  async checkOllamaAvailability() {
+  setContext(context) {
+    this.context = { ...this.context, ...context };
+  }
+
+  /**
+   * Check which LLM backends are available
+   * Priority: Ollama (local) > Claude API (external)
+   */
+  async checkLLMAvailability() {
+    // Check Ollama first (preferred - local, private)
     try {
       const response = await fetch(`${this.ollamaUrl}/api/tags`, {
         method: 'GET',
@@ -131,12 +157,34 @@ class VoiceCommandService {
       });
       if (response.ok) {
         const data = await response.json();
-        console.log('Ollama available with models:', data.models?.map(m => m.name) || []);
+        const models = data.models?.map(m => m.name) || [];
+        console.log('[Voice] Ollama available with models:', models);
         this.useOllama = true;
+
+        // Check if our preferred model is available
+        const hasPreferred = models.some(m => m.startsWith(this.ollamaModel.split(':')[0]));
+        if (!hasPreferred && models.length > 0) {
+          // Use first available small model
+          const smallModel = models.find(m =>
+            m.includes('llama3.2:1b') || m.includes('phi') || m.includes('qwen')
+          ) || models[0];
+          console.log(`[Voice] Using model: ${smallModel}`);
+          this.ollamaModel = smallModel;
+        }
       }
     } catch (err) {
-      console.log('Ollama not available, using rule-based parsing only');
+      console.log('[Voice] Ollama not available');
       this.useOllama = false;
+    }
+
+    // Check Claude API (fallback - external but fast)
+    if (this.claudeApiKey) {
+      this.useClaude = true;
+      console.log('[Voice] Claude API available as fallback');
+    }
+
+    if (!this.useOllama && !this.useClaude) {
+      console.log('[Voice] No LLM available - using rule-based parsing only');
     }
   }
 
@@ -147,7 +195,7 @@ class VoiceCommandService {
     // Clean up transcript
     const text = transcript.toLowerCase().trim();
 
-    // Try rule-based parsing first (fast)
+    // Try rule-based parsing first (instant, free)
     const ruleResult = this.parseWithRules(text);
     if (ruleResult) {
       return {
@@ -157,14 +205,26 @@ class VoiceCommandService {
       };
     }
 
-    // Try LLM parsing if available
+    // Try Ollama first (local, private)
     if (this.useOllama) {
-      const llmResult = await this.parseWithLLM(text);
-      if (llmResult) {
+      const ollamaResult = await this.parseWithOllama(text);
+      if (ollamaResult) {
         return {
           success: true,
-          method: 'llm',
-          ...llmResult
+          method: 'ollama',
+          ...ollamaResult
+        };
+      }
+    }
+
+    // Try Claude API as fallback (fast, cheap)
+    if (this.useClaude) {
+      const claudeResult = await this.parseWithClaude(text);
+      if (claudeResult) {
+        return {
+          success: true,
+          method: 'claude',
+          ...claudeResult
         };
       }
     }
@@ -196,26 +256,77 @@ class VoiceCommandService {
   }
 
   /**
-   * LLM-based command parsing via Ollama
+   * Build the LLM prompt with context (shared between Ollama and Claude)
    */
-  async parseWithLLM(text) {
+  buildLLMPrompt(text) {
     const capabilities = commandRegistry.getCapabilities();
-    const commandList = Object.values(capabilities)
-      .flat()
-      .map(c => `- ${c.name}: ${c.description}`)
-      .join('\n');
 
-    const prompt = `You are a command parser for a development tool. Parse the user's voice command and return a JSON object with the matching command.
+    // Build command list with descriptions
+    const commandList = Object.entries(capabilities)
+      .map(([category, commands]) =>
+        commands.map(c => `${c.name}: ${c.description}`).join('\n')
+      ).join('\n');
 
-Available commands:
-${commandList}
+    // Build context string
+    const ctx = this.context;
+    const contextStr = [
+      ctx.currentWorkspace ? `Workspace: ${ctx.currentWorkspace}` : null,
+      ctx.currentWorktree ? `Worktree: ${ctx.currentWorktree}` : null,
+      ctx.worktrees?.length ? `Available worktrees: ${ctx.worktrees.join(', ')}` : null,
+      ctx.workspaces?.length ? `Available workspaces: ${ctx.workspaces.join(', ')}` : null,
+    ].filter(Boolean).join('\n');
+
+    return `Classify this voice command for a developer orchestrator tool.
 
 User said: "${text}"
 
-Return ONLY a JSON object like: {"command": "command-name", "params": {"key": "value"}}
-If you can't match a command, return: {"command": null, "error": "reason"}
+${contextStr ? `Context:\n${contextStr}\n` : ''}
+Available commands:
+${commandList}
 
-JSON response:`;
+Command naming patterns:
+- focus-worktree: Show only one worktree's terminals
+- show-all-worktrees: Reset view to show all worktrees
+- switch-workspace: Change to a different workspace
+- start-claude: Launch Claude in a terminal
+- stop-session: Stop a running terminal
+- open-commander: Open the Commander AI panel
+- open-settings: Open settings panel
+- highlight-worktree: Scroll to a worktree in sidebar
+
+Return JSON: {"command": "command-name", "params": {"key": "value"}}
+Return {"command": null} if unclear.
+
+JSON:`;
+  }
+
+  /**
+   * Parse LLM JSON response
+   */
+  parseLLMResponse(responseText) {
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.command && parsed.command !== null) {
+          return {
+            command: parsed.command,
+            params: parsed.params || {},
+            confidence: 0.7
+          };
+        }
+      }
+    } catch (err) {
+      console.error('[Voice] Failed to parse LLM response:', err.message);
+    }
+    return null;
+  }
+
+  /**
+   * LLM-based command parsing via Ollama (local)
+   */
+  async parseWithOllama(text) {
+    const prompt = this.buildLLMPrompt(text);
 
     try {
       const response = await fetch(`${this.ollamaUrl}/api/generate`, {
@@ -236,19 +347,46 @@ JSON response:`;
       if (!response.ok) return null;
 
       const data = await response.json();
-      const jsonMatch = data.response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.command && parsed.command !== null) {
-          return {
-            command: parsed.command,
-            params: parsed.params || {},
-            confidence: 0.7
-          };
-        }
-      }
+      return this.parseLLMResponse(data.response);
     } catch (err) {
-      console.error('LLM parsing failed:', err.message);
+      console.error('[Voice] Ollama parsing failed:', err.message);
+    }
+    return null;
+  }
+
+  /**
+   * LLM-based command parsing via Claude API (external fallback)
+   */
+  async parseWithClaude(text) {
+    const prompt = this.buildLLMPrompt(text);
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.claudeApiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: this.claudeModel,
+          max_tokens: 100,
+          temperature: 0.1,
+          messages: [{ role: 'user', content: prompt }]
+        }),
+        signal: AbortSignal.timeout(5000)
+      });
+
+      if (!response.ok) {
+        console.error('[Voice] Claude API error:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+      const content = data.content?.[0]?.text || '';
+      return this.parseLLMResponse(content);
+    } catch (err) {
+      console.error('[Voice] Claude parsing failed:', err.message);
     }
     return null;
   }
@@ -295,6 +433,37 @@ JSON response:`;
           .trim()
       ).slice(0, 2)
     }));
+  }
+
+  /**
+   * Get LLM backend status
+   */
+  getLLMStatus() {
+    return {
+      ollama: {
+        available: this.useOllama,
+        url: this.ollamaUrl,
+        model: this.ollamaModel
+      },
+      claude: {
+        available: this.useClaude,
+        model: this.claudeModel,
+        hasApiKey: !!this.claudeApiKey
+      },
+      activeBackend: this.useOllama ? 'ollama' : (this.useClaude ? 'claude' : 'rules-only'),
+      context: {
+        currentWorkspace: this.context.currentWorkspace,
+        currentWorktree: this.context.currentWorktree
+      }
+    };
+  }
+
+  /**
+   * Re-check LLM availability (useful after config changes)
+   */
+  async refreshLLMStatus() {
+    await this.checkLLMAvailability();
+    return this.getLLMStatus();
   }
 }
 
