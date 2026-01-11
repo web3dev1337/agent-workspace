@@ -62,12 +62,22 @@ curl -s http://localhost:4000/api/commander/execute \
 curl -s http://localhost:4000/api/commander/execute \
   -H "Content-Type: application/json" \
   -d '{"command": "highlight-worktree", "params": {"worktreeId": "work1"}}'
+
+# Focus a worktree (show ONLY that worktree's terminals, hide others)
+curl -s http://localhost:4000/api/commander/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "focus-worktree", "params": {"worktreeId": "work1"}}'
+
+# Show all worktrees again (unfocus)
+curl -s http://localhost:4000/api/commander/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "show-all-worktrees"}'
 ```
 
 ### Available Command Categories
 - **sessions**: focus-session, send-to-session, list-sessions
 - **workspaces**: switch-workspace, list-workspaces
-- **ui**: open-commander, open-new-project, open-settings, highlight-worktree
+- **ui**: open-commander, open-new-project, open-settings, highlight-worktree, focus-worktree, show-all-worktrees
 - **terminals**: start-claude, stop-session, run-command
 - **git**: get-git-status
 - **coordination**: broadcast
