@@ -119,8 +119,9 @@ class CommanderService {
   /**
    * Start Claude Code in the Commander terminal
    * @param {string} mode - 'fresh', 'continue', or 'resume'
+   * @param {boolean} yolo - Use --dangerously-skip-permissions (default: true for Commander)
    */
-  async startClaude(mode = 'fresh') {
+  async startClaude(mode = 'fresh', yolo = true) {
     if (!this.session) {
       await this.start();
     }
@@ -135,10 +136,12 @@ class CommanderService {
       cmd += ' --resume';
     }
 
-    // Add dangerously-skip-permissions if desired (configurable)
-    // cmd += ' --dangerously-skip-permissions';
+    // Commander runs in YOLO mode by default for orchestration capabilities
+    if (yolo) {
+      cmd += ' --dangerously-skip-permissions';
+    }
 
-    logger.info('Starting Claude in Commander', { mode, cmd });
+    logger.info('Starting Claude in Commander', { mode, yolo, cmd });
     this.sendInput(cmd + '\n');
 
     return { success: true, message: `Starting Claude (${mode})` };
