@@ -18,9 +18,14 @@ class Dashboard {
       window.quickLinks = this.quickLinks; // Make available globally for onclick handlers
     }
 
-    // Fetch quick links data in parallel with workspaces
+    // Fetch quick links data - re-render when complete
     if (this.quickLinks) {
-      this.quickLinks.fetchData().catch(() => {});
+      this.quickLinks.fetchData().then(() => {
+        // Re-render to show quick links once loaded
+        if (this.isVisible) {
+          this.render();
+        }
+      }).catch(() => {});
     }
 
     // Request workspaces from server
