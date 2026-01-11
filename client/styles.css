@@ -4791,3 +4791,53 @@ header h1 {
 .send-icon {
   font-size: 1.1rem;
 }
+
+/* Commander Toolbar */
+.commander-toolbar {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.commander-btn {
+  padding: var(--space-xs) var(--space-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.commander-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent-primary);
+}
+
+.commander-toolbar select {
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+/* Commander Terminal Container */
+.commander-terminal {
+  flex: 1;
+  background: #0d1117;
+  overflow: hidden;
+}
+
+.commander-placeholder {
+  padding: var(--space-xl);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.commander-placeholder p {
+  margin: var(--space-sm) 0;
+}

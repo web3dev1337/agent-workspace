@@ -122,13 +122,9 @@ const greenfieldService = GreenfieldService.getInstance();
 const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
 
-// Initialize Commander service (Top-Level AI)
+// Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
-  apiKey: process.env.ANTHROPIC_API_KEY,
   sessionManager,
-  workspaceManager,
-  portRegistry,
-  greenfieldService,
   io
 });
 
@@ -1469,7 +1465,7 @@ app.delete('/api/quick-links/recent-sessions', async (req, res) => {
 });
 
 // ============================================
-// Commander Service API (Top-Level AI)
+// Commander Service API (Claude Code Terminal)
 // ============================================
 
 // Get Commander status
@@ -1483,41 +1479,114 @@ app.get('/api/commander/status', (req, res) => {
   }
 });
 
-// Process a command through Commander
-app.post('/api/commander/command', async (req, res) => {
+// Start Commander terminal
+app.post('/api/commander/start', async (req, res) => {
+  try {
+    const result = await commanderService.start();
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to start commander', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Start Claude Code in Commander terminal
+app.post('/api/commander/start-claude', async (req, res) => {
+  try {
+    const { mode } = req.body;
+    const result = await commanderService.startClaude(mode || 'fresh');
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to start Claude in commander', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send input to Commander terminal
+app.post('/api/commander/input', (req, res) => {
   try {
     const { input } = req.body;
     if (!input) {
       return res.status(400).json({ error: 'Input is required' });
     }
 
-    const result = await commanderService.processCommand(input);
-    res.json(result);
+    const success = commanderService.sendInput(input);
+    res.json({ success });
   } catch (error) {
-    logger.error('Commander command failed', { error: error.message, stack: error.stack });
+    logger.error('Commander input failed', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
 
-// Clear Commander conversation history
-app.post('/api/commander/clear', (req, res) => {
+// Stop Commander terminal
+app.post('/api/commander/stop', (req, res) => {
   try {
-    commanderService.clearHistory();
-    res.json({ success: true });
+    const result = commanderService.stop();
+    res.json(result);
   } catch (error) {
-    logger.error('Failed to clear commander history', { error: error.message });
-    res.status(500).json({ error: 'Failed to clear history' });
+    logger.error('Failed to stop commander', { error: error.message });
+    res.status(500).json({ error: 'Failed to stop commander' });
   }
 });
 
-// Get available Commander tools
-app.get('/api/commander/tools', (req, res) => {
+// Restart Commander terminal
+app.post('/api/commander/restart', async (req, res) => {
   try {
-    const tools = commanderService.getTools();
-    res.json({ tools });
+    const result = await commanderService.restart();
+    res.json(result);
   } catch (error) {
-    logger.error('Failed to get commander tools', { error: error.message });
-    res.status(500).json({ error: 'Failed to get tools' });
+    logger.error('Failed to restart commander', { error: error.message });
+    res.status(500).json({ error: 'Failed to restart commander' });
+  }
+});
+
+// Get recent output from Commander
+app.get('/api/commander/output', (req, res) => {
+  try {
+    const { lines } = req.query;
+    const output = commanderService.getRecentOutput(lines ? parseInt(lines) : 50);
+    res.json({ output });
+  } catch (error) {
+    logger.error('Failed to get commander output', { error: error.message });
+    res.status(500).json({ error: 'Failed to get output' });
+  }
+});
+
+// Clear Commander buffer
+app.post('/api/commander/clear', (req, res) => {
+  try {
+    commanderService.clearBuffer();
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to clear commander buffer', { error: error.message });
+    res.status(500).json({ error: 'Failed to clear buffer' });
+  }
+});
+
+// List all sessions (for Commander visibility)
+app.get('/api/commander/sessions', (req, res) => {
+  try {
+    const sessions = commanderService.listSessions();
+    res.json({ sessions });
+  } catch (error) {
+    logger.error('Failed to list sessions', { error: error.message });
+    res.status(500).json({ error: 'Failed to list sessions' });
+  }
+});
+
+// Send to another session from Commander
+app.post('/api/commander/send-to-session', (req, res) => {
+  try {
+    const { sessionId, input } = req.body;
+    if (!sessionId || !input) {
+      return res.status(400).json({ error: 'sessionId and input are required' });
+    }
+
+    const success = commanderService.sendToSession(sessionId, input);
+    res.json({ success });
+  } catch (error) {
+    logger.error('Failed to send to session', { error: error.message });
+    res.status(500).json({ error: 'Failed to send to session' });
   }
 });
 

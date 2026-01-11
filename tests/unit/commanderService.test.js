@@ -1,5 +1,5 @@
 /**
- * Unit tests for CommanderService
+ * Unit tests for CommanderService (Terminal-based)
  */
 
 // Mock winston before requiring the service
@@ -22,33 +22,26 @@ jest.mock('winston', () => ({
   }
 }));
 
-// Mock Anthropic SDK
-jest.mock('@anthropic-ai/sdk', () => ({
-  default: jest.fn().mockImplementation(() => ({
-    messages: {
-      create: jest.fn()
-    }
-  }))
+// Mock node-pty
+const mockPty = {
+  write: jest.fn(),
+  kill: jest.fn(),
+  resize: jest.fn(),
+  onData: jest.fn(),
+  onExit: jest.fn()
+};
+
+jest.mock('node-pty', () => ({
+  spawn: jest.fn(() => mockPty)
 }));
 
 const { CommanderService } = require('../../server/commanderService');
 
 describe('CommanderService', () => {
   let service;
+  const mockSessions = new Map();
   const mockSessionManager = {
-    getAllSessions: jest.fn(),
-    getSession: jest.fn(),
-    sendInput: jest.fn()
-  };
-  const mockWorkspaceManager = {
-    listWorkspaces: jest.fn()
-  };
-  const mockPortRegistry = {
-    getAllAssignments: jest.fn(),
-    getOrAssignPort: jest.fn()
-  };
-  const mockGreenfieldService = {
-    createProject: jest.fn()
+    sessions: mockSessions
   };
   const mockIo = {
     emit: jest.fn()
@@ -60,11 +53,7 @@ describe('CommanderService', () => {
     jest.clearAllMocks();
 
     service = new CommanderService({
-      apiKey: 'test-api-key',
       sessionManager: mockSessionManager,
-      workspaceManager: mockWorkspaceManager,
-      portRegistry: mockPortRegistry,
-      greenfieldService: mockGreenfieldService,
       io: mockIo
     });
   });
@@ -78,171 +67,150 @@ describe('CommanderService', () => {
   });
 
   describe('getStatus', () => {
-    it('should return enabled status with API key', () => {
+    it('should return stopped status when not running', () => {
       const status = service.getStatus();
-      expect(status.enabled).toBe(true);
-      expect(status.apiKeyConfigured).toBe(true);
+      expect(status.running).toBe(false);
+      expect(status.status).toBe('stopped');
     });
 
-    it('should return disabled status without API key', () => {
-      CommanderService.instance = null;
-      const noKeyService = new CommanderService({});
-      const status = noKeyService.getStatus();
-      expect(status.enabled).toBe(false);
-      expect(status.apiKeyConfigured).toBe(false);
+    it('should return running status after start', async () => {
+      await service.start();
+      const status = service.getStatus();
+      expect(status.running).toBe(true);
     });
   });
 
-  describe('getTools', () => {
-    it('should return array of tools', () => {
-      const tools = service.getTools();
-      expect(Array.isArray(tools)).toBe(true);
-      expect(tools.length).toBeGreaterThan(0);
+  describe('start', () => {
+    it('should spawn a pty process', async () => {
+      const result = await service.start();
+      expect(result.success).toBe(true);
+      expect(require('node-pty').spawn).toHaveBeenCalled();
     });
 
-    it('should have required tool properties', () => {
-      const tools = service.getTools();
-      tools.forEach(tool => {
-        expect(tool).toHaveProperty('name');
-        expect(tool).toHaveProperty('description');
-        expect(tool).toHaveProperty('input_schema');
-      });
-    });
-
-    it('should include create_project tool', () => {
-      const tools = service.getTools();
-      const createProject = tools.find(t => t.name === 'create_project');
-      expect(createProject).toBeDefined();
-    });
-
-    it('should include list_workspaces tool', () => {
-      const tools = service.getTools();
-      const listWorkspaces = tools.find(t => t.name === 'list_workspaces');
-      expect(listWorkspaces).toBeDefined();
+    it('should return error if already running', async () => {
+      await service.start();
+      const result = await service.start();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Already running');
     });
   });
 
-  describe('clearHistory', () => {
-    it('should clear conversation history', () => {
-      service.conversationHistory = [{ role: 'user', content: 'test' }];
-      service.clearHistory();
-      expect(service.conversationHistory).toHaveLength(0);
+  describe('stop', () => {
+    it('should kill the pty process', async () => {
+      await service.start();
+      const result = service.stop();
+      expect(result.success).toBe(true);
+      expect(mockPty.kill).toHaveBeenCalled();
+    });
+
+    it('should return error if not running', () => {
+      const result = service.stop();
+      expect(result.success).toBe(false);
     });
   });
 
-  describe('tool execution', () => {
-    describe('toolListWorkspaces', () => {
-      it('should list workspaces', async () => {
-        mockWorkspaceManager.listWorkspaces.mockResolvedValue([
-          { id: 'ws1', name: 'Workspace 1', type: 'test', terminals: { pairs: 4 } }
-        ]);
-
-        const result = await service.toolListWorkspaces();
-        expect(result.workspaces).toBeDefined();
-        expect(result.workspaces[0].id).toBe('ws1');
-      });
-
-      it('should return error if workspace manager not available', async () => {
-        service.workspaceManager = null;
-        const result = await service.toolListWorkspaces();
-        expect(result.error).toBeDefined();
-      });
+  describe('sendInput', () => {
+    it('should write to pty', async () => {
+      await service.start();
+      const success = service.sendInput('test command\n');
+      expect(success).toBe(true);
+      expect(mockPty.write).toHaveBeenCalledWith('test command\n');
     });
 
-    describe('toolListSessions', () => {
-      it('should list sessions', async () => {
-        mockSessionManager.getAllSessions.mockReturnValue([
-          { id: 'session1', type: 'claude', status: 'active', branch: 'main' }
-        ]);
-
-        const result = await service.toolListSessions();
-        expect(result.sessions).toBeDefined();
-        expect(result.sessions[0].id).toBe('session1');
-      });
-    });
-
-    describe('toolSendToTerminal', () => {
-      it('should send input to terminal', async () => {
-        mockSessionManager.getSession.mockReturnValue({ id: 'session1' });
-
-        const result = await service.toolSendToTerminal({
-          sessionId: 'session1',
-          input: 'test command'
-        });
-
-        expect(result.success).toBe(true);
-        expect(mockSessionManager.sendInput).toHaveBeenCalledWith('session1', 'test command\n');
-      });
-
-      it('should return error for non-existent session', async () => {
-        mockSessionManager.getSession.mockReturnValue(null);
-
-        const result = await service.toolSendToTerminal({
-          sessionId: 'invalid',
-          input: 'test'
-        });
-
-        expect(result.error).toContain('Session not found');
-      });
-    });
-
-    describe('toolListPorts', () => {
-      it('should list port assignments', async () => {
-        mockPortRegistry.getAllAssignments.mockReturnValue([
-          { port: 8080, repoPath: '/test', worktreeId: 'work1' }
-        ]);
-
-        const result = await service.toolListPorts();
-        expect(result.ports).toBeDefined();
-      });
-    });
-
-    describe('toolGetPort', () => {
-      it('should get port for worktree', async () => {
-        mockPortRegistry.getOrAssignPort.mockResolvedValue(8080);
-
-        const result = await service.toolGetPort({
-          repoPath: '/test',
-          worktreeId: 'work1'
-        });
-
-        expect(result.port).toBe(8080);
-      });
-    });
-
-    describe('toolSwitchWorkspace', () => {
-      it('should emit workspace switch event', async () => {
-        const result = await service.toolSwitchWorkspace({ workspaceId: 'ws1' });
-
-        expect(result.success).toBe(true);
-        expect(mockIo.emit).toHaveBeenCalledWith('commander-switch-workspace', { workspaceId: 'ws1' });
-      });
-    });
-
-    describe('toolBroadcastMessage', () => {
-      it('should broadcast to all Claude sessions', async () => {
-        mockSessionManager.getAllSessions.mockReturnValue([
-          { id: 'claude1', type: 'claude' },
-          { id: 'server1', type: 'server' },
-          { id: 'claude2', type: 'claude' }
-        ]);
-
-        const result = await service.toolBroadcastMessage({ message: 'Hello all!' });
-
-        expect(result.success).toBe(true);
-        expect(result.message).toContain('2 Claude sessions');
-        expect(mockSessionManager.sendInput).toHaveBeenCalledTimes(2);
-      });
+    it('should return false if not running', () => {
+      const success = service.sendInput('test');
+      expect(success).toBe(false);
     });
   });
 
-  describe('processCommand without API key', () => {
-    it('should return simulated response', async () => {
-      service.client = null;
-      const result = await service.processCommand('test input');
+  describe('resize', () => {
+    it('should resize pty', async () => {
+      await service.start();
+      const success = service.resize(100, 50);
+      expect(success).toBe(true);
+      expect(mockPty.resize).toHaveBeenCalledWith(100, 50);
+    });
 
-      expect(result.response).toContain('Commander would process');
-      expect(result.response).toContain('ANTHROPIC_API_KEY not configured');
+    it('should return false if not running', () => {
+      const success = service.resize(100, 50);
+      expect(success).toBe(false);
+    });
+  });
+
+  describe('output buffer', () => {
+    it('should add to output buffer', () => {
+      service.addToOutputBuffer('line1\nline2\n');
+      const output = service.getRecentOutput(10);
+      expect(output).toContain('line1');
+    });
+
+    it('should trim buffer when too large', () => {
+      // Add more than maxBufferLines
+      for (let i = 0; i < 600; i++) {
+        service.addToOutputBuffer(`line ${i}\n`);
+      }
+      expect(service.outputBuffer.length).toBeLessThanOrEqual(500);
+    });
+
+    it('should clear buffer', () => {
+      service.addToOutputBuffer('test');
+      service.clearBuffer();
+      expect(service.outputBuffer).toHaveLength(0);
+    });
+  });
+
+  describe('listSessions', () => {
+    it('should return mapped sessions', () => {
+      mockSessions.clear();
+      mockSessions.set('s1', {
+        id: 's1', type: 'claude', status: 'active', branch: 'main', worktreeId: 'work1'
+      });
+
+      const sessions = service.listSessions();
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].id).toBe('s1');
+    });
+
+    it('should return empty array if no session manager', () => {
+      service.sessionManager = null;
+      const sessions = service.listSessions();
+      expect(sessions).toEqual([]);
+    });
+  });
+
+  describe('sendToSession', () => {
+    it('should send input to another session', () => {
+      const mockPtyTarget = { write: jest.fn() };
+      mockSessions.clear();
+      mockSessions.set('s1', { id: 's1', pty: mockPtyTarget });
+
+      const success = service.sendToSession('s1', 'hello');
+      expect(success).toBe(true);
+      expect(mockPtyTarget.write).toHaveBeenCalledWith('hello');
+    });
+
+    it('should return false if session not found', () => {
+      mockSessions.clear();
+
+      const success = service.sendToSession('invalid', 'hello');
+      expect(success).toBe(false);
+    });
+  });
+
+  describe('startClaude', () => {
+    it('should start terminal and send claude command', async () => {
+      await service.startClaude('fresh');
+      expect(mockPty.write).toHaveBeenCalledWith('claude\n');
+    });
+
+    it('should send --continue flag', async () => {
+      await service.startClaude('continue');
+      expect(mockPty.write).toHaveBeenCalledWith('claude --continue\n');
+    });
+
+    it('should send --resume flag', async () => {
+      await service.startClaude('resume');
+      expect(mockPty.write).toHaveBeenCalledWith('claude --resume\n');
     });
   });
 });
