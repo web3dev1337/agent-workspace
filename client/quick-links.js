@@ -99,6 +99,28 @@ class QuickLinks {
   }
 
   /**
+   * Reorder favorites
+   */
+  async reorderFavorites(urls) {
+    try {
+      const response = await fetch(`${this.serverUrl}/api/quick-links/favorites/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        this.data.favorites = data.favorites;
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to reorder favorites:', error);
+      return false;
+    }
+  }
+
+  /**
    * Get icon HTML for a given icon name
    */
   getIconHTML(iconName) {
@@ -150,10 +172,12 @@ class QuickLinks {
     return `
       <div class="quick-links-section">
         <h3>⭐ Favorites</h3>
-        <div class="quick-links-grid">
-          ${favorites.map(fav => `
+        <div class="quick-links-grid" id="favorites-grid">
+          ${favorites.map((fav, index) => `
             <a href="${this.escapeHtml(fav.url)}" target="_blank" class="quick-link"
                data-url="${this.escapeHtml(fav.url)}"
+               data-index="${index}"
+               draggable="true"
                title="${this.escapeHtml(fav.name)}">
               <span class="quick-link-icon">${this.getIconHTML(fav.icon)}</span>
               <span class="quick-link-label">${this.escapeHtml(fav.name)}</span>
@@ -169,6 +193,70 @@ class QuickLinks {
         </div>
       </div>
     `;
+  }
+
+  /**
+   * Setup drag and drop for favorites reordering
+   */
+  setupDragAndDrop() {
+    const grid = document.getElementById('favorites-grid');
+    if (!grid) return;
+
+    let draggedItem = null;
+
+    grid.addEventListener('dragstart', (e) => {
+      if (!e.target.classList.contains('quick-link') || e.target.classList.contains('add-favorite-btn')) return;
+      draggedItem = e.target;
+      e.target.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    grid.addEventListener('dragend', (e) => {
+      if (!e.target.classList.contains('quick-link')) return;
+      e.target.classList.remove('dragging');
+      document.querySelectorAll('.quick-link.drag-over').forEach(el => el.classList.remove('drag-over'));
+      draggedItem = null;
+    });
+
+    grid.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const target = e.target.closest('.quick-link');
+      if (!target || target === draggedItem || target.classList.contains('add-favorite-btn')) return;
+      target.classList.add('drag-over');
+    });
+
+    grid.addEventListener('dragleave', (e) => {
+      const target = e.target.closest('.quick-link');
+      if (target) target.classList.remove('drag-over');
+    });
+
+    grid.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      const target = e.target.closest('.quick-link');
+      if (!target || target === draggedItem || target.classList.contains('add-favorite-btn') || !draggedItem) return;
+
+      target.classList.remove('drag-over');
+
+      // Get new order
+      const items = Array.from(grid.querySelectorAll('.quick-link:not(.add-favorite-btn)'));
+      const draggedIndex = parseInt(draggedItem.dataset.index);
+      const targetIndex = parseInt(target.dataset.index);
+
+      // Reorder the data
+      const newOrder = [...this.data.favorites];
+      const [removed] = newOrder.splice(draggedIndex, 1);
+      newOrder.splice(targetIndex, 0, removed);
+
+      // Save new order
+      const urls = newOrder.map(f => f.url);
+      await this.reorderFavorites(urls);
+
+      // Re-render
+      if (window.orchestrator?.dashboard?.isVisible) {
+        await this.fetchData();
+        window.orchestrator.dashboard.render();
+      }
+    });
   }
 
   /**
