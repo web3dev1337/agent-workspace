@@ -245,6 +245,13 @@ class ClaudeOrchestrator {
         }
       });
 
+      // ============ COMMANDER UI CONTROL ============
+      // Commander Claude can control UI via these semantic commands
+      this.socket.on('commander-action', ({ action, ...params }) => {
+        console.log('Commander action:', action, params);
+        this.handleCommanderAction(action, params);
+      });
+
       // Handle new worktree sessions being added without destroying existing ones
       this.socket.on('worktree-sessions-added', ({ worktreeId, sessions }) => {
         console.log('New worktree sessions added:', worktreeId, sessions);
@@ -2461,7 +2468,62 @@ class ClaudeOrchestrator {
       this.socket.emit('terminal-resize', { sessionId, cols, rows });
     }
   }
-  
+
+  /**
+   * Handle Commander Claude UI control actions
+   * These are semantic commands that Commander uses to control the UI
+   */
+  handleCommanderAction(action, params) {
+    switch (action) {
+      case 'focus-session':
+        this.focusTerminal(params.sessionId);
+        break;
+
+      case 'switch-workspace':
+        if (this.tabManager) {
+          this.tabManager.switchToWorkspace(params.workspaceName);
+        }
+        break;
+
+      case 'open-commander':
+        if (this.commanderPanel) {
+          this.commanderPanel.show();
+        }
+        break;
+
+      case 'open-greenfield':
+        if (this.greenfieldWizard) {
+          this.greenfieldWizard.show();
+        }
+        break;
+
+      case 'open-settings':
+        document.getElementById('settings-panel')?.classList.remove('hidden');
+        break;
+
+      case 'highlight-worktree': {
+        const item = document.querySelector(`[data-worktree-id="${params.worktreeId}"]`);
+        if (item) {
+          item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          item.classList.add('highlighted');
+          setTimeout(() => item.classList.remove('highlighted'), 2000);
+        }
+        break;
+      }
+
+      case 'start-claude':
+        this.startClaudeInSession(params.sessionId, params.yolo !== false);
+        break;
+
+      case 'stop-session':
+        this.stopSession(params.sessionId);
+        break;
+
+      default:
+        console.warn('Unknown commander action:', action);
+    }
+  }
+
   handleSessionExit(sessionId, exitCode) {
     console.log(`Session ${sessionId} exited with code ${exitCode}`);
     this.updateSessionStatus(sessionId, 'exited');
