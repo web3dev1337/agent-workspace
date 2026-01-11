@@ -80,6 +80,15 @@ class ClaudeOrchestrator {
         console.log('Greenfield wizard initialized');
       }
 
+      // Initialize Conversation browser for history
+      if (typeof ConversationBrowser !== 'undefined') {
+        this.conversationBrowser = new ConversationBrowser(this);
+        document.getElementById('conversations-btn')?.addEventListener('click', () => {
+          this.conversationBrowser.show();
+        });
+        console.log('Conversation browser initialized');
+      }
+
       // Request notification permission if enabled
       if (this.settings.notifications) {
         this.notificationManager.requestPermission();
