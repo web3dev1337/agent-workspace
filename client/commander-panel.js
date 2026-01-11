@@ -1,18 +1,19 @@
 /**
- * Commander Panel - Frontend UI for Top-Level AI
- * Provides a chat interface to interact with Commander Claude
+ * Commander Panel - Frontend UI for Commander Claude Code Terminal
+ * This provides a terminal interface to the Commander, which is itself
+ * a Claude Code instance running from the orchestrator directory.
  */
 
 class CommanderPanel {
   constructor(orchestrator) {
     this.orchestrator = orchestrator;
     this.isVisible = false;
-    this.isLoading = false;
-    this.messages = [];
+    this.isRunning = false;
     this.serverUrl = window.location.port === '2080' || window.location.port === '2081'
       ? `http://localhost:${window.location.port === '2080' ? '3000' : '4000'}`
       : window.location.origin;
-    this.status = null;
+    this.terminal = null;
+    this.fitAddon = null;
   }
 
   /**
@@ -21,6 +22,7 @@ class CommanderPanel {
   async init() {
     this.createPanelHTML();
     this.attachEventListeners();
+    this.setupSocketListeners();
     await this.fetchStatus();
   }
 
@@ -34,7 +36,7 @@ class CommanderPanel {
       const toggleBtn = document.createElement('button');
       toggleBtn.id = 'commander-toggle';
       toggleBtn.className = 'icon-button';
-      toggleBtn.title = 'Commander (Top-Level AI)';
+      toggleBtn.title = 'Commander (Top-Level Claude)';
       toggleBtn.innerHTML = '🎖️';
       headerActions.insertBefore(toggleBtn, headerActions.firstChild);
     }
@@ -48,35 +50,90 @@ class CommanderPanel {
         <div class="commander-title">
           <span class="commander-icon">🎖️</span>
           <h3>Commander Claude</h3>
-          <span class="commander-status" id="commander-status-badge">Checking...</span>
+          <span class="commander-status" id="commander-status-badge">Stopped</span>
         </div>
         <div class="commander-actions">
-          <button id="commander-clear" class="icon-button" title="Clear history">🗑️</button>
+          <button id="commander-start" class="icon-button" title="Start Commander">▶️</button>
+          <button id="commander-stop" class="icon-button" title="Stop Commander">⏹️</button>
+          <button id="commander-clear" class="icon-button" title="Clear terminal">🗑️</button>
           <button id="commander-close" class="icon-button" title="Close">✕</button>
         </div>
       </div>
-      <div class="commander-messages" id="commander-messages">
-        <div class="commander-welcome">
-          <p>I'm Commander Claude, your top-level AI assistant for the orchestrator.</p>
-          <p>I can help you:</p>
-          <ul>
-            <li>Create new projects</li>
-            <li>Switch workspaces</li>
-            <li>Send commands to terminals</li>
-            <li>Check port usage</li>
-            <li>Coordinate across sessions</li>
-          </ul>
-          <p>Try: "List all workspaces" or "What ports are in use?"</p>
-        </div>
-      </div>
-      <div class="commander-input-area">
-        <textarea id="commander-input" placeholder="Ask Commander..." rows="2"></textarea>
-        <button id="commander-send" class="button-primary" disabled>
-          <span class="send-icon">➤</span>
+      <div class="commander-toolbar">
+        <button id="commander-start-claude" class="commander-btn" title="Start Claude Code">
+          Start Claude
         </button>
+        <select id="commander-mode">
+          <option value="fresh">Fresh</option>
+          <option value="continue">Continue</option>
+          <option value="resume">Resume</option>
+        </select>
+        <button id="commander-sessions" class="commander-btn" title="View sessions">
+          Sessions
+        </button>
+      </div>
+      <div class="commander-terminal" id="commander-terminal">
+        <div class="commander-placeholder">
+          <p>Commander is a Claude Code terminal for orchestrating your sessions.</p>
+          <p>Click <strong>▶️ Start</strong> to launch the terminal, then <strong>Start Claude</strong> to begin.</p>
+        </div>
       </div>
     `;
     document.body.appendChild(panel);
+  }
+
+  /**
+   * Initialize XTerm.js terminal
+   */
+  initTerminal() {
+    if (this.terminal) return;
+
+    const container = document.getElementById('commander-terminal');
+    if (!container) return;
+
+    // Clear placeholder
+    container.innerHTML = '';
+
+    // Create terminal
+    this.terminal = new Terminal({
+      cursorBlink: true,
+      fontSize: 13,
+      fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace",
+      theme: {
+        background: '#0d1117',
+        foreground: '#c9d1d9',
+        cursor: '#58a6ff',
+        selection: 'rgba(56, 139, 253, 0.4)',
+        black: '#484f58',
+        red: '#ff7b72',
+        green: '#3fb950',
+        yellow: '#d29922',
+        blue: '#58a6ff',
+        magenta: '#bc8cff',
+        cyan: '#39c5cf',
+        white: '#b1bac4'
+      }
+    });
+
+    // Add fit addon
+    this.fitAddon = new FitAddon.FitAddon();
+    this.terminal.loadAddon(this.fitAddon);
+
+    // Open terminal
+    this.terminal.open(container);
+    this.fitAddon.fit();
+
+    // Handle input
+    this.terminal.onData(data => {
+      this.sendInput(data);
+    });
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+      if (this.isVisible && this.fitAddon) {
+        this.fitAddon.fit();
+      }
+    });
   }
 
   /**
@@ -84,50 +141,54 @@ class CommanderPanel {
    */
   attachEventListeners() {
     // Toggle button
-    const toggleBtn = document.getElementById('commander-toggle');
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => this.toggle());
-    }
+    document.getElementById('commander-toggle')?.addEventListener('click', () => this.toggle());
 
     // Close button
-    const closeBtn = document.getElementById('commander-close');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => this.hide());
-    }
+    document.getElementById('commander-close')?.addEventListener('click', () => this.hide());
+
+    // Start button
+    document.getElementById('commander-start')?.addEventListener('click', () => this.startCommander());
+
+    // Stop button
+    document.getElementById('commander-stop')?.addEventListener('click', () => this.stopCommander());
 
     // Clear button
-    const clearBtn = document.getElementById('commander-clear');
-    if (clearBtn) {
-      clearBtn.addEventListener('click', () => this.clearHistory());
-    }
+    document.getElementById('commander-clear')?.addEventListener('click', () => this.clearTerminal());
 
-    // Send button
-    const sendBtn = document.getElementById('commander-send');
-    if (sendBtn) {
-      sendBtn.addEventListener('click', () => this.sendMessage());
-    }
+    // Start Claude button
+    document.getElementById('commander-start-claude')?.addEventListener('click', () => {
+      const mode = document.getElementById('commander-mode')?.value || 'fresh';
+      this.startClaude(mode);
+    });
 
-    // Input field
-    const input = document.getElementById('commander-input');
-    if (input) {
-      input.addEventListener('input', () => {
-        const sendBtn = document.getElementById('commander-send');
-        sendBtn.disabled = !input.value.trim();
-      });
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          if (input.value.trim()) {
-            this.sendMessage();
-          }
-        }
-      });
-    }
+    // Sessions button
+    document.getElementById('commander-sessions')?.addEventListener('click', () => this.showSessions());
 
     // ESC to close
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.isVisible) {
         this.hide();
+      }
+    });
+  }
+
+  /**
+   * Setup Socket.IO listeners for Commander output
+   */
+  setupSocketListeners() {
+    if (!this.orchestrator?.socket) return;
+
+    this.orchestrator.socket.on('commander-output', ({ data }) => {
+      if (this.terminal) {
+        this.terminal.write(data);
+      }
+    });
+
+    this.orchestrator.socket.on('commander-exit', ({ exitCode }) => {
+      this.isRunning = false;
+      this.updateStatusBadge();
+      if (this.terminal) {
+        this.terminal.writeln(`\r\n[Commander exited with code ${exitCode}]`);
       }
     });
   }
@@ -139,7 +200,8 @@ class CommanderPanel {
     try {
       const response = await fetch(`${this.serverUrl}/api/commander/status`);
       if (response.ok) {
-        this.status = await response.json();
+        const status = await response.json();
+        this.isRunning = status.running;
         this.updateStatusBadge();
       }
     } catch (error) {
@@ -152,12 +214,12 @@ class CommanderPanel {
    */
   updateStatusBadge() {
     const badge = document.getElementById('commander-status-badge');
-    if (badge && this.status) {
-      if (this.status.enabled) {
-        badge.textContent = 'Online';
+    if (badge) {
+      if (this.isRunning) {
+        badge.textContent = 'Running';
         badge.className = 'commander-status online';
       } else {
-        badge.textContent = 'No API Key';
+        badge.textContent = 'Stopped';
         badge.className = 'commander-status offline';
       }
     }
@@ -182,8 +244,16 @@ class CommanderPanel {
     if (panel) {
       panel.classList.remove('hidden');
       this.isVisible = true;
-      const input = document.getElementById('commander-input');
-      if (input) input.focus();
+
+      // Initialize terminal if not already
+      if (!this.terminal && this.isRunning) {
+        this.initTerminal();
+      }
+
+      // Fit terminal
+      if (this.fitAddon) {
+        setTimeout(() => this.fitAddon.fit(), 100);
+      }
     }
   }
 
@@ -199,149 +269,116 @@ class CommanderPanel {
   }
 
   /**
-   * Send a message to Commander
+   * Start the Commander terminal
    */
-  async sendMessage() {
-    const input = document.getElementById('commander-input');
-    const message = input.value.trim();
-    if (!message || this.isLoading) return;
-
-    // Clear input
-    input.value = '';
-    document.getElementById('commander-send').disabled = true;
-
-    // Add user message to UI
-    this.addMessage('user', message);
-
-    // Show loading
-    this.isLoading = true;
-    this.addMessage('loading', '');
-
+  async startCommander() {
     try {
-      const response = await fetch(`${this.serverUrl}/api/commander/command`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: message })
+      const response = await fetch(`${this.serverUrl}/api/commander/start`, {
+        method: 'POST'
       });
-
-      // Remove loading message
-      this.removeLoadingMessage();
 
       if (response.ok) {
         const result = await response.json();
-
-        // Show tool calls if any
-        if (result.toolCalls && result.toolCalls.length > 0) {
-          for (const tc of result.toolCalls) {
-            this.addMessage('tool', `Used: ${tc.tool}`);
-          }
+        if (result.success) {
+          this.isRunning = true;
+          this.updateStatusBadge();
+          this.initTerminal();
         }
-
-        // Show response
-        this.addMessage('assistant', result.response || 'Command executed.');
-      } else {
-        const error = await response.json();
-        this.addMessage('error', `Error: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
-      this.removeLoadingMessage();
-      this.addMessage('error', `Connection error: ${error.message}`);
+      console.error('Failed to start commander:', error);
     }
-
-    this.isLoading = false;
   }
 
   /**
-   * Add a message to the chat
+   * Stop the Commander terminal
    */
-  addMessage(type, content) {
-    const container = document.getElementById('commander-messages');
-    if (!container) return;
-
-    // Remove welcome message on first real message
-    const welcome = container.querySelector('.commander-welcome');
-    if (welcome && type !== 'loading') {
-      welcome.remove();
-    }
-
-    const msg = document.createElement('div');
-    msg.className = `commander-message ${type}`;
-
-    if (type === 'loading') {
-      msg.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
-    } else if (type === 'tool') {
-      msg.innerHTML = `<span class="tool-badge">🔧 ${this.escapeHtml(content)}</span>`;
-    } else {
-      msg.innerHTML = `<div class="message-content">${this.formatMessage(content)}</div>`;
-    }
-
-    container.appendChild(msg);
-    container.scrollTop = container.scrollHeight;
-
-    this.messages.push({ type, content });
-  }
-
-  /**
-   * Remove loading message
-   */
-  removeLoadingMessage() {
-    const container = document.getElementById('commander-messages');
-    const loading = container?.querySelector('.commander-message.loading');
-    if (loading) loading.remove();
-  }
-
-  /**
-   * Format message content (basic markdown)
-   */
-  formatMessage(content) {
-    if (!content) return '';
-
-    // Escape HTML first
-    let html = this.escapeHtml(content);
-
-    // Code blocks
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-
-    // Inline code
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-    // Bold
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-    // Line breaks
-    html = html.replace(/\n/g, '<br>');
-
-    return html;
-  }
-
-  /**
-   * Escape HTML
-   */
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  /**
-   * Clear conversation history
-   */
-  async clearHistory() {
+  async stopCommander() {
     try {
-      await fetch(`${this.serverUrl}/api/commander/clear`, { method: 'POST' });
-      this.messages = [];
+      const response = await fetch(`${this.serverUrl}/api/commander/stop`, {
+        method: 'POST'
+      });
 
-      const container = document.getElementById('commander-messages');
-      if (container) {
-        container.innerHTML = `
-          <div class="commander-welcome">
-            <p>History cleared. How can I help you?</p>
-          </div>
-        `;
+      if (response.ok) {
+        this.isRunning = false;
+        this.updateStatusBadge();
       }
     } catch (error) {
-      console.error('Failed to clear history:', error);
+      console.error('Failed to stop commander:', error);
+    }
+  }
+
+  /**
+   * Start Claude Code in the Commander terminal
+   */
+  async startClaude(mode = 'fresh') {
+    if (!this.isRunning) {
+      await this.startCommander();
+      // Wait for terminal to be ready
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    try {
+      const response = await fetch(`${this.serverUrl}/api/commander/start-claude`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode })
+      });
+
+      if (response.ok) {
+        if (this.terminal) {
+          this.terminal.focus();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to start Claude:', error);
+    }
+  }
+
+  /**
+   * Send input to Commander terminal
+   */
+  async sendInput(input) {
+    try {
+      await fetch(`${this.serverUrl}/api/commander/input`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input })
+      });
+    } catch (error) {
+      console.error('Failed to send input:', error);
+    }
+  }
+
+  /**
+   * Clear the terminal
+   */
+  clearTerminal() {
+    if (this.terminal) {
+      this.terminal.clear();
+    }
+  }
+
+  /**
+   * Show active sessions
+   */
+  async showSessions() {
+    try {
+      const response = await fetch(`${this.serverUrl}/api/commander/sessions`);
+      if (response.ok) {
+        const { sessions } = await response.json();
+
+        // Display sessions in terminal or modal
+        if (this.terminal) {
+          this.terminal.writeln('\r\n=== Active Sessions ===');
+          sessions.forEach(s => {
+            this.terminal.writeln(`  ${s.id} [${s.type}] - ${s.status} (${s.branch || 'no branch'})`);
+          });
+          this.terminal.writeln('======================\r\n');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to get sessions:', error);
     }
   }
 }

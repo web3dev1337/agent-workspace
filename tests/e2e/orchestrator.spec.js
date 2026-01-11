@@ -308,48 +308,52 @@ test.describe('Socket.IO Connection', () => {
   });
 });
 
-test.describe('Commander API', () => {
+test.describe('Commander API (Terminal-based)', () => {
   test('should get commander status', async ({ request }) => {
     const response = await request.get(`${SERVER_URL}/api/commander/status`);
 
     expect(response.ok()).toBeTruthy();
 
     const status = await response.json();
-    expect(status).toHaveProperty('enabled');
-    expect(status).toHaveProperty('historyLength');
-    expect(status).toHaveProperty('apiKeyConfigured');
+    expect(status).toHaveProperty('running');
+    expect(status).toHaveProperty('status');
+    expect(status).toHaveProperty('cwd');
   });
 
-  test('should get available tools', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/commander/tools`);
-
-    expect(response.ok()).toBeTruthy();
-
-    const data = await response.json();
-    expect(data).toHaveProperty('tools');
-    expect(Array.isArray(data.tools)).toBe(true);
-    expect(data.tools.length).toBeGreaterThan(0);
-
-    // Check that tools have required properties
-    data.tools.forEach(tool => {
-      expect(tool).toHaveProperty('name');
-      expect(tool).toHaveProperty('description');
-      expect(tool).toHaveProperty('input_schema');
-    });
-  });
-
-  test('should process command (simulation mode without API key)', async ({ request }) => {
-    const response = await request.post(`${SERVER_URL}/api/commander/command`, {
-      data: { input: 'list workspaces' }
-    });
+  test('should start commander terminal', async ({ request }) => {
+    const response = await request.post(`${SERVER_URL}/api/commander/start`);
 
     expect(response.ok()).toBeTruthy();
 
     const result = await response.json();
-    expect(result).toHaveProperty('response');
+    expect(result.success).toBe(true);
+
+    // Stop it for cleanup
+    await request.post(`${SERVER_URL}/api/commander/stop`);
   });
 
-  test('should clear history', async ({ request }) => {
+  test('should stop commander terminal', async ({ request }) => {
+    // Start first
+    await request.post(`${SERVER_URL}/api/commander/start`);
+
+    const response = await request.post(`${SERVER_URL}/api/commander/stop`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const result = await response.json();
+    expect(result.success).toBe(true);
+  });
+
+  test('should get output from commander', async ({ request }) => {
+    const response = await request.get(`${SERVER_URL}/api/commander/output`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const result = await response.json();
+    expect(result).toHaveProperty('output');
+  });
+
+  test('should clear commander buffer', async ({ request }) => {
     const response = await request.post(`${SERVER_URL}/api/commander/clear`);
 
     expect(response.ok()).toBeTruthy();
@@ -358,8 +362,18 @@ test.describe('Commander API', () => {
     expect(result.success).toBe(true);
   });
 
-  test('should reject empty input', async ({ request }) => {
-    const response = await request.post(`${SERVER_URL}/api/commander/command`, {
+  test('should list active sessions', async ({ request }) => {
+    const response = await request.get(`${SERVER_URL}/api/commander/sessions`);
+
+    expect(response.ok()).toBeTruthy();
+
+    const result = await response.json();
+    expect(result).toHaveProperty('sessions');
+    expect(Array.isArray(result.sessions)).toBe(true);
+  });
+
+  test('should reject send input without input field', async ({ request }) => {
+    const response = await request.post(`${SERVER_URL}/api/commander/input`, {
       data: {}
     });
 
