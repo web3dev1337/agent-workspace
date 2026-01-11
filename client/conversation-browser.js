@@ -20,11 +20,14 @@ class ConversationBrowser {
                      window.location.origin;
     this.currentSort = 'date';
     this.sortDirection = 'desc';
+    this.loadAll = false;
+    this.totalIndexed = 0;
     this.filters = {
       repo: '',
       branch: '',
       folder: '',
-      query: ''
+      query: '',
+      dateFilter: ''
     };
   }
 
@@ -55,7 +58,7 @@ class ConversationBrowser {
 
         <div class="browser-toolbar">
           <div class="search-container">
-            <input type="text" id="conv-search" placeholder="Search conversations..."
+            <input type="text" id="conv-search" placeholder="Search all conversations..."
                    oninput="window.conversationBrowser.handleSearch(this.value)">
             <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
           </div>
@@ -67,6 +70,16 @@ class ConversationBrowser {
 
             <select id="conv-branch-filter" onchange="window.conversationBrowser.applyFilter('branch', this.value)">
               <option value="">All Branches</option>
+            </select>
+
+            <select id="conv-date-filter" onchange="window.conversationBrowser.applyDateFilter(this.value)">
+              <option value="">All Time</option>
+              <option value="1h">Last Hour</option>
+              <option value="24h">Last 24 Hours</option>
+              <option value="3d">Last 3 Days</option>
+              <option value="7d">Last Week</option>
+              <option value="30d">Last Month</option>
+              <option value="90d">Last 3 Months</option>
             </select>
 
             <select id="conv-sort" onchange="window.conversationBrowser.handleSort(this.value)">
@@ -84,6 +97,14 @@ class ConversationBrowser {
 
         <div class="browser-stats" id="browser-stats">
           Loading...
+        </div>
+
+        <div class="browser-info" id="browser-info">
+          <span class="info-note">Search queries all <span id="total-indexed">0</span> conversations</span>
+          <label class="load-all-toggle">
+            <input type="checkbox" id="load-all-checkbox" onchange="window.conversationBrowser.toggleLoadAll(this.checked)">
+            Load all in list
+          </label>
         </div>
 
         <div class="browser-list" id="conversation-list">
@@ -105,7 +126,9 @@ class ConversationBrowser {
 
   async loadRecent() {
     try {
-      const response = await fetch(`${this.serverUrl}/api/conversations/recent?limit=500`);
+      // Load all if checkbox is checked, otherwise limit to 500
+      const limit = this.loadAll ? 10000 : 500;
+      const response = await fetch(`${this.serverUrl}/api/conversations/recent?limit=${limit}`);
       if (!response.ok) throw new Error('Failed to load conversations');
 
       this.conversations = await response.json();
@@ -306,8 +329,52 @@ class ConversationBrowser {
     this.applyFilters();
   }
 
+  applyDateFilter(value) {
+    this.filters.dateFilter = value;
+    this.applyFilters();
+  }
+
+  toggleLoadAll(checked) {
+    this.loadAll = checked;
+    this.loadRecent();
+  }
+
+  getDateFilterCutoff() {
+    if (!this.filters.dateFilter) return null;
+
+    const now = new Date();
+    const cutoff = new Date(now);
+
+    switch (this.filters.dateFilter) {
+      case '1h':
+        cutoff.setHours(now.getHours() - 1);
+        break;
+      case '24h':
+        cutoff.setHours(now.getHours() - 24);
+        break;
+      case '3d':
+        cutoff.setDate(now.getDate() - 3);
+        break;
+      case '7d':
+        cutoff.setDate(now.getDate() - 7);
+        break;
+      case '30d':
+        cutoff.setDate(now.getDate() - 30);
+        break;
+      case '90d':
+        cutoff.setDate(now.getDate() - 90);
+        break;
+      default:
+        return null;
+    }
+
+    return cutoff.toISOString();
+  }
+
   applyFilters() {
     // Client-side filtering
+    const dateCutoff = this.getDateFilterCutoff();
+
     this.filteredConversations = this.conversations.filter(conv => {
       // Repo filter - extract repo from path and compare
       if (this.filters.repo) {
@@ -318,6 +385,8 @@ class ConversationBrowser {
       if (this.filters.branch && conv.branch !== this.filters.branch) return false;
       // Folder filter
       if (this.filters.folder && (!conv.cwd || !conv.cwd.includes(this.filters.folder))) return false;
+      // Date filter
+      if (dateCutoff && conv.lastTimestamp && conv.lastTimestamp < dateCutoff) return false;
       // Text search
       if (this.filters.query) {
         const q = this.filters.query.toLowerCase();
@@ -375,7 +444,8 @@ class ConversationBrowser {
   renderConversationItem(conv) {
     const startDate = conv.firstTimestamp ? new Date(conv.firstTimestamp) : null;
     const lastDate = conv.lastTimestamp ? new Date(conv.lastTimestamp) : null;
-    const startedStr = startDate ? `${startDate.toLocaleDateString()} ${startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : 'Unknown';
+    // Australian date format: DD/MM/YYYY HH:MM
+    const startedStr = startDate ? this.formatDateAU(startDate) : 'Unknown';
     const lastStr = lastDate ? this.timeAgo(lastDate) : 'Unknown';
 
     // Parse path into components
@@ -462,6 +532,20 @@ class ConversationBrowser {
     return this.escapeHtml(cleaned.slice(0, 200));
   }
 
+  /**
+   * Format date in Australian format: DD/MM/YYYY HH:MM
+   */
+  formatDateAU(date) {
+    return date.toLocaleDateString('en-AU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  }
+
   timeAgo(date) {
     const seconds = Math.floor((new Date() - date) / 1000);
     if (seconds < 60) return 'just now';
@@ -471,7 +555,7 @@ class ConversationBrowser {
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
     if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString();
+    return date.toLocaleDateString('en-AU');
   }
 
   copyPath(path) {
@@ -493,13 +577,19 @@ class ConversationBrowser {
       if (!response.ok) return;
 
       const stats = await response.json();
-      const statsEl = document.getElementById('browser-stats');
+      this.totalIndexed = stats.totalConversations;
 
+      const statsEl = document.getElementById('browser-stats');
       statsEl.innerHTML = `
-        <span>${stats.totalConversations} conversations</span>
+        <span>${stats.totalConversations.toLocaleString('en-AU')} total</span>
         <span>${stats.totalProjects} projects</span>
-        <span>${this.formatTokens(stats.totalTokens)} total tokens</span>
+        <span>${this.formatTokens(stats.totalTokens)} tokens</span>
+        <span>${stats.totalMessages?.toLocaleString('en-AU') || 0} messages</span>
       `;
+
+      // Update the info note
+      const totalEl = document.getElementById('total-indexed');
+      if (totalEl) totalEl.textContent = stats.totalConversations.toLocaleString('en-AU');
     } catch (error) {
       console.error('Failed to load stats:', error);
     }

@@ -5283,6 +5283,39 @@ header h1 {
   margin-left: auto;
 }
 
+/* Browser info bar */
+.browser-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-sm);
+  font-size: 0.8rem;
+}
+
+.info-note {
+  color: var(--text-muted);
+}
+
+.info-note span {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.load-all-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.load-all-toggle input {
+  cursor: pointer;
+}
+
 .conv-preview {
   font-size: 0.85rem;
   color: var(--text-secondary);
