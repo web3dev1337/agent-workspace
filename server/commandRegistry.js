@@ -236,6 +236,32 @@ class CommandRegistry {
       }
     });
 
+    this.register('focus-worktree', {
+      category: 'ui',
+      description: 'Show only this worktree\'s terminals (hide all others)',
+      params: [
+        { name: 'worktreeId', required: true, description: 'Worktree ID to focus (e.g., "work1")' }
+      ],
+      examples: [
+        { params: { worktreeId: 'work1' }, description: 'Show only work1 terminals' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'focus-worktree', ...params });
+        return { message: `Focusing ${params.worktreeId}` };
+      }
+    });
+
+    this.register('show-all-worktrees', {
+      category: 'ui',
+      description: 'Show all worktrees (unfocus/reset view)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'show-all-worktrees' });
+        return { message: 'Showing all worktrees' };
+      }
+    });
+
     // ============ TERMINAL ACTIONS ============
 
     this.register('start-claude', {
