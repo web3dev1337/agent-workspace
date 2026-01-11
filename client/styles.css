@@ -4959,3 +4959,13 @@ header h1 {
 .commander-placeholder p {
   margin: var(--space-sm) 0;
 }
+
+/* Commander highlight animation */
+.highlighted {
+  animation: commander-highlight 2s ease-out;
+}
+
+@keyframes commander-highlight {
+  0% { background-color: rgba(59, 130, 246, 0.5); }
+  100% { background-color: transparent; }
+}

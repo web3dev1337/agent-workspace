@@ -46,6 +46,7 @@ const { GreenfieldService } = require('./greenfieldService');
 const { ContinuityService } = require('./continuityService');
 const { QuickLinksService } = require('./quickLinksService');
 const { CommanderService } = require('./commanderService');
+const commandRegistry = require('./commandRegistry');
 
 const app = express();
 const httpServer = createServer(app);
@@ -126,6 +127,13 @@ const quickLinksService = QuickLinksService.getInstance();
 const commanderService = CommanderService.getInstance({
   sessionManager,
   io
+});
+
+// Initialize Command Registry for Commander UI control
+commandRegistry.init({
+  io,
+  sessionManager,
+  workspaceManager
 });
 
 // Connect services
@@ -1599,6 +1607,35 @@ app.post('/api/commander/send-to-session', (req, res) => {
   } catch (error) {
     logger.error('Failed to send to session', { error: error.message });
     res.status(500).json({ error: 'Failed to send to session' });
+  }
+});
+
+// ============ COMMANDER COMMAND REGISTRY ============
+// Semantic command system for Commander Claude UI control
+
+// Get all available commands (discovery endpoint)
+app.get('/api/commander/capabilities', (req, res) => {
+  try {
+    const capabilities = commandRegistry.getCapabilities();
+    res.json(capabilities);
+  } catch (error) {
+    logger.error('Failed to get capabilities', { error: error.message });
+    res.status(500).json({ error: 'Failed to get capabilities' });
+  }
+});
+
+// Execute a command by name
+app.post('/api/commander/execute', async (req, res) => {
+  try {
+    const { command, params } = req.body;
+    if (!command) {
+      return res.status(400).json({ error: 'command is required' });
+    }
+    const result = await commandRegistry.execute(command, params || {});
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to execute command', { error: error.message });
+    res.status(500).json({ error: 'Failed to execute command' });
   }
 });
 

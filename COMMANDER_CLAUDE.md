@@ -4,6 +4,76 @@ You are Commander Claude. You can control the Claude Orchestrator by calling the
 
 **Base URL:** `http://localhost:4000`
 
+---
+
+## Command Registry (Recommended)
+
+The Command Registry provides semantic, self-documenting commands. **This is the preferred way to control the Orchestrator.**
+
+### Discover Available Commands
+```bash
+# See all available commands with descriptions and examples
+curl -s http://localhost:4000/api/commander/capabilities | jq
+```
+
+### Execute Commands
+```bash
+# General syntax
+curl -s http://localhost:4000/api/commander/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "COMMAND_NAME", "params": {...}}'
+
+# Focus on a terminal
+curl -s http://localhost:4000/api/commander/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "focus-session", "params": {"sessionId": "work1-claude"}}'
+
+# Switch workspace
+curl -s http://localhost:4000/api/commander/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "switch-workspace", "params": {"name": "Epic Survivors"}}'
+
+# Open Commander panel
+curl -s http://localhost:4000/api/commander/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "open-commander"}'
+
+# Open New Project wizard
+curl -s http://localhost:4000/api/commander/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "open-new-project"}'
+
+# Start Claude in a session
+curl -s http://localhost:4000/api/commander/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "start-claude", "params": {"sessionId": "work1-claude"}}'
+
+# Run a shell command
+curl -s http://localhost:4000/api/commander/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "run-command", "params": {"sessionId": "work1-server", "command": "npm test"}}'
+
+# Broadcast to multiple sessions
+curl -s http://localhost:4000/api/commander/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "broadcast", "params": {"sessionIds": ["work1-claude", "work2-claude"], "input": "git pull\n"}}'
+
+# Highlight a worktree in sidebar
+curl -s http://localhost:4000/api/commander/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "highlight-worktree", "params": {"worktreeId": "work1"}}'
+```
+
+### Available Command Categories
+- **sessions**: focus-session, send-to-session, list-sessions
+- **workspaces**: switch-workspace, list-workspaces
+- **ui**: open-commander, open-new-project, open-settings, highlight-worktree
+- **terminals**: start-claude, stop-session, run-command
+- **git**: get-git-status
+- **coordination**: broadcast
+
+---
+
 ## Session Control
 
 ```bash
