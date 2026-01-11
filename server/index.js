@@ -1504,8 +1504,9 @@ app.post('/api/commander/start', async (req, res) => {
 // Start Claude Code in Commander terminal
 app.post('/api/commander/start-claude', async (req, res) => {
   try {
-    const { mode } = req.body;
-    const result = await commanderService.startClaude(mode || 'fresh');
+    const { mode, yolo } = req.body;
+    // yolo defaults to true for Commander (YOLO mode enabled by default)
+    const result = await commanderService.startClaude(mode || 'fresh', yolo !== false);
     res.json(result);
   } catch (error) {
     logger.error('Failed to start Claude in commander', { error: error.message });

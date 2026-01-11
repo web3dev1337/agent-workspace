@@ -127,17 +127,29 @@ class CommanderPanel {
 
     // Open terminal
     this.terminal.open(container);
-    this.fitAddon.fit();
 
-    // Handle input
+    // Use requestAnimationFrame to ensure renderer is ready before fitting
+    requestAnimationFrame(() => {
+      this.fitAddon.fit();
+      this.terminal.focus();
+    });
+
+    // Handle input - send to Commander service
     this.terminal.onData(data => {
       this.sendInput(data);
+    });
+
+    // Click to focus
+    container.addEventListener('click', () => {
+      if (this.terminal) {
+        this.terminal.focus();
+      }
     });
 
     // Handle resize
     window.addEventListener('resize', () => {
       if (this.isVisible && this.fitAddon) {
-        this.fitAddon.fit();
+        requestAnimationFrame(() => this.fitAddon.fit());
       }
     });
   }
@@ -248,7 +260,7 @@ class CommanderPanel {
   /**
    * Show the panel
    */
-  show() {
+  async show() {
     const panel = document.getElementById('commander-panel');
     const backdrop = document.getElementById('commander-backdrop');
     if (panel) {
@@ -256,14 +268,26 @@ class CommanderPanel {
       backdrop?.classList.remove('hidden');
       this.isVisible = true;
 
-      // Initialize terminal if not already
-      if (!this.terminal && this.isRunning) {
-        this.initTerminal();
+      // Auto-start Commander if not running
+      if (!this.isRunning) {
+        await this.startCommander();
+        // Give it a moment to be ready, then start Claude
+        setTimeout(() => {
+          this.startClaude('fresh');
+        }, 1500);
+      } else {
+        // Already running, just init terminal if needed
+        if (!this.terminal) {
+          this.initTerminal();
+        }
       }
 
-      // Fit terminal
-      if (this.fitAddon) {
-        setTimeout(() => this.fitAddon.fit(), 100);
+      // Fit and focus terminal
+      if (this.fitAddon && this.terminal) {
+        requestAnimationFrame(() => {
+          this.fitAddon.fit();
+          this.terminal.focus();
+        });
       }
     }
   }
