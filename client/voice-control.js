@@ -55,7 +55,7 @@ class VoiceControl {
     `;
 
     // Add to header
-    const header = document.querySelector('.header-buttons') || document.querySelector('header');
+    const header = document.querySelector('.header-actions') || document.querySelector('header');
     if (header) {
       header.appendChild(container);
     } else {
