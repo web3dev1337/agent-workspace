@@ -382,6 +382,9 @@ class ClaudeOrchestrator {
           this.isDashboardMode = false;
         }
 
+        // Update voice command context with workspace info
+        this.updateVoiceContext();
+
         // Initialize dashboard if configured
         if (config.ui.startupDashboard && !active) {
           this.showDashboard();
@@ -906,6 +909,9 @@ class ClaudeOrchestrator {
     setTimeout(() => {
       this.checkAndApplyAutoStart();
     }, 2000);
+
+    // Update voice command context with session info
+    this.updateVoiceContext();
   }
 
   checkAndApplyAutoStart() {
@@ -5116,6 +5122,40 @@ class ClaudeOrchestrator {
       console.error('Error pulling latest changes:', error);
       this.showTemporaryMessage('Error pulling latest changes', 'error');
     }
+  }
+
+  // Update voice command context with current workspace/worktree info
+  updateVoiceContext() {
+    if (!this.voiceControl) return;
+
+    // Build list of worktrees with their full identifiers
+    const worktrees = [];
+    for (const [sessionId, session] of this.sessions) {
+      // Extract worktree info from session ID (e.g., "zoo-game-work1-claude" -> "zoo-game/work1")
+      const match = sessionId.match(/^(.+?)-(work\d+)-/);
+      if (match) {
+        const worktreeId = `${match[1]}/${match[2]}`;
+        if (!worktrees.includes(worktreeId)) {
+          worktrees.push(worktreeId);
+        }
+      }
+    }
+
+    // Build context
+    const context = {
+      currentWorkspace: this.currentWorkspace?.name || null,
+      workspaces: this.availableWorkspaces?.map(w => w.name) || [],
+      worktrees: worktrees.sort(),
+      // Add branch info if available
+      worktreeDetails: Array.from(this.sessions.entries())
+        .filter(([id]) => id.includes('-claude'))
+        .map(([id, session]) => ({
+          id: id.replace(/-claude$/, ''),
+          branch: session.branch || 'unknown'
+        }))
+    };
+
+    this.voiceControl.updateContext(context);
   }
 
   // Workspace management methods
