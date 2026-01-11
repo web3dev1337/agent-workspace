@@ -57,7 +57,14 @@ class ClaudeOrchestrator {
         this.tabManager = new WorkspaceTabManager(this);
         console.log('Tab manager initialized');
       }
-      
+
+      // Initialize Commander panel (Top-Level Claude terminal)
+      if (typeof CommanderPanel !== 'undefined') {
+        this.commanderPanel = new CommanderPanel(this);
+        this.commanderPanel.init();
+        console.log('Commander panel initialized');
+      }
+
       // Request notification permission if enabled
       if (this.settings.notifications) {
         this.notificationManager.requestPermission();
