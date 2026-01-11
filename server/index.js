@@ -41,6 +41,7 @@ const { GitUpdateService } = require('./gitUpdateService');
 const { WorkspaceManager } = require('./workspaceManager');
 const { WorktreeHelper } = require('./worktreeHelper');
 const AgentManager = require('./agentManager');
+const { PortRegistry } = require('./portRegistry');
 
 const app = express();
 const httpServer = createServer(app);
@@ -112,6 +113,7 @@ const statusDetector = new StatusDetector();
 const gitHelper = new GitHelper();
 const notificationService = new NotificationService(io);
 const worktreeHelper = new WorktreeHelper();
+const portRegistry = PortRegistry.getInstance();
 
 // Connect services
 sessionManager.setStatusDetector(statusDetector);
@@ -210,14 +212,19 @@ io.on('connection', (socket) => {
   });
   
   // Handle server control
-  socket.on('server-control', ({ sessionId, action, environment, launchSettings }) => {
+  socket.on('server-control', async ({ sessionId, action, environment, launchSettings }) => {
     logger.info('Server control request', { sessionId, action, environment, launchSettings });
 
     if (action === 'start') {
-      // Extract worktree number and assign port accordingly
+      // Get session info to find repository path and worktree ID
+      const session = sessionManager.sessions.get(sessionId);
       const worktreeMatch = sessionId.match(/work(\d+)/);
       const worktreeNum = worktreeMatch ? parseInt(worktreeMatch[1]) : 1;
-      const port = 8080 + worktreeNum - 1; // work1=8080, work2=8081, etc.
+
+      // Use port registry to get a port (avoids conflicts)
+      const repoPath = session?.config?.cwd || 'default';
+      const worktreeId = session?.worktreeId || `work${worktreeNum}`;
+      const port = await portRegistry.suggestPort(worktreeNum, repoPath, worktreeId);
 
       // Clear any existing input first with Ctrl+C, then send command
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C to clear
@@ -251,7 +258,7 @@ io.on('connection', (socket) => {
 
         command += '\n';
 
-        logger.info('Starting server with command', { sessionId, command, port, nodeEnv });
+        logger.info('Starting server with command', { sessionId, command, port, nodeEnv, repoPath, worktreeId });
 
         const written = sessionManager.writeToSession(sessionId, command);
         if (!written) {
@@ -264,8 +271,20 @@ io.on('connection', (socket) => {
       }, 100); // Small delay after Ctrl+C
     } else if (action === 'stop') {
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C
+
+      // Release the port when stopping
+      const session = sessionManager.sessions.get(sessionId);
+      if (session?.config?.cwd && session?.worktreeId) {
+        portRegistry.releasePort(session.config.cwd, session.worktreeId);
+      }
     } else if (action === 'kill') {
       sessionManager.writeToSession(sessionId, '\x03\x03'); // Double Ctrl+C
+
+      // Release the port when killing
+      const session = sessionManager.sessions.get(sessionId);
+      if (session?.config?.cwd && session?.worktreeId) {
+        portRegistry.releasePort(session.config.cwd, session.worktreeId);
+      }
     }
   });
   
@@ -1214,6 +1233,42 @@ app.get('/api/agents', (req, res) => {
   } catch (error) {
     logger.error('Failed to get agent configurations', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get agent configurations' });
+  }
+});
+
+// Port registry API endpoints
+app.get('/api/ports', (req, res) => {
+  try {
+    const assignments = portRegistry.getAllAssignments();
+    res.json(assignments);
+  } catch (error) {
+    logger.error('Failed to get port assignments', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get port assignments' });
+  }
+});
+
+app.get('/api/ports/:repoPath/:worktreeId', async (req, res) => {
+  try {
+    const { repoPath, worktreeId } = req.params;
+    const decodedRepoPath = decodeURIComponent(repoPath);
+    const portInfo = portRegistry.getPortInfo(decodedRepoPath, worktreeId);
+
+    if (portInfo) {
+      res.json(portInfo);
+    } else {
+      // Get or assign a new port
+      const worktreeNum = parseInt(worktreeId.replace(/\D/g, '')) || 1;
+      const port = await portRegistry.suggestPort(worktreeNum, decodedRepoPath, worktreeId);
+      res.json({
+        port,
+        assignedAt: Date.now(),
+        url: `http://localhost:${port}`,
+        newAssignment: true
+      });
+    }
+  } catch (error) {
+    logger.error('Failed to get port info', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get port info' });
   }
 });
 
