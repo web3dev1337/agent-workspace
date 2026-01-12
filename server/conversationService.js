@@ -288,14 +288,37 @@ class ConversationService {
             return '';
           };
 
-          const msgContent = extractText(obj.message?.content);
+          // Clean system cruft from message
+          const cleanMessage = (text) => {
+            if (!text) return '';
+            return text
+              .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/gi, '')
+              .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, '')
+              .replace(/<command-name>[\s\S]*?<\/command-name>/gi, '')
+              .replace(/<command-message>[\s\S]*?<\/command-message>/gi, '')
+              .replace(/<command-args>[\s\S]*?<\/command-args>/gi, '')
+              .replace(/Caveat:.*?consider them in your response[^.]*\./gi, '')
+              .replace(/\[Request interrupted by user\]/gi, '')
+              .replace(/<[^>]+>/g, '')
+              .trim();
+          };
 
-          // Track first user message
+          // Check if message is just system cruft
+          const isSystemCruft = (text) => {
+            if (!text) return true;
+            const cleaned = cleanMessage(text);
+            return cleaned.length < 5; // Too short after cleaning = likely just cruft
+          };
+
+          const msgContent = extractText(obj.message?.content);
+          const cleanedContent = cleanMessage(msgContent);
+
+          // Track first user message (skip system cruft)
           if (obj.type === 'user') {
             userMessageCount++;
-            if (!firstUserMessage && msgContent) {
-              firstUserMessage = msgContent.slice(0, 500);
-              preview = msgContent.slice(0, 300); // Keep preview for backwards compat
+            if (!firstUserMessage && cleanedContent && !isSystemCruft(msgContent)) {
+              firstUserMessage = cleanedContent.slice(0, 500);
+              preview = cleanedContent.slice(0, 300); // Keep preview for backwards compat
             }
           }
 
