@@ -5244,16 +5244,21 @@ class ClaudeOrchestrator {
           <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
         </div>
         <div class="ports-info">
-          ${portsData.count} service${portsData.count !== 1 ? 's' : ''} running
+          ${portsData.count} service${portsData.count !== 1 ? 's' : ''} running • Click name to edit label
         </div>
         <div class="ports-list">
           ${portsData.ports.length === 0 ? '<div class="no-ports">No services detected</div>' :
             portsData.ports.map(p => `
-              <div class="port-item ${p.type}">
+              <div class="port-item ${p.type}" data-port="${p.port}">
                 <span class="port-icon">${p.icon || '❓'}</span>
                 <div class="port-details">
-                  <span class="port-name">${p.name}</span>
-                  <span class="port-process">${p.processName || ''} (PID: ${p.pid || '?'})</span>
+                  <span class="port-name ${p.customLabel ? 'custom-label' : ''}"
+                        onclick="window.orchestrator.editPortLabel(${p.port}, '${(p.name || '').replace(/'/g, "\\'")}', this)"
+                        title="Click to edit label">
+                    ${p.name}${p.customLabel ? ' ✏️' : ''}
+                  </span>
+                  <span class="port-path" title="${p.cwd || ''}">${p.cwd ? p.cwd.split('/').slice(-2).join('/') : ''}</span>
+                  <span class="port-process">${p.processName || ''} • PID ${p.pid || '?'}${p.detectedFrom ? ` • from ${p.detectedFrom}` : ''}</span>
                 </div>
                 <a href="${p.url}" target="_blank" class="port-link" title="Open in browser">
                   :${p.port} →
@@ -5275,6 +5280,33 @@ class ClaudeOrchestrator {
     modal.addEventListener('click', (e) => {
       if (e.target === modal) modal.remove();
     });
+  }
+
+  async editPortLabel(port, currentName, element) {
+    const newLabel = prompt(`Enter custom label for port ${port}:`, currentName);
+    if (newLabel === null) return; // Cancelled
+
+    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
+                      window.location.port === '2081' ? 'http://localhost:4000' :
+                      window.location.origin;
+
+    try {
+      const response = await fetch(`${serverUrl}/api/ports/label`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ port, label: newLabel || null })
+      });
+
+      if (response.ok) {
+        // Refresh the panel
+        this.showPortsPanel();
+      } else {
+        alert('Failed to save label');
+      }
+    } catch (error) {
+      console.error('Failed to save port label:', error);
+      alert('Failed to save label: ' + error.message);
+    }
   }
 
   async showAddWorktreeModal() {

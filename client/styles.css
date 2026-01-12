@@ -5908,3 +5908,28 @@ header h1 {
   padding: var(--space-lg);
   color: var(--text-muted);
 }
+
+/* Port panel - project detection styles */
+.port-name {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.port-name:hover {
+  color: var(--accent-primary);
+}
+
+.port-name.custom-label {
+  color: #9f7aea;
+}
+
+.port-path {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--accent-primary);
+  opacity: 0.8;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
