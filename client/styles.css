@@ -5304,16 +5304,26 @@ header h1 {
   font-weight: 600;
 }
 
-.load-all-toggle {
+.browser-options {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.option-toggle {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
   color: var(--text-secondary);
   cursor: pointer;
+  font-size: 0.8rem;
 }
 
-.load-all-toggle input {
+.option-toggle input {
   cursor: pointer;
+}
+
+.option-toggle:has(input:checked) {
+  color: var(--accent-primary);
 }
 
 .conv-preview {
