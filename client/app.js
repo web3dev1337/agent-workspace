@@ -5257,8 +5257,12 @@ class ClaudeOrchestrator {
                         title="Click to edit label">
                     ${p.name}${p.customLabel ? ' ✏️' : ''}
                   </span>
-                  <span class="port-path" title="${p.cwd || ''}">${p.cwd ? p.cwd.split('/').slice(-2).join('/') : ''}</span>
-                  <span class="port-process">${p.processName || ''} • PID ${p.pid || '?'}${p.detectedFrom ? ` • from ${p.detectedFrom}` : ''}</span>
+                  <span class="port-context">
+                    ${p.project?.project ? `<span class="port-project">${p.project.project}</span>` : ''}
+                    ${p.project?.worktree ? `<span class="port-worktree">${p.project.worktree}</span>` : ''}
+                    ${p.project?.subPath ? `<span class="port-subpath">/${p.project.subPath}</span>` : ''}
+                  </span>
+                  <span class="port-process" title="${p.cwd || ''}">${p.processName || ''} • PID ${p.pid || '?'}</span>
                 </div>
                 <a href="${p.url}" target="_blank" class="port-link" title="Open in browser">
                   :${p.port} →
