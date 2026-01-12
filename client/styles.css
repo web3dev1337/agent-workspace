@@ -5306,6 +5306,11 @@ header h1 {
   font-size: 0.8rem;
   color: var(--text-muted);
   flex-shrink: 0;
+}
+
+.conv-date.last-used {
+  color: #48bb78;
+  font-weight: 500;
   margin-left: auto;
 }
 
