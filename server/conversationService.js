@@ -233,6 +233,9 @@ class ConversationService {
 
     let summary = null;
     let preview = '';
+    let firstUserMessage = '';
+    let lastMessage = '';
+    let lastMessageRole = '';
     let firstTimestamp = null;
     let lastTimestamp = null;
     let branch = null;
@@ -272,18 +275,34 @@ class ConversationService {
           if (!sessionId && obj.sessionId) sessionId = obj.sessionId;
           if (!model && obj.message?.model) model = obj.message.model;
 
-          // Extract preview from first user message
-          if (obj.type === 'user' && !preview) {
-            const content = obj.message?.content;
+          // Extract message content as text
+          const extractText = (content) => {
             if (typeof content === 'string') {
-              preview = content.slice(0, 300).replace(/\n/g, ' ').trim();
+              return content.replace(/\n/g, ' ').trim();
             } else if (Array.isArray(content)) {
               const textParts = content
                 .filter(c => c.type === 'text' || typeof c === 'string')
                 .map(c => typeof c === 'string' ? c : c.text);
-              preview = textParts.join(' ').slice(0, 300).replace(/\n/g, ' ').trim();
+              return textParts.join(' ').replace(/\n/g, ' ').trim();
             }
+            return '';
+          };
+
+          const msgContent = extractText(obj.message?.content);
+
+          // Track first user message
+          if (obj.type === 'user') {
             userMessageCount++;
+            if (!firstUserMessage && msgContent) {
+              firstUserMessage = msgContent.slice(0, 500);
+              preview = msgContent.slice(0, 300); // Keep preview for backwards compat
+            }
+          }
+
+          // Always update last message (so we end up with the final one)
+          if (msgContent) {
+            lastMessage = msgContent.slice(0, 500);
+            lastMessageRole = obj.type;
           }
 
           // Count tool uses
@@ -322,6 +341,9 @@ class ConversationService {
       project: projectName,
       summary,
       preview,
+      firstUserMessage,   // Full first user message (up to 500 chars)
+      lastMessage,        // Last message content (up to 500 chars)
+      lastMessageRole,    // 'user' or 'assistant'
       branch,
       cwd,
       sessionId,

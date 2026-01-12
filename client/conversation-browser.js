@@ -516,8 +516,10 @@ class ConversationBrowser {
     const repoName = conv.gitRepo || pathInfo.project || fullPath.split('/').slice(-2).join('/') || 'Unknown';
     const repoUrl = conv.gitRepoUrl;
 
-    // Clean preview - remove system messages and commands
-    const preview = this.cleanPreview(conv.preview || conv.summary || '');
+    // Clean messages - remove system messages and commands
+    const firstMsg = this.cleanPreview(conv.firstUserMessage || conv.preview || '');
+    const lastMsg = this.cleanPreview(conv.lastMessage || '');
+    const lastRole = conv.lastMessageRole || 'assistant';
 
     return `
       <div class="conversation-item" data-id="${conv.id}" data-project="${conv.project}" data-repo="${repoName}">
@@ -531,11 +533,17 @@ class ConversationBrowser {
           <span class="conv-date">${lastStr}</span>
         </div>
 
-        <div class="conv-preview-section">
-          <div class="conv-preview">${preview || '(No preview)'}</div>
-          <button class="btn-expand" onclick="window.conversationBrowser.viewConversation('${conv.id}', event)">
-            View Full
-          </button>
+        <div class="conv-messages-preview">
+          <div class="msg-preview first-msg">
+            <span class="msg-label">You:</span>
+            <span class="msg-text">${firstMsg || '(No message)'}</span>
+          </div>
+          ${lastMsg && lastMsg !== firstMsg ? `
+          <div class="msg-preview last-msg ${lastRole}">
+            <span class="msg-label">${lastRole === 'user' ? 'You:' : 'Claude:'}</span>
+            <span class="msg-text">${lastMsg}</span>
+          </div>
+          ` : ''}
         </div>
 
         <div class="conv-full-preview" id="full-preview-${conv.id}" style="display: none;">
@@ -556,6 +564,9 @@ class ConversationBrowser {
         <div class="conv-actions">
           <button class="btn-small primary" onclick="window.conversationBrowser.resumeConversation('${conv.id}', '${conv.project}', '${conv.cwd || ''}')">
             Resume
+          </button>
+          <button class="btn-small secondary" onclick="window.conversationBrowser.viewConversation('${conv.id}', event)">
+            View All
           </button>
           <button class="btn-small secondary" onclick="window.conversationBrowser.copyPath('${fullPath}')">
             Copy Path

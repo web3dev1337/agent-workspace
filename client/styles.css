@@ -5352,6 +5352,53 @@ header h1 {
   color: var(--accent-primary);
 }
 
+.conv-messages-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+}
+
+.msg-preview {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-xs);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.msg-preview.first-msg {
+  background: rgba(99, 179, 237, 0.1);
+  border-left: 3px solid #63b3ed;
+}
+
+.msg-preview.last-msg.user {
+  background: rgba(99, 179, 237, 0.1);
+  border-left: 3px solid #63b3ed;
+}
+
+.msg-preview.last-msg.assistant {
+  background: rgba(159, 122, 234, 0.1);
+  border-left: 3px solid #9f7aea;
+}
+
+.msg-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  min-width: 50px;
+}
+
+.msg-text {
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
 .conv-preview-section {
   display: flex;
   gap: var(--space-sm);
