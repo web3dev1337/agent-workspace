@@ -1379,6 +1379,81 @@ app.post('/api/ports/label', async (req, res) => {
   }
 });
 
+// Startup scripts setup
+app.get('/api/startup/info', async (req, res) => {
+  const os = require('os');
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  const platform = os.platform();
+  const isWSL = platform === 'linux' && (process.env.WSL_DISTRO_NAME || process.env.WSLENV);
+
+  const scriptsDir = path.join(__dirname, '..', 'scripts');
+  const windowsScript = path.join(scriptsDir, 'windows', 'start-orchestrator.bat');
+  const linuxScript = path.join(scriptsDir, 'linux', 'start-orchestrator.sh');
+
+  let windowsExists = false;
+  let linuxExists = false;
+
+  try { await fs.access(windowsScript); windowsExists = true; } catch (e) {}
+  try { await fs.access(linuxScript); linuxExists = true; } catch (e) {}
+
+  res.json({
+    platform,
+    isWSL,
+    scriptsAvailable: {
+      windows: windowsExists,
+      linux: linuxExists
+    },
+    paths: {
+      windows: windowsExists ? windowsScript : null,
+      linux: linuxExists ? linuxScript : null,
+      scriptsDir
+    }
+  });
+});
+
+app.post('/api/startup/install-windows', async (req, res) => {
+  const { spawn } = require('child_process');
+  const path = require('path');
+
+  const installerPath = path.join(__dirname, '..', 'scripts', 'windows', 'install-startup.ps1');
+
+  // Convert to Windows path for PowerShell
+  const winPath = installerPath.replace(/^\/mnt\/([a-z])/, (_, drive) => `${drive.toUpperCase()}:`).replace(/\//g, '\\');
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const ps = spawn('powershell.exe', [
+        '-ExecutionPolicy', 'Bypass',
+        '-File', winPath,
+        '-DesktopShortcut'
+      ], { timeout: 30000 });
+
+      let stdout = '';
+      let stderr = '';
+
+      ps.stdout.on('data', (data) => { stdout += data.toString(); });
+      ps.stderr.on('data', (data) => { stderr += data.toString(); });
+
+      ps.on('close', (code) => {
+        if (code === 0) {
+          resolve({ success: true, output: stdout });
+        } else {
+          reject(new Error(stderr || `Exit code: ${code}`));
+        }
+      });
+
+      ps.on('error', reject);
+    });
+
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to install Windows startup', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/ports/:repoPath/:worktreeId', async (req, res) => {
   try {
     const { repoPath, worktreeId } = req.params;

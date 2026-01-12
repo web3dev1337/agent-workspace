@@ -224,6 +224,10 @@ class Dashboard {
         <span class="quick-link-icon">⚙️</span>
         <span class="quick-link-label">Settings</span>
       </button>
+      <button class="quick-link-item setup-link" onclick="window.dashboard.installWindowsStartup()" title="Setup auto-start on Windows login">
+        <span class="quick-link-icon">🚀</span>
+        <span class="quick-link-label">Setup Windows Startup</span>
+      </button>
     `;
   }
 
@@ -451,6 +455,61 @@ class Dashboard {
     } catch (error) {
       console.error('Failed to load dashboard ports:', error);
       gridEl.innerHTML = '<div class="ports-empty">Failed to load services</div>';
+    }
+  }
+
+  async installWindowsStartup() {
+    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
+                      window.location.port === '2081' ? 'http://localhost:4000' :
+                      window.location.origin;
+
+    // First check if we're on WSL
+    try {
+      const infoRes = await fetch(`${serverUrl}/api/startup/info`);
+      const info = await infoRes.json();
+
+      if (!info.isWSL) {
+        alert('This feature is for Windows (WSL) only.\n\nFor native Linux, run:\n  scripts/linux/install-startup.sh');
+        return;
+      }
+
+      if (!info.scriptsAvailable.windows) {
+        alert('Windows startup scripts not found.\n\nMake sure scripts/windows/ exists in the repo.');
+        return;
+      }
+
+      // Confirm installation
+      const confirmed = confirm(
+        '🚀 Setup Windows Startup\n\n' +
+        'This will:\n' +
+        '• Create a Windows Task Scheduler task\n' +
+        '• Add a desktop shortcut\n' +
+        '• Auto-start orchestrator on Windows login\n\n' +
+        'The startup script waits for WSL to be ready before launching.\n\n' +
+        'Continue?'
+      );
+
+      if (!confirmed) return;
+
+      // Run the installer
+      const response = await fetch(`${serverUrl}/api/startup/install-windows`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert('✅ Windows Startup Setup Complete!\n\n' +
+              'The orchestrator will now start automatically when you log into Windows.\n\n' +
+              'A desktop shortcut was also created.');
+        console.log('Startup install output:', result.output);
+      } else {
+        const error = await response.json();
+        alert('❌ Setup Failed\n\n' + (error.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Failed to install Windows startup:', error);
+      alert('❌ Setup Failed\n\n' + error.message);
     }
   }
 }
