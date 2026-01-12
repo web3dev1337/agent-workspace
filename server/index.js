@@ -1349,6 +1349,21 @@ app.get('/api/ports', (req, res) => {
   }
 });
 
+// Scan all listening ports on the system
+app.get('/api/ports/scan', async (req, res) => {
+  try {
+    const ports = await portRegistry.scanAllPorts();
+    res.json({
+      ports,
+      scannedAt: new Date().toISOString(),
+      count: ports.length
+    });
+  } catch (error) {
+    logger.error('Failed to scan ports', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to scan ports' });
+  }
+});
+
 app.get('/api/ports/:repoPath/:worktreeId', async (req, res) => {
   try {
     const { repoPath, worktreeId } = req.params;

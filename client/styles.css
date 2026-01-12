@@ -5774,3 +5774,137 @@ header h1 {
   display: flex;
   justify-content: flex-end;
 }
+
+/* ============================================
+   Ports Panel Styles
+   ============================================ */
+
+.ports-modal .ports-content {
+  max-width: 500px;
+  width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ports-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ports-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.ports-info {
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--bg-tertiary);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.ports-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+.port-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-xs);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--border-color);
+  transition: all 0.15s;
+}
+
+.port-item:hover {
+  background: var(--bg-primary);
+}
+
+.port-item.orchestrator,
+.port-item.orchestrator-dev {
+  border-left-color: #9f7aea;
+}
+
+.port-item.client,
+.port-item.client-dev {
+  border-left-color: #63b3ed;
+}
+
+.port-item.vite,
+.port-item.react {
+  border-left-color: #48bb78;
+}
+
+.port-item.game-server {
+  border-left-color: #f6ad55;
+}
+
+.port-item.python,
+.port-item.flask {
+  border-left-color: #ffd93d;
+}
+
+.port-item.node {
+  border-left-color: #68d391;
+}
+
+.port-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.port-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.port-name {
+  display: block;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.port-process {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.port-link {
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--accent-primary);
+  color: white;
+  border-radius: var(--radius-xs);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.port-link:hover {
+  background: #1a66d9;
+}
+
+.ports-footer {
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.no-ports {
+  text-align: center;
+  padding: var(--space-lg);
+  color: var(--text-muted);
+}

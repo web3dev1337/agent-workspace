@@ -89,6 +89,11 @@ class ClaudeOrchestrator {
         console.log('Conversation browser initialized');
       }
 
+      // Initialize Ports panel
+      document.getElementById('ports-btn')?.addEventListener('click', () => {
+        this.showPortsPanel();
+      });
+
       // Request notification permission if enabled
       if (this.settings.notifications) {
         this.notificationManager.requestPermission();
@@ -5205,6 +5210,71 @@ class ClaudeOrchestrator {
   switchToWorkspace(workspaceId) {
     console.log('Switching to workspace:', workspaceId);
     this.socket.emit('switch-workspace', { workspaceId });
+  }
+
+  async showPortsPanel() {
+    console.log('Opening Ports panel...');
+
+    // Remove existing modal
+    const existing = document.getElementById('ports-panel');
+    if (existing) existing.remove();
+
+    // Fetch ports
+    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
+                      window.location.port === '2081' ? 'http://localhost:4000' :
+                      window.location.origin;
+
+    let portsData = { ports: [], count: 0 };
+    try {
+      const response = await fetch(`${serverUrl}/api/ports/scan`);
+      if (response.ok) {
+        portsData = await response.json();
+      }
+    } catch (error) {
+      console.error('Failed to fetch ports:', error);
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'ports-panel';
+    modal.className = 'modal ports-modal';
+    modal.innerHTML = `
+      <div class="modal-content ports-content">
+        <div class="ports-header">
+          <h2>🔌 Running Services</h2>
+          <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
+        </div>
+        <div class="ports-info">
+          ${portsData.count} service${portsData.count !== 1 ? 's' : ''} running
+        </div>
+        <div class="ports-list">
+          ${portsData.ports.length === 0 ? '<div class="no-ports">No services detected</div>' :
+            portsData.ports.map(p => `
+              <div class="port-item ${p.type}">
+                <span class="port-icon">${p.icon || '❓'}</span>
+                <div class="port-details">
+                  <span class="port-name">${p.name}</span>
+                  <span class="port-process">${p.processName || ''} (PID: ${p.pid || '?'})</span>
+                </div>
+                <a href="${p.url}" target="_blank" class="port-link" title="Open in browser">
+                  :${p.port} →
+                </a>
+              </div>
+            `).join('')}
+        </div>
+        <div class="ports-footer">
+          <button class="btn-secondary" onclick="window.orchestrator.showPortsPanel()">
+            🔄 Refresh
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
   }
 
   async showAddWorktreeModal() {
