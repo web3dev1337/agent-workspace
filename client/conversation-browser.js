@@ -21,6 +21,9 @@ class ConversationBrowser {
     this.currentSort = 'date';
     this.sortDirection = 'desc';
     this.loadAll = false;
+    // Load YOLO mode from localStorage, default to true
+    const savedYolo = localStorage.getItem('conversationBrowser.yoloMode');
+    this.yoloMode = savedYolo === null ? true : savedYolo === 'true';
     this.totalIndexed = 0;
     this.filters = {
       repo: '',
@@ -101,10 +104,16 @@ class ConversationBrowser {
 
         <div class="browser-info" id="browser-info">
           <span class="info-note">Search queries all <span id="total-indexed">0</span> conversations</span>
-          <label class="load-all-toggle">
-            <input type="checkbox" id="load-all-checkbox" onchange="window.conversationBrowser.toggleLoadAll(this.checked)">
-            Load all in list
-          </label>
+          <div class="browser-options">
+            <label class="option-toggle">
+              <input type="checkbox" id="load-all-checkbox" onchange="window.conversationBrowser.toggleLoadAll(this.checked)">
+              Load all
+            </label>
+            <label class="option-toggle">
+              <input type="checkbox" id="yolo-mode-checkbox" checked onchange="window.conversationBrowser.toggleYoloMode(this.checked)">
+              YOLO mode
+            </label>
+          </div>
         </div>
 
         <div class="browser-list" id="conversation-list">
@@ -119,6 +128,10 @@ class ConversationBrowser {
 
     document.body.appendChild(modal);
     window.conversationBrowser = this;
+
+    // Set checkbox states from saved values
+    const yoloCheckbox = document.getElementById('yolo-mode-checkbox');
+    if (yoloCheckbox) yoloCheckbox.checked = this.yoloMode;
 
     // Load projects for filter dropdown
     this.loadProjects();
@@ -350,6 +363,17 @@ class ConversationBrowser {
   toggleLoadAll(checked) {
     this.loadAll = checked;
     this.loadRecent();
+  }
+
+  toggleYoloMode(checked) {
+    this.yoloMode = checked;
+    // Could save to localStorage for persistence
+    localStorage.setItem('conversationBrowser.yoloMode', checked ? 'true' : 'false');
+  }
+
+  getResumeCommand(id) {
+    const baseCmd = `claude --resume ${id}`;
+    return this.yoloMode ? `${baseCmd} --dangerously-skip-permissions` : baseCmd;
   }
 
   getDateFilterCutoff() {
@@ -640,7 +664,7 @@ class ConversationBrowser {
     }
 
     if (!this.orchestrator || !this.orchestrator.socket) {
-      alert(`To resume this conversation, run:\ncd ${cwd}\nclaude --resume ${id}`);
+      alert(`To resume this conversation, run:\ncd ${cwd}\n${this.getResumeCommand(id)}`);
       return;
     }
 
@@ -654,7 +678,7 @@ class ConversationBrowser {
       // Found existing session - send resume command
       this.orchestrator.socket.emit('terminal-input', {
         sessionId: matchingSession.id,
-        input: `claude --resume ${id}\n`
+        input: `${this.getResumeCommand(id)}\n`
       });
 
       // Close browser
@@ -689,7 +713,7 @@ class ConversationBrowser {
           setTimeout(() => {
             this.orchestrator.socket.emit('terminal-input', {
               sessionId: claudeSessionId,
-              input: `claude --resume ${id}\n`
+              input: `${this.getResumeCommand(id)}\n`
             });
           }, 500); // Small delay to let terminal initialize
         }
