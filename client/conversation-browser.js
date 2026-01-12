@@ -446,18 +446,39 @@ class ConversationBrowser {
       if (this.filters.folder && (!conv.cwd || !conv.cwd.includes(this.filters.folder))) return false;
       // Date filter
       if (dateCutoff && conv.lastTimestamp && conv.lastTimestamp < dateCutoff) return false;
-      // Text search
+      // Text search - track what matched for display
       if (this.filters.query) {
         const q = this.filters.query.toLowerCase();
-        const matches = (conv.summary && conv.summary.toLowerCase().includes(q)) ||
-                        (conv.preview && conv.preview.toLowerCase().includes(q)) ||
-                        (conv.project && conv.project.toLowerCase().includes(q)) ||
-                        (conv.branch && conv.branch.toLowerCase().includes(q)) ||
-                        (conv.cwd && conv.cwd.toLowerCase().includes(q));
-        if (!matches) return false;
+        const matchedFields = [];
+
+        if (conv.branch && conv.branch.toLowerCase().includes(q)) matchedFields.push('branch');
+        if (conv.gitRepo && conv.gitRepo.toLowerCase().includes(q)) matchedFields.push('repo');
+        if (conv.cwd && conv.cwd.toLowerCase().includes(q)) matchedFields.push('path');
+        if (conv.project && conv.project.toLowerCase().includes(q)) matchedFields.push('project');
+        if (conv.preview && conv.preview.toLowerCase().includes(q)) matchedFields.push('content');
+        if (conv.summary && conv.summary.toLowerCase().includes(q)) matchedFields.push('content');
+        if (conv.firstUserMessage && conv.firstUserMessage.toLowerCase().includes(q)) matchedFields.push('content');
+        if (conv.lastMessage && conv.lastMessage.toLowerCase().includes(q)) matchedFields.push('content');
+
+        if (matchedFields.length === 0) return false;
+
+        // Store match info for display (dedupe content)
+        conv._matchedFields = [...new Set(matchedFields)];
+        // Priority: branch/repo matches are more relevant than content matches
+        conv._matchPriority = matchedFields.includes('branch') ? 0 :
+                              matchedFields.includes('repo') ? 1 :
+                              matchedFields.includes('path') ? 2 : 3;
+      } else {
+        conv._matchedFields = null;
+        conv._matchPriority = 99;
       }
       return true;
     });
+
+    // Sort by match priority first (branch matches before content matches)
+    if (this.filters.query) {
+      this.filteredConversations.sort((a, b) => (a._matchPriority || 99) - (b._matchPriority || 99));
+    }
 
     this.sortConversations();
     this.renderList();
@@ -522,6 +543,11 @@ class ConversationBrowser {
     const lastMsg = this.cleanPreview(conv.lastMessage || '');
     const lastRole = conv.lastMessageRole || 'assistant';
 
+    // Build match indicator if search is active
+    const matchIndicator = conv._matchedFields && conv._matchedFields.length > 0
+      ? `<span class="match-indicator ${conv._matchedFields.includes('branch') ? 'match-branch' : conv._matchedFields.includes('content') ? 'match-content' : 'match-meta'}" title="Matched: ${conv._matchedFields.join(', ')}">⚡ ${conv._matchedFields.join(', ')}</span>`
+      : '';
+
     return `
       <div class="conversation-item" data-id="${conv.id}" data-project="${conv.project}" data-repo="${repoName}">
         <div class="conv-header">
@@ -531,6 +557,7 @@ class ConversationBrowser {
           }
           ${worktree ? `<span class="conv-worktree">${worktree}</span>` : ''}
           ${conv.branch ? `<span class="conv-branch">${conv.branch}</span>` : ''}
+          ${matchIndicator}
           <span class="conv-date last-used" title="Last used: ${lastFullStr}">Last: ${lastStr}</span>
         </div>
 

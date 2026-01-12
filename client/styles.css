@@ -5314,6 +5314,28 @@ header h1 {
   margin-left: auto;
 }
 
+.match-indicator {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  font-weight: 500;
+}
+
+.match-indicator.match-branch {
+  background: rgba(72, 187, 120, 0.2);
+  color: #48bb78;
+}
+
+.match-indicator.match-content {
+  background: rgba(237, 137, 54, 0.2);
+  color: #ed8936;
+}
+
+.match-indicator.match-meta {
+  background: rgba(99, 179, 237, 0.2);
+  color: #63b3ed;
+}
+
 /* Browser info bar */
 .browser-info {
   display: flex;
