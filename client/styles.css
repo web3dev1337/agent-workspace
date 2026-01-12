@@ -5961,3 +5961,124 @@ header h1 {
   color: var(--text-muted);
   font-size: 0.7rem;
 }
+
+/* ============================================
+   Sidebar Ports Section
+   ============================================ */
+
+.sidebar-section {
+  border-top: 1px solid var(--border-color);
+  margin-top: auto;
+}
+
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: background 0.15s;
+}
+
+.sidebar-section-header:hover {
+  background: var(--bg-tertiary);
+}
+
+.ports-count {
+  background: var(--accent-primary);
+  color: white;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+}
+
+.collapse-icon {
+  margin-left: auto;
+  font-size: 0.7rem;
+  transition: transform 0.2s;
+}
+
+.sidebar-section.collapsed .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+.sidebar-section.collapsed .ports-sidebar-list {
+  display: none;
+}
+
+.ports-sidebar-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: var(--space-xs) 0;
+}
+
+.port-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-left: 2px solid transparent;
+}
+
+.port-sidebar-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.port-sidebar-item.orchestrator { border-left-color: #9f7aea; }
+.port-sidebar-item.node { border-left-color: #68d391; }
+.port-sidebar-item.rails { border-left-color: #f56565; }
+.port-sidebar-item.python { border-left-color: #ffd93d; }
+.port-sidebar-item.vite { border-left-color: #48bb78; }
+
+.port-sidebar-icon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.port-sidebar-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.port-sidebar-name {
+  display: block;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.port-sidebar-context {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.port-sidebar-port {
+  color: var(--accent-primary);
+  font-weight: 500;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+.ports-sidebar-empty {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+}

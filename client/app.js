@@ -94,6 +94,10 @@ class ClaudeOrchestrator {
         this.showPortsPanel();
       });
 
+      // Initialize sidebar ports and set up auto-refresh
+      this.refreshSidebarPorts();
+      setInterval(() => this.refreshSidebarPorts(), 30000); // Refresh every 30s
+
       // Request notification permission if enabled
       if (this.settings.notifications) {
         this.notificationManager.requestPermission();
@@ -5302,14 +5306,61 @@ class ClaudeOrchestrator {
       });
 
       if (response.ok) {
-        // Refresh the panel
+        // Refresh the panel and sidebar
         this.showPortsPanel();
+        this.refreshSidebarPorts();
       } else {
         alert('Failed to save label');
       }
     } catch (error) {
       console.error('Failed to save port label:', error);
       alert('Failed to save label: ' + error.message);
+    }
+  }
+
+  async refreshSidebarPorts() {
+    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
+                      window.location.port === '2081' ? 'http://localhost:4000' :
+                      window.location.origin;
+
+    const listEl = document.getElementById('ports-sidebar-list');
+    const countEl = document.getElementById('ports-count');
+    if (!listEl) return;
+
+    try {
+      const response = await fetch(`${serverUrl}/api/ports/scan`);
+      if (!response.ok) throw new Error('Failed to fetch');
+      const data = await response.json();
+
+      countEl.textContent = data.count || 0;
+
+      if (!data.ports || data.ports.length === 0) {
+        listEl.innerHTML = '<div class="ports-sidebar-empty">No services running</div>';
+        return;
+      }
+
+      listEl.innerHTML = data.ports.map(p => {
+        const context = p.project?.project
+          ? `${p.project.project}${p.project.worktree ? ' • ' + p.project.worktree : ''}`
+          : (p.cwd ? p.cwd.split('/').slice(-2).join('/') : '');
+
+        return `
+          <div class="port-sidebar-item ${p.type || ''}"
+               onclick="window.open('${p.url}', '_blank')"
+               title="${p.cwd || p.name}">
+            <span class="port-sidebar-icon">${p.icon || '❓'}</span>
+            <div class="port-sidebar-info">
+              <span class="port-sidebar-name">${p.name}</span>
+              <span class="port-sidebar-context">${context}</span>
+            </div>
+            <span class="port-sidebar-port">:${p.port}</span>
+          </div>
+        `;
+      }).join('');
+
+    } catch (error) {
+      console.error('Failed to refresh sidebar ports:', error);
+      listEl.innerHTML = '<div class="ports-sidebar-empty">Failed to load</div>';
     }
   }
 
