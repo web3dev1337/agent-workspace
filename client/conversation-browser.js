@@ -145,17 +145,27 @@ class ConversationBrowser {
   }
 
   async loadFilters() {
-    // Extract repos and branches from loaded conversations
+    // Extract repos and repo/branch combinations from loaded conversations
     const repos = new Set();
-    const branches = new Set();
+    const repoBranches = new Map(); // Map of "repo/branch" -> { repo, branch, lastActivity }
 
     for (const conv of this.conversations) {
       // Extract repo from path
       const repo = this.extractRepoFromPath(conv.cwd);
       if (repo) repos.add(repo);
 
-      // Extract branch
-      if (conv.branch) branches.add(conv.branch);
+      // Track repo/branch combinations with last activity
+      if (conv.branch && repo) {
+        const key = `${repo}::${conv.branch}`;
+        const existing = repoBranches.get(key);
+        if (!existing || conv.lastTimestamp > existing.lastActivity) {
+          repoBranches.set(key, {
+            repo,
+            branch: conv.branch,
+            lastActivity: conv.lastTimestamp || ''
+          });
+        }
+      }
     }
 
     // Populate repo filter
@@ -170,14 +180,17 @@ class ConversationBrowser {
       }
     }
 
-    // Populate branch filter
+    // Populate branch filter with repo/branch format, sorted by last activity
     const branchSelect = document.getElementById('conv-branch-filter');
     if (branchSelect) {
-      const sortedBranches = Array.from(branches).sort();
-      for (const branch of sortedBranches) {
+      const sortedBranches = Array.from(repoBranches.values())
+        .sort((a, b) => (b.lastActivity || '').localeCompare(a.lastActivity || ''));
+
+      for (const { repo, branch } of sortedBranches) {
         const option = document.createElement('option');
-        option.value = branch;
-        option.textContent = branch;
+        // Store just the branch as value for filtering, but show repo/branch in display
+        option.value = `${repo}::${branch}`;
+        option.textContent = `${repo} / ${branch}`;
         branchSelect.appendChild(option);
       }
     }
@@ -375,14 +388,32 @@ class ConversationBrowser {
     // Client-side filtering
     const dateCutoff = this.getDateFilterCutoff();
 
+    // Parse branch filter (format: "repo::branch" or just "branch")
+    let filterRepo = null;
+    let filterBranch = null;
+    if (this.filters.branch) {
+      if (this.filters.branch.includes('::')) {
+        [filterRepo, filterBranch] = this.filters.branch.split('::');
+      } else {
+        filterBranch = this.filters.branch;
+      }
+    }
+
     this.filteredConversations = this.conversations.filter(conv => {
       // Repo filter - extract repo from path and compare
       if (this.filters.repo) {
         const convRepo = this.extractRepoFromPath(conv.cwd);
         if (!convRepo || convRepo !== this.filters.repo) return false;
       }
-      // Branch filter
-      if (this.filters.branch && conv.branch !== this.filters.branch) return false;
+      // Branch filter (now includes repo check if specified)
+      if (filterBranch) {
+        if (conv.branch !== filterBranch) return false;
+        // If repo was specified in branch filter, also check repo matches
+        if (filterRepo) {
+          const convRepo = this.extractRepoFromPath(conv.cwd);
+          if (!convRepo || convRepo !== filterRepo) return false;
+        }
+      }
       // Folder filter
       if (this.filters.folder && (!conv.cwd || !conv.cwd.includes(this.filters.folder))) return false;
       // Date filter
