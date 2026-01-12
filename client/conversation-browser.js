@@ -563,13 +563,13 @@ class ConversationBrowser {
         </div>
 
         <div class="conv-actions">
-          <button class="btn-small primary" onclick="window.conversationBrowser.resumeConversation('${conv.id}', '${conv.project}', '${conv.cwd || ''}')">
+          <button class="btn-small primary" onclick="window.conversationBrowser.resumeConversation('${this.escapeAttr(conv.id)}', '${this.escapeAttr(conv.project)}', '${this.escapeAttr(conv.cwd || '')}')">
             Resume
           </button>
-          <button class="btn-small secondary" onclick="window.conversationBrowser.copyResumeCommand('${conv.id}', '${fullPath}')">
+          <button class="btn-small secondary" onclick="window.conversationBrowser.copyResumeCommand('${this.escapeAttr(conv.id)}', '${this.escapeAttr(fullPath)}')">
             Copy Cmd
           </button>
-          <button class="btn-small secondary" onclick="window.conversationBrowser.viewConversation('${conv.id}', event)">
+          <button class="btn-small secondary" onclick="window.conversationBrowser.viewConversation('${this.escapeAttr(conv.id)}', event)">
             View All
           </button>
         </div>
@@ -905,6 +905,16 @@ class ConversationBrowser {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // Escape value for use in onclick attribute with single quotes
+  escapeAttr(text) {
+    if (!text) return '';
+    return text
+      .replace(/\\/g, '\\\\')  // Escape backslashes first
+      .replace(/'/g, "\\'")     // Escape single quotes
+      .replace(/"/g, '&quot;')  // Escape double quotes
+      .replace(/\n/g, '\\n');   // Escape newlines
   }
 
   async refresh() {
