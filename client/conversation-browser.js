@@ -163,8 +163,8 @@ class ConversationBrowser {
     const repoBranches = new Map(); // Map of "repo/branch" -> { repo, branch, lastActivity }
 
     for (const conv of this.conversations) {
-      // Extract repo from path
-      const repo = this.extractRepoFromPath(conv.cwd);
+      // Use actual GitHub repo if available, fallback to path extraction
+      const repo = conv.gitRepo || this.extractRepoFromPath(conv.cwd);
       if (repo) repos.add(repo);
 
       // Track repo/branch combinations with last activity
@@ -424,9 +424,9 @@ class ConversationBrowser {
     }
 
     this.filteredConversations = this.conversations.filter(conv => {
-      // Repo filter - extract repo from path and compare
+      // Repo filter - use gitRepo or fallback to path extraction
       if (this.filters.repo) {
-        const convRepo = this.extractRepoFromPath(conv.cwd);
+        const convRepo = conv.gitRepo || this.extractRepoFromPath(conv.cwd);
         if (!convRepo || convRepo !== this.filters.repo) return false;
       }
       // Branch filter (now includes repo check if specified)
@@ -434,7 +434,7 @@ class ConversationBrowser {
         if (conv.branch !== filterBranch) return false;
         // If repo was specified in branch filter, also check repo matches
         if (filterRepo) {
-          const convRepo = this.extractRepoFromPath(conv.cwd);
+          const convRepo = conv.gitRepo || this.extractRepoFromPath(conv.cwd);
           if (!convRepo || convRepo !== filterRepo) return false;
         }
       }
@@ -506,16 +506,22 @@ class ConversationBrowser {
     // Parse path into components
     const fullPath = conv.cwd || '';
     const pathInfo = this.parseProjectPath(fullPath) || {};
-    const projectName = pathInfo.project || fullPath.split('/').slice(-2).join('/') || 'Unknown';
     const worktree = pathInfo.worktree;
+
+    // Use actual GitHub repo if available, fallback to parsed path
+    const repoName = conv.gitRepo || pathInfo.project || fullPath.split('/').slice(-2).join('/') || 'Unknown';
+    const repoUrl = conv.gitRepoUrl;
 
     // Clean preview - remove system messages and commands
     const preview = this.cleanPreview(conv.preview || conv.summary || '');
 
     return `
-      <div class="conversation-item" data-id="${conv.id}" data-project="${conv.project}" data-repo="${projectName}">
+      <div class="conversation-item" data-id="${conv.id}" data-project="${conv.project}" data-repo="${repoName}">
         <div class="conv-header">
-          <span class="conv-project-name">${projectName}</span>
+          ${repoUrl
+            ? `<a href="${repoUrl}" target="_blank" class="conv-project-name conv-repo-link">${repoName}</a>`
+            : `<span class="conv-project-name">${repoName}</span>`
+          }
           ${worktree ? `<span class="conv-worktree">${worktree}</span>` : ''}
           ${conv.branch ? `<span class="conv-branch">${conv.branch}</span>` : ''}
           <span class="conv-date">${lastStr}</span>

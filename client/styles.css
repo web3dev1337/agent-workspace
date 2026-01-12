@@ -5250,6 +5250,16 @@ header h1 {
   white-space: nowrap;
 }
 
+.conv-repo-link {
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.conv-repo-link:hover {
+  color: #b794f4;
+  text-decoration: underline;
+}
+
 .conv-worktree {
   font-size: 0.75rem;
   color: #f6ad55;

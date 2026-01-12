@@ -306,6 +306,15 @@ class ConversationService {
 
     if (messageCount === 0) return null;
 
+    // Get actual GitHub repo info from git remote
+    let gitRepo = null;
+    let gitRepoUrl = null;
+    if (cwd) {
+      const repoInfo = await this.getGitRepoInfo(cwd);
+      gitRepo = repoInfo?.repo;
+      gitRepoUrl = repoInfo?.url;
+    }
+
     return {
       id: path.basename(filePath, '.jsonl'),
       filename: path.basename(filePath),
@@ -317,6 +326,8 @@ class ConversationService {
       cwd,
       sessionId,
       model,
+      gitRepo,      // e.g., "web3dev1337/zoo-game"
+      gitRepoUrl,   // e.g., "https://github.com/web3dev1337/zoo-game"
       messageCount,
       userMessageCount,
       toolUseCount,
@@ -326,6 +337,46 @@ class ConversationService {
       firstTimestamp,
       lastTimestamp
     };
+  }
+
+  /**
+   * Get GitHub repo info from a directory's git remote
+   */
+  async getGitRepoInfo(dirPath) {
+    try {
+      const { stdout } = await execAsync('git remote get-url origin', {
+        cwd: dirPath,
+        timeout: 5000
+      });
+      const url = stdout.trim();
+      if (!url) return null;
+
+      // Parse GitHub URL formats:
+      // https://github.com/owner/repo.git
+      // git@github.com:owner/repo.git
+      let repo = null;
+      const httpsMatch = url.match(/github\.com\/([^\/]+\/[^\/\.]+)/);
+      const sshMatch = url.match(/github\.com:([^\/]+\/[^\/\.]+)/);
+
+      if (httpsMatch) {
+        repo = httpsMatch[1].replace(/\.git$/, '');
+      } else if (sshMatch) {
+        repo = sshMatch[1].replace(/\.git$/, '');
+      }
+
+      // Normalize URL to https
+      let normalizedUrl = url;
+      if (url.startsWith('git@github.com:')) {
+        normalizedUrl = url.replace('git@github.com:', 'https://github.com/').replace(/\.git$/, '');
+      } else {
+        normalizedUrl = url.replace(/\.git$/, '');
+      }
+
+      return { repo, url: normalizedUrl };
+    } catch (e) {
+      // Not a git repo or no remote
+      return null;
+    }
   }
 
   /**
