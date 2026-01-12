@@ -241,6 +241,143 @@ class PortRegistry {
       url: `http://localhost:${this.assignments.get(key)}`
     };
   }
+
+  /**
+   * Scan all listening ports on the system
+   * @returns {Promise<Array>} Array of port info objects
+   */
+  async scanAllPorts() {
+    try {
+      // Use ss (socket statistics) to get listening ports
+      const { stdout } = await execAsync('ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null', { timeout: 5000 });
+      const ports = [];
+      const lines = stdout.split('\n');
+
+      for (const line of lines) {
+        // Parse ss output: LISTEN  0  511  *:3000  *:*  users:(("node",pid=12345,fd=20))
+        // Or netstat: tcp  0  0  0.0.0.0:3000  0.0.0.0:*  LISTEN  12345/node
+        const portMatch = line.match(/:(\d+)\s/);
+        if (!portMatch) continue;
+
+        const port = parseInt(portMatch[1], 10);
+        if (port < 1000) continue; // Skip low ports
+
+        // Extract process info
+        let processName = 'unknown';
+        let pid = null;
+
+        // ss format: users:(("node",pid=12345,fd=20))
+        const ssMatch = line.match(/users:\(\("([^"]+)",pid=(\d+)/);
+        if (ssMatch) {
+          processName = ssMatch[1];
+          pid = parseInt(ssMatch[2], 10);
+        }
+
+        // netstat format: 12345/node
+        const netstatMatch = line.match(/(\d+)\/(\S+)/);
+        if (netstatMatch) {
+          pid = parseInt(netstatMatch[1], 10);
+          processName = netstatMatch[2];
+        }
+
+        // Skip duplicates
+        if (ports.find(p => p.port === port)) continue;
+
+        // Identify the service
+        const serviceInfo = this.identifyService(port, processName);
+
+        ports.push({
+          port,
+          pid,
+          processName,
+          ...serviceInfo,
+          url: `http://localhost:${port}`
+        });
+      }
+
+      // Sort by port number
+      ports.sort((a, b) => a.port - b.port);
+
+      return ports;
+    } catch (error) {
+      logger.error('Failed to scan ports', { error: error.message });
+      return [];
+    }
+  }
+
+  /**
+   * Identify a service based on port and process name
+   * @param {number} port - Port number
+   * @param {string} processName - Process name
+   * @returns {Object} Service identification info
+   */
+  identifyService(port, processName) {
+    // Known ports mapping
+    const knownPorts = {
+      3000: { name: 'Claude Orchestrator', type: 'orchestrator', icon: '🎛️' },
+      4000: { name: 'Claude Orchestrator (Dev)', type: 'orchestrator-dev', icon: '🔧' },
+      2080: { name: 'Orchestrator Client', type: 'client', icon: '🖥️' },
+      2081: { name: 'Orchestrator Client (Dev)', type: 'client-dev', icon: '🖥️' },
+      7655: { name: 'Diff Viewer', type: 'diff-viewer', icon: '📝' },
+      7656: { name: 'Diff Viewer (Dev)', type: 'diff-viewer-dev', icon: '📝' },
+      5173: { name: 'Vite Dev Server', type: 'vite', icon: '⚡' },
+      5174: { name: 'Vite Dev Server', type: 'vite', icon: '⚡' },
+      3001: { name: 'React Dev Server', type: 'react', icon: '⚛️' },
+      8080: { name: 'Web Server', type: 'web', icon: '🌐' },
+      8000: { name: 'Python Server', type: 'python', icon: '🐍' },
+      5000: { name: 'Flask/Dev Server', type: 'flask', icon: '🌶️' },
+      4321: { name: 'Astro Dev', type: 'astro', icon: '🚀' },
+      1420: { name: 'Tauri Dev', type: 'tauri', icon: '🦀' },
+      1421: { name: 'Tauri Dev', type: 'tauri', icon: '🦀' },
+    };
+
+    // Check known ports first
+    if (knownPorts[port]) {
+      return knownPorts[port];
+    }
+
+    // Check port range for orchestrator-assigned ports
+    if (port >= 8080 && port <= 8199) {
+      // Check if we assigned this port
+      for (const [key, assignedPort] of this.assignments) {
+        if (assignedPort === port) {
+          const [repoPath, worktreeId] = this.parseKey(key);
+          const repoName = repoPath.split('/').pop() || repoPath;
+          return {
+            name: `${repoName} (${worktreeId})`,
+            type: 'game-server',
+            icon: '🎮',
+            repoPath,
+            worktreeId
+          };
+        }
+      }
+    }
+
+    // Guess based on process name
+    const processGuesses = {
+      'node': { name: 'Node.js App', type: 'node', icon: '📦' },
+      'python': { name: 'Python App', type: 'python', icon: '🐍' },
+      'python3': { name: 'Python App', type: 'python', icon: '🐍' },
+      'ruby': { name: 'Ruby App', type: 'ruby', icon: '💎' },
+      'java': { name: 'Java App', type: 'java', icon: '☕' },
+      'nginx': { name: 'Nginx', type: 'nginx', icon: '🌐' },
+      'apache': { name: 'Apache', type: 'apache', icon: '🌐' },
+      'php': { name: 'PHP App', type: 'php', icon: '🐘' },
+      'dotnet': { name: '.NET App', type: 'dotnet', icon: '🔷' },
+      'go': { name: 'Go App', type: 'go', icon: '🐹' },
+    };
+
+    if (processGuesses[processName]) {
+      return { ...processGuesses[processName], name: `${processGuesses[processName].name} (:${port})` };
+    }
+
+    return {
+      name: `${processName || 'Unknown'} (:${port})`,
+      type: 'unknown',
+      icon: '❓'
+    };
+  }
 }
 
 module.exports = { PortRegistry };
