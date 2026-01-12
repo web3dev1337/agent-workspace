@@ -506,6 +506,7 @@ class ConversationBrowser {
     // Australian date format: DD/MM/YYYY HH:MM
     const startedStr = startDate ? this.formatDateAU(startDate) : 'Unknown';
     const lastStr = lastDate ? this.timeAgo(lastDate) : 'Unknown';
+    const lastFullStr = lastDate ? this.formatDateAU(lastDate) : 'Unknown';
 
     // Parse path into components
     const fullPath = conv.cwd || '';
@@ -530,7 +531,7 @@ class ConversationBrowser {
           }
           ${worktree ? `<span class="conv-worktree">${worktree}</span>` : ''}
           ${conv.branch ? `<span class="conv-branch">${conv.branch}</span>` : ''}
-          <span class="conv-date">${lastStr}</span>
+          <span class="conv-date last-used" title="Last used: ${lastFullStr}">Last: ${lastStr}</span>
         </div>
 
         <div class="conv-messages-preview">
@@ -565,14 +566,11 @@ class ConversationBrowser {
           <button class="btn-small primary" onclick="window.conversationBrowser.resumeConversation('${conv.id}', '${conv.project}', '${conv.cwd || ''}')">
             Resume
           </button>
+          <button class="btn-small secondary" onclick="window.conversationBrowser.copyResumeCommand('${conv.id}', '${fullPath}')">
+            Copy Cmd
+          </button>
           <button class="btn-small secondary" onclick="window.conversationBrowser.viewConversation('${conv.id}', event)">
             View All
-          </button>
-          <button class="btn-small secondary" onclick="window.conversationBrowser.copyPath('${fullPath}')">
-            Copy Path
-          </button>
-          <button class="btn-small secondary" onclick="window.conversationBrowser.copyId('${conv.id}')">
-            Copy ID
           </button>
         </div>
       </div>
@@ -637,9 +635,10 @@ class ConversationBrowser {
     });
   }
 
-  copyId(id) {
-    navigator.clipboard.writeText(id).then(() => {
-      console.log('ID copied:', id);
+  copyResumeCommand(id, cwd) {
+    const cmd = `cd "${cwd}" && ${this.getResumeCommand(id)}`;
+    navigator.clipboard.writeText(cmd).then(() => {
+      console.log('Resume command copied:', cmd);
     });
   }
 
