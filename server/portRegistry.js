@@ -1,7 +1,12 @@
 const winston = require('winston');
 const { exec } = require('child_process');
 const util = require('util');
+const fs = require('fs').promises;
+const path = require('path');
 const execAsync = util.promisify(exec);
+
+// Custom port labels file
+const PORT_LABELS_FILE = path.join(process.env.HOME || '', '.orchestrator', 'port-labels.json');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -243,11 +248,101 @@ class PortRegistry {
   }
 
   /**
+   * Load custom port labels from config file
+   */
+  async loadPortLabels() {
+    try {
+      const data = await fs.readFile(PORT_LABELS_FILE, 'utf8');
+      return JSON.parse(data);
+    } catch (e) {
+      return {};
+    }
+  }
+
+  /**
+   * Save custom port label
+   */
+  async savePortLabel(port, label) {
+    const labels = await this.loadPortLabels();
+    labels[port] = label;
+    await fs.mkdir(path.dirname(PORT_LABELS_FILE), { recursive: true });
+    await fs.writeFile(PORT_LABELS_FILE, JSON.stringify(labels, null, 2));
+    return labels;
+  }
+
+  /**
+   * Get the working directory of a process
+   */
+  async getProcessCwd(pid) {
+    try {
+      const cwd = await fs.readlink(`/proc/${pid}/cwd`);
+      return cwd;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Try to detect project name from a directory
+   */
+  async detectProjectName(cwd) {
+    if (!cwd) return null;
+
+    try {
+      // Try package.json first
+      const packageJsonPath = path.join(cwd, 'package.json');
+      try {
+        const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
+        if (packageJson.name) {
+          return { name: packageJson.name, type: 'node', source: 'package.json' };
+        }
+      } catch (e) {}
+
+      // Try Gemfile (Ruby)
+      const gemfilePath = path.join(cwd, 'Gemfile');
+      try {
+        await fs.access(gemfilePath);
+        // Check for Rails
+        const gemfile = await fs.readFile(gemfilePath, 'utf8');
+        if (gemfile.includes('rails')) {
+          // Try to get app name from config/application.rb
+          try {
+            const appRb = await fs.readFile(path.join(cwd, 'config', 'application.rb'), 'utf8');
+            const match = appRb.match(/module\s+(\w+)/);
+            if (match) {
+              return { name: match[1], type: 'rails', source: 'config/application.rb' };
+            }
+          } catch (e) {}
+          return { name: path.basename(cwd), type: 'rails', source: 'Gemfile' };
+        }
+        return { name: path.basename(cwd), type: 'ruby', source: 'Gemfile' };
+      } catch (e) {}
+
+      // Try pyproject.toml or setup.py (Python)
+      try {
+        const pyproject = await fs.readFile(path.join(cwd, 'pyproject.toml'), 'utf8');
+        const match = pyproject.match(/name\s*=\s*["']([^"']+)["']/);
+        if (match) {
+          return { name: match[1], type: 'python', source: 'pyproject.toml' };
+        }
+      } catch (e) {}
+
+      // Fall back to directory name
+      return { name: path.basename(cwd), type: 'unknown', source: 'directory' };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * Scan all listening ports on the system
    * @returns {Promise<Array>} Array of port info objects
    */
   async scanAllPorts() {
     try {
+      // Load custom labels
+      const customLabels = await this.loadPortLabels();
+
       // Use ss (socket statistics) to get listening ports
       const { stdout } = await execAsync('ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null', { timeout: 5000 });
       const ports = [];
@@ -283,14 +378,26 @@ class PortRegistry {
         // Skip duplicates
         if (ports.find(p => p.port === port)) continue;
 
+        // Get working directory and detect project
+        const cwd = pid ? await this.getProcessCwd(pid) : null;
+        const projectInfo = cwd ? await this.detectProjectName(cwd) : null;
+
         // Identify the service
-        const serviceInfo = this.identifyService(port, processName);
+        const serviceInfo = this.identifyService(port, processName, projectInfo);
+
+        // Apply custom label if exists
+        const customLabel = customLabels[port];
 
         ports.push({
           port,
           pid,
           processName,
+          cwd,
+          project: projectInfo,
+          customLabel,
           ...serviceInfo,
+          // Override name if custom label exists
+          name: customLabel || serviceInfo.name,
           url: `http://localhost:${port}`
         });
       }
@@ -309,9 +416,10 @@ class PortRegistry {
    * Identify a service based on port and process name
    * @param {number} port - Port number
    * @param {string} processName - Process name
+   * @param {Object} projectInfo - Detected project info
    * @returns {Object} Service identification info
    */
-  identifyService(port, processName) {
+  identifyService(port, processName, projectInfo = null) {
     // Known ports mapping
     const knownPorts = {
       3000: { name: 'Claude Orchestrator', type: 'orchestrator', icon: '🎛️' },
@@ -352,6 +460,23 @@ class PortRegistry {
           };
         }
       }
+    }
+
+    // If we have project info, use it
+    if (projectInfo && projectInfo.name) {
+      const typeIcons = {
+        'node': '📦',
+        'rails': '🛤️',
+        'ruby': '💎',
+        'python': '🐍',
+        'unknown': '📁'
+      };
+      return {
+        name: projectInfo.name,
+        type: projectInfo.type || 'unknown',
+        icon: typeIcons[projectInfo.type] || '📁',
+        detectedFrom: projectInfo.source
+      };
     }
 
     // Guess based on process name

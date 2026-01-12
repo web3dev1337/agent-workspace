@@ -1364,6 +1364,21 @@ app.get('/api/ports/scan', async (req, res) => {
   }
 });
 
+// Save custom label for a port
+app.post('/api/ports/label', async (req, res) => {
+  try {
+    const { port, label } = req.body;
+    if (!port) {
+      return res.status(400).json({ error: 'Port is required' });
+    }
+    const labels = await portRegistry.savePortLabel(port, label || null);
+    res.json({ success: true, labels });
+  } catch (error) {
+    logger.error('Failed to save port label', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to save port label' });
+  }
+});
+
 app.get('/api/ports/:repoPath/:worktreeId', async (req, res) => {
   try {
     const { repoPath, worktreeId } = req.params;
