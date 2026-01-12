@@ -5933,3 +5933,31 @@ header h1 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Port context - project/worktree info */
+.port-context {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+.port-project {
+  color: #9f7aea;
+  font-weight: 500;
+}
+
+.port-worktree {
+  background: var(--accent-primary);
+  color: white;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.port-subpath {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}

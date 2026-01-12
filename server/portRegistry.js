@@ -283,52 +283,136 @@ class PortRegistry {
   }
 
   /**
+   * Walk up directory tree to find worktree context (work1, work2, master, etc.)
+   * Returns { worktree: 'work1', project: 'zoo-game', projectPath: '/home/...' }
+   */
+  async detectWorktreeContext(cwd) {
+    if (!cwd) return null;
+
+    const worktreePattern = /^(work\d+|master)$/;
+    let currentPath = cwd;
+    const root = path.parse(cwd).root;
+
+    // Walk up looking for worktree folder
+    while (currentPath !== root) {
+      const folderName = path.basename(currentPath);
+
+      if (worktreePattern.test(folderName)) {
+        // Found a worktree! Parent is the project
+        const projectPath = path.dirname(currentPath);
+        const projectName = path.basename(projectPath);
+
+        // Try to get a better project name from package.json or similar
+        let displayName = projectName;
+        try {
+          // Check master folder for package.json if we're in a worktree
+          const masterPath = path.join(projectPath, 'master');
+          const pkgPath = path.join(masterPath, 'package.json');
+          const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8'));
+          if (pkg.name) displayName = pkg.name;
+        } catch (e) {
+          // Try the project folder itself
+          try {
+            const pkgPath = path.join(projectPath, 'package.json');
+            const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8'));
+            if (pkg.name) displayName = pkg.name;
+          } catch (e2) {}
+        }
+
+        return {
+          worktree: folderName,
+          project: displayName,
+          projectPath: projectPath,
+          subPath: path.relative(currentPath, cwd) || null
+        };
+      }
+
+      currentPath = path.dirname(currentPath);
+    }
+
+    return null;
+  }
+
+  /**
    * Try to detect project name from a directory
    */
   async detectProjectName(cwd) {
     if (!cwd) return null;
 
     try {
+      // First, detect worktree context
+      const worktreeContext = await this.detectWorktreeContext(cwd);
+
+      let name = null;
+      let type = 'unknown';
+      let source = 'directory';
+
       // Try package.json first
       const packageJsonPath = path.join(cwd, 'package.json');
       try {
         const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
         if (packageJson.name) {
-          return { name: packageJson.name, type: 'node', source: 'package.json' };
+          name = packageJson.name;
+          type = 'node';
+          source = 'package.json';
         }
       } catch (e) {}
 
       // Try Gemfile (Ruby)
-      const gemfilePath = path.join(cwd, 'Gemfile');
-      try {
-        await fs.access(gemfilePath);
-        // Check for Rails
-        const gemfile = await fs.readFile(gemfilePath, 'utf8');
-        if (gemfile.includes('rails')) {
-          // Try to get app name from config/application.rb
-          try {
-            const appRb = await fs.readFile(path.join(cwd, 'config', 'application.rb'), 'utf8');
-            const match = appRb.match(/module\s+(\w+)/);
-            if (match) {
-              return { name: match[1], type: 'rails', source: 'config/application.rb' };
+      if (!name) {
+        const gemfilePath = path.join(cwd, 'Gemfile');
+        try {
+          await fs.access(gemfilePath);
+          const gemfile = await fs.readFile(gemfilePath, 'utf8');
+          if (gemfile.includes('rails')) {
+            try {
+              const appRb = await fs.readFile(path.join(cwd, 'config', 'application.rb'), 'utf8');
+              const match = appRb.match(/module\s+(\w+)/);
+              if (match) {
+                name = match[1];
+                type = 'rails';
+                source = 'config/application.rb';
+              }
+            } catch (e) {}
+            if (!name) {
+              name = path.basename(cwd);
+              type = 'rails';
+              source = 'Gemfile';
             }
-          } catch (e) {}
-          return { name: path.basename(cwd), type: 'rails', source: 'Gemfile' };
-        }
-        return { name: path.basename(cwd), type: 'ruby', source: 'Gemfile' };
-      } catch (e) {}
+          } else {
+            name = path.basename(cwd);
+            type = 'ruby';
+            source = 'Gemfile';
+          }
+        } catch (e) {}
+      }
 
-      // Try pyproject.toml or setup.py (Python)
-      try {
-        const pyproject = await fs.readFile(path.join(cwd, 'pyproject.toml'), 'utf8');
-        const match = pyproject.match(/name\s*=\s*["']([^"']+)["']/);
-        if (match) {
-          return { name: match[1], type: 'python', source: 'pyproject.toml' };
-        }
-      } catch (e) {}
+      // Try pyproject.toml (Python)
+      if (!name) {
+        try {
+          const pyproject = await fs.readFile(path.join(cwd, 'pyproject.toml'), 'utf8');
+          const match = pyproject.match(/name\s*=\s*["']([^"']+)["']/);
+          if (match) {
+            name = match[1];
+            type = 'python';
+            source = 'pyproject.toml';
+          }
+        } catch (e) {}
+      }
 
       // Fall back to directory name
-      return { name: path.basename(cwd), type: 'unknown', source: 'directory' };
+      if (!name) {
+        name = path.basename(cwd);
+      }
+
+      return {
+        name,
+        type,
+        source,
+        worktree: worktreeContext?.worktree || null,
+        project: worktreeContext?.project || null,
+        subPath: worktreeContext?.subPath || null
+      };
     } catch (e) {
       return null;
     }
