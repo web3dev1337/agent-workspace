@@ -537,6 +537,59 @@ io.on('connection', (socket) => {
         repositoryType
       });
 
+      // IMPORTANT: Update workspace config to persist this worktree
+      // This ensures the worktree survives page reloads
+      const activeWorkspace = workspaceManager.getActiveWorkspace();
+      if (activeWorkspace) {
+        try {
+          const updatedConfig = { ...activeWorkspace };
+
+          // Handle mixed-repo workspaces (terminals is an array)
+          if (Array.isArray(updatedConfig.terminals)) {
+            // Add new terminal entries for claude and server
+            const baseRepo = {
+              name: repositoryName || worktreeId.split('-')[0],
+              path: worktreePath.replace(/\/work\d+$/, ''),
+              masterBranch: 'master'
+            };
+
+            updatedConfig.terminals.push({
+              id: `${repositoryName || worktreeId}-claude`,
+              repository: baseRepo,
+              worktree: worktreeId,
+              terminalType: 'claude',
+              visible: true
+            });
+            updatedConfig.terminals.push({
+              id: `${repositoryName || worktreeId}-server`,
+              repository: baseRepo,
+              worktree: worktreeId,
+              terminalType: 'server',
+              visible: true
+            });
+          }
+          // Handle single-repo workspaces (terminals.pairs is a number)
+          else if (updatedConfig.terminals && typeof updatedConfig.terminals.pairs === 'number') {
+            // Extract worktree number from ID (e.g., "work5" -> 5)
+            const worktreeNum = parseInt(worktreeId.replace(/\D/g, '')) || updatedConfig.terminals.pairs + 1;
+            if (worktreeNum > updatedConfig.terminals.pairs) {
+              updatedConfig.terminals.pairs = worktreeNum;
+            }
+            // Also update worktrees.count if it exists
+            if (updatedConfig.worktrees && typeof updatedConfig.worktrees.count === 'number') {
+              if (worktreeNum > updatedConfig.worktrees.count) {
+                updatedConfig.worktrees.count = worktreeNum;
+              }
+            }
+          }
+
+          await workspaceManager.updateWorkspace(activeWorkspace.id, updatedConfig);
+          logger.info('Workspace config updated with new worktree', { worktreeId, workspaceId: activeWorkspace.id });
+        } catch (configError) {
+          logger.warn('Failed to update workspace config (sessions still created)', { error: configError.message });
+        }
+      }
+
       // Emit the new sessions to the requesting client only
       socket.emit('worktree-sessions-added', {
         worktreeId,
