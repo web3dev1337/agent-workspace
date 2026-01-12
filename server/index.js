@@ -220,10 +220,15 @@ io.on('connection', (socket) => {
   // Send initial session states
   socket.emit('sessions', sessionManager.getSessionStates());
   
-  // Handle terminal input
-  socket.on('terminal-input', ({ sessionId, data }) => {
-    logger.debug('Terminal input received', { sessionId, dataLength: data.length });
-    sessionManager.writeToSession(sessionId, data);
+  // Handle terminal input (accepts both 'data' and 'input' for compatibility)
+  socket.on('terminal-input', ({ sessionId, data, input }) => {
+    const inputData = data || input;
+    if (!inputData) {
+      logger.warn('Terminal input received with no data', { sessionId });
+      return;
+    }
+    logger.debug('Terminal input received', { sessionId, dataLength: inputData.length });
+    sessionManager.writeToSession(sessionId, inputData);
   });
   
   // Handle terminal resize
