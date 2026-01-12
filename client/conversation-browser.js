@@ -60,41 +60,55 @@ class ConversationBrowser {
         </div>
 
         <div class="browser-toolbar">
-          <div class="search-container">
-            <input type="text" id="conv-search" placeholder="Search all conversations..."
-                   oninput="window.conversationBrowser.handleSearch(this.value)">
-            <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
-          </div>
-
-          <div class="filter-container">
-            <select id="conv-repo-filter" onchange="window.conversationBrowser.applyFilter('repo', this.value)">
-              <option value="">All Repositories</option>
-            </select>
-
-            <select id="conv-branch-filter" onchange="window.conversationBrowser.applyFilter('branch', this.value)">
-              <option value="">All Branches</option>
-            </select>
-
-            <select id="conv-date-filter" onchange="window.conversationBrowser.applyDateFilter(this.value)">
-              <option value="">All Time</option>
-              <option value="1h">Last Hour</option>
-              <option value="24h">Last 24 Hours</option>
-              <option value="3d">Last 3 Days</option>
-              <option value="7d">Last Week</option>
-              <option value="30d">Last Month</option>
-              <option value="90d">Last 3 Months</option>
-            </select>
-
-            <select id="conv-sort" onchange="window.conversationBrowser.handleSort(this.value)">
-              <option value="date-desc">Newest First</option>
-              <option value="date-asc">Oldest First</option>
-              <option value="tokens-desc">Most Tokens</option>
-              <option value="messages-desc">Most Messages</option>
-            </select>
-
+          <div class="browser-toolbar-row">
+            <div class="search-container">
+              <input type="text" id="conv-search" placeholder="Search all conversations..."
+                     oninput="window.conversationBrowser.handleSearch(this.value)">
+              <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
+            </div>
             <button class="btn-secondary" onclick="window.conversationBrowser.refresh()">
               Refresh
             </button>
+          </div>
+
+          <div class="browser-toolbar-row">
+            <div class="filter-group">
+              <select id="conv-repo-filter" onchange="window.conversationBrowser.applyFilter('repo', this.value)">
+                <option value="">All Repos</option>
+              </select>
+
+              <select id="conv-branch-filter" onchange="window.conversationBrowser.applyFilter('branch', this.value)">
+                <option value="">All Branches</option>
+              </select>
+
+              <select id="conv-date-filter" onchange="window.conversationBrowser.applyDateFilter(this.value)">
+                <option value="">All Time</option>
+                <option value="1h">Last Hour</option>
+                <option value="24h">Last 24 Hours</option>
+                <option value="3d">Last 3 Days</option>
+                <option value="7d">Last Week</option>
+                <option value="30d">Last Month</option>
+                <option value="90d">Last 3 Months</option>
+              </select>
+
+              <select id="conv-sort" onchange="window.conversationBrowser.handleSort(this.value)">
+                <option value="date-desc">Newest First</option>
+                <option value="date-asc">Oldest First</option>
+                <option value="tokens-desc">Most Tokens</option>
+                <option value="messages-desc">Most Messages</option>
+              </select>
+            </div>
+
+            <div class="browser-options">
+              <label class="option-toggle">
+                <input type="checkbox" id="load-all-checkbox" onchange="window.conversationBrowser.toggleLoadAll(this.checked)">
+                Load all
+              </label>
+              <label class="option-toggle">
+                <input type="checkbox" id="yolo-mode-checkbox" checked onchange="window.conversationBrowser.toggleYoloMode(this.checked)">
+                YOLO mode
+              </label>
+            </div>
           </div>
         </div>
 
@@ -103,17 +117,7 @@ class ConversationBrowser {
         </div>
 
         <div class="browser-info" id="browser-info">
-          <span class="info-note">Search queries all <span id="total-indexed">0</span> conversations</span>
-          <div class="browser-options">
-            <label class="option-toggle">
-              <input type="checkbox" id="load-all-checkbox" onchange="window.conversationBrowser.toggleLoadAll(this.checked)">
-              Load all
-            </label>
-            <label class="option-toggle">
-              <input type="checkbox" id="yolo-mode-checkbox" checked onchange="window.conversationBrowser.toggleYoloMode(this.checked)">
-              YOLO mode
-            </label>
-          </div>
+          <span class="info-note">Searching <span id="total-indexed">0</span> total conversations</span>
         </div>
 
         <div class="browser-list" id="conversation-list">
@@ -527,40 +531,37 @@ class ConversationBrowser {
           <span class="conv-date">${lastStr}</span>
         </div>
 
-        <div class="conv-preview">${preview || '(No preview)'}</div>
-
-        <div class="conv-details-section">
-          <div class="detail-row-full">
-            <span class="detail-label">Full path:</span>
-            <span class="detail-value folder-path-full">${fullPath || 'Unknown'}</span>
-          </div>
+        <div class="conv-preview-section">
+          <div class="conv-preview">${preview || '(No preview)'}</div>
+          <button class="btn-expand" onclick="window.conversationBrowser.viewConversation('${conv.id}', event)">
+            View Full
+          </button>
         </div>
 
-        <div class="conv-details-grid">
-          <div class="detail-row">
-            <span class="detail-label">Model:</span>
-            <span class="detail-value model-name">${conv.model || 'Unknown'}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Started:</span>
-            <span class="detail-value">${startedStr}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Messages:</span>
-            <span class="detail-value">${conv.messageCount || 0} (${conv.userMessageCount || 0} user)</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Tokens:</span>
-            <span class="detail-value">${this.formatTokens(conv.totalTokens)}</span>
-          </div>
+        <div class="conv-full-preview" id="full-preview-${conv.id}" style="display: none;">
+          <div class="full-preview-content">Loading...</div>
+        </div>
+
+        <div class="conv-meta-row">
+          <span class="meta-item folder">${fullPath || 'Unknown'}</span>
+        </div>
+
+        <div class="conv-meta-row">
+          <span class="meta-item">${conv.model || 'Unknown'}</span>
+          <span class="meta-item">Started: ${startedStr}</span>
+          <span class="meta-item">${conv.messageCount || 0} msgs (${conv.userMessageCount || 0} user)</span>
+          <span class="meta-item">${this.formatTokens(conv.totalTokens)} tokens</span>
         </div>
 
         <div class="conv-actions">
-          <button class="btn-small" onclick="window.conversationBrowser.resumeConversation('${conv.id}', '${conv.project}', '${conv.cwd || ''}')">
+          <button class="btn-small primary" onclick="window.conversationBrowser.resumeConversation('${conv.id}', '${conv.project}', '${conv.cwd || ''}')">
             Resume
           </button>
           <button class="btn-small secondary" onclick="window.conversationBrowser.copyPath('${fullPath}')">
             Copy Path
+          </button>
+          <button class="btn-small secondary" onclick="window.conversationBrowser.copyId('${conv.id}')">
+            Copy ID
           </button>
         </div>
       </div>
@@ -623,6 +624,71 @@ class ConversationBrowser {
     navigator.clipboard.writeText(path).then(() => {
       console.log('Path copied:', path);
     });
+  }
+
+  copyId(id) {
+    navigator.clipboard.writeText(id).then(() => {
+      console.log('ID copied:', id);
+    });
+  }
+
+  async viewConversation(id, event) {
+    event.stopPropagation();
+
+    const previewEl = document.getElementById(`full-preview-${id}`);
+    if (!previewEl) return;
+
+    // Toggle visibility
+    if (previewEl.style.display === 'none') {
+      previewEl.style.display = 'block';
+      const contentEl = previewEl.querySelector('.full-preview-content');
+
+      // Load content if not already loaded
+      if (contentEl.textContent === 'Loading...') {
+        try {
+          const response = await fetch(`${this.serverUrl}/api/conversations/${id}`);
+          if (!response.ok) throw new Error('Failed to load');
+
+          const conv = await response.json();
+          const messages = conv.messages || [];
+
+          // Format messages for display
+          let html = messages.slice(0, 20).map(msg => {
+            const role = msg.role || 'unknown';
+            const roleClass = role === 'user' ? 'user-msg' : role === 'assistant' ? 'assistant-msg' : 'system-msg';
+            let content = '';
+
+            if (typeof msg.content === 'string') {
+              content = this.escapeHtml(msg.content.slice(0, 500));
+            } else if (Array.isArray(msg.content)) {
+              content = msg.content.map(c => {
+                if (c.type === 'text') return this.escapeHtml(c.text?.slice(0, 500) || '');
+                if (c.type === 'tool_use') return `[Tool: ${c.name}]`;
+                if (c.type === 'tool_result') return `[Tool Result]`;
+                return `[${c.type}]`;
+              }).join(' ');
+            }
+
+            return `<div class="preview-msg ${roleClass}"><strong>${role}:</strong> ${content}</div>`;
+          }).join('');
+
+          if (messages.length > 20) {
+            html += `<div class="preview-more">... and ${messages.length - 20} more messages</div>`;
+          }
+
+          contentEl.innerHTML = html || '<em>No messages found</em>';
+        } catch (error) {
+          contentEl.textContent = 'Failed to load conversation: ' + error.message;
+        }
+      }
+
+      // Update button text
+      const btn = event.target;
+      btn.textContent = 'Hide';
+    } else {
+      previewEl.style.display = 'none';
+      event.target.textContent = 'View Full';
+    }
   }
 
   formatTokens(tokens) {
