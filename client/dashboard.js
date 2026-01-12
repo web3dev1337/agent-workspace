@@ -75,6 +75,9 @@ class Dashboard {
     if (this.quickLinks) {
       this.quickLinks.setupDragAndDrop();
     }
+
+    // Load ports for dashboard
+    this.loadDashboardPorts();
   }
 
   generateDashboardHTML() {
@@ -108,6 +111,13 @@ class Dashboard {
         <h2>🔗 Quick Links</h2>
         <div class="quick-links-grid">
           ${this.generateQuickLinksHTML()}
+        </div>
+      </div>
+
+      <div class="dashboard-section ports-dashboard-section">
+        <h2>🔌 Running Services</h2>
+        <div class="ports-dashboard-grid" id="ports-dashboard-grid">
+          <div class="ports-loading">Loading services...</div>
         </div>
       </div>
     `;
@@ -384,6 +394,49 @@ class Dashboard {
     } catch (error) {
       console.error('Error deleting workspace:', error);
       window.orchestrator?.showTemporaryMessage(`Error: ${error.message}`, 'error');
+    }
+  }
+
+  async loadDashboardPorts() {
+    const gridEl = document.getElementById('ports-dashboard-grid');
+    if (!gridEl) return;
+
+    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
+                      window.location.port === '2081' ? 'http://localhost:4000' :
+                      window.location.origin;
+
+    try {
+      const response = await fetch(`${serverUrl}/api/ports/scan`);
+      if (!response.ok) throw new Error('Failed to fetch');
+      const data = await response.json();
+
+      if (!data.ports || data.ports.length === 0) {
+        gridEl.innerHTML = '<div class="ports-empty">No services currently running</div>';
+        return;
+      }
+
+      gridEl.innerHTML = data.ports.map(p => {
+        const context = p.project?.project
+          ? `${p.project.project}${p.project.worktree ? ' • ' + p.project.worktree : ''}`
+          : (p.cwd ? p.cwd.split('/').slice(-2).join('/') : '');
+
+        return `
+          <div class="port-dashboard-card ${p.type || ''}"
+               onclick="window.open('${p.url}', '_blank')"
+               title="${p.cwd || p.name}">
+            <div class="port-card-icon">${p.icon || '❓'}</div>
+            <div class="port-card-info">
+              <span class="port-card-name">${p.name}</span>
+              <span class="port-card-context">${context}</span>
+            </div>
+            <div class="port-card-port">:${p.port}</div>
+          </div>
+        `;
+      }).join('');
+
+    } catch (error) {
+      console.error('Failed to load dashboard ports:', error);
+      gridEl.innerHTML = '<div class="ports-empty">Failed to load services</div>';
     }
   }
 }
