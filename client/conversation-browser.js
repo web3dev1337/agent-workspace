@@ -634,29 +634,89 @@ class ConversationBrowser {
   async resumeConversation(id, project, cwd) {
     console.log('Resuming conversation:', { id, project, cwd });
 
-    // If we have a cwd, we can resume in that directory
-    if (cwd && this.orchestrator) {
-      // Find a matching worktree session
-      const sessions = Array.from(this.orchestrator.sessions?.values() || []);
-      const matchingSession = sessions.find(s =>
-        s.worktreePath && cwd.includes(s.worktreePath)
-      );
+    if (!cwd) {
+      alert('Cannot resume: no working directory found for this conversation');
+      return;
+    }
 
-      if (matchingSession) {
-        // Send resume command to the session
-        this.orchestrator.socket?.emit('terminal-input', {
-          sessionId: matchingSession.id,
-          input: `claude --resume ${id}\n`
-        });
+    if (!this.orchestrator || !this.orchestrator.socket) {
+      alert(`To resume this conversation, run:\ncd ${cwd}\nclaude --resume ${id}`);
+      return;
+    }
+
+    // Find a matching worktree session
+    const sessions = Array.from(this.orchestrator.sessions?.values() || []);
+    const matchingSession = sessions.find(s =>
+      s.worktreePath && (cwd === s.worktreePath || cwd.startsWith(s.worktreePath + '/'))
+    );
+
+    if (matchingSession) {
+      // Found existing session - send resume command
+      this.orchestrator.socket.emit('terminal-input', {
+        sessionId: matchingSession.id,
+        input: `claude --resume ${id}\n`
+      });
+
+      // Close browser
+      document.getElementById('conversation-browser')?.remove();
+      return;
+    }
+
+    // No matching session - need to add this as a new worktree
+    const pathInfo = this.parseProjectPath(cwd);
+    const worktreeId = pathInfo?.worktree || cwd.split('/').pop() || 'resumed';
+    const repoName = pathInfo?.project || cwd.split('/').slice(-2, -1)[0] || 'unknown';
+
+    console.log('Adding new worktree for conversation:', { worktreeId, cwd, repoName });
+
+    // Show loading state
+    const resumeBtn = document.querySelector(`[data-id="${id}"] .btn-small`);
+    if (resumeBtn) {
+      resumeBtn.textContent = 'Adding...';
+      resumeBtn.disabled = true;
+    }
+
+    // Listen for the session to be added
+    const sessionAddedHandler = (data) => {
+      console.log('Worktree sessions added:', data);
+
+      if (data.worktreeId === worktreeId) {
+        this.orchestrator.socket.off('worktree-sessions-added', sessionAddedHandler);
+
+        // Find the claude session and send resume command
+        const claudeSessionId = Object.keys(data.sessions).find(sid => sid.includes('claude'));
+        if (claudeSessionId) {
+          setTimeout(() => {
+            this.orchestrator.socket.emit('terminal-input', {
+              sessionId: claudeSessionId,
+              input: `claude --resume ${id}\n`
+            });
+          }, 500); // Small delay to let terminal initialize
+        }
 
         // Close browser
         document.getElementById('conversation-browser')?.remove();
-        return;
       }
-    }
+    };
 
-    // Otherwise, show instructions
-    alert(`To resume this conversation, run:\ncd ${cwd || '~'}\nclaude --resume ${id}`);
+    this.orchestrator.socket.on('worktree-sessions-added', sessionAddedHandler);
+
+    // Request to add the worktree sessions
+    this.orchestrator.socket.emit('add-worktree-sessions', {
+      worktreeId,
+      worktreePath: cwd,
+      repositoryName: repoName,
+      repositoryType: 'single' // Assume single repo
+    });
+
+    // Timeout handler
+    setTimeout(() => {
+      this.orchestrator.socket.off('worktree-sessions-added', sessionAddedHandler);
+      if (resumeBtn) {
+        resumeBtn.textContent = 'Resume';
+        resumeBtn.disabled = false;
+      }
+    }, 10000);
   }
 
   async showDetails(id, project) {
