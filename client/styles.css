@@ -6082,3 +6082,87 @@ header h1 {
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* ============================================
+   Dashboard Ports Section
+   ============================================ */
+
+.ports-dashboard-section {
+  margin-top: var(--space-lg);
+}
+
+.ports-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-md);
+}
+
+.port-dashboard-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.port-dashboard-card:hover {
+  background: var(--bg-tertiary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.port-dashboard-card.orchestrator { border-left-color: #9f7aea; }
+.port-dashboard-card.node { border-left-color: #68d391; }
+.port-dashboard-card.rails { border-left-color: #f56565; }
+.port-dashboard-card.ruby { border-left-color: #f56565; }
+.port-dashboard-card.python { border-left-color: #ffd93d; }
+.port-dashboard-card.vite { border-left-color: #48bb78; }
+
+.port-card-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.port-card-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.port-card-name {
+  display: block;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.port-card-context {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.port-card-port {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.ports-empty,
+.ports-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: var(--space-lg);
+  color: var(--text-muted);
+  font-style: italic;
+}
