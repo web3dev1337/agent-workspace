@@ -6166,3 +6166,142 @@ header h1 {
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* ============================================
+   Dashboard Split Row Layout
+   ============================================ */
+
+.dashboard-split-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+
+.dashboard-half {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.dashboard-half h2 {
+  margin: 0 0 var(--space-sm) 0;
+  font-size: 1rem;
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  padding-bottom: var(--space-xs);
+}
+
+/* Compact ports grid for dashboard half */
+.dashboard-half .ports-dashboard-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.dashboard-half .port-dashboard-card {
+  padding: var(--space-sm) var(--space-md);
+}
+
+.dashboard-half .port-card-icon {
+  font-size: 1.1rem;
+}
+
+.dashboard-half .port-card-name {
+  font-size: 0.85rem;
+}
+
+.dashboard-half .port-card-context {
+  font-size: 0.7rem;
+}
+
+.dashboard-half .port-card-port {
+  font-size: 0.85rem;
+}
+
+/* Compact quick links for dashboard half */
+.dashboard-half .quick-links-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.dashboard-half .quick-link {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.85rem;
+}
+
+/* Quick links container inside dashboard */
+.dashboard-half .quick-links-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.dashboard-half .quick-links-section h3 {
+  font-size: 0.85rem;
+  margin: 0 0 var(--space-xs) 0;
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .dashboard-split-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================
+   Quick Link Items (for dashboard half)
+   ============================================ */
+
+.quick-link-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent-primary);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+  color: inherit;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.quick-link-item:hover {
+  background: var(--bg-primary);
+  transform: translateX(2px);
+}
+
+.quick-link-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.quick-link-label {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.quick-links-empty {
+  padding: var(--space-md);
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Stack layout for quick links in dashboard half */
+.dashboard-half .quick-links-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}

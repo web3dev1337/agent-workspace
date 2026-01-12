@@ -107,17 +107,19 @@ class Dashboard {
         </div>
       </div>
 
-      <div class="dashboard-section">
-        <h2>🔗 Quick Links</h2>
-        <div class="quick-links-grid">
-          ${this.generateQuickLinksHTML()}
+      <div class="dashboard-split-row">
+        <div class="dashboard-section dashboard-half">
+          <h2>🔗 Quick Links</h2>
+          <div class="quick-links-grid">
+            ${this.generateQuickLinksHTML()}
+          </div>
         </div>
-      </div>
 
-      <div class="dashboard-section ports-dashboard-section">
-        <h2>🔌 Running Services</h2>
-        <div class="ports-dashboard-grid" id="ports-dashboard-grid">
-          <div class="ports-loading">Loading services...</div>
+        <div class="dashboard-section dashboard-half ports-dashboard-section">
+          <h2>🔌 Running Services</h2>
+          <div class="ports-dashboard-grid" id="ports-dashboard-grid">
+            <div class="ports-loading">Loading services...</div>
+          </div>
         </div>
       </div>
     `;
@@ -192,21 +194,33 @@ class Dashboard {
   }
 
   generateQuickLinksHTML() {
-    // Use QuickLinks component if available
-    if (this.quickLinks) {
+    // Get globalShortcuts from config
+    const globalShortcuts = this.orchestrator.orchestratorConfig?.globalShortcuts || [];
+
+    // Check if QuickLinks has actual data
+    const hasQuickLinksData = this.quickLinks &&
+      (this.quickLinks.data?.favorites?.length > 0 ||
+       this.quickLinks.data?.recentSessions?.length > 0 ||
+       this.quickLinks.data?.customLinks?.length > 0);
+
+    // If QuickLinks has data, use it alongside globalShortcuts
+    if (hasQuickLinksData) {
       return this.quickLinks.generateDashboardHTML();
     }
 
-    // Fallback to legacy globalShortcuts
-    const globalShortcuts = this.orchestrator.orchestratorConfig?.globalShortcuts || [];
+    // Otherwise show globalShortcuts
+    if (globalShortcuts.length === 0) {
+      return '<div class="quick-links-empty">No links configured. Add shortcuts in Settings.</div>';
+    }
 
     return globalShortcuts.map(shortcut => `
-      <a href="${shortcut.url}" target="_blank" class="quick-link">
-        <span class="quick-link-icon">${shortcut.icon}</span>
+      <a href="${shortcut.url}" target="_blank" class="quick-link-item"
+         title="${shortcut.label}">
+        <span class="quick-link-icon">${shortcut.icon || '🔗'}</span>
         <span class="quick-link-label">${shortcut.label}</span>
       </a>
     `).join('') + `
-      <button class="quick-link settings-link" onclick="window.orchestrator.showSettings()">
+      <button class="quick-link-item settings-link" onclick="window.orchestrator.showSettings()">
         <span class="quick-link-icon">⚙️</span>
         <span class="quick-link-label">Settings</span>
       </button>
