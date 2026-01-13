@@ -190,31 +190,21 @@ class SessionRecoveryService {
     const sessions = state.sessions || {};
     const fsSync = require('fs');
 
-    // Build recovery info for each session
+    // Build recovery info for each session - use STORED data, no lookup
     const recoveryData = [];
     for (const s of Object.values(sessions)) {
-      // Skip if no worktree path
+      // Skip if no worktree path and no server command
       if (!s.worktreePath && !s.lastServerCommand) {
         continue;
       }
 
-      let conversationId = null;
-      let actualCwd = s.worktreePath;  // Default to worktree path
-
-      // For Claude sessions, look up conversation (checks worktree AND parent folder)
-      if (s.lastAgent === 'claude' && s.worktreePath) {
-        const result = this.getLatestConversation(s.worktreePath);
-        if (result) {
-          conversationId = result.conversationId;
-          actualCwd = result.actualCwd;  // Where Claude was actually started
-        }
-      }
-
+      // Use the conversation ID that was captured when Claude started
+      // Don't try to look it up - it was stored at the moment Claude started
       recoveryData.push({
         sessionId: s.sessionId,
-        lastCwd: actualCwd,  // Actual CWD where Claude was started (may differ from worktree)
+        lastCwd: s.lastCwd || s.worktreePath,  // CWD captured when Claude started
         lastAgent: s.lastAgent,
-        lastConversationId: conversationId,
+        lastConversationId: s.lastConversationId,  // ID captured when Claude started
         worktreePath: s.worktreePath,
         lastServerCommand: s.lastServerCommand,
         updatedAt: s.updatedAt
