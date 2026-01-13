@@ -726,10 +726,12 @@ class SessionManager extends EventEmitter {
       if (pattern.test(data)) {
         sessionRecoveryService.updateAgent(workspaceId, sessionId, agent);
 
-        // When agent starts, look up most recent conversation for this worktree
-        // Use worktree path from config as base, ConversationService will find actual CWD
-        if (config.cwd) {
-          this.lookupConversationForWorktree(workspaceId, sessionId, config.cwd, agent);
+        // When agent starts, look up most recent conversation
+        // Use tracked CWD if available (user may have cd'd), otherwise use worktree path
+        const currentState = sessionRecoveryService.getSession(workspaceId, sessionId);
+        const searchPath = currentState?.lastCwd || config.cwd;
+        if (searchPath) {
+          this.lookupConversationForWorktree(workspaceId, sessionId, searchPath, agent);
         }
         break;
       }
@@ -787,11 +789,10 @@ class SessionManager extends EventEmitter {
 
       const relevant = index.conversations.filter(c => {
         if (!c.cwd) return false;
-        // Match: exact worktree, parent folder, or child of worktree
+        // Match: exact worktree path OR subfolders within worktree
+        // Do NOT match parent folders - that would match ALL sibling worktrees
         return c.cwd === worktreePath ||
-               c.cwd === parentPath ||
-               c.cwd.startsWith(worktreePath + '/') ||
-               worktreePath.startsWith(c.cwd + '/');
+               c.cwd.startsWith(worktreePath + '/');
       });
 
       if (relevant.length === 0) {
