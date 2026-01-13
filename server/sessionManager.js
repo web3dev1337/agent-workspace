@@ -737,8 +737,8 @@ class SessionManager extends EventEmitter {
     }
 
     // Also detect CWD from bash prompt for when user cd's around
-    // Matches: user@host:path$ or HOST:path$ format
-    const cwdMatch = data.match(/(?:\w+@)?[\w-]+:([~\/][^\$\#\n\r]*?)[\$\#]\s*$/);
+    // Matches: user@host:path$ or HOST:path$ format (no end anchor - data may continue)
+    const cwdMatch = data.match(/(?:\w+@)?[\w-]+:([~\/][^\$\#\n\r]*?)[\$\#]/);
     if (cwdMatch && cwdMatch[1]) {
       let cwd = cwdMatch[1].trim();
       if (cwd.startsWith('~')) {
