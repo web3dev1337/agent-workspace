@@ -255,16 +255,19 @@ class SessionRecoveryService {
           continue;
         }
 
-        // Get all .jsonl files and find the most recently modified
+        // Get all .jsonl files that have content (size > 0)
         const files = fsSync.readdirSync(projectsDir)
           .filter(f => f.endsWith('.jsonl'))
           .map(f => {
             const fullPath = path.join(projectsDir, f);
+            const stats = fsSync.statSync(fullPath);
             return {
               name: f,
-              mtime: fsSync.statSync(fullPath).mtime.getTime()
+              mtime: stats.mtime.getTime(),
+              size: stats.size
             };
-          });
+          })
+          .filter(f => f.size > 0);  // Only files with actual content
 
         for (const file of files) {
           if (file.mtime > bestMtime) {
