@@ -714,53 +714,7 @@ class SessionManager extends EventEmitter {
     const workspaceId = this.workspace?.id;
     if (!workspaceId) return;
 
-    // Detect CWD from Claude Code startup banner
-    // Matches: ▘▘ ▝▝    ~/GitHub/games/hytopia/zoo-game/work1
-    const claudeBannerMatch = data.match(/▘▘\s*▝▝\s+([~\/][^\r\n]+)/);
-    if (claudeBannerMatch && claudeBannerMatch[1]) {
-      let cwd = claudeBannerMatch[1].trim();
-      if (cwd.startsWith('~')) {
-        cwd = cwd.replace('~', process.env.HOME || '/home/user');
-      }
-      if (cwd.startsWith('/') && !cwd.includes('\x1b')) {
-        sessionRecoveryService.updateCwd(workspaceId, sessionId, cwd);
-        this.lookupConversationForPath(workspaceId, sessionId, cwd);
-      }
-    }
-
-    // Detect CWD from bash prompt (common formats)
-    // Matches: ~/path$, /home/user/path$, user@host:~/path$, HOST:~/path$, etc.
-    const cwdPatterns = [
-      // user@host:path$ or HOST:path$ format
-      /(?:^|\n)(?:\x1b\[[0-9;]*m)*(?:\w+@)?[\w-]+:([~\/][^\$\#\n\r]*?)[\$\#]\s*(?:\x1b\[[0-9;]*m)*$/,
-      // Simple path$ format
-      /(?:^|\n)(?:\x1b\[[0-9;]*m)*([~\/][^\$\#\n\r\s]{2,}?)[\$\#]\s*(?:\x1b\[[0-9;]*m)*$/,
-      // [brackets] path$ format
-      /(?:^|\n)(?:\x1b\[[0-9;]*m)*\[.*?\]\s*([~\/][^\]]*?)\s*[\$\#]/,
-      // pwd command output
-      /(?:^|\n)pwd\r?\n([\/~][^\r\n]+)/
-    ];
-
-    for (const pattern of cwdPatterns) {
-      const match = data.match(pattern);
-      if (match && match[1]) {
-        let cwd = match[1].trim();
-        // Expand ~ to home directory
-        if (cwd.startsWith('~')) {
-          cwd = cwd.replace('~', process.env.HOME || '/home/user');
-        }
-        // Only track if it looks like a valid path
-        if (cwd.startsWith('/') && !cwd.includes('\x1b')) {
-          sessionRecoveryService.updateCwd(workspaceId, sessionId, cwd);
-
-          // Look up most recent conversation for this folder
-          this.lookupConversationForPath(workspaceId, sessionId, cwd);
-        }
-        break;
-      }
-    }
-
-    // Detect agent type from command
+    // Detect agent type from command and look up conversation
     const agentPatterns = [
       { pattern: /(?:^|\n)\s*claude\s/, agent: 'claude' },
       { pattern: /(?:^|\n)\s*codex\s/, agent: 'codex' },
@@ -771,7 +725,26 @@ class SessionManager extends EventEmitter {
     for (const { pattern, agent } of agentPatterns) {
       if (pattern.test(data)) {
         sessionRecoveryService.updateAgent(workspaceId, sessionId, agent);
+
+        // When agent starts, look up most recent conversation for this worktree
+        // Use worktree path from config as base, ConversationService will find actual CWD
+        if (config.cwd) {
+          this.lookupConversationForWorktree(workspaceId, sessionId, config.cwd, agent);
+        }
         break;
+      }
+    }
+
+    // Also detect CWD from bash prompt for when user cd's around
+    // Matches: user@host:path$ or HOST:path$ format
+    const cwdMatch = data.match(/(?:\w+@)?[\w-]+:([~\/][^\$\#\n\r]*?)[\$\#]\s*$/);
+    if (cwdMatch && cwdMatch[1]) {
+      let cwd = cwdMatch[1].trim();
+      if (cwd.startsWith('~')) {
+        cwd = cwd.replace('~', process.env.HOME || '/home/user');
+      }
+      if (cwd.startsWith('/') && !cwd.includes('\x1b')) {
+        sessionRecoveryService.updateCwd(workspaceId, sessionId, cwd);
       }
     }
 
@@ -796,64 +769,68 @@ class SessionManager extends EventEmitter {
   }
 
   /**
-   * Look up the most recent conversation for a given path using ConversationService
-   * Prioritizes exact CWD match, falls back to parent path matches
+   * Look up the most recent conversation for a worktree terminal
+   * Searches for conversations in the worktree path and parent folders
+   * The conversation metadata contains the actual CWD where Claude was launched
    */
-  async lookupConversationForPath(workspaceId, sessionId, cwd) {
+  async lookupConversationForWorktree(workspaceId, sessionId, worktreePath, agent) {
     try {
       const conversationService = ConversationService.getInstance();
-      const allConversations = await conversationService.getByFolder(cwd);
 
-      if (!allConversations || allConversations.length === 0) {
+      // Get all recent conversations and filter by path relevance
+      const index = await conversationService.getIndex();
+      if (!index || !index.conversations) return;
+
+      // Find conversations that match this worktree or its parent
+      // User could have cd'd up from work1 to zoo-game, so check both
+      const parentPath = path.dirname(worktreePath);
+
+      const relevant = index.conversations.filter(c => {
+        if (!c.cwd) return false;
+        // Match: exact worktree, parent folder, or child of worktree
+        return c.cwd === worktreePath ||
+               c.cwd === parentPath ||
+               c.cwd.startsWith(worktreePath + '/') ||
+               worktreePath.startsWith(c.cwd + '/');
+      });
+
+      if (relevant.length === 0) {
+        logger.debug('No conversations found for worktree', { sessionId, worktreePath });
         return;
       }
 
-      // Prioritize conversations by path match quality:
-      // 1. Exact CWD match
-      // 2. CWD starts with conversation path (user cd'd into subfolder)
-      // 3. Conversation path starts with CWD (conversation started in subfolder)
-      const scored = allConversations.map(c => {
-        let score = 0;
-        const convCwd = c.cwd || '';
-
-        if (convCwd === cwd) {
-          score = 100; // Exact match
-        } else if (cwd.startsWith(convCwd + '/')) {
-          score = 50; // We're in a subfolder of where conversation was started
-        } else if (convCwd.startsWith(cwd + '/')) {
-          score = 25; // Conversation was started in a subfolder
-        } else if (convCwd.includes(cwd) || cwd.includes(convCwd)) {
-          score = 10; // Partial match
-        }
-
-        return { conversation: c, score };
-      }).filter(s => s.score > 0);
-
-      if (scored.length === 0) {
-        return;
-      }
-
-      // Sort by score desc, then by timestamp desc
-      scored.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        const timeA = new Date(a.conversation.lastTimestamp || 0).getTime();
-        const timeB = new Date(b.conversation.lastTimestamp || 0).getTime();
+      // Sort by most recent first
+      relevant.sort((a, b) => {
+        const timeA = new Date(a.lastTimestamp || 0).getTime();
+        const timeB = new Date(b.lastTimestamp || 0).getTime();
         return timeB - timeA;
       });
 
-      const best = scored[0].conversation;
-      if (best && best.id) {
-        logger.debug('Found conversation for path', {
-          sessionId,
-          cwd,
-          conversationId: best.id,
-          matchScore: scored[0].score,
-          conversationCwd: best.cwd
-        });
-        sessionRecoveryService.updateConversation(workspaceId, sessionId, best.id, best.filepath);
-      }
+      // Get the most recent conversation
+      const mostRecent = relevant[0];
+
+      logger.info('Found conversation for recovery', {
+        sessionId,
+        worktreePath,
+        conversationId: mostRecent.id,
+        conversationCwd: mostRecent.cwd,
+        agent
+      });
+
+      // Update recovery state with conversation info
+      // The conversation's CWD is where Claude was actually launched from
+      sessionRecoveryService.updateSession(workspaceId, sessionId, {
+        lastCwd: mostRecent.cwd,
+        lastConversationId: mostRecent.id,
+        lastConversationPath: mostRecent.filepath,
+        lastAgent: agent,
+        worktreePath: worktreePath
+      });
+
     } catch (error) {
-      logger.debug('Failed to lookup conversation for path', { sessionId, cwd, error: error.message });
+      logger.error('Failed to lookup conversation for worktree', {
+        sessionId, worktreePath, error: error.message
+      });
     }
   }
 
