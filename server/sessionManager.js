@@ -724,6 +724,7 @@ class SessionManager extends EventEmitter {
     for (const { pattern, agent } of agentPatterns) {
       if (pattern.test(data)) {
         // Track agent type and worktree path
+        logger.info('Detected agent command', { sessionId, agent, cwd: config.cwd });
         sessionRecoveryService.updateAgent(workspaceId, sessionId, agent);
 
         if (config.cwd) {
@@ -734,11 +735,16 @@ class SessionManager extends EventEmitter {
           // Snapshot existing conversation files BEFORE Claude starts
           // This lets us find which NEW file was created
           const existingFiles = this.snapshotConversationFiles();
+          logger.info('Snapshotted conversation files', { sessionId, count: existingFiles.size });
 
           // Capture the conversation ID at this moment
           // Wait briefly for Claude to create the .jsonl file, then capture it
+          const captureWorkspaceId = workspaceId;
+          const captureSessionId = sessionId;
+          const captureCwd = config.cwd;
           setTimeout(() => {
-            this.captureConversationId(workspaceId, sessionId, config.cwd, existingFiles);
+            logger.info('Capture timeout fired', { sessionId: captureSessionId });
+            this.captureConversationId(captureWorkspaceId, captureSessionId, captureCwd, existingFiles);
           }, 2000);
         }
         break;
@@ -844,6 +850,7 @@ class SessionManager extends EventEmitter {
    * So we check against known paths (worktree, parent, home) and match folder names
    */
   captureConversationId(workspaceId, sessionId, worktreePath, existingFiles = null) {
+    logger.info('captureConversationId called', { workspaceId, sessionId, worktreePath });
     const fsSync = require('fs');
     const now = Date.now();
     const projectsBase = path.join(process.env.HOME, '.claude', 'projects');
