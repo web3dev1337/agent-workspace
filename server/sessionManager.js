@@ -828,14 +828,40 @@ class SessionManager extends EventEmitter {
   }
 
   /**
+   * Convert a path to Claude's folder name format
+   * /home/<user>/foo → -home-ab-foo
+   */
+  pathToFolderName(p) {
+    return p.replace(/\//g, '-');
+  }
+
+  /**
    * Capture the conversation ID for a terminal at the moment Claude starts
-   * Scans ALL folders in ~/.claude/projects/ for NEW or recently modified .jsonl files
+   * Scans folders in ~/.claude/projects/ for NEW or recently modified .jsonl files
    * Uses existingFiles snapshot to identify truly NEW files (avoids race conditions)
+   *
+   * IMPORTANT: We can convert path → folder name, but NOT the reverse (lossy)
+   * So we check against known paths (worktree, parent, home) and match folder names
    */
   captureConversationId(workspaceId, sessionId, worktreePath, existingFiles = null) {
     const fsSync = require('fs');
     const now = Date.now();
     const projectsBase = path.join(process.env.HOME, '.claude', 'projects');
+
+    // Build a map of folder names to actual paths we know about
+    // This is the ONLY reliable way since folder → path conversion is lossy
+    const knownPaths = [
+      worktreePath,
+      path.dirname(worktreePath),  // Parent folder (user may have cd'd up)
+      process.env.HOME,  // Home directory
+      path.join(process.env.HOME, 'GitHub'),  // Common location
+    ].filter(Boolean);
+
+    const folderToPath = new Map();
+    for (const p of knownPaths) {
+      const folderName = this.pathToFolderName(p);
+      folderToPath.set(folderName, p);
+    }
 
     let bestMatch = null;
     const newFiles = [];
@@ -846,7 +872,7 @@ class SessionManager extends EventEmitter {
         return;
       }
 
-      // Scan ALL folders in ~/.claude/projects/
+      // Scan folders in ~/.claude/projects/
       const folders = fsSync.readdirSync(projectsBase, { withFileTypes: true })
         .filter(d => d.isDirectory())
         .map(d => d.name);
@@ -854,16 +880,17 @@ class SessionManager extends EventEmitter {
       for (const folder of folders) {
         const projectsDir = path.join(projectsBase, folder);
 
+        // Determine the actual CWD for this folder
+        // If we know the path, use it; otherwise use worktreePath as fallback
+        const actualCwd = folderToPath.get(folder) || worktreePath;
+
         try {
           // Find .jsonl files WITH CONTENT (size > 0)
-          // Empty files are created when Claude starts but have no conversation
           const files = fsSync.readdirSync(projectsDir)
             .filter(f => f.endsWith('.jsonl'))
             .map(f => {
               const fullPath = path.join(projectsDir, f);
               const stats = fsSync.statSync(fullPath);
-              // Convert folder name back to path: -home-ab-foo → /home/<user>/foo
-              const cwd = '/' + folder.substring(1).replace(/-/g, '/');
               const isNew = existingFiles ? !existingFiles.has(fullPath) : false;
               return {
                 name: f,
@@ -871,9 +898,10 @@ class SessionManager extends EventEmitter {
                 size: stats.size,
                 mtime: stats.mtime.getTime(),
                 age: now - stats.mtime.getTime(),
-                cwd: cwd,
+                cwd: actualCwd,
                 folder: folder,
-                isNew: isNew
+                isNew: isNew,
+                isKnownPath: folderToPath.has(folder)
               };
             })
             .filter(f => f.size > 0);  // ONLY files with actual content
@@ -897,15 +925,21 @@ class SessionManager extends EventEmitter {
       return;
     }
 
-    // Prefer NEW files over modified files (more reliable for identifying THIS session's conversation)
+    // Prefer NEW files over modified files
     if (newFiles.length > 0) {
-      // If multiple new files, pick the one with smallest age (most recently modified)
-      newFiles.sort((a, b) => a.age - b.age);
+      // If multiple new files, prefer ones from known paths, then by age
+      newFiles.sort((a, b) => {
+        if (a.isKnownPath !== b.isKnownPath) {
+          return b.isKnownPath ? 1 : -1;  // Known paths first
+        }
+        return a.age - b.age;  // Then by age
+      });
       bestMatch = newFiles[0];
       logger.debug('Found NEW conversation file', {
         sessionId,
         newFilesCount: newFiles.length,
-        picked: bestMatch.name
+        picked: bestMatch.name,
+        isKnownPath: bestMatch.isKnownPath
       });
     }
 
@@ -919,14 +953,16 @@ class SessionManager extends EventEmitter {
       sessionId,
       conversationId,
       actualCwd: bestMatch.cwd,
+      folder: bestMatch.folder,
       worktreePath,
       age: bestMatch.age,
-      isNew: bestMatch.isNew
+      isNew: bestMatch.isNew,
+      isKnownPath: bestMatch.isKnownPath
     });
 
     sessionRecoveryService.updateSession(workspaceId, sessionId, {
       lastConversationId: conversationId,
-      lastCwd: bestMatch.cwd  // The ACTUAL cwd where Claude was started
+      lastCwd: bestMatch.cwd
     });
   }
 
