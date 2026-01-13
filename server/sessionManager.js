@@ -742,9 +742,14 @@ class SessionManager extends EventEmitter {
           const captureWorkspaceId = workspaceId;
           const captureSessionId = sessionId;
           const captureCwd = config.cwd;
+          const self = this;  // Capture this reference
           setTimeout(() => {
             logger.info('Capture timeout fired', { sessionId: captureSessionId });
-            this.captureConversationId(captureWorkspaceId, captureSessionId, captureCwd, existingFiles);
+            try {
+              self.captureConversationId(captureWorkspaceId, captureSessionId, captureCwd, existingFiles);
+            } catch (error) {
+              logger.error('captureConversationId threw error', { sessionId: captureSessionId, error: error.message, stack: error.stack });
+            }
           }, 2000);
         }
         break;
