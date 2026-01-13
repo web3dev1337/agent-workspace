@@ -8,6 +8,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const winston = require('winston');
+const { ConversationService } = require('./conversationService');
 
 const RECOVERY_DIR = path.join(process.env.HOME || '', '.orchestrator', 'session-recovery');
 
@@ -183,28 +184,73 @@ class SessionRecoveryService {
 
   /**
    * Get recovery info for display
+   * Looks up conversation IDs on-demand for each session
    */
   async getRecoveryInfo(workspaceId) {
     const state = await this.loadWorkspaceState(workspaceId);
     const sessions = state.sessions || {};
 
-    const recoverable = Object.values(sessions).filter(s =>
-      s.lastCwd || s.lastConversationId || s.lastServerCommand
-    );
+    // Get conversation index once
+    const conversationService = ConversationService.getInstance();
+    let conversationIndex = null;
+    try {
+      conversationIndex = await conversationService.getIndex();
+    } catch (e) {
+      logger.warn('Could not load conversation index for recovery', { error: e.message });
+    }
+
+    // Build recovery info for each session
+    const recoveryData = [];
+    for (const s of Object.values(sessions)) {
+      // Skip if no useful recovery data
+      if (!s.lastCwd && !s.worktreePath && !s.lastServerCommand) {
+        continue;
+      }
+
+      // Look up conversation for this session's path
+      let conversationId = s.lastConversationId;
+      let conversationCwd = s.lastCwd;
+
+      if (!conversationId && conversationIndex && s.lastAgent === 'claude') {
+        // Find most recent conversation for this session's path
+        const searchPath = s.lastCwd || s.worktreePath;
+        if (searchPath) {
+          const matching = conversationIndex.conversations.filter(c => {
+            if (!c.cwd) return false;
+            // Exact match only - no fuzzy matching
+            return c.cwd === searchPath;
+          });
+
+          if (matching.length > 0) {
+            // Sort by most recent
+            matching.sort((a, b) => {
+              const timeA = new Date(a.lastTimestamp || 0).getTime();
+              const timeB = new Date(b.lastTimestamp || 0).getTime();
+              return timeB - timeA;
+            });
+            conversationId = matching[0].id;
+            conversationCwd = matching[0].cwd;
+          }
+        }
+      }
+
+      recoveryData.push({
+        sessionId: s.sessionId,
+        lastCwd: conversationCwd || s.lastCwd || s.worktreePath,
+        lastAgent: s.lastAgent,
+        lastConversationId: conversationId,
+        worktreePath: s.worktreePath,
+        lastServerCommand: s.lastServerCommand,
+        updatedAt: s.updatedAt
+      });
+    }
 
     return {
       workspaceId,
       savedAt: state.savedAt,
       totalSessions: Object.keys(sessions).length,
-      recoverableSessions: recoverable.length,
-      sessions: recoverable.map(s => ({
-        sessionId: s.sessionId,
-        lastCwd: s.lastCwd,
-        lastAgent: s.lastAgent,
-        lastConversationId: s.lastConversationId,
-        lastServerCommand: s.lastServerCommand,
-        updatedAt: s.updatedAt
-      }))
+      recoverableSessions: recoveryData.length,
+      sessions: recoveryData
     };
   }
 
