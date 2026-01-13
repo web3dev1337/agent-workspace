@@ -761,11 +761,11 @@ class SessionManager extends EventEmitter {
     } else if (/\/compact\b/.test(data)) {
       const session = sessionRecoveryService.getSession(workspaceId, sessionId);
       if (session?.lastAgent === 'claude') {
-        logger.info('Detected /compact command, re-capturing conversation after 10s', { sessionId });
-        // /compact modifies existing file, so no snapshot needed - just find recently modified
+        logger.info('Detected /compact command, re-capturing conversation after 2min', { sessionId });
+        // /compact modifies existing file, can take 1-2 minutes
         setTimeout(() => {
           this.captureConversationId(workspaceId, sessionId, session.worktreePath || config.cwd);
-        }, 10000);
+        }, 120000);  // 2 minutes
       }
     }
 
