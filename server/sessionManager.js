@@ -723,20 +723,23 @@ class SessionManager extends EventEmitter {
 
     for (const { pattern, agent } of agentPatterns) {
       if (pattern.test(data)) {
-        // Only track the agent type - conversation lookup happens at recovery time
+        // Track agent type and worktree path
         sessionRecoveryService.updateAgent(workspaceId, sessionId, agent);
 
-        // Store worktree path from config for recovery
         if (config.cwd) {
           sessionRecoveryService.updateSession(workspaceId, sessionId, {
             worktreePath: config.cwd
           });
+
+          // Capture the conversation ID at this moment
+          // Wait briefly for Claude to create the .jsonl file, then capture it
+          setTimeout(() => {
+            this.captureConversationId(workspaceId, sessionId, config.cwd);
+          }, 2000);
         }
         break;
       }
     }
-
-    // CWD is known from session config - no need to parse terminal output
 
     // Detect server commands
     const serverPatterns = [
@@ -755,6 +758,63 @@ class SessionManager extends EventEmitter {
           break;
         }
       }
+    }
+  }
+
+  /**
+   * Capture the conversation ID for a terminal at the moment Claude starts
+   * Finds the most recently modified .jsonl file in the Claude projects folder
+   */
+  captureConversationId(workspaceId, sessionId, cwd) {
+    const fsSync = require('fs');
+
+    // Convert CWD to Claude's folder format: /home/ab/foo → -home-ab-foo
+    const folderName = cwd.replace(/\//g, '-');
+    const projectsDir = path.join(process.env.HOME, '.claude', 'projects', folderName);
+
+    try {
+      if (!fsSync.existsSync(projectsDir)) {
+        logger.debug('Claude projects folder not found', { sessionId, projectsDir });
+        return;
+      }
+
+      // Find the most recently modified .jsonl file (created in last 30 seconds)
+      const now = Date.now();
+      const files = fsSync.readdirSync(projectsDir)
+        .filter(f => f.endsWith('.jsonl'))
+        .map(f => {
+          const fullPath = path.join(projectsDir, f);
+          const stats = fsSync.statSync(fullPath);
+          return {
+            name: f,
+            mtime: stats.mtime.getTime(),
+            age: now - stats.mtime.getTime()
+          };
+        })
+        .filter(f => f.age < 30000)  // Modified in last 30 seconds
+        .sort((a, b) => a.age - b.age);  // Most recent first
+
+      if (files.length === 0) {
+        logger.debug('No recent conversation file found', { sessionId, cwd });
+        return;
+      }
+
+      const conversationId = files[0].name.replace('.jsonl', '');
+      logger.info('Captured conversation ID for session', {
+        sessionId,
+        conversationId,
+        cwd,
+        age: files[0].age
+      });
+
+      sessionRecoveryService.updateSession(workspaceId, sessionId, {
+        lastConversationId: conversationId,
+        lastCwd: cwd
+      });
+    } catch (error) {
+      logger.error('Failed to capture conversation ID', {
+        sessionId, cwd, error: error.message
+      });
     }
   }
 
