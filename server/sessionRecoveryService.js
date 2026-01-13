@@ -8,7 +8,6 @@
 const fs = require('fs').promises;
 const path = require('path');
 const winston = require('winston');
-const { ConversationService } = require('./conversationService');
 
 const RECOVERY_DIR = path.join(process.env.HOME || '', '.orchestrator', 'session-recovery');
 
@@ -184,59 +183,32 @@ class SessionRecoveryService {
 
   /**
    * Get recovery info for display
-   * Looks up conversation IDs on-demand for each session
+   * Looks up conversation IDs by directly checking Claude's projects folder
    */
   async getRecoveryInfo(workspaceId) {
     const state = await this.loadWorkspaceState(workspaceId);
     const sessions = state.sessions || {};
-
-    // Get conversation index once
-    const conversationService = ConversationService.getInstance();
-    let conversationIndex = null;
-    try {
-      conversationIndex = await conversationService.getIndex();
-    } catch (e) {
-      logger.warn('Could not load conversation index for recovery', { error: e.message });
-    }
+    const fsSync = require('fs');
 
     // Build recovery info for each session
     const recoveryData = [];
     for (const s of Object.values(sessions)) {
-      // Skip if no useful recovery data
-      if (!s.lastCwd && !s.worktreePath && !s.lastServerCommand) {
+      // Skip if no worktree path
+      if (!s.worktreePath && !s.lastServerCommand) {
         continue;
       }
 
-      // Look up conversation for this session's path
-      let conversationId = s.lastConversationId;
-      let conversationCwd = s.lastCwd;
+      let conversationId = null;
+      const cwd = s.worktreePath;
 
-      if (!conversationId && conversationIndex && s.lastAgent === 'claude') {
-        // Find most recent conversation for this session's path
-        const searchPath = s.lastCwd || s.worktreePath;
-        if (searchPath) {
-          const matching = conversationIndex.conversations.filter(c => {
-            if (!c.cwd) return false;
-            // Exact match only - no fuzzy matching
-            return c.cwd === searchPath;
-          });
-
-          if (matching.length > 0) {
-            // Sort by most recent
-            matching.sort((a, b) => {
-              const timeA = new Date(a.lastTimestamp || 0).getTime();
-              const timeB = new Date(b.lastTimestamp || 0).getTime();
-              return timeB - timeA;
-            });
-            conversationId = matching[0].id;
-            conversationCwd = matching[0].cwd;
-          }
-        }
+      // For Claude sessions, look up conversation directly from Claude's projects folder
+      if (s.lastAgent === 'claude' && cwd) {
+        conversationId = this.getLatestConversationId(cwd);
       }
 
       recoveryData.push({
         sessionId: s.sessionId,
-        lastCwd: conversationCwd || s.lastCwd || s.worktreePath,
+        lastCwd: cwd,
         lastAgent: s.lastAgent,
         lastConversationId: conversationId,
         worktreePath: s.worktreePath,
@@ -252,6 +224,43 @@ class SessionRecoveryService {
       recoverableSessions: recoveryData.length,
       sessions: recoveryData
     };
+  }
+
+  /**
+   * Get the latest conversation ID for a given CWD
+   * Claude stores conversations in ~/.claude/projects/{path-with-dashes}/
+   */
+  getLatestConversationId(cwd) {
+    const fsSync = require('fs');
+
+    // Convert CWD to Claude's folder format: /home/<user>/foo → -home-ab-foo
+    const folderName = cwd.replace(/\//g, '-');
+    const projectsDir = path.join(process.env.HOME, '.claude', 'projects', folderName);
+
+    try {
+      if (!fsSync.existsSync(projectsDir)) {
+        return null;
+      }
+
+      // Get all .jsonl files and find the most recently modified
+      const files = fsSync.readdirSync(projectsDir)
+        .filter(f => f.endsWith('.jsonl'))
+        .map(f => ({
+          name: f,
+          mtime: fsSync.statSync(path.join(projectsDir, f)).mtime
+        }))
+        .sort((a, b) => b.mtime - a.mtime);
+
+      if (files.length === 0) {
+        return null;
+      }
+
+      // Return the conversation ID (filename without .jsonl)
+      return files[0].name.replace('.jsonl', '');
+    } catch (error) {
+      logger.debug('Could not get conversation for path', { cwd, error: error.message });
+      return null;
+    }
   }
 
   /**

@@ -736,18 +736,7 @@ class SessionManager extends EventEmitter {
       }
     }
 
-    // Also detect CWD from bash prompt for when user cd's around
-    // Matches: user@host:path$ or HOST:path$ format (no end anchor - data may continue)
-    const cwdMatch = data.match(/(?:\w+@)?[\w-]+:([~\/][^\$\#\n\r]*?)[\$\#]/);
-    if (cwdMatch && cwdMatch[1]) {
-      let cwd = cwdMatch[1].trim();
-      if (cwd.startsWith('~')) {
-        cwd = cwd.replace('~', process.env.HOME || '/home/user');
-      }
-      if (cwd.startsWith('/') && !cwd.includes('\x1b')) {
-        sessionRecoveryService.updateCwd(workspaceId, sessionId, cwd);
-      }
-    }
+    // CWD is known from session config - no need to parse terminal output
 
     // Detect server commands
     const serverPatterns = [
