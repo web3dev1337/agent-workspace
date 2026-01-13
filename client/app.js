@@ -824,6 +824,13 @@ class ClaudeOrchestrator {
       });
     }
 
+    const recoverySkipPermissions = document.getElementById('recovery-skip-permissions');
+    if (recoverySkipPermissions) {
+      recoverySkipPermissions.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('sessionRecovery.skipPermissions', e.target.checked);
+      });
+    }
+
     // Template management buttons
     document.getElementById('reset-to-defaults').addEventListener('click', () => {
       this.resetToDefaults();
@@ -4192,7 +4199,8 @@ class ClaudeOrchestrator {
         // Wait a bit then start claude with --resume
         await new Promise(resolve => setTimeout(resolve, 500));
 
-        const skipPermissions = this.userSettings?.global?.claudeFlags?.skipPermissions || false;
+        // Use recovery-specific skipPermissions setting (defaults to true)
+        const skipPermissions = recoverySettings.skipPermissions !== false;
         const yoloFlag = skipPermissions ? ' --dangerously-skip-permissions' : '';
 
         this.socket.emit('terminal-input', {
@@ -4870,6 +4878,10 @@ class ClaudeOrchestrator {
     }
     if (recoveryResumeConversation) {
       recoveryResumeConversation.checked = recoverySettings.resumeConversation !== false;
+    }
+    const recoverySkipPermissions = document.getElementById('recovery-skip-permissions');
+    if (recoverySkipPermissions) {
+      recoverySkipPermissions.checked = recoverySettings.skipPermissions !== false; // Default to true
     }
 
     // Update per-terminal settings UI
