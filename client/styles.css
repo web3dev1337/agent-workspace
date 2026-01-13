@@ -6195,56 +6195,89 @@ header h1 {
   padding-bottom: var(--space-xs);
 }
 
-/* Compact ports grid for dashboard half */
+/* Grid layout for ports in dashboard half */
 .dashboard-half .ports-dashboard-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: var(--space-xs);
 }
 
 .dashboard-half .port-dashboard-card {
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-sm);
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-xs);
+  min-height: 70px;
 }
 
 .dashboard-half .port-card-icon {
-  font-size: 1.1rem;
+  font-size: 1.3rem;
+}
+
+.dashboard-half .port-card-info {
+  width: 100%;
 }
 
 .dashboard-half .port-card-name {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dashboard-half .port-card-context {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
 }
 
 .dashboard-half .port-card-port {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  margin-top: auto;
 }
 
-/* Compact quick links for dashboard half */
+/* Grid layout for quick links in dashboard half */
 .dashboard-half .quick-links-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: var(--space-xs);
 }
 
-.dashboard-half .quick-link {
-  padding: var(--space-sm) var(--space-md);
-  font-size: 0.85rem;
+.dashboard-half .quick-link-item {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-sm);
+  min-height: 60px;
+  gap: var(--space-xs);
+  border-left: none;
+  border-bottom: 2px solid var(--accent-primary);
+}
+
+.dashboard-half .quick-link-item .quick-link-icon {
+  font-size: 1.2rem;
+}
+
+.dashboard-half .quick-link-item .quick-link-label {
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* Quick links container inside dashboard */
 .dashboard-half .quick-links-container {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--space-xs);
+}
+
+.dashboard-half .quick-links-section {
+  display: contents;
 }
 
 .dashboard-half .quick-links-section h3 {
-  font-size: 0.85rem;
-  margin: 0 0 var(--space-xs) 0;
-  color: var(--text-muted);
+  display: none;
 }
 
 @media (max-width: 900px) {
@@ -6297,11 +6330,158 @@ header h1 {
   text-align: center;
   color: var(--text-muted);
   font-style: italic;
+  grid-column: 1 / -1;
 }
 
-/* Stack layout for quick links in dashboard half */
-.dashboard-half .quick-links-grid {
+/* ============================================
+   Session Recovery Dialog
+   ============================================ */
+
+.recovery-modal .modal-content {
+  max-width: 600px;
+  width: 90vw;
+}
+
+.recovery-header {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.recovery-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.recovery-info {
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--bg-secondary);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.recovery-sessions {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+.recovery-session {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-xs);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent-primary);
+}
+
+.recovery-session.selected {
+  border-left-color: #48bb78;
+  background: rgba(72, 187, 120, 0.1);
+}
+
+.recovery-checkbox {
+  margin-top: 2px;
+}
+
+.recovery-session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.recovery-session-id {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.recovery-session-details {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.recovery-session-details span {
+  display: inline-block;
+  margin-right: var(--space-sm);
+}
+
+.recovery-session-cwd {
+  color: var(--accent-primary);
+}
+
+.recovery-session-agent {
+  background: var(--bg-primary);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.recovery-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border-color);
+  gap: var(--space-md);
+}
+
+.recovery-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.recovery-skip {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.btn-recovery {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.btn-recovery-all {
+  background: #48bb78;
+  color: white;
+}
+
+.btn-recovery-all:hover {
+  background: #38a169;
+}
+
+.btn-recovery-selected {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.btn-recovery-selected:hover {
+  background: #1a66d9;
+}
+
+.btn-recovery-skip {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.btn-recovery-skip:hover {
+  background: var(--bg-primary);
+}
+
+.no-recovery {
+  text-align: center;
+  padding: var(--space-lg);
+  color: var(--text-muted);
 }
