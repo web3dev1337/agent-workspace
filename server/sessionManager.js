@@ -527,6 +527,8 @@ class SessionManager extends EventEmitter {
           NODE_PATH: process.env.NODE_PATH
         }
       });
+
+      const initialCwd = config.cwd || process.cwd();
       
       const session = {
         id: sessionId,
@@ -541,6 +543,11 @@ class SessionManager extends EventEmitter {
         lastActivity: Date.now(),
         tokenUsage: 0,
         config: config,
+        cwdState: {
+          current: initialCwd,
+          previous: null,
+          stack: []
+        },
         autoStarted: false  // Track if auto-start has been triggered
       };
       
@@ -556,6 +563,7 @@ class SessionManager extends EventEmitter {
       ptyProcess.onData((data) => {
         session.buffer += data;
         session.lastActivity = Date.now();
+        this.handleTerminalOutput(sessionId, data);
 
         // Reset inactivity timer
         this.resetInactivityTimer(session);
@@ -565,11 +573,6 @@ class SessionManager extends EventEmitter {
           sessionId,
           data
         });
-
-        // Track session state for recovery
-        if (this.workspace?.id) {
-          this.trackSessionState(sessionId, data, config);
-        }
 
         // Update status based on output (for Claude sessions)
         if (config.type === 'claude' && this.statusDetector) {
@@ -690,6 +693,18 @@ class SessionManager extends EventEmitter {
       // Add workspace ID to session
       session.workspace = this.workspace?.id || null;
       this.sessions.set(sessionId, session);
+
+      if (session.workspace) {
+        sessionRecoveryService.updateSession(session.workspace, sessionId, {
+          sessionId,
+          type: session.type,
+          worktreeId: session.worktreeId,
+          repositoryName: session.repositoryName,
+          repositoryType: session.repositoryType,
+          worktreePath: initialCwd,
+          lastCwd: initialCwd
+        });
+      }
       
       // Monitor for fork bombs (every 5 seconds)
       session.processMonitor = setInterval(() => {
@@ -706,76 +721,74 @@ class SessionManager extends EventEmitter {
   }
 
   /**
-   * Track session state for crash recovery
-   * Detects CWD changes, conversation IDs, and running processes
+   * Track session state for crash recovery based on executed commands.
+   * Detects agent starts, conversation IDs, and server commands.
    */
-  trackSessionState(sessionId, data, config) {
+  trackSessionState(sessionId, command, config, effectiveCwd = null, commandName = null, commandArgs = []) {
     const workspaceId = this.workspace?.id;
-    if (!workspaceId) return;
+    if (!workspaceId || !command) return;
 
-    // Detect agent type from command and look up conversation
-    const agentPatterns = [
-      { pattern: /(?:^|\n)\s*claude\s/, agent: 'claude' },
-      { pattern: /(?:^|\n)\s*codex\s/, agent: 'codex' },
-      { pattern: /(?:^|\n)\s*opencode\s/, agent: 'opencode' },
-      { pattern: /(?:^|\n)\s*aider\s/, agent: 'aider' }
-    ];
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
 
-    for (const { pattern, agent } of agentPatterns) {
-      if (pattern.test(data)) {
-        // Track agent type and worktree path
-        logger.info('Detected agent command', { sessionId, agent, cwd: config.cwd });
-        sessionRecoveryService.updateAgent(workspaceId, sessionId, agent);
+    const cwd = effectiveCwd || this.getSessionCwd(session) || config?.cwd;
+    const agent = this.detectAgentFromCommand(commandName, commandArgs, command);
 
-        if (config.cwd) {
-          sessionRecoveryService.updateSession(workspaceId, sessionId, {
-            worktreePath: config.cwd
-          });
+    if (agent) {
+      const mode = this.detectAgentMode(agent, commandName, commandArgs, command);
+      logger.info('Detected agent command', { sessionId, agent, cwd, mode });
 
-          // Snapshot existing conversation files BEFORE Claude starts
-          // This lets us find which NEW file was created
-          const existingFiles = this.snapshotConversationFiles();
-          logger.info('Snapshotted conversation files', { sessionId, count: existingFiles.size });
+      sessionRecoveryService.updateAgent(workspaceId, sessionId, agent, mode);
 
-          // Capture the conversation ID at this moment
-          // Wait briefly for Claude to create the .jsonl file, then capture it
-          const captureWorkspaceId = workspaceId;
-          const captureSessionId = sessionId;
-          const captureCwd = config.cwd;
-          const self = this;  // Capture this reference
-          setTimeout(() => {
-            logger.info('Capture timeout fired', { sessionId: captureSessionId });
-            try {
-              self.captureConversationId(captureWorkspaceId, captureSessionId, captureCwd, existingFiles);
-            } catch (error) {
-              logger.error('captureConversationId threw error', { sessionId: captureSessionId, error: error.message, stack: error.stack });
-            }
-          }, 2000);
-        }
-        break;
+      if (cwd) {
+        sessionRecoveryService.updateSession(workspaceId, sessionId, {
+          lastAgentCommand: this.truncateCommandForLog(command),
+          lastAgentCwd: cwd,
+          lastCwd: cwd
+        });
+      }
+
+      if (agent === 'claude' && cwd) {
+        const existingFiles = this.snapshotConversationFiles();
+        logger.info('Snapshotted conversation files', { sessionId, count: existingFiles.size });
+
+        const captureWorkspaceId = workspaceId;
+        const captureSessionId = sessionId;
+        const captureCwd = cwd;
+
+        setTimeout(() => {
+          try {
+            this.captureConversationId(captureWorkspaceId, captureSessionId, captureCwd, existingFiles);
+          } catch (error) {
+            logger.error('captureConversationId threw error', { sessionId: captureSessionId, error: error.message, stack: error.stack });
+          }
+        }, 2000);
       }
     }
 
     // Detect /clear and /compact commands which affect conversation state
     // /clear creates a NEW conversation (fast) - use snapshot to find new file
     // /compact modifies existing conversation file (can take a while)
-    if (/\/clear\b/.test(data)) {
-      const session = sessionRecoveryService.getSession(workspaceId, sessionId);
-      if (session?.lastAgent === 'claude') {
+    if (/^\/clear\b/.test(command)) {
+      const recovery = sessionRecoveryService.getSession(workspaceId, sessionId);
+      if (recovery?.lastAgent === 'claude') {
         logger.info('Detected /clear command, re-capturing conversation', { sessionId });
-        // Snapshot BEFORE clear creates new file
         const existingFiles = this.snapshotConversationFiles();
         setTimeout(() => {
-          this.captureConversationId(workspaceId, sessionId, session.worktreePath || config.cwd, existingFiles);
+          this.captureConversationId(
+            workspaceId,
+            sessionId,
+            recovery.lastAgentCwd || recovery.lastCwd || cwd,
+            existingFiles
+          );
         }, 2000);
       }
-    } else if (/\/compact\b/.test(data)) {
-      const session = sessionRecoveryService.getSession(workspaceId, sessionId);
-      if (session?.lastAgent === 'claude') {
+    } else if (/^\/compact\b/.test(command)) {
+      const recovery = sessionRecoveryService.getSession(workspaceId, sessionId);
+      if (recovery?.lastAgent === 'claude') {
         logger.info('Detected /compact command, re-capturing conversation after 2min', { sessionId });
-        // /compact modifies existing file, can take 1-2 minutes
         setTimeout(() => {
-          this.captureConversationId(workspaceId, sessionId, session.worktreePath || config.cwd);
+          this.captureConversationId(workspaceId, sessionId, recovery.lastAgentCwd || recovery.lastCwd || cwd);
         }, 120000);  // 2 minutes
       }
     }
@@ -790,14 +803,460 @@ class SessionManager extends EventEmitter {
       { pattern: /cargo\s+run/, cmd: 'cargo run' }
     ];
 
-    if (config.type === 'server') {
+    if (config?.type === 'server' || session.type === 'server') {
       for (const { pattern, cmd } of serverPatterns) {
-        if (pattern.test(data)) {
+        if (pattern.test(command)) {
           sessionRecoveryService.updateServer(workspaceId, sessionId, cmd);
+          if (cwd) {
+            sessionRecoveryService.updateSession(workspaceId, sessionId, { lastCwd: cwd });
+          }
           break;
         }
       }
     }
+  }
+
+  handleTerminalOutput(sessionId, data) {
+    const session = this.sessions.get(sessionId);
+    if (!session || !data) return;
+
+    const oscCwd = this.extractOsc7Cwd(data);
+    if (oscCwd) {
+      this.updateSessionCwd(session, oscCwd, 'osc7');
+    }
+  }
+
+  handleCommandExecution(sessionId, command) {
+    const session = this.sessions.get(sessionId);
+    if (!session || !command) return;
+
+    const trimmed = command.trim();
+    if (!trimmed) return;
+
+    const parts = this.splitCommandChain(trimmed);
+    for (const part of parts) {
+      const tokens = this.tokenizeCommand(part);
+      if (!tokens.length) continue;
+
+      const details = this.extractCommandDetails(tokens);
+      if (!details?.commandName) continue;
+
+      const baseCommand = path.basename(details.commandName).toLowerCase();
+
+      if (baseCommand === 'cd') {
+        this.applyCdCommand(session, details.args);
+        continue;
+      }
+
+      if (baseCommand === 'pushd') {
+        this.applyPushdCommand(session, details.args);
+        continue;
+      }
+
+      if (baseCommand === 'popd') {
+        this.applyPopdCommand(session);
+        continue;
+      }
+
+      this.handleGitCommand(session, baseCommand, details.args, part);
+
+      const effectiveCwd = this.getSessionCwd(session);
+      this.trackSessionState(sessionId, part, session.config || {}, effectiveCwd, baseCommand, details.args);
+    }
+  }
+
+  handleGitCommand(session, baseCommand, args, command) {
+    if (!session || baseCommand !== 'git') return;
+
+    const subCommand = (args[0] || '').toLowerCase();
+    const normalizedSub = subCommand === 'co' ? 'checkout' : subCommand === 'sw' ? 'switch' : subCommand;
+    const gitCommands = [
+      'checkout',
+      'switch',
+      'branch',
+      'merge',
+      'pull',
+      'fetch',
+      'rebase',
+      'reset',
+      'cherry-pick'
+    ];
+
+    if (!gitCommands.includes(normalizedSub)) {
+      return;
+    }
+
+    logger.info('🎉 Detected git command execution', {
+      sessionId: session.id,
+      command: command.substring(0, 50),
+      worktreeId: session.worktreeId,
+      timestamp: new Date().toISOString()
+    });
+
+    if (this.gitHelper) {
+      this.gitHelper.clearCacheForPath(this.getSessionCwd(session));
+    }
+
+    const delay = /pull|fetch|merge/.test(command) ? 500 : 200;
+    setTimeout(() => {
+      logger.info('⏰ Triggering branch update after git command', {
+        sessionId: session.id,
+        worktreeId: session.worktreeId,
+        delay: `${delay}ms`
+      });
+      this.updateGitBranch(session.worktreeId, this.getSessionCwd(session), true);
+    }, delay);
+  }
+
+  splitCommandChain(command) {
+    const parts = [];
+    let current = '';
+    let quote = null;
+    let escape = false;
+
+    for (let i = 0; i < command.length; i++) {
+      const ch = command[i];
+
+      if (escape) {
+        current += ch;
+        escape = false;
+        continue;
+      }
+
+      if (ch === '\\') {
+        escape = true;
+        current += ch;
+        continue;
+      }
+
+      if (quote) {
+        if (ch === quote) {
+          quote = null;
+        }
+        current += ch;
+        continue;
+      }
+
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        current += ch;
+        continue;
+      }
+
+      if (ch === ';') {
+        if (current.trim()) {
+          parts.push(current.trim());
+        }
+        current = '';
+        continue;
+      }
+
+      if (ch === '&' && command[i + 1] === '&') {
+        if (current.trim()) {
+          parts.push(current.trim());
+        }
+        current = '';
+        i += 1;
+        continue;
+      }
+
+      current += ch;
+    }
+
+    if (current.trim()) {
+      parts.push(current.trim());
+    }
+
+    return parts;
+  }
+
+  tokenizeCommand(command) {
+    const tokens = [];
+    let current = '';
+    let quote = null;
+    let escape = false;
+
+    for (let i = 0; i < command.length; i++) {
+      const ch = command[i];
+
+      if (escape) {
+        current += ch;
+        escape = false;
+        continue;
+      }
+
+      if (ch === '\\') {
+        escape = true;
+        continue;
+      }
+
+      if (quote) {
+        if (ch === quote) {
+          quote = null;
+        } else {
+          current += ch;
+        }
+        continue;
+      }
+
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        continue;
+      }
+
+      if (/\s/.test(ch)) {
+        if (current) {
+          tokens.push(current);
+          current = '';
+        }
+        continue;
+      }
+
+      current += ch;
+    }
+
+    if (current) {
+      tokens.push(current);
+    }
+
+    return tokens;
+  }
+
+  extractCommandDetails(tokens) {
+    let index = 0;
+
+    while (index < tokens.length && this.isEnvAssignment(tokens[index])) {
+      index += 1;
+    }
+
+    if (tokens[index] === 'env') {
+      index += 1;
+      while (index < tokens.length && this.isEnvAssignment(tokens[index])) {
+        index += 1;
+      }
+    }
+
+    if (['command', 'builtin', 'exec'].includes(tokens[index])) {
+      index += 1;
+    }
+
+    if (['sudo', 'doas'].includes(tokens[index])) {
+      index += 1;
+      while (index < tokens.length && tokens[index].startsWith('-')) {
+        index += 1;
+      }
+    }
+
+    const commandName = tokens[index];
+    const args = tokens.slice(index + 1);
+
+    return { commandName, args };
+  }
+
+  isEnvAssignment(token) {
+    return /^[A-Za-z_][A-Za-z0-9_]*=/.test(token);
+  }
+
+  applyCdCommand(session, args) {
+    const target = this.resolveCdTarget(session, args);
+    if (!target) return;
+
+    if (!fs.existsSync(target)) return;
+
+    this.updateSessionCwd(session, target, 'cd');
+  }
+
+  applyPushdCommand(session, args) {
+    const target = this.resolveCdTarget(session, args);
+    if (!target) return;
+
+    if (!fs.existsSync(target)) return;
+
+    const state = session.cwdState || { current: session.config?.cwd || process.cwd(), previous: null, stack: [] };
+    state.stack = state.stack || [];
+    state.stack.push(state.current);
+    this.updateSessionCwd(session, target, 'pushd');
+  }
+
+  applyPopdCommand(session) {
+    const state = session.cwdState;
+    if (!state?.stack || state.stack.length === 0) return;
+
+    const target = state.stack.pop();
+    if (!target) return;
+
+    this.updateSessionCwd(session, target, 'popd');
+  }
+
+  resolveCdTarget(session, args = []) {
+    const state = session.cwdState || { current: session.config?.cwd || process.cwd(), previous: null, stack: [] };
+    session.cwdState = state;
+
+    const home = process.env.HOME || '';
+    const targetArg = args.find(arg => arg === '-' || !arg.startsWith('-'));
+    const rawTarget = targetArg || home;
+
+    if (!rawTarget) return null;
+
+    if (rawTarget === '-') {
+      return state.previous || state.current;
+    }
+
+    if (rawTarget === '~' || rawTarget.startsWith('~/')) {
+      return path.join(home, rawTarget.replace(/^~\/?/, ''));
+    }
+
+    if (rawTarget.startsWith('$HOME')) {
+      return path.join(home, rawTarget.replace(/^\$HOME\/?/, ''));
+    }
+
+    if (rawTarget.startsWith('${HOME}')) {
+      return path.join(home, rawTarget.replace(/^\$\{HOME\}\/?/, ''));
+    }
+
+    if (path.isAbsolute(rawTarget)) {
+      return rawTarget;
+    }
+
+    return path.resolve(state.current || home, rawTarget);
+  }
+
+  getSessionCwd(session) {
+    return session?.cwdState?.current || session?.config?.cwd || process.cwd();
+  }
+
+  updateSessionCwd(session, cwd, source = 'unknown') {
+    if (!session || !cwd) return;
+
+    const normalized = path.resolve(cwd);
+    const state = session.cwdState || { current: session.config?.cwd || process.cwd(), previous: null, stack: [] };
+
+    if (state.current === normalized) {
+      session.cwdState = state;
+      return;
+    }
+
+    state.previous = state.current;
+    state.current = normalized;
+    session.cwdState = state;
+
+    if (session.workspace) {
+      sessionRecoveryService.updateSession(session.workspace, session.id, {
+        lastCwd: normalized,
+        lastCwdSource: source
+      });
+    }
+  }
+
+  detectAgentFromCommand(commandName, commandArgs = [], fullCommand = '') {
+    if (!commandName && fullCommand) {
+      const tokens = this.tokenizeCommand(fullCommand);
+      const details = this.extractCommandDetails(tokens);
+      if (details?.commandName) {
+        return this.detectAgentFromCommand(details.commandName, details.args, fullCommand);
+      }
+      return null;
+    }
+
+    if (!commandName) return null;
+
+    const base = path.basename(commandName).toLowerCase();
+    const knownAgents = new Map();
+
+    if (this.agentManager) {
+      for (const agent of this.agentManager.getAllAgents()) {
+        if (!agent?.baseCommand) continue;
+        const agentBase = path.basename(agent.baseCommand).toLowerCase();
+        knownAgents.set(agentBase, agent.id);
+      }
+    }
+
+    knownAgents.set('opencode', 'opencode');
+    knownAgents.set('aider', 'aider');
+
+    if (knownAgents.has(base)) {
+      return knownAgents.get(base);
+    }
+
+    const wrapperCommands = ['npx', 'bunx', 'pnpm', 'yarn', 'npm'];
+    if (wrapperCommands.includes(base) && commandArgs.length > 0) {
+      let candidate = commandArgs[0];
+
+      if ((base === 'npm' || base === 'pnpm') && candidate === 'exec') {
+        candidate = commandArgs[1];
+      } else if (base === 'pnpm' && candidate === 'dlx') {
+        candidate = commandArgs[1];
+      }
+
+      if (candidate) {
+        const candidateBase = path.basename(candidate).toLowerCase();
+        if (knownAgents.has(candidateBase)) {
+          return knownAgents.get(candidateBase);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  detectAgentMode(agent, commandName, commandArgs = [], fullCommand = '') {
+    if (!agent) return null;
+
+    const lower = fullCommand.toLowerCase();
+    if (lower.includes('--continue')) return 'continue';
+    if (lower.includes('--resume')) return 'resume';
+
+    const base = (commandName || '').toLowerCase();
+    if ((base === 'codex' || base === 'claude') && commandArgs.length > 0) {
+      const firstArg = commandArgs[0].toLowerCase();
+      if (firstArg === 'resume') return 'resume';
+      if (firstArg === 'continue') return 'continue';
+    }
+
+    return 'fresh';
+  }
+
+  truncateCommandForLog(command) {
+    if (!command) return '';
+    return command.length > 120 ? `${command.slice(0, 117)}...` : command;
+  }
+
+  sanitizeInputData(data) {
+    if (!data) return '';
+    let sanitized = data.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
+    sanitized = sanitized.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '');
+    sanitized = sanitized.replace(/\x1b[()][A-Za-z0-9]/g, '');
+    return sanitized;
+  }
+
+  extractOsc7Cwd(data) {
+    const regex = /\x1b]7;file:\/\/([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
+    let match;
+    let latest = null;
+
+    while ((match = regex.exec(data)) !== null) {
+      const uri = match[1];
+      if (!uri) continue;
+
+      let pathStart = uri.indexOf('/');
+      if (pathStart === -1) continue;
+
+      let cwd = uri.slice(pathStart);
+      const homeIndex = cwd.indexOf('/home/');
+      if (homeIndex >= 0) {
+        cwd = cwd.slice(homeIndex);
+      }
+
+      try {
+        cwd = decodeURIComponent(cwd);
+      } catch (error) {
+        // Ignore decode errors, use raw path
+      }
+
+      latest = cwd;
+    }
+
+    return latest;
   }
 
   /**
@@ -843,6 +1302,7 @@ class SessionManager extends EventEmitter {
    * /home/<user>/foo → -home-ab-foo
    */
   pathToFolderName(p) {
+    if (!p) return '';
     return p.replace(/\//g, '-');
   }
 
@@ -855,6 +1315,11 @@ class SessionManager extends EventEmitter {
    * So we check against known paths (worktree, parent, home) and match folder names
    */
   captureConversationId(workspaceId, sessionId, worktreePath, existingFiles = null) {
+    if (!workspaceId || !sessionId || !worktreePath) {
+      logger.debug('captureConversationId skipped (missing info)', { workspaceId, sessionId, worktreePath });
+      return;
+    }
+
     logger.info('captureConversationId called', { workspaceId, sessionId, worktreePath });
     const fsSync = require('fs');
     const now = Date.now();
@@ -1001,64 +1466,36 @@ class SessionManager extends EventEmitter {
         this.emitStatusUpdate(sessionId, 'busy');
       }
       
-      // Track the current command being typed
       if (!session.currentCommand) {
         session.currentCommand = '';
       }
-      
-      // Build command string or reset on Enter
-      if (data === '\r' || data === '\n') {
-        // Command was executed, check if it was a git command
-        const command = session.currentCommand.trim();
-        
-        // Match various git commands that could change branches
-        const gitCommandPatterns = [
-          /^git\s+(checkout|switch|branch|merge|pull|fetch|rebase|reset|cherry-pick)/i,
-          /^git\s+co\s+/i,  // Common alias for checkout
-          /^git\s+sw\s+/i,  // Common alias for switch
-        ];
-        
-        const isGitCommand = gitCommandPatterns.some(pattern => pattern.test(command));
-        
-        if (isGitCommand) {
-          logger.info('🎉 Detected git command execution', { 
-            sessionId,
-            command: command.substring(0, 50),
-            worktreeId: session.worktreeId,
-            timestamp: new Date().toISOString()
-          });
-          
-          // Clear cache and schedule immediate branch refresh
-          if (this.gitHelper) {
-            this.gitHelper.clearCacheForPath(session.config.cwd);
+
+      const sanitizedInput = this.sanitizeInputData(data);
+      for (const char of sanitizedInput) {
+        if (char === '\r' || char === '\n') {
+          const command = session.currentCommand.trim();
+          if (command) {
+            this.handleCommandExecution(sessionId, command);
           }
-          
-          // Use a slightly longer delay for commands that might take time
-          const delay = command.includes('pull') || command.includes('fetch') || command.includes('merge') ? 500 : 200;
-          
-          setTimeout(() => {
-            logger.info('⏰ Triggering branch update after git command', { 
-              sessionId,
-              worktreeId: session.worktreeId,
-              delay: `${delay}ms`
-            });
-            this.updateGitBranch(session.worktreeId, session.config.cwd, true);
-          }, delay);
+          session.currentCommand = '';
+          continue;
         }
-        
-        // Reset command buffer after Enter
-        session.currentCommand = '';
-      } else if (data === '\x7f' || data === '\b') {
-        // Backspace - remove last character
-        if (session.currentCommand.length > 0) {
-          session.currentCommand = session.currentCommand.slice(0, -1);
+
+        if (char === '\x7f' || char === '\b') {
+          if (session.currentCommand.length > 0) {
+            session.currentCommand = session.currentCommand.slice(0, -1);
+          }
+          continue;
         }
-      } else if (data === '\x03') {
-        // Ctrl+C - clear command
-        session.currentCommand = '';
-      } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
-        // Regular character - add to command
-        session.currentCommand += data;
+
+        if (char === '\x03') {
+          session.currentCommand = '';
+          continue;
+        }
+
+        if (char.length === 1 && char.charCodeAt(0) >= 32) {
+          session.currentCommand += char;
+        }
       }
       
       return true;
