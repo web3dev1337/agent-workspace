@@ -30,7 +30,7 @@ const logger = winston.createLogger({
 class SessionRecoveryService {
   constructor() {
     this.states = new Map(); // workspaceId -> { sessionId -> state }
-    this.saveDebounce = null;
+    this.saveDebounce = new Map();
     this.initialized = false;
   }
 
@@ -77,11 +77,13 @@ class SessionRecoveryService {
    * Save recovery state for a workspace (debounced)
    */
   async saveWorkspaceState(workspaceId) {
-    if (this.saveDebounce) {
-      clearTimeout(this.saveDebounce);
+    const existing = this.saveDebounce.get(workspaceId);
+    if (existing) {
+      clearTimeout(existing);
     }
 
-    this.saveDebounce = setTimeout(async () => {
+    const timeout = setTimeout(async () => {
+      this.saveDebounce.delete(workspaceId);
       try {
         const sessions = this.states.get(workspaceId);
         if (!sessions) return;
@@ -99,6 +101,8 @@ class SessionRecoveryService {
         logger.error('Failed to save recovery state', { workspaceId, error: error.message });
       }
     }, 1000); // Debounce 1 second
+
+    this.saveDebounce.set(workspaceId, timeout);
   }
 
   /**
@@ -147,22 +151,36 @@ class SessionRecoveryService {
   /**
    * Update running process/agent for a session
    */
-  updateAgent(workspaceId, sessionId, agent, mode) {
-    return this.updateSession(workspaceId, sessionId, {
-      lastAgent: agent,  // 'claude', 'codex', 'opencode', etc.
-      lastMode: mode     // 'fresh', 'continue', 'resume'
-    });
+  updateAgent(workspaceId, sessionId, agent, modeOrMeta) {
+    const updates = {
+      lastAgent: agent  // 'claude', 'codex', 'opencode', etc.
+    };
+
+    if (modeOrMeta && typeof modeOrMeta === 'object') {
+      Object.assign(updates, modeOrMeta);
+    } else if (typeof modeOrMeta === 'string') {
+      updates.lastMode = modeOrMeta; // 'fresh', 'continue', 'resume'
+    }
+
+    return this.updateSession(workspaceId, sessionId, updates);
   }
 
   /**
    * Mark session as running a server
    */
-  updateServer(workspaceId, sessionId, command, port) {
-    return this.updateSession(workspaceId, sessionId, {
+  updateServer(workspaceId, sessionId, command, portOrMeta) {
+    const updates = {
       lastServerCommand: command,
-      lastServerPort: port,
       serverRunning: true
-    });
+    };
+
+    if (portOrMeta && typeof portOrMeta === 'object') {
+      Object.assign(updates, portOrMeta);
+    } else if (portOrMeta !== undefined) {
+      updates.lastServerPort = portOrMeta;
+    }
+
+    return this.updateSession(workspaceId, sessionId, updates);
   }
 
   /**
@@ -189,6 +207,12 @@ class SessionRecoveryService {
     const state = await this.loadWorkspaceState(workspaceId);
     const sessions = state.sessions || {};
     const fsSync = require('fs');
+    const candidateRoots = (cwd) => {
+      const roots = [];
+      if (cwd) roots.push(cwd);
+      if (cwd) roots.push(path.dirname(cwd));
+      return roots;
+    };
 
     // Build recovery info for each session - validate conversations exist
     const recoveryData = [];
@@ -200,18 +224,28 @@ class SessionRecoveryService {
 
       // For Claude sessions, validate the conversation file exists and has content
       let conversationValid = false;
-      if (s.lastAgent === 'claude' && s.lastConversationId && s.lastCwd) {
-        const folderName = s.lastCwd.replace(/\//g, '-');
-        const convPath = path.join(
-          process.env.HOME, '.claude', 'projects', folderName,
-          `${s.lastConversationId}.jsonl`
-        );
-        try {
-          const stats = fsSync.statSync(convPath);
-          conversationValid = stats.size > 0;  // Must have actual content
-        } catch (error) {
-          // File doesn't exist
-          conversationValid = false;
+      let conversationCwd = s.lastAgentCwd || s.lastCwd || s.worktreePath;
+      if (s.lastAgent === 'claude' && s.lastConversationId && conversationCwd) {
+        const roots = [...new Set([
+          ...(conversationCwd ? candidateRoots(conversationCwd) : []),
+          ...(s.worktreePath ? candidateRoots(s.worktreePath) : [])
+        ])];
+        for (const root of roots) {
+          const folderName = root.replace(/\//g, '-');
+          const convPath = path.join(
+            process.env.HOME, '.claude', 'projects', folderName,
+            `${s.lastConversationId}.jsonl`
+          );
+          try {
+            const stats = fsSync.statSync(convPath);
+            if (stats.size > 0) {
+              conversationValid = true;
+              conversationCwd = root;
+              break;
+            }
+          } catch (error) {
+            // Ignore missing files
+          }
         }
       }
 
@@ -227,7 +261,7 @@ class SessionRecoveryService {
 
       recoveryData.push({
         sessionId: s.sessionId,
-        lastCwd: s.lastCwd || s.worktreePath,
+        lastCwd: conversationCwd || s.worktreePath,
         lastAgent: s.lastAgent,
         lastConversationId: s.lastConversationId,
         worktreePath: s.worktreePath,
