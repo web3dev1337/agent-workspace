@@ -7,7 +7,6 @@ const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 const { UserSettingsService } = require('./userSettingsService');
 const { WorktreeHelper } = require('./worktreeHelper');
 const sessionRecoveryService = require('./sessionRecoveryService');
-const { ConversationService } = require('./conversationService');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -724,14 +723,14 @@ class SessionManager extends EventEmitter {
 
     for (const { pattern, agent } of agentPatterns) {
       if (pattern.test(data)) {
+        // Only track the agent type - conversation lookup happens at recovery time
         sessionRecoveryService.updateAgent(workspaceId, sessionId, agent);
 
-        // When agent starts, look up most recent conversation
-        // Use tracked CWD if available (user may have cd'd), otherwise use worktree path
-        const currentState = sessionRecoveryService.getSession(workspaceId, sessionId);
-        const searchPath = currentState?.lastCwd || config.cwd;
-        if (searchPath) {
-          this.lookupConversationForWorktree(workspaceId, sessionId, searchPath, agent);
+        // Store worktree path from config for recovery
+        if (config.cwd) {
+          sessionRecoveryService.updateSession(workspaceId, sessionId, {
+            worktreePath: config.cwd
+          });
         }
         break;
       }
@@ -767,71 +766,6 @@ class SessionManager extends EventEmitter {
           break;
         }
       }
-    }
-  }
-
-  /**
-   * Look up the most recent conversation for a worktree terminal
-   * Searches for conversations in the worktree path and parent folders
-   * The conversation metadata contains the actual CWD where Claude was launched
-   */
-  async lookupConversationForWorktree(workspaceId, sessionId, worktreePath, agent) {
-    try {
-      const conversationService = ConversationService.getInstance();
-
-      // Get all recent conversations and filter by path relevance
-      const index = await conversationService.getIndex();
-      if (!index || !index.conversations) return;
-
-      // Find conversations that match this worktree or its parent
-      // User could have cd'd up from work1 to zoo-game, so check both
-      const parentPath = path.dirname(worktreePath);
-
-      const relevant = index.conversations.filter(c => {
-        if (!c.cwd) return false;
-        // Match: exact worktree path OR subfolders within worktree
-        // Do NOT match parent folders - that would match ALL sibling worktrees
-        return c.cwd === worktreePath ||
-               c.cwd.startsWith(worktreePath + '/');
-      });
-
-      if (relevant.length === 0) {
-        logger.debug('No conversations found for worktree', { sessionId, worktreePath });
-        return;
-      }
-
-      // Sort by most recent first
-      relevant.sort((a, b) => {
-        const timeA = new Date(a.lastTimestamp || 0).getTime();
-        const timeB = new Date(b.lastTimestamp || 0).getTime();
-        return timeB - timeA;
-      });
-
-      // Get the most recent conversation
-      const mostRecent = relevant[0];
-
-      logger.info('Found conversation for recovery', {
-        sessionId,
-        worktreePath,
-        conversationId: mostRecent.id,
-        conversationCwd: mostRecent.cwd,
-        agent
-      });
-
-      // Update recovery state with conversation info
-      // The conversation's CWD is where Claude was actually launched from
-      sessionRecoveryService.updateSession(workspaceId, sessionId, {
-        lastCwd: mostRecent.cwd,
-        lastConversationId: mostRecent.id,
-        lastConversationPath: mostRecent.filepath,
-        lastAgent: agent,
-        worktreePath: worktreePath
-      });
-
-    } catch (error) {
-      logger.error('Failed to lookup conversation for worktree', {
-        sessionId, worktreePath, error: error.message
-      });
     }
   }
 
