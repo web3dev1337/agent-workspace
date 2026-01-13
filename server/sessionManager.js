@@ -7,6 +7,7 @@ const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 const { UserSettingsService } = require('./userSettingsService');
 const { WorktreeHelper } = require('./worktreeHelper');
 const sessionRecoveryService = require('./sessionRecoveryService');
+const { ConversationService } = require('./conversationService');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -737,24 +738,10 @@ class SessionManager extends EventEmitter {
         // Only track if it looks like a valid path
         if (cwd.startsWith('/') && !cwd.includes('\x1b')) {
           sessionRecoveryService.updateCwd(workspaceId, sessionId, cwd);
+
+          // Look up most recent conversation for this folder
+          this.lookupConversationForPath(workspaceId, sessionId, cwd);
         }
-        break;
-      }
-    }
-
-    // Detect Claude conversation ID from output
-    // Look for: "Resuming conversation: abc123" or conversation ID in various formats
-    const conversationPatterns = [
-      /conversation[:\s]+([a-f0-9]{8,})/i,
-      /resuming[:\s]+([a-f0-9-]{8,})/i,
-      /session[:\s]+([a-f0-9-]{8,})/i,
-      /\.claude\/projects\/[^\/]+\/([a-f0-9-]+)\.jsonl/
-    ];
-
-    for (const pattern of conversationPatterns) {
-      const match = data.match(pattern);
-      if (match && match[1]) {
-        sessionRecoveryService.updateConversation(workspaceId, sessionId, match[1]);
         break;
       }
     }
@@ -791,6 +778,33 @@ class SessionManager extends EventEmitter {
           break;
         }
       }
+    }
+  }
+
+  /**
+   * Look up the most recent conversation for a given path using ConversationService
+   */
+  async lookupConversationForPath(workspaceId, sessionId, cwd) {
+    try {
+      const conversationService = ConversationService.getInstance();
+      const conversations = await conversationService.getByFolder(cwd);
+
+      if (conversations && conversations.length > 0) {
+        // Sort by lastTimestamp descending to get most recent first
+        const sorted = conversations.sort((a, b) => {
+          const timeA = new Date(a.lastTimestamp || 0).getTime();
+          const timeB = new Date(b.lastTimestamp || 0).getTime();
+          return timeB - timeA;
+        });
+
+        const mostRecent = sorted[0];
+        if (mostRecent && mostRecent.id) {
+          logger.debug('Found conversation for path', { sessionId, cwd, conversationId: mostRecent.id });
+          sessionRecoveryService.updateConversation(workspaceId, sessionId, mostRecent.id, mostRecent.filepath);
+        }
+      }
+    } catch (error) {
+      logger.debug('Failed to lookup conversation for path', { sessionId, cwd, error: error.message });
     }
   }
 
