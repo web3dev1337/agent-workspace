@@ -51,6 +51,7 @@ const { WorktreeMetadataService } = require('./worktreeMetadataService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
+const sessionRecoveryService = require('./sessionRecoveryService');
 const multer = require('multer');
 
 // Configure multer for audio file uploads
@@ -170,11 +171,17 @@ async function initializeWorkspaceSystem() {
     logger.info('Initializing workspace system...');
     await workspaceManager.initialize();
 
+    // Initialize session recovery service
+    await sessionRecoveryService.init();
+
     const activeWorkspace = workspaceManager.getActiveWorkspace();
     if (activeWorkspace) {
       logger.info(`Active workspace: ${activeWorkspace.name}`);
       sessionManager.setWorkspace(activeWorkspace);
       workspaceInitialized = true;
+
+      // Load recovery state for active workspace
+      await sessionRecoveryService.loadWorkspaceState(activeWorkspace.id);
     } else {
       logger.warn('No active workspace found');
     }
@@ -1450,6 +1457,41 @@ app.post('/api/startup/install-windows', async (req, res) => {
     res.json(result);
   } catch (error) {
     logger.error('Failed to install Windows startup', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Session Recovery API
+app.get('/api/recovery/:workspaceId', async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const recoveryInfo = await sessionRecoveryService.getRecoveryInfo(workspaceId);
+    res.json(recoveryInfo);
+  } catch (error) {
+    logger.error('Failed to get recovery info', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/recovery/:workspaceId/:sessionId', async (req, res) => {
+  try {
+    const { workspaceId, sessionId } = req.params;
+    await sessionRecoveryService.loadWorkspaceState(workspaceId);
+    const session = sessionRecoveryService.getSession(workspaceId, sessionId);
+    res.json(session || { error: 'Session not found' });
+  } catch (error) {
+    logger.error('Failed to get session recovery info', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/recovery/:workspaceId', async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    await sessionRecoveryService.clearWorkspace(workspaceId);
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to clear recovery state', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
