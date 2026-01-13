@@ -4196,16 +4196,17 @@ class ClaudeOrchestrator {
 
       // Start agent with resume if conversation available and it's a claude terminal
       if (resumeConversation && lastConversationId && lastAgent === 'claude' && sessionId.includes('-claude')) {
-        console.log(`Resuming conversation: ${lastConversationId}`);
+        console.log(`Resuming conversation: ${lastConversationId} in ${lastCwd}`);
 
         // Use recovery-specific skipPermissions setting (defaults to true)
         const skipPermissions = recoverySettings.skipPermissions !== false;
         const yoloFlag = skipPermissions ? ' --dangerously-skip-permissions' : '';
 
-        // Single command: claude --resume with conversation ID
+        // CD to actual CWD (may differ from worktree if user cd'd before starting Claude)
+        // Then start claude with --resume
         this.socket.emit('terminal-input', {
           sessionId,
-          data: `claude --resume ${lastConversationId}${yoloFlag}\n`
+          data: `cd "${lastCwd}" && claude --resume ${lastConversationId}${yoloFlag}\n`
         });
 
         // Small delay between sessions

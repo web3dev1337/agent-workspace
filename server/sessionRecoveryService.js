@@ -199,16 +199,20 @@ class SessionRecoveryService {
       }
 
       let conversationId = null;
-      const cwd = s.worktreePath;
+      let actualCwd = s.worktreePath;  // Default to worktree path
 
-      // For Claude sessions, look up conversation directly from Claude's projects folder
-      if (s.lastAgent === 'claude' && cwd) {
-        conversationId = this.getLatestConversationId(cwd);
+      // For Claude sessions, look up conversation (checks worktree AND parent folder)
+      if (s.lastAgent === 'claude' && s.worktreePath) {
+        const result = this.getLatestConversation(s.worktreePath);
+        if (result) {
+          conversationId = result.conversationId;
+          actualCwd = result.actualCwd;  // Where Claude was actually started
+        }
       }
 
       recoveryData.push({
         sessionId: s.sessionId,
-        lastCwd: cwd,
+        lastCwd: actualCwd,  // Actual CWD where Claude was started (may differ from worktree)
         lastAgent: s.lastAgent,
         lastConversationId: conversationId,
         worktreePath: s.worktreePath,
@@ -227,40 +231,56 @@ class SessionRecoveryService {
   }
 
   /**
-   * Get the latest conversation ID for a given CWD
-   * Claude stores conversations in ~/.claude/projects/{path-with-dashes}/
+   * Get the latest conversation ID for a worktree path
+   * Checks both the worktree path AND its parent (user may have cd'd up)
+   * Returns { conversationId, actualCwd } where actualCwd is where Claude was started
    */
-  getLatestConversationId(cwd) {
+  getLatestConversation(worktreePath) {
     const fsSync = require('fs');
 
-    // Convert CWD to Claude's folder format: /home/<user>/foo → -home-ab-foo
-    const folderName = cwd.replace(/\//g, '-');
-    const projectsDir = path.join(process.env.HOME, '.claude', 'projects', folderName);
+    // Paths to check: worktree path and its parent (user may have cd'd up)
+    const parentPath = path.dirname(worktreePath);
+    const pathsToCheck = [worktreePath, parentPath];
 
-    try {
-      if (!fsSync.existsSync(projectsDir)) {
-        return null;
+    let bestMatch = null;
+    let bestMtime = 0;
+
+    for (const checkPath of pathsToCheck) {
+      // Convert path to Claude's folder format: /home/<user>/foo → -home-ab-foo
+      const folderName = checkPath.replace(/\//g, '-');
+      const projectsDir = path.join(process.env.HOME, '.claude', 'projects', folderName);
+
+      try {
+        if (!fsSync.existsSync(projectsDir)) {
+          continue;
+        }
+
+        // Get all .jsonl files and find the most recently modified
+        const files = fsSync.readdirSync(projectsDir)
+          .filter(f => f.endsWith('.jsonl'))
+          .map(f => {
+            const fullPath = path.join(projectsDir, f);
+            return {
+              name: f,
+              mtime: fsSync.statSync(fullPath).mtime.getTime()
+            };
+          });
+
+        for (const file of files) {
+          if (file.mtime > bestMtime) {
+            bestMtime = file.mtime;
+            bestMatch = {
+              conversationId: file.name.replace('.jsonl', ''),
+              actualCwd: checkPath  // The path where this conversation was started
+            };
+          }
+        }
+      } catch (error) {
+        logger.debug('Could not check path for conversations', { checkPath, error: error.message });
       }
-
-      // Get all .jsonl files and find the most recently modified
-      const files = fsSync.readdirSync(projectsDir)
-        .filter(f => f.endsWith('.jsonl'))
-        .map(f => ({
-          name: f,
-          mtime: fsSync.statSync(path.join(projectsDir, f)).mtime
-        }))
-        .sort((a, b) => b.mtime - a.mtime);
-
-      if (files.length === 0) {
-        return null;
-      }
-
-      // Return the conversation ID (filename without .jsonl)
-      return files[0].name.replace('.jsonl', '');
-    } catch (error) {
-      logger.debug('Could not get conversation for path', { cwd, error: error.message });
-      return null;
     }
+
+    return bestMatch;
   }
 
   /**
