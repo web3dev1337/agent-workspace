@@ -848,20 +848,23 @@ class SessionManager extends EventEmitter {
     const now = Date.now();
     const projectsBase = path.join(process.env.HOME, '.claude', 'projects');
 
-    // Build a map of folder names to actual paths we know about
-    // This is the ONLY reliable way since folder → path conversion is lossy
-    const knownPaths = [
-      worktreePath,
-      path.dirname(worktreePath),  // Parent folder (user may have cd'd up)
-      process.env.HOME,  // Home directory
-      path.join(process.env.HOME, 'GitHub'),  // Common location
-    ].filter(Boolean);
-
+    // Build a map of folder names to actual paths
+    // Include ALL paths from worktree up to home (entire hierarchy)
     const folderToPath = new Map();
-    for (const p of knownPaths) {
-      const folderName = this.pathToFolderName(p);
-      folderToPath.set(folderName, p);
+    const home = process.env.HOME;
+
+    // Add all parent paths from worktreePath up to home
+    let current = worktreePath;
+    while (current && current.length >= home.length) {
+      folderToPath.set(this.pathToFolderName(current), current);
+      const parent = path.dirname(current);
+      if (parent === current) break;  // Reached root
+      current = parent;
     }
+
+    // Also add ~/.claude in case user starts from there
+    const claudeDir = path.join(home, '.claude');
+    folderToPath.set(this.pathToFolderName(claudeDir), claudeDir);
 
     let bestMatch = null;
     const newFiles = [];
