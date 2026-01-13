@@ -731,13 +731,41 @@ class SessionManager extends EventEmitter {
             worktreePath: config.cwd
           });
 
+          // Snapshot existing conversation files BEFORE Claude starts
+          // This lets us find which NEW file was created
+          const existingFiles = this.snapshotConversationFiles();
+
           // Capture the conversation ID at this moment
           // Wait briefly for Claude to create the .jsonl file, then capture it
           setTimeout(() => {
-            this.captureConversationId(workspaceId, sessionId, config.cwd);
+            this.captureConversationId(workspaceId, sessionId, config.cwd, existingFiles);
           }, 2000);
         }
         break;
+      }
+    }
+
+    // Detect /clear and /compact commands which affect conversation state
+    // /clear creates a NEW conversation (fast) - use snapshot to find new file
+    // /compact modifies existing conversation file (can take a while)
+    if (/\/clear\b/.test(data)) {
+      const session = sessionRecoveryService.getSession(workspaceId, sessionId);
+      if (session?.lastAgent === 'claude') {
+        logger.info('Detected /clear command, re-capturing conversation', { sessionId });
+        // Snapshot BEFORE clear creates new file
+        const existingFiles = this.snapshotConversationFiles();
+        setTimeout(() => {
+          this.captureConversationId(workspaceId, sessionId, session.worktreePath || config.cwd, existingFiles);
+        }, 2000);
+      }
+    } else if (/\/compact\b/.test(data)) {
+      const session = sessionRecoveryService.getSession(workspaceId, sessionId);
+      if (session?.lastAgent === 'claude') {
+        logger.info('Detected /compact command, re-capturing conversation after 10s', { sessionId });
+        // /compact modifies existing file, so no snapshot needed - just find recently modified
+        setTimeout(() => {
+          this.captureConversationId(workspaceId, sessionId, session.worktreePath || config.cwd);
+        }, 10000);
       }
     }
 
@@ -762,60 +790,141 @@ class SessionManager extends EventEmitter {
   }
 
   /**
-   * Capture the conversation ID for a terminal at the moment Claude starts
-   * Finds the most recently modified .jsonl file in the Claude projects folder
+   * Snapshot all existing conversation files
+   * Used to detect NEW files created after Claude starts
+   * Returns a Set of full paths
    */
-  captureConversationId(workspaceId, sessionId, cwd) {
+  snapshotConversationFiles() {
     const fsSync = require('fs');
-
-    // Convert CWD to Claude's folder format: /home/ab/foo → -home-ab-foo
-    const folderName = cwd.replace(/\//g, '-');
-    const projectsDir = path.join(process.env.HOME, '.claude', 'projects', folderName);
+    const projectsBase = path.join(process.env.HOME, '.claude', 'projects');
+    const existing = new Set();
 
     try {
-      if (!fsSync.existsSync(projectsDir)) {
-        logger.debug('Claude projects folder not found', { sessionId, projectsDir });
-        return;
+      if (!fsSync.existsSync(projectsBase)) {
+        return existing;
       }
 
-      // Find the most recently modified .jsonl file (created in last 30 seconds)
-      const now = Date.now();
-      const files = fsSync.readdirSync(projectsDir)
-        .filter(f => f.endsWith('.jsonl'))
-        .map(f => {
-          const fullPath = path.join(projectsDir, f);
-          const stats = fsSync.statSync(fullPath);
-          return {
-            name: f,
-            mtime: stats.mtime.getTime(),
-            age: now - stats.mtime.getTime()
-          };
-        })
-        .filter(f => f.age < 30000)  // Modified in last 30 seconds
-        .sort((a, b) => a.age - b.age);  // Most recent first
+      const folders = fsSync.readdirSync(projectsBase, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name);
 
-      if (files.length === 0) {
-        logger.debug('No recent conversation file found', { sessionId, cwd });
-        return;
+      for (const folder of folders) {
+        const projectsDir = path.join(projectsBase, folder);
+        try {
+          const files = fsSync.readdirSync(projectsDir)
+            .filter(f => f.endsWith('.jsonl'));
+          for (const file of files) {
+            existing.add(path.join(projectsDir, file));
+          }
+        } catch (error) {
+          // Skip folders we can't read
+        }
       }
-
-      const conversationId = files[0].name.replace('.jsonl', '');
-      logger.info('Captured conversation ID for session', {
-        sessionId,
-        conversationId,
-        cwd,
-        age: files[0].age
-      });
-
-      sessionRecoveryService.updateSession(workspaceId, sessionId, {
-        lastConversationId: conversationId,
-        lastCwd: cwd
-      });
     } catch (error) {
-      logger.error('Failed to capture conversation ID', {
-        sessionId, cwd, error: error.message
+      logger.debug('Error snapshotting conversation files', { error: error.message });
+    }
+
+    return existing;
+  }
+
+  /**
+   * Capture the conversation ID for a terminal at the moment Claude starts
+   * Scans ALL folders in ~/.claude/projects/ for NEW or recently modified .jsonl files
+   * Uses existingFiles snapshot to identify truly NEW files (avoids race conditions)
+   */
+  captureConversationId(workspaceId, sessionId, worktreePath, existingFiles = null) {
+    const fsSync = require('fs');
+    const now = Date.now();
+    const projectsBase = path.join(process.env.HOME, '.claude', 'projects');
+
+    let bestMatch = null;
+    const newFiles = [];
+
+    try {
+      if (!fsSync.existsSync(projectsBase)) {
+        logger.debug('Claude projects folder not found', { projectsBase });
+        return;
+      }
+
+      // Scan ALL folders in ~/.claude/projects/
+      const folders = fsSync.readdirSync(projectsBase, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name);
+
+      for (const folder of folders) {
+        const projectsDir = path.join(projectsBase, folder);
+
+        try {
+          // Find .jsonl files
+          const files = fsSync.readdirSync(projectsDir)
+            .filter(f => f.endsWith('.jsonl'))
+            .map(f => {
+              const fullPath = path.join(projectsDir, f);
+              const stats = fsSync.statSync(fullPath);
+              // Convert folder name back to path: -home-ab-foo → /home/ab/foo
+              const cwd = '/' + folder.substring(1).replace(/-/g, '/');
+              const isNew = existingFiles ? !existingFiles.has(fullPath) : false;
+              return {
+                name: f,
+                fullPath: fullPath,
+                mtime: stats.mtime.getTime(),
+                age: now - stats.mtime.getTime(),
+                cwd: cwd,
+                folder: folder,
+                isNew: isNew
+              };
+            });
+
+          // Prefer NEW files (didn't exist before), otherwise use recently modified
+          for (const file of files) {
+            if (file.isNew) {
+              newFiles.push(file);
+            } else if (file.age < 30000) {  // Modified in last 30 seconds
+              if (!bestMatch || file.age < bestMatch.age) {
+                bestMatch = file;
+              }
+            }
+          }
+        } catch (error) {
+          // Skip folders we can't read
+        }
+      }
+    } catch (error) {
+      logger.error('Error scanning projects folders', { error: error.message });
+      return;
+    }
+
+    // Prefer NEW files over modified files (more reliable for identifying THIS session's conversation)
+    if (newFiles.length > 0) {
+      // If multiple new files, pick the one with smallest age (most recently modified)
+      newFiles.sort((a, b) => a.age - b.age);
+      bestMatch = newFiles[0];
+      logger.debug('Found NEW conversation file', {
+        sessionId,
+        newFilesCount: newFiles.length,
+        picked: bestMatch.name
       });
     }
+
+    if (!bestMatch) {
+      logger.debug('No recent conversation file found', { sessionId, worktreePath });
+      return;
+    }
+
+    const conversationId = bestMatch.name.replace('.jsonl', '');
+    logger.info('Captured conversation ID for session', {
+      sessionId,
+      conversationId,
+      actualCwd: bestMatch.cwd,
+      worktreePath,
+      age: bestMatch.age,
+      isNew: bestMatch.isNew
+    });
+
+    sessionRecoveryService.updateSession(workspaceId, sessionId, {
+      lastConversationId: conversationId,
+      lastCwd: bestMatch.cwd  // The ACTUAL cwd where Claude was started
+    });
   }
 
   writeToSession(sessionId, data) {
