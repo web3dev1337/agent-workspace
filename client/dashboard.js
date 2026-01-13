@@ -275,6 +275,18 @@ class Dashboard {
   async openWorkspace(workspaceId) {
     console.log('Opening workspace:', workspaceId);
 
+    // Check for recovery state first
+    const recoveryInfo = await this.checkRecoveryState(workspaceId);
+    if (recoveryInfo && recoveryInfo.recoverableSessions > 0) {
+      // Show recovery dialog and wait for user choice
+      const shouldRecover = await this.showRecoveryDialog(workspaceId, recoveryInfo);
+      if (shouldRecover === 'cancel') {
+        return; // User cancelled
+      }
+      // shouldRecover contains { sessions: [...], mode: 'all' | 'selected' | 'skip' }
+      this.pendingRecovery = shouldRecover;
+    }
+
     // Show loading state
     const card = document.querySelector(`[data-workspace-id="${workspaceId}"]`);
     if (card) {
@@ -511,6 +523,118 @@ class Dashboard {
       console.error('Failed to install Windows startup:', error);
       alert('❌ Setup Failed\n\n' + error.message);
     }
+  }
+
+  async checkRecoveryState(workspaceId) {
+    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
+                      window.location.port === '2081' ? 'http://localhost:4000' :
+                      window.location.origin;
+
+    try {
+      const response = await fetch(`${serverUrl}/api/recovery/${encodeURIComponent(workspaceId)}`);
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Failed to check recovery state:', error);
+    }
+    return null;
+  }
+
+  showRecoveryDialog(workspaceId, recoveryInfo) {
+    return new Promise((resolve) => {
+      // Remove existing dialog
+      const existing = document.getElementById('recovery-dialog');
+      if (existing) existing.remove();
+
+      const sessions = recoveryInfo.sessions || [];
+      const savedAt = recoveryInfo.savedAt ? new Date(recoveryInfo.savedAt).toLocaleString() : 'Unknown';
+
+      const modal = document.createElement('div');
+      modal.id = 'recovery-dialog';
+      modal.className = 'modal recovery-modal';
+      modal.innerHTML = `
+        <div class="modal-content">
+          <div class="recovery-header">
+            <h2>🔄 Session Recovery</h2>
+            <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
+          </div>
+          <div class="recovery-info">
+            Found ${sessions.length} recoverable session${sessions.length !== 1 ? 's' : ''} from ${savedAt}
+          </div>
+          <div class="recovery-sessions">
+            ${sessions.length === 0 ? '<div class="no-recovery">No sessions to recover</div>' :
+              sessions.map((s, i) => `
+                <div class="recovery-session" data-session-id="${s.sessionId}">
+                  <input type="checkbox" class="recovery-checkbox" id="recover-${i}" checked>
+                  <label for="recover-${i}" class="recovery-session-info">
+                    <div class="recovery-session-id">${s.sessionId}</div>
+                    <div class="recovery-session-details">
+                      ${s.lastCwd ? `<span class="recovery-session-cwd">📁 ${s.lastCwd.split('/').slice(-2).join('/')}</span>` : ''}
+                      ${s.lastAgent ? `<span class="recovery-session-agent">${s.lastAgent}</span>` : ''}
+                      ${s.lastConversationId ? `<span>💬 ${s.lastConversationId.slice(0, 8)}...</span>` : ''}
+                    </div>
+                  </label>
+                </div>
+              `).join('')}
+          </div>
+          <div class="recovery-footer">
+            <button class="btn-recovery btn-recovery-skip" id="recovery-skip">
+              Skip Recovery
+            </button>
+            <div class="recovery-actions">
+              <button class="btn-recovery btn-recovery-selected" id="recovery-selected">
+                Recover Selected
+              </button>
+              <button class="btn-recovery btn-recovery-all" id="recovery-all">
+                Recover All
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      // Event handlers
+      modal.querySelector('.close-btn').onclick = () => {
+        modal.remove();
+        resolve('cancel');
+      };
+
+      modal.querySelector('#recovery-skip').onclick = () => {
+        modal.remove();
+        resolve({ mode: 'skip', sessions: [] });
+      };
+
+      modal.querySelector('#recovery-selected').onclick = () => {
+        const selected = [];
+        modal.querySelectorAll('.recovery-session').forEach(el => {
+          const checkbox = el.querySelector('.recovery-checkbox');
+          if (checkbox.checked) {
+            selected.push(sessions.find(s => s.sessionId === el.dataset.sessionId));
+          }
+        });
+        modal.remove();
+        resolve({ mode: 'selected', sessions: selected });
+      };
+
+      modal.querySelector('#recovery-all').onclick = () => {
+        modal.remove();
+        resolve({ mode: 'all', sessions: sessions });
+      };
+
+      // Toggle selection on row click
+      modal.querySelectorAll('.recovery-session').forEach(el => {
+        el.onclick = (e) => {
+          if (e.target.tagName !== 'INPUT') {
+            const checkbox = el.querySelector('.recovery-checkbox');
+            checkbox.checked = !checkbox.checked;
+            el.classList.toggle('selected', checkbox.checked);
+          }
+        };
+      });
+    });
   }
 }
 
