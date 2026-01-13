@@ -714,10 +714,15 @@ class SessionManager extends EventEmitter {
     if (!workspaceId) return;
 
     // Detect CWD from bash prompt (common formats)
-    // Matches: ~/path$, /home/user/path$, user@host:~/path$, etc.
+    // Matches: ~/path$, /home/user/path$, user@host:~/path$, HOST:~/path$, etc.
     const cwdPatterns = [
-      /(?:^|\n)(?:\x1b\[[0-9;]*m)*(?:\w+@[\w-]+:)?([~\/][^\$\#\n\r]*?)[\$\#]\s*(?:\x1b\[[0-9;]*m)*$/,
+      // user@host:path$ or HOST:path$ format
+      /(?:^|\n)(?:\x1b\[[0-9;]*m)*(?:\w+@)?[\w-]+:([~\/][^\$\#\n\r]*?)[\$\#]\s*(?:\x1b\[[0-9;]*m)*$/,
+      // Simple path$ format
+      /(?:^|\n)(?:\x1b\[[0-9;]*m)*([~\/][^\$\#\n\r\s]{2,}?)[\$\#]\s*(?:\x1b\[[0-9;]*m)*$/,
+      // [brackets] path$ format
       /(?:^|\n)(?:\x1b\[[0-9;]*m)*\[.*?\]\s*([~\/][^\]]*?)\s*[\$\#]/,
+      // pwd command output
       /(?:^|\n)pwd\r?\n([\/~][^\r\n]+)/
     ];
 
