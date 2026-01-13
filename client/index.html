@@ -224,6 +224,33 @@
                     </label>
                 </div>
 
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="session-recovery-enabled" />
+                        <strong>Session Recovery</strong>
+                        <small>Track session state for recovery after crashes</small>
+                    </label>
+                </div>
+
+                <div class="setting-group" id="session-recovery-options" style="margin-left: 20px; display: none;">
+                    <label>
+                        <strong>Recovery Mode:</strong>
+                        <select id="session-recovery-mode">
+                            <option value="ask">Ask - Show recovery dialog</option>
+                            <option value="auto">Auto - Automatically recover all</option>
+                            <option value="skip">Skip - Never show recovery dialog</option>
+                        </select>
+                    </label>
+                    <label style="margin-top: 10px;">
+                        <input type="checkbox" id="recovery-resume-cwd" checked />
+                        <span>Restore last working directory</span>
+                    </label>
+                    <label>
+                        <input type="checkbox" id="recovery-resume-conversation" checked />
+                        <span>Resume last conversation (if available)</span>
+                    </label>
+                </div>
+
                 <div class="setting-group per-terminal-settings" id="per-terminal-settings">
                     <h5>Per-Terminal Overrides</h5>
                     <p class="setting-description">Override global settings for specific terminals (requires terminal restart)</p>

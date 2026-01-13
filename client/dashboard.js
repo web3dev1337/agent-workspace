@@ -275,16 +275,29 @@ class Dashboard {
   async openWorkspace(workspaceId) {
     console.log('Opening workspace:', workspaceId);
 
-    // Check for recovery state first
-    const recoveryInfo = await this.checkRecoveryState(workspaceId);
-    if (recoveryInfo && recoveryInfo.recoverableSessions > 0) {
-      // Show recovery dialog and wait for user choice
-      const shouldRecover = await this.showRecoveryDialog(workspaceId, recoveryInfo);
-      if (shouldRecover === 'cancel') {
-        return; // User cancelled
+    // Get recovery settings
+    const recoverySettings = this.orchestrator.userSettings?.global?.sessionRecovery || {};
+    const recoveryEnabled = recoverySettings.enabled !== false;
+    const recoveryMode = recoverySettings.mode || 'ask';
+
+    // Check for recovery state first (if enabled)
+    if (recoveryEnabled) {
+      const recoveryInfo = await this.checkRecoveryState(workspaceId);
+      if (recoveryInfo && recoveryInfo.recoverableSessions > 0) {
+        if (recoveryMode === 'auto') {
+          // Auto-recover all sessions
+          this.pendingRecovery = { mode: 'all', sessions: recoveryInfo.sessions };
+          console.log('Auto-recovering all sessions');
+        } else if (recoveryMode === 'ask') {
+          // Show recovery dialog and wait for user choice
+          const shouldRecover = await this.showRecoveryDialog(workspaceId, recoveryInfo);
+          if (shouldRecover === 'cancel') {
+            return; // User cancelled
+          }
+          this.pendingRecovery = shouldRecover;
+        }
+        // If mode === 'skip', don't set pendingRecovery
       }
-      // shouldRecover contains { sessions: [...], mode: 'all' | 'selected' | 'skip' }
-      this.pendingRecovery = shouldRecover;
     }
 
     // Show loading state

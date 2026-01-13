@@ -790,6 +790,40 @@ class ClaudeOrchestrator {
       });
     }
 
+    // Session recovery settings
+    const sessionRecoveryEnabled = document.getElementById('session-recovery-enabled');
+    const sessionRecoveryOptions = document.getElementById('session-recovery-options');
+
+    if (sessionRecoveryEnabled) {
+      sessionRecoveryEnabled.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('sessionRecovery.enabled', e.target.checked);
+        if (sessionRecoveryOptions) {
+          sessionRecoveryOptions.style.display = e.target.checked ? 'block' : 'none';
+        }
+      });
+    }
+
+    const sessionRecoveryMode = document.getElementById('session-recovery-mode');
+    if (sessionRecoveryMode) {
+      sessionRecoveryMode.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('sessionRecovery.mode', e.target.value);
+      });
+    }
+
+    const recoveryResumeCwd = document.getElementById('recovery-resume-cwd');
+    if (recoveryResumeCwd) {
+      recoveryResumeCwd.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('sessionRecovery.resumeCwd', e.target.checked);
+      });
+    }
+
+    const recoveryResumeConversation = document.getElementById('recovery-resume-conversation');
+    if (recoveryResumeConversation) {
+      recoveryResumeConversation.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('sessionRecovery.resumeConversation', e.target.checked);
+      });
+    }
+
     // Template management buttons
     document.getElementById('reset-to-defaults').addEventListener('click', () => {
       this.resetToDefaults();
@@ -927,6 +961,14 @@ class ClaudeOrchestrator {
     setTimeout(() => {
       this.checkAndApplyAutoStart();
     }, 2000);
+
+    // Apply session recovery if pending
+    if (this.dashboard?.pendingRecovery && this.dashboard.pendingRecovery.mode !== 'skip') {
+      setTimeout(() => {
+        this.applySessionRecovery(this.dashboard.pendingRecovery);
+        this.dashboard.pendingRecovery = null;
+      }, 1000);
+    }
 
     // Update voice command context with session info
     this.updateVoiceContext();
@@ -4108,7 +4150,61 @@ class ClaudeOrchestrator {
     
     return { cols: Math.max(80, cols), rows: Math.max(24, rows) };
   }
-  
+
+  /**
+   * Apply session recovery - cd to last directory and optionally resume conversation
+   */
+  async applySessionRecovery(recovery) {
+    if (!recovery || !recovery.sessions || recovery.sessions.length === 0) {
+      console.log('No sessions to recover');
+      return;
+    }
+
+    console.log('Applying session recovery:', recovery);
+    const recoverySettings = this.userSettings?.global?.sessionRecovery || {};
+    const resumeCwd = recoverySettings.resumeCwd !== false;
+    const resumeConversation = recoverySettings.resumeConversation !== false;
+
+    for (const session of recovery.sessions) {
+      const { sessionId, lastCwd, lastAgent, lastConversationId } = session;
+
+      // Find the terminal for this session
+      if (!this.sessions.has(sessionId)) {
+        console.log(`Session ${sessionId} not found, skipping recovery`);
+        continue;
+      }
+
+      console.log(`Recovering session ${sessionId}:`, { lastCwd, lastAgent, lastConversationId });
+
+      // CD to last directory if enabled and available
+      if (resumeCwd && lastCwd) {
+        console.log(`Changing directory to: ${lastCwd}`);
+        this.socket.emit('terminal-input', {
+          sessionId,
+          data: `cd "${lastCwd}"\n`
+        });
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      // Start agent with resume if enabled, conversation available, and it's a claude terminal
+      if (resumeConversation && lastConversationId && lastAgent === 'claude' && sessionId.includes('-claude')) {
+        console.log(`Resuming conversation: ${lastConversationId}`);
+        // Wait a bit then start claude with --resume
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const skipPermissions = this.userSettings?.global?.claudeFlags?.skipPermissions || false;
+        const yoloFlag = skipPermissions ? ' --dangerously-skip-permissions' : '';
+
+        this.socket.emit('terminal-input', {
+          sessionId,
+          data: `claude --resume ${lastConversationId}${yoloFlag}\n`
+        });
+      }
+    }
+
+    this.showTemporaryMessage(`Recovered ${recovery.sessions.length} session(s)`, 'success');
+  }
+
   async autoStartClaude(sessionId) {
     console.log(`Auto-starting Claude with user settings: ${sessionId}`);
 
@@ -4750,6 +4846,30 @@ class ClaudeOrchestrator {
       if (autoStartDelay) {
         autoStartDelay.value = this.userSettings.global.autoStart.delay || 500;
       }
+    }
+
+    // Update session recovery settings UI
+    const sessionRecoveryEnabled = document.getElementById('session-recovery-enabled');
+    const sessionRecoveryOptions = document.getElementById('session-recovery-options');
+    const sessionRecoveryMode = document.getElementById('session-recovery-mode');
+    const recoveryResumeCwd = document.getElementById('recovery-resume-cwd');
+    const recoveryResumeConversation = document.getElementById('recovery-resume-conversation');
+
+    const recoverySettings = this.userSettings.global.sessionRecovery || {};
+    if (sessionRecoveryEnabled) {
+      sessionRecoveryEnabled.checked = recoverySettings.enabled !== false; // Default to enabled
+      if (sessionRecoveryOptions) {
+        sessionRecoveryOptions.style.display = sessionRecoveryEnabled.checked ? 'block' : 'none';
+      }
+    }
+    if (sessionRecoveryMode) {
+      sessionRecoveryMode.value = recoverySettings.mode || 'ask';
+    }
+    if (recoveryResumeCwd) {
+      recoveryResumeCwd.checked = recoverySettings.resumeCwd !== false;
+    }
+    if (recoveryResumeConversation) {
+      recoveryResumeConversation.checked = recoverySettings.resumeConversation !== false;
     }
 
     // Update per-terminal settings UI
