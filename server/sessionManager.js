@@ -714,6 +714,20 @@ class SessionManager extends EventEmitter {
     const workspaceId = this.workspace?.id;
     if (!workspaceId) return;
 
+    // Detect CWD from Claude Code startup banner
+    // Matches: ▘▘ ▝▝    ~/GitHub/games/hytopia/zoo-game/work1
+    const claudeBannerMatch = data.match(/▘▘\s*▝▝\s+([~\/][^\r\n]+)/);
+    if (claudeBannerMatch && claudeBannerMatch[1]) {
+      let cwd = claudeBannerMatch[1].trim();
+      if (cwd.startsWith('~')) {
+        cwd = cwd.replace('~', process.env.HOME || '/home/user');
+      }
+      if (cwd.startsWith('/') && !cwd.includes('\x1b')) {
+        sessionRecoveryService.updateCwd(workspaceId, sessionId, cwd);
+        this.lookupConversationForPath(workspaceId, sessionId, cwd);
+      }
+    }
+
     // Detect CWD from bash prompt (common formats)
     // Matches: ~/path$, /home/user/path$, user@host:~/path$, HOST:~/path$, etc.
     const cwdPatterns = [
@@ -783,25 +797,60 @@ class SessionManager extends EventEmitter {
 
   /**
    * Look up the most recent conversation for a given path using ConversationService
+   * Prioritizes exact CWD match, falls back to parent path matches
    */
   async lookupConversationForPath(workspaceId, sessionId, cwd) {
     try {
       const conversationService = ConversationService.getInstance();
-      const conversations = await conversationService.getByFolder(cwd);
+      const allConversations = await conversationService.getByFolder(cwd);
 
-      if (conversations && conversations.length > 0) {
-        // Sort by lastTimestamp descending to get most recent first
-        const sorted = conversations.sort((a, b) => {
-          const timeA = new Date(a.lastTimestamp || 0).getTime();
-          const timeB = new Date(b.lastTimestamp || 0).getTime();
-          return timeB - timeA;
-        });
+      if (!allConversations || allConversations.length === 0) {
+        return;
+      }
 
-        const mostRecent = sorted[0];
-        if (mostRecent && mostRecent.id) {
-          logger.debug('Found conversation for path', { sessionId, cwd, conversationId: mostRecent.id });
-          sessionRecoveryService.updateConversation(workspaceId, sessionId, mostRecent.id, mostRecent.filepath);
+      // Prioritize conversations by path match quality:
+      // 1. Exact CWD match
+      // 2. CWD starts with conversation path (user cd'd into subfolder)
+      // 3. Conversation path starts with CWD (conversation started in subfolder)
+      const scored = allConversations.map(c => {
+        let score = 0;
+        const convCwd = c.cwd || '';
+
+        if (convCwd === cwd) {
+          score = 100; // Exact match
+        } else if (cwd.startsWith(convCwd + '/')) {
+          score = 50; // We're in a subfolder of where conversation was started
+        } else if (convCwd.startsWith(cwd + '/')) {
+          score = 25; // Conversation was started in a subfolder
+        } else if (convCwd.includes(cwd) || cwd.includes(convCwd)) {
+          score = 10; // Partial match
         }
+
+        return { conversation: c, score };
+      }).filter(s => s.score > 0);
+
+      if (scored.length === 0) {
+        return;
+      }
+
+      // Sort by score desc, then by timestamp desc
+      scored.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const timeA = new Date(a.conversation.lastTimestamp || 0).getTime();
+        const timeB = new Date(b.conversation.lastTimestamp || 0).getTime();
+        return timeB - timeA;
+      });
+
+      const best = scored[0].conversation;
+      if (best && best.id) {
+        logger.debug('Found conversation for path', {
+          sessionId,
+          cwd,
+          conversationId: best.id,
+          matchScore: scored[0].score,
+          conversationCwd: best.cwd
+        });
+        sessionRecoveryService.updateConversation(workspaceId, sessionId, best.id, best.filepath);
       }
     } catch (error) {
       logger.debug('Failed to lookup conversation for path', { sessionId, cwd, error: error.message });
