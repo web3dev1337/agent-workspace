@@ -855,7 +855,8 @@ class SessionManager extends EventEmitter {
         const projectsDir = path.join(projectsBase, folder);
 
         try {
-          // Find .jsonl files
+          // Find .jsonl files WITH CONTENT (size > 0)
+          // Empty files are created when Claude starts but have no conversation
           const files = fsSync.readdirSync(projectsDir)
             .filter(f => f.endsWith('.jsonl'))
             .map(f => {
@@ -867,13 +868,15 @@ class SessionManager extends EventEmitter {
               return {
                 name: f,
                 fullPath: fullPath,
+                size: stats.size,
                 mtime: stats.mtime.getTime(),
                 age: now - stats.mtime.getTime(),
                 cwd: cwd,
                 folder: folder,
                 isNew: isNew
               };
-            });
+            })
+            .filter(f => f.size > 0);  // ONLY files with actual content
 
           // Prefer NEW files (didn't exist before), otherwise use recently modified
           for (const file of files) {
