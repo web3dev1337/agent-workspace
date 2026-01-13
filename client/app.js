@@ -990,6 +990,12 @@ class ClaudeOrchestrator {
     // Check each Claude session for auto-start
     for (const [sessionId, session] of this.sessions) {
       if (sessionId.includes('-claude')) {
+        // Skip if this session was recovered
+        if (this.recoveredSessions && this.recoveredSessions.has(sessionId)) {
+          console.log(`Skipping auto-start for ${sessionId} - already recovered`);
+          continue;
+        }
+
         const effectiveSettings = this.getEffectiveSettings(sessionId);
 
         if (effectiveSettings && effectiveSettings.autoStart && effectiveSettings.autoStart.enabled) {
@@ -4169,8 +4175,10 @@ class ClaudeOrchestrator {
 
     console.log('Applying session recovery:', recovery);
     const recoverySettings = this.userSettings?.global?.sessionRecovery || {};
-    const resumeCwd = recoverySettings.resumeCwd !== false;
     const resumeConversation = recoverySettings.resumeConversation !== false;
+
+    // Track which sessions we're recovering so auto-start skips them
+    this.recoveredSessions = new Set();
 
     for (const session of recovery.sessions) {
       const { sessionId, lastCwd, lastAgent, lastConversationId } = session;
@@ -4181,32 +4189,27 @@ class ClaudeOrchestrator {
         continue;
       }
 
+      // Mark this session as recovered to prevent auto-start
+      this.recoveredSessions.add(sessionId);
+
       console.log(`Recovering session ${sessionId}:`, { lastCwd, lastAgent, lastConversationId });
 
-      // CD to last directory if enabled and available
-      if (resumeCwd && lastCwd) {
-        console.log(`Changing directory to: ${lastCwd}`);
-        this.socket.emit('terminal-input', {
-          sessionId,
-          data: `cd "${lastCwd}"\n`
-        });
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-
-      // Start agent with resume if enabled, conversation available, and it's a claude terminal
+      // Start agent with resume if conversation available and it's a claude terminal
       if (resumeConversation && lastConversationId && lastAgent === 'claude' && sessionId.includes('-claude')) {
         console.log(`Resuming conversation: ${lastConversationId}`);
-        // Wait a bit then start claude with --resume
-        await new Promise(resolve => setTimeout(resolve, 500));
 
         // Use recovery-specific skipPermissions setting (defaults to true)
         const skipPermissions = recoverySettings.skipPermissions !== false;
         const yoloFlag = skipPermissions ? ' --dangerously-skip-permissions' : '';
 
+        // Single command: claude --resume with conversation ID
         this.socket.emit('terminal-input', {
           sessionId,
           data: `claude --resume ${lastConversationId}${yoloFlag}\n`
         });
+
+        // Small delay between sessions
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
     }
 
