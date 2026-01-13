@@ -6,6 +6,7 @@ const path = require('path');
 const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 const { UserSettingsService } = require('./userSettingsService');
 const { WorktreeHelper } = require('./worktreeHelper');
+const sessionRecoveryService = require('./sessionRecoveryService');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -555,16 +556,21 @@ class SessionManager extends EventEmitter {
       ptyProcess.onData((data) => {
         session.buffer += data;
         session.lastActivity = Date.now();
-        
+
         // Reset inactivity timer
         this.resetInactivityTimer(session);
-        
+
         // Emit to clients
         this.io.emit('terminal-output', {
           sessionId,
           data
         });
-        
+
+        // Track session state for recovery
+        if (this.workspace?.id) {
+          this.trackSessionState(sessionId, data, config);
+        }
+
         // Update status based on output (for Claude sessions)
         if (config.type === 'claude' && this.statusDetector) {
           const newStatus = this.statusDetector.detectStatus(session.buffer);
@@ -691,14 +697,98 @@ class SessionManager extends EventEmitter {
       }, 5000);
       
     } catch (error) {
-      logger.error('Failed to create session', { 
-        sessionId, 
-        error: error.message 
+      logger.error('Failed to create session', {
+        sessionId,
+        error: error.message
       });
       throw error;
     }
   }
-  
+
+  /**
+   * Track session state for crash recovery
+   * Detects CWD changes, conversation IDs, and running processes
+   */
+  trackSessionState(sessionId, data, config) {
+    const workspaceId = this.workspace?.id;
+    if (!workspaceId) return;
+
+    // Detect CWD from bash prompt (common formats)
+    // Matches: ~/path$, /home/user/path$, user@host:~/path$, etc.
+    const cwdPatterns = [
+      /(?:^|\n)(?:\x1b\[[0-9;]*m)*(?:\w+@[\w-]+:)?([~\/][^\$\#\n\r]*?)[\$\#]\s*(?:\x1b\[[0-9;]*m)*$/,
+      /(?:^|\n)(?:\x1b\[[0-9;]*m)*\[.*?\]\s*([~\/][^\]]*?)\s*[\$\#]/,
+      /(?:^|\n)pwd\r?\n([\/~][^\r\n]+)/
+    ];
+
+    for (const pattern of cwdPatterns) {
+      const match = data.match(pattern);
+      if (match && match[1]) {
+        let cwd = match[1].trim();
+        // Expand ~ to home directory
+        if (cwd.startsWith('~')) {
+          cwd = cwd.replace('~', process.env.HOME || '/home/user');
+        }
+        // Only track if it looks like a valid path
+        if (cwd.startsWith('/') && !cwd.includes('\x1b')) {
+          sessionRecoveryService.updateCwd(workspaceId, sessionId, cwd);
+        }
+        break;
+      }
+    }
+
+    // Detect Claude conversation ID from output
+    // Look for: "Resuming conversation: abc123" or conversation ID in various formats
+    const conversationPatterns = [
+      /conversation[:\s]+([a-f0-9]{8,})/i,
+      /resuming[:\s]+([a-f0-9-]{8,})/i,
+      /session[:\s]+([a-f0-9-]{8,})/i,
+      /\.claude\/projects\/[^\/]+\/([a-f0-9-]+)\.jsonl/
+    ];
+
+    for (const pattern of conversationPatterns) {
+      const match = data.match(pattern);
+      if (match && match[1]) {
+        sessionRecoveryService.updateConversation(workspaceId, sessionId, match[1]);
+        break;
+      }
+    }
+
+    // Detect agent type from command
+    const agentPatterns = [
+      { pattern: /(?:^|\n)\s*claude\s/, agent: 'claude' },
+      { pattern: /(?:^|\n)\s*codex\s/, agent: 'codex' },
+      { pattern: /(?:^|\n)\s*opencode\s/, agent: 'opencode' },
+      { pattern: /(?:^|\n)\s*aider\s/, agent: 'aider' }
+    ];
+
+    for (const { pattern, agent } of agentPatterns) {
+      if (pattern.test(data)) {
+        sessionRecoveryService.updateAgent(workspaceId, sessionId, agent);
+        break;
+      }
+    }
+
+    // Detect server commands
+    const serverPatterns = [
+      { pattern: /npm\s+(?:run\s+)?(?:start|dev|serve)/, cmd: 'npm start' },
+      { pattern: /yarn\s+(?:run\s+)?(?:start|dev|serve)/, cmd: 'yarn start' },
+      { pattern: /node\s+[\w\/\.]+/, cmd: 'node' },
+      { pattern: /python\s+[\w\/\.]+/, cmd: 'python' },
+      { pattern: /rails\s+s(?:erver)?/, cmd: 'rails server' },
+      { pattern: /cargo\s+run/, cmd: 'cargo run' }
+    ];
+
+    if (config.type === 'server') {
+      for (const { pattern, cmd } of serverPatterns) {
+        if (pattern.test(data)) {
+          sessionRecoveryService.updateServer(workspaceId, sessionId, cmd);
+          break;
+        }
+      }
+    }
+  }
+
   writeToSession(sessionId, data) {
     const session = this.sessions.get(sessionId);
     if (!session || !session.pty) {
