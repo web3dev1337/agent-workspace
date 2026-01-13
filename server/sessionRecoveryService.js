@@ -183,14 +183,14 @@ class SessionRecoveryService {
 
   /**
    * Get recovery info for display
-   * Looks up conversation IDs by directly checking Claude's projects folder
+   * Validates that conversation files exist and have content before including
    */
   async getRecoveryInfo(workspaceId) {
     const state = await this.loadWorkspaceState(workspaceId);
     const sessions = state.sessions || {};
     const fsSync = require('fs');
 
-    // Build recovery info for each session - use STORED data, no lookup
+    // Build recovery info for each session - validate conversations exist
     const recoveryData = [];
     for (const s of Object.values(sessions)) {
       // Skip if no worktree path and no server command
@@ -198,13 +198,38 @@ class SessionRecoveryService {
         continue;
       }
 
-      // Use the conversation ID that was captured when Claude started
-      // Don't try to look it up - it was stored at the moment Claude started
+      // For Claude sessions, validate the conversation file exists and has content
+      let conversationValid = false;
+      if (s.lastAgent === 'claude' && s.lastConversationId && s.lastCwd) {
+        const folderName = s.lastCwd.replace(/\//g, '-');
+        const convPath = path.join(
+          process.env.HOME, '.claude', 'projects', folderName,
+          `${s.lastConversationId}.jsonl`
+        );
+        try {
+          const stats = fsSync.statSync(convPath);
+          conversationValid = stats.size > 0;  // Must have actual content
+        } catch (error) {
+          // File doesn't exist
+          conversationValid = false;
+        }
+      }
+
+      // Only include Claude sessions with valid conversations
+      // Always include server sessions
+      if (s.lastAgent === 'claude' && !conversationValid) {
+        logger.debug('Skipping session with invalid/empty conversation', {
+          sessionId: s.sessionId,
+          conversationId: s.lastConversationId
+        });
+        continue;
+      }
+
       recoveryData.push({
         sessionId: s.sessionId,
-        lastCwd: s.lastCwd || s.worktreePath,  // CWD captured when Claude started
+        lastCwd: s.lastCwd || s.worktreePath,
         lastAgent: s.lastAgent,
-        lastConversationId: s.lastConversationId,  // ID captured when Claude started
+        lastConversationId: s.lastConversationId,
         worktreePath: s.worktreePath,
         lastServerCommand: s.lastServerCommand,
         updatedAt: s.updatedAt
