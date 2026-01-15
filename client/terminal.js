@@ -23,6 +23,7 @@ class TerminalManager {
     // Track scroll state per terminal
     this.terminalScrollStates = new Map();
     this.userScrolling = new Map();
+    this.ephemeralLineState = new Map();
     
     // Apply global terminal scrollbar styles
     this.applyScrollbarStyles();
@@ -547,7 +548,10 @@ class TerminalManager {
       // Try again with current data
       const newTerminal = this.terminals.get(sessionId);
       if (newTerminal && data) {
-        newTerminal.write(data);
+        const normalized = this.normalizeOutput(sessionId, data);
+        if (normalized) {
+          newTerminal.write(normalized);
+        }
       }
       return;
     }
@@ -555,12 +559,17 @@ class TerminalManager {
     // Check if user is manually scrolling
     const isUserScrolling = this.userScrolling.get(sessionId) || false;
 
+    const normalized = this.normalizeOutput(sessionId, data);
+    if (!normalized) {
+      return;
+    }
+
     // Write data to terminal
-    terminal.write(data);
+    terminal.write(normalized);
 
     // Check if this is a carriage return update (like a spinner)
     // Don't auto-scroll for CR updates to avoid breaking the overwrite behavior
-    const hasCarriageReturn = data.includes('\r') && !data.includes('\n');
+    const hasCarriageReturn = normalized.includes('\r') && !normalized.includes('\n');
 
     // Only auto-scroll if user is not manually scrolling and autoScroll is enabled
     // AND this isn't a carriage return update (spinner)
@@ -569,7 +578,45 @@ class TerminalManager {
     }
 
     // Check for special patterns (optional enhancement)
-    this.checkOutputPatterns(sessionId, data);
+    this.checkOutputPatterns(sessionId, normalized);
+  }
+
+  normalizeOutput(sessionId, data) {
+    if (!data) return data;
+
+    const state = this.ephemeralLineState.get(sessionId) || { pendingEol: false };
+    let output = '';
+    const parts = data.split('\n');
+
+    for (let i = 0; i < parts.length; i++) {
+      const rawLine = parts[i];
+      const hasNewline = i < parts.length - 1;
+      const line = rawLine.replace(/\r/g, '');
+
+      if (this.isEphemeralLine(line)) {
+        output += `\r\x1b[2K${line}`;
+        state.pendingEol = true;
+        continue;
+      }
+
+      if (state.pendingEol) {
+        output += '\r\n';
+        state.pendingEol = false;
+      }
+
+      output += rawLine;
+      if (hasNewline) {
+        output += '\n';
+      }
+    }
+
+    this.ephemeralLineState.set(sessionId, state);
+    return output;
+  }
+
+  isEphemeralLine(line) {
+    if (!line) return false;
+    return /ctrl\+c to interrupt/i.test(line) || /ctrl\+t to hide todos/i.test(line);
   }
   
   checkOutputPatterns(sessionId, data) {
