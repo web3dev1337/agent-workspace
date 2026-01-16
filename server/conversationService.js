@@ -38,7 +38,10 @@ class ConversationService {
     this.index = null;
     this.lastIndexTime = null;
     this.indexing = false;
+    this.refreshScheduled = false;
     this.cacheMaxAge = 5 * 60 * 1000; // 5 minutes
+    this.diskCacheMaxAge = 24 * 60 * 60 * 1000; // 24 hours
+    this.gitRepoInfoCache = new Map();
   }
 
   static getInstance() {
@@ -52,21 +55,41 @@ class ConversationService {
    * Get or build the conversation index
    */
   async getIndex(forceRefresh = false) {
+    if (forceRefresh) {
+      return await this.buildIndex({ force: true });
+    }
+
+    if (this.indexing && this.index) {
+      return this.index;
+    }
+
     // Return cached index if fresh
     if (!forceRefresh && this.index && this.lastIndexTime) {
       const age = Date.now() - this.lastIndexTime;
       if (age < this.cacheMaxAge) {
         return this.index;
       }
+
+      this.scheduleBackgroundRefresh('memory-cache-stale');
+      return this.index;
     }
 
     // Try loading from disk cache
     if (!forceRefresh && !this.index) {
       try {
-        const cached = await this.loadCachedIndex();
-        if (cached) {
-          this.index = cached;
-          this.lastIndexTime = Date.now();
+        const cached = await this.loadCachedIndex({ allowStale: true });
+        if (cached?.index) {
+          this.index = cached.index;
+          if (cached.savedAtMs) {
+            this.lastIndexTime = cached.savedAtMs;
+          } else {
+            this.lastIndexTime = Date.now();
+          }
+
+          if (cached.cacheAgeMs > this.cacheMaxAge) {
+            this.scheduleBackgroundRefresh('disk-cache-stale');
+          }
+
           return this.index;
         }
       } catch (e) {
@@ -81,18 +104,24 @@ class ConversationService {
   /**
    * Load cached index from disk
    */
-  async loadCachedIndex() {
+  async loadCachedIndex(options = {}) {
+    const { allowStale = false } = options;
     try {
       const stat = await fs.stat(INDEX_CACHE_FILE);
-      const age = Date.now() - stat.mtimeMs;
+      const cacheAgeMs = Date.now() - stat.mtimeMs;
 
-      // Don't use cache older than 1 hour
-      if (age > 60 * 60 * 1000) {
+      // Don't use cache older than disk max age unless stale is allowed
+      if (!allowStale && cacheAgeMs > this.diskCacheMaxAge) {
         return null;
       }
 
       const data = await fs.readFile(INDEX_CACHE_FILE, 'utf8');
-      return JSON.parse(data);
+      const index = JSON.parse(data);
+      const savedAtMs = index?.cacheMeta?.savedAt ||
+        (index?.stats?.indexedAt ? Date.parse(index.stats.indexedAt) : null) ||
+        stat.mtimeMs;
+
+      return { index, cacheAgeMs, savedAtMs };
     } catch (e) {
       return null;
     }
@@ -114,7 +143,8 @@ class ConversationService {
   /**
    * Build the conversation index by scanning ~/.claude/projects/
    */
-  async buildIndex() {
+  async buildIndex(options = {}) {
+    const { force = false } = options;
     if (this.indexing) {
       // Wait for ongoing indexing
       while (this.indexing) {
@@ -124,16 +154,50 @@ class ConversationService {
     }
 
     this.indexing = true;
-    logger.info('Building conversation index...');
+    logger.info('Building conversation index...', { mode: force ? 'full' : 'incremental' });
 
     try {
       const conversations = [];
       const projects = new Set();
+      const cachedByPath = new Map();
+      const cacheSavedAt = this.index?.cacheMeta?.savedAt ||
+        (this.index?.stats?.indexedAt ? Date.parse(this.index.stats.indexedAt) : null);
+      const reuseCounters = {
+        reused: 0,
+        parsed: 0,
+        skippedSmall: 0,
+        skippedAgent: 0
+      };
+
+      if (!force && this.index?.conversations) {
+        for (const cachedConv of this.index.conversations) {
+          if (cachedConv?.filepath) {
+            cachedByPath.set(cachedConv.filepath, cachedConv);
+          }
+        }
+      }
 
       // Check if projects directory exists
       if (!fsSync.existsSync(CLAUDE_PROJECTS_DIR)) {
         logger.warn('Claude projects directory not found', { path: CLAUDE_PROJECTS_DIR });
-        this.index = { conversations: [], projects: [], stats: {} };
+        const savedAt = Date.now();
+        this.index = {
+          conversations: [],
+          projects: [],
+          stats: {
+            totalConversations: 0,
+            totalProjects: 0,
+            totalMessages: 0,
+            totalTokens: 0,
+            indexedAt: new Date().toISOString()
+          },
+          cacheMeta: {
+            savedAt,
+            version: 2
+          }
+        };
+        this.lastIndexTime = savedAt;
+        this.saveCachedIndex(this.index);
         return this.index;
       }
 
@@ -148,16 +212,46 @@ class ConversationService {
 
         for (const jsonlFile of jsonlFiles) {
           // Skip agent sub-conversations and tiny files
-          if (path.basename(jsonlFile).startsWith('agent-')) continue;
+          if (path.basename(jsonlFile).startsWith('agent-')) {
+            reuseCounters.skippedAgent++;
+            continue;
+          }
 
           try {
             const stat = await fs.stat(jsonlFile);
-            if (stat.size < 500) continue;
+            if (stat.size < 500) {
+              reuseCounters.skippedSmall++;
+              continue;
+            }
+
+            const cachedConv = !force ? cachedByPath.get(jsonlFile) : null;
+            const hasFileMeta = cachedConv &&
+              typeof cachedConv.fileMtimeMs === 'number' &&
+              typeof cachedConv.fileSize === 'number';
+            const isUnchanged = cachedConv && (
+              (hasFileMeta && cachedConv.fileMtimeMs === stat.mtimeMs && cachedConv.fileSize === stat.size) ||
+              (!hasFileMeta && cacheSavedAt && stat.mtimeMs <= cacheSavedAt)
+            );
+
+            if (cachedConv && isUnchanged) {
+              if (!hasFileMeta) {
+                cachedConv.fileMtimeMs = stat.mtimeMs;
+                cachedConv.fileSize = stat.size;
+              }
+              if (!cachedConv.project) cachedConv.project = dirent.name;
+              conversations.push(cachedConv);
+              projects.add(cachedConv.project || dirent.name);
+              reuseCounters.reused++;
+              continue;
+            }
 
             const conv = await this.parseConversationFile(jsonlFile, dirent.name);
             if (conv) {
+              conv.fileMtimeMs = stat.mtimeMs;
+              conv.fileSize = stat.size;
               conversations.push(conv);
               projects.add(dirent.name);
+              reuseCounters.parsed++;
             }
           } catch (e) {
             logger.debug('Failed to parse conversation', { file: jsonlFile, error: e.message });
@@ -181,20 +275,26 @@ class ConversationService {
         indexedAt: new Date().toISOString()
       };
 
+      const savedAt = Date.now();
       this.index = {
         conversations,
         projects: Array.from(projects).sort(),
-        stats
+        stats,
+        cacheMeta: {
+          savedAt,
+          version: 2
+        }
       };
 
-      this.lastIndexTime = Date.now();
+      this.lastIndexTime = savedAt;
 
       // Save to disk cache (async, don't wait)
       this.saveCachedIndex(this.index);
 
       logger.info('Conversation index built', {
         conversations: conversations.length,
-        projects: projects.size
+        projects: projects.size,
+        ...reuseCounters
       });
 
       return this.index;
@@ -389,12 +489,25 @@ class ConversationService {
    */
   async getGitRepoInfo(dirPath) {
     try {
+      if (!dirPath) return null;
+      const resolved = path.resolve(dirPath);
+      if (this.gitRepoInfoCache.has(resolved)) {
+        return this.gitRepoInfoCache.get(resolved);
+      }
+      if (!fsSync.existsSync(resolved)) {
+        this.gitRepoInfoCache.set(resolved, null);
+        return null;
+      }
+
       const { stdout } = await execAsync('git remote get-url origin', {
-        cwd: dirPath,
+        cwd: resolved,
         timeout: 5000
       });
       const url = stdout.trim();
-      if (!url) return null;
+      if (!url) {
+        this.gitRepoInfoCache.set(resolved, null);
+        return null;
+      }
 
       // Parse GitHub URL formats:
       // https://github.com/owner/repo.git
@@ -417,11 +530,33 @@ class ConversationService {
         normalizedUrl = url.replace(/\.git$/, '');
       }
 
-      return { repo, url: normalizedUrl };
+      const info = { repo, url: normalizedUrl };
+      this.gitRepoInfoCache.set(resolved, info);
+      return info;
     } catch (e) {
       // Not a git repo or no remote
+      if (dirPath) {
+        this.gitRepoInfoCache.set(path.resolve(dirPath), null);
+      }
       return null;
     }
+  }
+
+  scheduleBackgroundRefresh(reason) {
+    if (this.indexing || this.refreshScheduled) return;
+    this.refreshScheduled = true;
+
+    logger.info('Scheduling background conversation index refresh', { reason });
+
+    setImmediate(async () => {
+      try {
+        await this.buildIndex();
+      } catch (e) {
+        logger.warn('Background conversation index refresh failed', { error: e.message });
+      } finally {
+        this.refreshScheduled = false;
+      }
+    });
   }
 
   /**
@@ -668,7 +803,7 @@ class ConversationService {
    * Force refresh the index
    */
   async refresh() {
-    return await this.buildIndex();
+    return await this.buildIndex({ force: true });
   }
 }
 
