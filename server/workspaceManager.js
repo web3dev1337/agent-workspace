@@ -461,7 +461,7 @@ class WorkspaceManager {
       globalShortcuts: [
         {
           label: 'GitHub Profile',
-          url: 'https://github.com/web3dev1337',
+          url: process.env.GITHUB_USERNAME ? `https://github.com/${process.env.GITHUB_USERNAME}` : 'https://github.com',
           icon: '💻'
         },
         {
@@ -485,14 +485,8 @@ class WorkspaceManager {
         checkForNewRepos: false
       },
       user: {
-        username: 'web3dev1337',
-        teammates: [
-          {
-            username: 'Anrokx',
-            access: 'team',
-            repos: []
-          }
-        ]
+        username: process.env.GITHUB_USERNAME || null,
+        teammates: []
       }
     };
   }
