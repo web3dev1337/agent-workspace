@@ -1,6 +1,7 @@
 const { exec } = require('child_process');
 const util = require('util');
 const path = require('path');
+const os = require('os');
 const winston = require('winston');
 
 const execAsync = util.promisify(exec);
@@ -29,7 +30,7 @@ class GitHelper {
     this.cacheTimeout = GIT_CACHE_TIMEOUT_MS;
 
     // Store base path for validation
-    this.basePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
+    this.basePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || os.homedir();
 
     // If specific worktree pattern is needed, it can be configured
     this.worktreePattern = process.env.WORKTREE_PATTERN || null;
