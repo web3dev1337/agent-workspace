@@ -3,6 +3,7 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const os = require('os');
 const winston = require('winston');
 
 // Initialize logger
@@ -56,7 +57,7 @@ const multer = require('multer');
 
 // Configure multer for audio file uploads
 const audioUpload = multer({
-  dest: '/tmp/orchestrator-audio/',
+  dest: path.join(os.tmpdir(), 'orchestrator-audio'),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
   fileFilter: (req, file, cb) => {
     const allowed = ['audio/webm', 'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/ogg', 'audio/x-wav'];
