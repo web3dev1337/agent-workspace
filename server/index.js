@@ -562,8 +562,12 @@ io.on('connection', (socket) => {
               masterBranch: 'master'
             };
 
+            const terminalIdBase = repositoryName
+              ? `${repositoryName}-${worktreeId}`
+              : worktreeId;
+
             updatedConfig.terminals.push({
-              id: `${repositoryName || worktreeId}-claude`,
+              id: `${terminalIdBase}-claude`,
               repository: baseRepo,
               worktree: worktreeId,
               worktreePath: worktreePath,
@@ -571,7 +575,7 @@ io.on('connection', (socket) => {
               visible: true
             });
             updatedConfig.terminals.push({
-              id: `${repositoryName || worktreeId}-server`,
+              id: `${terminalIdBase}-server`,
               repository: baseRepo,
               worktree: worktreeId,
               worktreePath: worktreePath,
