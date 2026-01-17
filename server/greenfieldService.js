@@ -122,6 +122,32 @@ class GreenfieldService {
     return GreenfieldService.instance;
   }
 
+  normalizeRepoUrl(url) {
+    if (!url) return null;
+    let cleaned = String(url).trim().split(/\s+/)[0];
+
+    if (cleaned.startsWith('git@')) {
+      cleaned = cleaned.replace(/^git@([^:]+):/, 'https://$1/');
+    } else if (cleaned.startsWith('ssh://git@')) {
+      cleaned = cleaned.replace(/^ssh:\/\/git@/, 'https://');
+    }
+
+    if (cleaned.endsWith('.git')) {
+      cleaned = cleaned.slice(0, -4);
+    }
+
+    return cleaned;
+  }
+
+  async getRemoteRepoUrl(cwd) {
+    try {
+      const { stdout } = await execAsync('git remote get-url origin', { cwd });
+      return this.normalizeRepoUrl(stdout);
+    } catch (error) {
+      return null;
+    }
+  }
+
   setSessionManager(sessionManager) {
     this.sessionManager = sessionManager;
   }
@@ -265,7 +291,8 @@ class GreenfieldService {
           `gh repo create ${name} ${isPrivate ? '--private' : '--public'} --source=. --remote=origin --push`,
           { cwd: masterPath, timeout: 60000 }
         );
-        repoUrl = result.stdout.trim();
+        const remoteUrl = await this.getRemoteRepoUrl(masterPath);
+        repoUrl = remoteUrl || this.normalizeRepoUrl(result.stdout);
         logger.info('GitHub repo created and pushed', { repoUrl });
       } catch (ghError) {
         logger.warn('GitHub repo creation failed, continuing without remote', { error: ghError.message });
