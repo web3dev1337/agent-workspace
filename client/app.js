@@ -1146,10 +1146,10 @@ class ClaudeOrchestrator {
    */
   getButtonsForSession(sessionId, terminalType) {
     const session = this.sessions.get(sessionId);
-    if (!session) return this.getDefaultButtons(terminalType);
+    if (!session) return this.getDefaultButtons(terminalType, sessionId);
 
     // Get repository type for this session
-    let repositoryType = null;
+    let repositoryType = session.repositoryType || null;
     if (this.currentWorkspace) {
       if (this.currentWorkspace.workspaceType === 'mixed-repo') {
         const repositoryName = this.extractRepositoryName(sessionId);
@@ -1159,9 +1159,9 @@ class ClaudeOrchestrator {
           : this.currentWorkspace.terminals?.pairs;
 
         if (repositoryName && terminals) {
-          const terminal = terminals.find(t =>
-            t.id === sessionId || t.repository?.name === repositoryName
-          );
+          const terminal = terminals.find(t => t.id === sessionId)
+            || terminals.find(t => t.repository?.name === repositoryName && t.worktree === session.worktreeId)
+            || terminals.find(t => t.repository?.name === repositoryName);
           repositoryType = terminal?.repository?.type || null;
         }
       } else {
@@ -1171,7 +1171,7 @@ class ClaudeOrchestrator {
 
     if (!repositoryType) {
       console.log(`No repositoryType found for session ${sessionId}, using defaults`);
-      return this.getDefaultButtons(terminalType);
+      return this.getDefaultButtons(terminalType, sessionId);
     }
 
     // Get worktree-specific cascaded config (pre-fetched)
@@ -1179,7 +1179,7 @@ class ClaudeOrchestrator {
     console.log(`Looking up worktree config for ${sessionId} (type: ${repositoryType}):`, cascadedConfig);
     if (!cascadedConfig || !cascadedConfig.buttons) {
       console.log(`No worktree config or buttons found for ${sessionId}, using defaults`);
-      return this.getDefaultButtons(terminalType);
+      return this.getDefaultButtons(terminalType, sessionId);
     }
 
     // Get button definitions for this terminal type
@@ -1233,21 +1233,21 @@ class ClaudeOrchestrator {
   /**
    * Get default buttons (fallback when no config)
    */
-  getDefaultButtons(terminalType) {
+  getDefaultButtons(terminalType, sessionId = '') {
     if (terminalType === 'claude') {
       return [
-        this.renderButton('focus', this.buttonRegistry.focus, ''),
-        this.renderButton('claudeStart', this.buttonRegistry.claudeStart, ''),
-        this.renderButton('claudeModal', this.buttonRegistry.claudeModal, ''),
-        this.renderButton('refresh', this.buttonRegistry.refresh, ''),
-        this.renderButton('review', this.buttonRegistry.review, ''),
-        this.renderButton('build', this.buttonRegistry.build, '')
+        this.renderButton('focus', this.buttonRegistry.focus, sessionId),
+        this.renderButton('claudeStart', this.buttonRegistry.claudeStart, sessionId),
+        this.renderButton('claudeModal', this.buttonRegistry.claudeModal, sessionId),
+        this.renderButton('refresh', this.buttonRegistry.refresh, sessionId),
+        this.renderButton('review', this.buttonRegistry.review, sessionId),
+        this.renderButton('build', this.buttonRegistry.build, sessionId)
       ];
     } else {
       return [
-        this.renderButton('focus', this.buttonRegistry.focus, ''),
-        this.renderButton('build', this.buttonRegistry.build, ''),
-        this.renderButton('kill', this.buttonRegistry.kill, '')
+        this.renderButton('focus', this.buttonRegistry.focus, sessionId),
+        this.renderButton('build', this.buttonRegistry.build, sessionId),
+        this.renderButton('kill', this.buttonRegistry.kill, sessionId)
       ];
     }
   }
@@ -1273,7 +1273,9 @@ class ClaudeOrchestrator {
             : workspace.terminals?.pairs;
 
           if (terminals) {
-            const terminal = terminals.find(t => t.id === sessionId);
+            const repositoryName = session.repositoryName || this.extractRepositoryName(sessionId);
+            const terminal = terminals.find(t => t.id === sessionId)
+              || terminals.find(t => t.repository?.name === repositoryName && t.worktree === session.worktreeId);
             if (terminal && terminal.repository && terminal.worktree) {
               repositoryType = terminal.repository.type;
               worktreePath = terminal.worktreePath || `${terminal.repository.path}/${terminal.worktree}`;
@@ -1342,7 +1344,8 @@ class ClaudeOrchestrator {
       html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>`;
     } else {
       html += `<div class="server-launch-group">
-        <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+        <select class="control-btn env-select" id="server-env-${sessionId}" name="server-env-${sessionId}"
+                onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
           <option value="">▶</option>
           ${this.getDynamicLaunchOptions(sessionId)}
           <option value="custom" selected>Custom...</option>

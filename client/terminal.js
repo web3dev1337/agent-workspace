@@ -231,6 +231,9 @@ class TerminalManager {
       // Open terminal in DOM
       terminal.open(terminalElement);
 
+      // Add id/name to xterm textarea for accessibility/linting
+      this.setTerminalInputAttributes(sessionId, terminalElement);
+
       // Fit terminal after opening
       requestAnimationFrame(() => {
         this.fitTerminal(sessionId);
@@ -323,6 +326,18 @@ class TerminalManager {
     this.setupResizeObserver(sessionId);
 
     return terminal;
+  }
+
+  setTerminalInputAttributes(sessionId, terminalElement) {
+    if (!terminalElement) return;
+    const textarea = terminalElement.querySelector('.xterm-helper-textarea');
+    if (!textarea) return;
+    if (!textarea.id) {
+      textarea.id = `terminal-input-${sessionId}`;
+    }
+    if (!textarea.name) {
+      textarea.name = `terminal-input-${sessionId}`;
+    }
   }
   
   checkScrollPosition(sessionId) {
