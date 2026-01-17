@@ -379,7 +379,7 @@ git clone https://github.com/web3dev1337/claude-orchestrator.git ~/GitHub/tools/
 cd ~/GitHub/tools/automation/claude-orchestrator/master
 
 cat > .env << 'EOF'
-PORT=3000
+ORCHESTRATOR_PORT=3000
 CLIENT_PORT=2080
 TAURI_DEV_PORT=1420
 DIFF_VIEWER_PORT=7655
@@ -396,7 +396,7 @@ git clone https://github.com/web3dev1337/claude-orchestrator.git ~/GitHub/tools/
 cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 
 cat > .env << 'EOF'
-PORT=4000
+ORCHESTRATOR_PORT=4000
 CLIENT_PORT=2081
 TAURI_DEV_PORT=1421
 DIFF_VIEWER_PORT=7656

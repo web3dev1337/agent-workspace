@@ -319,7 +319,7 @@ close-tab: {tabId}                             - Close workspace tab and cleanup
 
 ### Environment Variables (.env)
 ```
-PORT=3001
+ORCHESTRATOR_PORT=3001
 LOG_LEVEL=info
 NODE_ENV=development
 ENABLE_FILE_WATCHING=true

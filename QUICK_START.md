@@ -36,7 +36,7 @@ npm rebuild node-pty
 
 Then create `.env` file with:
 ```
-PORT=4000
+ORCHESTRATOR_PORT=4000
 CLIENT_PORT=2081
 WORKTREE_BASE_PATH=/home/ab
 WORKTREE_COUNT=8
