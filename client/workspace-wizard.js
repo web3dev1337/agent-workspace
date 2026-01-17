@@ -159,6 +159,8 @@ class WorkspaceWizard {
   }
 
   renderRepositorySelection() {
+    const isBlank = !!this.data.isBlank;
+
     // Group projects by category
     const categories = {};
     this.discoveredProjects.forEach(project => {
@@ -196,13 +198,23 @@ class WorkspaceWizard {
         <h3>Select Repository</h3>
         <p>Choose the repository for this workspace. Type is auto-detected from folder structure.</p>
 
-        ${categorizedHTML}
+        <div class="config-section">
+          <label>
+            <input type="checkbox" id="blank-workspace-toggle" ${isBlank ? 'checked' : ''} onchange="window.workspaceWizard.toggleBlankWorkspace(this.checked)" />
+            <strong>Create empty workspace (add worktrees later)</strong>
+          </label>
+          <small>Skip repository selection for now.</small>
+        </div>
 
-        <div class="custom-path">
-          <h4>Or enter custom path:</h4>
-          <div class="path-input-group">
-            <input type="text" id="custom-repo-path" placeholder="/path/to/repository" />
-            <button class="btn-secondary" onclick="window.workspaceWizard.browsePath()">Browse...</button>
+        <div style="${isBlank ? 'opacity:0.4; pointer-events:none;' : ''}">
+          ${categorizedHTML}
+
+          <div class="custom-path">
+            <h4>Or enter custom path:</h4>
+            <div class="path-input-group">
+              <input type="text" id="custom-repo-path" placeholder="/path/to/repository" />
+              <button class="btn-secondary" onclick="window.workspaceWizard.browsePath()">Browse...</button>
+            </div>
           </div>
         </div>
       </div>
@@ -210,8 +222,10 @@ class WorkspaceWizard {
   }
 
   renderConfiguration() {
-    const selectedType = this.data.type;
+    const isBlank = !!this.data.isBlank;
+    const selectedType = this.data.type || 'custom';
     const typeInfo = this.getTypeInfo(selectedType);
+    const defaultPairs = isBlank ? 0 : typeInfo.defaultTerminalPairs;
 
     return `
       <div class="wizard-step">
@@ -235,19 +249,25 @@ class WorkspaceWizard {
           </select>
         </div>
 
-        <div class="config-section">
-          <label>
-            <input type="checkbox" id="enable-worktrees" ${typeInfo.defaultTerminalPairs > 1 ? 'checked' : ''} />
-            <strong>Enable Git Worktrees</strong>
-          </label>
-          <small>Create multiple working directories (work1, work2, etc.) for parallel development on different branches</small>
-        </div>
+        ${isBlank ? `
+          <div class="config-section">
+            <small>This workspace starts empty. You can add worktrees and terminals later.</small>
+          </div>
+        ` : `
+          <div class="config-section">
+            <label>
+              <input type="checkbox" id="enable-worktrees" ${typeInfo.defaultTerminalPairs > 1 ? 'checked' : ''} />
+              <strong>Enable Git Worktrees</strong>
+            </label>
+            <small>Create multiple working directories (work1, work2, etc.) for parallel development on different branches</small>
+          </div>
 
-        <div class="config-section worktree-config">
-          <label>Number of terminal pairs:</label>
-          <input type="range" id="terminal-pairs" min="1" max="${typeInfo.maxTerminalPairs}" value="${typeInfo.defaultTerminalPairs}" />
-          <span id="pairs-value">${typeInfo.defaultTerminalPairs}</span>
-        </div>
+          <div class="config-section worktree-config">
+            <label>Number of terminal pairs:</label>
+            <input type="range" id="terminal-pairs" min="1" max="${typeInfo.maxTerminalPairs}" value="${defaultPairs}" />
+            <span id="pairs-value">${defaultPairs}</span>
+          </div>
+        `}
 
         <div class="config-section">
           <label>Access Level:</label>
@@ -262,6 +282,7 @@ class WorkspaceWizard {
   }
 
   renderReview() {
+    const isBlank = !!this.data.isBlank;
     return `
       <div class="wizard-step">
         <h3>Review Workspace</h3>
@@ -275,13 +296,13 @@ class WorkspaceWizard {
             <strong>Type:</strong> ${this.getTypeInfo(this.data.type).name}
           </div>
           <div class="review-item">
-            <strong>Repository:</strong> ${this.data.repositoryPath || 'Not selected'}
+            <strong>Repository:</strong> ${isBlank ? 'None (empty workspace)' : (this.data.repositoryPath || 'Not selected')}
           </div>
           <div class="review-item">
-            <strong>Terminal Pairs:</strong> ${this.data.terminalPairs || 1}
+            <strong>Terminal Pairs:</strong> ${isBlank ? 0 : (this.data.terminalPairs || 1)}
           </div>
           <div class="review-item">
-            <strong>Worktrees:</strong> ${this.data.enableWorktrees ? 'Enabled' : 'Disabled'}
+            <strong>Worktrees:</strong> ${isBlank ? 'Disabled' : (this.data.enableWorktrees ? 'Enabled' : 'Disabled')}
           </div>
           <div class="review-item">
             <strong>Access:</strong> ${this.data.accessLevel || 'private'}
@@ -309,6 +330,8 @@ class WorkspaceWizard {
   validateCurrentStep() {
     switch (this.currentStep) {
       case 1:
+        const blank = document.getElementById('blank-workspace-toggle')?.checked;
+        if (blank) return true;
         const selectedProject = document.querySelector('.project-item.selected');
         const customPath = document.getElementById('custom-repo-path').value;
         if (!selectedProject && !customPath) {
@@ -330,6 +353,14 @@ class WorkspaceWizard {
   collectCurrentStepData() {
     switch (this.currentStep) {
       case 1:
+        const blank = document.getElementById('blank-workspace-toggle')?.checked;
+        this.data.isBlank = !!blank;
+        if (blank) {
+          this.data.repositoryPath = '';
+          this.data.type = 'custom';
+          this.data.suggestedName = this.data.suggestedName || '';
+          break;
+        }
         const selectedProject = document.querySelector('.project-item.selected');
         if (selectedProject) {
           this.data.repositoryPath = selectedProject.dataset.path;
@@ -345,8 +376,13 @@ class WorkspaceWizard {
       case 2:
         this.data.name = document.getElementById('workspace-name').value;
         this.data.icon = document.getElementById('workspace-icon').value;
-        this.data.enableWorktrees = document.getElementById('enable-worktrees').checked;
-        this.data.terminalPairs = parseInt(document.getElementById('terminal-pairs').value);
+        if (this.data.isBlank) {
+          this.data.enableWorktrees = false;
+          this.data.terminalPairs = 0;
+        } else {
+          this.data.enableWorktrees = document.getElementById('enable-worktrees').checked;
+          this.data.terminalPairs = parseInt(document.getElementById('terminal-pairs').value);
+        }
         this.data.accessLevel = document.getElementById('access-level').value;
         break;
     }
@@ -360,7 +396,8 @@ class WorkspaceWizard {
       const workspaceId = this.data.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
       // Build workspace config with mixed-repo format
-      const terminalPairs = this.data.terminalPairs || 8;
+      const isBlank = !!this.data.isBlank;
+      const terminalPairs = isBlank ? 0 : (this.data.terminalPairs || 8);
       const terminals = [];
 
       // Generate terminal array for mixed-repo format
@@ -401,16 +438,17 @@ class WorkspaceWizard {
         icon: this.data.icon,
         description: `${this.getTypeInfo(this.data.type).name} workspace`,
         access: this.data.accessLevel,
+        empty: isBlank,
         repository: {
           path: this.data.repositoryPath,
           masterBranch: 'master',
           remote: ''
         },
         worktrees: {
-          enabled: true,
-          count: 8,
+          enabled: !isBlank,
+          count: isBlank ? 0 : 8,
           namingPattern: 'work{n}',
-          autoCreate: true
+          autoCreate: !isBlank
         },
         terminals: terminals,
         launchSettings: {
@@ -484,6 +522,7 @@ class WorkspaceWizard {
   }
 
   selectProject(path) {
+    if (this.data.isBlank) return;
     // Remove previous selection
     document.querySelectorAll('.project-item').forEach(item => {
       item.classList.remove('selected');
@@ -497,6 +536,7 @@ class WorkspaceWizard {
   }
 
   browsePath() {
+    if (this.data.isBlank) return;
     // Simple implementation - just focus the input
     document.getElementById('custom-repo-path').focus();
   }
@@ -516,6 +556,19 @@ class WorkspaceWizard {
 
   getProjectIcon(type) {
     return this.getTypeInfo(type).icon;
+  }
+
+  toggleBlankWorkspace(isBlank) {
+    this.data.isBlank = !!isBlank;
+
+    if (isBlank) {
+      document.querySelectorAll('.project-item.selected').forEach(item => item.classList.remove('selected'));
+      const customPath = document.getElementById('custom-repo-path');
+      if (customPath) customPath.value = '';
+    }
+
+    // Re-render step to apply disabled state
+    this.showStep(1);
   }
 
   toTitleCase(str) {
