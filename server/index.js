@@ -2344,11 +2344,20 @@ httpServer.listen(PORT, HOST, () => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
-function shutdown() {
-  logger.info('Shutting down server...');
+let isShuttingDown = false;
+let forcedExitTimer = null;
+
+function shutdown(signal = 'unknown') {
+  if (isShuttingDown) {
+    logger.warn('Shutdown already in progress', { signal });
+    return;
+  }
+
+  isShuttingDown = true;
+  logger.info('Shutting down server...', { signal });
   
   // Clean up sessions first
   sessionManager.cleanup();
@@ -2361,11 +2370,15 @@ function shutdown() {
   // Close HTTP server
   httpServer.close(() => {
     logger.info('HTTP server closed');
+    if (forcedExitTimer) {
+      clearTimeout(forcedExitTimer);
+      forcedExitTimer = null;
+    }
     process.exit(0);
   });
   
   // Force shutdown after 10 seconds
-  setTimeout(() => {
+  forcedExitTimer = setTimeout(() => {
     logger.error('Forced shutdown after timeout');
     process.exit(1);
   }, 10000);
