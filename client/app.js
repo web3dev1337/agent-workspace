@@ -5796,7 +5796,16 @@ class ClaudeOrchestrator {
 
   getRecommendedWorktree(repo) {
     const worktreeEntries = Array.isArray(repo.worktreeDirs) ? repo.worktreeDirs : [];
-    if (!worktreeEntries.length) return null;
+    if (!worktreeEntries.length) {
+      if (!repo.path) return null;
+      const rootId = 'root';
+      if (this.isWorktreeInUse(repo.path, rootId, repo.name)) return null;
+      return {
+        id: rootId,
+        path: repo.path,
+        lastModifiedMs: repo.lastModifiedMs || 0
+      };
+    }
 
     const available = worktreeEntries.filter(entry => {
       if (!entry || !entry.id) return false;
