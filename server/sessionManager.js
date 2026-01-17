@@ -1528,6 +1528,11 @@ class SessionManager extends EventEmitter {
           logger.warn('PTY session is dead, skipping resize', { sessionId });
           session.resizeDeadLogged = true;
         }
+        if (session.status !== 'dead') {
+          session.status = 'dead';
+          this.emitStatusUpdate(sessionId, 'dead');
+        }
+        session.pty = null;
         return false;
       }
 
@@ -1546,7 +1551,8 @@ class SessionManager extends EventEmitter {
 
         // Mark session as dead and clean up
         session.status = 'dead';
-        this.io.emit('session-status', { sessionId, status: 'dead' });
+        this.emitStatusUpdate(sessionId, 'dead');
+        session.pty = null;
 
         return false;
       }
