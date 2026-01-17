@@ -1718,7 +1718,10 @@ app.post('/api/greenfield/create', async (req, res) => {
         'node-typescript': 'tool-project',
         'empty': 'tool-project'
       };
-      const workspaceType = templateToWorkspaceType[template] || 'tool-project';
+      const resolvedTemplate = String(template || '').trim();
+      const workspaceType = templateToWorkspaceType[resolvedTemplate] || 'tool-project';
+      const desiredPairs = Number.isFinite(worktreeCount) ? worktreeCount : 1;
+      const pairs = Math.max(1, desiredPairs);
 
       const workspaceData = {
         id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
@@ -1730,11 +1733,12 @@ app.post('/api/greenfield/create', async (req, res) => {
         },
         worktrees: {
           enabled: true,
+          count: pairs,
           namingPattern: 'work{n}',
           autoCreate: false
         },
         terminals: {
-          pairs: worktreeCount || 1
+          pairs
         }
       };
 
@@ -1791,7 +1795,12 @@ app.post('/api/greenfield/create-full', async (req, res) => {
         other: 'tool-project'
       };
 
-      const workspaceType = categoryToWorkspaceType[category] || 'tool-project';
+      const resolvedCategory = String(category || result.category || 'other').trim().toLowerCase();
+      const workspaceType = categoryToWorkspaceType[resolvedCategory] || 'tool-project';
+      const derivedPairs = Number.isFinite(worktreeCount)
+        ? worktreeCount
+        : (Array.isArray(result.worktrees) ? Math.max(result.worktrees.length - 1, 1) : 1);
+      const pairs = Math.max(1, derivedPairs);
 
       const workspaceData = {
         id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
@@ -1803,11 +1812,12 @@ app.post('/api/greenfield/create-full', async (req, res) => {
         },
         worktrees: {
           enabled: true,
+          count: pairs,
           namingPattern: 'work{n}',
           autoCreate: false
         },
         terminals: {
-          pairs: worktreeCount
+          pairs
         }
       };
 
