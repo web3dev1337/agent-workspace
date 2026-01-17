@@ -112,7 +112,7 @@ class SessionManager extends EventEmitter {
       terminals.forEach(terminal => {
         const repoPath = terminal.repository.path;
         const worktreeId = terminal.worktree;
-        const worktreePath = path.join(repoPath, worktreeId);
+        const worktreePath = terminal.worktreePath || path.join(repoPath, worktreeId);
 
         // Use a unique key to avoid duplicate worktrees (same repo + worktree)
         const worktreeKey = `${terminal.repository.name}-${worktreeId}`;

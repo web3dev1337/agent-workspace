@@ -1276,7 +1276,7 @@ class ClaudeOrchestrator {
             const terminal = terminals.find(t => t.id === sessionId);
             if (terminal && terminal.repository && terminal.worktree) {
               repositoryType = terminal.repository.type;
-              worktreePath = `${terminal.repository.path}/${terminal.worktree}`;
+              worktreePath = terminal.worktreePath || `${terminal.repository.path}/${terminal.worktree}`;
             }
           }
         } else {
@@ -5639,11 +5639,6 @@ class ClaudeOrchestrator {
           const matches = name.includes(term) || path.includes(term);
           row.style.display = matches ? 'flex' : 'none';
         });
-        modal.querySelectorAll('.quick-repo-category').forEach(category => {
-          const visible = Array.from(category.querySelectorAll('.quick-repo-row'))
-            .some(row => row.style.display !== 'none');
-          category.style.display = visible ? 'block' : 'none';
-        });
       });
     }
 
@@ -5672,13 +5667,22 @@ class ClaudeOrchestrator {
       const repos = await response.json();
 
       const sortedRepos = repos
-        .map(repo => ({
-          ...repo,
-          lastModifiedMs: repo.lastModifiedMs || 0
-        }))
+        .map(repo => {
+          const sessionActivity = this.getRepoLastActivity(repo);
+          const lastModifiedMs = Math.max(repo.lastModifiedMs || 0, sessionActivity || 0);
+          return {
+            ...repo,
+            lastModifiedMs
+          };
+        })
         .sort((a, b) => b.lastModifiedMs - a.lastModifiedMs);
 
-      listEl.innerHTML = this.renderQuickRepoGroups(sortedRepos);
+      if (!sortedRepos.length) {
+        listEl.innerHTML = '<div class="quick-empty">No repos found</div>';
+        return;
+      }
+
+      listEl.innerHTML = this.renderQuickRepoList(sortedRepos);
 
       listEl.querySelectorAll('.quick-start-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -5686,13 +5690,22 @@ class ClaudeOrchestrator {
           const repoType = btn.dataset.repoType;
           const repoName = btn.dataset.repoName;
           const worktreeId = btn.dataset.worktreeId;
+          const worktreePath = btn.dataset.worktreePath;
+          const repositoryRoot = btn.dataset.repoRoot || repoPath;
 
-          if (!worktreeId) {
-            this.showTemporaryMessage('All worktrees are in use for this repo', 'error');
+          if (!worktreeId || !worktreePath) {
+            this.showTemporaryMessage('No available worktrees for this repo', 'error');
             return;
           }
 
-          this.addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName);
+          this.quickStartWorktree({
+            repoPath,
+            repoType,
+            repoName,
+            worktreeId,
+            worktreePath,
+            repositoryRoot
+          });
         });
       });
     } catch (error) {
@@ -5701,58 +5714,37 @@ class ClaudeOrchestrator {
     }
   }
 
-  renderQuickRepoGroups(repos) {
-    const categories = new Map();
-    repos.forEach(repo => {
-      const category = repo.category || 'Other';
-      if (!categories.has(category)) {
-        categories.set(category, { repos: [], maxMtime: 0 });
-      }
-      const entry = categories.get(category);
-      entry.repos.push(repo);
-      entry.maxMtime = Math.max(entry.maxMtime, repo.lastModifiedMs || 0);
-    });
-
-    const orderedCategories = Array.from(categories.entries())
-      .sort((a, b) => b[1].maxMtime - a[1].maxMtime);
-
-    return orderedCategories.map(([category, info]) => {
-      const reposHtml = info.repos
-        .sort((a, b) => (b.lastModifiedMs || 0) - (a.lastModifiedMs || 0))
-        .map(repo => this.renderQuickRepoRow(repo))
-        .join('');
-
-      return `
-        <div class="quick-repo-category">
-          <div class="quick-repo-category-header">${category}</div>
-          ${reposHtml}
-        </div>
-      `;
-    }).join('');
+  renderQuickRepoList(repos) {
+    return repos.map(repo => this.renderQuickRepoRow(repo)).join('');
   }
 
   renderQuickRepoRow(repo) {
     const recommended = this.getRecommendedWorktree(repo);
-    const actionLabel = recommended ? `Start (${recommended})` : 'All busy';
+    const hasWorktrees = Array.isArray(repo.worktreeDirs) && repo.worktreeDirs.length > 0;
+    const actionLabel = recommended ? `Start (${recommended.id})` : (hasWorktrees ? 'All busy' : 'No worktrees');
+    const displayPath = repo.relativePath || repo.path || '';
+    const displayPathLabel = displayPath.startsWith('/') ? displayPath : `~/${displayPath}`;
 
     return `
       <div class="quick-repo-row"
            data-repo-name="${repo.name.toLowerCase()}"
-           data-repo-path="${(repo.relativePath || '').toLowerCase()}">
+           data-repo-path="${displayPath.toLowerCase()}">
         <div class="quick-repo-meta">
           <span class="quick-repo-icon">${this.getProjectIcon(repo.type)}</span>
           <div class="quick-repo-info">
-            <div class="quick-repo-name">${repo.name}</div>
-            <div class="quick-repo-path">~/${repo.relativePath || ''}</div>
+            <div class="quick-repo-name">${this.escapeHtml(repo.name)}</div>
+            <div class="quick-repo-path">${this.escapeHtml(displayPathLabel)}</div>
           </div>
         </div>
         <div class="quick-repo-actions">
-          ${recommended ? `<span class="quick-worktree-pill">${recommended}</span>` : ''}
+          ${recommended ? `<span class="quick-worktree-pill">${recommended.id}</span>` : ''}
           <button class="btn-primary quick-start-btn"
                   data-repo-path="${repo.path}"
                   data-repo-type="${repo.type}"
                   data-repo-name="${repo.name}"
-                  data-worktree-id="${recommended || ''}"
+                  data-repo-root="${repo.path}"
+                  data-worktree-id="${recommended ? recommended.id : ''}"
+                  data-worktree-path="${recommended ? recommended.path : ''}"
                   ${recommended ? '' : 'disabled'}>
             ${actionLabel}
           </button>
@@ -5762,31 +5754,59 @@ class ClaudeOrchestrator {
   }
 
   getRecommendedWorktree(repo) {
-    const available = [];
-    for (let i = 1; i <= 8; i++) {
-      const worktreeId = `work${i}`;
-      if (!this.isWorktreeInUse(repo.path, worktreeId)) {
-        available.push(worktreeId);
-      }
-    }
+    const worktreeEntries = Array.isArray(repo.worktreeDirs) ? repo.worktreeDirs : [];
+    if (!worktreeEntries.length) return null;
 
-    if (available.length === 0) return null;
+    const available = worktreeEntries.filter(entry => {
+      if (!entry || !entry.id) return false;
+      return !this.isWorktreeInUse(repo.path, entry.id, repo.name);
+    });
 
-    let best = available[0];
+    if (!available.length) return null;
+
+    let best = null;
     let bestTime = Infinity;
 
-    for (const worktreeId of available) {
-      const lastActivity = this.getWorktreeLastActivity(repo, worktreeId);
-      if (lastActivity === null) {
-        return worktreeId; // never used
-      }
-      if (lastActivity < bestTime) {
-        bestTime = lastActivity;
-        best = worktreeId;
+    for (const entry of available) {
+      const lastActivity = this.getWorktreeLastActivity(repo, entry.id);
+      const entryMtime = typeof entry.lastModifiedMs === 'number' ? entry.lastModifiedMs : 0;
+      const effectiveLastUsed = Math.max(entryMtime, lastActivity || 0);
+      if (effectiveLastUsed < bestTime) {
+        bestTime = effectiveLastUsed;
+        best = entry;
       }
     }
 
-    return best;
+    if (!best) return null;
+
+    return {
+      id: best.id,
+      path: best.path || `${repo.path}/${best.id}`,
+      lastModifiedMs: best.lastModifiedMs
+    };
+  }
+
+  getRepoLastActivity(repo) {
+    let latest = null;
+    const repoName = repo.name?.toLowerCase();
+
+    for (const [sessionId, session] of this.sessions) {
+      const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
+
+      if (!sessionRepoName) {
+        if (this.currentWorkspace?.repository?.path !== repo.path) {
+          continue;
+        }
+      } else if (repoName && sessionRepoName !== repoName) {
+        continue;
+      }
+
+      if (typeof session.lastActivity === 'number') {
+        latest = latest === null ? session.lastActivity : Math.max(latest, session.lastActivity);
+      }
+    }
+
+    return latest;
   }
 
   getWorktreeLastActivity(repo, worktreeId) {
@@ -5941,7 +5961,7 @@ class ClaudeOrchestrator {
     const worktreeOptions = [];
     for (let i = 1; i <= 8; i++) {
       const worktreeId = `work${i}`;
-      const isInUse = this.isWorktreeInUse(repo.path, worktreeId);
+      const isInUse = this.isWorktreeInUse(repo.path, worktreeId, repo.name);
       const statusIcon = isInUse ? '⚠️' : '✅';
       const statusText = isInUse ? 'In use' : 'Available';
 
@@ -5972,21 +5992,21 @@ class ClaudeOrchestrator {
     `;
   }
 
-  isWorktreeInUse(repoPath, worktreeId) {
+  isWorktreeInUse(repoPath, worktreeId, repoNameOverride = null) {
     // Check if this worktree has ACTIVE SESSIONS, not just workspace config
     // A worktree is "in use" only if there are actual terminal sessions for it
 
     if (!this.currentWorkspace) return false;
 
     // Extract repo name from path for session matching
-    const repoName = repoPath.split('/').pop();
+    const repoName = (repoNameOverride || repoPath.split('/').pop() || '').toLowerCase();
 
     // Check if any session is using this worktree
     // Session IDs follow patterns like: "work1-claude", "work1-server",
     // or for mixed-repo: "repoName-work1-claude", "repoName-work1-server"
     for (const [sessionId, session] of this.sessions) {
       const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
-      const sessionRepoName = this.extractRepositoryName(sessionId);
+      const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
 
       // For single-repo workspaces (no repo name in session)
       if (!sessionRepoName && this.currentWorkspace.repository?.path === repoPath) {
@@ -5996,7 +6016,7 @@ class ClaudeOrchestrator {
       }
 
       // For mixed-repo workspaces (repo name in session)
-      if (sessionRepoName && sessionRepoName.toLowerCase() === repoName.toLowerCase()) {
+      if (sessionRepoName && repoName && sessionRepoName === repoName) {
         if (sessionWorktreeId === worktreeId) {
           return true;
         }
@@ -6005,9 +6025,14 @@ class ClaudeOrchestrator {
 
     // Also check mixed-repo workspace config for explicitly assigned worktrees
     if (this.currentWorkspace.terminals && Array.isArray(this.currentWorkspace.terminals)) {
+      const repoNameMatch = repoNameOverride ? repoNameOverride.toLowerCase() : '';
       return this.currentWorkspace.terminals.some(terminal => {
-        if (terminal.repository?.path === repoPath && terminal.worktree === worktreeId) {
+        if (terminal.worktree !== worktreeId) return false;
+        if (terminal.repository?.path === repoPath) {
           return true; // This worktree is assigned in workspace config
+        }
+        if (repoNameMatch && (terminal.repository?.name || '').toLowerCase() === repoNameMatch) {
+          return true; // Match by repo name when paths differ
         }
         return false;
       });
@@ -6015,6 +6040,24 @@ class ClaudeOrchestrator {
 
     // No active sessions for this worktree - it's available
     return false;
+  }
+
+  quickStartWorktree({ repoPath, repoType, repoName, worktreeId, worktreePath, repositoryRoot }) {
+    if (!this.socket) {
+      this.showTemporaryMessage('Socket not connected', 'error');
+      return;
+    }
+
+    this.showTemporaryMessage(`Starting ${repoName} ${worktreeId}...`, 'success');
+    this.socket.emit('add-worktree-sessions', {
+      worktreeId,
+      worktreePath,
+      repositoryName: repoName,
+      repositoryType: repoType,
+      repositoryRoot: repositoryRoot || repoPath
+    });
+
+    document.getElementById('quick-worktree-modal')?.remove();
   }
 
   async addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName) {
