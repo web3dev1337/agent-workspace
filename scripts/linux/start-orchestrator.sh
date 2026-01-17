@@ -9,11 +9,11 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PORT="${ORCHESTRATOR_PORT:-3000}"
+export ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-3000}"
 
 echo "Starting Claude Orchestrator..."
 echo "  Path: $REPO_ROOT"
-echo "  Port: $PORT"
+echo "  Port: $ORCHESTRATOR_PORT"
 echo ""
 
 cd "$REPO_ROOT"
@@ -25,7 +25,7 @@ SERVER_PID=$!
 # Wait for server to be ready
 echo "Waiting for server to start..."
 for i in {1..30}; do
-    if curl -s "http://localhost:$PORT" > /dev/null 2>&1; then
+    if curl -s "http://localhost:$ORCHESTRATOR_PORT" > /dev/null 2>&1; then
         echo "Server is ready!"
         break
     fi
@@ -34,9 +34,9 @@ done
 
 # Open browser
 if command -v xdg-open &> /dev/null; then
-    xdg-open "http://localhost:$PORT"
+    xdg-open "http://localhost:$ORCHESTRATOR_PORT"
 elif command -v open &> /dev/null; then
-    open "http://localhost:$PORT"
+    open "http://localhost:$ORCHESTRATOR_PORT"
 fi
 
 echo ""
