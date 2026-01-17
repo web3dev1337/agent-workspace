@@ -124,7 +124,7 @@ class GreenfieldWizard {
           <label for="gf-project-name">Project Name</label>
           <input type="text" id="gf-project-name" value="${this.data.name}"
                  placeholder="my-awesome-project"
-                 pattern="[a-z0-9-]+"
+                 pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$"
                  oninput="window.greenfieldWizard.updateData('name', this.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))">
           <p class="field-help">Lowercase letters, numbers, and hyphens only</p>
         </div>

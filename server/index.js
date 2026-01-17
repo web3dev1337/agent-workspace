@@ -1713,9 +1713,17 @@ app.post('/api/greenfield/create', async (req, res) => {
 
     // Optionally create a workspace for the new project
     if (req.body.createWorkspace) {
+      const templateToWorkspaceType = {
+        'hytopia-game': 'hytopia-game',
+        'node-typescript': 'tool-project',
+        'empty': 'tool-project'
+      };
+      const workspaceType = templateToWorkspaceType[template] || 'tool-project';
+
       const workspaceData = {
         id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
         name: name,
+        type: workspaceType,
         repository: {
           path: result.projectPath,
           masterBranch: 'master'
@@ -1774,9 +1782,21 @@ app.post('/api/greenfield/create-full', async (req, res) => {
 
     // Also create a workspace configuration
     if (result.success) {
+      const categoryToWorkspaceType = {
+        website: 'website',
+        game: 'hytopia-game',
+        tool: 'tool-project',
+        api: 'tool-project',
+        library: 'tool-project',
+        other: 'tool-project'
+      };
+
+      const workspaceType = categoryToWorkspaceType[category] || 'tool-project';
+
       const workspaceData = {
         id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
         name: name,
+        type: workspaceType,
         repository: {
           path: result.projectPath,
           masterBranch: 'master'
