@@ -533,7 +533,7 @@ io.on('connection', (socket) => {
   });
 
   // Add sessions for a new worktree without destroying existing sessions
-  socket.on('add-worktree-sessions', async ({ worktreeId, worktreePath, repositoryName, repositoryType }) => {
+  socket.on('add-worktree-sessions', async ({ worktreeId, worktreePath, repositoryName, repositoryType, repositoryRoot }) => {
     try {
       logger.info('Adding sessions for new worktree', { worktreeId, worktreePath, repositoryName });
 
@@ -557,7 +557,8 @@ io.on('connection', (socket) => {
             // Add new terminal entries for claude and server
             const baseRepo = {
               name: repositoryName || worktreeId.split('-')[0],
-              path: worktreePath.replace(/\/work\d+$/, ''),
+              path: repositoryRoot || worktreePath.replace(/\/work\d+$/, ''),
+              type: repositoryType,
               masterBranch: 'master'
             };
 
@@ -565,6 +566,7 @@ io.on('connection', (socket) => {
               id: `${repositoryName || worktreeId}-claude`,
               repository: baseRepo,
               worktree: worktreeId,
+              worktreePath: worktreePath,
               terminalType: 'claude',
               visible: true
             });
@@ -572,6 +574,7 @@ io.on('connection', (socket) => {
               id: `${repositoryName || worktreeId}-server`,
               repository: baseRepo,
               worktree: worktreeId,
+              worktreePath: worktreePath,
               terminalType: 'server',
               visible: true
             });
@@ -726,6 +729,8 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
     const path = require('path');
 
     const projects = [];
+    const projectIndexByKey = new Map();
+    const worktreeGroups = new Map();
     const gitHubPath = path.join(require('os').homedir(), 'GitHub');
 
     // Deep scan function
@@ -741,6 +746,38 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
           if (entry.name === 'node_modules') continue;
 
           const fullPath = path.join(dirPath, entry.name);
+
+          // Detect sibling worktree directories like "repo-work7"
+          const worktreeMatch = entry.name.match(/^(.*)-work(\d+)$/i);
+          if (worktreeMatch) {
+            const baseName = worktreeMatch[1];
+            const worktreeNumber = parseInt(worktreeMatch[2], 10);
+            const key = path.join(dirPath, baseName);
+            let lastModifiedMs = 0;
+            try {
+              const wtStat = await fs.stat(fullPath);
+              lastModifiedMs = wtStat.mtimeMs;
+            } catch (statError) {
+              lastModifiedMs = 0;
+            }
+
+            if (!worktreeGroups.has(key)) {
+              worktreeGroups.set(key, {
+                baseName,
+                parentDir: dirPath,
+                entries: []
+              });
+            }
+
+            worktreeGroups.get(key).entries.push({
+              id: `work${worktreeNumber}`,
+              name: entry.name,
+              path: fullPath,
+              number: worktreeNumber,
+              lastModifiedMs
+            });
+            continue;
+          }
 
           // Check if this looks like a project (has package.json, .git, or other indicators)
           const isProject = await isProjectDirectory(fullPath);
@@ -776,15 +813,50 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
               lastModifiedMs = 0;
             }
 
-            projects.push({
+            const repoEntry = {
               name: projectName,
               path: projectPath,
               masterPath: entry.name === 'master' ? fullPath : path.join(fullPath, 'master'),
               relativePath: path.relative(gitHubPath, projectPath),
               type: type,
               category: getCategoryFromPath(fullPath),
-              lastModifiedMs
-            });
+              lastModifiedMs,
+              worktreeDirs: [],
+              worktreeLayout: 'nested'
+            };
+
+            // Detect nested worktrees inside repo directory (work1..work8)
+            try {
+              const nestedEntries = [];
+              for (let i = 1; i <= 8; i++) {
+                const worktreeName = `work${i}`;
+                const worktreePath = path.join(projectPath, worktreeName);
+                try {
+                  const wtStat = await fs.stat(worktreePath);
+                  nestedEntries.push({
+                    id: worktreeName,
+                    name: worktreeName,
+                    path: worktreePath,
+                    number: i,
+                    lastModifiedMs: wtStat.mtimeMs
+                  });
+                } catch (wtError) {
+                  // Worktree does not exist
+                }
+              }
+              if (nestedEntries.length) {
+                repoEntry.worktreeDirs = nestedEntries;
+                const maxNested = nestedEntries.reduce((max, entry) => Math.max(max, entry.lastModifiedMs || 0), 0);
+                if (maxNested) {
+                  repoEntry.lastModifiedMs = Math.max(repoEntry.lastModifiedMs || 0, maxNested);
+                }
+              }
+            } catch (wtScanError) {
+              // Ignore nested worktree scan errors
+            }
+
+            projects.push(repoEntry);
+            projectIndexByKey.set(projectPath, projects.length - 1);
           } else {
             // Continue scanning subdirectories
             await scanDirectory(fullPath, depth + 1, maxDepth);
@@ -848,8 +920,77 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
       return 'Other';
     }
 
+    function mergeWorktreeEntries(existing, entries) {
+      const byId = new Map();
+      (existing || []).forEach(entry => {
+        if (entry && entry.id) byId.set(entry.id, entry);
+      });
+      entries.forEach(entry => {
+        if (entry && entry.id && !byId.has(entry.id)) {
+          byId.set(entry.id, entry);
+        }
+      });
+      return Array.from(byId.values()).sort((a, b) => (a.number || 0) - (b.number || 0));
+    }
+
+    function findSiblingRepoIndex(group) {
+      const baseLower = (group.baseName || '').toLowerCase();
+      let matchIndex = null;
+      let matchCount = 0;
+
+      projects.forEach((repo, idx) => {
+        if (!repo?.path) return;
+        if (path.dirname(repo.path) !== group.parentDir) return;
+        const nameLower = (repo.name || '').toLowerCase();
+        if (nameLower === baseLower || nameLower.startsWith(`${baseLower}-`) || nameLower.startsWith(`${baseLower}_`)) {
+          matchIndex = idx;
+          matchCount += 1;
+        }
+      });
+
+      return matchCount === 1 ? matchIndex : null;
+    }
+
     // Start deep scan
     await scanDirectory(gitHubPath);
+
+    // Attach sibling worktree groups to base repos or create synthetic repos
+    for (const [key, group] of worktreeGroups.entries()) {
+      const entries = group.entries.sort((a, b) => a.number - b.number);
+      const maxModified = entries.reduce((max, e) => Math.max(max, e.lastModifiedMs || 0), 0);
+
+      const directIndex = projectIndexByKey.has(key) ? projectIndexByKey.get(key) : null;
+      const siblingIndex = directIndex !== null ? null : findSiblingRepoIndex(group);
+      const targetIndex = directIndex !== null ? directIndex : siblingIndex;
+
+      if (targetIndex !== null && targetIndex !== undefined) {
+        const repo = projects[targetIndex];
+        const mergedEntries = mergeWorktreeEntries(repo.worktreeDirs, entries);
+        repo.worktreeDirs = mergedEntries;
+        repo.worktreeLayout = repo.worktreeLayout === 'nested' ? 'mixed' : 'sibling';
+        const mergedMax = mergedEntries.reduce((max, e) => Math.max(max, e.lastModifiedMs || 0), 0);
+        repo.lastModifiedMs = Math.max(repo.lastModifiedMs || 0, mergedMax);
+      } else {
+        // No base repo found; create synthetic entry using the lowest-numbered worktree
+        const fallback = entries[0];
+        const projectPath = fallback.path;
+        const projectName = group.baseName;
+        const type = getTypeFromPath(projectPath);
+        const category = getCategoryFromPath(projectPath);
+
+        projects.push({
+          name: projectName,
+          path: projectPath,
+          masterPath: path.join(projectPath, 'master'),
+          relativePath: path.relative(gitHubPath, projectPath),
+          type,
+          category,
+          lastModifiedMs: maxModified,
+          worktreeDirs: entries,
+          worktreeLayout: 'sibling'
+        });
+      }
+    }
 
     // Sort by category then name
     projects.sort((a, b) => {
