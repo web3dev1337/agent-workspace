@@ -610,7 +610,14 @@ class SessionManager extends EventEmitter {
                 });
 
                 // Start Claude after delay
-                setTimeout(() => {
+                session.autoStartTimer = setTimeout(() => {
+                  const currentSession = this.sessions.get(sessionId);
+                  if (!currentSession || currentSession !== session) {
+                    return;
+                  }
+                  if (currentSession.status === 'exited' || currentSession.status === 'dead') {
+                    return;
+                  }
                   this.startClaudeWithOptions(sessionId, {
                     mode: mode,
                     skipPermissions: skipPermissions
@@ -1517,7 +1524,10 @@ class SessionManager extends EventEmitter {
     try {
       // Check if PTY is still valid before resizing
       if (session.pty.killed || !session.pty.writable) {
-        logger.warn('PTY session is dead, skipping resize', { sessionId });
+        if (!session.resizeDeadLogged) {
+          logger.warn('PTY session is dead, skipping resize', { sessionId });
+          session.resizeDeadLogged = true;
+        }
         return false;
       }
 
@@ -1526,10 +1536,13 @@ class SessionManager extends EventEmitter {
     } catch (error) {
       // Handle ENOTTY/EBADF errors gracefully - these mean the PTY is dead
       if (error.code === 'ENOTTY' || error.code === 'EBADF') {
-        logger.warn('PTY session has invalid file descriptor, cleaning up', {
-          sessionId,
-          error: error.code
-        });
+        if (!session.resizeDeadLogged) {
+          logger.warn('PTY session has invalid file descriptor, cleaning up', {
+            sessionId,
+            error: error.code
+          });
+          session.resizeDeadLogged = true;
+        }
 
         // Mark session as dead and clean up
         session.status = 'dead';
@@ -1833,6 +1846,12 @@ class SessionManager extends EventEmitter {
       session.processMonitor = null;
     }
 
+    // Clear any pending auto-start timers
+    if (session.autoStartTimer) {
+      clearTimeout(session.autoStartTimer);
+      session.autoStartTimer = null;
+    }
+
     // Kill the PTY process if it exists
     if (session.pty) {
       try {
@@ -2030,6 +2049,9 @@ class SessionManager extends EventEmitter {
     for (const [sessionId, session] of this.sessions) {
       clearTimeout(session.inactivityTimer);
       clearInterval(session.processMonitor);
+      if (session.autoStartTimer) {
+        clearTimeout(session.autoStartTimer);
+      }
       
       try {
         if (session.pty) {
@@ -2062,6 +2084,10 @@ class SessionManager extends EventEmitter {
         // Clear process monitor
         if (session.processMonitor) {
           clearInterval(session.processMonitor);
+        }
+
+        if (session.autoStartTimer) {
+          clearTimeout(session.autoStartTimer);
         }
       } catch (error) {
         logger.error('Error cleaning up session', {
