@@ -38,6 +38,9 @@ git checkout -b fix/your-feature-name main
 
 ## Code Style Guidelines
 
+### UI/UX Rules
+- Never darken the background when a modal is open.
+
 ### Node.js Standards
 - Follow existing patterns in the codebase
 - **Always prefer parameters over magic numbers** - use constants or config
