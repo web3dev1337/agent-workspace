@@ -5567,6 +5567,7 @@ class ClaudeOrchestrator {
     const existing = document.getElementById('quick-worktree-modal');
     if (existing) existing.remove();
     this.quickWorktreeConversationsLoaded = false;
+    this.quickWorktreeConversationLimit = this.quickWorktreeConversationLimit || 100;
 
     const modal = document.createElement('div');
     modal.id = 'quick-worktree-modal';
@@ -5594,6 +5595,13 @@ class ClaudeOrchestrator {
             </div>
           </div>
           <div class="quick-tab-panel" data-tab="resume">
+            <div class="quick-conv-toolbar">
+              <div class="quick-conv-controls">
+                <button class="btn-secondary quick-conv-more-btn">Load more</button>
+                <button class="btn-secondary quick-conv-history-btn">Open history</button>
+              </div>
+              <div class="quick-conv-count" id="quick-conv-count"></div>
+            </div>
             <div id="quick-conv-list" class="quick-conv-list">
               <div class="loading">Loading recent conversations...</div>
             </div>
@@ -5607,6 +5615,8 @@ class ClaudeOrchestrator {
     const searchInput = modal.querySelector('#quick-worktree-search');
     const advancedBtn = modal.querySelector('.quick-advanced-btn');
     const tabButtons = modal.querySelectorAll('.quick-tab-btn');
+    const convMoreBtn = modal.querySelector('.quick-conv-more-btn');
+    const convHistoryBtn = modal.querySelector('.quick-conv-history-btn');
 
     if (advancedBtn) {
       advancedBtn.addEventListener('click', () => {
@@ -5630,15 +5640,44 @@ class ClaudeOrchestrator {
       });
     });
 
+    if (convMoreBtn) {
+      convMoreBtn.addEventListener('click', () => {
+        this.quickWorktreeConversationLimit = (this.quickWorktreeConversationLimit || 100) + 100;
+        this.loadQuickWorktreeConversations({ force: true });
+      });
+    }
+
+    if (convHistoryBtn) {
+      convHistoryBtn.addEventListener('click', () => {
+        if (this.conversationBrowser) {
+          modal.remove();
+          this.conversationBrowser.show();
+        } else {
+          this.showTemporaryMessage('Conversation history not available', 'error');
+        }
+      });
+    }
+
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase().trim();
-        modal.querySelectorAll('.quick-repo-row').forEach(row => {
-          const name = row.dataset.repoName || '';
-          const path = row.dataset.repoPath || '';
-          const matches = name.includes(term) || path.includes(term);
-          row.style.display = matches ? 'flex' : 'none';
-        });
+        const activeTab = modal.querySelector('.quick-tab-panel.active')?.dataset.tab;
+        if (activeTab === 'resume') {
+          modal.querySelectorAll('.quick-conv-row').forEach(row => {
+            const title = row.dataset.convTitle || '';
+            const repo = row.dataset.convRepo || '';
+            const path = row.dataset.convPath || '';
+            const matches = title.includes(term) || repo.includes(term) || path.includes(term);
+            row.style.display = matches ? 'flex' : 'none';
+          });
+        } else {
+          modal.querySelectorAll('.quick-repo-row').forEach(row => {
+            const name = row.dataset.repoName || '';
+            const path = row.dataset.repoPath || '';
+            const matches = name.includes(term) || path.includes(term);
+            row.style.display = matches ? 'flex' : 'none';
+          });
+        }
       });
     }
 
@@ -5685,13 +5724,14 @@ class ClaudeOrchestrator {
       listEl.innerHTML = this.renderQuickRepoList(sortedRepos);
 
       listEl.querySelectorAll('.quick-start-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (event) => {
           const repoPath = btn.dataset.repoPath;
           const repoType = btn.dataset.repoType;
           const repoName = btn.dataset.repoName;
           const worktreeId = btn.dataset.worktreeId;
           const worktreePath = btn.dataset.worktreePath;
           const repositoryRoot = btn.dataset.repoRoot || repoPath;
+          const keepOpen = event && (event.ctrlKey || event.metaKey);
 
           if (!worktreeId || !worktreePath) {
             this.showTemporaryMessage('No available worktrees for this repo', 'error');
@@ -5704,7 +5744,8 @@ class ClaudeOrchestrator {
             repoName,
             worktreeId,
             worktreePath,
-            repositoryRoot
+            repositoryRoot,
+            keepOpen
           });
         });
       });
@@ -5809,6 +5850,61 @@ class ClaudeOrchestrator {
     return latest;
   }
 
+  getConversationRepoLabel(conv) {
+    if (conv.gitRepo) return conv.gitRepo;
+    if (conv.project) return conv.project;
+    const cwd = conv.cwd || '';
+    if (!cwd) return 'Unknown';
+
+    const parts = cwd.split('/').filter(Boolean);
+    if (!parts.length) return 'Unknown';
+    return parts.slice(-2).join('/');
+  }
+
+  extractWorktreeLabel(cwd) {
+    if (!cwd) return '';
+    const nestedMatch = cwd.match(/(?:^|\/)(work\d+)(?:\/|$)/i);
+    if (nestedMatch) return nestedMatch[1];
+    const siblingMatch = cwd.match(/-work(\d+)(?:\/|$)/i);
+    if (siblingMatch) return `work${siblingMatch[1]}`;
+    return '';
+  }
+
+  formatConversationTimestamp(timestamp) {
+    try {
+      const date = new Date(timestamp);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleString();
+    } catch (error) {
+      return '';
+    }
+  }
+
+  cleanQuickPreview(text) {
+    if (!text) return '';
+    let cleaned = text
+      .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/gi, '')
+      .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, '')
+      .replace(/<command-name>[\s\S]*?<\/command-name>/gi, '')
+      .replace(/<command-message>[\s\S]*?<\/command-message>/gi, '')
+      .replace(/<command-args>[\s\S]*?<\/command-args>/gi, '')
+      .replace(/<[^>]+>/g, '')
+      .trim();
+
+    if (cleaned.length < 10) {
+      cleaned = text.replace(/<[^>]+>/g, '').trim();
+    }
+
+    return cleaned.slice(0, 180);
+  }
+
+  formatTokenCount(tokens) {
+    if (!tokens || typeof tokens !== 'number') return '';
+    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+    if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
+    return `${tokens}`;
+  }
+
   getWorktreeLastActivity(repo, worktreeId) {
     let oldest = null;
     const repoName = repo.name?.toLowerCase();
@@ -5828,15 +5924,23 @@ class ClaudeOrchestrator {
     return oldest;
   }
 
-  async loadQuickWorktreeConversations() {
+  async loadQuickWorktreeConversations({ force = false } = {}) {
     const listEl = document.getElementById('quick-conv-list');
     if (!listEl) return;
 
     try {
+      if (this.quickWorktreeConversationsLoaded && !force) return;
+      listEl.innerHTML = '<div class="loading">Loading recent conversations...</div>';
+
       const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
-      const response = await fetch(`${serverUrl}/api/conversations/recent?limit=20`);
+      const limit = this.quickWorktreeConversationLimit || 100;
+      const response = await fetch(`${serverUrl}/api/conversations/recent?limit=${limit}`);
       const conversations = await response.json();
       this.quickWorktreeConversationsLoaded = true;
+      const countEl = document.getElementById('quick-conv-count');
+      if (countEl) {
+        countEl.textContent = `${conversations.length} loaded`;
+      }
 
       if (!conversations.length) {
         listEl.innerHTML = '<div class="quick-empty">No recent conversations yet</div>';
@@ -5846,10 +5950,11 @@ class ClaudeOrchestrator {
       listEl.innerHTML = conversations.map(conv => this.renderQuickConversationRow(conv)).join('');
 
       listEl.querySelectorAll('.quick-resume-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (event) => {
           const id = btn.dataset.id;
           const project = btn.dataset.project;
           const cwd = btn.dataset.cwd;
+          const keepOpen = event && (event.ctrlKey || event.metaKey);
 
           if (this.conversationBrowser) {
             this.conversationBrowser.resumeConversation(id, project, cwd);
@@ -5857,7 +5962,9 @@ class ClaudeOrchestrator {
             this.showTemporaryMessage('Conversation browser not available', 'error');
           }
 
-          document.getElementById('quick-worktree-modal')?.remove();
+          if (!keepOpen) {
+            document.getElementById('quick-worktree-modal')?.remove();
+          }
         });
       });
     } catch (error) {
@@ -5867,20 +5974,48 @@ class ClaudeOrchestrator {
   }
 
   renderQuickConversationRow(conv) {
-    const title = (conv.summary || conv.firstUserMessage || conv.preview || conv.project || 'Conversation').slice(0, 120);
-    const repo = conv.gitRepo || conv.project || 'Unknown';
-    const timestamp = conv.lastTimestamp ? new Date(conv.lastTimestamp).toLocaleString() : '';
+    const repoLabel = this.getConversationRepoLabel(conv);
+    const worktreeLabel = this.extractWorktreeLabel(conv.cwd || '');
+    const lastUsed = conv.lastTimestamp ? this.formatConversationTimestamp(conv.lastTimestamp) : '';
+    const title = this.cleanQuickPreview(conv.summary || conv.firstUserMessage || conv.preview || conv.project || 'Conversation');
+    const lastPreview = this.cleanQuickPreview(conv.lastMessage || '');
     const disabled = !conv.cwd;
+    const model = conv.model || '';
+    const msgCount = typeof conv.messageCount === 'number' ? conv.messageCount : 0;
+    const userCount = typeof conv.userMessageCount === 'number' ? conv.userMessageCount : 0;
+    const tokens = this.formatTokenCount(conv.totalTokens);
 
     return `
-      <div class="quick-conv-row">
-        <div class="quick-conv-info">
-          <div class="quick-conv-title">${this.escapeHtml(title)}</div>
-          <div class="quick-conv-meta">${this.escapeHtml(repo)}${timestamp ? ` • ${timestamp}` : ''}</div>
+      <div class="quick-conv-row"
+           data-conv-title="${this.escapeHtml(title).toLowerCase()}"
+           data-conv-repo="${this.escapeHtml(repoLabel).toLowerCase()}"
+           data-conv-path="${this.escapeHtml(conv.cwd || '').toLowerCase()}">
+        <div class="quick-conv-main">
+          <div class="quick-conv-header">
+            <div class="quick-conv-title">${this.escapeHtml(repoLabel)}</div>
+            <div class="quick-conv-badges">
+              ${worktreeLabel ? `<span class="quick-pill">${this.escapeHtml(worktreeLabel)}</span>` : ''}
+              ${conv.branch ? `<span class="quick-pill">${this.escapeHtml(conv.branch)}</span>` : ''}
+            </div>
+          </div>
+          <div class="quick-conv-meta-row">
+            ${lastUsed ? `<span>Last: ${this.escapeHtml(lastUsed)}</span>` : ''}
+            ${conv.project ? `<span>${this.escapeHtml(conv.project)}</span>` : ''}
+          </div>
+          ${title ? `<div class="quick-conv-preview">${this.escapeHtml(title)}</div>` : ''}
+          ${lastPreview && lastPreview !== title ? `<div class="quick-conv-preview">${this.escapeHtml(lastPreview)}</div>` : ''}
+          <div class="quick-conv-meta-row">
+            ${model ? `<span>${this.escapeHtml(model)}</span>` : ''}
+            <span>${msgCount} msgs${userCount ? ` (${userCount} user)` : ''}</span>
+            ${tokens ? `<span>${tokens} tokens</span>` : ''}
+          </div>
+          ${conv.cwd ? `<div class="quick-conv-path">${this.escapeHtml(conv.cwd)}</div>` : ''}
         </div>
-        <button class="btn-secondary quick-resume-btn" data-id="${conv.id}" data-project="${conv.project || ''}" data-cwd="${conv.cwd || ''}" ${disabled ? 'disabled' : ''}>
-          ${disabled ? 'No CWD' : 'Resume'}
-        </button>
+        <div class="quick-conv-actions">
+          <button class="btn-secondary quick-resume-btn" data-id="${conv.id}" data-project="${conv.project || ''}" data-cwd="${conv.cwd || ''}" ${disabled ? 'disabled' : ''}>
+            ${disabled ? 'No CWD' : 'Resume'}
+          </button>
+        </div>
       </div>
     `;
   }
@@ -6042,7 +6177,7 @@ class ClaudeOrchestrator {
     return false;
   }
 
-  quickStartWorktree({ repoPath, repoType, repoName, worktreeId, worktreePath, repositoryRoot }) {
+  quickStartWorktree({ repoPath, repoType, repoName, worktreeId, worktreePath, repositoryRoot, keepOpen = false }) {
     if (!this.socket) {
       this.showTemporaryMessage('Socket not connected', 'error');
       return;
@@ -6057,7 +6192,9 @@ class ClaudeOrchestrator {
       repositoryRoot: repositoryRoot || repoPath
     });
 
-    document.getElementById('quick-worktree-modal')?.remove();
+    if (!keepOpen) {
+      document.getElementById('quick-worktree-modal')?.remove();
+    }
   }
 
   async addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName) {
