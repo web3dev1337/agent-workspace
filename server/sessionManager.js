@@ -1523,7 +1523,7 @@ class SessionManager extends EventEmitter {
 
     try {
       // Check if PTY is still valid before resizing
-      if (session.pty.killed || !session.pty.writable) {
+      if (session.pty.killed) {
         if (!session.resizeDeadLogged) {
           logger.warn('PTY session is dead, skipping resize', { sessionId });
           session.resizeDeadLogged = true;
