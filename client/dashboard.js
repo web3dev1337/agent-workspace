@@ -189,7 +189,7 @@ class Dashboard {
 
         <div class="workspace-card-footer">
           <button class="btn-primary workspace-create-btn">Create Workspace</button>
-          <button class="btn-secondary workspace-create-empty-btn">Create Empty</button>
+          <button class="btn-cta-empty workspace-create-empty-btn">One‑Click Empty</button>
         </div>
       </div>
     `;
@@ -266,7 +266,7 @@ class Dashboard {
     const createEmptyBtn = document.querySelector('.workspace-create-empty-btn');
     if (createEmptyBtn) {
       createEmptyBtn.addEventListener('click', () => {
-        this.showCreateWorkspaceWizard({ blank: true });
+        this.createEmptyWorkspaceQuick();
       });
     }
 
@@ -361,6 +361,94 @@ class Dashboard {
 
     const wizard = new WorkspaceWizard(this.orchestrator);
     wizard.show(options);
+  }
+
+  async createEmptyWorkspaceQuick() {
+    try {
+      const timestamp = new Date();
+      const stamp = timestamp.toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const name = `Empty Workspace ${timestamp.toLocaleString()}`;
+      const baseId = `empty-${stamp}`;
+      const randomSuffix = Math.random().toString(36).slice(2, 6);
+      let workspaceId = `${baseId}-${randomSuffix}`;
+
+      // Ensure ID is unique against current list
+      const existingIds = new Set(this.workspaces.map(ws => ws.id));
+      if (existingIds.has(workspaceId)) {
+        workspaceId = `${baseId}-${Math.random().toString(36).slice(2, 8)}`;
+      }
+
+      const workspaceConfig = {
+        id: workspaceId,
+        name,
+        type: 'custom',
+        icon: '🧱',
+        description: 'Empty workspace (add worktrees later)',
+        access: 'private',
+        empty: true,
+        repository: {
+          path: '',
+          masterBranch: 'master',
+          remote: ''
+        },
+        worktrees: {
+          enabled: false,
+          count: 0,
+          namingPattern: 'work{n}',
+          autoCreate: false
+        },
+        terminals: [],
+        launchSettings: {
+          type: 'custom',
+          defaults: {
+            envVars: '',
+            nodeOptions: '',
+            gameArgs: ''
+          },
+          perWorktree: {}
+        },
+        shortcuts: [],
+        quickLinks: [],
+        theme: {
+          primaryColor: '#0ea5e9',
+          icon: '🧱'
+        },
+        notifications: {
+          enabled: true,
+          background: true,
+          types: {},
+          priority: 'normal'
+        },
+        workspaceType: 'mixed-repo',
+        layout: {
+          type: 'dynamic',
+          arrangement: 'auto'
+        }
+      };
+
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const response = await fetch(`${serverUrl}/api/workspaces`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(workspaceConfig)
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Failed to create empty workspace');
+      }
+
+      const workspace = await response.json();
+      this.workspaces.push(workspace);
+
+      // Switch to new workspace
+      this.openWorkspace(workspaceId);
+
+      this.orchestrator.showTemporaryMessage(`Empty workspace "${name}" created`, 'success');
+    } catch (error) {
+      console.error('Failed to create empty workspace:', error);
+      alert('Failed to create empty workspace: ' + error.message);
+    }
   }
 
   // Helper methods
