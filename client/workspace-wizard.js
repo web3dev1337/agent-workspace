@@ -8,15 +8,24 @@ class WorkspaceWizard {
     this.discoveredProjects = [];
   }
 
-  async show() {
+  async show(options = {}) {
+    const { blank = false } = options;
     console.log('Opening workspace creation wizard...');
 
-    // Scan for projects first
-    await this.scanProjects();
+    this.data = {};
+
+    if (blank) {
+      this.data.isBlank = true;
+      this.data.type = 'custom';
+      this.data.suggestedName = this.data.suggestedName || 'New Workspace';
+    } else {
+      // Scan for projects first
+      await this.scanProjects();
+    }
 
     // Show wizard modal
     this.renderWizard();
-    this.showStep(1);
+    this.showStep(blank ? 2 : 1);
   }
 
   async scanProjects() {
@@ -558,16 +567,23 @@ class WorkspaceWizard {
     return this.getTypeInfo(type).icon;
   }
 
-  toggleBlankWorkspace(isBlank) {
+  async toggleBlankWorkspace(isBlank) {
     this.data.isBlank = !!isBlank;
 
     if (isBlank) {
       document.querySelectorAll('.project-item.selected').forEach(item => item.classList.remove('selected'));
       const customPath = document.getElementById('custom-repo-path');
       if (customPath) customPath.value = '';
+      // Re-render step to apply disabled state
+      this.showStep(1);
+      return;
     }
 
-    // Re-render step to apply disabled state
+    if (!this.discoveredProjects.length) {
+      await this.scanProjects();
+    }
+
+    // Re-render step to apply enabled state
     this.showStep(1);
   }
 

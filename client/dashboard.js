@@ -128,6 +128,9 @@ class Dashboard {
   generateWorkspaceCard(workspace, isActive) {
     const lastUsed = this.getLastUsed(workspace.id);
     const activityCount = this.getActivityCount(workspace.id);
+    const terminalPairs = Array.isArray(workspace.terminals)
+      ? Math.floor(workspace.terminals.length / 2)
+      : (workspace.terminals?.pairs ?? 0);
 
     return `
       <div class="workspace-card ${isActive ? 'active' : ''}" data-workspace-id="${workspace.id}">
@@ -146,7 +149,7 @@ class Dashboard {
               <span class="stat-label">active</span>
             </div>
             <div class="stat">
-              <span class="stat-value">${workspace.terminals?.pairs || 1}</span>
+              <span class="stat-value">${terminalPairs}</span>
               <span class="stat-label">terminals</span>
             </div>
           </div>
@@ -185,9 +188,8 @@ class Dashboard {
         </div>
 
         <div class="workspace-card-footer">
-          <button class="btn-secondary workspace-create-btn">
-            Create Workspace
-          </button>
+          <button class="btn-primary workspace-create-btn">Create Workspace</button>
+          <button class="btn-secondary workspace-create-empty-btn">Create Empty</button>
         </div>
       </div>
     `;
@@ -258,6 +260,13 @@ class Dashboard {
     if (createBtn) {
       createBtn.addEventListener('click', () => {
         this.showCreateWorkspaceWizard();
+      });
+    }
+
+    const createEmptyBtn = document.querySelector('.workspace-create-empty-btn');
+    if (createEmptyBtn) {
+      createEmptyBtn.addEventListener('click', () => {
+        this.showCreateWorkspaceWizard({ blank: true });
       });
     }
 
@@ -343,7 +352,7 @@ class Dashboard {
     });
   }
 
-  showCreateWorkspaceWizard() {
+  showCreateWorkspaceWizard(options = {}) {
     console.log('Opening workspace creation wizard...');
     if (!window.WorkspaceWizard) {
       console.error('WorkspaceWizard not loaded');
@@ -351,7 +360,7 @@ class Dashboard {
     }
 
     const wizard = new WorkspaceWizard(this.orchestrator);
-    wizard.show();
+    wizard.show(options);
   }
 
   // Helper methods
