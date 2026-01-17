@@ -82,7 +82,7 @@ The system supports these environment variables (all optional):
 
 - `WORKTREE_BASE_PATH`: Base directory for worktrees (defaults to your home directory)
 - `WORKTREE_COUNT`: Number of worktrees (defaults to 8)
-- `PORT`: Server port (defaults to 3000)
+- `ORCHESTRATOR_PORT`: Server port (defaults to 3000)
 - `SESSION_TIMEOUT`: Session timeout in ms (defaults to 1800000 - 30 minutes)
 
 ## What Changed

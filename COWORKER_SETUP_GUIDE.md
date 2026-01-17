@@ -562,7 +562,7 @@ bash scripts/install-startup.sh
 Create `master/.env` if you need custom ports:
 
 ```bash
-PORT=3000              # Server port
+ORCHESTRATOR_PORT=3000 # Server port
 CLIENT_PORT=2080       # Client UI port
 TAURI_DEV_PORT=1420    # Native app port
 LOG_LEVEL=info         # Logging level
@@ -962,7 +962,7 @@ lsof -i :3000
 kill -9 [PID]
 
 # Or use different port in .env
-echo "PORT=3001" >> .env
+echo "ORCHESTRATOR_PORT=3001" >> .env
 ```
 
 ### Issue: "Workspace not detected by wizard"

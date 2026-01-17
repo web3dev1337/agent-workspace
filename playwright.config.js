@@ -1,7 +1,7 @@
 const { defineConfig } = require('@playwright/test');
 
 // Dev instance uses ports 4000 (server), 2081 (client), 7656 (diff-viewer)
-const SERVER_PORT = process.env.PORT || 4000;
+const SERVER_PORT = process.env.ORCHESTRATOR_PORT || process.env.PORT || 4000;
 const CLIENT_PORT = process.env.CLIENT_PORT || 2081;
 
 module.exports = defineConfig({

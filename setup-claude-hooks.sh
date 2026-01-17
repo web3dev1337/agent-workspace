@@ -2,7 +2,7 @@
 
 # Setup Claude hooks in each worktree to notify orchestrator when Claude is ready
 
-ORCHESTRATOR_PORT=${PORT:-3000}
+ORCHESTRATOR_PORT=${ORCHESTRATOR_PORT:-3000}
 # Use WORKTREE_BASE_PATH from environment or default to $HOME
 WORKTREE_BASE="${WORKTREE_BASE_PATH:-$HOME}"
 

@@ -73,7 +73,7 @@ mkdir -p logs sessions
 Edit `.env` file:
 ```env
 # Server
-PORT=3000
+ORCHESTRATOR_PORT=3000
 HOST=0.0.0.0
 
 # Security (optional)
