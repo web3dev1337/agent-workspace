@@ -768,13 +768,22 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
               projectPath = fullPath;
             }
 
+            let lastModifiedMs = 0;
+            try {
+              const repoStat = await fs.stat(projectPath);
+              lastModifiedMs = repoStat.mtimeMs;
+            } catch (statError) {
+              lastModifiedMs = 0;
+            }
+
             projects.push({
               name: projectName,
               path: projectPath,
               masterPath: entry.name === 'master' ? fullPath : path.join(fullPath, 'master'),
               relativePath: path.relative(gitHubPath, projectPath),
               type: type,
-              category: getCategoryFromPath(fullPath)
+              category: getCategoryFromPath(fullPath),
+              lastModifiedMs
             });
           } else {
             // Continue scanning subdirectories

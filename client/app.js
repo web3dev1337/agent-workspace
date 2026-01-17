@@ -5503,16 +5503,7 @@ class ClaudeOrchestrator {
   async showAddWorktreeModal() {
     console.log('Opening Add Worktree modal...');
 
-    // Fetch available repositories
-    try {
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
-      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
-      const allRepos = await response.json();
-      this.showAdvancedAddWorktreeModal(allRepos);
-    } catch (error) {
-      console.error('Failed to fetch repositories:', error);
-      this.showSimpleAddWorktreeModal();
-    }
+    this.showQuickWorktreeModal();
   }
 
   showSimpleAddWorktreeModal() {
@@ -5570,6 +5561,308 @@ class ClaudeOrchestrator {
 
     document.body.appendChild(modal);
     this.setupWorktreeModalInteractions();
+  }
+
+  async showQuickWorktreeModal() {
+    const existing = document.getElementById('quick-worktree-modal');
+    if (existing) existing.remove();
+    this.quickWorktreeConversationsLoaded = false;
+
+    const modal = document.createElement('div');
+    modal.id = 'quick-worktree-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content quick-worktree-modal">
+        <div class="modal-header">
+          <div class="quick-worktree-title">
+            <h3>Quick Work</h3>
+            <div class="quick-worktree-tabs">
+              <button class="quick-tab-btn active" data-tab="start">Start work</button>
+              <button class="quick-tab-btn" data-tab="resume">Resume</button>
+            </div>
+          </div>
+          <button class="close-btn" onclick="this.closest('.modal').remove()">✕</button>
+        </div>
+        <div class="quick-worktree-toolbar">
+          <input type="text" id="quick-worktree-search" placeholder="Search repos..." class="search-input">
+          <button class="btn-secondary quick-advanced-btn">Advanced</button>
+        </div>
+        <div class="modal-body quick-worktree-body">
+          <div class="quick-tab-panel active" data-tab="start">
+            <div id="quick-repo-list" class="quick-repo-list">
+              <div class="loading">Loading repos...</div>
+            </div>
+          </div>
+          <div class="quick-tab-panel" data-tab="resume">
+            <div id="quick-conv-list" class="quick-conv-list">
+              <div class="loading">Loading recent conversations...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const searchInput = modal.querySelector('#quick-worktree-search');
+    const advancedBtn = modal.querySelector('.quick-advanced-btn');
+    const tabButtons = modal.querySelectorAll('.quick-tab-btn');
+
+    if (advancedBtn) {
+      advancedBtn.addEventListener('click', () => {
+        modal.remove();
+        this.showAddWorktreeModalAdvanced();
+      });
+    }
+
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        modal.querySelectorAll('.quick-tab-panel').forEach(panel => {
+          panel.classList.toggle('active', panel.dataset.tab === tab);
+        });
+
+        if (tab === 'resume' && !this.quickWorktreeConversationsLoaded) {
+          this.loadQuickWorktreeConversations();
+        }
+      });
+    });
+
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase().trim();
+        modal.querySelectorAll('.quick-repo-row').forEach(row => {
+          const name = row.dataset.repoName || '';
+          const path = row.dataset.repoPath || '';
+          const matches = name.includes(term) || path.includes(term);
+          row.style.display = matches ? 'flex' : 'none';
+        });
+        modal.querySelectorAll('.quick-repo-category').forEach(category => {
+          const visible = Array.from(category.querySelectorAll('.quick-repo-row'))
+            .some(row => row.style.display !== 'none');
+          category.style.display = visible ? 'block' : 'none';
+        });
+      });
+    }
+
+    this.loadQuickWorktreeRepos();
+  }
+
+  async showAddWorktreeModalAdvanced() {
+    try {
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
+      const allRepos = await response.json();
+      this.showAdvancedAddWorktreeModal(allRepos);
+    } catch (error) {
+      console.error('Failed to fetch repositories:', error);
+      this.showSimpleAddWorktreeModal();
+    }
+  }
+
+  async loadQuickWorktreeRepos() {
+    const listEl = document.getElementById('quick-repo-list');
+    if (!listEl) return;
+
+    try {
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
+      const repos = await response.json();
+
+      const sortedRepos = repos
+        .map(repo => ({
+          ...repo,
+          lastModifiedMs: repo.lastModifiedMs || 0
+        }))
+        .sort((a, b) => b.lastModifiedMs - a.lastModifiedMs);
+
+      listEl.innerHTML = this.renderQuickRepoGroups(sortedRepos);
+
+      listEl.querySelectorAll('.quick-start-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const repoPath = btn.dataset.repoPath;
+          const repoType = btn.dataset.repoType;
+          const repoName = btn.dataset.repoName;
+          const worktreeId = btn.dataset.worktreeId;
+
+          if (!worktreeId) {
+            this.showTemporaryMessage('All worktrees are in use for this repo', 'error');
+            return;
+          }
+
+          this.addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName);
+        });
+      });
+    } catch (error) {
+      console.error('Failed to load repositories:', error);
+      listEl.innerHTML = '<div class="quick-empty">Failed to load repos</div>';
+    }
+  }
+
+  renderQuickRepoGroups(repos) {
+    const categories = new Map();
+    repos.forEach(repo => {
+      const category = repo.category || 'Other';
+      if (!categories.has(category)) {
+        categories.set(category, { repos: [], maxMtime: 0 });
+      }
+      const entry = categories.get(category);
+      entry.repos.push(repo);
+      entry.maxMtime = Math.max(entry.maxMtime, repo.lastModifiedMs || 0);
+    });
+
+    const orderedCategories = Array.from(categories.entries())
+      .sort((a, b) => b[1].maxMtime - a[1].maxMtime);
+
+    return orderedCategories.map(([category, info]) => {
+      const reposHtml = info.repos
+        .sort((a, b) => (b.lastModifiedMs || 0) - (a.lastModifiedMs || 0))
+        .map(repo => this.renderQuickRepoRow(repo))
+        .join('');
+
+      return `
+        <div class="quick-repo-category">
+          <div class="quick-repo-category-header">${category}</div>
+          ${reposHtml}
+        </div>
+      `;
+    }).join('');
+  }
+
+  renderQuickRepoRow(repo) {
+    const recommended = this.getRecommendedWorktree(repo);
+    const actionLabel = recommended ? `Start (${recommended})` : 'All busy';
+
+    return `
+      <div class="quick-repo-row"
+           data-repo-name="${repo.name.toLowerCase()}"
+           data-repo-path="${(repo.relativePath || '').toLowerCase()}">
+        <div class="quick-repo-meta">
+          <span class="quick-repo-icon">${this.getProjectIcon(repo.type)}</span>
+          <div class="quick-repo-info">
+            <div class="quick-repo-name">${repo.name}</div>
+            <div class="quick-repo-path">~/${repo.relativePath || ''}</div>
+          </div>
+        </div>
+        <div class="quick-repo-actions">
+          ${recommended ? `<span class="quick-worktree-pill">${recommended}</span>` : ''}
+          <button class="btn-primary quick-start-btn"
+                  data-repo-path="${repo.path}"
+                  data-repo-type="${repo.type}"
+                  data-repo-name="${repo.name}"
+                  data-worktree-id="${recommended || ''}"
+                  ${recommended ? '' : 'disabled'}>
+            ${actionLabel}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  getRecommendedWorktree(repo) {
+    const available = [];
+    for (let i = 1; i <= 8; i++) {
+      const worktreeId = `work${i}`;
+      if (!this.isWorktreeInUse(repo.path, worktreeId)) {
+        available.push(worktreeId);
+      }
+    }
+
+    if (available.length === 0) return null;
+
+    let best = available[0];
+    let bestTime = Infinity;
+
+    for (const worktreeId of available) {
+      const lastActivity = this.getWorktreeLastActivity(repo, worktreeId);
+      if (lastActivity === null) {
+        return worktreeId; // never used
+      }
+      if (lastActivity < bestTime) {
+        bestTime = lastActivity;
+        best = worktreeId;
+      }
+    }
+
+    return best;
+  }
+
+  getWorktreeLastActivity(repo, worktreeId) {
+    let oldest = null;
+    const repoName = repo.name?.toLowerCase();
+
+    for (const [sessionId, session] of this.sessions) {
+      const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+      if (sessionWorktreeId !== worktreeId) continue;
+
+      const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
+      if (repoName && sessionRepoName && sessionRepoName !== repoName) continue;
+
+      if (typeof session.lastActivity === 'number') {
+        oldest = oldest === null ? session.lastActivity : Math.min(oldest, session.lastActivity);
+      }
+    }
+
+    return oldest;
+  }
+
+  async loadQuickWorktreeConversations() {
+    const listEl = document.getElementById('quick-conv-list');
+    if (!listEl) return;
+
+    try {
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const response = await fetch(`${serverUrl}/api/conversations/recent?limit=20`);
+      const conversations = await response.json();
+      this.quickWorktreeConversationsLoaded = true;
+
+      if (!conversations.length) {
+        listEl.innerHTML = '<div class="quick-empty">No recent conversations yet</div>';
+        return;
+      }
+
+      listEl.innerHTML = conversations.map(conv => this.renderQuickConversationRow(conv)).join('');
+
+      listEl.querySelectorAll('.quick-resume-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.id;
+          const project = btn.dataset.project;
+          const cwd = btn.dataset.cwd;
+
+          if (this.conversationBrowser) {
+            this.conversationBrowser.resumeConversation(id, project, cwd);
+          } else {
+            this.showTemporaryMessage('Conversation browser not available', 'error');
+          }
+
+          document.getElementById('quick-worktree-modal')?.remove();
+        });
+      });
+    } catch (error) {
+      console.error('Failed to load conversations:', error);
+      listEl.innerHTML = '<div class="quick-empty">Failed to load conversations</div>';
+    }
+  }
+
+  renderQuickConversationRow(conv) {
+    const title = (conv.summary || conv.firstUserMessage || conv.preview || conv.project || 'Conversation').slice(0, 120);
+    const repo = conv.gitRepo || conv.project || 'Unknown';
+    const timestamp = conv.lastTimestamp ? new Date(conv.lastTimestamp).toLocaleString() : '';
+    const disabled = !conv.cwd;
+
+    return `
+      <div class="quick-conv-row">
+        <div class="quick-conv-info">
+          <div class="quick-conv-title">${this.escapeHtml(title)}</div>
+          <div class="quick-conv-meta">${this.escapeHtml(repo)}${timestamp ? ` • ${timestamp}` : ''}</div>
+        </div>
+        <button class="btn-secondary quick-resume-btn" data-id="${conv.id}" data-project="${conv.project || ''}" data-cwd="${conv.cwd || ''}" ${disabled ? 'disabled' : ''}>
+          ${disabled ? 'No CWD' : 'Resume'}
+        </button>
+      </div>
+    `;
   }
 
   setupWorktreeModalInteractions() {
@@ -5742,7 +6035,8 @@ class ClaudeOrchestrator {
 
       if (response.ok) {
         this.showTemporaryMessage(`Added ${repoName} ${worktreeId} to workspace!`, 'success');
-        document.getElementById('add-worktree-modal').remove();
+        document.getElementById('add-worktree-modal')?.remove();
+        document.getElementById('quick-worktree-modal')?.remove();
 
         // workspace-config-updated event will be emitted by server
         // No need to refresh entire workspace - new terminals will be initialized automatically
@@ -5818,6 +6112,16 @@ class ClaudeOrchestrator {
       'ruby-rails': '💎'
     };
     return icons[type] || '📁';
+  }
+
+  escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 }
 
