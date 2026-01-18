@@ -5,7 +5,7 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 const PORT = process.env.CLIENT_PORT || 2080;
-const SERVER_PORT = process.env.ORCHESTRATOR_PORT || process.env.PORT || 3000;
+const SERVER_PORT = process.env.ORCHESTRATOR_PORT || 3000;
 
 // Proxy socket.io requests to the backend server
 app.use('/socket.io', createProxyMiddleware({
