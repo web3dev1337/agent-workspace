@@ -14,6 +14,7 @@ class ClaudeOrchestrator {
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
     this.githubLinks = new Map(); // Track GitHub PR/branch links per session
+    this.githubLinkLogs = new Map(); // Track last logged GitHub links per session
     this.sessionActivity = new Map(); // Track which sessions have been used
     this.dismissedStartupUI = new Map(); // Track which sessions have dismissed startup UI
     this.startupUIDebounce = new Map(); // Debounce startup UI showing
@@ -470,6 +471,7 @@ class ClaudeOrchestrator {
             this.serverStatuses.clear();
             this.serverPorts.clear();
             this.githubLinks.clear();
+            this.githubLinkLogs.clear();
 
             // Switch to the new tab so it becomes active
             await this.tabManager.switchTab(tabId);
@@ -518,6 +520,7 @@ class ClaudeOrchestrator {
           this.serverStatuses.clear();
           this.serverPorts.clear();
           this.githubLinks.clear();
+          this.githubLinkLogs.clear();
 
           // Clear terminal manager terminals
           if (this.terminalManager) {
@@ -2293,7 +2296,7 @@ class ClaudeOrchestrator {
   
   detectGitHubLinks(sessionId, data) {
     // Look for GitHub URLs with improved pattern matching
-    const githubUrlPattern = /https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(?:\/[^\s\)\]\}\>\"\'\`]*)?/g;
+    const githubUrlPattern = /https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(?:\/(?!https:\/\/github\.com\/)[^\s\)\]\}\>\"\'\`]*)?/g;
     const matches = data.match(githubUrlPattern);
     
     if (matches) {
@@ -2321,14 +2324,20 @@ class ClaudeOrchestrator {
         
         // Categorize the URL
         if (url.includes('/pull/') && url.match(/\/pull\/\d+\/?$/)) {
-          links.pr = url;
-          console.log('PR link detected:', url);
+          if (links.pr !== url) {
+            links.pr = url;
+            console.log('PR link detected:', url);
+          }
         } else if (url.includes('/commit/') && url.match(/\/commit\/[a-f0-9]+\/?$/)) {
-          links.commit = url;
-          console.log('Commit link detected:', url);
+          if (links.commit !== url) {
+            links.commit = url;
+            console.log('Commit link detected:', url);
+          }
         } else if (url.includes('/tree/') || url.includes('/commits/')) {
-          links.branch = url;
-          console.log('Branch link detected:', url);
+          if (links.branch !== url) {
+            links.branch = url;
+            console.log('Branch link detected:', url);
+          }
         }
       });
       
@@ -2339,6 +2348,7 @@ class ClaudeOrchestrator {
   
   clearGitHubLinks(sessionId) {
     this.githubLinks.delete(sessionId);
+    this.githubLinkLogs.delete(sessionId);
     this.updateTerminalControls(sessionId);
   }
   
@@ -2395,8 +2405,11 @@ class ClaudeOrchestrator {
     
     // Show PR button if PR link detected
     if (links.pr) {
-      // Add some debugging
-      console.log('Adding PR button for session:', sessionId, 'URL:', links.pr);
+      const lastLogged = this.githubLinkLogs.get(sessionId);
+      if (!lastLogged || lastLogged.pr !== links.pr) {
+        console.log('Adding PR button for session:', sessionId, 'URL:', links.pr);
+        this.githubLinkLogs.set(sessionId, { pr: links.pr });
+      }
       buttons += `<button class="control-btn" onclick="window.orchestrator.openPRLink('${links.pr}')" title="View PR on GitHub (${links.pr})">📥</button>`;
       // Add advanced diff viewer button for PRs
       buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${links.pr}')" title="Advanced Diff View">🔍</button>`;
