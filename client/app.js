@@ -380,6 +380,7 @@ class ClaudeOrchestrator {
           if (existingTab) {
             console.log(`Active workspace already open, switching to tab ${existingTab.id}`);
             await this.tabManager.switchTab(existingTab.id);
+            this.tabManager.pruneDuplicateWorkspaceTabs(active.id, existingTab.id);
           } else if (this.tabManager.tabs.size === 0) {
             console.log('Creating initial tab for active workspace after page load');
 
@@ -404,10 +405,12 @@ class ClaudeOrchestrator {
 
             // Switch to the new tab
             await this.tabManager.switchTab(tabId);
+            this.tabManager.pruneDuplicateWorkspaceTabs(active.id, tabId);
 
             this.isDashboardMode = false;
           } else {
             console.log('Active workspace received on reconnect; preserving current tabs');
+            this.tabManager.pruneDuplicateWorkspaceTabs(active.id, this.currentTabId || this.tabManager.activeTabId);
           }
         }
 
@@ -449,6 +452,7 @@ class ClaudeOrchestrator {
             // Switch to existing tab
             console.log(`Workspace ${workspace.name} already open, switching to tab`);
             await this.tabManager.switchTab(existingTab.id);
+            this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, existingTab.id);
           } else {
             // Create new tab for this workspace
             const tabId = this.tabManager.createTab(workspace, sessions);
@@ -469,6 +473,7 @@ class ClaudeOrchestrator {
 
             // Switch to the new tab so it becomes active
             await this.tabManager.switchTab(tabId);
+            this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, tabId);
 
             // Pre-fetch worktree-specific configs for all terminals
             await this.prefetchWorktreeConfigs(workspace, sessions);
