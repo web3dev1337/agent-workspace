@@ -164,7 +164,7 @@ class CommanderService {
   async gatherSessionsInfo() {
     try {
       const http = require('http');
-      const port = process.env.ORCHESTRATOR_PORT || process.env.PORT || 3000;
+      const port = process.env.ORCHESTRATOR_PORT || 3000;
 
       return new Promise((resolve) => {
         const req = http.get(`http://localhost:${port}/api/commander/sessions`, (res) => {
