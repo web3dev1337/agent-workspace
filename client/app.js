@@ -371,33 +371,44 @@ class ClaudeOrchestrator {
         this.workspaceSwitcher.render();
 
         // If there's an active workspace and tabManager is initialized,
-        // create a tab for it (handles page refresh scenario)
+        // create or focus a tab for it (handles page refresh / reconnect)
         if (active && this.tabManager) {
-          console.log('Creating initial tab for active workspace after page load');
+          // If a tab for this workspace already exists, just focus it
+          const existingTab = Array.from(this.tabManager.tabs.values())
+            .find(tab => tab.workspaceId === active.id);
 
-          // Hide dashboard if showing
-          if (this.dashboard) {
-            this.dashboard.hide();
+          if (existingTab) {
+            console.log(`Active workspace already open, switching to tab ${existingTab.id}`);
+            await this.tabManager.switchTab(existingTab.id);
+          } else if (this.tabManager.tabs.size === 0) {
+            console.log('Creating initial tab for active workspace after page load');
+
+            // Hide dashboard if showing
+            if (this.dashboard) {
+              this.dashboard.hide();
+            }
+
+            // Show main UI
+            const mainContainer = document.querySelector('.main-container');
+            const sidebar = document.querySelector('.sidebar');
+            if (mainContainer) mainContainer.classList.remove('hidden');
+            if (sidebar) sidebar.classList.remove('hidden');
+
+            // Create tab for the active workspace
+            // Note: sessions will come later in the 'sessions' event
+            const tabId = this.tabManager.createTab(active, []);
+            console.log(`Created initial tab ${tabId} for workspace ${active.name}`);
+
+            // Set currentTabId so subsequent sessions event knows which tab to use
+            this.currentTabId = tabId;
+
+            // Switch to the new tab
+            await this.tabManager.switchTab(tabId);
+
+            this.isDashboardMode = false;
+          } else {
+            console.log('Active workspace received on reconnect; preserving current tabs');
           }
-
-          // Show main UI
-          const mainContainer = document.querySelector('.main-container');
-          const sidebar = document.querySelector('.sidebar');
-          if (mainContainer) mainContainer.classList.remove('hidden');
-          if (sidebar) sidebar.classList.remove('hidden');
-
-          // Create tab for the active workspace
-          // Note: sessions will come later in the 'sessions' event
-          const tabId = this.tabManager.createTab(active, []);
-          console.log(`Created initial tab ${tabId} for workspace ${active.name}`);
-
-          // Set currentTabId so subsequent sessions event knows which tab to use
-          this.currentTabId = tabId;
-
-          // Switch to the new tab
-          await this.tabManager.switchTab(tabId);
-
-          this.isDashboardMode = false;
         }
 
         // Update voice command context with workspace info
