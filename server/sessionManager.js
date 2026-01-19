@@ -1,4 +1,10 @@
-const pty = require('node-pty');
+let pty = null;
+let ptyLoadError = null;
+try {
+  pty = require('node-pty');
+} catch (error) {
+  ptyLoadError = error;
+}
 const { EventEmitter } = require('events');
 const winston = require('winston');
 const fs = require('fs');
@@ -19,6 +25,12 @@ const logger = winston.createLogger({
     new winston.transports.Console({ format: winston.format.simple() })
   ]
 });
+if (ptyLoadError) {
+  logger.error('node-pty failed to load', {
+    error: ptyLoadError.message,
+    stack: ptyLoadError.stack
+  });
+}
 
 class SessionManager extends EventEmitter {
   constructor(io, agentManager) {
@@ -44,6 +56,10 @@ class SessionManager extends EventEmitter {
     this.branchRefreshInterval = null;
     this.maxProcessesPerSession = parseInt(process.env.MAX_PROCESSES_PER_SESSION || this.config.sessions.maxProcessesPerSession.toString());
     this.maxBufferSize = parseInt(process.env.MAX_BUFFER_SIZE || this.config.sessions.maxBufferSize.toString());
+    this.statusMinHoldMs = parseInt(process.env.STATUS_MIN_HOLD_MS || '300');
+    this.branchRefreshMs = parseInt(process.env.BRANCH_REFRESH_MS || '60000');
+    this.conversationSnapshotTtlMs = parseInt(process.env.CONVERSATION_SNAPSHOT_TTL_MS || '5000');
+    this.conversationSnapshotCache = { timestamp: 0, files: null };
 
     // Worktrees will be built when workspace is set
     this.worktrees = [];
@@ -361,7 +377,7 @@ class SessionManager extends EventEmitter {
       this.worktrees.forEach(worktree => {
         this.updateGitBranch(worktree.id, worktree.path);
       });
-    }, 30000); // Refresh every 30 seconds
+    }, this.branchRefreshMs);
   }
   
   stopBranchRefresh() {
@@ -512,6 +528,10 @@ class SessionManager extends EventEmitter {
     logger.info('Creating session', { sessionId, type: config.type });
     
     try {
+      if (!pty) {
+        logger.error('Cannot create session - node-pty unavailable', { sessionId, type: config.type });
+        throw new Error('node-pty unavailable');
+      }
       const ptyProcess = pty.spawn(config.command, config.args, {
         name: 'xterm-color',
         cols: 80,
@@ -543,6 +563,9 @@ class SessionManager extends EventEmitter {
         lastActivity: Date.now(),
         tokenUsage: 0,
         config: config,
+        statusChangedAt: Date.now(),
+        pendingStatus: null,
+        pendingStatusTimer: null,
         cwdState: {
           current: initialCwd,
           previous: null,
@@ -578,59 +601,7 @@ class SessionManager extends EventEmitter {
         if (config.type === 'claude' && this.statusDetector) {
           const newStatus = this.statusDetector.detectStatus(session.buffer);
           if (newStatus !== session.status) {
-            const oldStatus = session.status;
-            session.status = newStatus;
-            this.emitStatusUpdate(sessionId, newStatus);
-            
-            // Trigger notification if waiting
-            if (newStatus === 'waiting') {
-              this.io.emit('notification-trigger', {
-                sessionId,
-                type: 'waiting',
-                message: `Claude ${config.worktreeId} needs your input`,
-                branch: session.branch
-              });
-
-              // Check for auto-start settings
-              const effectiveSettings = this.userSettings.getEffectiveSettings(sessionId);
-              if (effectiveSettings.autoStart && effectiveSettings.autoStart.enabled && !session.autoStarted) {
-                // Mark as auto-started to prevent multiple triggers
-                session.autoStarted = true;
-
-                // Apply auto-start with configured delay
-                const delay = effectiveSettings.autoStart.delay || 500;
-                const mode = effectiveSettings.autoStart.mode || 'fresh';
-                const skipPermissions = effectiveSettings.claudeFlags.skipPermissions || false;
-
-                logger.info('Auto-starting Claude session', {
-                  sessionId,
-                  mode,
-                  delay,
-                  skipPermissions
-                });
-
-                // Start Claude after delay
-                session.autoStartTimer = setTimeout(() => {
-                  const currentSession = this.sessions.get(sessionId);
-                  if (!currentSession || currentSession !== session) {
-                    return;
-                  }
-                  if (currentSession.status === 'exited' || currentSession.status === 'dead') {
-                    return;
-                  }
-                  this.startClaudeWithOptions(sessionId, {
-                    mode: mode,
-                    skipPermissions: skipPermissions
-                  });
-                }, delay);
-              }
-            }
-            
-            logger.info('Session status changed', { 
-              sessionId, 
-              oldStatus, 
-              newStatus 
-            });
+            this.maybeApplyStatusUpdate(sessionId, session, newStatus);
           }
         }
         
@@ -645,6 +616,10 @@ class SessionManager extends EventEmitter {
         logger.info('Session exited', { sessionId, exitCode, signal });
         
         clearTimeout(session.inactivityTimer);
+        if (session.pendingStatusTimer) {
+          clearTimeout(session.pendingStatusTimer);
+          session.pendingStatusTimer = null;
+        }
         session.status = 'exited';
         this.emitStatusUpdate(sessionId, 'exited');
         
@@ -1275,6 +1250,11 @@ class SessionManager extends EventEmitter {
     const fsSync = require('fs');
     const projectsBase = path.join(process.env.HOME, '.claude', 'projects');
     const existing = new Set();
+    const now = Date.now();
+
+    if (this.conversationSnapshotCache.files && (now - this.conversationSnapshotCache.timestamp) < this.conversationSnapshotTtlMs) {
+      return this.conversationSnapshotCache.files;
+    }
 
     try {
       if (!fsSync.existsSync(projectsBase)) {
@@ -1301,6 +1281,7 @@ class SessionManager extends EventEmitter {
       logger.debug('Error snapshotting conversation files', { error: error.message });
     }
 
+    this.conversationSnapshotCache = { timestamp: now, files: existing };
     return existing;
   }
 
@@ -1612,13 +1593,21 @@ class SessionManager extends EventEmitter {
       sessionsToUpdate.forEach(sessionId => {
         const session = this.sessions.get(sessionId);
         if (session) {
+          const hasChanges = session.branch !== branch ||
+            session.remoteUrl !== remoteUrl ||
+            session.defaultBranch !== defaultBranch ||
+            session.existingPR !== existingPR;
+
+          if (!hasChanges) {
+            return;
+          }
+
           const oldBranch = session.branch;
           session.branch = branch;
           session.remoteUrl = remoteUrl;
           session.defaultBranch = defaultBranch;
           session.existingPR = existingPR;
 
-          // Only log at debug level to reduce spam (fires frequently)
           logger.debug('Branch update', { sessionId, oldBranch, newBranch: branch });
 
           this.io.emit('branch-update', { sessionId, branch, remoteUrl, defaultBranch, existingPR });
@@ -1634,6 +1623,84 @@ class SessionManager extends EventEmitter {
     }
   }
   
+  maybeApplyStatusUpdate(sessionId, session, newStatus) {
+    const now = Date.now();
+    const lastChange = session.statusChangedAt || 0;
+    const elapsed = now - lastChange;
+
+    if (elapsed < this.statusMinHoldMs) {
+      session.pendingStatus = newStatus;
+      if (!session.pendingStatusTimer) {
+        const delay = this.statusMinHoldMs - elapsed;
+        session.pendingStatusTimer = setTimeout(() => {
+          const currentSession = this.sessions.get(sessionId);
+          if (!currentSession) return;
+          const pending = currentSession.pendingStatus;
+          currentSession.pendingStatus = null;
+          currentSession.pendingStatusTimer = null;
+          if (pending && pending !== currentSession.status) {
+            this.applyStatusUpdate(sessionId, currentSession, pending);
+          }
+        }, delay);
+      }
+      return;
+    }
+
+    this.applyStatusUpdate(sessionId, session, newStatus);
+  }
+
+  applyStatusUpdate(sessionId, session, newStatus) {
+    const oldStatus = session.status;
+    session.status = newStatus;
+    session.statusChangedAt = Date.now();
+    this.emitStatusUpdate(sessionId, newStatus);
+
+    if (newStatus === 'waiting') {
+      this.io.emit('notification-trigger', {
+        sessionId,
+        type: 'waiting',
+        message: `Claude ${session.worktreeId} needs your input`,
+        branch: session.branch
+      });
+
+      const effectiveSettings = this.userSettings.getEffectiveSettings(sessionId);
+      if (effectiveSettings.autoStart && effectiveSettings.autoStart.enabled && !session.autoStarted) {
+        session.autoStarted = true;
+
+        const delay = effectiveSettings.autoStart.delay || 500;
+        const mode = effectiveSettings.autoStart.mode || 'fresh';
+        const skipPermissions = effectiveSettings.claudeFlags.skipPermissions || false;
+
+        logger.info('Auto-starting Claude session', {
+          sessionId,
+          mode,
+          delay,
+          skipPermissions
+        });
+
+        session.autoStartTimer = setTimeout(() => {
+          const currentSession = this.sessions.get(sessionId);
+          if (!currentSession || currentSession !== session) {
+            return;
+          }
+          if (currentSession.status === 'exited' || currentSession.status === 'dead') {
+            return;
+          }
+          this.startClaudeWithOptions(sessionId, {
+            mode: mode,
+            skipPermissions: skipPermissions
+          });
+        }, delay);
+      }
+    }
+
+    logger.info('Session status changed', {
+      sessionId,
+      oldStatus,
+      newStatus
+    });
+  }
+
   emitStatusUpdate(sessionId, status) {
     this.io.emit('status-update', { sessionId, status });
   }
@@ -1856,6 +1923,10 @@ class SessionManager extends EventEmitter {
     if (session.autoStartTimer) {
       clearTimeout(session.autoStartTimer);
       session.autoStartTimer = null;
+    }
+    if (session.pendingStatusTimer) {
+      clearTimeout(session.pendingStatusTimer);
+      session.pendingStatusTimer = null;
     }
 
     // Kill the PTY process if it exists
