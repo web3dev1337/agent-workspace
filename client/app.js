@@ -19,6 +19,7 @@ class ClaudeOrchestrator {
     this.dismissedStartupUI = new Map(); // Track which sessions have dismissed startup UI
     this.startupUIDebounce = new Map(); // Debounce startup UI showing
     this.sessionAgentPreferences = new Map(); // Track agent preferences per session
+    this.autoStartApplied = new Set(); // Prevent duplicate auto-start on reconnects
     this.showActiveOnly = false; // Filter toggle
     this.serverLaunchSettings = this.loadServerLaunchSettings(); // Server launch flags
 
@@ -472,6 +473,7 @@ class ClaudeOrchestrator {
             this.serverPorts.clear();
             this.githubLinks.clear();
             this.githubLinkLogs.clear();
+            this.autoStartApplied.clear();
 
             // Switch to the new tab so it becomes active
             await this.tabManager.switchTab(tabId);
@@ -521,6 +523,7 @@ class ClaudeOrchestrator {
           this.serverPorts.clear();
           this.githubLinks.clear();
           this.githubLinkLogs.clear();
+          this.autoStartApplied.clear();
 
           // Clear terminal manager terminals
           if (this.terminalManager) {
@@ -1014,6 +1017,9 @@ class ClaudeOrchestrator {
           console.log(`Skipping auto-start for ${sessionId} - already recovered`);
           continue;
         }
+        if (this.autoStartApplied.has(sessionId)) {
+          continue;
+        }
 
         const effectiveSettings = this.getEffectiveSettings(sessionId);
 
@@ -1032,6 +1038,7 @@ class ClaudeOrchestrator {
             console.log(`Auto-starting Claude ${sessionId} with mode: ${mode}, skip: ${skipPermissions}`);
             this.startClaudeWithOptions(sessionId, mode, skipPermissions);
           }, delay);
+          this.autoStartApplied.add(sessionId);
         } else {
           // Use centralized logic to determine if UI should show (no previous status in auto-start)
           this.showStartupUIIfNeeded(sessionId, 'waiting', 'idle');
@@ -2313,6 +2320,12 @@ class ClaudeOrchestrator {
         
         // Remove common trailing punctuation that might be captured
         url = url.replace(/[,;.!?)\]}>'"`]*$/, '');
+
+        // Guard against concatenated URLs in a single chunk
+        const secondUrlIndex = url.indexOf('https://github.com/', 8);
+        if (secondUrlIndex > 0) {
+          url = url.slice(0, secondUrlIndex);
+        }
         
         // Validate URL format
         try {
