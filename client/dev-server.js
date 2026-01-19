@@ -4,8 +4,8 @@ const path = require('path');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
-const PORT = process.env.CLIENT_PORT || 2080;
-const SERVER_PORT = process.env.PORT || 3000;
+const BASE_PORT = parseInt(process.env.CLIENT_PORT || '2080', 10);
+const SERVER_PORT = process.env.ORCHESTRATOR_PORT || 3000;
 
 // Proxy socket.io requests to the backend server
 app.use('/socket.io', createProxyMiddleware({
@@ -29,6 +29,25 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, () => {
-    console.log(`Client dev server running on http://localhost:${PORT}`);
-});
+let port = Number.isFinite(BASE_PORT) ? BASE_PORT : 2080;
+const MAX_PORT_ATTEMPTS = 20;
+let attempts = 0;
+
+const startServer = () => {
+    const server = app.listen(port, () => {
+        console.log(`Client dev server running on http://localhost:${port}`);
+    });
+
+    server.on('error', (err) => {
+        if (err && err.code === 'EADDRINUSE' && attempts < MAX_PORT_ATTEMPTS) {
+            attempts += 1;
+            port += 1;
+            console.warn(`Port ${port - 1} in use, trying ${port}...`);
+            server.close(() => startServer());
+            return;
+        }
+        throw err;
+    });
+};
+
+startServer();

@@ -49,4 +49,5 @@ src-tauri/Cargo.lock
 src-tauri/WixTools/
 
 # Tauri generated files
-src-tauri/gen/
+src-tauri/gen/thoughts/ledgers/
+coverage/

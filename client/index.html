@@ -27,6 +27,18 @@
             <!-- Worktree items will be dynamically generated -->
         </div>
         
+        <!-- Running Services Section -->
+        <div class="sidebar-section ports-section">
+            <div class="sidebar-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <span>🔌 Services</span>
+                <span class="ports-count" id="ports-count">0</span>
+                <span class="collapse-icon">▼</span>
+            </div>
+            <div class="ports-sidebar-list" id="ports-sidebar-list">
+                <!-- Ports will be dynamically populated -->
+            </div>
+        </div>
+
         <div class="sidebar-footer">
             <button id="view-all" class="button-secondary">View All</button>
             <button id="view-claude-only" class="button-secondary">Claude Only</button>
@@ -47,6 +59,18 @@
                 </div>
             </div>
             <div class="header-actions">
+                <button id="greenfield-btn" class="header-btn" title="Create new project">
+                    ➕ New Project
+                </button>
+                <button id="conversations-btn" class="header-btn" title="Browse Claude conversations">
+                    💬 History
+                </button>
+                <button id="ports-btn" class="header-btn" title="View running services">
+                    🔌 Ports
+                </button>
+                <button id="commander-toggle" class="header-btn commander-btn" title="Commander Claude (Top-Level AI)">
+                    🎖️ Commander
+                </button>
                 <button id="notification-toggle" class="icon-button" title="Notifications">
                     <span class="notification-badge" id="notification-badge">0</span>
                     🔔
@@ -200,6 +224,37 @@
                     </label>
                 </div>
 
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="session-recovery-enabled" />
+                        <strong>Session Recovery</strong>
+                        <small>Track session state for recovery after crashes</small>
+                    </label>
+                </div>
+
+                <div class="setting-group" id="session-recovery-options" style="margin-left: 20px; display: none;">
+                    <label>
+                        <strong>Recovery Mode:</strong>
+                        <select id="session-recovery-mode">
+                            <option value="ask">Ask - Show recovery dialog</option>
+                            <option value="auto">Auto - Automatically recover all</option>
+                            <option value="skip">Skip - Never show recovery dialog</option>
+                        </select>
+                    </label>
+                    <label style="margin-top: 10px;">
+                        <input type="checkbox" id="recovery-resume-cwd" checked />
+                        <span>Restore last working directory</span>
+                    </label>
+                    <label>
+                        <input type="checkbox" id="recovery-resume-conversation" checked />
+                        <span>Resume last conversation (if available)</span>
+                    </label>
+                    <label>
+                        <input type="checkbox" id="recovery-skip-permissions" checked />
+                        <span>Use YOLO mode (--dangerously-skip-permissions)</span>
+                    </label>
+                </div>
+
                 <div class="setting-group per-terminal-settings" id="per-terminal-settings">
                     <h5>Per-Terminal Overrides</h5>
                     <p class="setting-description">Override global settings for specific terminals (requires terminal restart)</p>
@@ -257,10 +312,16 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
     
     <!-- Our scripts -->
+    <script src="logger.js"></script>
+    <script src="quick-links.js"></script>
+    <script src="commander-panel.js"></script>
     <script src="dashboard.js"></script>
     <script src="workspace-switcher.js"></script>
     <script src="workspace-wizard.js"></script>
+    <script src="greenfield-wizard.js"></script>
     <script src="workspace-tab-manager.js"></script>
+    <script src="voice-control.js"></script>
+    <script src="conversation-browser.js"></script>
     <script src="app.js"></script>
     <!-- Focus Overlay -->
     <div id="focus-overlay" class="focus-overlay">

@@ -38,6 +38,9 @@ git checkout -b fix/your-feature-name main
 
 ## Code Style Guidelines
 
+### UI/UX Rules
+- Never darken the background when a modal is open.
+
 ### Node.js Standards
 - Follow existing patterns in the codebase
 - **Always prefer parameters over magic numbers** - use constants or config
@@ -69,8 +72,54 @@ git checkout -b fix/your-feature-name main
 - **WorkspaceManager**: Multi-workspace orchestration (`server/workspaceManager.js`)
 - **WorktreeHelper**: Git worktree operations (`server/worktreeHelper.js`)
 - **NotificationService**: System notifications (`server/notificationService.js`)
+- **CommanderService**: Top-Level AI orchestration terminal (`server/commanderService.js`)
 - **Tauri App**: Native desktop application (`src-tauri/`)
 - **Diff Viewer**: Advanced code review tool (`diff-viewer/`)
+
+## Commander Claude (Top-Level AI)
+
+Commander Claude is a special Claude Code instance that runs from the orchestrator directory with knowledge of the entire system. When you ARE Commander Claude (running in this directory), you have these capabilities:
+
+### What Commander Can Do
+1. **View All Sessions**: See all active Claude sessions across all workspaces
+   - API: `GET /api/commander/sessions`
+2. **Send Commands to Sessions**: Write input to any running session
+   - API: `POST /api/commander/send-to-session` with `{ sessionId, input }`
+3. **Orchestrate Work**: Coordinate tasks across multiple Claude instances
+4. **Access Project Information**: Read workspace configs and status
+
+### Commander API Endpoints
+```bash
+# Check Commander status
+GET /api/commander/status
+
+# Start/Stop/Restart Commander terminal
+POST /api/commander/start
+POST /api/commander/stop
+POST /api/commander/restart
+
+# Start Claude in Commander (yolo mode by default)
+POST /api/commander/start-claude  { mode: 'fresh'|'continue'|'resume', yolo: true }
+
+# Send input to Commander terminal
+POST /api/commander/input  { input: "text to send" }
+
+# View all sessions
+GET /api/commander/sessions
+
+# Send to another session
+POST /api/commander/send-to-session  { sessionId: "...", input: "..." }
+```
+
+### Project Workspaces Location
+Workspaces are stored in `~/.orchestrator/workspaces/`. Each workspace has:
+- `config.json`: Workspace configuration
+- Terminal assignments and repository mappings
+
+### Common Orchestration Tasks
+- **Broadcast a message**: Loop through sessions and send to each
+- **Check project status**: Read worktree git status via sessions
+- **Coordinate builds**: Trigger builds across multiple projects
 
 ### Important Files to Read First
 - `CODEBASE_DOCUMENTATION.md`: Comprehensive system overview
@@ -379,7 +428,7 @@ git clone https://github.com/web3dev1337/claude-orchestrator.git ~/GitHub/tools/
 cd ~/GitHub/tools/automation/claude-orchestrator/master
 
 cat > .env << 'EOF'
-PORT=3000
+ORCHESTRATOR_PORT=3000
 CLIENT_PORT=2080
 TAURI_DEV_PORT=1420
 DIFF_VIEWER_PORT=7655
@@ -396,7 +445,7 @@ git clone https://github.com/web3dev1337/claude-orchestrator.git ~/GitHub/tools/
 cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 
 cat > .env << 'EOF'
-PORT=4000
+ORCHESTRATOR_PORT=4000
 CLIENT_PORT=2081
 TAURI_DEV_PORT=1421
 DIFF_VIEWER_PORT=7656

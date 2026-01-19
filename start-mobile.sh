@@ -5,7 +5,7 @@ pkill -f "node.*orchestrator" || true
 
 # Start orchestrator with explicit binding
 echo "Starting orchestrator for mobile access..."
-HOST=0.0.0.0 PORT=8888 npm start &
+ORCHESTRATOR_PORT=8888 HOST=0.0.0.0 npm start &
 
 sleep 3
 

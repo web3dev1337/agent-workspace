@@ -1,6 +1,7 @@
 const { exec } = require('child_process');
 const util = require('util');
 const path = require('path');
+const os = require('os');
 const winston = require('winston');
 
 const execAsync = util.promisify(exec);
@@ -21,15 +22,18 @@ const logger = winston.createLogger({
 const GIT_CACHE_TIMEOUT_MS = 30000; // 30 seconds
 const GIT_COMMAND_TIMEOUT_MS = 5000; // 5 seconds
 const GIT_LONG_COMMAND_TIMEOUT_MS = 10000; // 10 seconds for slow operations
+const PR_CACHE_TIMEOUT_MS = 300000; // 5 minutes
 
 class GitHelper {
   constructor() {
     // Cache branch names to reduce git calls
     this.branchCache = new Map();
     this.cacheTimeout = GIT_CACHE_TIMEOUT_MS;
+    this.prCache = new Map();
+    this.prCacheTimeout = PR_CACHE_TIMEOUT_MS;
 
     // Store base path for validation
-    this.basePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || '/home/ab';
+    this.basePath = process.env.WORKTREE_BASE_PATH || process.env.HOME || os.homedir();
 
     // If specific worktree pattern is needed, it can be configured
     this.worktreePattern = process.env.WORKTREE_PATTERN || null;
@@ -52,18 +56,9 @@ class GitHelper {
     if (!skipCache) {
       const cached = this.getCachedBranch(worktreePath);
       if (cached) {
-        logger.info('📦 Using cached branch', { 
-          path: worktreePath, 
-          branch: cached,
-          cacheAge: this.branchCache.has(worktreePath) ? 
-            Date.now() - this.branchCache.get(worktreePath).timestamp : 'unknown'
-        });
+        logger.debug('Using cached branch', { path: worktreePath, branch: cached });
         return cached;
-      } else {
-        logger.info('🚫 No cache found', { path: worktreePath });
       }
-    } else {
-      logger.info('⏭️ Skipping cache as requested', { path: worktreePath });
     }
     
     try {
@@ -86,11 +81,7 @@ class GitHelper {
       }
       
       const branch = stdout.trim();
-      logger.info('🌿 Git command returned branch', { 
-        path: worktreePath, 
-        branch,
-        timestamp: new Date().toISOString()
-      });
+      logger.debug('Git returned branch', { path: worktreePath, branch });
       
       // Handle detached HEAD state
       if (branch === 'HEAD') {
@@ -107,8 +98,6 @@ class GitHelper {
       
       // Cache the result
       this.setCachedBranch(worktreePath, branch);
-      
-      logger.info('Retrieved git branch', { path: worktreePath, branch });
       return branch;
       
     } catch (error) {
@@ -263,16 +252,28 @@ class GitHelper {
   }
 
   async checkForExistingPR(remoteUrl, branch) {
+    const cacheKey = `${remoteUrl || 'none'}|${branch || 'none'}`;
+    const now = Date.now();
+    const cached = this.prCache.get(cacheKey);
+    if (cached && (now - cached.timestamp) < this.prCacheTimeout) {
+      return cached.value;
+    }
+
+    const storeCache = (value) => {
+      this.prCache.set(cacheKey, { value, timestamp: Date.now() });
+      return value;
+    };
+
     // Only check for GitHub repositories
     if (!remoteUrl || !remoteUrl.includes('github.com') || !branch || branch === 'main' || branch === 'master' || branch.startsWith('detached@')) {
-      return null;
+      return storeCache(null);
     }
 
     try {
       // Extract owner and repo from GitHub URL
       const urlMatch = remoteUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
       if (!urlMatch) {
-        return null;
+        return storeCache(null);
       }
 
       const [, owner, repo] = urlMatch;
@@ -290,7 +291,7 @@ class GitHelper {
         const prUrl = stdout.trim();
         if (prUrl && prUrl !== 'null' && prUrl.startsWith('https://github.com')) {
           logger.info('Found existing PR via gh CLI', { branch, prUrl });
-          return prUrl;
+          return storeCache(prUrl);
         }
       } catch (ghError) {
         logger.debug('gh CLI not available or failed, trying API directly', { error: ghError.message });
@@ -315,38 +316,38 @@ class GitHelper {
                 if (Array.isArray(prs) && prs.length > 0) {
                   const prUrl = prs[0].html_url;
                   logger.info('Found existing PR via GitHub API', { branch, prUrl });
-                  resolve(prUrl);
+                  resolve(storeCache(prUrl));
                 } else {
-                  resolve(null);
+                  resolve(storeCache(null));
                 }
               } catch (parseError) {
                 logger.debug('Failed to parse GitHub API response', { error: parseError.message });
-                resolve(null);
+                resolve(storeCache(null));
               }
             });
           });
           
           req.on('error', (error) => {
             logger.debug('GitHub API request failed', { error: error.message, stack: error.stack });
-            resolve(null);
+            resolve(storeCache(null));
           });
           
           req.on('timeout', () => {
             logger.debug('GitHub API request timed out');
             req.destroy();
-            resolve(null);
+            resolve(storeCache(null));
           });
         });
       }
       
-      return null;
+      return storeCache(null);
     } catch (error) {
       logger.debug('Failed to check for existing PR', { 
         branch, 
         remoteUrl, 
         error: error.message 
       });
-      return null;
+      return storeCache(null);
     }
   }
   
