@@ -192,7 +192,7 @@ const WORKSPACE_TYPES = {
     name: 'Website/Web App',
     description: 'Frontend or fullstack web application',
     defaultTerminalPairs: 3,
-    maxTerminalPairs: 6,
+    maxTerminalPairs: 16,
     requiresServer: true,
     launchSettingsTemplate: 'website',
     icon: '🌐',
@@ -248,7 +248,7 @@ const WORKSPACE_TYPES = {
     name: 'Tool/Utility Project',
     description: 'Development tools, scripts, utilities',
     defaultTerminalPairs: 2,
-    maxTerminalPairs: 4,
+    maxTerminalPairs: 16,
     requiresServer: false,
     launchSettingsTemplate: 'tool-project',
     icon: '🛠️',
@@ -379,6 +379,13 @@ const WORKSPACE_SCHEMA = {
 function validateWorkspace(workspace) {
   const errors = [];
 
+  const hasRepoPath = Boolean(
+    workspace.repository &&
+    typeof workspace.repository.path === 'string' &&
+    workspace.repository.path.trim().length > 0
+  );
+  const allowEmptyRepo = workspace.empty === true || workspace.isBlank === true || workspace.allowEmptyRepository === true;
+
   if (!workspace.id || !/^[a-z0-9-]+$/.test(workspace.id)) {
     errors.push('Workspace ID must be lowercase alphanumeric with hyphens');
   }
@@ -391,7 +398,7 @@ function validateWorkspace(workspace) {
     errors.push(`Invalid workspace type: ${workspace.type}`);
   }
 
-  if (!workspace.repository || !workspace.repository.path) {
+  if (!hasRepoPath && !allowEmptyRepo) {
     errors.push('Repository path is required');
   }
 

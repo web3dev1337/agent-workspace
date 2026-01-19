@@ -161,6 +161,13 @@ class WorktreeHelper {
   }
 
   async ensureWorktreesExist(workspace) {
+    if (!workspace.repository || !workspace.repository.path) {
+      logger.info('Workspace has no repository path, skipping worktree creation', {
+        workspace: workspace.name
+      });
+      return [];
+    }
+
     if (!workspace.worktrees.enabled) {
       logger.info(`Worktrees disabled for workspace ${workspace.name}, skipping creation`);
       return [];

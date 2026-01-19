@@ -1,4 +1,10 @@
-const pty = require('node-pty');
+let pty = null;
+let ptyLoadError = null;
+try {
+  pty = require('node-pty');
+} catch (error) {
+  ptyLoadError = error;
+}
 const { EventEmitter } = require('events');
 const winston = require('winston');
 const fs = require('fs');
@@ -6,6 +12,7 @@ const path = require('path');
 const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 const { UserSettingsService } = require('./userSettingsService');
 const { WorktreeHelper } = require('./worktreeHelper');
+const sessionRecoveryService = require('./sessionRecoveryService');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -18,6 +25,12 @@ const logger = winston.createLogger({
     new winston.transports.Console({ format: winston.format.simple() })
   ]
 });
+if (ptyLoadError) {
+  logger.error('node-pty failed to load', {
+    error: ptyLoadError.message,
+    stack: ptyLoadError.stack
+  });
+}
 
 class SessionManager extends EventEmitter {
   constructor(io, agentManager) {
@@ -43,6 +56,10 @@ class SessionManager extends EventEmitter {
     this.branchRefreshInterval = null;
     this.maxProcessesPerSession = parseInt(process.env.MAX_PROCESSES_PER_SESSION || this.config.sessions.maxProcessesPerSession.toString());
     this.maxBufferSize = parseInt(process.env.MAX_BUFFER_SIZE || this.config.sessions.maxBufferSize.toString());
+    this.statusMinHoldMs = parseInt(process.env.STATUS_MIN_HOLD_MS || '300');
+    this.branchRefreshMs = parseInt(process.env.BRANCH_REFRESH_MS || '60000');
+    this.conversationSnapshotTtlMs = parseInt(process.env.CONVERSATION_SNAPSHOT_TTL_MS || '5000');
+    this.conversationSnapshotCache = { timestamp: 0, files: null };
 
     // Worktrees will be built when workspace is set
     this.worktrees = [];
@@ -111,7 +128,7 @@ class SessionManager extends EventEmitter {
       terminals.forEach(terminal => {
         const repoPath = terminal.repository.path;
         const worktreeId = terminal.worktree;
-        const worktreePath = path.join(repoPath, worktreeId);
+        const worktreePath = terminal.worktreePath || path.join(repoPath, worktreeId);
 
         // Use a unique key to avoid duplicate worktrees (same repo + worktree)
         const worktreeKey = `${terminal.repository.name}-${worktreeId}`;
@@ -360,7 +377,7 @@ class SessionManager extends EventEmitter {
       this.worktrees.forEach(worktree => {
         this.updateGitBranch(worktree.id, worktree.path);
       });
-    }, 30000); // Refresh every 30 seconds
+    }, this.branchRefreshMs);
   }
   
   stopBranchRefresh() {
@@ -395,10 +412,7 @@ class SessionManager extends EventEmitter {
               
               // Small delay to ensure the file write is complete
               setTimeout(() => {
-                logger.info('⏰ Triggering branch update from file watcher', { 
-                  worktree: worktree.id,
-                  delay: '50ms'
-                });
+                logger.debug('File watcher triggered branch update', { worktree: worktree.id });
                 this.updateGitBranch(worktree.id, worktree.path, true);
               }, 50);
             }
@@ -514,6 +528,10 @@ class SessionManager extends EventEmitter {
     logger.info('Creating session', { sessionId, type: config.type });
     
     try {
+      if (!pty) {
+        logger.error('Cannot create session - node-pty unavailable', { sessionId, type: config.type });
+        throw new Error('node-pty unavailable');
+      }
       const ptyProcess = pty.spawn(config.command, config.args, {
         name: 'xterm-color',
         cols: 80,
@@ -529,6 +547,8 @@ class SessionManager extends EventEmitter {
           NODE_PATH: process.env.NODE_PATH
         }
       });
+
+      const initialCwd = config.cwd || process.cwd();
       
       const session = {
         id: sessionId,
@@ -543,6 +563,14 @@ class SessionManager extends EventEmitter {
         lastActivity: Date.now(),
         tokenUsage: 0,
         config: config,
+        statusChangedAt: Date.now(),
+        pendingStatus: null,
+        pendingStatusTimer: null,
+        cwdState: {
+          current: initialCwd,
+          previous: null,
+          stack: []
+        },
         autoStarted: false  // Track if auto-start has been triggered
       };
       
@@ -558,66 +586,22 @@ class SessionManager extends EventEmitter {
       ptyProcess.onData((data) => {
         session.buffer += data;
         session.lastActivity = Date.now();
-        
+        this.handleTerminalOutput(sessionId, data);
+
         // Reset inactivity timer
         this.resetInactivityTimer(session);
-        
+
         // Emit to clients
         this.io.emit('terminal-output', {
           sessionId,
           data
         });
-        
+
         // Update status based on output (for Claude sessions)
         if (config.type === 'claude' && this.statusDetector) {
           const newStatus = this.statusDetector.detectStatus(session.buffer);
           if (newStatus !== session.status) {
-            const oldStatus = session.status;
-            session.status = newStatus;
-            this.emitStatusUpdate(sessionId, newStatus);
-            
-            // Trigger notification if waiting
-            if (newStatus === 'waiting') {
-              this.io.emit('notification-trigger', {
-                sessionId,
-                type: 'waiting',
-                message: `Claude ${config.worktreeId} needs your input`,
-                branch: session.branch
-              });
-
-              // Check for auto-start settings
-              const effectiveSettings = this.userSettings.getEffectiveSettings(sessionId);
-              if (effectiveSettings.autoStart && effectiveSettings.autoStart.enabled && !session.autoStarted) {
-                // Mark as auto-started to prevent multiple triggers
-                session.autoStarted = true;
-
-                // Apply auto-start with configured delay
-                const delay = effectiveSettings.autoStart.delay || 500;
-                const mode = effectiveSettings.autoStart.mode || 'fresh';
-                const skipPermissions = effectiveSettings.claudeFlags.skipPermissions || false;
-
-                logger.info('Auto-starting Claude session', {
-                  sessionId,
-                  mode,
-                  delay,
-                  skipPermissions
-                });
-
-                // Start Claude after delay
-                setTimeout(() => {
-                  this.startClaudeWithOptions(sessionId, {
-                    mode: mode,
-                    skipPermissions: skipPermissions
-                  });
-                }, delay);
-              }
-            }
-            
-            logger.info('Session status changed', { 
-              sessionId, 
-              oldStatus, 
-              newStatus 
-            });
+            this.maybeApplyStatusUpdate(sessionId, session, newStatus);
           }
         }
         
@@ -632,6 +616,10 @@ class SessionManager extends EventEmitter {
         logger.info('Session exited', { sessionId, exitCode, signal });
         
         clearTimeout(session.inactivityTimer);
+        if (session.pendingStatusTimer) {
+          clearTimeout(session.pendingStatusTimer);
+          session.pendingStatusTimer = null;
+        }
         session.status = 'exited';
         this.emitStatusUpdate(sessionId, 'exited');
         
@@ -687,6 +675,18 @@ class SessionManager extends EventEmitter {
       // Add workspace ID to session
       session.workspace = this.workspace?.id || null;
       this.sessions.set(sessionId, session);
+
+      if (session.workspace) {
+        sessionRecoveryService.updateSession(session.workspace, sessionId, {
+          sessionId,
+          type: session.type,
+          worktreeId: session.worktreeId,
+          repositoryName: session.repositoryName,
+          repositoryType: session.repositoryType,
+          worktreePath: initialCwd,
+          lastCwd: initialCwd
+        });
+      }
       
       // Monitor for fork bombs (every 5 seconds)
       session.processMonitor = setInterval(() => {
@@ -694,14 +694,746 @@ class SessionManager extends EventEmitter {
       }, 5000);
       
     } catch (error) {
-      logger.error('Failed to create session', { 
-        sessionId, 
-        error: error.message 
+      logger.error('Failed to create session', {
+        sessionId,
+        error: error.message
       });
       throw error;
     }
   }
-  
+
+  /**
+   * Track session state for crash recovery based on executed commands.
+   * Detects agent starts, conversation IDs, and server commands.
+   */
+  trackSessionState(sessionId, command, config, effectiveCwd = null, commandName = null, commandArgs = []) {
+    const workspaceId = this.workspace?.id;
+    if (!workspaceId || !command) return;
+
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+
+    const cwd = effectiveCwd || this.getSessionCwd(session) || config?.cwd;
+    const agent = this.detectAgentFromCommand(commandName, commandArgs, command);
+
+    if (agent) {
+      const mode = this.detectAgentMode(agent, commandName, commandArgs, command);
+      logger.info('Detected agent command', { sessionId, agent, cwd, mode });
+
+      sessionRecoveryService.updateAgent(workspaceId, sessionId, agent, mode);
+
+      if (cwd) {
+        sessionRecoveryService.updateSession(workspaceId, sessionId, {
+          lastAgentCommand: this.truncateCommandForLog(command),
+          lastAgentCwd: cwd,
+          lastCwd: cwd
+        });
+      }
+
+      if (agent === 'claude' && cwd) {
+        const existingFiles = this.snapshotConversationFiles();
+        logger.info('Snapshotted conversation files', { sessionId, count: existingFiles.size });
+
+        const captureWorkspaceId = workspaceId;
+        const captureSessionId = sessionId;
+        const captureCwd = cwd;
+
+        setTimeout(() => {
+          try {
+            this.captureConversationId(captureWorkspaceId, captureSessionId, captureCwd, existingFiles);
+          } catch (error) {
+            logger.error('captureConversationId threw error', { sessionId: captureSessionId, error: error.message, stack: error.stack });
+          }
+        }, 2000);
+      }
+    }
+
+    // Detect /clear and /compact commands which affect conversation state
+    // /clear creates a NEW conversation (fast) - use snapshot to find new file
+    // /compact modifies existing conversation file (can take a while)
+    if (/^\/clear\b/.test(command)) {
+      const recovery = sessionRecoveryService.getSession(workspaceId, sessionId);
+      if (recovery?.lastAgent === 'claude') {
+        logger.info('Detected /clear command, re-capturing conversation', { sessionId });
+        const existingFiles = this.snapshotConversationFiles();
+        setTimeout(() => {
+          this.captureConversationId(
+            workspaceId,
+            sessionId,
+            recovery.lastAgentCwd || recovery.lastCwd || cwd,
+            existingFiles
+          );
+        }, 2000);
+      }
+    } else if (/^\/compact\b/.test(command)) {
+      const recovery = sessionRecoveryService.getSession(workspaceId, sessionId);
+      if (recovery?.lastAgent === 'claude') {
+        logger.info('Detected /compact command, re-capturing conversation after 2min', { sessionId });
+        setTimeout(() => {
+          this.captureConversationId(workspaceId, sessionId, recovery.lastAgentCwd || recovery.lastCwd || cwd);
+        }, 120000);  // 2 minutes
+      }
+    }
+
+    // Detect server commands
+    const serverPatterns = [
+      { pattern: /npm\s+(?:run\s+)?(?:start|dev|serve)/, cmd: 'npm start' },
+      { pattern: /yarn\s+(?:run\s+)?(?:start|dev|serve)/, cmd: 'yarn start' },
+      { pattern: /node\s+[\w\/\.]+/, cmd: 'node' },
+      { pattern: /python\s+[\w\/\.]+/, cmd: 'python' },
+      { pattern: /rails\s+s(?:erver)?/, cmd: 'rails server' },
+      { pattern: /cargo\s+run/, cmd: 'cargo run' }
+    ];
+
+    if (config?.type === 'server' || session.type === 'server') {
+      for (const { pattern, cmd } of serverPatterns) {
+        if (pattern.test(command)) {
+          sessionRecoveryService.updateServer(workspaceId, sessionId, cmd);
+          if (cwd) {
+            sessionRecoveryService.updateSession(workspaceId, sessionId, { lastCwd: cwd });
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  handleTerminalOutput(sessionId, data) {
+    const session = this.sessions.get(sessionId);
+    if (!session || !data) return;
+
+    const oscCwd = this.extractOsc7Cwd(data);
+    if (oscCwd) {
+      this.updateSessionCwd(session, oscCwd, 'osc7');
+    }
+  }
+
+  handleCommandExecution(sessionId, command) {
+    const session = this.sessions.get(sessionId);
+    if (!session || !command) return;
+
+    const trimmed = command.trim();
+    if (!trimmed) return;
+
+    const parts = this.splitCommandChain(trimmed);
+    for (const part of parts) {
+      const tokens = this.tokenizeCommand(part);
+      if (!tokens.length) continue;
+
+      const details = this.extractCommandDetails(tokens);
+      if (!details?.commandName) continue;
+
+      const baseCommand = path.basename(details.commandName).toLowerCase();
+
+      if (baseCommand === 'cd') {
+        this.applyCdCommand(session, details.args);
+        continue;
+      }
+
+      if (baseCommand === 'pushd') {
+        this.applyPushdCommand(session, details.args);
+        continue;
+      }
+
+      if (baseCommand === 'popd') {
+        this.applyPopdCommand(session);
+        continue;
+      }
+
+      this.handleGitCommand(session, baseCommand, details.args, part);
+
+      const effectiveCwd = this.getSessionCwd(session);
+      this.trackSessionState(sessionId, part, session.config || {}, effectiveCwd, baseCommand, details.args);
+    }
+  }
+
+  handleGitCommand(session, baseCommand, args, command) {
+    if (!session || baseCommand !== 'git') return;
+
+    const subCommand = (args[0] || '').toLowerCase();
+    const normalizedSub = subCommand === 'co' ? 'checkout' : subCommand === 'sw' ? 'switch' : subCommand;
+    const gitCommands = [
+      'checkout',
+      'switch',
+      'branch',
+      'merge',
+      'pull',
+      'fetch',
+      'rebase',
+      'reset',
+      'cherry-pick'
+    ];
+
+    if (!gitCommands.includes(normalizedSub)) {
+      return;
+    }
+
+    logger.info('🎉 Detected git command execution', {
+      sessionId: session.id,
+      command: command.substring(0, 50),
+      worktreeId: session.worktreeId,
+      timestamp: new Date().toISOString()
+    });
+
+    if (this.gitHelper) {
+      this.gitHelper.clearCacheForPath(this.getSessionCwd(session));
+    }
+
+    const delay = /pull|fetch|merge/.test(command) ? 500 : 200;
+    setTimeout(() => {
+      logger.info('⏰ Triggering branch update after git command', {
+        sessionId: session.id,
+        worktreeId: session.worktreeId,
+        delay: `${delay}ms`
+      });
+      this.updateGitBranch(session.worktreeId, this.getSessionCwd(session), true);
+    }, delay);
+  }
+
+  splitCommandChain(command) {
+    const parts = [];
+    let current = '';
+    let quote = null;
+    let escape = false;
+
+    for (let i = 0; i < command.length; i++) {
+      const ch = command[i];
+
+      if (escape) {
+        current += ch;
+        escape = false;
+        continue;
+      }
+
+      if (ch === '\\') {
+        escape = true;
+        current += ch;
+        continue;
+      }
+
+      if (quote) {
+        if (ch === quote) {
+          quote = null;
+        }
+        current += ch;
+        continue;
+      }
+
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        current += ch;
+        continue;
+      }
+
+      if (ch === ';') {
+        if (current.trim()) {
+          parts.push(current.trim());
+        }
+        current = '';
+        continue;
+      }
+
+      if (ch === '&' && command[i + 1] === '&') {
+        if (current.trim()) {
+          parts.push(current.trim());
+        }
+        current = '';
+        i += 1;
+        continue;
+      }
+
+      current += ch;
+    }
+
+    if (current.trim()) {
+      parts.push(current.trim());
+    }
+
+    return parts;
+  }
+
+  tokenizeCommand(command) {
+    const tokens = [];
+    let current = '';
+    let quote = null;
+    let escape = false;
+
+    for (let i = 0; i < command.length; i++) {
+      const ch = command[i];
+
+      if (escape) {
+        current += ch;
+        escape = false;
+        continue;
+      }
+
+      if (ch === '\\') {
+        escape = true;
+        continue;
+      }
+
+      if (quote) {
+        if (ch === quote) {
+          quote = null;
+        } else {
+          current += ch;
+        }
+        continue;
+      }
+
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        continue;
+      }
+
+      if (/\s/.test(ch)) {
+        if (current) {
+          tokens.push(current);
+          current = '';
+        }
+        continue;
+      }
+
+      current += ch;
+    }
+
+    if (current) {
+      tokens.push(current);
+    }
+
+    return tokens;
+  }
+
+  extractCommandDetails(tokens) {
+    let index = 0;
+
+    while (index < tokens.length && this.isEnvAssignment(tokens[index])) {
+      index += 1;
+    }
+
+    if (tokens[index] === 'env') {
+      index += 1;
+      while (index < tokens.length && this.isEnvAssignment(tokens[index])) {
+        index += 1;
+      }
+    }
+
+    if (['command', 'builtin', 'exec'].includes(tokens[index])) {
+      index += 1;
+    }
+
+    if (['sudo', 'doas'].includes(tokens[index])) {
+      index += 1;
+      while (index < tokens.length && tokens[index].startsWith('-')) {
+        index += 1;
+      }
+    }
+
+    const commandName = tokens[index];
+    const args = tokens.slice(index + 1);
+
+    return { commandName, args };
+  }
+
+  isEnvAssignment(token) {
+    return /^[A-Za-z_][A-Za-z0-9_]*=/.test(token);
+  }
+
+  applyCdCommand(session, args) {
+    const target = this.resolveCdTarget(session, args);
+    if (!target) return;
+
+    if (!fs.existsSync(target)) return;
+
+    this.updateSessionCwd(session, target, 'cd');
+  }
+
+  applyPushdCommand(session, args) {
+    const target = this.resolveCdTarget(session, args);
+    if (!target) return;
+
+    if (!fs.existsSync(target)) return;
+
+    const state = session.cwdState || { current: session.config?.cwd || process.cwd(), previous: null, stack: [] };
+    state.stack = state.stack || [];
+    state.stack.push(state.current);
+    this.updateSessionCwd(session, target, 'pushd');
+  }
+
+  applyPopdCommand(session) {
+    const state = session.cwdState;
+    if (!state?.stack || state.stack.length === 0) return;
+
+    const target = state.stack.pop();
+    if (!target) return;
+
+    this.updateSessionCwd(session, target, 'popd');
+  }
+
+  resolveCdTarget(session, args = []) {
+    const state = session.cwdState || { current: session.config?.cwd || process.cwd(), previous: null, stack: [] };
+    session.cwdState = state;
+
+    const home = process.env.HOME || '';
+    const targetArg = args.find(arg => arg === '-' || !arg.startsWith('-'));
+    const rawTarget = targetArg || home;
+
+    if (!rawTarget) return null;
+
+    if (rawTarget === '-') {
+      return state.previous || state.current;
+    }
+
+    if (rawTarget === '~' || rawTarget.startsWith('~/')) {
+      return path.join(home, rawTarget.replace(/^~\/?/, ''));
+    }
+
+    if (rawTarget.startsWith('$HOME')) {
+      return path.join(home, rawTarget.replace(/^\$HOME\/?/, ''));
+    }
+
+    if (rawTarget.startsWith('${HOME}')) {
+      return path.join(home, rawTarget.replace(/^\$\{HOME\}\/?/, ''));
+    }
+
+    if (path.isAbsolute(rawTarget)) {
+      return rawTarget;
+    }
+
+    return path.resolve(state.current || home, rawTarget);
+  }
+
+  getSessionCwd(session) {
+    return session?.cwdState?.current || session?.config?.cwd || process.cwd();
+  }
+
+  updateSessionCwd(session, cwd, source = 'unknown') {
+    if (!session || !cwd) return;
+
+    const normalized = path.resolve(cwd);
+    const state = session.cwdState || { current: session.config?.cwd || process.cwd(), previous: null, stack: [] };
+
+    if (state.current === normalized) {
+      session.cwdState = state;
+      return;
+    }
+
+    state.previous = state.current;
+    state.current = normalized;
+    session.cwdState = state;
+
+    if (session.workspace) {
+      sessionRecoveryService.updateSession(session.workspace, session.id, {
+        lastCwd: normalized,
+        lastCwdSource: source
+      });
+    }
+  }
+
+  detectAgentFromCommand(commandName, commandArgs = [], fullCommand = '') {
+    if (!commandName && fullCommand) {
+      const tokens = this.tokenizeCommand(fullCommand);
+      const details = this.extractCommandDetails(tokens);
+      if (details?.commandName) {
+        return this.detectAgentFromCommand(details.commandName, details.args, fullCommand);
+      }
+      return null;
+    }
+
+    if (!commandName) return null;
+
+    const base = path.basename(commandName).toLowerCase();
+    const knownAgents = new Map();
+
+    if (this.agentManager) {
+      for (const agent of this.agentManager.getAllAgents()) {
+        if (!agent?.baseCommand) continue;
+        const agentBase = path.basename(agent.baseCommand).toLowerCase();
+        knownAgents.set(agentBase, agent.id);
+      }
+    }
+
+    knownAgents.set('opencode', 'opencode');
+    knownAgents.set('aider', 'aider');
+
+    if (knownAgents.has(base)) {
+      return knownAgents.get(base);
+    }
+
+    const wrapperCommands = ['npx', 'bunx', 'pnpm', 'yarn', 'npm'];
+    if (wrapperCommands.includes(base) && commandArgs.length > 0) {
+      let candidate = commandArgs[0];
+
+      if ((base === 'npm' || base === 'pnpm') && candidate === 'exec') {
+        candidate = commandArgs[1];
+      } else if (base === 'pnpm' && candidate === 'dlx') {
+        candidate = commandArgs[1];
+      }
+
+      if (candidate) {
+        const candidateBase = path.basename(candidate).toLowerCase();
+        if (knownAgents.has(candidateBase)) {
+          return knownAgents.get(candidateBase);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  detectAgentMode(agent, commandName, commandArgs = [], fullCommand = '') {
+    if (!agent) return null;
+
+    const lower = fullCommand.toLowerCase();
+    if (lower.includes('--continue')) return 'continue';
+    if (lower.includes('--resume')) return 'resume';
+
+    const base = (commandName || '').toLowerCase();
+    if ((base === 'codex' || base === 'claude') && commandArgs.length > 0) {
+      const firstArg = commandArgs[0].toLowerCase();
+      if (firstArg === 'resume') return 'resume';
+      if (firstArg === 'continue') return 'continue';
+    }
+
+    return 'fresh';
+  }
+
+  truncateCommandForLog(command) {
+    if (!command) return '';
+    return command.length > 120 ? `${command.slice(0, 117)}...` : command;
+  }
+
+  sanitizeInputData(data) {
+    if (!data) return '';
+    let sanitized = data.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
+    sanitized = sanitized.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '');
+    sanitized = sanitized.replace(/\x1b[()][A-Za-z0-9]/g, '');
+    return sanitized;
+  }
+
+  extractOsc7Cwd(data) {
+    const regex = /\x1b]7;file:\/\/([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
+    let match;
+    let latest = null;
+
+    while ((match = regex.exec(data)) !== null) {
+      const uri = match[1];
+      if (!uri) continue;
+
+      let pathStart = uri.indexOf('/');
+      if (pathStart === -1) continue;
+
+      let cwd = uri.slice(pathStart);
+      const homeIndex = cwd.indexOf('/home/');
+      if (homeIndex >= 0) {
+        cwd = cwd.slice(homeIndex);
+      }
+
+      try {
+        cwd = decodeURIComponent(cwd);
+      } catch (error) {
+        // Ignore decode errors, use raw path
+      }
+
+      latest = cwd;
+    }
+
+    return latest;
+  }
+
+  /**
+   * Snapshot all existing conversation files
+   * Used to detect NEW files created after Claude starts
+   * Returns a Set of full paths
+   */
+  snapshotConversationFiles() {
+    const fsSync = require('fs');
+    const projectsBase = path.join(process.env.HOME, '.claude', 'projects');
+    const existing = new Set();
+    const now = Date.now();
+
+    if (this.conversationSnapshotCache.files && (now - this.conversationSnapshotCache.timestamp) < this.conversationSnapshotTtlMs) {
+      return this.conversationSnapshotCache.files;
+    }
+
+    try {
+      if (!fsSync.existsSync(projectsBase)) {
+        return existing;
+      }
+
+      const folders = fsSync.readdirSync(projectsBase, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name);
+
+      for (const folder of folders) {
+        const projectsDir = path.join(projectsBase, folder);
+        try {
+          const files = fsSync.readdirSync(projectsDir)
+            .filter(f => f.endsWith('.jsonl'));
+          for (const file of files) {
+            existing.add(path.join(projectsDir, file));
+          }
+        } catch (error) {
+          // Skip folders we can't read
+        }
+      }
+    } catch (error) {
+      logger.debug('Error snapshotting conversation files', { error: error.message });
+    }
+
+    this.conversationSnapshotCache = { timestamp: now, files: existing };
+    return existing;
+  }
+
+  /**
+   * Convert a path to Claude's folder name format
+   * /home/ab/foo → -home-ab-foo
+   */
+  pathToFolderName(p) {
+    if (!p) return '';
+    return p.replace(/\//g, '-');
+  }
+
+  /**
+   * Capture the conversation ID for a terminal at the moment Claude starts
+   * Scans folders in ~/.claude/projects/ for NEW or recently modified .jsonl files
+   * Uses existingFiles snapshot to identify truly NEW files (avoids race conditions)
+   *
+   * IMPORTANT: We can convert path → folder name, but NOT the reverse (lossy)
+   * So we check against known paths (worktree, parent, home) and match folder names
+   */
+  captureConversationId(workspaceId, sessionId, worktreePath, existingFiles = null) {
+    if (!workspaceId || !sessionId || !worktreePath) {
+      logger.debug('captureConversationId skipped (missing info)', { workspaceId, sessionId, worktreePath });
+      return;
+    }
+
+    logger.info('captureConversationId called', { workspaceId, sessionId, worktreePath });
+    const fsSync = require('fs');
+    const now = Date.now();
+    const projectsBase = path.join(process.env.HOME, '.claude', 'projects');
+
+    // Build a map of folder names to actual paths
+    // Include ALL paths from worktree up to home (entire hierarchy)
+    const folderToPath = new Map();
+    const home = process.env.HOME;
+
+    // Add all parent paths from worktreePath up to home
+    let current = worktreePath;
+    while (current && current.length >= home.length) {
+      folderToPath.set(this.pathToFolderName(current), current);
+      const parent = path.dirname(current);
+      if (parent === current) break;  // Reached root
+      current = parent;
+    }
+
+    // Also add ~/.claude in case user starts from there
+    const claudeDir = path.join(home, '.claude');
+    folderToPath.set(this.pathToFolderName(claudeDir), claudeDir);
+
+    let bestMatch = null;
+    const newFiles = [];
+
+    try {
+      if (!fsSync.existsSync(projectsBase)) {
+        logger.debug('Claude projects folder not found', { projectsBase });
+        return;
+      }
+
+      // Scan folders in ~/.claude/projects/
+      const folders = fsSync.readdirSync(projectsBase, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name);
+
+      for (const folder of folders) {
+        const projectsDir = path.join(projectsBase, folder);
+
+        // Determine the actual CWD for this folder
+        // If we know the path, use it; otherwise use worktreePath as fallback
+        const actualCwd = folderToPath.get(folder) || worktreePath;
+
+        try {
+          // Find .jsonl files WITH CONTENT (size > 0)
+          const files = fsSync.readdirSync(projectsDir)
+            .filter(f => f.endsWith('.jsonl'))
+            .map(f => {
+              const fullPath = path.join(projectsDir, f);
+              const stats = fsSync.statSync(fullPath);
+              const isNew = existingFiles ? !existingFiles.has(fullPath) : false;
+              return {
+                name: f,
+                fullPath: fullPath,
+                size: stats.size,
+                mtime: stats.mtime.getTime(),
+                age: now - stats.mtime.getTime(),
+                cwd: actualCwd,
+                folder: folder,
+                isNew: isNew,
+                isKnownPath: folderToPath.has(folder)
+              };
+            })
+            .filter(f => f.size > 0);  // ONLY files with actual content
+
+          // Prefer NEW files (didn't exist before), otherwise use recently modified
+          for (const file of files) {
+            if (file.isNew) {
+              newFiles.push(file);
+            } else if (file.age < 30000) {  // Modified in last 30 seconds
+              if (!bestMatch || file.age < bestMatch.age) {
+                bestMatch = file;
+              }
+            }
+          }
+        } catch (error) {
+          // Skip folders we can't read
+        }
+      }
+    } catch (error) {
+      logger.error('Error scanning projects folders', { error: error.message });
+      return;
+    }
+
+    // Prefer NEW files over modified files
+    if (newFiles.length > 0) {
+      // If multiple new files, prefer ones from known paths, then by age
+      newFiles.sort((a, b) => {
+        if (a.isKnownPath !== b.isKnownPath) {
+          return b.isKnownPath ? 1 : -1;  // Known paths first
+        }
+        return a.age - b.age;  // Then by age
+      });
+      bestMatch = newFiles[0];
+      logger.debug('Found NEW conversation file', {
+        sessionId,
+        newFilesCount: newFiles.length,
+        picked: bestMatch.name,
+        isKnownPath: bestMatch.isKnownPath
+      });
+    }
+
+    if (!bestMatch) {
+      logger.debug('No recent conversation file found', { sessionId, worktreePath });
+      return;
+    }
+
+    const conversationId = bestMatch.name.replace('.jsonl', '');
+    logger.info('Captured conversation ID for session', {
+      sessionId,
+      conversationId,
+      actualCwd: bestMatch.cwd,
+      folder: bestMatch.folder,
+      worktreePath,
+      age: bestMatch.age,
+      isNew: bestMatch.isNew,
+      isKnownPath: bestMatch.isKnownPath
+    });
+
+    sessionRecoveryService.updateSession(workspaceId, sessionId, {
+      lastConversationId: conversationId,
+      lastCwd: bestMatch.cwd
+    });
+  }
+
   writeToSession(sessionId, data) {
     const session = this.sessions.get(sessionId);
     if (!session || !session.pty) {
@@ -722,64 +1454,36 @@ class SessionManager extends EventEmitter {
         this.emitStatusUpdate(sessionId, 'busy');
       }
       
-      // Track the current command being typed
       if (!session.currentCommand) {
         session.currentCommand = '';
       }
-      
-      // Build command string or reset on Enter
-      if (data === '\r' || data === '\n') {
-        // Command was executed, check if it was a git command
-        const command = session.currentCommand.trim();
-        
-        // Match various git commands that could change branches
-        const gitCommandPatterns = [
-          /^git\s+(checkout|switch|branch|merge|pull|fetch|rebase|reset|cherry-pick)/i,
-          /^git\s+co\s+/i,  // Common alias for checkout
-          /^git\s+sw\s+/i,  // Common alias for switch
-        ];
-        
-        const isGitCommand = gitCommandPatterns.some(pattern => pattern.test(command));
-        
-        if (isGitCommand) {
-          logger.info('🎉 Detected git command execution', { 
-            sessionId,
-            command: command.substring(0, 50),
-            worktreeId: session.worktreeId,
-            timestamp: new Date().toISOString()
-          });
-          
-          // Clear cache and schedule immediate branch refresh
-          if (this.gitHelper) {
-            this.gitHelper.clearCacheForPath(session.config.cwd);
+
+      const sanitizedInput = this.sanitizeInputData(data);
+      for (const char of sanitizedInput) {
+        if (char === '\r' || char === '\n') {
+          const command = session.currentCommand.trim();
+          if (command) {
+            this.handleCommandExecution(sessionId, command);
           }
-          
-          // Use a slightly longer delay for commands that might take time
-          const delay = command.includes('pull') || command.includes('fetch') || command.includes('merge') ? 500 : 200;
-          
-          setTimeout(() => {
-            logger.info('⏰ Triggering branch update after git command', { 
-              sessionId,
-              worktreeId: session.worktreeId,
-              delay: `${delay}ms`
-            });
-            this.updateGitBranch(session.worktreeId, session.config.cwd, true);
-          }, delay);
+          session.currentCommand = '';
+          continue;
         }
-        
-        // Reset command buffer after Enter
-        session.currentCommand = '';
-      } else if (data === '\x7f' || data === '\b') {
-        // Backspace - remove last character
-        if (session.currentCommand.length > 0) {
-          session.currentCommand = session.currentCommand.slice(0, -1);
+
+        if (char === '\x7f' || char === '\b') {
+          if (session.currentCommand.length > 0) {
+            session.currentCommand = session.currentCommand.slice(0, -1);
+          }
+          continue;
         }
-      } else if (data === '\x03') {
-        // Ctrl+C - clear command
-        session.currentCommand = '';
-      } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
-        // Regular character - add to command
-        session.currentCommand += data;
+
+        if (char === '\x03') {
+          session.currentCommand = '';
+          continue;
+        }
+
+        if (char.length === 1 && char.charCodeAt(0) >= 32) {
+          session.currentCommand += char;
+        }
       }
       
       return true;
@@ -800,8 +1504,16 @@ class SessionManager extends EventEmitter {
 
     try {
       // Check if PTY is still valid before resizing
-      if (session.pty.killed || !session.pty.writable) {
-        logger.warn('PTY session is dead, skipping resize', { sessionId });
+      if (session.pty.killed) {
+        if (!session.resizeDeadLogged) {
+          logger.warn('PTY session is dead, skipping resize', { sessionId });
+          session.resizeDeadLogged = true;
+        }
+        if (session.status !== 'dead') {
+          session.status = 'dead';
+          this.emitStatusUpdate(sessionId, 'dead');
+        }
+        session.pty = null;
         return false;
       }
 
@@ -810,14 +1522,18 @@ class SessionManager extends EventEmitter {
     } catch (error) {
       // Handle ENOTTY/EBADF errors gracefully - these mean the PTY is dead
       if (error.code === 'ENOTTY' || error.code === 'EBADF') {
-        logger.warn('PTY session has invalid file descriptor, cleaning up', {
-          sessionId,
-          error: error.code
-        });
+        if (!session.resizeDeadLogged) {
+          logger.warn('PTY session has invalid file descriptor, cleaning up', {
+            sessionId,
+            error: error.code
+          });
+          session.resizeDeadLogged = true;
+        }
 
         // Mark session as dead and clean up
         session.status = 'dead';
-        this.io.emit('session-status', { sessionId, status: 'dead' });
+        this.emitStatusUpdate(sessionId, 'dead');
+        session.pty = null;
 
         return false;
       }
@@ -877,21 +1593,22 @@ class SessionManager extends EventEmitter {
       sessionsToUpdate.forEach(sessionId => {
         const session = this.sessions.get(sessionId);
         if (session) {
+          const hasChanges = session.branch !== branch ||
+            session.remoteUrl !== remoteUrl ||
+            session.defaultBranch !== defaultBranch ||
+            session.existingPR !== existingPR;
+
+          if (!hasChanges) {
+            return;
+          }
+
           const oldBranch = session.branch;
           session.branch = branch;
           session.remoteUrl = remoteUrl;
           session.defaultBranch = defaultBranch;
           session.existingPR = existingPR;
 
-          logger.info('📡 Emitting branch-update', {
-            sessionId,
-            oldBranch,
-            newBranch: branch,
-            remoteUrl: remoteUrl ? 'present' : 'none',
-            defaultBranch,
-            existingPR: existingPR ? 'found' : 'none',
-            timestamp: new Date().toISOString()
-          });
+          logger.debug('Branch update', { sessionId, oldBranch, newBranch: branch });
 
           this.io.emit('branch-update', { sessionId, branch, remoteUrl, defaultBranch, existingPR });
         }
@@ -906,6 +1623,84 @@ class SessionManager extends EventEmitter {
     }
   }
   
+  maybeApplyStatusUpdate(sessionId, session, newStatus) {
+    const now = Date.now();
+    const lastChange = session.statusChangedAt || 0;
+    const elapsed = now - lastChange;
+
+    if (elapsed < this.statusMinHoldMs) {
+      session.pendingStatus = newStatus;
+      if (!session.pendingStatusTimer) {
+        const delay = this.statusMinHoldMs - elapsed;
+        session.pendingStatusTimer = setTimeout(() => {
+          const currentSession = this.sessions.get(sessionId);
+          if (!currentSession) return;
+          const pending = currentSession.pendingStatus;
+          currentSession.pendingStatus = null;
+          currentSession.pendingStatusTimer = null;
+          if (pending && pending !== currentSession.status) {
+            this.applyStatusUpdate(sessionId, currentSession, pending);
+          }
+        }, delay);
+      }
+      return;
+    }
+
+    this.applyStatusUpdate(sessionId, session, newStatus);
+  }
+
+  applyStatusUpdate(sessionId, session, newStatus) {
+    const oldStatus = session.status;
+    session.status = newStatus;
+    session.statusChangedAt = Date.now();
+    this.emitStatusUpdate(sessionId, newStatus);
+
+    if (newStatus === 'waiting') {
+      this.io.emit('notification-trigger', {
+        sessionId,
+        type: 'waiting',
+        message: `Claude ${session.worktreeId} needs your input`,
+        branch: session.branch
+      });
+
+      const effectiveSettings = this.userSettings.getEffectiveSettings(sessionId);
+      if (effectiveSettings.autoStart && effectiveSettings.autoStart.enabled && !session.autoStarted) {
+        session.autoStarted = true;
+
+        const delay = effectiveSettings.autoStart.delay || 500;
+        const mode = effectiveSettings.autoStart.mode || 'fresh';
+        const skipPermissions = effectiveSettings.claudeFlags.skipPermissions || false;
+
+        logger.info('Auto-starting Claude session', {
+          sessionId,
+          mode,
+          delay,
+          skipPermissions
+        });
+
+        session.autoStartTimer = setTimeout(() => {
+          const currentSession = this.sessions.get(sessionId);
+          if (!currentSession || currentSession !== session) {
+            return;
+          }
+          if (currentSession.status === 'exited' || currentSession.status === 'dead') {
+            return;
+          }
+          this.startClaudeWithOptions(sessionId, {
+            mode: mode,
+            skipPermissions: skipPermissions
+          });
+        }, delay);
+      }
+    }
+
+    logger.info('Session status changed', {
+      sessionId,
+      oldStatus,
+      newStatus
+    });
+  }
+
   emitStatusUpdate(sessionId, status) {
     this.io.emit('status-update', { sessionId, status });
   }
@@ -1124,6 +1919,16 @@ class SessionManager extends EventEmitter {
       session.processMonitor = null;
     }
 
+    // Clear any pending auto-start timers
+    if (session.autoStartTimer) {
+      clearTimeout(session.autoStartTimer);
+      session.autoStartTimer = null;
+    }
+    if (session.pendingStatusTimer) {
+      clearTimeout(session.pendingStatusTimer);
+      session.pendingStatusTimer = null;
+    }
+
     // Kill the PTY process if it exists
     if (session.pty) {
       try {
@@ -1146,21 +1951,31 @@ class SessionManager extends EventEmitter {
       logger.warn('Cannot restart session - not found', { sessionId });
       return false;
     }
-    
+
     logger.info('Manually restarting session', { sessionId });
-    
+
     // Save config before terminating
     const config = { ...session.config };
-    
-    // For Claude sessions, use proper bash wrapper
+
+    // For Claude sessions, restart as a clean bash shell
+    // This allows user to use the agent selection UI to choose how to start
     if (config.type === 'claude') {
       config.command = 'bash';
-      config.args = ['-c', `cd "${config.cwd}" && exec ${process.env.HOME}/.nvm/versions/node/v22.16.0/bin/claude`];
+      config.args = ['-c', `cd "${config.cwd}" && exec bash`];
     }
-    
+
+    // For server sessions, restart with welcome message
+    if (config.type === 'server') {
+      const worktreeLabel = config.repositoryName
+        ? `${config.repositoryName}/${config.worktreeId}`
+        : config.worktreeId;
+      config.command = 'bash';
+      config.args = ['-c', `cd "${config.cwd}" && echo "=== Server Terminal for ${worktreeLabel} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && exec bash`];
+    }
+
     // Terminate existing session
     this.terminateSession(sessionId);
-    
+
     // Wait a moment then recreate
     setTimeout(() => {
       try {
@@ -1169,14 +1984,14 @@ class SessionManager extends EventEmitter {
         logger.info('Session restarted successfully', { sessionId });
         return true;
       } catch (error) {
-        logger.error('Failed to restart session', { 
-          sessionId, 
-          error: error.message 
+        logger.error('Failed to restart session', {
+          sessionId,
+          error: error.message
         });
         return false;
       }
     }, 1000);
-    
+
     return true;
   }
   
@@ -1311,6 +2126,9 @@ class SessionManager extends EventEmitter {
     for (const [sessionId, session] of this.sessions) {
       clearTimeout(session.inactivityTimer);
       clearInterval(session.processMonitor);
+      if (session.autoStartTimer) {
+        clearTimeout(session.autoStartTimer);
+      }
       
       try {
         if (session.pty) {
@@ -1343,6 +2161,10 @@ class SessionManager extends EventEmitter {
         // Clear process monitor
         if (session.processMonitor) {
           clearInterval(session.processMonitor);
+        }
+
+        if (session.autoStartTimer) {
+          clearTimeout(session.autoStartTimer);
         }
       } catch (error) {
         logger.error('Error cleaning up session', {

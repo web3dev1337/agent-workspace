@@ -1,0 +1,113 @@
+# Claude Orchestrator - Startup Scripts
+
+Platform-specific scripts for auto-starting the orchestrator on system boot/login.
+
+## Windows (WSL)
+
+### Quick Install
+
+From PowerShell (as Administrator):
+
+```powershell
+cd path\to\claude-orchestrator\scripts\windows
+powershell -ExecutionPolicy Bypass -File install-startup.ps1
+```
+
+### Options
+
+```powershell
+# Install with desktop shortcut
+.\install-startup.ps1 -DesktopShortcut
+
+# Install without startup task (just shortcut)
+.\install-startup.ps1 -DesktopShortcut -NoStartupTask
+
+# Specify WSL distro
+.\install-startup.ps1 -WslDistro "Ubuntu-22.04"
+
+# Uninstall
+.\install-startup.ps1 -Uninstall
+```
+
+### What It Does
+
+1. Creates a Windows Task Scheduler task that runs on login
+2. The task waits for WSL to be ready (up to 60 seconds)
+3. Opens VS Code with the orchestrator folder in WSL remote
+4. Waits for server to start, then opens browser
+
+### Files
+
+- `start-orchestrator.bat` - The startup script (waits for WSL, launches VS Code)
+- `install-startup.ps1` - Installer (creates scheduled task and/or desktop shortcut)
+
+## Linux (Native)
+
+### Quick Install
+
+```bash
+cd path/to/claude-orchestrator/scripts/linux
+chmod +x install-startup.sh start-orchestrator.sh
+./install-startup.sh
+```
+
+### Files
+
+- `start-orchestrator.sh` - Starts server and opens browser
+- `install-startup.sh` - Creates systemd user service or XDG autostart
+
+## macOS
+
+Coming soon. For now, use Login Items in System Preferences.
+
+## Manual Setup
+
+If the installers don't work for your setup:
+
+### Windows Task Scheduler
+
+1. Open Task Scheduler
+2. Create Basic Task → "Launch Orchestrator"
+3. Trigger: "When I log on"
+4. Action: Start a program → Browse to `scripts/windows/start-orchestrator.bat`
+5. Finish
+
+### Linux systemd
+
+```bash
+# Create user service
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/claude-orchestrator.service << EOF
+[Unit]
+Description=Claude Orchestrator
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/claude-orchestrator
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+EOF
+
+# Enable and start
+systemctl --user enable claude-orchestrator
+systemctl --user start claude-orchestrator
+```
+
+## Troubleshooting
+
+### WSL not ready error
+The script waits up to 60 seconds for WSL. If that's not enough:
+- Edit `start-orchestrator.bat` and increase `max_attempts`
+- Check WSL health: `wsl --status`
+
+### VS Code doesn't open in WSL
+- Ensure VS Code Remote - WSL extension is installed
+- Try: `code --folder-uri "vscode-remote://wsl+Ubuntu/path/to/folder"`
+
+### Browser opens before server is ready
+- Increase the `timeout` value in the startup script
+- Or just refresh the browser after a few seconds

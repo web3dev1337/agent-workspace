@@ -14,10 +14,12 @@ class ClaudeOrchestrator {
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
     this.githubLinks = new Map(); // Track GitHub PR/branch links per session
+    this.githubLinkLogs = new Map(); // Track last logged GitHub links per session
     this.sessionActivity = new Map(); // Track which sessions have been used
     this.dismissedStartupUI = new Map(); // Track which sessions have dismissed startup UI
     this.startupUIDebounce = new Map(); // Debounce startup UI showing
     this.sessionAgentPreferences = new Map(); // Track agent preferences per session
+    this.autoStartApplied = new Set(); // Prevent duplicate auto-start on reconnects
     this.showActiveOnly = false; // Filter toggle
     this.serverLaunchSettings = this.loadServerLaunchSettings(); // Server launch flags
 
@@ -57,7 +59,47 @@ class ClaudeOrchestrator {
         this.tabManager = new WorkspaceTabManager(this);
         console.log('Tab manager initialized');
       }
-      
+
+      // Initialize Commander panel (Top-Level Claude terminal)
+      if (typeof CommanderPanel !== 'undefined') {
+        this.commanderPanel = new CommanderPanel(this);
+        this.commanderPanel.init();
+        console.log('Commander panel initialized');
+      }
+
+      // Initialize Voice Control (push-to-talk voice commands)
+      if (typeof VoiceControl !== 'undefined') {
+        this.voiceControl = new VoiceControl(this);
+        console.log('Voice control initialized (press V or click mic button)');
+      }
+
+      // Initialize Greenfield wizard for new project creation
+      if (typeof GreenfieldWizard !== 'undefined') {
+        this.greenfieldWizard = new GreenfieldWizard(this);
+        document.getElementById('greenfield-btn')?.addEventListener('click', () => {
+          this.greenfieldWizard.show();
+        });
+        console.log('Greenfield wizard initialized');
+      }
+
+      // Initialize Conversation browser for history
+      if (typeof ConversationBrowser !== 'undefined') {
+        this.conversationBrowser = new ConversationBrowser(this);
+        document.getElementById('conversations-btn')?.addEventListener('click', () => {
+          this.conversationBrowser.show();
+        });
+        console.log('Conversation browser initialized');
+      }
+
+      // Initialize Ports panel
+      document.getElementById('ports-btn')?.addEventListener('click', () => {
+        this.showPortsPanel();
+      });
+
+      // Initialize sidebar ports and set up auto-refresh
+      this.refreshSidebarPorts();
+      setInterval(() => this.refreshSidebarPorts(), 30000); // Refresh every 30s
+
       // Request notification permission if enabled
       if (this.settings.notifications) {
         this.notificationManager.requestPermission();
@@ -229,6 +271,13 @@ class ClaudeOrchestrator {
         }
       });
 
+      // ============ COMMANDER UI CONTROL ============
+      // Commander Claude can control UI via these semantic commands
+      this.socket.on('commander-action', ({ action, ...params }) => {
+        console.log('Commander action:', action, params);
+        this.handleCommanderAction(action, params);
+      });
+
       // Handle new worktree sessions being added without destroying existing ones
       this.socket.on('worktree-sessions-added', ({ worktreeId, sessions }) => {
         console.log('New worktree sessions added:', worktreeId, sessions);
@@ -324,34 +373,51 @@ class ClaudeOrchestrator {
         this.workspaceSwitcher.render();
 
         // If there's an active workspace and tabManager is initialized,
-        // create a tab for it (handles page refresh scenario)
+        // create or focus a tab for it (handles page refresh / reconnect)
         if (active && this.tabManager) {
-          console.log('Creating initial tab for active workspace after page load');
+          // If a tab for this workspace already exists, just focus it
+          const existingTab = Array.from(this.tabManager.tabs.values())
+            .find(tab => tab.workspaceId === active.id);
 
-          // Hide dashboard if showing
-          if (this.dashboard) {
-            this.dashboard.hide();
+          if (existingTab) {
+            console.log(`Active workspace already open, switching to tab ${existingTab.id}`);
+            await this.tabManager.switchTab(existingTab.id);
+            this.tabManager.pruneDuplicateWorkspaceTabs(active.id, existingTab.id);
+          } else if (this.tabManager.tabs.size === 0) {
+            console.log('Creating initial tab for active workspace after page load');
+
+            // Hide dashboard if showing
+            if (this.dashboard) {
+              this.dashboard.hide();
+            }
+
+            // Show main UI
+            const mainContainer = document.querySelector('.main-container');
+            const sidebar = document.querySelector('.sidebar');
+            if (mainContainer) mainContainer.classList.remove('hidden');
+            if (sidebar) sidebar.classList.remove('hidden');
+
+            // Create tab for the active workspace
+            // Note: sessions will come later in the 'sessions' event
+            const tabId = this.tabManager.createTab(active, []);
+            console.log(`Created initial tab ${tabId} for workspace ${active.name}`);
+
+            // Set currentTabId so subsequent sessions event knows which tab to use
+            this.currentTabId = tabId;
+
+            // Switch to the new tab
+            await this.tabManager.switchTab(tabId);
+            this.tabManager.pruneDuplicateWorkspaceTabs(active.id, tabId);
+
+            this.isDashboardMode = false;
+          } else {
+            console.log('Active workspace received on reconnect; preserving current tabs');
+            this.tabManager.pruneDuplicateWorkspaceTabs(active.id, this.currentTabId || this.tabManager.activeTabId);
           }
-
-          // Show main UI
-          const mainContainer = document.querySelector('.main-container');
-          const sidebar = document.querySelector('.sidebar');
-          if (mainContainer) mainContainer.classList.remove('hidden');
-          if (sidebar) sidebar.classList.remove('hidden');
-
-          // Create tab for the active workspace
-          // Note: sessions will come later in the 'sessions' event
-          const tabId = this.tabManager.createTab(active, []);
-          console.log(`Created initial tab ${tabId} for workspace ${active.name}`);
-
-          // Set currentTabId so subsequent sessions event knows which tab to use
-          this.currentTabId = tabId;
-
-          // Switch to the new tab
-          await this.tabManager.switchTab(tabId);
-
-          this.isDashboardMode = false;
         }
+
+        // Update voice command context with workspace info
+        this.updateVoiceContext();
 
         // Initialize dashboard if configured
         if (config.ui.startupDashboard && !active) {
@@ -388,6 +454,7 @@ class ClaudeOrchestrator {
             // Switch to existing tab
             console.log(`Workspace ${workspace.name} already open, switching to tab`);
             await this.tabManager.switchTab(existingTab.id);
+            this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, existingTab.id);
           } else {
             // Create new tab for this workspace
             const tabId = this.tabManager.createTab(workspace, sessions);
@@ -405,9 +472,12 @@ class ClaudeOrchestrator {
             this.serverStatuses.clear();
             this.serverPorts.clear();
             this.githubLinks.clear();
+            this.githubLinkLogs.clear();
+            this.autoStartApplied.clear();
 
             // Switch to the new tab so it becomes active
             await this.tabManager.switchTab(tabId);
+            this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, tabId);
 
             // Pre-fetch worktree-specific configs for all terminals
             await this.prefetchWorktreeConfigs(workspace, sessions);
@@ -452,6 +522,8 @@ class ClaudeOrchestrator {
           this.serverStatuses.clear();
           this.serverPorts.clear();
           this.githubLinks.clear();
+          this.githubLinkLogs.clear();
+          this.autoStartApplied.clear();
 
           // Clear terminal manager terminals
           if (this.terminalManager) {
@@ -740,6 +812,47 @@ class ClaudeOrchestrator {
       });
     }
 
+    // Session recovery settings
+    const sessionRecoveryEnabled = document.getElementById('session-recovery-enabled');
+    const sessionRecoveryOptions = document.getElementById('session-recovery-options');
+
+    if (sessionRecoveryEnabled) {
+      sessionRecoveryEnabled.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('sessionRecovery.enabled', e.target.checked);
+        if (sessionRecoveryOptions) {
+          sessionRecoveryOptions.style.display = e.target.checked ? 'block' : 'none';
+        }
+      });
+    }
+
+    const sessionRecoveryMode = document.getElementById('session-recovery-mode');
+    if (sessionRecoveryMode) {
+      sessionRecoveryMode.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('sessionRecovery.mode', e.target.value);
+      });
+    }
+
+    const recoveryResumeCwd = document.getElementById('recovery-resume-cwd');
+    if (recoveryResumeCwd) {
+      recoveryResumeCwd.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('sessionRecovery.resumeCwd', e.target.checked);
+      });
+    }
+
+    const recoveryResumeConversation = document.getElementById('recovery-resume-conversation');
+    if (recoveryResumeConversation) {
+      recoveryResumeConversation.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('sessionRecovery.resumeConversation', e.target.checked);
+      });
+    }
+
+    const recoverySkipPermissions = document.getElementById('recovery-skip-permissions');
+    if (recoverySkipPermissions) {
+      recoverySkipPermissions.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('sessionRecovery.skipPermissions', e.target.checked);
+      });
+    }
+
     // Template management buttons
     document.getElementById('reset-to-defaults').addEventListener('click', () => {
       this.resetToDefaults();
@@ -877,6 +990,17 @@ class ClaudeOrchestrator {
     setTimeout(() => {
       this.checkAndApplyAutoStart();
     }, 2000);
+
+    // Apply session recovery if pending
+    if (this.dashboard?.pendingRecovery && this.dashboard.pendingRecovery.mode !== 'skip') {
+      setTimeout(() => {
+        this.applySessionRecovery(this.dashboard.pendingRecovery);
+        this.dashboard.pendingRecovery = null;
+      }, 1000);
+    }
+
+    // Update voice command context with session info
+    this.updateVoiceContext();
   }
 
   checkAndApplyAutoStart() {
@@ -888,6 +1012,15 @@ class ClaudeOrchestrator {
     // Check each Claude session for auto-start
     for (const [sessionId, session] of this.sessions) {
       if (sessionId.includes('-claude')) {
+        // Skip if this session was recovered
+        if (this.recoveredSessions && this.recoveredSessions.has(sessionId)) {
+          console.log(`Skipping auto-start for ${sessionId} - already recovered`);
+          continue;
+        }
+        if (this.autoStartApplied.has(sessionId)) {
+          continue;
+        }
+
         const effectiveSettings = this.getEffectiveSettings(sessionId);
 
         if (effectiveSettings && effectiveSettings.autoStart && effectiveSettings.autoStart.enabled) {
@@ -905,6 +1038,7 @@ class ClaudeOrchestrator {
             console.log(`Auto-starting Claude ${sessionId} with mode: ${mode}, skip: ${skipPermissions}`);
             this.startClaudeWithOptions(sessionId, mode, skipPermissions);
           }, delay);
+          this.autoStartApplied.add(sessionId);
         } else {
           // Use centralized logic to determine if UI should show (no previous status in auto-start)
           this.showStartupUIIfNeeded(sessionId, 'waiting', 'idle');
@@ -1038,10 +1172,10 @@ class ClaudeOrchestrator {
    */
   getButtonsForSession(sessionId, terminalType) {
     const session = this.sessions.get(sessionId);
-    if (!session) return this.getDefaultButtons(terminalType);
+    if (!session) return this.getDefaultButtons(terminalType, sessionId);
 
     // Get repository type for this session
-    let repositoryType = null;
+    let repositoryType = session.repositoryType || null;
     if (this.currentWorkspace) {
       if (this.currentWorkspace.workspaceType === 'mixed-repo') {
         const repositoryName = this.extractRepositoryName(sessionId);
@@ -1051,9 +1185,9 @@ class ClaudeOrchestrator {
           : this.currentWorkspace.terminals?.pairs;
 
         if (repositoryName && terminals) {
-          const terminal = terminals.find(t =>
-            t.id === sessionId || t.repository?.name === repositoryName
-          );
+          const terminal = terminals.find(t => t.id === sessionId)
+            || terminals.find(t => t.repository?.name === repositoryName && t.worktree === session.worktreeId)
+            || terminals.find(t => t.repository?.name === repositoryName);
           repositoryType = terminal?.repository?.type || null;
         }
       } else {
@@ -1063,7 +1197,7 @@ class ClaudeOrchestrator {
 
     if (!repositoryType) {
       console.log(`No repositoryType found for session ${sessionId}, using defaults`);
-      return this.getDefaultButtons(terminalType);
+      return this.getDefaultButtons(terminalType, sessionId);
     }
 
     // Get worktree-specific cascaded config (pre-fetched)
@@ -1071,7 +1205,7 @@ class ClaudeOrchestrator {
     console.log(`Looking up worktree config for ${sessionId} (type: ${repositoryType}):`, cascadedConfig);
     if (!cascadedConfig || !cascadedConfig.buttons) {
       console.log(`No worktree config or buttons found for ${sessionId}, using defaults`);
-      return this.getDefaultButtons(terminalType);
+      return this.getDefaultButtons(terminalType, sessionId);
     }
 
     // Get button definitions for this terminal type
@@ -1125,21 +1259,21 @@ class ClaudeOrchestrator {
   /**
    * Get default buttons (fallback when no config)
    */
-  getDefaultButtons(terminalType) {
+  getDefaultButtons(terminalType, sessionId = '') {
     if (terminalType === 'claude') {
       return [
-        this.renderButton('focus', this.buttonRegistry.focus, ''),
-        this.renderButton('claudeStart', this.buttonRegistry.claudeStart, ''),
-        this.renderButton('claudeModal', this.buttonRegistry.claudeModal, ''),
-        this.renderButton('refresh', this.buttonRegistry.refresh, ''),
-        this.renderButton('review', this.buttonRegistry.review, ''),
-        this.renderButton('build', this.buttonRegistry.build, '')
+        this.renderButton('focus', this.buttonRegistry.focus, sessionId),
+        this.renderButton('claudeStart', this.buttonRegistry.claudeStart, sessionId),
+        this.renderButton('claudeModal', this.buttonRegistry.claudeModal, sessionId),
+        this.renderButton('refresh', this.buttonRegistry.refresh, sessionId),
+        this.renderButton('review', this.buttonRegistry.review, sessionId),
+        this.renderButton('build', this.buttonRegistry.build, sessionId)
       ];
     } else {
       return [
-        this.renderButton('focus', this.buttonRegistry.focus, ''),
-        this.renderButton('build', this.buttonRegistry.build, ''),
-        this.renderButton('kill', this.buttonRegistry.kill, '')
+        this.renderButton('focus', this.buttonRegistry.focus, sessionId),
+        this.renderButton('build', this.buttonRegistry.build, sessionId),
+        this.renderButton('kill', this.buttonRegistry.kill, sessionId)
       ];
     }
   }
@@ -1165,10 +1299,12 @@ class ClaudeOrchestrator {
             : workspace.terminals?.pairs;
 
           if (terminals) {
-            const terminal = terminals.find(t => t.id === sessionId);
+            const repositoryName = session.repositoryName || this.extractRepositoryName(sessionId);
+            const terminal = terminals.find(t => t.id === sessionId)
+              || terminals.find(t => t.repository?.name === repositoryName && t.worktree === session.worktreeId);
             if (terminal && terminal.repository && terminal.worktree) {
               repositoryType = terminal.repository.type;
-              worktreePath = `${terminal.repository.path}/${terminal.worktree}`;
+              worktreePath = terminal.worktreePath || `${terminal.repository.path}/${terminal.worktree}`;
             }
           }
         } else {
@@ -1234,7 +1370,8 @@ class ClaudeOrchestrator {
       html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>`;
     } else {
       html += `<div class="server-launch-group">
-        <select class="control-btn env-select" onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+        <select class="control-btn env-select" id="server-env-${sessionId}" name="server-env-${sessionId}"
+                onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
           <option value="">▶</option>
           ${this.getDynamicLaunchOptions(sessionId)}
           <option value="custom" selected>Custom...</option>
@@ -1488,7 +1625,8 @@ class ClaudeOrchestrator {
         const repositoryName = this.extractRepositoryName(sessionId);
         const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
 
-        if (sessionKey === worktreeIdOrKey) {
+        // Match full key OR just the worktreeId part (e.g., "work1" matches "zoo-game-work1")
+        if (sessionKey === worktreeIdOrKey || sessionWorktreeId === worktreeIdOrKey) {
           this.visibleTerminals.add(sessionId);
         }
       }
@@ -2165,7 +2303,7 @@ class ClaudeOrchestrator {
   
   detectGitHubLinks(sessionId, data) {
     // Look for GitHub URLs with improved pattern matching
-    const githubUrlPattern = /https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(?:\/[^\s\)\]\}\>\"\'\`]*)?/g;
+    const githubUrlPattern = /https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(?:\/(?!https:\/\/github\.com\/)[^\s\)\]\}\>\"\'\`]*)?/g;
     const matches = data.match(githubUrlPattern);
     
     if (matches) {
@@ -2182,6 +2320,12 @@ class ClaudeOrchestrator {
         
         // Remove common trailing punctuation that might be captured
         url = url.replace(/[,;.!?)\]}>'"`]*$/, '');
+
+        // Guard against concatenated URLs in a single chunk
+        const secondUrlIndex = url.indexOf('https://github.com/', 8);
+        if (secondUrlIndex > 0) {
+          url = url.slice(0, secondUrlIndex);
+        }
         
         // Validate URL format
         try {
@@ -2193,14 +2337,20 @@ class ClaudeOrchestrator {
         
         // Categorize the URL
         if (url.includes('/pull/') && url.match(/\/pull\/\d+\/?$/)) {
-          links.pr = url;
-          console.log('PR link detected:', url);
+          if (links.pr !== url) {
+            links.pr = url;
+            console.log('PR link detected:', url);
+          }
         } else if (url.includes('/commit/') && url.match(/\/commit\/[a-f0-9]+\/?$/)) {
-          links.commit = url;
-          console.log('Commit link detected:', url);
+          if (links.commit !== url) {
+            links.commit = url;
+            console.log('Commit link detected:', url);
+          }
         } else if (url.includes('/tree/') || url.includes('/commits/')) {
-          links.branch = url;
-          console.log('Branch link detected:', url);
+          if (links.branch !== url) {
+            links.branch = url;
+            console.log('Branch link detected:', url);
+          }
         }
       });
       
@@ -2211,6 +2361,7 @@ class ClaudeOrchestrator {
   
   clearGitHubLinks(sessionId) {
     this.githubLinks.delete(sessionId);
+    this.githubLinkLogs.delete(sessionId);
     this.updateTerminalControls(sessionId);
   }
   
@@ -2267,8 +2418,11 @@ class ClaudeOrchestrator {
     
     // Show PR button if PR link detected
     if (links.pr) {
-      // Add some debugging
-      console.log('Adding PR button for session:', sessionId, 'URL:', links.pr);
+      const lastLogged = this.githubLinkLogs.get(sessionId);
+      if (!lastLogged || lastLogged.pr !== links.pr) {
+        console.log('Adding PR button for session:', sessionId, 'URL:', links.pr);
+        this.githubLinkLogs.set(sessionId, { pr: links.pr });
+      }
       buttons += `<button class="control-btn" onclick="window.orchestrator.openPRLink('${links.pr}')" title="View PR on GitHub (${links.pr})">📥</button>`;
       // Add advanced diff viewer button for PRs
       buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${links.pr}')" title="Advanced Diff View">🔍</button>`;
@@ -2428,9 +2582,8 @@ class ClaudeOrchestrator {
     if (data.length > 0 && !data.match(/^[\x1b\x7f\r\n]/) && data.trim().length > 0) {
       const currentActivity = this.sessionActivity.get(sessionId);
       if (currentActivity !== 'active') {
-        console.log(`Marking ${sessionId} as active due to user input`);
         this.sessionActivity.set(sessionId, 'active');
-        this.buildSidebar(); // Refresh to update grey/active state
+        this.buildSidebar();
       }
     }
     
@@ -2446,7 +2599,70 @@ class ClaudeOrchestrator {
       this.socket.emit('terminal-resize', { sessionId, cols, rows });
     }
   }
-  
+
+  /**
+   * Handle Commander Claude UI control actions
+   * These are semantic commands that Commander uses to control the UI
+   */
+  handleCommanderAction(action, params) {
+    switch (action) {
+      case 'focus-session':
+        this.focusTerminal(params.sessionId);
+        break;
+
+      case 'switch-workspace':
+        if (this.tabManager) {
+          this.tabManager.switchToWorkspace(params.workspaceName);
+        }
+        break;
+
+      case 'open-commander':
+        if (this.commanderPanel) {
+          this.commanderPanel.show();
+        }
+        break;
+
+      case 'open-greenfield':
+        if (this.greenfieldWizard) {
+          this.greenfieldWizard.show();
+        }
+        break;
+
+      case 'open-settings':
+        document.getElementById('settings-panel')?.classList.remove('hidden');
+        break;
+
+      case 'highlight-worktree': {
+        const item = document.querySelector(`[data-worktree-id="${params.worktreeId}"]`);
+        if (item) {
+          item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          item.classList.add('highlighted');
+          setTimeout(() => item.classList.remove('highlighted'), 2000);
+        }
+        break;
+      }
+
+      case 'start-claude':
+        this.startClaudeInSession(params.sessionId, params.yolo !== false);
+        break;
+
+      case 'stop-session':
+        this.stopSession(params.sessionId);
+        break;
+
+      case 'focus-worktree':
+        this.showOnlyWorktree(params.worktreeId);
+        break;
+
+      case 'show-all-worktrees':
+        this.showAllTerminals();
+        break;
+
+      default:
+        console.warn('Unknown commander action:', action);
+    }
+  }
+
   handleSessionExit(sessionId, exitCode) {
     console.log(`Session ${sessionId} exited with code ${exitCode}`);
     this.updateSessionStatus(sessionId, 'exited');
@@ -2629,8 +2845,6 @@ class ClaudeOrchestrator {
         tag: `claude-ready-${sessionId}` // Prevent duplicates
       });
     }
-    
-    console.log(`🎉 Claude ${worktreeId} is ready for input!`);
   }
 
   showNotification(title, message) {
@@ -3994,7 +4208,60 @@ class ClaudeOrchestrator {
     
     return { cols: Math.max(80, cols), rows: Math.max(24, rows) };
   }
-  
+
+  /**
+   * Apply session recovery - cd to last directory and optionally resume conversation
+   */
+  async applySessionRecovery(recovery) {
+    if (!recovery || !recovery.sessions || recovery.sessions.length === 0) {
+      console.log('No sessions to recover');
+      return;
+    }
+
+    console.log('Applying session recovery:', recovery);
+    const recoverySettings = this.userSettings?.global?.sessionRecovery || {};
+    const resumeConversation = recoverySettings.resumeConversation !== false;
+
+    // Track which sessions we're recovering so auto-start skips them
+    this.recoveredSessions = new Set();
+
+    for (const session of recovery.sessions) {
+      const { sessionId, lastCwd, lastAgent, lastConversationId } = session;
+
+      // Find the terminal for this session
+      if (!this.sessions.has(sessionId)) {
+        console.log(`Session ${sessionId} not found, skipping recovery`);
+        continue;
+      }
+
+      // Mark this session as recovered to prevent auto-start
+      this.recoveredSessions.add(sessionId);
+
+      console.log(`Recovering session ${sessionId}:`, { lastCwd, lastAgent, lastConversationId });
+
+      // Start agent with resume if conversation available and it's a claude terminal
+      if (resumeConversation && lastConversationId && lastAgent === 'claude' && sessionId.includes('-claude')) {
+        console.log(`Resuming conversation: ${lastConversationId} in ${lastCwd}`);
+
+        // Use recovery-specific skipPermissions setting (defaults to true)
+        const skipPermissions = recoverySettings.skipPermissions !== false;
+        const yoloFlag = skipPermissions ? ' --dangerously-skip-permissions' : '';
+
+        // CD to actual CWD (may differ from worktree if user cd'd before starting Claude)
+        // Then start claude with --resume
+        this.socket.emit('terminal-input', {
+          sessionId,
+          data: `cd "${lastCwd}" && claude --resume ${lastConversationId}${yoloFlag}\n`
+        });
+
+        // Small delay between sessions
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+
+    this.showTemporaryMessage(`Recovered ${recovery.sessions.length} session(s)`, 'success');
+  }
+
   async autoStartClaude(sessionId) {
     console.log(`Auto-starting Claude with user settings: ${sessionId}`);
 
@@ -4638,6 +4905,34 @@ class ClaudeOrchestrator {
       }
     }
 
+    // Update session recovery settings UI
+    const sessionRecoveryEnabled = document.getElementById('session-recovery-enabled');
+    const sessionRecoveryOptions = document.getElementById('session-recovery-options');
+    const sessionRecoveryMode = document.getElementById('session-recovery-mode');
+    const recoveryResumeCwd = document.getElementById('recovery-resume-cwd');
+    const recoveryResumeConversation = document.getElementById('recovery-resume-conversation');
+
+    const recoverySettings = this.userSettings.global.sessionRecovery || {};
+    if (sessionRecoveryEnabled) {
+      sessionRecoveryEnabled.checked = recoverySettings.enabled !== false; // Default to enabled
+      if (sessionRecoveryOptions) {
+        sessionRecoveryOptions.style.display = sessionRecoveryEnabled.checked ? 'block' : 'none';
+      }
+    }
+    if (sessionRecoveryMode) {
+      sessionRecoveryMode.value = recoverySettings.mode || 'ask';
+    }
+    if (recoveryResumeCwd) {
+      recoveryResumeCwd.checked = recoverySettings.resumeCwd !== false;
+    }
+    if (recoveryResumeConversation) {
+      recoveryResumeConversation.checked = recoverySettings.resumeConversation !== false;
+    }
+    const recoverySkipPermissions = document.getElementById('recovery-skip-permissions');
+    if (recoverySkipPermissions) {
+      recoverySkipPermissions.checked = recoverySettings.skipPermissions !== false; // Default to true
+    }
+
     // Update per-terminal settings UI
     this.updatePerTerminalSettingsUI();
   }
@@ -5028,6 +5323,40 @@ class ClaudeOrchestrator {
     }
   }
 
+  // Update voice command context with current workspace/worktree info
+  updateVoiceContext() {
+    if (!this.voiceControl) return;
+
+    // Build list of worktrees with their full identifiers
+    const worktrees = [];
+    for (const [sessionId, session] of this.sessions) {
+      // Extract worktree info from session ID (e.g., "zoo-game-work1-claude" -> "zoo-game/work1")
+      const match = sessionId.match(/^(.+?)-(work\d+)-/);
+      if (match) {
+        const worktreeId = `${match[1]}/${match[2]}`;
+        if (!worktrees.includes(worktreeId)) {
+          worktrees.push(worktreeId);
+        }
+      }
+    }
+
+    // Build context
+    const context = {
+      currentWorkspace: this.currentWorkspace?.name || null,
+      workspaces: this.availableWorkspaces?.map(w => w.name) || [],
+      worktrees: worktrees.sort(),
+      // Add branch info if available
+      worktreeDetails: Array.from(this.sessions.entries())
+        .filter(([id]) => id.includes('-claude'))
+        .map(([id, session]) => ({
+          id: id.replace(/-claude$/, ''),
+          branch: session.branch || 'unknown'
+        }))
+    };
+
+    this.voiceControl.updateContext(context);
+  }
+
   // Workspace management methods
   showDashboard() {
     console.log('Showing dashboard...');
@@ -5068,19 +5397,158 @@ class ClaudeOrchestrator {
     this.socket.emit('switch-workspace', { workspaceId });
   }
 
+  async showPortsPanel() {
+    console.log('Opening Ports panel...');
+
+    // Remove existing modal
+    const existing = document.getElementById('ports-panel');
+    if (existing) existing.remove();
+
+    // Fetch ports
+    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
+                      window.location.port === '2081' ? 'http://localhost:4000' :
+                      window.location.origin;
+
+    let portsData = { ports: [], count: 0 };
+    try {
+      const response = await fetch(`${serverUrl}/api/ports/scan`);
+      if (response.ok) {
+        portsData = await response.json();
+      }
+    } catch (error) {
+      console.error('Failed to fetch ports:', error);
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'ports-panel';
+    modal.className = 'modal ports-modal';
+    modal.innerHTML = `
+      <div class="modal-content ports-content">
+        <div class="ports-header">
+          <h2>🔌 Running Services</h2>
+          <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
+        </div>
+        <div class="ports-info">
+          ${portsData.count} service${portsData.count !== 1 ? 's' : ''} running • Click name to edit label
+        </div>
+        <div class="ports-list">
+          ${portsData.ports.length === 0 ? '<div class="no-ports">No services detected</div>' :
+            portsData.ports.map(p => `
+              <div class="port-item ${p.type}" data-port="${p.port}">
+                <span class="port-icon">${p.icon || '❓'}</span>
+                <div class="port-details">
+                  <span class="port-name ${p.customLabel ? 'custom-label' : ''}"
+                        onclick="window.orchestrator.editPortLabel(${p.port}, '${(p.name || '').replace(/'/g, "\\'")}', this)"
+                        title="Click to edit label">
+                    ${p.name}${p.customLabel ? ' ✏️' : ''}
+                  </span>
+                  <span class="port-context">
+                    ${p.project?.project ? `<span class="port-project">${p.project.project}</span>` : ''}
+                    ${p.project?.worktree ? `<span class="port-worktree">${p.project.worktree}</span>` : ''}
+                    ${p.project?.subPath ? `<span class="port-subpath">/${p.project.subPath}</span>` : ''}
+                  </span>
+                  <span class="port-process" title="${p.cwd || ''}">${p.processName || ''} • PID ${p.pid || '?'}</span>
+                </div>
+                <a href="${p.url}" target="_blank" class="port-link" title="Open in browser">
+                  :${p.port} →
+                </a>
+              </div>
+            `).join('')}
+        </div>
+        <div class="ports-footer">
+          <button class="btn-secondary" onclick="window.orchestrator.showPortsPanel()">
+            🔄 Refresh
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+  }
+
+  async editPortLabel(port, currentName, element) {
+    const newLabel = prompt(`Enter custom label for port ${port}:`, currentName);
+    if (newLabel === null) return; // Cancelled
+
+    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
+                      window.location.port === '2081' ? 'http://localhost:4000' :
+                      window.location.origin;
+
+    try {
+      const response = await fetch(`${serverUrl}/api/ports/label`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ port, label: newLabel || null })
+      });
+
+      if (response.ok) {
+        // Refresh the panel and sidebar
+        this.showPortsPanel();
+        this.refreshSidebarPorts();
+      } else {
+        alert('Failed to save label');
+      }
+    } catch (error) {
+      console.error('Failed to save port label:', error);
+      alert('Failed to save label: ' + error.message);
+    }
+  }
+
+  async refreshSidebarPorts() {
+    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
+                      window.location.port === '2081' ? 'http://localhost:4000' :
+                      window.location.origin;
+
+    const listEl = document.getElementById('ports-sidebar-list');
+    const countEl = document.getElementById('ports-count');
+    if (!listEl) return;
+
+    try {
+      const response = await fetch(`${serverUrl}/api/ports/scan`);
+      if (!response.ok) throw new Error('Failed to fetch');
+      const data = await response.json();
+
+      countEl.textContent = data.count || 0;
+
+      if (!data.ports || data.ports.length === 0) {
+        listEl.innerHTML = '<div class="ports-sidebar-empty">No services running</div>';
+        return;
+      }
+
+      listEl.innerHTML = data.ports.map(p => {
+        const context = p.project?.project
+          ? `${p.project.project}${p.project.worktree ? ' • ' + p.project.worktree : ''}`
+          : (p.cwd ? p.cwd.split('/').slice(-2).join('/') : '');
+
+        return `
+          <div class="port-sidebar-item ${p.type || ''}"
+               onclick="window.open('${p.url}', '_blank')"
+               title="${p.cwd || p.name}">
+            <span class="port-sidebar-icon">${p.icon || '❓'}</span>
+            <div class="port-sidebar-info">
+              <span class="port-sidebar-name">${p.name}</span>
+              <span class="port-sidebar-context">${context}</span>
+            </div>
+            <span class="port-sidebar-port">:${p.port}</span>
+          </div>
+        `;
+      }).join('');
+
+    } catch (error) {
+      console.error('Failed to refresh sidebar ports:', error);
+      listEl.innerHTML = '<div class="ports-sidebar-empty">Failed to load</div>';
+    }
+  }
+
   async showAddWorktreeModal() {
     console.log('Opening Add Worktree modal...');
 
-    // Fetch available repositories
-    try {
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
-      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
-      const allRepos = await response.json();
-      this.showAdvancedAddWorktreeModal(allRepos);
-    } catch (error) {
-      console.error('Failed to fetch repositories:', error);
-      this.showSimpleAddWorktreeModal();
-    }
+    this.showQuickWorktreeModal();
   }
 
   showSimpleAddWorktreeModal() {
@@ -5138,6 +5606,472 @@ class ClaudeOrchestrator {
 
     document.body.appendChild(modal);
     this.setupWorktreeModalInteractions();
+  }
+
+  async showQuickWorktreeModal() {
+    const existing = document.getElementById('quick-worktree-modal');
+    if (existing) existing.remove();
+    this.quickWorktreeConversationsLoaded = false;
+    this.quickWorktreeConversationLimit = this.quickWorktreeConversationLimit || 100;
+
+    const modal = document.createElement('div');
+    modal.id = 'quick-worktree-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content quick-worktree-modal">
+        <div class="modal-header">
+          <div class="quick-worktree-title">
+            <h3>Quick Work</h3>
+            <div class="quick-worktree-tabs">
+              <button class="quick-tab-btn active" data-tab="start">Start work</button>
+              <button class="quick-tab-btn" data-tab="resume">Resume</button>
+            </div>
+          </div>
+          <button class="close-btn" onclick="this.closest('.modal').remove()">✕</button>
+        </div>
+        <div class="quick-worktree-toolbar">
+          <input type="text" id="quick-worktree-search" placeholder="Search repos..." class="search-input">
+          <button class="btn-secondary quick-advanced-btn">Advanced</button>
+        </div>
+        <div class="modal-body quick-worktree-body">
+          <div class="quick-tab-panel active" data-tab="start">
+            <div id="quick-repo-list" class="quick-repo-list">
+              <div class="loading">Loading repos...</div>
+            </div>
+          </div>
+          <div class="quick-tab-panel" data-tab="resume">
+            <div class="quick-conv-toolbar">
+              <div class="quick-conv-controls">
+                <button class="btn-secondary quick-conv-more-btn">Load more</button>
+                <button class="btn-secondary quick-conv-history-btn">Open history</button>
+              </div>
+              <div class="quick-conv-count" id="quick-conv-count"></div>
+            </div>
+            <div id="quick-conv-list" class="quick-conv-list">
+              <div class="loading">Loading recent conversations...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const searchInput = modal.querySelector('#quick-worktree-search');
+    const advancedBtn = modal.querySelector('.quick-advanced-btn');
+    const tabButtons = modal.querySelectorAll('.quick-tab-btn');
+    const convMoreBtn = modal.querySelector('.quick-conv-more-btn');
+    const convHistoryBtn = modal.querySelector('.quick-conv-history-btn');
+
+    if (advancedBtn) {
+      advancedBtn.addEventListener('click', () => {
+        modal.remove();
+        this.showAddWorktreeModalAdvanced();
+      });
+    }
+
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        modal.querySelectorAll('.quick-tab-panel').forEach(panel => {
+          panel.classList.toggle('active', panel.dataset.tab === tab);
+        });
+
+        if (tab === 'resume' && !this.quickWorktreeConversationsLoaded) {
+          this.loadQuickWorktreeConversations();
+        }
+      });
+    });
+
+    if (convMoreBtn) {
+      convMoreBtn.addEventListener('click', () => {
+        this.quickWorktreeConversationLimit = (this.quickWorktreeConversationLimit || 100) + 100;
+        this.loadQuickWorktreeConversations({ force: true });
+      });
+    }
+
+    if (convHistoryBtn) {
+      convHistoryBtn.addEventListener('click', () => {
+        if (this.conversationBrowser) {
+          modal.remove();
+          this.conversationBrowser.show();
+        } else {
+          this.showTemporaryMessage('Conversation history not available', 'error');
+        }
+      });
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase().trim();
+        const activeTab = modal.querySelector('.quick-tab-panel.active')?.dataset.tab;
+        if (activeTab === 'resume') {
+          modal.querySelectorAll('.quick-conv-row').forEach(row => {
+            const title = row.dataset.convTitle || '';
+            const repo = row.dataset.convRepo || '';
+            const path = row.dataset.convPath || '';
+            const matches = title.includes(term) || repo.includes(term) || path.includes(term);
+            row.style.display = matches ? 'flex' : 'none';
+          });
+        } else {
+          modal.querySelectorAll('.quick-repo-row').forEach(row => {
+            const name = row.dataset.repoName || '';
+            const path = row.dataset.repoPath || '';
+            const matches = name.includes(term) || path.includes(term);
+            row.style.display = matches ? 'flex' : 'none';
+          });
+        }
+      });
+    }
+
+    this.loadQuickWorktreeRepos();
+  }
+
+  async showAddWorktreeModalAdvanced() {
+    try {
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
+      const allRepos = await response.json();
+      this.showAdvancedAddWorktreeModal(allRepos);
+    } catch (error) {
+      console.error('Failed to fetch repositories:', error);
+      this.showSimpleAddWorktreeModal();
+    }
+  }
+
+  async loadQuickWorktreeRepos() {
+    const listEl = document.getElementById('quick-repo-list');
+    if (!listEl) return;
+
+    try {
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
+      const repos = await response.json();
+
+      const sortedRepos = repos
+        .map(repo => {
+          const sessionActivity = this.getRepoLastActivity(repo);
+          const lastModifiedMs = Math.max(repo.lastModifiedMs || 0, sessionActivity || 0);
+          return {
+            ...repo,
+            lastModifiedMs
+          };
+        })
+        .sort((a, b) => b.lastModifiedMs - a.lastModifiedMs);
+
+      if (!sortedRepos.length) {
+        listEl.innerHTML = '<div class="quick-empty">No repos found</div>';
+        return;
+      }
+
+      listEl.innerHTML = this.renderQuickRepoList(sortedRepos);
+
+      listEl.querySelectorAll('.quick-start-btn').forEach(btn => {
+        btn.addEventListener('click', (event) => {
+          const repoPath = btn.dataset.repoPath;
+          const repoType = btn.dataset.repoType;
+          const repoName = btn.dataset.repoName;
+          const worktreeId = btn.dataset.worktreeId;
+          const worktreePath = btn.dataset.worktreePath;
+          const repositoryRoot = btn.dataset.repoRoot || repoPath;
+          const keepOpen = event && (event.ctrlKey || event.metaKey);
+
+          if (!worktreeId || !worktreePath) {
+            this.showTemporaryMessage('No available worktrees for this repo', 'error');
+            return;
+          }
+
+          this.quickStartWorktree({
+            repoPath,
+            repoType,
+            repoName,
+            worktreeId,
+            worktreePath,
+            repositoryRoot,
+            keepOpen
+          });
+        });
+      });
+    } catch (error) {
+      console.error('Failed to load repositories:', error);
+      listEl.innerHTML = '<div class="quick-empty">Failed to load repos</div>';
+    }
+  }
+
+  renderQuickRepoList(repos) {
+    return repos.map(repo => this.renderQuickRepoRow(repo)).join('');
+  }
+
+  renderQuickRepoRow(repo) {
+    const recommended = this.getRecommendedWorktree(repo);
+    const hasWorktrees = Array.isArray(repo.worktreeDirs) && repo.worktreeDirs.length > 0;
+    const actionLabel = recommended ? `Start (${recommended.id})` : (hasWorktrees ? 'All busy' : 'No worktrees');
+    const displayPath = repo.relativePath || repo.path || '';
+    const displayPathLabel = displayPath.startsWith('/') ? displayPath : `~/${displayPath}`;
+
+    return `
+      <div class="quick-repo-row"
+           data-repo-name="${repo.name.toLowerCase()}"
+           data-repo-path="${displayPath.toLowerCase()}">
+        <div class="quick-repo-meta">
+          <span class="quick-repo-icon">${this.getProjectIcon(repo.type)}</span>
+          <div class="quick-repo-info">
+            <div class="quick-repo-name">${this.escapeHtml(repo.name)}</div>
+            <div class="quick-repo-path">${this.escapeHtml(displayPathLabel)}</div>
+          </div>
+        </div>
+        <div class="quick-repo-actions">
+          ${recommended ? `<span class="quick-worktree-pill">${recommended.id}</span>` : ''}
+          <button class="btn-primary quick-start-btn"
+                  data-repo-path="${repo.path}"
+                  data-repo-type="${repo.type}"
+                  data-repo-name="${repo.name}"
+                  data-repo-root="${repo.path}"
+                  data-worktree-id="${recommended ? recommended.id : ''}"
+                  data-worktree-path="${recommended ? recommended.path : ''}"
+                  ${recommended ? '' : 'disabled'}>
+            ${actionLabel}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  getRecommendedWorktree(repo) {
+    const worktreeEntries = Array.isArray(repo.worktreeDirs) ? repo.worktreeDirs : [];
+    if (!worktreeEntries.length) {
+      if (!repo.path) return null;
+      const rootId = 'root';
+      if (this.isWorktreeInUse(repo.path, rootId, repo.name)) return null;
+      return {
+        id: rootId,
+        path: repo.path,
+        lastModifiedMs: repo.lastModifiedMs || 0
+      };
+    }
+
+    const available = worktreeEntries.filter(entry => {
+      if (!entry || !entry.id) return false;
+      return !this.isWorktreeInUse(repo.path, entry.id, repo.name);
+    });
+
+    if (!available.length) return null;
+
+    let best = null;
+    let bestTime = Infinity;
+
+    for (const entry of available) {
+      const lastActivity = this.getWorktreeLastActivity(repo, entry.id);
+      const entryMtime = typeof entry.lastModifiedMs === 'number' ? entry.lastModifiedMs : 0;
+      const effectiveLastUsed = Math.max(entryMtime, lastActivity || 0);
+      if (effectiveLastUsed < bestTime) {
+        bestTime = effectiveLastUsed;
+        best = entry;
+      }
+    }
+
+    if (!best) return null;
+
+    return {
+      id: best.id,
+      path: best.path || `${repo.path}/${best.id}`,
+      lastModifiedMs: best.lastModifiedMs
+    };
+  }
+
+  getRepoLastActivity(repo) {
+    let latest = null;
+    const repoName = repo.name?.toLowerCase();
+
+    for (const [sessionId, session] of this.sessions) {
+      const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
+
+      if (!sessionRepoName) {
+        if (this.currentWorkspace?.repository?.path !== repo.path) {
+          continue;
+        }
+      } else if (repoName && sessionRepoName !== repoName) {
+        continue;
+      }
+
+      if (typeof session.lastActivity === 'number') {
+        latest = latest === null ? session.lastActivity : Math.max(latest, session.lastActivity);
+      }
+    }
+
+    return latest;
+  }
+
+  getConversationRepoLabel(conv) {
+    if (conv.gitRepo) return conv.gitRepo;
+    if (conv.project) return conv.project;
+    const cwd = conv.cwd || '';
+    if (!cwd) return 'Unknown';
+
+    const parts = cwd.split('/').filter(Boolean);
+    if (!parts.length) return 'Unknown';
+    return parts.slice(-2).join('/');
+  }
+
+  extractWorktreeLabel(cwd) {
+    if (!cwd) return '';
+    const nestedMatch = cwd.match(/(?:^|\/)(work\d+)(?:\/|$)/i);
+    if (nestedMatch) return nestedMatch[1];
+    const siblingMatch = cwd.match(/-work(\d+)(?:\/|$)/i);
+    if (siblingMatch) return `work${siblingMatch[1]}`;
+    return '';
+  }
+
+  formatConversationTimestamp(timestamp) {
+    try {
+      const date = new Date(timestamp);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleString();
+    } catch (error) {
+      return '';
+    }
+  }
+
+  cleanQuickPreview(text) {
+    if (!text) return '';
+    let cleaned = text
+      .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/gi, '')
+      .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, '')
+      .replace(/<command-name>[\s\S]*?<\/command-name>/gi, '')
+      .replace(/<command-message>[\s\S]*?<\/command-message>/gi, '')
+      .replace(/<command-args>[\s\S]*?<\/command-args>/gi, '')
+      .replace(/<[^>]+>/g, '')
+      .trim();
+
+    if (cleaned.length < 10) {
+      cleaned = text.replace(/<[^>]+>/g, '').trim();
+    }
+
+    return cleaned.slice(0, 180);
+  }
+
+  formatTokenCount(tokens) {
+    if (!tokens || typeof tokens !== 'number') return '';
+    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+    if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
+    return `${tokens}`;
+  }
+
+  getWorktreeLastActivity(repo, worktreeId) {
+    let oldest = null;
+    const repoName = repo.name?.toLowerCase();
+
+    for (const [sessionId, session] of this.sessions) {
+      const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+      if (sessionWorktreeId !== worktreeId) continue;
+
+      const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
+      if (repoName && sessionRepoName && sessionRepoName !== repoName) continue;
+
+      if (typeof session.lastActivity === 'number') {
+        oldest = oldest === null ? session.lastActivity : Math.min(oldest, session.lastActivity);
+      }
+    }
+
+    return oldest;
+  }
+
+  async loadQuickWorktreeConversations({ force = false } = {}) {
+    const listEl = document.getElementById('quick-conv-list');
+    if (!listEl) return;
+
+    try {
+      if (this.quickWorktreeConversationsLoaded && !force) return;
+      listEl.innerHTML = '<div class="loading">Loading recent conversations...</div>';
+
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const limit = this.quickWorktreeConversationLimit || 100;
+      const response = await fetch(`${serverUrl}/api/conversations/recent?limit=${limit}`);
+      const conversations = await response.json();
+      this.quickWorktreeConversationsLoaded = true;
+      const countEl = document.getElementById('quick-conv-count');
+      if (countEl) {
+        countEl.textContent = `${conversations.length} loaded`;
+      }
+
+      if (!conversations.length) {
+        listEl.innerHTML = '<div class="quick-empty">No recent conversations yet</div>';
+        return;
+      }
+
+      listEl.innerHTML = conversations.map(conv => this.renderQuickConversationRow(conv)).join('');
+
+      listEl.querySelectorAll('.quick-resume-btn').forEach(btn => {
+        btn.addEventListener('click', (event) => {
+          const id = btn.dataset.id;
+          const project = btn.dataset.project;
+          const cwd = btn.dataset.cwd;
+          const keepOpen = event && (event.ctrlKey || event.metaKey);
+
+          if (this.conversationBrowser) {
+            this.conversationBrowser.resumeConversation(id, project, cwd);
+          } else {
+            this.showTemporaryMessage('Conversation browser not available', 'error');
+          }
+
+          if (!keepOpen) {
+            document.getElementById('quick-worktree-modal')?.remove();
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Failed to load conversations:', error);
+      listEl.innerHTML = '<div class="quick-empty">Failed to load conversations</div>';
+    }
+  }
+
+  renderQuickConversationRow(conv) {
+    const repoLabel = this.getConversationRepoLabel(conv);
+    const worktreeLabel = this.extractWorktreeLabel(conv.cwd || '');
+    const lastUsed = conv.lastTimestamp ? this.formatConversationTimestamp(conv.lastTimestamp) : '';
+    const title = this.cleanQuickPreview(conv.summary || conv.firstUserMessage || conv.preview || conv.project || 'Conversation');
+    const lastPreview = this.cleanQuickPreview(conv.lastMessage || '');
+    const disabled = !conv.cwd;
+    const model = conv.model || '';
+    const msgCount = typeof conv.messageCount === 'number' ? conv.messageCount : 0;
+    const userCount = typeof conv.userMessageCount === 'number' ? conv.userMessageCount : 0;
+    const tokens = this.formatTokenCount(conv.totalTokens);
+
+    return `
+      <div class="quick-conv-row"
+           data-conv-title="${this.escapeHtml(title).toLowerCase()}"
+           data-conv-repo="${this.escapeHtml(repoLabel).toLowerCase()}"
+           data-conv-path="${this.escapeHtml(conv.cwd || '').toLowerCase()}">
+        <div class="quick-conv-main">
+          <div class="quick-conv-header">
+            <div class="quick-conv-title">${this.escapeHtml(repoLabel)}</div>
+            <div class="quick-conv-badges">
+              ${worktreeLabel ? `<span class="quick-pill">${this.escapeHtml(worktreeLabel)}</span>` : ''}
+              ${conv.branch ? `<span class="quick-pill">${this.escapeHtml(conv.branch)}</span>` : ''}
+            </div>
+          </div>
+          <div class="quick-conv-meta-row">
+            ${lastUsed ? `<span>Last: ${this.escapeHtml(lastUsed)}</span>` : ''}
+            ${conv.project ? `<span>${this.escapeHtml(conv.project)}</span>` : ''}
+          </div>
+          ${title ? `<div class="quick-conv-preview">${this.escapeHtml(title)}</div>` : ''}
+          ${lastPreview && lastPreview !== title ? `<div class="quick-conv-preview">${this.escapeHtml(lastPreview)}</div>` : ''}
+          <div class="quick-conv-meta-row">
+            ${model ? `<span>${this.escapeHtml(model)}</span>` : ''}
+            <span>${msgCount} msgs${userCount ? ` (${userCount} user)` : ''}</span>
+            ${tokens ? `<span>${tokens} tokens</span>` : ''}
+          </div>
+          ${conv.cwd ? `<div class="quick-conv-path">${this.escapeHtml(conv.cwd)}</div>` : ''}
+        </div>
+        <div class="quick-conv-actions">
+          <button class="btn-secondary quick-resume-btn" data-id="${conv.id}" data-project="${conv.project || ''}" data-cwd="${conv.cwd || ''}" ${disabled ? 'disabled' : ''}>
+            ${disabled ? 'No CWD' : 'Resume'}
+          </button>
+        </div>
+      </div>
+    `;
   }
 
   setupWorktreeModalInteractions() {
@@ -5216,7 +6150,7 @@ class ClaudeOrchestrator {
     const worktreeOptions = [];
     for (let i = 1; i <= 8; i++) {
       const worktreeId = `work${i}`;
-      const isInUse = this.isWorktreeInUse(repo.path, worktreeId);
+      const isInUse = this.isWorktreeInUse(repo.path, worktreeId, repo.name);
       const statusIcon = isInUse ? '⚠️' : '✅';
       const statusText = isInUse ? 'In use' : 'Available';
 
@@ -5247,21 +6181,21 @@ class ClaudeOrchestrator {
     `;
   }
 
-  isWorktreeInUse(repoPath, worktreeId) {
+  isWorktreeInUse(repoPath, worktreeId, repoNameOverride = null) {
     // Check if this worktree has ACTIVE SESSIONS, not just workspace config
     // A worktree is "in use" only if there are actual terminal sessions for it
 
     if (!this.currentWorkspace) return false;
 
     // Extract repo name from path for session matching
-    const repoName = repoPath.split('/').pop();
+    const repoName = (repoNameOverride || repoPath.split('/').pop() || '').toLowerCase();
 
     // Check if any session is using this worktree
     // Session IDs follow patterns like: "work1-claude", "work1-server",
     // or for mixed-repo: "repoName-work1-claude", "repoName-work1-server"
     for (const [sessionId, session] of this.sessions) {
       const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
-      const sessionRepoName = this.extractRepositoryName(sessionId);
+      const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
 
       // For single-repo workspaces (no repo name in session)
       if (!sessionRepoName && this.currentWorkspace.repository?.path === repoPath) {
@@ -5271,7 +6205,7 @@ class ClaudeOrchestrator {
       }
 
       // For mixed-repo workspaces (repo name in session)
-      if (sessionRepoName && sessionRepoName.toLowerCase() === repoName.toLowerCase()) {
+      if (sessionRepoName && repoName && sessionRepoName === repoName) {
         if (sessionWorktreeId === worktreeId) {
           return true;
         }
@@ -5280,9 +6214,14 @@ class ClaudeOrchestrator {
 
     // Also check mixed-repo workspace config for explicitly assigned worktrees
     if (this.currentWorkspace.terminals && Array.isArray(this.currentWorkspace.terminals)) {
+      const repoNameMatch = repoNameOverride ? repoNameOverride.toLowerCase() : '';
       return this.currentWorkspace.terminals.some(terminal => {
-        if (terminal.repository?.path === repoPath && terminal.worktree === worktreeId) {
+        if (terminal.worktree !== worktreeId) return false;
+        if (terminal.repository?.path === repoPath) {
           return true; // This worktree is assigned in workspace config
+        }
+        if (repoNameMatch && (terminal.repository?.name || '').toLowerCase() === repoNameMatch) {
+          return true; // Match by repo name when paths differ
         }
         return false;
       });
@@ -5290,6 +6229,26 @@ class ClaudeOrchestrator {
 
     // No active sessions for this worktree - it's available
     return false;
+  }
+
+  quickStartWorktree({ repoPath, repoType, repoName, worktreeId, worktreePath, repositoryRoot, keepOpen = false }) {
+    if (!this.socket) {
+      this.showTemporaryMessage('Socket not connected', 'error');
+      return;
+    }
+
+    this.showTemporaryMessage(`Starting ${repoName} ${worktreeId}...`, 'success');
+    this.socket.emit('add-worktree-sessions', {
+      worktreeId,
+      worktreePath,
+      repositoryName: repoName,
+      repositoryType: repoType,
+      repositoryRoot: repositoryRoot || repoPath
+    });
+
+    if (!keepOpen) {
+      document.getElementById('quick-worktree-modal')?.remove();
+    }
   }
 
   async addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName) {
@@ -5310,7 +6269,8 @@ class ClaudeOrchestrator {
 
       if (response.ok) {
         this.showTemporaryMessage(`Added ${repoName} ${worktreeId} to workspace!`, 'success');
-        document.getElementById('add-worktree-modal').remove();
+        document.getElementById('add-worktree-modal')?.remove();
+        document.getElementById('quick-worktree-modal')?.remove();
 
         // workspace-config-updated event will be emitted by server
         // No need to refresh entire workspace - new terminals will be initialized automatically
@@ -5386,6 +6346,16 @@ class ClaudeOrchestrator {
       'ruby-rails': '💎'
     };
     return icons[type] || '📁';
+  }
+
+  escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 }
 

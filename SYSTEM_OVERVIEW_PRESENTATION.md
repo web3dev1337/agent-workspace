@@ -1199,3 +1199,134 @@ This AI development environment represents a **revolutionary approach to multi-p
 *Last Updated: October 7, 2025*
 *Version: 2.0*
 *Author: web3dev1337*
+
+### Claude Orchestrator Architecture (Mermaid Draft)
+
+#### System Layers & Data Flow
+
+```mermaid
+flowchart TB
+  subgraph UI["Client UI (Web)"]
+    Dashboard["Dashboard + Workspace Tabs"]
+    TerminalGrid["Terminal Grid (Xterm.js)"]
+    Sidebar["Sidebar + Buttons + Worktree List"]
+    Modals["Agent Modal + Settings + Recovery Dialog"]
+  end
+
+  subgraph Server["Server (Node.js + Socket.IO)"]
+    API["REST API"]
+    WS["Socket.IO"]
+    SessionMgr["SessionManager (PTY sessions)"]
+    WorkspaceMgr["WorkspaceManager"]
+    WorktreeHelper["WorktreeHelper"]
+    GitHelper["GitHelper"]
+    StatusDetector["StatusDetector"]
+    RecoverySvc["SessionRecoveryService"]
+    ConfigDiscovery["ConfigDiscoveryService"]
+    AgentMgr["AgentManager (Claude/Codex/etc)"]
+  end
+
+  subgraph Runtime["Runtime / OS"]
+    PTY["node-pty processes (bash/claude/codex)"]
+    Git["git worktrees + repos"]
+    FS["Filesystem (configs + session state)"]
+    ClaudeFiles["~/.claude/projects/*.jsonl"]
+  end
+
+  Dashboard -->|switch workspace| WS
+  TerminalGrid <-->|terminal-output| WS
+  Sidebar -->|launch buttons| WS
+  Modals -->|settings + recovery| API
+
+  WS --> SessionMgr
+  API --> WorkspaceMgr
+  WorkspaceMgr --> WorktreeHelper
+  SessionMgr --> GitHelper
+  SessionMgr --> StatusDetector
+  SessionMgr --> RecoverySvc
+  WorkspaceMgr --> ConfigDiscovery
+  SessionMgr --> AgentMgr
+
+  SessionMgr -->|spawn| PTY
+  WorktreeHelper --> Git
+  WorkspaceMgr --> FS
+  RecoverySvc --> FS
+  SessionMgr --> ClaudeFiles
+```
+
+#### Workspace / Worktree Model
+
+```mermaid
+flowchart LR
+  Workspace["Workspace"]
+  Repo["Repository"]
+  Worktree["Worktree (work1, work2, master, etc)"]
+  Pair["Terminal Pair (claude + server)"]
+
+  Workspace --> Repo
+  Repo --> Worktree
+  Worktree --> Pair
+```
+
+#### Session Pair + Command Flow
+
+```mermaid
+sequenceDiagram
+  participant UI
+  participant WS as Socket.IO
+  participant SM as SessionManager
+  participant PTY as node-pty
+  participant FS as Filesystem
+
+  UI->>WS: start-claude / start-agent
+  WS->>SM: startClaudeWithOptions or startAgentWithConfig
+  SM->>PTY: write command (claude/codex)
+  PTY-->>SM: output stream
+  SM-->>WS: terminal-output
+  WS-->>UI: render output (Xterm)
+  SM->>FS: update recovery state
+```
+
+#### Cascaded Config (Buttons + Modes + Flags)
+
+```mermaid
+flowchart TB
+  Global["Global .orchestrator-config.json"]
+  Category["Category config (games/)"]
+  Framework["Framework config (hytopia/)"]
+  Project["Project config"]
+  Worktree["Worktree config"]
+
+  Global --> Category --> Framework --> Project --> Worktree
+  Worktree --> Result["Merged config (buttons + gameModes + flags)"]
+```
+
+#### Recovery Pipeline (Crash/Restart)
+
+```mermaid
+sequenceDiagram
+  participant UI
+  participant Dashboard
+  participant API
+  participant Recovery as SessionRecoveryService
+  participant FS as Filesystem
+  participant SM as SessionManager
+
+  Dashboard->>API: GET /api/recovery/:workspaceId
+  API->>Recovery: getRecoveryInfo()
+  Recovery->>FS: read session-recovery/<workspace>.json
+  API-->>Dashboard: recoverable sessions
+  Dashboard->>UI: show recovery dialog
+  UI->>SM: terminal-input: cd "<lastCwd>" && claude --resume <id>
+```
+
+#### Buttons / Actions (Concept Map)
+
+```mermaid
+flowchart LR
+  Buttons["Sidebar Buttons"]
+  Buttons --> ClaudeBtn["Claude: start/continue/resume"]
+  Buttons --> ServerBtn["Server: start/dev/kill"]
+  Buttons --> GitBtn["Git: branch/status/PR"]
+  Buttons --> UtilityBtn["Utility: open folders, scripts"]
+```

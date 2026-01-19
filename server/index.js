@@ -3,6 +3,7 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const os = require('os');
 const winston = require('winston');
 
 // Initialize logger
@@ -41,6 +42,32 @@ const { GitUpdateService } = require('./gitUpdateService');
 const { WorkspaceManager } = require('./workspaceManager');
 const { WorktreeHelper } = require('./worktreeHelper');
 const AgentManager = require('./agentManager');
+const { PortRegistry } = require('./portRegistry');
+const { GreenfieldService } = require('./greenfieldService');
+const { ContinuityService } = require('./continuityService');
+const { QuickLinksService } = require('./quickLinksService');
+const { CommanderService } = require('./commanderService');
+const { ConversationService } = require('./conversationService');
+const { WorktreeMetadataService } = require('./worktreeMetadataService');
+const commandRegistry = require('./commandRegistry');
+const voiceCommandService = require('./voiceCommandService');
+const whisperService = require('./whisperService');
+const sessionRecoveryService = require('./sessionRecoveryService');
+const multer = require('multer');
+
+// Configure multer for audio file uploads
+const audioUpload = multer({
+  dest: path.join(os.tmpdir(), 'orchestrator-audio'),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = ['audio/webm', 'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/ogg', 'audio/x-wav'];
+    if (allowed.includes(file.mimetype) || file.originalname.match(/\.(wav|webm|mp3|ogg)$/i)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid audio format'));
+    }
+  }
+});
 
 const app = express();
 const httpServer = createServer(app);
@@ -51,9 +78,14 @@ const io = new Server(httpServer, {
   }
 });
 
-// Log all requests for debugging
+// Log requests only in debug mode (reduces console spam)
 app.use((req, res, next) => {
-  logger.info(`Request: ${req.method} ${req.path}`);
+  // Skip noisy static file requests
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+    logger.debug(`Request: ${req.method} ${req.path}`);
+  } else if (req.path.startsWith('/api')) {
+    logger.info(`API: ${req.method} ${req.path}`);
+  }
   next();
 });
 
@@ -107,6 +139,27 @@ const statusDetector = new StatusDetector();
 const gitHelper = new GitHelper();
 const notificationService = new NotificationService(io);
 const worktreeHelper = new WorktreeHelper();
+const portRegistry = PortRegistry.getInstance();
+const greenfieldService = GreenfieldService.getInstance();
+greenfieldService.setSessionManager(sessionManager);
+greenfieldService.setIO(io);
+const continuityService = ContinuityService.getInstance();
+const quickLinksService = QuickLinksService.getInstance();
+const conversationService = ConversationService.getInstance();
+const worktreeMetadataService = WorktreeMetadataService.getInstance();
+
+// Initialize Commander service (Top-Level AI as Claude Code terminal)
+const commanderService = CommanderService.getInstance({
+  sessionManager,
+  io
+});
+
+// Initialize Command Registry for Commander UI control
+commandRegistry.init({
+  io,
+  sessionManager,
+  workspaceManager
+});
 
 // Connect services
 sessionManager.setStatusDetector(statusDetector);
@@ -119,11 +172,17 @@ async function initializeWorkspaceSystem() {
     logger.info('Initializing workspace system...');
     await workspaceManager.initialize();
 
+    // Initialize session recovery service
+    await sessionRecoveryService.init();
+
     const activeWorkspace = workspaceManager.getActiveWorkspace();
     if (activeWorkspace) {
       logger.info(`Active workspace: ${activeWorkspace.name}`);
       sessionManager.setWorkspace(activeWorkspace);
       workspaceInitialized = true;
+
+      // Load recovery state for active workspace
+      await sessionRecoveryService.loadWorkspaceState(activeWorkspace.id);
     } else {
       logger.warn('No active workspace found');
     }
@@ -169,10 +228,15 @@ io.on('connection', (socket) => {
   // Send initial session states
   socket.emit('sessions', sessionManager.getSessionStates());
   
-  // Handle terminal input
-  socket.on('terminal-input', ({ sessionId, data }) => {
-    logger.debug('Terminal input received', { sessionId, dataLength: data.length });
-    sessionManager.writeToSession(sessionId, data);
+  // Handle terminal input (accepts both 'data' and 'input' for compatibility)
+  socket.on('terminal-input', ({ sessionId, data, input }) => {
+    const inputData = data || input;
+    if (!inputData) {
+      logger.warn('Terminal input received with no data', { sessionId });
+      return;
+    }
+    logger.debug('Terminal input received', { sessionId, dataLength: inputData.length });
+    sessionManager.writeToSession(sessionId, inputData);
   });
   
   // Handle terminal resize
@@ -205,14 +269,19 @@ io.on('connection', (socket) => {
   });
   
   // Handle server control
-  socket.on('server-control', ({ sessionId, action, environment, launchSettings }) => {
+  socket.on('server-control', async ({ sessionId, action, environment, launchSettings }) => {
     logger.info('Server control request', { sessionId, action, environment, launchSettings });
 
     if (action === 'start') {
-      // Extract worktree number and assign port accordingly
+      // Get session info to find repository path and worktree ID
+      const session = sessionManager.sessions.get(sessionId);
       const worktreeMatch = sessionId.match(/work(\d+)/);
       const worktreeNum = worktreeMatch ? parseInt(worktreeMatch[1]) : 1;
-      const port = 8080 + worktreeNum - 1; // work1=8080, work2=8081, etc.
+
+      // Use port registry to get a port (avoids conflicts)
+      const repoPath = session?.config?.cwd || 'default';
+      const worktreeId = session?.worktreeId || `work${worktreeNum}`;
+      const port = await portRegistry.suggestPort(worktreeNum, repoPath, worktreeId);
 
       // Clear any existing input first with Ctrl+C, then send command
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C to clear
@@ -246,7 +315,7 @@ io.on('connection', (socket) => {
 
         command += '\n';
 
-        logger.info('Starting server with command', { sessionId, command, port, nodeEnv });
+        logger.info('Starting server with command', { sessionId, command, port, nodeEnv, repoPath, worktreeId });
 
         const written = sessionManager.writeToSession(sessionId, command);
         if (!written) {
@@ -259,8 +328,20 @@ io.on('connection', (socket) => {
       }, 100); // Small delay after Ctrl+C
     } else if (action === 'stop') {
       sessionManager.writeToSession(sessionId, '\x03'); // Ctrl+C
+
+      // Release the port when stopping
+      const session = sessionManager.sessions.get(sessionId);
+      if (session?.config?.cwd && session?.worktreeId) {
+        portRegistry.releasePort(session.config.cwd, session.worktreeId);
+      }
     } else if (action === 'kill') {
       sessionManager.writeToSession(sessionId, '\x03\x03'); // Double Ctrl+C
+
+      // Release the port when killing
+      const session = sessionManager.sessions.get(sessionId);
+      if (session?.config?.cwd && session?.worktreeId) {
+        portRegistry.releasePort(session.config.cwd, session.worktreeId);
+      }
     }
   });
   
@@ -452,7 +533,7 @@ io.on('connection', (socket) => {
   });
 
   // Add sessions for a new worktree without destroying existing sessions
-  socket.on('add-worktree-sessions', async ({ worktreeId, worktreePath, repositoryName, repositoryType }) => {
+  socket.on('add-worktree-sessions', async ({ worktreeId, worktreePath, repositoryName, repositoryType, repositoryRoot }) => {
     try {
       logger.info('Adding sessions for new worktree', { worktreeId, worktreePath, repositoryName });
 
@@ -463,6 +544,66 @@ io.on('connection', (socket) => {
         repositoryName,
         repositoryType
       });
+
+      // IMPORTANT: Update workspace config to persist this worktree
+      // This ensures the worktree survives page reloads
+      const activeWorkspace = workspaceManager.getActiveWorkspace();
+      if (activeWorkspace) {
+        try {
+          const updatedConfig = { ...activeWorkspace };
+
+          // Handle mixed-repo workspaces (terminals is an array)
+          if (Array.isArray(updatedConfig.terminals)) {
+            // Add new terminal entries for claude and server
+            const baseRepo = {
+              name: repositoryName || worktreeId.split('-')[0],
+              path: repositoryRoot || worktreePath.replace(/\/work\d+$/, ''),
+              type: repositoryType,
+              masterBranch: 'master'
+            };
+
+            const terminalIdBase = repositoryName
+              ? `${repositoryName}-${worktreeId}`
+              : worktreeId;
+
+            updatedConfig.terminals.push({
+              id: `${terminalIdBase}-claude`,
+              repository: baseRepo,
+              worktree: worktreeId,
+              worktreePath: worktreePath,
+              terminalType: 'claude',
+              visible: true
+            });
+            updatedConfig.terminals.push({
+              id: `${terminalIdBase}-server`,
+              repository: baseRepo,
+              worktree: worktreeId,
+              worktreePath: worktreePath,
+              terminalType: 'server',
+              visible: true
+            });
+          }
+          // Handle single-repo workspaces (terminals.pairs is a number)
+          else if (updatedConfig.terminals && typeof updatedConfig.terminals.pairs === 'number') {
+            // Extract worktree number from ID (e.g., "work5" -> 5)
+            const worktreeNum = parseInt(worktreeId.replace(/\D/g, '')) || updatedConfig.terminals.pairs + 1;
+            if (worktreeNum > updatedConfig.terminals.pairs) {
+              updatedConfig.terminals.pairs = worktreeNum;
+            }
+            // Also update worktrees.count if it exists
+            if (updatedConfig.worktrees && typeof updatedConfig.worktrees.count === 'number') {
+              if (worktreeNum > updatedConfig.worktrees.count) {
+                updatedConfig.worktrees.count = worktreeNum;
+              }
+            }
+          }
+
+          await workspaceManager.updateWorkspace(activeWorkspace.id, updatedConfig);
+          logger.info('Workspace config updated with new worktree', { worktreeId, workspaceId: activeWorkspace.id });
+        } catch (configError) {
+          logger.warn('Failed to update workspace config (sessions still created)', { error: configError.message });
+        }
+      }
 
       // Emit the new sessions to the requesting client only
       socket.emit('worktree-sessions-added', {
@@ -592,6 +733,8 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
     const path = require('path');
 
     const projects = [];
+    const projectIndexByKey = new Map();
+    const worktreeGroups = new Map();
     const gitHubPath = path.join(require('os').homedir(), 'GitHub');
 
     // Deep scan function
@@ -607,6 +750,38 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
           if (entry.name === 'node_modules') continue;
 
           const fullPath = path.join(dirPath, entry.name);
+
+          // Detect sibling worktree directories like "repo-work7"
+          const worktreeMatch = entry.name.match(/^(.*)-work(\d+)$/i);
+          if (worktreeMatch) {
+            const baseName = worktreeMatch[1];
+            const worktreeNumber = parseInt(worktreeMatch[2], 10);
+            const key = path.join(dirPath, baseName);
+            let lastModifiedMs = 0;
+            try {
+              const wtStat = await fs.stat(fullPath);
+              lastModifiedMs = wtStat.mtimeMs;
+            } catch (statError) {
+              lastModifiedMs = 0;
+            }
+
+            if (!worktreeGroups.has(key)) {
+              worktreeGroups.set(key, {
+                baseName,
+                parentDir: dirPath,
+                entries: []
+              });
+            }
+
+            worktreeGroups.get(key).entries.push({
+              id: `work${worktreeNumber}`,
+              name: entry.name,
+              path: fullPath,
+              number: worktreeNumber,
+              lastModifiedMs
+            });
+            continue;
+          }
 
           // Check if this looks like a project (has package.json, .git, or other indicators)
           const isProject = await isProjectDirectory(fullPath);
@@ -634,14 +809,58 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
               projectPath = fullPath;
             }
 
-            projects.push({
+            let lastModifiedMs = 0;
+            try {
+              const repoStat = await fs.stat(projectPath);
+              lastModifiedMs = repoStat.mtimeMs;
+            } catch (statError) {
+              lastModifiedMs = 0;
+            }
+
+            const repoEntry = {
               name: projectName,
               path: projectPath,
               masterPath: entry.name === 'master' ? fullPath : path.join(fullPath, 'master'),
               relativePath: path.relative(gitHubPath, projectPath),
               type: type,
-              category: getCategoryFromPath(fullPath)
-            });
+              category: getCategoryFromPath(fullPath),
+              lastModifiedMs,
+              worktreeDirs: [],
+              worktreeLayout: 'nested'
+            };
+
+            // Detect nested worktrees inside repo directory (work1..work8)
+            try {
+              const nestedEntries = [];
+              for (let i = 1; i <= 8; i++) {
+                const worktreeName = `work${i}`;
+                const worktreePath = path.join(projectPath, worktreeName);
+                try {
+                  const wtStat = await fs.stat(worktreePath);
+                  nestedEntries.push({
+                    id: worktreeName,
+                    name: worktreeName,
+                    path: worktreePath,
+                    number: i,
+                    lastModifiedMs: wtStat.mtimeMs
+                  });
+                } catch (wtError) {
+                  // Worktree does not exist
+                }
+              }
+              if (nestedEntries.length) {
+                repoEntry.worktreeDirs = nestedEntries;
+                const maxNested = nestedEntries.reduce((max, entry) => Math.max(max, entry.lastModifiedMs || 0), 0);
+                if (maxNested) {
+                  repoEntry.lastModifiedMs = Math.max(repoEntry.lastModifiedMs || 0, maxNested);
+                }
+              }
+            } catch (wtScanError) {
+              // Ignore nested worktree scan errors
+            }
+
+            projects.push(repoEntry);
+            projectIndexByKey.set(projectPath, projects.length - 1);
           } else {
             // Continue scanning subdirectories
             await scanDirectory(fullPath, depth + 1, maxDepth);
@@ -705,8 +924,77 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
       return 'Other';
     }
 
+    function mergeWorktreeEntries(existing, entries) {
+      const byId = new Map();
+      (existing || []).forEach(entry => {
+        if (entry && entry.id) byId.set(entry.id, entry);
+      });
+      entries.forEach(entry => {
+        if (entry && entry.id && !byId.has(entry.id)) {
+          byId.set(entry.id, entry);
+        }
+      });
+      return Array.from(byId.values()).sort((a, b) => (a.number || 0) - (b.number || 0));
+    }
+
+    function findSiblingRepoIndex(group) {
+      const baseLower = (group.baseName || '').toLowerCase();
+      let matchIndex = null;
+      let matchCount = 0;
+
+      projects.forEach((repo, idx) => {
+        if (!repo?.path) return;
+        if (path.dirname(repo.path) !== group.parentDir) return;
+        const nameLower = (repo.name || '').toLowerCase();
+        if (nameLower === baseLower || nameLower.startsWith(`${baseLower}-`) || nameLower.startsWith(`${baseLower}_`)) {
+          matchIndex = idx;
+          matchCount += 1;
+        }
+      });
+
+      return matchCount === 1 ? matchIndex : null;
+    }
+
     // Start deep scan
     await scanDirectory(gitHubPath);
+
+    // Attach sibling worktree groups to base repos or create synthetic repos
+    for (const [key, group] of worktreeGroups.entries()) {
+      const entries = group.entries.sort((a, b) => a.number - b.number);
+      const maxModified = entries.reduce((max, e) => Math.max(max, e.lastModifiedMs || 0), 0);
+
+      const directIndex = projectIndexByKey.has(key) ? projectIndexByKey.get(key) : null;
+      const siblingIndex = directIndex !== null ? null : findSiblingRepoIndex(group);
+      const targetIndex = directIndex !== null ? directIndex : siblingIndex;
+
+      if (targetIndex !== null && targetIndex !== undefined) {
+        const repo = projects[targetIndex];
+        const mergedEntries = mergeWorktreeEntries(repo.worktreeDirs, entries);
+        repo.worktreeDirs = mergedEntries;
+        repo.worktreeLayout = repo.worktreeLayout === 'nested' ? 'mixed' : 'sibling';
+        const mergedMax = mergedEntries.reduce((max, e) => Math.max(max, e.lastModifiedMs || 0), 0);
+        repo.lastModifiedMs = Math.max(repo.lastModifiedMs || 0, mergedMax);
+      } else {
+        // No base repo found; create synthetic entry using the lowest-numbered worktree
+        const fallback = entries[0];
+        const projectPath = fallback.path;
+        const projectName = group.baseName;
+        const type = getTypeFromPath(projectPath);
+        const category = getCategoryFromPath(projectPath);
+
+        projects.push({
+          name: projectName,
+          path: projectPath,
+          masterPath: path.join(projectPath, 'master'),
+          relativePath: path.relative(gitHubPath, projectPath),
+          type,
+          category,
+          lastModifiedMs: maxModified,
+          worktreeDirs: entries,
+          worktreeLayout: 'sibling'
+        });
+      }
+    }
 
     // Sort by category then name
     projects.sort((a, b) => {
@@ -1212,6 +1500,977 @@ app.get('/api/agents', (req, res) => {
   }
 });
 
+// Port registry API endpoints
+app.get('/api/ports', (req, res) => {
+  try {
+    const assignments = portRegistry.getAllAssignments();
+    res.json(assignments);
+  } catch (error) {
+    logger.error('Failed to get port assignments', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get port assignments' });
+  }
+});
+
+// Scan all listening ports on the system
+app.get('/api/ports/scan', async (req, res) => {
+  try {
+    const ports = await portRegistry.scanAllPorts();
+    res.json({
+      ports,
+      scannedAt: new Date().toISOString(),
+      count: ports.length
+    });
+  } catch (error) {
+    logger.error('Failed to scan ports', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to scan ports' });
+  }
+});
+
+// Save custom label for a port
+app.post('/api/ports/label', async (req, res) => {
+  try {
+    const { port, label } = req.body;
+    if (!port) {
+      return res.status(400).json({ error: 'Port is required' });
+    }
+    const labels = await portRegistry.savePortLabel(port, label || null);
+    res.json({ success: true, labels });
+  } catch (error) {
+    logger.error('Failed to save port label', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to save port label' });
+  }
+});
+
+// Startup scripts setup
+app.get('/api/startup/info', async (req, res) => {
+  const os = require('os');
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  const platform = os.platform();
+  const isWSL = platform === 'linux' && (process.env.WSL_DISTRO_NAME || process.env.WSLENV);
+
+  const scriptsDir = path.join(__dirname, '..', 'scripts');
+  const windowsScript = path.join(scriptsDir, 'windows', 'start-orchestrator.bat');
+  const linuxScript = path.join(scriptsDir, 'linux', 'start-orchestrator.sh');
+
+  let windowsExists = false;
+  let linuxExists = false;
+
+  try { await fs.access(windowsScript); windowsExists = true; } catch (e) {}
+  try { await fs.access(linuxScript); linuxExists = true; } catch (e) {}
+
+  res.json({
+    platform,
+    isWSL,
+    scriptsAvailable: {
+      windows: windowsExists,
+      linux: linuxExists
+    },
+    paths: {
+      windows: windowsExists ? windowsScript : null,
+      linux: linuxExists ? linuxScript : null,
+      scriptsDir
+    }
+  });
+});
+
+app.post('/api/startup/install-windows', async (req, res) => {
+  const { spawn } = require('child_process');
+  const path = require('path');
+
+  const installerPath = path.join(__dirname, '..', 'scripts', 'windows', 'install-startup.ps1');
+
+  // Convert to Windows path for PowerShell
+  const winPath = installerPath.replace(/^\/mnt\/([a-z])/, (_, drive) => `${drive.toUpperCase()}:`).replace(/\//g, '\\');
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const ps = spawn('powershell.exe', [
+        '-ExecutionPolicy', 'Bypass',
+        '-File', winPath,
+        '-DesktopShortcut'
+      ], { timeout: 30000 });
+
+      let stdout = '';
+      let stderr = '';
+
+      ps.stdout.on('data', (data) => { stdout += data.toString(); });
+      ps.stderr.on('data', (data) => { stderr += data.toString(); });
+
+      ps.on('close', (code) => {
+        if (code === 0) {
+          resolve({ success: true, output: stdout });
+        } else {
+          reject(new Error(stderr || `Exit code: ${code}`));
+        }
+      });
+
+      ps.on('error', reject);
+    });
+
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to install Windows startup', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Session Recovery API
+app.get('/api/recovery/:workspaceId', async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const recoveryInfo = await sessionRecoveryService.getRecoveryInfo(workspaceId);
+    res.json(recoveryInfo);
+  } catch (error) {
+    logger.error('Failed to get recovery info', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/recovery/:workspaceId/:sessionId', async (req, res) => {
+  try {
+    const { workspaceId, sessionId } = req.params;
+    await sessionRecoveryService.loadWorkspaceState(workspaceId);
+    const session = sessionRecoveryService.getSession(workspaceId, sessionId);
+    res.json(session || { error: 'Session not found' });
+  } catch (error) {
+    logger.error('Failed to get session recovery info', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/recovery/:workspaceId', async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    await sessionRecoveryService.clearWorkspace(workspaceId);
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to clear recovery state', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/ports/:repoPath/:worktreeId', async (req, res) => {
+  try {
+    const { repoPath, worktreeId } = req.params;
+    const decodedRepoPath = decodeURIComponent(repoPath);
+    const portInfo = portRegistry.getPortInfo(decodedRepoPath, worktreeId);
+
+    if (portInfo) {
+      res.json(portInfo);
+    } else {
+      // Get or assign a new port
+      const worktreeNum = parseInt(worktreeId.replace(/\D/g, '')) || 1;
+      const port = await portRegistry.suggestPort(worktreeNum, decodedRepoPath, worktreeId);
+      res.json({
+        port,
+        assignedAt: Date.now(),
+        url: `http://localhost:${port}`,
+        newAssignment: true
+      });
+    }
+  } catch (error) {
+    logger.error('Failed to get port info', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get port info' });
+  }
+});
+
+// Greenfield project API endpoints
+app.get('/api/greenfield/templates', (req, res) => {
+  try {
+    const templates = greenfieldService.getTemplates();
+    res.json(templates);
+  } catch (error) {
+    logger.error('Failed to get greenfield templates', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get templates' });
+  }
+});
+
+app.post('/api/greenfield/validate-path', async (req, res) => {
+  try {
+    const { path: projectPath } = req.body;
+    const result = await greenfieldService.validatePath(projectPath);
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to validate path', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to validate path' });
+  }
+});
+
+app.post('/api/greenfield/create', async (req, res) => {
+  try {
+    const { name, template, path, initGit, worktreeCount } = req.body;
+    logger.info('Creating greenfield project', { name, template, path, initGit, worktreeCount });
+
+    const result = await greenfieldService.createProject({
+      name,
+      template,
+      path,
+      initGit,
+      worktreeCount
+    });
+
+    // Optionally create a workspace for the new project
+    if (req.body.createWorkspace) {
+      const templateToWorkspaceType = {
+        'hytopia-game': 'hytopia-game',
+        'node-typescript': 'tool-project',
+        'empty': 'tool-project'
+      };
+      const resolvedTemplate = String(template || '').trim();
+      const workspaceType = templateToWorkspaceType[resolvedTemplate] || 'tool-project';
+      const desiredPairs = Number.isFinite(worktreeCount) ? worktreeCount : 1;
+      const pairs = Math.max(1, desiredPairs);
+
+      const workspaceData = {
+        id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        name: name,
+        type: workspaceType,
+        repository: {
+          path: result.projectPath,
+          masterBranch: 'master'
+        },
+        worktrees: {
+          enabled: true,
+          count: pairs,
+          namingPattern: 'work{n}',
+          autoCreate: false
+        },
+        terminals: {
+          pairs
+        }
+      };
+
+      try {
+        await workspaceManager.createWorkspace(workspaceData);
+        result.workspace = workspaceData;
+        logger.info('Created workspace for greenfield project', { workspaceId: workspaceData.id });
+      } catch (wsError) {
+        logger.warn('Failed to create workspace', { error: wsError.message });
+        result.workspaceError = wsError.message;
+      }
+    }
+
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to create greenfield project', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Full greenfield project creation with GitHub repo and Claude spawning
+app.post('/api/greenfield/create-full', async (req, res) => {
+  try {
+    const {
+      name,
+      description,
+      category,
+      isPrivate = true,
+      worktreeCount = 8,
+      spawnClaude = true,
+      yolo = true
+    } = req.body;
+
+    logger.info('Creating full greenfield project', { name, description, category });
+
+    const result = await greenfieldService.createFullProject({
+      name,
+      description,
+      category,
+      isPrivate,
+      worktreeCount,
+      spawnClaude,
+      yolo
+    });
+
+    // Also create a workspace configuration
+    if (result.success) {
+      const categoryToWorkspaceType = {
+        website: 'website',
+        game: 'hytopia-game',
+        tool: 'tool-project',
+        api: 'tool-project',
+        library: 'tool-project',
+        other: 'tool-project'
+      };
+
+      const resolvedCategory = String(category || result.category || 'other').trim().toLowerCase();
+      const workspaceType = categoryToWorkspaceType[resolvedCategory] || 'tool-project';
+      const derivedPairs = Number.isFinite(worktreeCount)
+        ? worktreeCount
+        : (Array.isArray(result.worktrees) ? Math.max(result.worktrees.length - 1, 1) : 1);
+      const pairs = Math.max(1, derivedPairs);
+
+      const workspaceData = {
+        id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        name: name,
+        type: workspaceType,
+        repository: {
+          path: result.projectPath,
+          masterBranch: 'master'
+        },
+        worktrees: {
+          enabled: true,
+          count: pairs,
+          namingPattern: 'work{n}',
+          autoCreate: false
+        },
+        terminals: {
+          pairs
+        }
+      };
+
+      try {
+        await workspaceManager.createWorkspace(workspaceData);
+        result.workspace = workspaceData;
+        logger.info('Created workspace for greenfield project', { workspaceId: workspaceData.id });
+      } catch (wsError) {
+        logger.warn('Failed to create workspace', { error: wsError.message });
+        result.workspaceError = wsError.message;
+      }
+    }
+
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to create full greenfield project', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Get greenfield categories
+app.get('/api/greenfield/categories', (req, res) => {
+  const categories = greenfieldService.getCategories();
+  res.json(categories);
+});
+
+// Detect category from description
+app.post('/api/greenfield/detect-category', (req, res) => {
+  const { description } = req.body;
+  if (!description) {
+    return res.status(400).json({ error: 'description is required' });
+  }
+  const category = greenfieldService.detectCategory(description);
+  const categoryConfig = greenfieldService.categories[category];
+  res.json({
+    category,
+    path: categoryConfig.path
+  });
+});
+
+// ============================================
+// Conversation History API
+// ============================================
+
+// Search conversations
+app.get('/api/conversations/search', async (req, res) => {
+  try {
+    const { q, project, branch, folder, startDate, endDate, limit, offset } = req.query;
+
+    const results = await conversationService.search(q, {
+      project,
+      branch,
+      folder,
+      startDate,
+      endDate,
+      limit: limit ? parseInt(limit) : undefined,
+      offset: offset ? parseInt(offset) : undefined
+    });
+
+    res.json(results);
+  } catch (error) {
+    logger.error('Failed to search conversations', { error: error.message });
+    res.status(500).json({ error: 'Failed to search conversations' });
+  }
+});
+
+// Autocomplete for conversation search
+app.get('/api/conversations/autocomplete', async (req, res) => {
+  try {
+    const { q, limit } = req.query;
+    const suggestions = await conversationService.autocomplete(q, limit ? parseInt(limit) : undefined);
+    res.json(suggestions);
+  } catch (error) {
+    logger.error('Failed to get autocomplete', { error: error.message });
+    res.status(500).json({ error: 'Failed to get autocomplete suggestions' });
+  }
+});
+
+// Get recent conversations
+app.get('/api/conversations/recent', async (req, res) => {
+  try {
+    const { limit } = req.query;
+    const recent = await conversationService.getRecent(limit ? parseInt(limit) : undefined);
+    res.json(recent);
+  } catch (error) {
+    logger.error('Failed to get recent conversations', { error: error.message });
+    res.status(500).json({ error: 'Failed to get recent conversations' });
+  }
+});
+
+// Get conversations by folder
+app.get('/api/conversations/by-folder', async (req, res) => {
+  try {
+    const { path: folderPath } = req.query;
+    if (!folderPath) {
+      return res.status(400).json({ error: 'path query parameter is required' });
+    }
+
+    const conversations = await conversationService.getByFolder(folderPath);
+    res.json(conversations);
+  } catch (error) {
+    logger.error('Failed to get conversations by folder', { error: error.message });
+    res.status(500).json({ error: 'Failed to get conversations' });
+  }
+});
+
+// Get list of projects
+app.get('/api/conversations/projects', async (req, res) => {
+  try {
+    const projects = await conversationService.getProjects();
+    res.json(projects);
+  } catch (error) {
+    logger.error('Failed to get projects', { error: error.message });
+    res.status(500).json({ error: 'Failed to get projects' });
+  }
+});
+
+// Get conversation stats
+app.get('/api/conversations/stats', async (req, res) => {
+  try {
+    const stats = await conversationService.getStats();
+    res.json(stats);
+  } catch (error) {
+    logger.error('Failed to get stats', { error: error.message });
+    res.status(500).json({ error: 'Failed to get stats' });
+  }
+});
+
+// Refresh conversation index
+app.post('/api/conversations/refresh', async (req, res) => {
+  try {
+    const index = await conversationService.refresh();
+    res.json({
+      success: true,
+      stats: index.stats
+    });
+  } catch (error) {
+    logger.error('Failed to refresh index', { error: error.message });
+    res.status(500).json({ error: 'Failed to refresh index' });
+  }
+});
+
+// Get conversation details (MUST be last to not catch other routes)
+app.get('/api/conversations/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { project } = req.query;
+    const conversation = await conversationService.getConversation(id, project);
+
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    res.json(conversation);
+  } catch (error) {
+    logger.error('Failed to get conversation', { error: error.message });
+    res.status(500).json({ error: 'Failed to get conversation' });
+  }
+});
+
+// ============================================
+// Worktree Metadata API
+// ============================================
+
+// Get metadata for a worktree
+app.get('/api/worktree-metadata', async (req, res) => {
+  try {
+    const { path: worktreePath } = req.query;
+    if (!worktreePath) {
+      return res.status(400).json({ error: 'path query parameter is required' });
+    }
+
+    const metadata = await worktreeMetadataService.getMetadata(worktreePath);
+    res.json(metadata);
+  } catch (error) {
+    logger.error('Failed to get worktree metadata', { error: error.message });
+    res.status(500).json({ error: 'Failed to get metadata' });
+  }
+});
+
+// Get metadata for multiple worktrees
+app.post('/api/worktree-metadata/batch', async (req, res) => {
+  try {
+    const { paths } = req.body;
+    if (!paths || !Array.isArray(paths)) {
+      return res.status(400).json({ error: 'paths array is required' });
+    }
+
+    const metadata = await worktreeMetadataService.getMultipleMetadata(paths);
+    res.json(metadata);
+  } catch (error) {
+    logger.error('Failed to get batch worktree metadata', { error: error.message });
+    res.status(500).json({ error: 'Failed to get metadata' });
+  }
+});
+
+// Refresh worktree metadata
+app.post('/api/worktree-metadata/refresh', async (req, res) => {
+  try {
+    const { path: worktreePath } = req.body;
+    if (!worktreePath) {
+      return res.status(400).json({ error: 'path is required' });
+    }
+
+    const metadata = await worktreeMetadataService.refresh(worktreePath);
+    res.json(metadata);
+  } catch (error) {
+    logger.error('Failed to refresh worktree metadata', { error: error.message });
+    res.status(500).json({ error: 'Failed to refresh metadata' });
+  }
+});
+
+// Continuity ledger API endpoints
+app.get('/api/continuity/ledger', async (req, res) => {
+  try {
+    const { worktreePath } = req.query;
+    if (!worktreePath) {
+      return res.status(400).json({ error: 'worktreePath is required' });
+    }
+
+    const ledger = await continuityService.getLedger(worktreePath);
+    if (ledger) {
+      const summary = continuityService.getSummary(ledger);
+      res.json({ ledger, summary });
+    } else {
+      res.json({ ledger: null, summary: null });
+    }
+  } catch (error) {
+    logger.error('Failed to get continuity ledger', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get ledger' });
+  }
+});
+
+app.get('/api/continuity/workspace', async (req, res) => {
+  try {
+    const activeWorkspace = workspaceManager.getActiveWorkspace();
+    if (!activeWorkspace) {
+      return res.json({ ledgers: [] });
+    }
+
+    const ledgers = await continuityService.getWorkspaceLedgers(activeWorkspace);
+    const summaries = ledgers.map(l => ({
+      ...l,
+      summary: continuityService.getSummary(l.ledger)
+    }));
+
+    res.json({ ledgers: summaries });
+  } catch (error) {
+    logger.error('Failed to get workspace ledgers', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get workspace ledgers' });
+  }
+});
+
+// Quick Links API endpoints
+app.get('/api/quick-links', async (req, res) => {
+  try {
+    const data = await quickLinksService.getAll();
+    res.json(data);
+  } catch (error) {
+    logger.error('Failed to get quick links', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get quick links' });
+  }
+});
+
+app.post('/api/quick-links/favorites', async (req, res) => {
+  try {
+    const { name, url, icon } = req.body;
+    const favorites = await quickLinksService.addFavorite({ name, url, icon });
+    res.json({ favorites });
+  } catch (error) {
+    logger.error('Failed to add favorite', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete('/api/quick-links/favorites', async (req, res) => {
+  try {
+    const { url } = req.body;
+    const favorites = await quickLinksService.removeFavorite(url);
+    res.json({ favorites });
+  } catch (error) {
+    logger.error('Failed to remove favorite', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/quick-links/favorites/reorder', async (req, res) => {
+  try {
+    const { urls } = req.body;
+    const favorites = await quickLinksService.reorderFavorites(urls);
+    res.json({ favorites });
+  } catch (error) {
+    logger.error('Failed to reorder favorites', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/quick-links/track-session', async (req, res) => {
+  try {
+    const recentSessions = await quickLinksService.trackSession(req.body);
+    res.json({ recentSessions });
+  } catch (error) {
+    logger.error('Failed to track session', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to track session' });
+  }
+});
+
+app.get('/api/quick-links/recent-sessions', (req, res) => {
+  try {
+    const { workspaceId, limit } = req.query;
+    const sessions = quickLinksService.getRecentSessions({
+      workspaceId,
+      limit: limit ? parseInt(limit) : undefined
+    });
+    res.json({ sessions });
+  } catch (error) {
+    logger.error('Failed to get recent sessions', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get recent sessions' });
+  }
+});
+
+app.delete('/api/quick-links/recent-sessions', async (req, res) => {
+  try {
+    await quickLinksService.clearRecentSessions();
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to clear recent sessions', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to clear recent sessions' });
+  }
+});
+
+// ============================================
+// Commander Service API (Claude Code Terminal)
+// ============================================
+
+// Get Commander status
+app.get('/api/commander/status', (req, res) => {
+  try {
+    const status = commanderService.getStatus();
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to get commander status', { error: error.message });
+    res.status(500).json({ error: 'Failed to get commander status' });
+  }
+});
+
+// Start Commander terminal
+app.post('/api/commander/start', async (req, res) => {
+  try {
+    const result = await commanderService.start();
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to start commander', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Start Claude Code in Commander terminal
+app.post('/api/commander/start-claude', async (req, res) => {
+  try {
+    const { mode, yolo } = req.body;
+    // yolo defaults to true for Commander (YOLO mode enabled by default)
+    const result = await commanderService.startClaude(mode || 'fresh', yolo !== false);
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to start Claude in commander', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send input to Commander terminal
+app.post('/api/commander/input', (req, res) => {
+  try {
+    const { input } = req.body;
+    if (!input) {
+      return res.status(400).json({ error: 'Input is required' });
+    }
+
+    const success = commanderService.sendInput(input);
+    res.json({ success });
+  } catch (error) {
+    logger.error('Commander input failed', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Stop Commander terminal
+app.post('/api/commander/stop', (req, res) => {
+  try {
+    const result = commanderService.stop();
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to stop commander', { error: error.message });
+    res.status(500).json({ error: 'Failed to stop commander' });
+  }
+});
+
+// Restart Commander terminal
+app.post('/api/commander/restart', async (req, res) => {
+  try {
+    const result = await commanderService.restart();
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to restart commander', { error: error.message });
+    res.status(500).json({ error: 'Failed to restart commander' });
+  }
+});
+
+// Get recent output from Commander
+app.get('/api/commander/output', (req, res) => {
+  try {
+    const { lines } = req.query;
+    const output = commanderService.getRecentOutput(lines ? parseInt(lines) : 50);
+    res.json({ output });
+  } catch (error) {
+    logger.error('Failed to get commander output', { error: error.message });
+    res.status(500).json({ error: 'Failed to get output' });
+  }
+});
+
+// Clear Commander buffer
+app.post('/api/commander/clear', (req, res) => {
+  try {
+    commanderService.clearBuffer();
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to clear commander buffer', { error: error.message });
+    res.status(500).json({ error: 'Failed to clear buffer' });
+  }
+});
+
+// List all sessions (for Commander visibility)
+app.get('/api/commander/sessions', (req, res) => {
+  try {
+    const sessions = commanderService.listSessions();
+    res.json({ sessions });
+  } catch (error) {
+    logger.error('Failed to list sessions', { error: error.message });
+    res.status(500).json({ error: 'Failed to list sessions' });
+  }
+});
+
+// Send to another session from Commander
+app.post('/api/commander/send-to-session', (req, res) => {
+  try {
+    const { sessionId, input } = req.body;
+    if (!sessionId || !input) {
+      return res.status(400).json({ error: 'sessionId and input are required' });
+    }
+
+    const success = commanderService.sendToSession(sessionId, input);
+    res.json({ success });
+  } catch (error) {
+    logger.error('Failed to send to session', { error: error.message });
+    res.status(500).json({ error: 'Failed to send to session' });
+  }
+});
+
+// ============ COMMANDER COMMAND REGISTRY ============
+// Semantic command system for Commander Claude UI control
+
+// Get all available commands (discovery endpoint)
+app.get('/api/commander/capabilities', (req, res) => {
+  try {
+    const capabilities = commandRegistry.getCapabilities();
+    res.json(capabilities);
+  } catch (error) {
+    logger.error('Failed to get capabilities', { error: error.message });
+    res.status(500).json({ error: 'Failed to get capabilities' });
+  }
+});
+
+// Execute a command by name
+app.post('/api/commander/execute', async (req, res) => {
+  try {
+    const { command, params } = req.body;
+    if (!command) {
+      return res.status(400).json({ error: 'command is required' });
+    }
+    const result = await commandRegistry.execute(command, params || {});
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to execute command', { error: error.message });
+    res.status(500).json({ error: 'Failed to execute command' });
+  }
+});
+
+// ============ VOICE COMMAND ENDPOINTS ============
+
+// Process voice command (parse + execute)
+app.post('/api/voice/command', async (req, res) => {
+  try {
+    const { transcript } = req.body;
+    if (!transcript) {
+      return res.status(400).json({ error: 'transcript is required' });
+    }
+    const result = await voiceCommandService.processVoiceCommand(transcript);
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to process voice command', { error: error.message });
+    res.status(500).json({ error: 'Failed to process voice command' });
+  }
+});
+
+// Parse voice command without executing
+app.post('/api/voice/parse', async (req, res) => {
+  try {
+    const { transcript } = req.body;
+    if (!transcript) {
+      return res.status(400).json({ error: 'transcript is required' });
+    }
+    const result = await voiceCommandService.parseCommand(transcript);
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to parse voice command', { error: error.message });
+    res.status(500).json({ error: 'Failed to parse voice command' });
+  }
+});
+
+// Get available voice commands
+app.get('/api/voice/commands', (req, res) => {
+  try {
+    const commands = voiceCommandService.getVoiceCommands();
+    res.json(commands);
+  } catch (error) {
+    logger.error('Failed to get voice commands', { error: error.message });
+    res.status(500).json({ error: 'Failed to get voice commands' });
+  }
+});
+
+// Get LLM backend status for voice commands
+app.get('/api/voice/status', (req, res) => {
+  try {
+    const status = voiceCommandService.getLLMStatus();
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to get voice LLM status', { error: error.message });
+    res.status(500).json({ error: 'Failed to get voice LLM status' });
+  }
+});
+
+// Refresh LLM availability check
+app.post('/api/voice/refresh-llm', async (req, res) => {
+  try {
+    const status = await voiceCommandService.refreshLLMStatus();
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to refresh LLM status', { error: error.message });
+    res.status(500).json({ error: 'Failed to refresh LLM status' });
+  }
+});
+
+// Update voice command context
+app.post('/api/voice/context', (req, res) => {
+  try {
+    const { context } = req.body;
+    voiceCommandService.setContext(context);
+    res.json({ success: true, context: voiceCommandService.context });
+  } catch (error) {
+    logger.error('Failed to update voice context', { error: error.message });
+    res.status(500).json({ error: 'Failed to update voice context' });
+  }
+});
+
+// ============ WHISPER TRANSCRIPTION ENDPOINTS ============
+
+// Get Whisper status
+app.get('/api/whisper/status', (req, res) => {
+  try {
+    const status = whisperService.getStatus();
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to get Whisper status', { error: error.message });
+    res.status(500).json({ error: 'Failed to get Whisper status' });
+  }
+});
+
+// Transcribe audio file with Whisper
+app.post('/api/whisper/transcribe', audioUpload.single('audio'), async (req, res) => {
+  const fs = require('fs');
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    if (!whisperService.isAvailable()) {
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+      return res.status(503).json({
+        error: 'Whisper not available',
+        hint: 'Install whisper.cpp or openai-whisper'
+      });
+    }
+
+    const result = await whisperService.transcribe(req.file.path);
+
+    // Clean up uploaded file
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+      text: result.text,
+      duration: result.duration,
+      backend: whisperService.backend
+    });
+  } catch (error) {
+    // Clean up uploaded file on error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    logger.error('Whisper transcription failed', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Full voice command with Whisper (transcribe + parse + execute)
+app.post('/api/whisper/command', audioUpload.single('audio'), async (req, res) => {
+  const fs = require('fs');
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    if (!whisperService.isAvailable()) {
+      fs.unlinkSync(req.file.path);
+      return res.status(503).json({
+        error: 'Whisper not available',
+        hint: 'Install whisper.cpp or openai-whisper'
+      });
+    }
+
+    // Step 1: Transcribe
+    const transcription = await whisperService.transcribe(req.file.path);
+    fs.unlinkSync(req.file.path);
+
+    // Step 2: Parse and execute
+    const result = await voiceCommandService.processVoiceCommand(transcription.text);
+
+    res.json({
+      ...result,
+      transcript: transcription.text,
+      transcriptionTime: transcription.duration,
+      transcriptionBackend: whisperService.backend
+    });
+  } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    logger.error('Whisper command failed', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get worktree configuration for frontend
 app.get('/api/worktrees/config', (req, res) => {
   try {
@@ -1250,7 +2509,7 @@ app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.ORCHESTRATOR_PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 httpServer.listen(PORT, HOST, () => {
@@ -1269,11 +2528,20 @@ httpServer.listen(PORT, HOST, () => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
-function shutdown() {
-  logger.info('Shutting down server...');
+let isShuttingDown = false;
+let forcedExitTimer = null;
+
+function shutdown(signal = 'unknown') {
+  if (isShuttingDown) {
+    logger.warn('Shutdown already in progress', { signal });
+    return;
+  }
+
+  isShuttingDown = true;
+  logger.info('Shutting down server...', { signal });
   
   // Clean up sessions first
   sessionManager.cleanup();
@@ -1286,11 +2554,15 @@ function shutdown() {
   // Close HTTP server
   httpServer.close(() => {
     logger.info('HTTP server closed');
+    if (forcedExitTimer) {
+      clearTimeout(forcedExitTimer);
+      forcedExitTimer = null;
+    }
     process.exit(0);
   });
   
   // Force shutdown after 10 seconds
-  setTimeout(() => {
+  forcedExitTimer = setTimeout(() => {
     logger.error('Forced shutdown after timeout');
     process.exit(1);
   }, 10000);

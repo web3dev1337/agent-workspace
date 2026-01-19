@@ -81,6 +81,22 @@ class WorkspaceTabManager {
    * Create a new tab for a workspace
    */
   createTab(workspace, sessions = []) {
+    // Prevent duplicate tabs for the same workspace
+    const existingTab = this.findTabByWorkspaceId(workspace?.id);
+    if (existingTab) {
+      // Keep workspace metadata fresh
+      existingTab.workspace = workspace;
+      existingTab.displayName = workspace.name || existingTab.displayName;
+      if (existingTab.tabElement) {
+        const nameEl = existingTab.tabElement.querySelector('.tab-name');
+        if (nameEl) {
+          nameEl.textContent = existingTab.displayName;
+          nameEl.title = existingTab.displayName;
+        }
+      }
+      return existingTab.id;
+    }
+
     const tabId = `tab-${Date.now()}-${this.nextTabIndex++}`;
 
     // Create tab state
@@ -92,6 +108,7 @@ class WorkspaceTabManager {
       isActive: false,
       notifications: 0,
       lastActivity: Date.now(),
+      createdAt: Date.now(),
 
       // Session tracking
       sessions: new Map(), // sessionId -> session data
@@ -264,6 +281,23 @@ class WorkspaceTabManager {
     this.restoreTabUIState(targetTab);
 
     console.log(`Switched to tab ${tabId} (${targetTab.displayName})`);
+  }
+
+  /**
+   * Switch to a workspace by name (for voice commands / Commander)
+   */
+  switchToWorkspace(workspaceName) {
+    // Find tab by workspace name (case-insensitive)
+    const searchName = workspaceName.toLowerCase();
+    for (const [tabId, tabState] of this.tabs) {
+      if (tabState.displayName.toLowerCase().includes(searchName) ||
+          tabState.workspace?.name?.toLowerCase().includes(searchName)) {
+        this.switchTab(tabId);
+        return true;
+      }
+    }
+    console.warn(`Workspace not found: ${workspaceName}`);
+    return false;
   }
 
   /**
@@ -641,6 +675,85 @@ class WorkspaceTabManager {
    */
   getTab(tabId) {
     return this.tabs.get(tabId);
+  }
+
+  /**
+   * Find a tab by workspace ID
+   */
+  findTabByWorkspaceId(workspaceId) {
+    if (!workspaceId) return null;
+    for (const tab of this.tabs.values()) {
+      if (tab.workspaceId === workspaceId) {
+        return tab;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Remove a tab UI/state without closing backend sessions
+   */
+  discardTabUI(tabState) {
+    if (!tabState) return;
+
+    // Dispose XTerm instances (UI only)
+    tabState.terminals.forEach((termData) => {
+      if (termData?.xtermInstance) {
+        try {
+          termData.xtermInstance.dispose();
+        } catch (err) {
+          console.warn(`Error disposing terminal during tab discard:`, err);
+        }
+      }
+    });
+    tabState.terminals.clear();
+
+    // Disconnect resize observer
+    if (tabState.resizeObserver) {
+      tabState.resizeObserver.disconnect();
+      tabState.resizeObserver = null;
+    }
+
+    // Remove DOM elements
+    if (tabState.tabElement) {
+      tabState.tabElement.remove();
+    }
+    if (tabState.containerElement && tabState.containerElement.id !== 'terminal-grid') {
+      tabState.containerElement.remove();
+    }
+
+    // Remove from tabs map
+    this.tabs.delete(tabState.id);
+  }
+
+  /**
+   * Prune duplicate tabs for the same workspace
+   */
+  pruneDuplicateWorkspaceTabs(workspaceId, keepTabId = null) {
+    if (!workspaceId) return;
+
+    const tabsForWorkspace = Array.from(this.tabs.values())
+      .filter(tab => tab.workspaceId === workspaceId);
+
+    if (tabsForWorkspace.length <= 1) return;
+
+    const keepTab =
+      tabsForWorkspace.find(tab => tab.id === keepTabId) ||
+      tabsForWorkspace.find(tab => tab.isActive) ||
+      tabsForWorkspace.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+
+    tabsForWorkspace.forEach(tab => {
+      if (tab.id !== keepTab.id) {
+        this.discardTabUI(tab);
+      }
+    });
+
+    // Ensure the kept tab is still active
+    if (this.activeTabId !== keepTab.id) {
+      this.switchTab(keepTab.id);
+    }
+
+    console.log(`Pruned ${tabsForWorkspace.length - 1} duplicate tab(s) for workspace ${workspaceId}`);
   }
 
   /**

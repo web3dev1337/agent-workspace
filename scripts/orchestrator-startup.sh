@@ -10,7 +10,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 ORCHESTRATOR_DIR="/home/ab/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev"
-PORT=4000
+export ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-4000}"
 CLIENT_PORT=2080
 
 echo -e "${BLUE}🚀 Claude Orchestrator Startup${NC}"

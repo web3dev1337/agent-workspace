@@ -17,217 +17,163 @@ const STATUS_DETECTION_WINDOW_MS = 2000; // 2 seconds for detection debouncing
 
 class StatusDetector {
   constructor() {
-    // Patterns that indicate Claude is waiting for user input
+    // RELIABLE waiting indicators - these must be exact matches or end-of-line
+    // Claude shows these when truly waiting for user input
     this.waitingPatterns = [
-      /\? for shortcuts/i,  // Claude ready prompt
-      /Do you want to proceed\?/i,  // Bash command confirmation
-      /\? 1\. Yes/i,  // Bash command options
-      /\(y\/N\)/i,
-      /\(Y\/n\)/i,
-      /\[y\/n\]/i,
-      /\[Y\/N\]/i,
-      /Proceed\?/i,
-      /Continue\?/i,
-      /Allow\?/i,
-      /confirm/i,
-      /Type 'yes' or 'no'/i,
-      /Are you sure/i,
-      /Do you want to/i,
-      /Would you like to/i,
-      /May I/i,
-      /Should I/i,
-      /Can I/i,
-      /\? \$/,  // Question mark followed by prompt
-      /\? >/,   // Question mark followed by prompt
+      /\? for shortcuts$/m,           // Claude ready prompt (must be at line end)
+      /^> $/m,                         // Input prompt (Claude waiting for input)
+      /Do you want to proceed\?$/m,   // Bash command confirmation
+      /\? 1\. Yes$/m,                  // Bash command options
+      /\(y\/N\)\s*$/,                  // Y/N prompt at line end
+      /\(Y\/n\)\s*$/,
+      /\[y\/n\]\s*$/i,
+      /Type 'yes' or 'no'.*$/m,
     ];
-    
-    // Patterns indicating Claude is actively processing
-    this.busyPatterns = [
-      /Processing/i,
-      /Working on/i,
-      /Analyzing/i,
-      /Generating/i,
-      /Creating/i,
-      /Implementing/i,
-      /Building/i,
-      /Searching/i,
-      /Loading/i,
-      /Fetching/i,
-      /Calculating/i,
-      /Thinking/i,
-      /Let me/i,
-      /I'll/i,
-      /I will/i,
-      /Starting/i,
-      /Running/i,
-      /Executing/i
+
+    // RELIABLE completion indicators - Claude shows these when done
+    // The Cost line is the most reliable indicator Claude is done
+    this.completionPatterns = [
+      /Cost: \$[\d.]+/,               // Cost line - MOST RELIABLE done indicator
+      /Total cost: \$[\d.]+/,
+      /Session cost: \$[\d.]+/,
+      /tokens used/i,                  // Token usage line
     ];
-    
-    // Patterns indicating Claude has finished or is idle
-    this.idlePatterns = [
-      /Done\./i,
-      /Completed\./i,
-      /Finished\./i,
-      /Here's/i,
-      /Here is/i,
-      /I've/i,
-      /I have/i,
-      /Successfully/i,
-      /The .* has been/i,
-      /Created/i,
-      /Updated/i,
-      /Modified/i,
-      /Added/i,
-      /Removed/i,
-      /Deleted/i
+
+    // Patterns indicating active tool usage (Claude is busy)
+    this.toolPatterns = [
+      /^● /m,                          // Tool output bullet (Claude executing tool)
+      /^⎿/m,                           // Tool result continuation
+      /Read\(.*\)/,                    // Read tool
+      /Write\(.*\)/,                   // Write tool
+      /Edit\(.*\)/,                    // Edit tool
+      /Bash\(.*\)/,                    // Bash tool
+      /Update\(.*\)/,                  // Update tool
+      /Grep\(.*\)/,                    // Grep tool
+      /Glob\(.*\)/,                    // Glob tool
+      /Task\(.*\)/,                    // Task tool
     ];
-    
+
+    // Patterns that suggest Claude is typing (busy) - more conservative
+    this.typingPatterns = [
+      /∴ Thinking…/,                   // Thinking indicator
+      /\.\.\.$/m,                      // Ends with ellipsis (still going)
+    ];
+
     // Track recent detections to avoid flip-flopping
     this.recentDetections = new Map();
     this.detectionWindow = STATUS_DETECTION_WINDOW_MS;
-    this.lastBufferLength = 0; // For debug logging
+    this.lastBufferLength = 0;
+    this.lastOutputTime = Date.now();
   }
   
   detectStatus(buffer) {
-    // Get last 1000 chars for analysis (more context than before)
-    const recentOutput = buffer.slice(-1000);
-    
-    // Split into lines for better analysis
-    const lines = recentOutput.split('\n');
-    const lastFewLines = lines.slice(-5).join('\n');
-    const lastLine = lines[lines.length - 1].trim();
-    
-    // Check if this looks like Claude startup/welcome screen
-    const isClaudeStartup = buffer.includes('Welcome to Claude Code!') && 
-                           buffer.includes('for shortcuts') &&
-                           buffer.includes('See you in a minute');
-    
-    // If it's startup and shows the ready prompt, it should be waiting (ready)
-    if (isClaudeStartup && buffer.includes('◯ See you in a minute')) {
-      logger.debug('Claude startup detected - ready for input');
-      return this.updateStatus('waiting', buffer);
-    }
-    
-    // Debug logging to see what Claude actually outputs
-    if (buffer.length > this.lastBufferLength + 100) { // Significant new output
-      logger.debug('Claude output detected', {
-        lastLine: lastLine,
-        lastFewLines: lastFewLines.slice(-200),
-        bufferGrowth: buffer.length - this.lastBufferLength,
-        isStartup: isClaudeStartup
-      });
+    // Track output timing for activity detection
+    const now = Date.now();
+    if (buffer.length > this.lastBufferLength) {
+      this.lastOutputTime = now;
       this.lastBufferLength = buffer.length;
     }
-    
-    // Check for specific Claude ready states
-    const isClaudeReady = lastLine === ''; // Claude seems to end with empty line when ready
-    const isBashConfirmation = /Do you want to proceed\?/.test(lastFewLines) || /\? 1\. Yes/.test(lastFewLines);
-    const hasQuestionMark = lastLine.endsWith('?'); // Claude asking a question
-    
-    if (isBashConfirmation || hasQuestionMark) {
-      logger.debug('Claude waiting for input', { 
-        isClaudeReady, 
-        isBashConfirmation,
-        hasQuestionMark,
-        lastLine: lastLine.slice(-50) // Last 50 chars for debugging
-      });
+    const timeSinceOutput = now - this.lastOutputTime;
+
+    // Get recent output for analysis
+    const recentOutput = buffer.slice(-2000);
+    const lines = recentOutput.split('\n');
+    const lastFewLines = lines.slice(-10).join('\n');
+    const lastLine = lines[lines.length - 1] || '';
+    const trimmedLastLine = lastLine.trim();
+
+    // 1. HIGHEST PRIORITY: Check for RELIABLE waiting indicators
+    // These patterns mean Claude is definitely waiting for input
+    for (const pattern of this.waitingPatterns) {
+      if (pattern.test(lastFewLines)) {
+        logger.debug('Waiting pattern matched', { pattern: pattern.toString() });
+        return this.updateStatus('waiting', buffer);
+      }
+    }
+
+    // 2. Check for Claude startup/welcome screen
+    if (buffer.includes('Welcome to Claude Code!') && buffer.includes('? for shortcuts')) {
+      logger.debug('Claude startup screen detected');
       return this.updateStatus('waiting', buffer);
     }
-    
-    // Check other waiting patterns (less sensitive)
-    for (const pattern of this.waitingPatterns.slice(3)) { // Skip the first 3 patterns we already checked
-      if (pattern.test(lastLine)) { // Only check last line, not last few lines
-        logger.debug('Other waiting pattern detected', { 
-          pattern: pattern.toString(),
-          match: lastLine.match(pattern)?.[0]
-        });
+
+    // 3. Check for RELIABLE completion indicators (Cost line = Claude is done)
+    for (const pattern of this.completionPatterns) {
+      if (pattern.test(lastFewLines)) {
+        logger.debug('Completion pattern matched - Claude done', { pattern: pattern.toString() });
         return this.updateStatus('waiting', buffer);
       }
     }
-    
-    // Check if Claude finished speaking (no activity for 2+ seconds)
-    const timeSinceLastOutput = this.getTimeSinceLastOutput(buffer);
-    if (timeSinceLastOutput > 2000) {
-      // Check if the last content looks like Claude finished a response
-      const lastContentLine = lines.reverse().find(line => line.trim().length > 0) || '';
-      
-      // Claude often ends with a bullet point message or question
-      if (lastContentLine.match(/^●.*\?$/) || // Bullet ending with question
-          lastContentLine.match(/What.*\?$/) || // Question starting with What
-          lastContentLine.match(/\?$/) || // Any question
-          lastContentLine.match(/^●.*\.$/) || // Bullet ending with period
-          timeSinceLastOutput > 5000) { // Or just been quiet for 5+ seconds
-        
-        logger.debug('Claude appears ready (quiet period)', {
-          timeSinceLastOutput,
-          lastContentLine: lastContentLine.slice(-100)
-        });
-        return this.updateStatus('waiting', buffer);
-      }
-    }
-    
-    // Check for busy patterns in recent output
-    for (const pattern of this.busyPatterns) {
-      if (pattern.test(recentOutput)) {
-        // But not if we also see idle patterns in the very last lines
-        const hasIdlePattern = this.idlePatterns.some(p => p.test(lastFewLines));
-        if (!hasIdlePattern) {
-          logger.debug('Busy pattern detected', { 
-            pattern: pattern.toString() 
-          });
+
+    // 4. Check if Claude is actively using tools (definitely busy)
+    for (const pattern of this.toolPatterns) {
+      if (pattern.test(lastFewLines)) {
+        // But only if we haven't also seen completion
+        const hasCompletion = this.completionPatterns.some(p => p.test(lastFewLines));
+        if (!hasCompletion) {
+          logger.debug('Tool activity detected - busy', { pattern: pattern.toString() });
           return this.updateStatus('busy', buffer);
         }
       }
     }
-    
-    // Check for completion/idle patterns
-    for (const pattern of this.idlePatterns) {
+
+    // 5. Check typing/thinking patterns
+    for (const pattern of this.typingPatterns) {
       if (pattern.test(lastFewLines)) {
-        logger.debug('Idle pattern detected', { 
-          pattern: pattern.toString() 
-        });
+        logger.debug('Typing pattern detected - busy');
+        return this.updateStatus('busy', buffer);
+      }
+    }
+
+    // 6. Activity-based detection
+    // If there's been recent output (within 1 second), Claude is probably still working
+    if (timeSinceOutput < 1000 && buffer.length > 100) {
+      return this.updateStatus('busy', buffer);
+    }
+
+    // 7. If no output for a while (>3 seconds) and no clear busy indicator, assume idle/waiting
+    if (timeSinceOutput > 3000) {
+      // Check if buffer ends with something that looks like Claude finished
+      const hasQuestion = trimmedLastLine.endsWith('?');
+      const hasPeriod = trimmedLastLine.endsWith('.');
+      const isEmpty = trimmedLastLine === '';
+
+      if (hasQuestion || isEmpty) {
+        logger.debug('Quiet period with question/empty - waiting');
+        return this.updateStatus('waiting', buffer);
+      }
+      if (hasPeriod) {
+        logger.debug('Quiet period with complete sentence - idle');
         return this.updateStatus('idle', buffer);
       }
     }
-    
-    // Check if last line looks like a prompt
-    if (this.looksLikePrompt(lastLine)) {
+
+    // 8. Check if last line looks like a shell/input prompt
+    if (this.looksLikePrompt(trimmedLastLine)) {
       return this.updateStatus('idle', buffer);
     }
-    
-    // Default based on recent activity
-    if (recentOutput.length > 50) {
-      // Recent output suggests activity
+
+    // 9. Default: if there's content and recent activity, busy; otherwise idle
+    if (timeSinceOutput < 5000) {
       return this.updateStatus('busy', buffer);
-    } else {
-      // Little recent output, probably idle
-      return this.updateStatus('idle', buffer);
     }
+
+    return this.updateStatus('idle', buffer);
   }
   
   looksLikePrompt(line) {
-    // Common prompt patterns
+    // Common shell/input prompt patterns
     const promptPatterns = [
       /^>$/,
       /^\$$/,
       /^>>>$/,
       /^claude>$/i,
       /^assistant>$/i,
-      /^\w+>$/,  // Any word followed by >
-      /^\w+\$$/,  // Any word followed by $
+      /^\w+[@:~].*[\$#>]$/,  // user@host:~$ or similar
+      /^\(.*\)\s*\$$/,        // (venv) $ style prompts
     ];
-    
+
     return promptPatterns.some(pattern => pattern.test(line));
-  }
-  
-  getTimeSinceLastOutput(buffer) {
-    // This is a simplified check - in reality, we'd track actual timestamps
-    // For now, we'll estimate based on buffer content
-    const recentContent = buffer.slice(-100);
-    if (recentContent.trim().length === 0) {
-      return 10000; // Assume long time if empty
-    }
-    return 0;
   }
   
   updateStatus(status, buffer) {
@@ -279,37 +225,11 @@ class StatusDetector {
     }
   }
   
-  // Advanced detection for specific Claude responses
-  detectClaudeSpecificPatterns(buffer) {
-    // Claude-specific patterns we've learned from usage
-    const claudePatterns = {
-      thinking: /I need to|Let me think|I should/i,
-      requesting_permission: /May I|Can I|Should I|Would you like me to/i,
-      completed_task: /I've completed|I've finished|I've created|I've updated/i,
-      error_occurred: /I encountered an error|failed to|couldn't/i,
-      waiting_for_confirmation: /Please confirm|Is this correct|Does this look right/i
-    };
-    
-    const recentOutput = buffer.slice(-500);
-    
-    for (const [type, pattern] of Object.entries(claudePatterns)) {
-      if (pattern.test(recentOutput)) {
-        logger.debug('Claude-specific pattern detected', { type });
-        
-        switch(type) {
-          case 'thinking':
-          case 'error_occurred':
-            return 'busy';
-          case 'requesting_permission':
-          case 'waiting_for_confirmation':
-            return 'waiting';
-          case 'completed_task':
-            return 'idle';
-        }
-      }
-    }
-    
-    return null; // No specific pattern detected
+  // Reset state (useful when session changes)
+  reset() {
+    this.lastBufferLength = 0;
+    this.lastOutputTime = Date.now();
+    this.recentDetections.clear();
   }
 }
 
