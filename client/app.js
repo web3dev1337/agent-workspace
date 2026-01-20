@@ -1483,36 +1483,22 @@ class ClaudeOrchestrator {
       const branch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
       const displayName = worktree.displayName;
 
-      // Convert claude status for display (waiting -> ready for green color)
-      const claudeDisplayStatus = worktree.claude?.status === 'waiting' ? 'ready' : worktree.claude?.status;
+      // Single-dot sidebar status: prefer the agent (Claude) status
+      const sidebarStatus = worktree.claude?.status || worktree.server?.status || 'idle';
 
       item.innerHTML = `
         <div class="worktree-header">
           <div class="worktree-title">
             <span class="visibility-indicator">${isVisible ? '👁' : '🚫'}</span>
-            ${displayName} - ${branch}
+            <span class="status-dot worktree-status-dot ${sidebarStatus}"></span>
+            <span class="worktree-name">${displayName}</span>
+            <span class="worktree-branch">${branch}</span>
           </div>
           <button class="delete-worktree-btn"
                   onclick="event.stopPropagation(); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
                   title="Remove worktree from workspace (keeps files intact)">
             ✕
           </button>
-        </div>
-        <div class="worktree-sessions">
-          ${worktree.claude ? `
-            <div class="session-status">
-              <span class="session-icon">🤖</span>
-              <span class="status-dot ${claudeDisplayStatus}"></span>
-              <span>Claude</span>
-            </div>
-          ` : ''}
-          ${worktree.server ? `
-            <div class="session-status">
-              <span class="session-icon">💻</span>
-              <span class="status-dot ${this.getServerStatusClass(worktree.server.sessionId)}"></span>
-              <span>Server</span>
-            </div>
-          ` : ''}
         </div>
       `;
       
@@ -2129,15 +2115,20 @@ class ClaudeOrchestrator {
   }
   
   updateSidebarStatus(sessionId, status) {
-    const worktreeId = sessionId.split('-')[0];
-    const isClaudeSession = sessionId.includes('-claude');
-    
-    const worktreeItem = document.querySelector(`[data-worktree-id="${worktreeId}"]`);
-    if (worktreeItem) {
-      const sessionStatus = worktreeItem.querySelector(`.session-status:${isClaudeSession ? 'first-child' : 'last-child'} .status-dot`);
-      if (sessionStatus) {
-        sessionStatus.className = `status-dot ${status}`;
-      }
+    const session = this.sessions.get(sessionId);
+    const worktreeId = session?.worktreeId || sessionId.split('-')[0];
+    const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
+    const key = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+
+    // Sidebar status is the agent (Claude) status. Ignore server updates to keep the sidebar compact.
+    if (!sessionId.includes('-claude')) return;
+
+    const worktreeItem = document.querySelector(`[data-worktree-id="${key}"]`);
+    if (!worktreeItem) return;
+
+    const dot = worktreeItem.querySelector('.worktree-status-dot');
+    if (dot) {
+      dot.className = `status-dot worktree-status-dot ${status}`;
     }
   }
   
