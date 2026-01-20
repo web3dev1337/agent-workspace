@@ -21,3 +21,14 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### Notes / next actions
 - Next PR should likely be “Test isolation & safety rails” (ensure Playwright uses 4001+ by default).
 - Highest priority runtime bug to tackle early: workspace tab switching corrupts xterm sizing / input + sidebar selection.
+
+---
+
+## 2026-01-20 (later)
+
+### Test isolation / safety rails (in progress)
+- Goal: default Playwright to a safe test port (4001) and keep API calls aligned.
+- Changes (draft):
+  - Added `ORCHESTRATOR_TEST_PORT` support for Playwright.
+  - Added `npm run test:e2e:safe` helper.
+  - Updated e2e tests to use `ORCHESTRATOR_TEST_PORT` when present.
