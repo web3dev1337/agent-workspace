@@ -4,7 +4,9 @@
 
 const { test, expect } = require('@playwright/test');
 
-const SERVER_PORT = process.env.ORCHESTRATOR_PORT || 4000;
+// Keep API calls aligned with Playwright's webServer/baseURL which may use a
+// dedicated test port to avoid colliding with the user's main instance.
+const SERVER_PORT = process.env.ORCHESTRATOR_TEST_PORT || process.env.ORCHESTRATOR_PORT || 4000;
 const SERVER_URL = `http://localhost:${SERVER_PORT}`;
 
 const ensureWorkspaceLoaded = async (page) => {
