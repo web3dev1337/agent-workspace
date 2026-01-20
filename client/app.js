@@ -784,6 +784,14 @@ class ClaudeOrchestrator {
       this.updateGlobalUserSetting('claudeFlags.skipPermissions', e.target.checked);
     });
 
+    const globalZaiProvider = document.getElementById('global-zai-provider');
+    if (globalZaiProvider) {
+      globalZaiProvider.addEventListener('change', (e) => {
+        const provider = e.target.checked ? 'zai' : 'anthropic';
+        this.updateGlobalUserSetting('claudeFlags.provider', provider);
+      });
+    }
+
     // Auto-start settings
     const globalAutoStart = document.getElementById('global-auto-start');
     const autoStartOptions = document.getElementById('auto-start-options');
@@ -4245,13 +4253,15 @@ class ClaudeOrchestrator {
 
         // Use recovery-specific skipPermissions setting (defaults to true)
         const skipPermissions = recoverySettings.skipPermissions !== false;
-        const yoloFlag = skipPermissions ? ' --dangerously-skip-permissions' : '';
 
-        // CD to actual CWD (may differ from worktree if user cd'd before starting Claude)
-        // Then start claude with --resume
-        this.socket.emit('terminal-input', {
+        this.socket.emit('start-claude', {
           sessionId,
-          data: `cd "${lastCwd}" && claude --resume ${lastConversationId}${yoloFlag}\n`
+          options: {
+            mode: 'resume',
+            resumeId: lastConversationId,
+            skipPermissions: skipPermissions,
+            cwd: lastCwd
+          }
         });
 
         // Small delay between sessions
@@ -4887,6 +4897,11 @@ class ClaudeOrchestrator {
       globalSkipPermissions.checked = this.userSettings.global.claudeFlags.skipPermissions;
     }
 
+    const globalZaiProvider = document.getElementById('global-zai-provider');
+    if (globalZaiProvider) {
+      globalZaiProvider.checked = this.userSettings.global.claudeFlags.provider === 'zai';
+    }
+
     // Update auto-start settings UI
     const globalAutoStart = document.getElementById('global-auto-start');
     const autoStartOptions = document.getElementById('auto-start-options');
@@ -4971,6 +4986,9 @@ class ClaudeOrchestrator {
     const effectiveSkipPermissions = hasOverride && hasOverride.claudeFlags
       ? hasOverride.claudeFlags.skipPermissions
       : this.userSettings.global.claudeFlags.skipPermissions;
+    const effectiveProvider = hasOverride && hasOverride.claudeFlags && hasOverride.claudeFlags.provider
+      ? hasOverride.claudeFlags.provider
+      : (this.userSettings.global.claudeFlags.provider || 'anthropic');
 
     const effectiveAutoStart = {
       enabled: hasOverride && hasOverride.autoStart && hasOverride.autoStart.enabled !== undefined
@@ -5000,6 +5018,12 @@ class ClaudeOrchestrator {
                    ${effectiveAutoStart.enabled ? 'checked' : ''}>
             Auto-Start
           </label>
+          <label style="margin-left: 15px;">
+            <input type="checkbox" class="terminal-use-zai"
+                   data-session-id="${sessionId}"
+                   ${effectiveProvider === 'zai' ? 'checked' : ''}>
+            Use Z.ai
+          </label>
           ${hasOverride ? `
             <button class="clear-override-btn" data-session-id="${sessionId}" title="Use global settings">
               ↻
@@ -5023,9 +5047,10 @@ class ClaudeOrchestrator {
     const skipCheckbox = div.querySelector('.terminal-skip-permissions');
     skipCheckbox.addEventListener('change', (e) => {
       const currentOverride = this.userSettings.perTerminal[sessionId] || {};
+      const currentFlags = currentOverride.claudeFlags || {};
       this.updatePerTerminalSetting(sessionId, {
         ...currentOverride,
-        claudeFlags: { skipPermissions: e.target.checked }
+        claudeFlags: { ...currentFlags, skipPermissions: e.target.checked }
       });
     });
 
@@ -5082,6 +5107,19 @@ class ClaudeOrchestrator {
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
         this.clearPerTerminalSetting(sessionId);
+      });
+    }
+
+    const providerCheckbox = div.querySelector('.terminal-use-zai');
+    if (providerCheckbox) {
+      providerCheckbox.addEventListener('change', (e) => {
+        const currentOverride = this.userSettings.perTerminal[sessionId] || {};
+        const currentFlags = currentOverride.claudeFlags || {};
+        const provider = e.target.checked ? 'zai' : 'anthropic';
+        this.updatePerTerminalSetting(sessionId, {
+          ...currentOverride,
+          claudeFlags: { ...currentFlags, provider }
+        });
       });
     }
 

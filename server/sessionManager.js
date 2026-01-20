@@ -1995,6 +1995,58 @@ class SessionManager extends EventEmitter {
     return true;
   }
   
+  normalizeClaudeProvider(provider) {
+    if (!provider) return 'anthropic';
+    const normalized = String(provider).toLowerCase();
+    return normalized === 'zai' ? 'zai' : 'anthropic';
+  }
+
+  escapeShellValue(value) {
+    if (value === null || value === undefined) return "''";
+    return `'${String(value).replace(/'/g, `'\\''`)}'`;
+  }
+
+  getZaiEnvOverrides() {
+    const baseUrl = process.env.ZAI_ANTHROPIC_BASE_URL
+      || process.env.ZAI_BASE_URL
+      || 'https://api.z.ai/api/anthropic';
+    const authToken = process.env.ZAI_ANTHROPIC_AUTH_TOKEN
+      || process.env.ZAI_API_KEY
+      || process.env.ZAI_AUTH_TOKEN;
+
+    if (!authToken) {
+      return null;
+    }
+
+    return { baseUrl, authToken };
+  }
+
+  resolveClaudeCommand(claudeCommand, provider) {
+    const normalizedProvider = this.normalizeClaudeProvider(provider);
+    if (normalizedProvider !== 'zai') {
+      return { command: claudeCommand, provider: 'anthropic' };
+    }
+
+    const zaiEnv = this.getZaiEnvOverrides();
+    if (!zaiEnv) {
+      return {
+        command: claudeCommand,
+        provider: 'anthropic',
+        warning: 'Z.ai provider selected but no ZAI_API_KEY or ZAI_ANTHROPIC_AUTH_TOKEN set.'
+      };
+    }
+
+    const envParts = [
+      `ANTHROPIC_BASE_URL=${this.escapeShellValue(zaiEnv.baseUrl)}`,
+      `ANTHROPIC_AUTH_TOKEN=${this.escapeShellValue(zaiEnv.authToken)}`
+    ];
+
+    return {
+      command: `${envParts.join(' ')} ${claudeCommand}`,
+      provider: 'zai'
+    };
+  }
+
   startClaudeWithOptions(sessionId, options) {
     const session = this.sessions.get(sessionId);
     if (!session) {
@@ -2007,15 +2059,18 @@ class SessionManager extends EventEmitter {
       return false;
     }
     
+    const safeOptions = options || {};
+
     // Get effective settings for this session (global + per-terminal overrides)
     const effectiveSettings = this.userSettings.getEffectiveSettings(sessionId);
     
     // Merge UI options with user settings (UI options take precedence)
     const finalOptions = {
-      ...options,
-      skipPermissions: options.skipPermissions !== undefined 
-        ? options.skipPermissions 
-        : effectiveSettings.claudeFlags.skipPermissions
+      ...safeOptions,
+      skipPermissions: safeOptions.skipPermissions !== undefined 
+        ? safeOptions.skipPermissions 
+        : effectiveSettings.claudeFlags.skipPermissions,
+      provider: safeOptions.provider || effectiveSettings.claudeFlags.provider || 'anthropic'
     };
     
     logger.info('Starting Claude with options', { 
@@ -2031,16 +2086,25 @@ class SessionManager extends EventEmitter {
     if (finalOptions.mode === 'continue') {
       claudeCommand = 'claude --continue';
     } else if (finalOptions.mode === 'resume') {
-      claudeCommand = 'claude --resume';
+      claudeCommand = finalOptions.resumeId
+        ? `claude --resume ${this.escapeShellValue(finalOptions.resumeId)}`
+        : 'claude --resume';
     }
     
     if (finalOptions.skipPermissions) {
       claudeCommand += ' --dangerously-skip-permissions';
     }
+
+    const resolvedCommand = this.resolveClaudeCommand(claudeCommand, finalOptions.provider);
+    if (resolvedCommand.warning) {
+      this.writeToSession(sessionId, `echo ${this.escapeShellValue(resolvedCommand.warning)}\n`);
+    }
     
     // Write the command to the terminal
-    const commandToRun = `${claudeCommand}\n`;
-    logger.info('Executing Claude command', { sessionId, command: claudeCommand });
+    const commandToRun = finalOptions.cwd
+      ? `cd ${this.escapeShellValue(finalOptions.cwd)} && ${resolvedCommand.command}\n`
+      : `${resolvedCommand.command}\n`;
+    logger.info('Executing Claude command', { sessionId, command: resolvedCommand.command, provider: resolvedCommand.provider });
     
     // Send the command to the terminal
     this.writeToSession(sessionId, commandToRun);
@@ -2090,9 +2154,19 @@ class SessionManager extends EventEmitter {
         ? finalConfig  // Pass full config object for Codex
         : finalConfig.flags;  // Pass just flags for Claude (backwards compat)
 
-      const command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, commandInput);
-
-      logger.info('Executing agent command', { sessionId, command });
+      let command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, commandInput);
+      if (finalConfig.agentId === 'claude') {
+        const effectiveSettings = this.userSettings.getEffectiveSettings(sessionId);
+        const provider = finalConfig.provider || effectiveSettings.claudeFlags.provider || 'anthropic';
+        const resolvedCommand = this.resolveClaudeCommand(command, provider);
+        if (resolvedCommand.warning) {
+          this.writeToSession(sessionId, `echo ${this.escapeShellValue(resolvedCommand.warning)}\n`);
+        }
+        command = resolvedCommand.command;
+        logger.info('Executing agent command', { sessionId, command, provider: resolvedCommand.provider });
+      } else {
+        logger.info('Executing agent command', { sessionId, command });
+      }
 
       // Send the command to the terminal
       this.writeToSession(sessionId, `${command}\n`);
