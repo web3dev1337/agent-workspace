@@ -38,7 +38,7 @@ class AgentManager {
           description: 'YOLO Mode (skip permissions)',
           label: '🚀 YOLO Mode',
           category: 'permissions',
-          default: false
+          default: true
         },
 
         // Future Claude flags (examples for extensibility)
@@ -58,7 +58,7 @@ class AgentManager {
         }
       },
       defaultMode: 'fresh',
-      defaultFlags: [], // Default is no flags (safe mode)
+      defaultFlags: ['skipPermissions'],
       availableFlags: ['skipPermissions', 'verbose', 'debug'],
       flagCategories: {
         permissions: { name: 'Permissions', mutuallyExclusive: false },
