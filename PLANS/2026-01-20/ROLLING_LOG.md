@@ -86,3 +86,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ### Sidebar: remove bottom-left services list (in progress)
 - Removed the left sidebar “🔌 Services” section (under worktrees). Use the top-right Ports button instead.
+
+### Sidebar: compact worktree rows + fix status dot colors (in progress)
+- Make worktree rows single-line (remove per-row Claude/Server sub-status rows).
+- Change agent status dot mapping to match `server/statusDetector.js` semantics: waiting=green, busy=orange, idle=gray.
