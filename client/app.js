@@ -453,8 +453,24 @@ class ClaudeOrchestrator {
           if (existingTab) {
             // Switch to existing tab
             console.log(`Workspace ${workspace.name} already open, switching to tab`);
+            // Set current workspace FIRST so tab manager doesn't re-request the backend switch
+            this.currentWorkspace = workspace;
+            this.isDashboardMode = false;
             await this.tabManager.switchTab(existingTab.id);
             this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, existingTab.id);
+
+            // Ensure the active tab view is refreshed with the latest sessions for this workspace
+            this.currentTabId = existingTab.id;
+
+            // Pre-fetch worktree-specific configs for all terminals
+            await this.prefetchWorktreeConfigs(workspace, sessions);
+
+            this.handleInitialSessions(sessions);
+
+            // Update workspace switcher
+            if (this.workspaceSwitcher) {
+              this.workspaceSwitcher.updateCurrentWorkspace();
+            }
           } else {
             // Create new tab for this workspace
             const tabId = this.tabManager.createTab(workspace, sessions);
