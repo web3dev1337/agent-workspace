@@ -33,6 +33,7 @@ class UserSettingsService {
       global: {
         claudeFlags: {
           skipPermissions: false,
+          provider: 'anthropic',
           // Add other global Claude flags here in the future
         },
         autoStart: {
