@@ -16,8 +16,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Added: `PLANS/2026-01-20/IMPLEMENTATION_PLAN.md`
 - Added: `PLANS/2026-01-20/CHECKLIST.md`
 - Added: `PLANS/2026-01-20/ROLLING_LOG.md`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/79
 
 ### Notes / next actions
 - Next PR should likely be “Test isolation & safety rails” (ensure Playwright uses 4001+ by default).
 - Highest priority runtime bug to tackle early: workspace tab switching corrupts xterm sizing / input + sidebar selection.
-
