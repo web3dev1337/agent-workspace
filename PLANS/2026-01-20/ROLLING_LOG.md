@@ -54,6 +54,11 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/83
 - Merged: commit `79eba5627b50c74a1e20db4a880dc35f1c45fab8`
 
-### Start Agent options label + default YOLO (in progress)
+### Start Agent options label + default YOLO (done)
 - Goal: rename the ↻ “Start Claude with Options” tooltip to “Start Agent with Options” and default YOLO checked in the agent startup modal.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/84
+- Merged: commit `7e593d7772c797ebe1f309afed4ac229f32a50ce`
+
+### Remove Yes/No quick actions (in progress)
+- Goal: remove the bottom Yes/No buttons (and the “waiting for my answer” quick-action UX) since everything runs in YOLO mode now.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/85
