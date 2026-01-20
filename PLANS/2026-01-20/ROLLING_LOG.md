@@ -83,3 +83,6 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Fix approach: track whether the user was at bottom when leaving; restore scroll only when they were scrolled up.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/88
 - Merged: commit `28c39a3`
+
+### Sidebar: remove bottom-left services list (in progress)
+- Removed the left sidebar “🔌 Services” section (under worktrees). Use the top-right Ports button instead.
