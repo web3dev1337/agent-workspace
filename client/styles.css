@@ -647,16 +647,6 @@ header h1 {
   overflow-y: auto !important;
 }
 
-/* Quick Actions */
-.quick-actions {
-  background: var(--bg-secondary);
-  padding: var(--space-sm);
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  gap: var(--space-sm);
-  justify-content: center;
-}
-
 /* Buttons */
 .button-primary, .button-secondary {
   background: var(--accent-primary);
