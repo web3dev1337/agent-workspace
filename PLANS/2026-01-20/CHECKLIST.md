@@ -19,21 +19,21 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 ## Feature / Fix tracking
 
 ### Planning & docs
-- [ ] Requested changes captured (`REQUESTED_CHANGES.md`)
-- [ ] Implementation plan written (`IMPLEMENTATION_PLAN.md`)
-- [ ] Rolling log started (`ROLLING_LOG.md`)
+- [x] Requested changes captured (`REQUESTED_CHANGES.md`)
+- [x] Implementation plan written (`IMPLEMENTATION_PLAN.md`)
+- [x] Rolling log started (`ROLLING_LOG.md`)
 
 ### Reliability (highest priority)
-- [ ] Tab switching preserves terminal typing & sizing
-- [ ] Tab switching preserves sidebar selection state
-- [ ] Adding worktrees does not resurrect startup overlays
+- [x] Tab switching preserves terminal typing & sizing
+- [x] Tab switching preserves sidebar selection state
+- [x] Adding worktrees does not resurrect startup overlays
 - [ ] Adding worktrees does not “reset” existing terminals
 - [ ] Sidebar worktree list updates immediately (no “one behind”)
 
 ### Status + UX cleanups
 - [ ] Status indicator colors are accurate and documented
 - [ ] Remove/hide non-functional “Dynamic layout”
-- [ ] Remove or fix empty “Quick actions” strip
+- [x] Remove or fix empty “Quick actions” strip
 - [ ] Modal close buttons are usable (ports + conversations + worktree picker)
 
 ### Ports / services
