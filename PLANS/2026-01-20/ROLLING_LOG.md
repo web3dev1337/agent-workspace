@@ -36,9 +36,14 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/80
 - Merged: commit `d13dfde339e9e7dacd07677822acff9d235e749c`
 
-### Tab switching state preservation (in progress)
+### Tab switching state preservation (done)
 - Goal: prevent tab creation/switching from wiping the previous tab’s per-workspace UI state (sessions, PR links, server status, startup UI dismissal).
-- Changes (draft):
+- Changes:
   - Store/restore more per-tab state in `WorkspaceTabManager` (Maps/Sets).
   - Avoid clearing global orchestrator state before the previous tab is hidden/snapshotted.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/81
+- Merged: commit `ce9e4dcb2505257bbc0ed512107c86fa583ee4fc`
+
+### Tab switching backend sync (in progress)
+- Goal: prevent terminal/output cross-contamination by switching the backend workspace when a workspace tab is activated.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/82
