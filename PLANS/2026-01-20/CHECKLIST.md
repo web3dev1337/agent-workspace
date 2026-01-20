@@ -38,7 +38,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [ ] Modal close buttons are usable (ports + conversations + worktree picker)
 
 ### Ports / services
-- [ ] Remove bottom-left “Services” list under worktrees
+- [x] Remove bottom-left “Services” list under worktrees
 - [ ] Ports/Services modal is large + card/grid layout
 - [ ] Ports/Services modal supports open + copy URL/port actions
 
