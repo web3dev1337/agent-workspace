@@ -1121,7 +1121,7 @@ class ClaudeOrchestrator {
       },
       claudeModal: {
         icon: '↻',
-        title: 'Start Claude with Options',
+        title: 'Start Agent with Options',
         action: 'showClaudeStartupModal',
         showWhen: 'always',
         terminalType: 'claude'

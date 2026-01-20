@@ -49,6 +49,11 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/82
 - Merged: commit `e662f6ef671a638d6788b9d34b2c0cd78a280136`
 
-### Startup UI overlay resurrection (in progress)
+### Startup UI overlay resurrection (done)
 - Goal: stop the “Fresh/Continue/Resume” startup overlay from reappearing after reconnects or worktree additions.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/83
+- Merged: commit `79eba5627b50c74a1e20db4a880dc35f1c45fab8`
+
+### Start Agent options label + default YOLO (in progress)
+- Goal: rename the ↻ “Start Claude with Options” tooltip to “Start Agent with Options” and default YOLO checked in the agent startup modal.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/84
