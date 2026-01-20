@@ -33,6 +33,12 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 - PR 83 — Prevent startup UI overlay resurrection: https://github.com/web3dev1337/claude-orchestrator/pull/83
 - PR 84 — “Start Agent with Options” + default YOLO: https://github.com/web3dev1337/claude-orchestrator/pull/84
 - PR 85 — Remove Yes/No quick actions UI: https://github.com/web3dev1337/claude-orchestrator/pull/85
+- PR 86 — Refresh plans/log with merged PRs: https://github.com/web3dev1337/claude-orchestrator/pull/86
+- PR 87 — Remove “Dynamic Layout” label: https://github.com/web3dev1337/claude-orchestrator/pull/87
+- PR 88 — Prevent terminal scroll jump on tab switch: https://github.com/web3dev1337/claude-orchestrator/pull/88
+- PR 89 — Update rolling log for PR 87/88: https://github.com/web3dev1337/claude-orchestrator/pull/89
+- PR 90 — Remove sidebar “Services” section: https://github.com/web3dev1337/claude-orchestrator/pull/90
+- PR 91 — Compact sidebar worktree list: https://github.com/web3dev1337/claude-orchestrator/pull/91
 
 ## Repo Understanding (High-level Architecture)
 
