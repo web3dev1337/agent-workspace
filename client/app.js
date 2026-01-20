@@ -464,17 +464,6 @@ class ClaudeOrchestrator {
             // Terminals need this to register to the correct tab
             this.currentTabId = tabId;
 
-            // Clear state for new tab context
-            this.sessions.clear();
-            this.visibleTerminals.clear();
-            this.worktreeConfigs.clear();
-            this.sessionActivity.clear();
-            this.serverStatuses.clear();
-            this.serverPorts.clear();
-            this.githubLinks.clear();
-            this.githubLinkLogs.clear();
-            this.autoStartApplied.clear();
-
             // Switch to the new tab so it becomes active
             await this.tabManager.switchTab(tabId);
             this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, tabId);
