@@ -2,7 +2,8 @@
   "version": "1.1.0",
   "global": {
     "claudeFlags": {
-      "skipPermissions": false
+      "skipPermissions": false,
+      "provider": "anthropic"
     },
     "autoStart": {
       "enabled": false,

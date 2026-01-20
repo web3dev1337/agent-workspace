@@ -785,9 +785,14 @@ class ConversationBrowser {
 
     if (matchingSession) {
       // Found existing session - send resume command
-      this.orchestrator.socket.emit('terminal-input', {
+      this.orchestrator.socket.emit('start-claude', {
         sessionId: matchingSession.id,
-        input: `${this.getResumeCommand(id)}\n`
+        options: {
+          mode: 'resume',
+          resumeId: id,
+          skipPermissions: this.yoloMode,
+          cwd: cwd
+        }
       });
 
       // Close browser
@@ -820,9 +825,14 @@ class ConversationBrowser {
         const claudeSessionId = Object.keys(data.sessions).find(sid => sid.includes('claude'));
         if (claudeSessionId) {
           setTimeout(() => {
-            this.orchestrator.socket.emit('terminal-input', {
+            this.orchestrator.socket.emit('start-claude', {
               sessionId: claudeSessionId,
-              input: `${this.getResumeCommand(id)}\n`
+              options: {
+                mode: 'resume',
+                resumeId: id,
+                skipPermissions: this.yoloMode,
+                cwd: cwd
+              }
             });
           }, 500); // Small delay to let terminal initialize
         }

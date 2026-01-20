@@ -73,7 +73,13 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:2080", "http://localhost:3000", "tauri://localhost"],
+    origin: (origin, callback) => {
+      if (!origin || origin === 'tauri://localhost' || origin.startsWith('http://localhost:')) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Not allowed by CORS'));
+    },
     credentials: true
   }
 });
@@ -2570,10 +2576,27 @@ function shutdown(signal = 'unknown') {
 
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {
+  if (error && error.code === 'EPIPE') {
+    return;
+  }
   logger.error('Uncaught exception', { error: error.message, stack: error.stack });
   shutdown();
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled rejection', { reason, promise });
+});
+
+process.stdout.on('error', (error) => {
+  if (error && error.code === 'EPIPE') {
+    return;
+  }
+  throw error;
+});
+
+process.stderr.on('error', (error) => {
+  if (error && error.code === 'EPIPE') {
+    return;
+  }
+  throw error;
 });
