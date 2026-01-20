@@ -56,3 +56,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ### Start Agent options label + default YOLO (in progress)
 - Goal: rename the ↻ “Start Claude with Options” tooltip to “Start Agent with Options” and default YOLO checked in the agent startup modal.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/84
