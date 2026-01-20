@@ -84,9 +84,13 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/88
 - Merged: commit `28c39a3`
 
-### Sidebar: remove bottom-left services list (in progress)
+### Sidebar: remove bottom-left services list (done)
 - Removed the left sidebar “🔌 Services” section (under worktrees). Use the top-right Ports button instead.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/90
+- Merged: commit `1e10187`
 
-### Sidebar: compact worktree rows + fix status dot colors (in progress)
+### Sidebar: compact worktree rows + fix status dot colors (done)
 - Make worktree rows single-line (remove per-row Claude/Server sub-status rows).
 - Change agent status dot mapping to match `server/statusDetector.js` semantics: waiting=green, busy=orange, idle=gray.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/91
+- Merged: commit `9c52434`
