@@ -9,6 +9,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Base branch: `origin/main`
 - Created working branch: `many-changes` (tracks `origin/main`)
 - Confirmed Z.ai toggle PR was merged into `main` (merge commit `d9406c0`).
+- `origin/main` HEAD (at time of writing): `7ca2113` (“Merge PR #85: remove Yes/No quick actions”)
 - Confirmed dev instance ports are set in `.env` (server is **not** 3000).
 
 ### Planning docs
@@ -59,6 +60,10 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/84
 - Merged: commit `7e593d7772c797ebe1f309afed4ac229f32a50ce`
 
-### Remove Yes/No quick actions (in progress)
+### Remove Yes/No quick actions (done)
 - Goal: remove the bottom Yes/No buttons (and the “waiting for my answer” quick-action UX) since everything runs in YOLO mode now.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/85
+- Merged: commit `7ca2113`
+
+### Notes / follow-ups
+- We removed the **Yes/No UI** + empty quick-actions strip. If the underlying “waiting for yes/no” detection is still causing issues, we can remove that logic next.
