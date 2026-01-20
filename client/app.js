@@ -328,17 +328,20 @@ class ClaudeOrchestrator {
       });
 
       this.socket.on('claude-started', ({ sessionId }) => {
-        // Hide the startup UI when Claude starts
-        const startupUI = document.getElementById(`startup-ui-${sessionId}`);
-        if (startupUI) {
-          startupUI.style.display = 'none';
-        }
+        // Hide + persist dismissal so it doesn't resurrect on refresh/worktree-add
+        this.hideStartupUI(sessionId);
         
         // Enable the start button now that Claude has started
         const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
         if (startBtn) {
           startBtn.disabled = false;
         }
+      });
+
+      // Agent-agnostic equivalent (Codex/OpenCode/etc). Startup UI only exists on -claude terminals,
+      // but hiding is safe and prevents resurrection when agent is started via recovery/automation.
+      this.socket.on('agent-started', ({ sessionId }) => {
+        this.hideStartupUI(sessionId);
       });
 
       this.socket.on('claude-update-required', (updateInfo) => {
@@ -1053,8 +1056,9 @@ class ClaudeOrchestrator {
           }, delay);
           this.autoStartApplied.add(sessionId);
         } else {
-          // Use centralized logic to determine if UI should show (no previous status in auto-start)
-          this.showStartupUIIfNeeded(sessionId, 'waiting', 'idle');
+          // Only show startup UI if the session is actually waiting.
+          // Passing hardcoded "waiting" can resurrect the overlay after worktree adds / reconnects.
+          this.showStartupUIIfNeeded(sessionId, session.status || 'idle', null);
         }
       }
     }
