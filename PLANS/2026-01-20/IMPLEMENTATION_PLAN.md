@@ -20,7 +20,8 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 - `npm run test:unit`
 
 ### E2E tests (Playwright)
-- Prefer: `ORCHESTRATOR_PORT=4001 npm run test:e2e`
+- Prefer: `npm run test:e2e:safe` (defaults to port 4001)
+- Or: `ORCHESTRATOR_TEST_PORT=4001 npm run test:e2e`
 - If we need the client dev-server: use a unique `CLIENT_PORT` (e.g. 2083+) and keep server on 4001+.
 
 ## Repo Understanding (High-level Architecture)
@@ -137,4 +138,3 @@ Order is chosen to fix reliability/state bugs first (tab switching + terminal in
   - add lightweight fixture folders under `tests/fixtures/` (if feasible), or
   - make the grouping logic testable as pure functions.
 - “Detecting Z.ai within Claude” is a stretch goal; we’ll treat it as best-effort.
-
