@@ -41,3 +41,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Changes (draft):
   - Store/restore more per-tab state in `WorkspaceTabManager` (Maps/Sets).
   - Avoid clearing global orchestrator state before the previous tab is hidden/snapshotted.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/81
