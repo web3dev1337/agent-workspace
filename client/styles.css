@@ -83,14 +83,14 @@ body {
 .worktree-list {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-sm);
+  padding: var(--space-xs);
 }
 
 .worktree-item {
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
-  margin-bottom: var(--space-sm);
-  padding: var(--space-md);
+  margin-bottom: var(--space-xs);
+  padding: var(--space-sm);
   cursor: pointer;
   transition: all 0.2s;
   border: 1px solid transparent;
@@ -110,7 +110,6 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--space-sm);
 }
 
 .delete-worktree-btn {
@@ -163,60 +162,46 @@ body {
 
 .worktree-title {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.worktree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .worktree-branch {
   font-size: 0.75rem;
   color: var(--text-secondary);
   font-family: var(--font-mono);
+  opacity: 0.85;
+  white-space: nowrap;
 }
 
 .worktree-item.active .worktree-branch {
   color: rgba(255, 255, 255, 0.8);
 }
 
-.worktree-sessions {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-.session-status {
-  flex: 1;
-  padding: var(--space-xs) var(--space-sm);
-  background: var(--bg-primary);
-  border-radius: var(--radius-sm);
-  font-size: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.session-icon {
-  font-size: 0.875rem;
-}
-
-.session-status .status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+/* Agent status dots (waiting/busy/idle) */
+.status-dot.idle {
   background: var(--text-tertiary);
 }
 
-.session-status .status-dot.idle {
+.status-dot.waiting {
   background: var(--accent-success);
 }
 
-.session-status .status-dot.busy {
+.status-dot.busy {
   background: var(--accent-warning);
-}
-
-.session-status .status-dot.waiting {
-  background: var(--accent-danger);
   animation: pulse 1s infinite;
 }
 
-.session-status .status-dot.error {
+.status-dot.error {
   background: var(--accent-danger);
 }
 
