@@ -2040,7 +2040,6 @@ class ClaudeOrchestrator {
           </div>
         ` : ''}
       </div>
-      <div class="quick-actions" id="actions-${sessionId}"></div>
     `;
     
     return wrapper;
@@ -2095,8 +2094,6 @@ class ClaudeOrchestrator {
     
     // Update quick actions for Claude sessions
     if (sessionId.includes('claude')) {
-      this.updateQuickActions(sessionId, status);
-
       // Clear any pending notification timer if Claude goes busy again
       if (status === 'busy' && this.notificationTimers && this.notificationTimers[sessionId]) {
         clearTimeout(this.notificationTimers[sessionId]);
@@ -2185,20 +2182,6 @@ class ClaudeOrchestrator {
     
     // Update GitHub buttons with new remote URL
     this.updateTerminalControls(sessionId);
-  }
-  
-  updateQuickActions(sessionId, status) {
-    const actionsElement = document.getElementById(`actions-${sessionId}`);
-    if (!actionsElement) return;
-    
-    if (status === 'waiting') {
-      actionsElement.innerHTML = `
-        <button class="button-primary" onclick="orchestrator.sendQuickResponse('${sessionId}', 'y\\n')">Yes</button>
-        <button class="button-secondary danger" onclick="orchestrator.sendQuickResponse('${sessionId}', 'n\\n')">No</button>
-      `;
-    } else {
-      actionsElement.innerHTML = '';
-    }
   }
   
   // Server control methods
@@ -2605,10 +2588,6 @@ class ClaudeOrchestrator {
     }
     
     this.socket.emit('terminal-input', { sessionId, data });
-  }
-  
-  sendQuickResponse(sessionId, response) {
-    this.sendTerminalInput(sessionId, response);
   }
   
   resizeTerminal(sessionId, cols, rows) {
