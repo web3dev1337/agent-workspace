@@ -85,7 +85,8 @@ class AgentModalManager {
               id: 'skipPermissions',
               label: '🚀 YOLO Mode',
               description: 'YOLO Mode (skip permissions)',
-              category: 'permissions'
+              category: 'permissions',
+              default: true
             }
           ],
           defaultMode: 'fresh'
