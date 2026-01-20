@@ -375,10 +375,14 @@ class WorkspaceTabManager {
         if (termData.xtermInstance) {
           try {
             const xterm = termData.xtermInstance;
-            termData.lastScrollPos = xterm.buffer.active.viewportY;
+            const buffer = xterm.buffer.active;
+            const scrollOffset = buffer.baseY - buffer.viewportY;
+
+            termData.lastScrollPos = buffer.viewportY;
+            termData.wasAtBottom = scrollOffset <= 5;
             termData.cursorState = {
-              x: xterm.buffer.active.cursorX,
-              y: xterm.buffer.active.cursorY
+              x: buffer.cursorX,
+              y: buffer.cursorY
             };
           } catch (err) {
             console.warn(`Failed to save scroll position for ${sessionId}:`, err);
@@ -462,13 +466,17 @@ class WorkspaceTabManager {
             }
           }
 
-          // Restore scroll position
-          if (termData.lastScrollPos !== undefined) {
-            try {
+          // Restore scroll position:
+          // - If the user was at bottom when they left the tab, keep them at bottom (don't force old viewportY).
+          // - If they were scrolled up, restore to their previous position.
+          try {
+            if (termData.wasAtBottom) {
+              xterm.scrollToBottom();
+            } else if (termData.lastScrollPos !== undefined) {
               xterm.scrollToLine(termData.lastScrollPos);
-            } catch (err) {
-              // Ignore scroll errors
             }
+          } catch (err) {
+            // Ignore scroll errors
           }
         });
 
@@ -549,7 +557,10 @@ class WorkspaceTabManager {
     tab.terminals.set(sessionId, {
       xtermInstance: xtermInstance,
       fitAddon: fitAddon,
-      lastScrollPos: 0,
+      // Only restore scroll position after we've captured it at least once.
+      // Using 0 here can incorrectly jump the terminal to the top.
+      lastScrollPos: undefined,
+      wasAtBottom: true,
       cursorState: { x: 0, y: 0 }
     });
 
