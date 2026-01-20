@@ -67,3 +67,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ### Notes / follow-ups
 - We removed the **Yes/No UI** + empty quick-actions strip. If the underlying “waiting for yes/no” detection is still causing issues, we can remove that logic next.
+- New report: sometimes terminal scroll jumps all the way to the top unexpectedly (needs repro + fix).

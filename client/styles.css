@@ -424,16 +424,6 @@ header h1 {
   grid-template-rows: repeat(4, 1fr);
 }
 
-/* Layout info display */
-.layout-info {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  padding: 0.5rem 1rem;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-color);
-}
-
 /* Terminal Container */
 .terminal-wrapper {
   background: var(--bg-tertiary);
