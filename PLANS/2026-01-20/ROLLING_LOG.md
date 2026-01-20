@@ -61,3 +61,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ### Remove Yes/No quick actions (in progress)
 - Goal: remove the bottom Yes/No buttons (and the “waiting for my answer” quick-action UX) since everything runs in YOLO mode now.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/85
