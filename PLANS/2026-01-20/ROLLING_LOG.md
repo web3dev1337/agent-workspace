@@ -44,6 +44,11 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/81
 - Merged: commit `ce9e4dcb2505257bbc0ed512107c86fa583ee4fc`
 
-### Tab switching backend sync (in progress)
+### Tab switching backend sync (done)
 - Goal: prevent terminal/output cross-contamination by switching the backend workspace when a workspace tab is activated.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/82
+- Merged: commit `e662f6ef671a638d6788b9d34b2c0cd78a280136`
+
+### Startup UI overlay resurrection (in progress)
+- Goal: stop the “Fresh/Continue/Resume” startup overlay from reappearing after reconnects or worktree additions.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/83
