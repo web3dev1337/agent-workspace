@@ -24,6 +24,16 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 - Or: `ORCHESTRATOR_TEST_PORT=4001 npm run test:e2e`
 - If we need the client dev-server: use a unique `CLIENT_PORT` (e.g. 2083+) and keep server on 4001+.
 
+## Completed PRs (as of 2026-01-20)
+
+- PR 79 — Planning docs: https://github.com/web3dev1337/claude-orchestrator/pull/79
+- PR 80 — Safe E2E port (defaults to 4001): https://github.com/web3dev1337/claude-orchestrator/pull/80
+- PR 81 — Preserve per-tab state (stop tab switches from wiping UI state): https://github.com/web3dev1337/claude-orchestrator/pull/81
+- PR 82 — Sync backend workspace on tab activation: https://github.com/web3dev1337/claude-orchestrator/pull/82
+- PR 83 — Prevent startup UI overlay resurrection: https://github.com/web3dev1337/claude-orchestrator/pull/83
+- PR 84 — “Start Agent with Options” + default YOLO: https://github.com/web3dev1337/claude-orchestrator/pull/84
+- PR 85 — Remove Yes/No quick actions UI: https://github.com/web3dev1337/claude-orchestrator/pull/85
+
 ## Repo Understanding (High-level Architecture)
 
 This repo is a Node/Express + Socket.IO backend (`server/`) with a plain JS frontend (`client/`) that renders:
@@ -44,7 +54,7 @@ Core systems involved in your issues:
 
 Order is chosen to fix reliability/state bugs first (tab switching + terminal integrity), then UI/UX enhancements, then broader productization (PR lists, favorites, “Agent Orchestrator” naming pass).
 
-### PR 0 — Planning docs (this PR)
+### PR 0 — Planning docs (done → PR 79)
 **Goal:** Capture requirements + plan + checklist + rolling log to avoid context loss.
 - Add:
   - `PLANS/2026-01-20/REQUESTED_CHANGES.md`
@@ -52,7 +62,7 @@ Order is chosen to fix reliability/state bugs first (tab switching + terminal in
   - `PLANS/2026-01-20/CHECKLIST.md`
   - `PLANS/2026-01-20/ROLLING_LOG.md`
 
-### PR 1 — Test isolation & safety rails
+### PR 1 — Test isolation & safety rails (done → PR 80)
 **Goal:** Make it harder to accidentally collide with port 3000 and easier to run tests on 4001+ consistently.
 - Potential changes:
   - Ensure Playwright defaults to a “safe” port (4001) when `ORCHESTRATOR_PORT` isn’t set.
@@ -62,7 +72,7 @@ Order is chosen to fix reliability/state bugs first (tab switching + terminal in
   - `npm run test:unit`
   - `npm run test:e2e` (with port override)
 
-### PR 2 — Tab switching: preserve terminal integrity (typing + sizing) + sidebar selection
+### PR 2 — Tab switching: preserve terminal integrity (typing + sizing) + sidebar selection (done → PR 81 + PR 82)
 **Goal:** Fix the most disruptive bug: switching tabs corrupts terminals (layout/typing) and UI selection state.
 - Likely work:
   - Audit tab state swap: ensure *all* per-tab state is saved/restored (sessions map, visibleTerminals, dismissedStartupUI, selected worktree, etc).
@@ -73,7 +83,7 @@ Order is chosen to fix reliability/state bugs first (tab switching + terminal in
   - Manual: open workspace A, open workspace B tab, switch back/forth 10x; terminals remain interactive and sized correctly.
   - E2E: add/extend Playwright test for tab switching + typing.
 
-### PR 3 — “Add worktree” should not resurrect startup overlays / reset terminals
+### PR 3 — “Add worktree” should not resurrect startup overlays / reset terminals (done → PR 83)
 **Goal:** Adding a worktree should append sessions without re-triggering startup UI or disturbing existing terminals.
 - Likely work:
   - Confirm whether `sessions` event is re-fired on add and whether `handleInitialSessions()` resets per-session UI state.
@@ -103,6 +113,10 @@ Order is chosen to fix reliability/state bugs first (tab switching + terminal in
 
 ### PR 6 — Remove/hide “Dynamic layout” control + fix/remove empty “Quick actions” strip
 **Goal:** UI cleanup that reduces confusion and layout weirdness.
+
+Status:
+- Empty “Quick actions” strip + Yes/No UI removed in PR 85.
+- “Dynamic layout” control still pending.
 
 ### PR 7 — Ports/Services modal redesign + remove bottom-left services list
 **Goal:** A larger modal, card/grid layout, grouping, and quick actions (open/copy URL).

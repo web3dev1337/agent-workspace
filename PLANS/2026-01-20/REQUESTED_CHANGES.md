@@ -134,9 +134,18 @@ Switching between workspace tabs causes:
 - Layout refits correctly without visual corruption.
 - Remove or fix the empty “Quick actions” strip.
 
+### F1) Remove “Yes / No” quick-response UX (YOLO-only)
+There’s a bottom “Yes/No” UI intended to answer the AI. You’re now running in YOLO mode and want this removed because it’s no longer needed and can interfere with layout/state.
+
+**Acceptance criteria**
+- No “Yes / No” buttons or related quick-response UI.
+- No “waiting for yes/no” behavior that blocks normal terminal usage.
+
 ## G. UI cleanup
 
 - “Dynamic layout” control in header doesn’t do anything → hide/remove for now.
+- ↻ tooltip should read **“Start Agent with Options”** (not “Start Claude with Options”).
+- In the agent startup modal, **YOLO should be enabled by default**.
 - Improve “micro X” close buttons (ports modal, conversation history modal).
 - Keep existing UI/UX rule: **do not darken the background** when a modal opens.
 
@@ -198,4 +207,3 @@ You want “product” links that:
 - Open the relevant page
 
 Also consider a simple port “reservation” doc (markdown list) to avoid collisions.
-
