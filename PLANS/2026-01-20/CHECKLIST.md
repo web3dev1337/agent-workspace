@@ -29,7 +29,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Adding worktrees does not resurrect startup overlays
 - [ ] Adding worktrees does not “reset” existing terminals
 - [ ] Sidebar worktree list updates immediately (no “one behind”)
-- [ ] Terminal scroll does not jump to top
+- [x] Terminal scroll does not jump to top
 
 ### Status + UX cleanups
 - [ ] Status indicator colors are accurate and documented
