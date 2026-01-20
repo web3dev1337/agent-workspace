@@ -141,6 +141,13 @@ There’s a bottom “Yes/No” UI intended to answer the AI. You’re now runni
 - No “Yes / No” buttons or related quick-response UI.
 - No “waiting for yes/no” behavior that blocks normal terminal usage.
 
+### F2) Terminal sometimes jumps scroll to the very top
+Observed: sometimes the terminal view/scroll position jumps all the way back to the top unexpectedly (may be related to prior quick-actions behavior, but not confirmed).
+
+**Acceptance criteria**
+- Terminal scroll position does not jump to the top unexpectedly during normal usage.
+- If auto-scroll is enabled, new output scrolls predictably; if the user is manually scrolling, we don’t fight their scroll position.
+
 ## G. UI cleanup
 
 - “Dynamic layout” control in header doesn’t do anything → hide/remove for now.
