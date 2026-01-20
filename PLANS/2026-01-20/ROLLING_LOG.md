@@ -68,3 +68,15 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### Notes / follow-ups
 - We removed the **Yes/No UI** + empty quick-actions strip. If the underlying “waiting for yes/no” detection is still causing issues, we can remove that logic next.
 - New report: sometimes terminal scroll jumps all the way to the top unexpectedly (needs repro + fix).
+
+---
+
+## 2026-01-20 (continued)
+
+### UI cleanup: remove “Dynamic Layout” label (done)
+- Removed the non-functional “Dynamic Layout” header label.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/87
+
+### Terminal: prevent scroll jumping to top on tab switches (in progress)
+- Hypothesis: on tab switch, we restore a stale `viewportY` even when the user was at the bottom; if output arrived while tab was hidden, restoring forces the terminal up (can look like jumping to the top).
+- Fix approach: track whether the user was at bottom when leaving; restore scroll only when they were scrolled up.
