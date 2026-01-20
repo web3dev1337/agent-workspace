@@ -8,7 +8,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [ ] Issue reproduced and documented (notes in `PLANS/2026-01-20/ROLLING_LOG.md`)
 - [ ] Fix implemented with minimal scope
 - [ ] Unit tests run: `npm run test:unit`
-- [ ] E2E tests run on safe port: `ORCHESTRATOR_PORT=4001 npm run test:e2e` (or justified skip)
+- [ ] E2E tests run on safe port: `npm run test:e2e:safe` (or justified skip)
 - [ ] Manual sanity check (focused, <5 minutes)
 - [ ] Docs updated (requirements/plan/log as needed)
 - [ ] Commit created (clear message)
@@ -70,4 +70,3 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 ### Skill + docs
 - [ ] Skill doc added for folder/worktree conventions
 - [ ] “Products” quick links: pull latest master + start + open/copy URL
-

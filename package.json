@@ -16,6 +16,7 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "jest",
     "test:e2e": "playwright test",
+    "test:e2e:safe": "ORCHESTRATOR_TEST_PORT=4001 playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:coverage": "jest --coverage"
   },
