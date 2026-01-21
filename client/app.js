@@ -1525,6 +1525,10 @@ class ClaudeOrchestrator {
       // Single-dot sidebar status: prefer the agent (Claude) status
       const sidebarStatus = worktree.claude?.status || worktree.server?.status || 'idle';
 
+      const agentId = worktree.claude?.agent || null;
+      const agentIcon = this.getAgentIcon(agentId);
+      const agentTitle = agentId ? `Agent: ${agentId}` : 'Agent: unknown';
+
       const worktreePath = this.getWorktreePathForSidebarEntry(worktree);
       const isReadyForReview = !!(worktreePath && this.worktreeTags.get(worktreePath)?.readyForReview);
       const readyTitle = isReadyForReview ? 'Ready for review (click to clear)' : 'Mark ready for review';
@@ -1534,6 +1538,7 @@ class ClaudeOrchestrator {
           <div class="worktree-title">
             <span class="visibility-indicator">${isVisible ? '👁' : '🚫'}</span>
             <span class="status-dot worktree-status-dot ${sidebarStatus}"></span>
+            <span class="agent-type-icon" title="${this.escapeHtml(agentTitle)}">${agentIcon}</span>
             <span class="worktree-name">${displayName}</span>
             <span class="worktree-branch">${branch}</span>
           </div>
@@ -7324,6 +7329,18 @@ class ClaudeOrchestrator {
       'ruby-rails': '💎'
     };
     return icons[type] || '📁';
+  }
+
+  getAgentIcon(agentId) {
+    const icons = {
+      claude: '🤖',
+      codex: '⚡',
+      opencode: '🧩',
+      aider: '🧰'
+    };
+
+    if (!agentId) return '🤖';
+    return icons[agentId] || '🤖';
   }
 
   escapeHtml(text) {
