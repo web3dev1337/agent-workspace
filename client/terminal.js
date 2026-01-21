@@ -471,9 +471,17 @@ class TerminalManager {
         // Check that container has valid dimensions before fitting
         const terminalElement = document.getElementById(`terminal-${sessionId}`);
         const terminalBody = terminalElement?.closest('.terminal-body');
+        const wrapper = document.getElementById(`wrapper-${sessionId}`);
 
         if (terminalBody) {
           const bodyRect = terminalBody.getBoundingClientRect();
+
+          // If the terminal is hidden (e.g. worktree toggled off), NEVER fit.
+          // Fitting while hidden can shrink the PTY to tiny dimensions and cause hard-wrapped output.
+          if (wrapper && wrapper.style.display === 'none') {
+            this.fitTimers.delete(sessionId);
+            return;
+          }
 
           // If container is too small (hidden or not laid out yet), retry
           if (bodyRect.width < 100 || bodyRect.height < 50) {
@@ -485,7 +493,10 @@ class TerminalManager {
               setTimeout(() => this.fitTerminal(sessionId, retryCount + 1), retryDelay);
               return;
             } else {
-              console.warn(`Terminal ${sessionId} container still too small after 5 retries, fitting anyway`);
+              // If we still can't get a reasonable size, do NOT fit. We'll retry on the next resize/show.
+              console.warn(`Terminal ${sessionId} container still too small after 5 retries (${bodyRect.width}x${bodyRect.height}); skipping fit`);
+              this.fitTimers.delete(sessionId);
+              return;
             }
           }
         }
