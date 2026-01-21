@@ -55,8 +55,8 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Show branch + PR + merged status
 
 ### PR management
-- [ ] PR list view (mine by default)
-- [ ] Filter toggle for “others’ PRs”
+- [x] PR list view (mine by default)
+- [x] Filter toggle for “others’ PRs”
 - [ ] “Ready for review” tagging (independent of PR creation)
 
 ### Naming / branding
