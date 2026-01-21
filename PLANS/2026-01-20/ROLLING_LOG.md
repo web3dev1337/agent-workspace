@@ -132,4 +132,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### UI: modal close buttons are usable (in progress)
 - Added shared modal header + close button styles (`.modal-header`, `.close-btn`) to make the close affordance larger and consistent across modals (ports, worktree picker, conversation history).
 - Tests: `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/98
