@@ -5471,29 +5471,36 @@ class ClaudeOrchestrator {
           <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
         </div>
         <div class="ports-info">
-          ${portsData.count} service${portsData.count !== 1 ? 's' : ''} running • Click name to edit label
+          ${portsData.count} service${portsData.count !== 1 ? 's' : ''} running • Click name to edit label • Use 📋 to copy
         </div>
         <div class="ports-list">
           ${portsData.ports.length === 0 ? '<div class="no-ports">No services detected</div>' :
             portsData.ports.map(p => `
               <div class="port-item ${p.type}" data-port="${p.port}">
-                <span class="port-icon">${p.icon || '❓'}</span>
-                <div class="port-details">
-                  <span class="port-name ${p.customLabel ? 'custom-label' : ''}"
-                        onclick="window.orchestrator.editPortLabel(${p.port}, '${(p.name || '').replace(/'/g, "\\'")}', this)"
-                        title="Click to edit label">
-                    ${p.name}${p.customLabel ? ' ✏️' : ''}
-                  </span>
-                  <span class="port-context">
-                    ${p.project?.project ? `<span class="port-project">${p.project.project}</span>` : ''}
-                    ${p.project?.worktree ? `<span class="port-worktree">${p.project.worktree}</span>` : ''}
-                    ${p.project?.subPath ? `<span class="port-subpath">/${p.project.subPath}</span>` : ''}
-                  </span>
-                  <span class="port-process" title="${p.cwd || ''}">${p.processName || ''} • PID ${p.pid || '?'}</span>
+                <div class="port-card-header">
+                  <div class="port-main">
+                    <span class="port-icon">${p.icon || '❓'}</span>
+                    <div class="port-details">
+                      <span class="port-name ${p.customLabel ? 'custom-label' : ''}"
+                            onclick="window.orchestrator.editPortLabel(${p.port}, '${(p.name || '').replace(/'/g, "\\'")}', this)"
+                            title="Click to edit label">
+                        ${p.name}${p.customLabel ? ' ✏️' : ''}
+                      </span>
+                      <span class="port-context">
+                        ${p.project?.project ? `<span class="port-project">${p.project.project}</span>` : ''}
+                        ${p.project?.worktree ? `<span class="port-worktree">${p.project.worktree}</span>` : ''}
+                        ${p.project?.subPath ? `<span class="port-subpath">/${p.project.subPath}</span>` : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="port-actions">
+                    <button class="port-action-btn" data-action="open" data-url="${p.url}" title="Open in browser">↗</button>
+                    <button class="port-action-btn" data-action="copy" data-copy="${p.url}" title="Copy URL">📋 URL</button>
+                    <button class="port-action-btn port-action-port" data-action="copy" data-copy="${p.port}" title="Copy Port">:${p.port}</button>
+                  </div>
                 </div>
-                <a href="${p.url}" target="_blank" class="port-link" title="Open in browser">
-                  :${p.port} →
-                </a>
+                <div class="port-process" title="${p.cwd || ''}">${p.processName || ''} • PID ${p.pid || '?'}</div>
               </div>
             `).join('')}
         </div>
@@ -5507,8 +5514,43 @@ class ClaudeOrchestrator {
 
     document.body.appendChild(modal);
 
-    // Close on backdrop click
     modal.addEventListener('click', (e) => {
+      const actionBtn = e.target.closest('.port-action-btn');
+      if (actionBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const action = actionBtn.dataset.action;
+        if (action === 'open') {
+          try {
+            const url = actionBtn.dataset.url;
+            new URL(url);
+            window.open(url, '_blank');
+          } catch (error) {
+            console.error('Invalid URL for port open action:', error);
+            this.showToast('Invalid URL', 'error');
+          }
+          return;
+        }
+
+        if (action === 'copy') {
+          const textToCopy = actionBtn.dataset.copy;
+          if (!textToCopy) return;
+
+          navigator.clipboard.writeText(textToCopy).then(() => {
+            const label = actionBtn.classList.contains('port-action-port')
+              ? `:${textToCopy}`
+              : textToCopy;
+            this.showToast(`Copied ${label}`, 'success');
+          }).catch((error) => {
+            console.error('Failed to copy to clipboard:', error);
+            this.showToast('Copy failed', 'error');
+          });
+          return;
+        }
+      }
+
+      // Close on backdrop click
       if (e.target === modal) modal.remove();
     });
   }
