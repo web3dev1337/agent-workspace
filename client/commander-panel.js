@@ -14,6 +14,8 @@ class CommanderPanel {
       : window.location.origin;
     this.terminal = null;
     this.fitAddon = null;
+    this.lastPasteAt = 0;
+    this.pasteCooldownMs = 200;
   }
 
   /**
@@ -138,6 +140,46 @@ class CommanderPanel {
     // Handle input - send to Commander service
     this.terminal.onData(data => {
       this.sendInput(data);
+    });
+
+    // Clipboard shortcuts (Commander terminal is not managed by TerminalManager)
+    this.terminal.attachCustomKeyEventHandler((e) => {
+      const key = (e.key || '').toLowerCase();
+      const isModifier = e.ctrlKey || e.metaKey;
+
+      // Ctrl/Cmd+C: copy selection
+      if (isModifier && key === 'c' && this.terminal?.hasSelection?.()) {
+        e.preventDefault();
+        const selection = this.terminal.getSelection();
+        navigator.clipboard.writeText(selection).catch(err => {
+          console.error('Failed to copy selection:', err);
+        });
+        return false;
+      }
+
+      // Ctrl/Cmd+V: paste clipboard text
+      if (isModifier && key === 'v') {
+        e.preventDefault();
+
+        const now = Date.now();
+        if (now - this.lastPasteAt < this.pasteCooldownMs) {
+          return false;
+        }
+        this.lastPasteAt = now;
+
+        navigator.clipboard.readText().then(text => {
+          if (text) {
+            this.sendInput(text);
+          }
+        }).catch(err => {
+          console.error('Failed to read clipboard:', err);
+          this.lastPasteAt = 0;
+        });
+
+        return false;
+      }
+
+      return true;
     });
 
     // Click to focus
