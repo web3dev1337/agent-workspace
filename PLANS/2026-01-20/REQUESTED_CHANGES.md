@@ -148,6 +148,13 @@ Observed: sometimes the terminal view/scroll position jumps all the way back to 
 - Terminal scroll position does not jump to the top unexpectedly during normal usage.
 - If auto-scroll is enabled, new output scrolls predictably; if the user is manually scrolling, we don’t fight their scroll position.
 
+### F3) Commander terminal: Ctrl/Cmd+V should paste text (not “no image found”)
+In the Commander popup terminal, pasting via Ctrl/Cmd+V often fails with an error like “no image found in clipboard” even when trying to paste plain text.
+
+**Acceptance criteria**
+- Ctrl/Cmd+V pastes clipboard **text** into the Commander terminal reliably.
+- No image-only paste handling should block normal text paste behavior.
+
 ## G. UI cleanup
 
 - “Dynamic layout” control in header doesn’t do anything → hide/remove for now.
