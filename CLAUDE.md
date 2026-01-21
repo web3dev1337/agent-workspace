@@ -487,6 +487,7 @@ All commands run these 4 services:
 - **Diff Viewer** (PR review tool on port 7655 for prod, 7656 for dev)
 
 ### Important Notes:
+- **DO NOT touch the production `master/` instance when developing:** if you’re working in `claude-orchestrator-dev/` (feature branches / PRs), treat `~/GitHub/tools/automation/claude-orchestrator/master` as **run-only**. Do all code changes + commits in `claude-orchestrator-dev/`, then open PRs into `main`. Only `git pull` in `master/` when you explicitly want to update the running production copy.
 - Both instances can run simultaneously without conflicts
 - The `.env` files control which ports are used
 - `npm start`, `npm run dev`, and `npm run prod` are all equivalent
