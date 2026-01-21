@@ -133,3 +133,10 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Added shared modal header + close button styles (`.modal-header`, `.close-btn`) to make the close affordance larger and consistent across modals (ports, worktree picker, conversation history).
 - Tests: `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/98
+
+### UI copy: “Claude Orchestrator” → “Agent Orchestrator” (in progress)
+- Updated the visible app title (page `<title>` + header) and dashboard heading to “Agent Orchestrator”.
+- Renamed the per-worktree “🤖 Claude” terminal label to “🤖 Agent” (the dropdown still controls Claude vs Codex).
+- Updated Playwright title assertion to match.
+- Tests: `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/99
