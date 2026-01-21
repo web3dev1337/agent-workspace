@@ -47,6 +47,11 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 - PR 97 — Status colors match StatusDetector: https://github.com/web3dev1337/claude-orchestrator/pull/97
 - PR 98 — Modal close buttons usable: https://github.com/web3dev1337/claude-orchestrator/pull/98
 - PR 99 — UI naming: “Agent Orchestrator”: https://github.com/web3dev1337/claude-orchestrator/pull/99
+- PR 100 — Docs: update plans/log for PR 96-99: https://github.com/web3dev1337/claude-orchestrator/pull/100
+- PR 101 — Fix: Commander terminal Ctrl/Cmd+V paste: https://github.com/web3dev1337/claude-orchestrator/pull/101
+- PR 102 — Docs: mark Commander paste fix complete: https://github.com/web3dev1337/claude-orchestrator/pull/102
+- PR 103 — UI: one-click Dashboard + back to workspaces: https://github.com/web3dev1337/claude-orchestrator/pull/103
+- PR 104 — Docs: mark dashboard navigation done: https://github.com/web3dev1337/claude-orchestrator/pull/104
 
 ## Repo Understanding (High-level Architecture)
 
