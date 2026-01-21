@@ -278,4 +278,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### Naming: “Claude Orchestrator” → “Agent Orchestrator” UI copy (done)
 - Updated notification titles and the View Presets modal to use “Agent” wording where it’s not provider-specific.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/126
