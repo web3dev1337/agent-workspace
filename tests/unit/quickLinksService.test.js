@@ -25,7 +25,8 @@ describe('QuickLinksService', () => {
     service.config = {
       favorites: [],
       recentSessions: [],
-      customLinks: []
+      customLinks: [],
+      products: []
     };
   });
 
@@ -52,8 +53,10 @@ describe('QuickLinksService', () => {
       const data = await service.getAll();
       expect(data).toHaveProperty('favorites');
       expect(data).toHaveProperty('recentSessions');
+      expect(data).toHaveProperty('products');
       expect(Array.isArray(data.favorites)).toBe(true);
       expect(Array.isArray(data.recentSessions)).toBe(true);
+      expect(Array.isArray(data.products)).toBe(true);
     });
   });
 
@@ -162,6 +165,64 @@ describe('QuickLinksService', () => {
 
       const data = await service.getAll();
       expect(data.recentSessions.length).toBe(0);
+    });
+  });
+
+  describe('products', () => {
+    it('should add a new product', async () => {
+      const products = await service.addProduct({
+        name: 'My App',
+        masterPath: '/tmp/my-app/master',
+        startCommand: 'npm start',
+        url: 'http://localhost:3333'
+      });
+
+      expect(products.length).toBe(1);
+      expect(products[0]).toHaveProperty('id');
+      expect(products[0].name).toBe('My App');
+      expect(products[0].masterPath).toBe('/tmp/my-app/master');
+    });
+
+    it('should throw on duplicate masterPath', async () => {
+      await service.addProduct({
+        name: 'My App',
+        masterPath: '/tmp/my-app/master',
+        startCommand: 'npm start',
+        url: 'http://localhost:3333'
+      });
+
+      await expect(service.addProduct({
+        name: 'My App 2',
+        masterPath: '/tmp/my-app/master',
+        startCommand: 'npm start',
+        url: 'http://localhost:3333'
+      })).rejects.toThrow('Product already exists');
+    });
+
+    it('should remove a product by id', async () => {
+      const products = await service.addProduct({
+        name: 'My App',
+        masterPath: '/tmp/my-app/master',
+        startCommand: 'npm start',
+        url: 'http://localhost:3333'
+      });
+
+      const id = products[0].id;
+      const remaining = await service.removeProduct(id);
+      expect(remaining.length).toBe(0);
+    });
+
+    it('should return product by id', async () => {
+      const products = await service.addProduct({
+        name: 'My App',
+        masterPath: '/tmp/my-app/master',
+        startCommand: 'npm start',
+        url: 'http://localhost:3333'
+      });
+
+      const found = service.getProductById(products[0].id);
+      expect(found).not.toBeNull();
+      expect(found.name).toBe('My App');
     });
   });
 });

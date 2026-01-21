@@ -3845,6 +3845,21 @@ header h1 {
   border-color: var(--accent-primary);
 }
 
+.quick-product {
+  cursor: default;
+}
+
+.quick-product-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.quick-product-actions .port-action-btn {
+  cursor: pointer;
+}
+
 .quick-link.settings-link {
   background: transparent;
   border: none;

@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const winston = require('winston');
 
 const logger = winston.createLogger({
@@ -20,6 +21,7 @@ const CONFIG_PATH = path.join(os.homedir(), '.orchestrator', 'quick-links.json')
 
 class QuickLinksService {
   constructor() {
+    this.configPath = CONFIG_PATH;
     this.config = this.loadConfig();
   }
 
@@ -32,9 +34,15 @@ class QuickLinksService {
 
   loadConfig() {
     try {
-      if (fsSync.existsSync(CONFIG_PATH)) {
-        const content = fsSync.readFileSync(CONFIG_PATH, 'utf8');
-        return JSON.parse(content);
+      if (fsSync.existsSync(this.configPath)) {
+        const content = fsSync.readFileSync(this.configPath, 'utf8');
+        const parsed = JSON.parse(content);
+        return {
+          favorites: Array.isArray(parsed.favorites) ? parsed.favorites : [],
+          recentSessions: Array.isArray(parsed.recentSessions) ? parsed.recentSessions : [],
+          customLinks: Array.isArray(parsed.customLinks) ? parsed.customLinks : [],
+          products: Array.isArray(parsed.products) ? parsed.products : []
+        };
       }
     } catch (error) {
       logger.warn('Failed to load quick-links config', { error: error.message });
@@ -47,15 +55,16 @@ class QuickLinksService {
         { name: 'Claude Docs', url: 'https://docs.anthropic.com', icon: 'docs' }
       ],
       recentSessions: [],
-      customLinks: []
+      customLinks: [],
+      products: []
     };
   }
 
   async saveConfig() {
     try {
-      const dir = path.dirname(CONFIG_PATH);
+      const dir = path.dirname(this.configPath);
       await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(CONFIG_PATH, JSON.stringify(this.config, null, 2));
+      await fs.writeFile(this.configPath, JSON.stringify(this.config, null, 2));
       logger.debug('Saved quick-links config');
     } catch (error) {
       logger.error('Failed to save quick-links config', { error: error.message });
@@ -69,7 +78,8 @@ class QuickLinksService {
     return {
       favorites: this.config.favorites,
       recentSessions: this.config.recentSessions.slice(0, 10), // Last 10
-      customLinks: this.config.customLinks
+      customLinks: this.config.customLinks,
+      products: this.config.products
     };
   }
 
@@ -224,6 +234,54 @@ class QuickLinksService {
     this.config.customLinks.splice(index, 1);
     await this.saveConfig();
     return this.config.customLinks;
+  }
+
+  /**
+   * Add a product (launchable service)
+   */
+  async addProduct(product) {
+    const { name, masterPath, startCommand, url, icon } = product;
+
+    if (!name || !masterPath || !startCommand || !url) {
+      throw new Error('name, masterPath, startCommand, and url are required');
+    }
+
+    // Check for duplicates by masterPath
+    const exists = this.config.products.some(p => p.masterPath === masterPath);
+    if (exists) {
+      throw new Error('Product already exists for this masterPath');
+    }
+
+    this.config.products.push({
+      id: crypto.randomUUID(),
+      name,
+      masterPath,
+      startCommand,
+      url,
+      icon: icon || 'rocket',
+      addedAt: new Date().toISOString()
+    });
+
+    await this.saveConfig();
+    return this.config.products;
+  }
+
+  /**
+   * Remove a product by id
+   */
+  async removeProduct(id) {
+    const index = this.config.products.findIndex(p => p.id === id);
+    if (index === -1) {
+      throw new Error('Product not found');
+    }
+
+    this.config.products.splice(index, 1);
+    await this.saveConfig();
+    return this.config.products;
+  }
+
+  getProductById(id) {
+    return this.config.products.find(p => p.id === id) || null;
   }
 
   /**
