@@ -43,6 +43,10 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 - PR 93 — Docs: warn not to touch `master/` from dev: https://github.com/web3dev1337/claude-orchestrator/pull/93
 - PR 94 — Add mixed worktree without resetting sessions: https://github.com/web3dev1337/claude-orchestrator/pull/94
 - PR 95 — Mixed-repo “active only” sidebar filtering: https://github.com/web3dev1337/claude-orchestrator/pull/95
+- PR 96 — Docs: update plans/checklist for PR 93-95: https://github.com/web3dev1337/claude-orchestrator/pull/96
+- PR 97 — Status colors match StatusDetector: https://github.com/web3dev1337/claude-orchestrator/pull/97
+- PR 98 — Modal close buttons usable: https://github.com/web3dev1337/claude-orchestrator/pull/98
+- PR 99 — UI naming: “Agent Orchestrator”: https://github.com/web3dev1337/claude-orchestrator/pull/99
 
 ## Repo Understanding (High-level Architecture)
 
@@ -112,7 +116,7 @@ Order is chosen to fix reliability/state bugs first (tab switching + terminal in
   - Manual add work4 → it appears immediately.
   - E2E: add test for sidebar update after add.
 
-### PR 5 — Status indicator correctness pass
+### PR 5 — Status indicator correctness pass (done → PR 97)
 **Goal:** Define and implement correct status signals for the green/orange/gray circle(s).
 - Deliverables:
   - **Status semantics (source of truth = `server/statusDetector.js`):**
