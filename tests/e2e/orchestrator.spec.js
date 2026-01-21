@@ -196,6 +196,7 @@ test.describe('API Health', () => {
     const data = await response.json();
     expect(data).toHaveProperty('favorites');
     expect(data).toHaveProperty('recentSessions');
+    expect(data).toHaveProperty('products');
   });
 
   test('should respond to greenfield templates API', async ({ request }) => {

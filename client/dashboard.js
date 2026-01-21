@@ -215,7 +215,8 @@ class Dashboard {
     const hasQuickLinksData = this.quickLinks &&
       (this.quickLinks.data?.favorites?.length > 0 ||
        this.quickLinks.data?.recentSessions?.length > 0 ||
-       this.quickLinks.data?.customLinks?.length > 0);
+       this.quickLinks.data?.customLinks?.length > 0 ||
+       this.quickLinks.data?.products?.length > 0);
 
     // If QuickLinks has data, use it alongside globalShortcuts
     if (hasQuickLinksData) {
