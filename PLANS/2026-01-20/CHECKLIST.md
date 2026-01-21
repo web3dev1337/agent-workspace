@@ -30,7 +30,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Adding worktrees does not “reset” existing terminals
 - [x] Sidebar worktree list updates immediately (no “one behind”)
 - [x] Terminal scroll does not jump to top
-- [ ] Commander terminal supports text paste (Ctrl/Cmd+V)
+- [x] Commander terminal supports text paste (Ctrl/Cmd+V)
 
 ### Status + UX cleanups
 - [x] Status indicator colors are accurate and documented
