@@ -46,7 +46,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Ports/Services modal supports open + copy URL/port actions
 
 ### Worktree picker UX
-- [ ] Modal layout is large and usable without excessive scrolling
+- [x] Modal layout is large and usable without excessive scrolling
 - [ ] Grouping by category/framework + ungrouped sections
 - [ ] Sorting: most recently edited + most recently created
 - [ ] Recency filters (radio buttons)
