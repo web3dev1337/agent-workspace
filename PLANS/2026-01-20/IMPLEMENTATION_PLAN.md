@@ -24,7 +24,7 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 - Or: `ORCHESTRATOR_TEST_PORT=4001 npm run test:e2e`
 - If we need the client dev-server: use a unique `CLIENT_PORT` (e.g. 2083+) and keep server on 4001+.
 
-## Completed PRs (as of 2026-01-20)
+## Completed PRs (as of 2026-01-21)
 
 - PR 79 — Planning docs: https://github.com/web3dev1337/claude-orchestrator/pull/79
 - PR 80 — Safe E2E port (defaults to 4001): https://github.com/web3dev1337/claude-orchestrator/pull/80
@@ -39,6 +39,10 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 - PR 89 — Update rolling log for PR 87/88: https://github.com/web3dev1337/claude-orchestrator/pull/89
 - PR 90 — Remove sidebar “Services” section: https://github.com/web3dev1337/claude-orchestrator/pull/90
 - PR 91 — Compact sidebar worktree list: https://github.com/web3dev1337/claude-orchestrator/pull/91
+- PR 92 — Refresh docs/checklist/log: https://github.com/web3dev1337/claude-orchestrator/pull/92
+- PR 93 — Docs: warn not to touch `master/` from dev: https://github.com/web3dev1337/claude-orchestrator/pull/93
+- PR 94 — Add mixed worktree without resetting sessions: https://github.com/web3dev1337/claude-orchestrator/pull/94
+- PR 95 — Mixed-repo “active only” sidebar filtering: https://github.com/web3dev1337/claude-orchestrator/pull/95
 
 ## Repo Understanding (High-level Architecture)
 
@@ -89,7 +93,7 @@ Order is chosen to fix reliability/state bugs first (tab switching + terminal in
   - Manual: open workspace A, open workspace B tab, switch back/forth 10x; terminals remain interactive and sized correctly.
   - E2E: add/extend Playwright test for tab switching + typing.
 
-### PR 3 — “Add worktree” should not resurrect startup overlays / reset terminals (done → PR 83)
+### PR 3 — “Add worktree” should not resurrect startup overlays (done → PR 83)
 **Goal:** Adding a worktree should append sessions without re-triggering startup UI or disturbing existing terminals.
 - Likely work:
   - Confirm whether `sessions` event is re-fired on add and whether `handleInitialSessions()` resets per-session UI state.
@@ -99,7 +103,7 @@ Order is chosen to fix reliability/state bugs first (tab switching + terminal in
   - Manual: dismiss startup UI on work1, add worktree; startup UI does not reappear.
   - E2E: add test to reproduce and verify.
 
-### PR 4 — Sidebar worktree list “one behind” update bug
+### PR 4 — Sidebar worktree list “one behind” update bug (done → PR 94 + PR 95)
 **Goal:** Fix delayed sidebar updates after adding worktrees.
 - Likely work:
   - Identify whether the client receives stale workspace config or whether the server emits updates in the wrong order.
