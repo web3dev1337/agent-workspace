@@ -152,3 +152,10 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/101
 - Merged: commit `2b3f9bc`
+
+### Dashboard navigation: one-click dashboard + back to tabs (in progress)
+- Added a header button `🏠 Dashboard` to open the dashboard in one click.
+- Added a dashboard “← Back to Workspaces” button (when tabs exist) that restores the current tabbed workspace view without forcing a workspace re-open.
+- ESC on the dashboard returns to the tabbed view when available.
+- Tests: `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/103

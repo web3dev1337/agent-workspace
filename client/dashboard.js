@@ -7,6 +7,7 @@ class Dashboard {
     this.config = {};
     this.isVisible = false;
     this.quickLinks = null;
+    this._escHandler = null;
   }
 
   async show() {
@@ -46,6 +47,11 @@ class Dashboard {
       dashboard.classList.add('hidden');
     }
     this.isVisible = false;
+
+    if (this._escHandler) {
+      document.removeEventListener('keydown', this._escHandler);
+      this._escHandler = null;
+    }
   }
 
   render() {
@@ -83,8 +89,14 @@ class Dashboard {
   generateDashboardHTML() {
     const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws));
     const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws));
+    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
 
     return `
+      ${canReturnToWorkspaces ? `
+        <div class="dashboard-topbar">
+          <button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to Workspaces</button>
+        </div>
+      ` : ''}
       <div class="dashboard-header">
         <h1>🎯 Agent Orchestrator Dashboard</h1>
         <p>Select a workspace to begin development</p>
@@ -234,6 +246,11 @@ class Dashboard {
   }
 
   setupEventListeners() {
+    // Back button to return to the current tabbed workspace view (when available)
+    document.getElementById('dashboard-back-btn')?.addEventListener('click', () => {
+      this.orchestrator.hideDashboard();
+    });
+
     // Workspace card click handlers
     document.querySelectorAll('.workspace-open-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -270,15 +287,17 @@ class Dashboard {
       });
     }
 
-    // ESC key to close dashboard (future feature)
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isVisible) {
-        // For now, just open the first workspace
-        if (this.workspaces.length > 0) {
-          this.openWorkspace(this.workspaces[0].id);
-        }
+    // ESC: return to tabbed workspaces if dashboard was opened from there
+    if (this._escHandler) {
+      document.removeEventListener('keydown', this._escHandler);
+    }
+    this._escHandler = (e) => {
+      if (e.key !== 'Escape' || !this.isVisible) return;
+      if (this.orchestrator.tabManager?.tabs?.size) {
+        this.orchestrator.hideDashboard();
       }
-    });
+    };
+    document.addEventListener('keydown', this._escHandler);
   }
 
   async openWorkspace(workspaceId) {
