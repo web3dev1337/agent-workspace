@@ -179,3 +179,13 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/106
 - Merged: commit `675362c`
+
+### Docs: update checklist/log for PR 106 (done)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/107
+- Merged: commit `93a537e`
+
+### Quick Worktree modal: larger to reduce scrolling (done)
+- Increased the “Quick Work” worktree picker modal size to reduce scrolling.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/108
+- Merged: commit `4e2ac9f`
