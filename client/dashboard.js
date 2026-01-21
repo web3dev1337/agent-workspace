@@ -86,7 +86,7 @@ class Dashboard {
 
     return `
       <div class="dashboard-header">
-        <h1>🎯 Claude Orchestrator Dashboard</h1>
+        <h1>🎯 Agent Orchestrator Dashboard</h1>
         <p>Select a workspace to begin development</p>
       </div>
 
