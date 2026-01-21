@@ -46,6 +46,7 @@ const { PortRegistry } = require('./portRegistry');
 const { GreenfieldService } = require('./greenfieldService');
 const { ContinuityService } = require('./continuityService');
 const { QuickLinksService } = require('./quickLinksService');
+const { ProductLauncherService } = require('./productLauncherService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
 const { WorktreeMetadataService } = require('./worktreeMetadataService');
@@ -152,6 +153,7 @@ greenfieldService.setSessionManager(sessionManager);
 greenfieldService.setIO(io);
 const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
+const productLauncherService = ProductLauncherService.getInstance();
 const conversationService = ConversationService.getInstance();
 const worktreeMetadataService = WorktreeMetadataService.getInstance();
 const worktreeTagService = WorktreeTagService.getInstance();
@@ -2244,6 +2246,48 @@ app.post('/api/quick-links/favorites/reorder', async (req, res) => {
   } catch (error) {
     logger.error('Failed to reorder favorites', { error: error.message, stack: error.stack });
     res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/quick-links/products', async (req, res) => {
+  try {
+    const { name, masterPath, startCommand, url, icon } = req.body;
+    const products = await quickLinksService.addProduct({ name, masterPath, startCommand, url, icon });
+    res.json({ products });
+  } catch (error) {
+    logger.error('Failed to add product', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete('/api/quick-links/products', async (req, res) => {
+  try {
+    const { id } = req.body;
+    const products = await quickLinksService.removeProduct(id);
+    res.json({ products });
+  } catch (error) {
+    logger.error('Failed to remove product', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/products/launch', async (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: 'id is required' });
+    }
+
+    const product = quickLinksService.getProductById(id);
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const result = await productLauncherService.launch(product);
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to launch product', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message });
   }
 });
 
