@@ -5806,6 +5806,19 @@ class ClaudeOrchestrator {
             const matches = name.includes(term) || path.includes(term);
             row.style.display = matches ? 'flex' : 'none';
           });
+
+          // Hide empty groups/subgroups after filtering
+          modal.querySelectorAll('.quick-repo-subcategory').forEach(sub => {
+            const anyVisible = Array.from(sub.querySelectorAll('.quick-repo-row'))
+              .some(row => row.style.display !== 'none');
+            sub.style.display = anyVisible ? '' : 'none';
+          });
+
+          modal.querySelectorAll('.quick-repo-category').forEach(cat => {
+            const anyVisible = Array.from(cat.querySelectorAll('.quick-repo-subcategory'))
+              .some(sub => sub.style.display !== 'none');
+            cat.style.display = anyVisible ? '' : 'none';
+          });
         }
       });
     }
@@ -5885,7 +5898,91 @@ class ClaudeOrchestrator {
   }
 
   renderQuickRepoList(repos) {
-    return repos.map(repo => this.renderQuickRepoRow(repo)).join('');
+    const splitSegments = (relativePath) => {
+      if (!relativePath) return [];
+      return relativePath.replace(/\\/g, '/').split('/').filter(Boolean);
+    };
+
+    const titleCase = (value) => {
+      if (!value) return '';
+      return value
+        .split(/[-_ ]+/g)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+    };
+
+    const topLabelFor = (top) => {
+      const key = (top || '').toLowerCase();
+      if (!key) return 'Ungrouped';
+      if (key === 'website' || key === 'websites' || key === 'web') return 'Websites';
+      if (key === 'game' || key === 'games') return 'Games';
+      if (key === 'board-games' || key === 'boardgames') return 'Board Games';
+      if (key === 'tools' || key === 'tool') return 'Tools';
+      if (key === 'writing') return 'Writing';
+      if (key === 'automation') return 'Automation';
+      if (key === 'docs' || key === 'documentation') return 'Docs';
+      return titleCase(top);
+    };
+
+    // Compute which second-level folders are real "groups" (appear more than once within a top category).
+    const secondLevelCounts = new Map(); // topKey -> Map(secondKey -> count)
+    repos.forEach(repo => {
+      const segments = splitSegments(repo.relativePath || '');
+      const topKey = (segments[0] || 'ungrouped').toLowerCase();
+      const secondKey = (segments[1] || '').toLowerCase();
+      if (!secondKey) return;
+      if (!secondLevelCounts.has(topKey)) secondLevelCounts.set(topKey, new Map());
+      const map = secondLevelCounts.get(topKey);
+      map.set(secondKey, (map.get(secondKey) || 0) + 1);
+    });
+
+    const groups = new Map(); // topLabel -> Map(subLabel -> repos[])
+
+    repos.forEach(repo => {
+      const segments = splitSegments(repo.relativePath || '');
+      const topKey = (segments[0] || 'ungrouped').toLowerCase();
+      const topLabel = topLabelFor(segments[0]);
+
+      const secondKey = (segments[1] || '').toLowerCase();
+      const secondCount = secondKey ? (secondLevelCounts.get(topKey)?.get(secondKey) || 0) : 0;
+      const subLabel = secondKey && secondCount >= 2 ? titleCase(segments[1]) : 'Ungrouped';
+
+      if (!groups.has(topLabel)) groups.set(topLabel, new Map());
+      const subgroups = groups.get(topLabel);
+      if (!subgroups.has(subLabel)) subgroups.set(subLabel, []);
+      subgroups.get(subLabel).push(repo);
+    });
+
+    const orderTop = ['Games', 'Websites', 'Tools', 'Writing', 'Automation', 'Docs', 'Other', 'Ungrouped'];
+    const topEntries = Array.from(groups.entries()).sort((a, b) => {
+      const ai = orderTop.indexOf(a[0]);
+      const bi = orderTop.indexOf(b[0]);
+      if (ai !== -1 || bi !== -1) {
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      }
+      return a[0].localeCompare(b[0]);
+    });
+
+    return topEntries.map(([topLabel, subgroups]) => {
+      const subEntries = Array.from(subgroups.entries()).sort((a, b) => {
+        if (a[0] === 'Ungrouped') return 1;
+        if (b[0] === 'Ungrouped') return -1;
+        return a[0].localeCompare(b[0]);
+      });
+
+      return `
+        <div class="quick-repo-category" data-category="${this.escapeHtml(topLabel.toLowerCase())}">
+          <div class="quick-repo-category-header">${this.escapeHtml(topLabel)}</div>
+          ${subEntries.map(([subLabel, reposInSub]) => `
+            <div class="quick-repo-subcategory" data-subcategory="${this.escapeHtml(subLabel.toLowerCase())}">
+              <div class="quick-repo-subcategory-header">${this.escapeHtml(subLabel)}</div>
+              ${reposInSub.map(r => this.renderQuickRepoRow(r)).join('')}
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }).join('');
   }
 
   renderQuickRepoRow(repo) {
