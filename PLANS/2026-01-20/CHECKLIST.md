@@ -52,7 +52,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Recency filters (radio buttons)
 - [x] Favorites (persisted)
 - [x] Quick launch: oldest + most recent + choose any
-- [ ] Show branch + PR + merged status
+- [x] Show branch + PR + merged status
 
 ### PR management
 - [ ] PR list view (mine by default)
