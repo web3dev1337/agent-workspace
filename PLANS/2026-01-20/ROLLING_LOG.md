@@ -94,3 +94,11 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Change agent status dot mapping to match `server/statusDetector.js` semantics: waiting=green, busy=orange, idle=gray.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/91
 - Merged: commit `9c52434`
+
+---
+
+## 2026-01-21
+
+### Docs: dev instance must not touch `master/` (in progress)
+- Added an explicit rule in `CLAUDE.md` that when developing in `claude-orchestrator-dev/` (feature branches / PRs), treat `~/GitHub/tools/automation/claude-orchestrator/master` as **run-only**.
+- PR: (pending)
