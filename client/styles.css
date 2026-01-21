@@ -12,6 +12,12 @@
   --accent-success: #3fb950;
   --accent-warning: #d29922;
   --accent-danger: #f85149;
+
+  /* Status colors (must match StatusDetector semantics) */
+  --status-idle: var(--text-tertiary);     /* idle = no active agent work */
+  --status-waiting: var(--accent-success); /* waiting = prompt/input needed */
+  --status-busy: var(--accent-warning);    /* busy = agent working */
+  --status-error: var(--accent-danger);    /* error = failure state */
   
   /* Layout */
   --sidebar-width: 280px;
@@ -522,24 +528,24 @@ header h1 {
 }
 
 .status-indicator.idle {
-  background: var(--accent-success);
+  background: var(--status-idle);
 }
 
 .status-indicator.busy {
-  background: var(--accent-warning);
+  background: var(--status-busy);
 }
 
 .status-indicator.waiting {
-  background: var(--accent-danger);
+  background: var(--status-waiting);
   animation: pulse 1s infinite;
 }
 
 .status-indicator.ready {
-  background: var(--accent-success);
+  background: var(--status-waiting);
 }
 
 .status-indicator.error {
-  background: var(--accent-danger);
+  background: var(--status-error);
 }
 
 .worktree-item.inactive {

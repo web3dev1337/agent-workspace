@@ -32,7 +32,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Terminal scroll does not jump to top
 
 ### Status + UX cleanups
-- [ ] Status indicator colors are accurate and documented
+- [x] Status indicator colors are accurate and documented
 - [x] Remove/hide non-functional “Dynamic layout”
 - [x] Remove or fix empty “Quick actions” strip
 - [x] Sidebar worktree list is compact

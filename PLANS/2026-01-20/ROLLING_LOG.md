@@ -118,3 +118,13 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/95
 - Merged: commit `e64f023`
+
+### Status: align UI colors with `StatusDetector` (in progress)
+- Defined status color variables in `client/styles.css` and aligned terminal header status colors with `server/statusDetector.js` semantics:
+  - `waiting` → green
+  - `busy` → orange
+  - `idle` → gray
+  - `error` → red
+- Removed the client-side `waiting` → `ready` remap so the UI uses the real status values consistently.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/97
