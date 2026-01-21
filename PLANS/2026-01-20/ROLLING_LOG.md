@@ -128,3 +128,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Removed the client-side `waiting` → `ready` remap so the UI uses the real status values consistently.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/97
+
+### UI: modal close buttons are usable (in progress)
+- Added shared modal header + close button styles (`.modal-header`, `.close-btn`) to make the close affordance larger and consistent across modals (ports, worktree picker, conversation history).
+- Tests: `npm run test:e2e:safe`
+- PR: (pending)
