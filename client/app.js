@@ -5700,6 +5700,15 @@ class ClaudeOrchestrator {
     this.quickWorktreeSearchTerm = this.quickWorktreeSearchTerm || '';
     this.quickWorktreeSortMode = localStorage.getItem('quick-worktree-sort') || 'edited';
     this.quickWorktreeRecencyFilter = localStorage.getItem('quick-worktree-recency') || 'all';
+    this.quickWorktreeFavoritesOnly = localStorage.getItem('quick-worktree-favorites-only') === 'true';
+    if (!this.quickWorktreeFavorites) {
+      try {
+        const stored = JSON.parse(localStorage.getItem('quick-worktree-favorites') || '[]');
+        this.quickWorktreeFavorites = new Set(Array.isArray(stored) ? stored : []);
+      } catch (e) {
+        this.quickWorktreeFavorites = new Set();
+      }
+    }
 
     const modal = document.createElement('div');
     modal.id = 'quick-worktree-modal';
@@ -5765,6 +5774,12 @@ class ClaudeOrchestrator {
                   1y
                 </label>
               </div>
+              <div class="quick-control-group">
+                <label class="quick-checkbox">
+                  <input type="checkbox" id="quick-favorites-only">
+                  Favorites only
+                </label>
+              </div>
             </div>
             <div id="quick-repo-list" class="quick-repo-list">
               <div class="loading">Loading repos...</div>
@@ -5801,6 +5816,10 @@ class ClaudeOrchestrator {
     modal.querySelectorAll('input[name="quick-recency"]').forEach(input => {
       input.checked = input.value === this.quickWorktreeRecencyFilter;
     });
+    const favoritesOnlyCheckbox = modal.querySelector('#quick-favorites-only');
+    if (favoritesOnlyCheckbox) {
+      favoritesOnlyCheckbox.checked = !!this.quickWorktreeFavoritesOnly;
+    }
 
     modal.addEventListener('change', (e) => {
       const sortInput = e.target.closest('input[name="quick-sort"]');
@@ -5815,6 +5834,13 @@ class ClaudeOrchestrator {
       if (recencyInput) {
         this.quickWorktreeRecencyFilter = recencyInput.value;
         localStorage.setItem('quick-worktree-recency', this.quickWorktreeRecencyFilter);
+        this.renderQuickWorktreeRepoList();
+        return;
+      }
+
+      if (e.target && e.target.id === 'quick-favorites-only') {
+        this.quickWorktreeFavoritesOnly = !!e.target.checked;
+        localStorage.setItem('quick-worktree-favorites-only', this.quickWorktreeFavoritesOnly ? 'true' : 'false');
         this.renderQuickWorktreeRepoList();
         return;
       }
@@ -5898,8 +5924,8 @@ class ClaudeOrchestrator {
     });
 
     modal.querySelectorAll('.quick-repo-category').forEach(cat => {
-      const anyVisible = Array.from(cat.querySelectorAll('.quick-repo-subcategory'))
-        .some(sub => sub.style.display !== 'none');
+      const anyVisible = Array.from(cat.querySelectorAll('.quick-repo-row'))
+        .some(row => row.style.display !== 'none');
       cat.style.display = anyVisible ? '' : 'none';
     });
   }
@@ -5977,7 +6003,12 @@ class ClaudeOrchestrator {
       ? repos.filter(r => (r.lastModifiedMs || 0) >= (now - threshold))
       : repos;
 
-    const sorted = filtered.sort((a, b) => {
+    const favoritesSet = this.quickWorktreeFavorites || new Set();
+    const filteredFavorites = this.quickWorktreeFavoritesOnly
+      ? filtered.filter(r => favoritesSet.has(r.path))
+      : filtered;
+
+    const sorted = filteredFavorites.sort((a, b) => {
       if (this.quickWorktreeSortMode === 'created') {
         const aCreated = a.createdMs || 0;
         const bCreated = b.createdMs || 0;
@@ -5995,6 +6026,18 @@ class ClaudeOrchestrator {
 
     // Delegate start button clicks (re-render safe)
     listEl.onclick = (event) => {
+      const favBtn = event.target.closest('.quick-fav-btn');
+      if (favBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const repoPath = favBtn.dataset.repoPath;
+        if (repoPath) {
+          this.toggleQuickWorktreeFavorite(repoPath);
+          this.renderQuickWorktreeRepoList();
+        }
+        return;
+      }
+
       const btn = event.target.closest('.quick-start-btn');
       if (!btn) return;
 
@@ -6023,7 +6066,24 @@ class ClaudeOrchestrator {
     };
   }
 
+  toggleQuickWorktreeFavorite(repoPath) {
+    if (!repoPath) return;
+    if (!this.quickWorktreeFavorites) this.quickWorktreeFavorites = new Set();
+
+    if (this.quickWorktreeFavorites.has(repoPath)) {
+      this.quickWorktreeFavorites.delete(repoPath);
+    } else {
+      this.quickWorktreeFavorites.add(repoPath);
+    }
+
+    localStorage.setItem('quick-worktree-favorites', JSON.stringify(Array.from(this.quickWorktreeFavorites)));
+  }
+
   renderQuickRepoList(repos) {
+    const favoritesSet = this.quickWorktreeFavorites || new Set();
+    const favorites = repos.filter(r => favoritesSet.has(r.path));
+    const nonFavorites = repos.filter(r => !favoritesSet.has(r.path));
+
     const splitSegments = (relativePath) => {
       if (!relativePath) return [];
       return relativePath.replace(/\\/g, '/').split('/').filter(Boolean);
@@ -6053,7 +6113,7 @@ class ClaudeOrchestrator {
 
     // Compute which second-level folders are real "groups" (appear more than once within a top category).
     const secondLevelCounts = new Map(); // topKey -> Map(secondKey -> count)
-    repos.forEach(repo => {
+    nonFavorites.forEach(repo => {
       const segments = splitSegments(repo.relativePath || '');
       const topKey = (segments[0] || 'ungrouped').toLowerCase();
       const secondKey = (segments[1] || '').toLowerCase();
@@ -6065,7 +6125,7 @@ class ClaudeOrchestrator {
 
     const groups = new Map(); // topLabel -> Map(subLabel -> repos[])
 
-    repos.forEach(repo => {
+    nonFavorites.forEach(repo => {
       const segments = splitSegments(repo.relativePath || '');
       const topKey = (segments[0] || 'ungrouped').toLowerCase();
       const topLabel = topLabelFor(segments[0]);
@@ -6090,7 +6150,16 @@ class ClaudeOrchestrator {
       return a[0].localeCompare(b[0]);
     });
 
-    return topEntries.map(([topLabel, subgroups]) => {
+    const favoritesHtml = favorites.length
+      ? `
+        <div class="quick-repo-category" data-category="favorites">
+          <div class="quick-repo-category-header">⭐ Favorites</div>
+          ${favorites.map(r => this.renderQuickRepoRow(r)).join('')}
+        </div>
+      `
+      : '';
+
+    const groupedHtml = topEntries.map(([topLabel, subgroups]) => {
       const subEntries = Array.from(subgroups.entries()).sort((a, b) => {
         if (a[0] === 'Ungrouped') return 1;
         if (b[0] === 'Ungrouped') return -1;
@@ -6109,6 +6178,8 @@ class ClaudeOrchestrator {
         </div>
       `;
     }).join('');
+
+    return favoritesHtml + groupedHtml;
   }
 
   renderQuickRepoRow(repo) {
@@ -6117,6 +6188,8 @@ class ClaudeOrchestrator {
     const actionLabel = recommended ? `Start (${recommended.id})` : (hasWorktrees ? 'All busy' : 'No worktrees');
     const displayPath = repo.relativePath || repo.path || '';
     const displayPathLabel = displayPath.startsWith('/') ? displayPath : `~/${displayPath}`;
+    const isFavorite = (this.quickWorktreeFavorites || new Set()).has(repo.path);
+    const favoriteLabel = isFavorite ? '★' : '☆';
 
     return `
       <div class="quick-repo-row"
@@ -6130,6 +6203,11 @@ class ClaudeOrchestrator {
           </div>
         </div>
         <div class="quick-repo-actions">
+          <button class="quick-fav-btn ${isFavorite ? 'active' : ''}"
+                  data-repo-path="${repo.path}"
+                  title="${isFavorite ? 'Remove from favorites' : 'Add to favorites'}">
+            ${favoriteLabel}
+          </button>
           ${recommended ? `<span class="quick-worktree-pill">${recommended.id}</span>` : ''}
           <button class="btn-primary quick-start-btn"
                   data-repo-path="${repo.path}"
