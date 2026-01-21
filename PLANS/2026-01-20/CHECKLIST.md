@@ -64,7 +64,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 
 ### Agents
 - [ ] Detect agent type where feasible (Claude vs Codex vs other)
-- [ ] Simplify Codex start command / remove unnecessary hard-coded flags
+- [x] Simplify Codex start command / remove unnecessary hard-coded flags
 
 ### Config-driven buttons
 - [ ] Custom buttons are wired from config JSON
