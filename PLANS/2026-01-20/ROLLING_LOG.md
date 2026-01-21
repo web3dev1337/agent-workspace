@@ -306,3 +306,10 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Port allocation uses `server/portRegistry.js` (8080–8199) with lsof-based availability checks and a per-(repoPath,worktreeId) cache.
 - Server start flow uses `PortRegistry.suggestPort()` and falls back to the next free port if the preferred one is taken.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/131
+
+### Quick Links: “Products” launcher (done)
+- Added `products` to `~/.orchestrator/quick-links.json` and exposed CRUD via `/api/quick-links/products`.
+- Added `/api/products/launch` to `git pull --ff-only` in the configured `masterPath` and then run `startCommand` (logs to `logs/products/<productId>.log`).
+- Safety: refuses to run inside the orchestrator production `~/GitHub/tools/automation/claude-orchestrator/master`.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: (pending)

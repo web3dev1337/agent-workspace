@@ -10,7 +10,8 @@ class QuickLinks {
     this.data = {
       favorites: [],
       recentSessions: [],
-      customLinks: []
+      customLinks: [],
+      products: []
     };
     this.isLoading = false;
     this.serverUrl = window.location.port === '2080' || window.location.port === '2081'
@@ -67,7 +68,8 @@ class QuickLinks {
         body: JSON.stringify({ name, url, icon })
       });
       if (response.ok) {
-        this.data.favorites = await response.json();
+        const data = await response.json();
+        this.data.favorites = data.favorites;
         return true;
       }
       return false;
@@ -88,7 +90,8 @@ class QuickLinks {
         body: JSON.stringify({ url })
       });
       if (response.ok) {
-        this.data.favorites = await response.json();
+        const data = await response.json();
+        this.data.favorites = data.favorites;
         return true;
       }
       return false;
@@ -121,6 +124,88 @@ class QuickLinks {
   }
 
   /**
+   * Add a product (launchable service)
+   */
+  async addProduct(product) {
+    try {
+      const response = await fetch(`${this.serverUrl}/api/quick-links/products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(product)
+      });
+      if (response.ok) {
+        const data = await response.json();
+        this.data.products = data.products;
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to add product:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Remove a product by id
+   */
+  async removeProduct(id) {
+    try {
+      const response = await fetch(`${this.serverUrl}/api/quick-links/products`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        this.data.products = data.products;
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to remove product:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Launch a product (pull latest master and start command)
+   */
+  async launchProduct(id, urlToOpen = null) {
+    try {
+      // Open first to avoid popup blockers (user gesture context)
+      const openedWindow = urlToOpen ? window.open(urlToOpen, '_blank') : null;
+
+      window.orchestrator?.showToast('Starting product…', 'info');
+      const response = await fetch(`${this.serverUrl}/api/products/launch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        window.orchestrator?.showToast(data?.error || 'Failed to start product', 'error');
+        return;
+      }
+
+      const url = data.url;
+      if (data.alreadyRunning) {
+        window.orchestrator?.showToast('Product already running', 'success');
+      } else {
+        window.orchestrator?.showToast('Product started', 'success');
+      }
+
+      if (openedWindow && url && url !== urlToOpen) {
+        openedWindow.location.href = url;
+      } else if (!openedWindow && url) {
+        window.open(url, '_blank');
+      }
+    } catch (error) {
+      console.error('Failed to launch product:', error);
+      window.orchestrator?.showToast('Failed to start product', 'error');
+    }
+  }
+
+  /**
    * Get icon HTML for a given icon name
    */
   getIconHTML(iconName) {
@@ -141,7 +226,8 @@ class QuickLinks {
       'link': '🔗',
       'folder': '📁',
       'code': '💻',
-      'terminal': '🖥️'
+      'terminal': '🖥️',
+      'rocket': '🚀'
     };
     return icons[iconName] || '🔗';
   }
@@ -156,9 +242,43 @@ class QuickLinks {
 
     return `
       <div class="quick-links-container">
+        ${this.generateProductsHTML()}
         ${this.generateFavoritesHTML()}
         ${this.generateRecentSessionsHTML()}
         ${this.generateCustomLinksHTML()}
+      </div>
+    `;
+  }
+
+  /**
+   * Generate products section
+   */
+  generateProductsHTML() {
+    const { products = [] } = this.data;
+
+    return `
+      <div class="quick-links-section">
+        <h3>🚀 Products</h3>
+        <div class="quick-links-grid" id="products-grid">
+          ${products.map(product => `
+            <div class="quick-link quick-product" title="${this.escapeHtml(product.masterPath || '')}">
+              <span class="quick-link-icon">${this.getIconHTML(product.icon || 'rocket')}</span>
+              <span class="quick-link-label">${this.escapeHtml(product.name)}</span>
+              <div class="quick-product-actions">
+                <button class="port-action-btn" onclick="event.preventDefault(); event.stopPropagation(); window.quickLinks.launchProduct(${JSON.stringify(product.id)}, ${JSON.stringify(product.url || '')})">Start</button>
+                <button class="port-action-btn" onclick="event.preventDefault(); event.stopPropagation(); window.open(${JSON.stringify(product.url || '')},'_blank')">Open</button>
+                <button class="port-action-btn" onclick="event.preventDefault(); event.stopPropagation(); window.quickLinks.copyText(${JSON.stringify(product.url || '')},'URL')">Copy</button>
+              </div>
+              <button class="quick-link-remove"
+                      onclick="event.preventDefault(); event.stopPropagation(); window.quickLinks.removeProductAndRefresh(${JSON.stringify(product.id)})"
+                      title="Remove product">×</button>
+            </div>
+          `).join('')}
+          <button class="quick-link add-favorite-btn" onclick="window.quickLinks.showAddProductModal()">
+            <span class="quick-link-icon">➕</span>
+            <span class="quick-link-label">Add Product</span>
+          </button>
+        </div>
       </div>
     `;
   }
@@ -406,6 +526,51 @@ class QuickLinks {
   }
 
   /**
+   * Show add product modal
+   */
+  showAddProductModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal quick-links-modal';
+    modal.id = 'add-product-modal';
+    modal.innerHTML = `
+      <div class="modal-content modal-large">
+        <h3>Add Product</h3>
+        <div class="form-group">
+          <label for="product-name">Name:</label>
+          <input type="text" id="product-name" placeholder="Education Platform" />
+        </div>
+        <div class="form-group">
+          <label for="product-master-path">Master Path:</label>
+          <input type="text" id="product-master-path" placeholder="/home/<user>/GitHub/websites/my-app/master" />
+        </div>
+        <div class="form-group">
+          <label for="product-start-command">Start Command:</label>
+          <input type="text" id="product-start-command" placeholder="npm start" />
+        </div>
+        <div class="form-group">
+          <label for="product-url">URL:</label>
+          <input type="url" id="product-url" placeholder="http://localhost:3333" />
+        </div>
+        <div class="form-group">
+          <label for="product-icon">Icon:</label>
+          <select id="product-icon">
+            <option value="rocket" selected>🚀 Rocket</option>
+            <option value="dashboard">📊 Dashboard</option>
+            <option value="code">💻 Code</option>
+            <option value="terminal">🖥️ Terminal</option>
+            <option value="link">🔗 Link</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="button-primary" onclick="window.quickLinks.submitAddProduct()">Add</button>
+          <button class="button-secondary" onclick="window.quickLinks.closeAddProductModal()">Cancel</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  /**
    * Submit add favorite form
    */
   async submitAddFavorite() {
@@ -439,6 +604,35 @@ class QuickLinks {
     if (modal) modal.remove();
   }
 
+  async submitAddProduct() {
+    const name = document.getElementById('product-name').value.trim();
+    const masterPath = document.getElementById('product-master-path').value.trim();
+    const startCommand = document.getElementById('product-start-command').value.trim();
+    const url = document.getElementById('product-url').value.trim();
+    const icon = document.getElementById('product-icon').value;
+
+    if (!name || !masterPath || !startCommand || !url) {
+      alert('Please fill in name, master path, start command, and URL');
+      return;
+    }
+
+    const success = await this.addProduct({ name, masterPath, startCommand, url, icon });
+    if (success) {
+      this.closeAddProductModal();
+      if (window.orchestrator?.dashboard?.isVisible) {
+        await this.fetchData();
+        window.orchestrator.dashboard.render();
+      }
+    } else {
+      alert('Failed to add product. It may already exist.');
+    }
+  }
+
+  closeAddProductModal() {
+    const modal = document.getElementById('add-product-modal');
+    if (modal) modal.remove();
+  }
+
   /**
    * Remove favorite and refresh UI
    */
@@ -447,6 +641,23 @@ class QuickLinks {
     if (success && window.orchestrator?.dashboard?.isVisible) {
       await this.fetchData();
       window.orchestrator.dashboard.render();
+    }
+  }
+
+  async removeProductAndRefresh(id) {
+    const success = await this.removeProduct(id);
+    if (success && window.orchestrator?.dashboard?.isVisible) {
+      await this.fetchData();
+      window.orchestrator.dashboard.render();
+    }
+  }
+
+  async copyText(text, label = 'text') {
+    try {
+      await navigator.clipboard.writeText(text);
+      window.orchestrator?.showToast(`Copied ${label}`, 'success');
+    } catch (e) {
+      window.orchestrator?.showToast('Copy failed', 'error');
     }
   }
 

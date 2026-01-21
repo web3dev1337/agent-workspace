@@ -73,4 +73,4 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 
 ### Skill + docs
 - [x] Skill doc added for folder/worktree conventions
-- [ ] “Products” quick links: pull latest master + start + open/copy URL
+- [x] “Products” quick links: pull latest master + start + open/copy URL
