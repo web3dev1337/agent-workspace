@@ -42,8 +42,8 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 
 ### Ports / services
 - [x] Remove bottom-left “Services” list under worktrees
-- [ ] Ports/Services modal is large + card/grid layout
-- [ ] Ports/Services modal supports open + copy URL/port actions
+- [x] Ports/Services modal is large + card/grid layout
+- [x] Ports/Services modal supports open + copy URL/port actions
 
 ### Worktree picker UX
 - [ ] Modal layout is large and usable without excessive scrolling
