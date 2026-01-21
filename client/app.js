@@ -91,6 +91,11 @@ class ClaudeOrchestrator {
         console.log('Conversation browser initialized');
       }
 
+      // PRs panel
+      document.getElementById('prs-btn')?.addEventListener('click', () => {
+        this.showPRsPanel();
+      });
+
       // Initialize Ports panel
       document.getElementById('ports-btn')?.addEventListener('click', () => {
         this.showPortsPanel();
@@ -5437,6 +5442,193 @@ class ClaudeOrchestrator {
   switchToWorkspace(workspaceId) {
     console.log('Switching to workspace:', workspaceId);
     this.socket.emit('switch-workspace', { workspaceId });
+  }
+
+  async showPRsPanel() {
+    console.log('Opening PRs panel...');
+
+    // Remove existing modal
+    const existing = document.getElementById('prs-panel');
+    if (existing) existing.remove();
+
+    const serverUrl = window.location.port === '2080'
+      ? 'http://localhost:3000'
+      : window.location.origin;
+
+    const state = {
+      mode: localStorage.getItem('prs-panel-mode') || 'mine', // mine | involved
+      prsState: localStorage.getItem('prs-panel-state') || 'all', // all | open | closed
+      query: '',
+      limit: 50
+    };
+
+    const modal = document.createElement('div');
+    modal.id = 'prs-panel';
+    modal.className = 'modal prs-modal';
+    modal.innerHTML = `
+      <div class="modal-content prs-content">
+        <div class="modal-header">
+          <h2>🔀 Pull Requests</h2>
+          <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
+        </div>
+        <div class="prs-toolbar">
+          <div class="prs-toolbar-group">
+            <span class="prs-label">Scope</span>
+            <label class="quick-radio">
+              <input type="radio" name="prs-mode" value="mine">
+              Mine
+            </label>
+            <label class="quick-radio">
+              <input type="radio" name="prs-mode" value="involved">
+              Include others
+            </label>
+          </div>
+          <div class="prs-toolbar-group">
+            <span class="prs-label">State</span>
+            <label class="quick-radio">
+              <input type="radio" name="prs-state" value="all">
+              All
+            </label>
+            <label class="quick-radio">
+              <input type="radio" name="prs-state" value="open">
+              Open
+            </label>
+            <label class="quick-radio">
+              <input type="radio" name="prs-state" value="closed">
+              Closed
+            </label>
+          </div>
+          <input type="text" id="prs-search" class="search-input prs-search" placeholder="Search PRs...">
+          <button class="btn-secondary" id="prs-refresh">🔄 Refresh</button>
+        </div>
+        <div class="prs-list" id="prs-list">
+          <div class="loading">Loading PRs...</div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const listEl = modal.querySelector('#prs-list');
+    const searchEl = modal.querySelector('#prs-search');
+    const refreshBtn = modal.querySelector('#prs-refresh');
+    const modeInputs = modal.querySelectorAll('input[name="prs-mode"]');
+    const stateInputs = modal.querySelectorAll('input[name="prs-state"]');
+
+    // Initialize UI state
+    modeInputs.forEach(input => { input.checked = input.value === state.mode; });
+    stateInputs.forEach(input => { input.checked = input.value === state.prsState; });
+
+    const fetchPRs = async () => {
+      listEl.innerHTML = '<div class="loading">Loading PRs...</div>';
+      const params = new URLSearchParams({
+        mode: state.mode,
+        state: state.prsState,
+        limit: String(state.limit)
+      });
+      if (state.query) params.set('q', state.query);
+
+      try {
+        const response = await fetch(`${serverUrl}/api/prs?${params.toString()}`);
+        if (!response.ok) throw new Error('Failed to load PRs');
+        const data = await response.json();
+        const prs = Array.isArray(data.prs) ? data.prs : [];
+
+        if (!prs.length) {
+          listEl.innerHTML = '<div class="quick-empty">No PRs found</div>';
+          return;
+        }
+
+        listEl.innerHTML = prs.map(pr => {
+          const repoLabel = pr.repository?.nameWithOwner || pr.repository?.name || 'unknown';
+          const stateLabel = (pr.state || 'unknown').toLowerCase();
+          const badge =
+            stateLabel === 'open' ? '🟢 open' :
+            stateLabel === 'merged' ? '✅ merged' :
+            stateLabel === 'closed' ? '⚪ closed' :
+            stateLabel;
+
+          const draftLabel = pr.isDraft ? '🟡 draft' : '';
+          const updated = pr.updatedAt ? new Date(pr.updatedAt).toLocaleString() : '';
+
+          return `
+            <div class="pr-row ${stateLabel}">
+              <div class="pr-main">
+                <div class="pr-title">
+                  <span class="pr-repo">${this.escapeHtml(repoLabel)}</span>
+                  <span class="pr-number">#${pr.number}</span>
+                  <span class="pr-badge">${badge}</span>
+                  ${draftLabel ? `<span class="pr-badge draft">${draftLabel}</span>` : ''}
+                </div>
+                <div class="pr-subtitle">${this.escapeHtml(pr.title || '')}</div>
+                <div class="pr-meta">${updated}</div>
+              </div>
+              <div class="pr-actions">
+                <button class="btn-secondary pr-open-btn" data-url="${this.escapeHtml(pr.url)}">↗ Open</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (error) {
+        console.error('Failed to fetch PRs:', error);
+        listEl.innerHTML = '<div class="quick-empty">Failed to load PRs</div>';
+      }
+    };
+
+    const scheduleSearch = (() => {
+      let t;
+      return () => {
+        clearTimeout(t);
+        t = setTimeout(() => fetchPRs(), 250);
+      };
+    })();
+
+    modeInputs.forEach(input => {
+      input.addEventListener('change', () => {
+        state.mode = input.value;
+        localStorage.setItem('prs-panel-mode', state.mode);
+        fetchPRs();
+      });
+    });
+
+    stateInputs.forEach(input => {
+      input.addEventListener('change', () => {
+        state.prsState = input.value;
+        localStorage.setItem('prs-panel-state', state.prsState);
+        fetchPRs();
+      });
+    });
+
+    if (searchEl) {
+      searchEl.addEventListener('input', () => {
+        state.query = (searchEl.value || '').trim();
+        scheduleSearch();
+      });
+    }
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => fetchPRs());
+    }
+
+    listEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('.pr-open-btn');
+      if (!btn) return;
+      const url = btn.dataset.url;
+      if (!url) return;
+      try {
+        new URL(url);
+        window.open(url, '_blank');
+      } catch (error) {
+        this.showToast('Invalid PR URL', 'error');
+      }
+    });
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+
+    await fetchPRs();
   }
 
   async showPortsPanel() {
