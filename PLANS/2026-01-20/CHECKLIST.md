@@ -31,7 +31,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Sidebar worktree list updates immediately (no “one behind”)
 - [x] Terminal scroll does not jump to top
 - [x] Commander terminal supports text paste (Ctrl/Cmd+V)
-- [ ] Single-click dashboard shortcut + return to tabs
+- [x] Single-click dashboard shortcut + return to tabs
 
 ### Status + UX cleanups
 - [x] Status indicator colors are accurate and documented
