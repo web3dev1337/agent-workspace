@@ -330,4 +330,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
   - `isWorktreeInUse()` only considers sessions from the current workspace.
   - “In use” buttons are no longer disabled; clicking them reveals the existing sessions instead of blocking.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/134
