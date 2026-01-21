@@ -127,4 +127,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
   - `error` → red
 - Removed the client-side `waiting` → `ready` remap so the UI uses the real status values consistently.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/97
