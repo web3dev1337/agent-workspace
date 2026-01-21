@@ -143,3 +143,11 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/99
 - Merged: commit `a4ec556`
+
+### Commander terminal: Ctrl/Cmd+V pastes text (in progress)
+- Added explicit copy/paste key handlers to the Commander XTerm:
+  - Ctrl/Cmd+C copies selection
+  - Ctrl/Cmd+V reads clipboard text + sends to Commander
+- Goal: prevent the “no image found in clipboard” behavior and allow normal text paste.
+- Tests: `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/101
