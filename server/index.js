@@ -1071,7 +1071,7 @@ app.post('/api/workspaces/create-worktree', async (req, res) => {
 
 app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
   try {
-    const { workspaceId, repositoryPath, repositoryType, repositoryName, worktreeId } = req.body;
+    const { workspaceId, repositoryPath, repositoryType, repositoryName, worktreeId, socketId } = req.body;
     logger.info('Adding mixed worktree to workspace', {
       workspaceId,
       repositoryName,
@@ -1092,7 +1092,8 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
     }
 
     // Add new terminal pair to the workspace
-    const terminalIdBase = `${repositoryName.toLowerCase()}-${worktreeId}`;
+    const worktreePath = path.join(repositoryPath, worktreeId);
+    const terminalIdBase = `${repositoryName}-${worktreeId}`;
     const newTerminals = [
       {
         id: `${terminalIdBase}-claude`,
@@ -1103,6 +1104,7 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
           masterBranch: 'master'
         },
         worktree: worktreeId,
+        worktreePath: worktreePath,
         terminalType: 'claude',
         visible: true
       },
@@ -1115,10 +1117,19 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
           masterBranch: 'master'
         },
         worktree: worktreeId,
+        worktreePath: worktreePath,
         terminalType: 'server',
         visible: true
       }
     ];
+
+    // Guard: don't double-add the same worktree terminals
+    if (Array.isArray(updatedWorkspace.terminals)) {
+      const existingIds = new Set(updatedWorkspace.terminals.map(t => t.id));
+      if (existingIds.has(newTerminals[0].id) || existingIds.has(newTerminals[1].id)) {
+        return res.status(409).json({ error: 'Worktree already exists in workspace' });
+      }
+    }
 
     updatedWorkspace.terminals = updatedWorkspace.terminals.concat(newTerminals);
 
@@ -1135,22 +1146,32 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
     // Update the SessionManager workspace reference and rebuild worktrees list
     const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
     sessionManager.setWorkspace(refreshedWorkspace);
-    sessionManager.buildWorktreesFromWorkspace();
 
-    // Re-initialize sessions to create the new terminals
-    // NOTE: This currently clears all existing sessions.
-    // TODO: Future improvement - only initialize NEW sessions without clearing existing ones
-    await sessionManager.initializeSessions();
+    // Create sessions for ONLY the new worktree (do not reset existing terminals)
+    const isActiveWorkspace = workspaceManager.getActiveWorkspace()?.id === workspaceId;
+    const newSessions = isActiveWorkspace
+      ? await sessionManager.createSessionsForWorktree({
+        worktreeId,
+        worktreePath,
+        repositoryName,
+        repositoryType
+      })
+      : {};
 
-    // Emit updated session states to all clients
-    const updatedSessions = sessionManager.getSessionStates();
-    io.emit('sessions', updatedSessions);
+    if (isActiveWorkspace) {
+      // Prefer targeting the requesting socket (avoid disrupting other connected clients / dashboards)
+      if (socketId && io.sockets.sockets.get(socketId)) {
+        io.to(socketId).emit('worktree-sessions-added', { worktreeId, sessions: newSessions });
+      } else {
+        io.emit('worktree-sessions-added', { worktreeId, sessions: newSessions });
+      }
+    }
 
-    logger.info('New worktree sessions initialized (all terminals refreshed)', {
-      totalSessions: Object.keys(updatedSessions).length
+    logger.info('New worktree sessions initialized (additive)', {
+      totalNewSessions: Object.keys(newSessions).length
     });
 
-    res.json({ success: true, terminalIds: newTerminals.map(t => t.id) });
+    res.json({ success: true, terminalIds: newTerminals.map(t => t.id), sessions: newSessions });
   } catch (error) {
     logger.error('Failed to add mixed worktree', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message, stack: error.stack });
