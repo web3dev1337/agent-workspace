@@ -1071,6 +1071,19 @@ header h1 {
   letter-spacing: 0.04em;
 }
 
+.quick-repo-subcategory {
+  margin-bottom: var(--space-md);
+}
+
+.quick-repo-subcategory-header {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin: var(--space-sm) 0 var(--space-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .quick-repo-row {
   display: flex;
   align-items: center;
