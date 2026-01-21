@@ -150,4 +150,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
   - Ctrl/Cmd+V reads clipboard text + sends to Commander
 - Goal: prevent the “no image found in clipboard” behavior and allow normal text paste.
 - Tests: `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/101
