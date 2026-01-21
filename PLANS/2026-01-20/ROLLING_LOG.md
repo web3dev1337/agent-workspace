@@ -230,3 +230,13 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/116
 - Merged: commit `d05a520`
+
+### Docs: mark favorites done (done)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/117
+- Merged: commit `8397cee`
+
+### Worktree picker: quick launch oldest/recent/choose (done)
+- Added a split-button menu to start oldest / start most recent / choose any worktree for a repo.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/118
+- Merged: commit `4d7e908`
