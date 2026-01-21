@@ -118,6 +118,45 @@ body {
   align-items: center;
 }
 
+.worktree-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ready-review-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.ready-review-btn.ready {
+  border-color: var(--accent-success);
+  color: var(--accent-success);
+}
+
+.ready-review-btn:hover:not(:disabled) {
+  border-color: var(--accent-success);
+  color: var(--accent-success);
+  transform: scale(1.05);
+}
+
+.ready-review-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .delete-worktree-btn {
   background: transparent;
   border: none;
