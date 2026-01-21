@@ -109,4 +109,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
   - Emits `worktree-sessions-added` with only the new sessions
 - Client includes `socketId` so the backend can target the requesting UI when possible.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/94
