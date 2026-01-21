@@ -99,19 +99,22 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ## 2026-01-21
 
-### Docs: dev instance must not touch `master/` (in progress)
+### Docs: dev instance must not touch `master/` (done)
 - Added an explicit rule in `CLAUDE.md` that when developing in `claude-orchestrator-dev/` (feature branches / PRs), treat `~/GitHub/tools/automation/claude-orchestrator/master` as **run-only**.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/93
+- Merged: commit `49e81bd`
 
-### Mixed worktree add: prevent terminal “reset” (in progress)
+### Mixed worktree add: prevent terminal “reset” (done)
 - Reworked `POST /api/workspaces/add-mixed-worktree` to be additive:
   - No `initializeSessions()` (which cleared all sessions)
   - Emits `worktree-sessions-added` with only the new sessions
 - Client includes `socketId` so the backend can target the requesting UI when possible.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/94
+- Merged: commit `830f385`
 
-### Sidebar: active-only filter works for mixed-repo worktrees (in progress)
+### Sidebar: active-only filter works for mixed-repo worktrees (done)
 - Fixed `isWorktreeActive()` / `showActiveWorktreesOnly()` to use the same mixed-repo worktree key as the sidebar (`RepoName-workN`), preventing “active only” mode from hiding mixed-repo worktrees.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/95
+- Merged: commit `e64f023`

@@ -28,7 +28,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Tab switching preserves sidebar selection state
 - [x] Adding worktrees does not resurrect startup overlays
 - [x] Adding worktrees does not “reset” existing terminals
-- [ ] Sidebar worktree list updates immediately (no “one behind”)
+- [x] Sidebar worktree list updates immediately (no “one behind”)
 - [x] Terminal scroll does not jump to top
 
 ### Status + UX cleanups
