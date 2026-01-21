@@ -290,3 +290,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Sidebar worktree rows show an icon for the last detected agent (Claude/Codex/OpenCode/Aider).
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/128
+
+### Config: worktree cascades include project layer (done)
+- Fixed `WorkspaceManager.getCascadedConfigForWorktree()` to merge **Global → Category → Framework → Project → Worktree** (previously missing the project layer).
+- This unblocks per-project config-driven buttons showing up in worktree terminals (plus any worktree-specific overrides).
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/129

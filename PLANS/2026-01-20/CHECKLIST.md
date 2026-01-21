@@ -67,8 +67,8 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Simplify Codex start command / remove unnecessary hard-coded flags
 
 ### Config-driven buttons
-- [ ] Custom buttons are wired from config JSON
-- [ ] Cascaded config hierarchy works reliably
+- [x] Custom buttons are wired from config JSON
+- [x] Cascaded config hierarchy works reliably
 - [ ] Dynamic port selection avoids collisions
 
 ### Skill + docs
