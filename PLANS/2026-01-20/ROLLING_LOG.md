@@ -158,4 +158,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Added a dashboard “← Back to Workspaces” button (when tabs exist) that restores the current tabbed workspace view without forcing a workspace re-open.
 - ESC on the dashboard returns to the tabbed view when available.
 - Tests: `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/103
