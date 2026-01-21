@@ -267,4 +267,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
   - `GET /api/worktree-tags`
   - `POST /api/worktree-tags/ready`
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/124
