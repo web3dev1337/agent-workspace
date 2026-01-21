@@ -1095,6 +1095,24 @@ header h1 {
   accent-color: var(--accent-primary);
 }
 
+.quick-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.quick-checkbox input {
+  accent-color: var(--accent-primary);
+}
+
 .quick-tab-panel {
   display: none;
 }
@@ -1180,6 +1198,22 @@ header h1 {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+}
+
+.quick-fav-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.quick-fav-btn.active {
+  border-color: #f6c445;
+  color: #f6c445;
 }
 
 .quick-worktree-pill {
