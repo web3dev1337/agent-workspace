@@ -268,3 +268,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
   - `POST /api/worktree-tags/ready`
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/124
+
+### YOLO-only: remove Yes/No waiting detection (done)
+- Removed legacy “yes/no” / `(y/N)` prompt detection from status detection to prevent false “waiting for your input” states and related UI churn.
+- Removed legacy `suggestedActions: ['yes','no',...]` from waiting notifications metadata.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/125

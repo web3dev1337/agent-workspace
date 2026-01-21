@@ -63,8 +63,7 @@ class NotificationService {
       worktreeId,
       branch,
       priority: 'high',
-      actionRequired: true,
-      suggestedActions: ['yes', 'no', 'view']
+      actionRequired: true
     };
     
     return this.notify(sessionId, 'waiting', message, metadata);
