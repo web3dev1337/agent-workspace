@@ -58,6 +58,8 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 - PR 108 — Quick Worktree modal: larger to reduce scrolling: https://github.com/web3dev1337/claude-orchestrator/pull/108
 - PR 109 — Docs: update plans/log for PR 108: https://github.com/web3dev1337/claude-orchestrator/pull/109
 - PR 110 — Docs: capture Commander paste requirement: https://github.com/web3dev1337/claude-orchestrator/pull/110
+- PR 111 — Docs: log PR 109-110: https://github.com/web3dev1337/claude-orchestrator/pull/111
+- PR 112 — Worktree picker: group repos by folder structure: https://github.com/web3dev1337/claude-orchestrator/pull/112
 
 ## Repo Understanding (High-level Architecture)
 

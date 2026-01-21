@@ -198,3 +198,14 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Add the missing “Commander Ctrl/Cmd+V paste text” item to the requested changes source-of-truth doc.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/110
 - Merged: commit `2e7a238`
+
+### Docs: log PR 109-110 (done)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/111
+- Merged: commit `5eb3ab1`
+
+### Worktree picker: group repos by folder structure (done)
+- Group “Quick Work” repo list by top-level folder (games/websites/tools/etc) and inferred framework subgroups.
+- Hide empty groups during search filtering.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/112
+- Merged: commit `67cd195`
