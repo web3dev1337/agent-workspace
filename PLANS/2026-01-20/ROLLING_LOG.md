@@ -240,3 +240,13 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/118
 - Merged: commit `4d7e908`
+
+### Docs: mark quick launch done (done)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/119
+- Merged: commit `234b0bc`
+
+### Worktree picker: show branch + PR status (done)
+- Added branch + PR state badges to the Quick Worktree choose menu (open/draft/merged/closed).
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/120
+- Merged: commit `d981598`
