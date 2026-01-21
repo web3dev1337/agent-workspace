@@ -1200,6 +1200,66 @@ header h1 {
   gap: var(--space-sm);
 }
 
+.quick-start-group {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.quick-start-group .quick-start-btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.quick-start-menu-btn {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding: 0 10px;
+  font-weight: 700;
+  min-height: 34px;
+}
+
+.quick-worktree-menu {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  padding: 6px;
+}
+
+.quick-menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quick-menu-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.quick-menu-item:hover {
+  border-color: var(--accent-primary);
+}
+
+.quick-menu-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.quick-menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 6px 0;
+}
+
 .quick-fav-btn {
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
