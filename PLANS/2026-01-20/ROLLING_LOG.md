@@ -209,3 +209,14 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/112
 - Merged: commit `67cd195`
+
+### Docs: mark worktree grouping done (done)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/113
+- Merged: commit `a60cf48`
+
+### Worktree picker: sort + recency filters (done)
+- Added fast-click radio controls for sorting (edited/created) and filtering by “edited within” (7d/1m/2m/3m/6m/1y).
+- Persisted selections in localStorage.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/114
+- Merged: commit `c987cfe`
