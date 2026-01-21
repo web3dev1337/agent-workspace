@@ -1538,12 +1538,30 @@ class ClaudeOrchestrator {
   }
   
   isWorktreeActive(worktreeIdOrKey) {
-    // Check if any session for this EXACT worktree key has been marked as active
+    // Check if any session for this worktree has been marked as active.
+    // For mixed-repo workspaces we may receive:
+    // - keys like "RepoName-work3" in the sidebar, or
+    // - plain worktree IDs like "work3" in some filters.
+    //
+    // Prefer direct sessionId checks first, then fall back to scanning sessions.
     const claudeId = `${worktreeIdOrKey}-claude`;
     const serverId = `${worktreeIdOrKey}-server`;
 
     if (this.sessionActivity.get(claudeId) === 'active') return true;
     if (this.sessionActivity.get(serverId) === 'active') return true;
+
+    // Fallback: compute the same key used in the sidebar and match against it.
+    for (const [sessionId, session] of this.sessions) {
+      const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+      const repositoryName = this.extractRepositoryName(sessionId);
+      const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
+
+      if (sessionKey === worktreeIdOrKey || sessionWorktreeId === worktreeIdOrKey) {
+        if (this.sessionActivity.get(sessionId) === 'active') {
+          return true;
+        }
+      }
+    }
 
     return false;
   }
@@ -1566,8 +1584,11 @@ class ClaudeOrchestrator {
     
     // Add only active worktree sessions to visible set
     for (const [sessionId, session] of this.sessions) {
-      const worktreeId = session.worktreeId || sessionId.split('-')[0];
-      if (this.isWorktreeActive(worktreeId)) {
+      const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+      const repositoryName = this.extractRepositoryName(sessionId);
+      const worktreeKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
+
+      if (this.isWorktreeActive(worktreeKey)) {
         this.visibleTerminals.add(sessionId);
       }
     }
