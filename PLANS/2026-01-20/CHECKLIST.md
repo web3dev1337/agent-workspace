@@ -50,7 +50,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Grouping by category/framework + ungrouped sections
 - [x] Sorting: most recently edited + most recently created
 - [x] Recency filters (radio buttons)
-- [ ] Favorites (persisted)
+- [x] Favorites (persisted)
 - [ ] Quick launch: oldest + most recent + choose any
 - [ ] Show branch + PR + merged status
 

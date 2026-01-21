@@ -220,3 +220,13 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/114
 - Merged: commit `c987cfe`
+
+### Docs: mark sort/recency done (done)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/115
+- Merged: commit `73658e3`
+
+### Worktree picker: favorites (done)
+- Added ⭐ favorites to “Quick Work” (persisted) and a “Favorites only” toggle.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/116
+- Merged: commit `d05a520`
