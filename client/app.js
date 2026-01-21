@@ -5697,6 +5697,9 @@ class ClaudeOrchestrator {
     if (existing) existing.remove();
     this.quickWorktreeConversationsLoaded = false;
     this.quickWorktreeConversationLimit = this.quickWorktreeConversationLimit || 100;
+    this.quickWorktreeSearchTerm = this.quickWorktreeSearchTerm || '';
+    this.quickWorktreeSortMode = localStorage.getItem('quick-worktree-sort') || 'edited';
+    this.quickWorktreeRecencyFilter = localStorage.getItem('quick-worktree-recency') || 'all';
 
     const modal = document.createElement('div');
     modal.id = 'quick-worktree-modal';
@@ -5719,6 +5722,50 @@ class ClaudeOrchestrator {
         </div>
         <div class="modal-body quick-worktree-body">
           <div class="quick-tab-panel active" data-tab="start">
+            <div class="quick-repo-controls">
+              <div class="quick-control-group">
+                <span class="quick-control-label">Sort</span>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-sort" value="edited">
+                  Edited
+                </label>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-sort" value="created">
+                  Created
+                </label>
+              </div>
+              <div class="quick-control-group">
+                <span class="quick-control-label">Edited within</span>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-recency" value="all">
+                  All
+                </label>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-recency" value="7d">
+                  7d
+                </label>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-recency" value="1m">
+                  1m
+                </label>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-recency" value="2m">
+                  2m
+                </label>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-recency" value="3m">
+                  3m
+                </label>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-recency" value="6m">
+                  6m
+                </label>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-recency" value="1y">
+                  1y
+                </label>
+              </div>
+            </div>
             <div id="quick-repo-list" class="quick-repo-list">
               <div class="loading">Loading repos...</div>
             </div>
@@ -5746,6 +5793,32 @@ class ClaudeOrchestrator {
     const tabButtons = modal.querySelectorAll('.quick-tab-btn');
     const convMoreBtn = modal.querySelector('.quick-conv-more-btn');
     const convHistoryBtn = modal.querySelector('.quick-conv-history-btn');
+
+    // Initialize quick work controls (sort/recency)
+    modal.querySelectorAll('input[name="quick-sort"]').forEach(input => {
+      input.checked = input.value === this.quickWorktreeSortMode;
+    });
+    modal.querySelectorAll('input[name="quick-recency"]').forEach(input => {
+      input.checked = input.value === this.quickWorktreeRecencyFilter;
+    });
+
+    modal.addEventListener('change', (e) => {
+      const sortInput = e.target.closest('input[name="quick-sort"]');
+      if (sortInput) {
+        this.quickWorktreeSortMode = sortInput.value;
+        localStorage.setItem('quick-worktree-sort', this.quickWorktreeSortMode);
+        this.renderQuickWorktreeRepoList();
+        return;
+      }
+
+      const recencyInput = e.target.closest('input[name="quick-recency"]');
+      if (recencyInput) {
+        this.quickWorktreeRecencyFilter = recencyInput.value;
+        localStorage.setItem('quick-worktree-recency', this.quickWorktreeRecencyFilter);
+        this.renderQuickWorktreeRepoList();
+        return;
+      }
+    });
 
     if (advancedBtn) {
       advancedBtn.addEventListener('click', () => {
@@ -5790,6 +5863,7 @@ class ClaudeOrchestrator {
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase().trim();
+        this.quickWorktreeSearchTerm = term;
         const activeTab = modal.querySelector('.quick-tab-panel.active')?.dataset.tab;
         if (activeTab === 'resume') {
           modal.querySelectorAll('.quick-conv-row').forEach(row => {
@@ -5800,30 +5874,34 @@ class ClaudeOrchestrator {
             row.style.display = matches ? 'flex' : 'none';
           });
         } else {
-          modal.querySelectorAll('.quick-repo-row').forEach(row => {
-            const name = row.dataset.repoName || '';
-            const path = row.dataset.repoPath || '';
-            const matches = name.includes(term) || path.includes(term);
-            row.style.display = matches ? 'flex' : 'none';
-          });
-
-          // Hide empty groups/subgroups after filtering
-          modal.querySelectorAll('.quick-repo-subcategory').forEach(sub => {
-            const anyVisible = Array.from(sub.querySelectorAll('.quick-repo-row'))
-              .some(row => row.style.display !== 'none');
-            sub.style.display = anyVisible ? '' : 'none';
-          });
-
-          modal.querySelectorAll('.quick-repo-category').forEach(cat => {
-            const anyVisible = Array.from(cat.querySelectorAll('.quick-repo-subcategory'))
-              .some(sub => sub.style.display !== 'none');
-            cat.style.display = anyVisible ? '' : 'none';
-          });
+          this.applyQuickRepoSearchFilter(modal, term);
         }
       });
     }
 
     this.loadQuickWorktreeRepos();
+  }
+
+  applyQuickRepoSearchFilter(modal, term) {
+    modal.querySelectorAll('.quick-repo-row').forEach(row => {
+      const name = row.dataset.repoName || '';
+      const path = row.dataset.repoPath || '';
+      const matches = name.includes(term) || path.includes(term);
+      row.style.display = matches ? 'flex' : 'none';
+    });
+
+    // Hide empty groups/subgroups after filtering
+    modal.querySelectorAll('.quick-repo-subcategory').forEach(sub => {
+      const anyVisible = Array.from(sub.querySelectorAll('.quick-repo-row'))
+        .some(row => row.style.display !== 'none');
+      sub.style.display = anyVisible ? '' : 'none';
+    });
+
+    modal.querySelectorAll('.quick-repo-category').forEach(cat => {
+      const anyVisible = Array.from(cat.querySelectorAll('.quick-repo-subcategory'))
+        .some(sub => sub.style.display !== 'none');
+      cat.style.display = anyVisible ? '' : 'none';
+    });
   }
 
   async showAddWorktreeModalAdvanced() {
@@ -5847,7 +5925,7 @@ class ClaudeOrchestrator {
       const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
       const repos = await response.json();
 
-      const sortedRepos = repos
+      this.quickWorktreeReposRaw = repos
         .map(repo => {
           const sessionActivity = this.getRepoLastActivity(repo);
           const lastModifiedMs = Math.max(repo.lastModifiedMs || 0, sessionActivity || 0);
@@ -5858,43 +5936,91 @@ class ClaudeOrchestrator {
         })
         .sort((a, b) => b.lastModifiedMs - a.lastModifiedMs);
 
-      if (!sortedRepos.length) {
+      if (!this.quickWorktreeReposRaw.length) {
         listEl.innerHTML = '<div class="quick-empty">No repos found</div>';
         return;
       }
 
-      listEl.innerHTML = this.renderQuickRepoList(sortedRepos);
+      this.renderQuickWorktreeRepoList();
 
-      listEl.querySelectorAll('.quick-start-btn').forEach(btn => {
-        btn.addEventListener('click', (event) => {
-          const repoPath = btn.dataset.repoPath;
-          const repoType = btn.dataset.repoType;
-          const repoName = btn.dataset.repoName;
-          const worktreeId = btn.dataset.worktreeId;
-          const worktreePath = btn.dataset.worktreePath;
-          const repositoryRoot = btn.dataset.repoRoot || repoPath;
-          const keepOpen = event && (event.ctrlKey || event.metaKey);
-
-          if (!worktreeId || !worktreePath) {
-            this.showTemporaryMessage('No available worktrees for this repo', 'error');
-            return;
-          }
-
-          this.quickStartWorktree({
-            repoPath,
-            repoType,
-            repoName,
-            worktreeId,
-            worktreePath,
-            repositoryRoot,
-            keepOpen
-          });
-        });
-      });
+      // Apply any existing search term
+      const modal = document.getElementById('quick-worktree-modal');
+      if (modal && this.quickWorktreeSearchTerm) {
+        this.applyQuickRepoSearchFilter(modal, this.quickWorktreeSearchTerm);
+      }
     } catch (error) {
       console.error('Failed to load repositories:', error);
       listEl.innerHTML = '<div class="quick-empty">Failed to load repos</div>';
     }
+  }
+
+  renderQuickWorktreeRepoList() {
+    const listEl = document.getElementById('quick-repo-list');
+    const modal = document.getElementById('quick-worktree-modal');
+    if (!listEl) return;
+
+    const repos = Array.isArray(this.quickWorktreeReposRaw) ? [...this.quickWorktreeReposRaw] : [];
+    const now = Date.now();
+
+    const recencyMs = {
+      all: 0,
+      '7d': 7 * 24 * 60 * 60 * 1000,
+      '1m': 30 * 24 * 60 * 60 * 1000,
+      '2m': 60 * 24 * 60 * 60 * 1000,
+      '3m': 90 * 24 * 60 * 60 * 1000,
+      '6m': 180 * 24 * 60 * 60 * 1000,
+      '1y': 365 * 24 * 60 * 60 * 1000
+    };
+
+    const threshold = recencyMs[this.quickWorktreeRecencyFilter] || 0;
+    const filtered = threshold
+      ? repos.filter(r => (r.lastModifiedMs || 0) >= (now - threshold))
+      : repos;
+
+    const sorted = filtered.sort((a, b) => {
+      if (this.quickWorktreeSortMode === 'created') {
+        const aCreated = a.createdMs || 0;
+        const bCreated = b.createdMs || 0;
+        return bCreated - aCreated;
+      }
+      return (b.lastModifiedMs || 0) - (a.lastModifiedMs || 0);
+    });
+
+    listEl.innerHTML = this.renderQuickRepoList(sorted);
+
+    // Re-apply search filter (if any)
+    if (modal && this.quickWorktreeSearchTerm) {
+      this.applyQuickRepoSearchFilter(modal, this.quickWorktreeSearchTerm);
+    }
+
+    // Delegate start button clicks (re-render safe)
+    listEl.onclick = (event) => {
+      const btn = event.target.closest('.quick-start-btn');
+      if (!btn) return;
+
+      const repoPath = btn.dataset.repoPath;
+      const repoType = btn.dataset.repoType;
+      const repoName = btn.dataset.repoName;
+      const worktreeId = btn.dataset.worktreeId;
+      const worktreePath = btn.dataset.worktreePath;
+      const repositoryRoot = btn.dataset.repoRoot || repoPath;
+      const keepOpen = event && (event.ctrlKey || event.metaKey);
+
+      if (!worktreeId || !worktreePath) {
+        this.showTemporaryMessage('No available worktrees for this repo', 'error');
+        return;
+      }
+
+      this.quickStartWorktree({
+        repoPath,
+        repoType,
+        repoName,
+        worktreeId,
+        worktreePath,
+        repositoryRoot,
+        keepOpen
+      });
+    };
   }
 
   renderQuickRepoList(repos) {
