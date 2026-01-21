@@ -1249,6 +1249,22 @@ header h1 {
   border-color: var(--accent-primary);
 }
 
+.quick-menu-item.pr-open {
+  border-left: 3px solid var(--accent-primary);
+}
+
+.quick-menu-item.pr-draft {
+  border-left: 3px solid var(--accent-warning);
+}
+
+.quick-menu-item.pr-merged {
+  border-left: 3px solid var(--accent-success);
+}
+
+.quick-menu-item.pr-closed {
+  border-left: 3px solid var(--border-color);
+}
+
 .quick-menu-item:disabled {
   opacity: 0.55;
   cursor: not-allowed;

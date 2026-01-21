@@ -6220,6 +6220,9 @@ class ClaudeOrchestrator {
 
     menu.addEventListener('click', onMenuClick);
 
+    // Enrich menu items with branch + PR state (best-effort, async)
+    this.enrichQuickWorktreeMenuWithMetadata(menu).catch(() => {});
+
     const onDocMouseDown = (e) => {
       if (menu.contains(e.target) || e.target === anchorButton) return;
       this.closeQuickWorktreeMenu();
@@ -6237,6 +6240,70 @@ class ClaudeOrchestrator {
       document.removeEventListener('mousedown', onDocMouseDown);
       document.removeEventListener('keydown', onDocKeyDown);
     };
+  }
+
+  async enrichQuickWorktreeMenuWithMetadata(menuEl) {
+    if (!menuEl) return;
+
+    const items = Array.from(menuEl.querySelectorAll('.quick-menu-item'))
+      .filter(btn => !!btn.dataset.worktreePath);
+
+    const paths = Array.from(new Set(items.map(btn => btn.dataset.worktreePath).filter(Boolean)));
+    if (!paths.length) return;
+
+    const serverUrl = window.location.port === '2080'
+      ? 'http://localhost:3000'
+      : window.location.origin;
+
+    const response = await fetch(`${serverUrl}/api/worktree-metadata/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths })
+    });
+
+    if (!response.ok) return;
+
+    const data = await response.json();
+    items.forEach(btn => {
+      const meta = data[btn.dataset.worktreePath];
+      if (!meta) return;
+
+      const branch = meta.git?.branch || 'unknown';
+      const pr = meta.pr || {};
+
+      let prLabel = '';
+      let prClass = '';
+      if (pr.hasPR && pr.number) {
+        if (pr.state === 'merged') {
+          prLabel = `✅ merged #${pr.number}`;
+          prClass = 'pr-merged';
+        } else if (pr.state === 'open') {
+          prLabel = pr.isDraft ? `🟡 draft #${pr.number}` : `🟢 PR #${pr.number}`;
+          prClass = pr.isDraft ? 'pr-draft' : 'pr-open';
+        } else if (pr.state === 'closed') {
+          prLabel = `⚪ closed #${pr.number}`;
+          prClass = 'pr-closed';
+        } else {
+          prLabel = `#${pr.number}`;
+          prClass = 'pr-unknown';
+        }
+      }
+
+      const id = btn.dataset.worktreeId || '';
+      const suffix = prLabel ? ` • ${prLabel}` : '';
+
+      // Keep the special "Start ..." labels intact, but append metadata.
+      if (btn.textContent.includes('Start oldest') || btn.textContent.includes('Start most recent')) {
+        btn.textContent = `${btn.textContent.split(' • ')[0]} • ${branch}${suffix}`;
+      } else {
+        btn.textContent = `${id} • ${branch}${suffix}`;
+      }
+
+      if (prClass) {
+        btn.classList.remove('pr-open', 'pr-draft', 'pr-merged', 'pr-closed', 'pr-unknown');
+        btn.classList.add(prClass);
+      }
+    });
   }
 
   renderQuickRepoList(repos) {
