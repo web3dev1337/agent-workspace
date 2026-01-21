@@ -764,11 +764,14 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
             const worktreeNumber = parseInt(worktreeMatch[2], 10);
             const key = path.join(dirPath, baseName);
             let lastModifiedMs = 0;
+            let createdMs = 0;
             try {
               const wtStat = await fs.stat(fullPath);
               lastModifiedMs = wtStat.mtimeMs;
+              createdMs = wtStat.birthtimeMs || wtStat.ctimeMs || 0;
             } catch (statError) {
               lastModifiedMs = 0;
+              createdMs = 0;
             }
 
             if (!worktreeGroups.has(key)) {
@@ -784,7 +787,8 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
               name: entry.name,
               path: fullPath,
               number: worktreeNumber,
-              lastModifiedMs
+              lastModifiedMs,
+              createdMs
             });
             continue;
           }
@@ -816,11 +820,14 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
             }
 
             let lastModifiedMs = 0;
+            let createdMs = 0;
             try {
               const repoStat = await fs.stat(projectPath);
               lastModifiedMs = repoStat.mtimeMs;
+              createdMs = repoStat.birthtimeMs || repoStat.ctimeMs || 0;
             } catch (statError) {
               lastModifiedMs = 0;
+              createdMs = 0;
             }
 
             const repoEntry = {
@@ -831,6 +838,7 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
               type: type,
               category: getCategoryFromPath(fullPath),
               lastModifiedMs,
+              createdMs,
               worktreeDirs: [],
               worktreeLayout: 'nested'
             };
@@ -848,7 +856,8 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
                     name: worktreeName,
                     path: worktreePath,
                     number: i,
-                    lastModifiedMs: wtStat.mtimeMs
+                    lastModifiedMs: wtStat.mtimeMs,
+                    createdMs: wtStat.birthtimeMs || wtStat.ctimeMs || 0
                   });
                 } catch (wtError) {
                   // Worktree does not exist
@@ -907,7 +916,7 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
       if (pathLower.includes('/games/minecraft/')) return 'minecraft-mod';
       if (pathLower.includes('/games/rust/')) return 'rust-game';
       if (pathLower.includes('/games/web/')) return 'web-game';
-      if (pathLower.includes('/website/')) return 'website';
+      if (pathLower.includes('/website/') || pathLower.includes('/websites/')) return 'website';
       if (pathLower.includes('/writing/')) return 'writing';
       if (pathLower.includes('/tools/')) return 'tool-project';
 
@@ -923,7 +932,7 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
       if (pathLower.includes('/games/hytopia/')) return 'Hytopia Games';
       if (pathLower.includes('/games/monogame/')) return 'MonoGame Games';
       if (pathLower.includes('/games/')) return 'Other Games';
-      if (pathLower.includes('/website/')) return 'Websites';
+      if (pathLower.includes('/website/') || pathLower.includes('/websites/')) return 'Websites';
       if (pathLower.includes('/writing/')) return 'Writing';
       if (pathLower.includes('/tools/')) return 'Tools';
 
