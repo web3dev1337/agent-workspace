@@ -153,6 +153,10 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/101
 - Merged: commit `2b3f9bc`
 
+### Docs: mark Commander paste fix complete (done)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/102
+- Merged: commit `5177214`
+
 ### Dashboard navigation: one-click dashboard + back to tabs (done)
 - Added a header button `🏠 Dashboard` to open the dashboard in one click.
 - Added a dashboard “← Back to Workspaces” button (when tabs exist) that restores the current tabbed workspace view without forcing a workspace re-open.
@@ -160,3 +164,18 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/103
 - Merged: commit `6a3bf9a`
+
+### Docs: mark dashboard navigation done (done)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/104
+- Merged: commit `f58dee6`
+
+### Docs: add PR 100-104 to plan (done)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/105
+- Merged: commit `0046a10`
+
+### Ports/Services modal: larger grid + copy actions (done)
+- Make the Ports/Services modal wide and grid-based to reduce scrolling.
+- Add per-service actions: open in browser, copy URL, copy port.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/106
+- Merged: commit `675362c`
