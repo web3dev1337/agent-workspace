@@ -312,4 +312,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Added `/api/products/launch` to `git pull --ff-only` in the configured `masterPath` and then run `startCommand` (logs to `logs/products/<productId>.log`).
 - Safety: refuses to run inside the orchestrator production `~/GitHub/tools/automation/claude-orchestrator/master`.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/132
