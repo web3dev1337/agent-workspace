@@ -250,3 +250,13 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/120
 - Merged: commit `d981598`
+
+### Docs: mark branch/PR status done (done)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/121
+- Merged: commit `0525cd9`
+
+### PR management: PR list view (done)
+- Added a PR list modal (mine by default) with a toggle to include others and filters for open/closed/all.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/122
+- Merged: commit `cc422cf`
