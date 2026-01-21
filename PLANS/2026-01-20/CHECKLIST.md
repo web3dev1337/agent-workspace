@@ -63,7 +63,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] UI copy updates: “Claude” → “Agent” where appropriate
 
 ### Agents
-- [ ] Detect agent type where feasible (Claude vs Codex vs other)
+- [x] Detect agent type where feasible (Claude vs Codex vs other)
 - [x] Simplify Codex start command / remove unnecessary hard-coded flags
 
 ### Config-driven buttons
