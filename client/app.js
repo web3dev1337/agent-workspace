@@ -986,6 +986,15 @@ class ClaudeOrchestrator {
   handleInitialSessions(sessionStates) {
     console.log('Received initial sessions:', sessionStates);
 
+    // Preserve per-workspace worktree visibility (hide/show toggles) when we
+    // receive a sessions refresh for the SAME workspace (e.g. after adding a
+    // worktree). Never carry visibility between different workspaces.
+    const currentWorkspaceId = this.currentWorkspace?.id || null;
+    const previousWorkspaceId = this.lastSessionsWorkspaceId || null;
+    const preserveVisibility = !!(currentWorkspaceId && previousWorkspaceId && currentWorkspaceId === previousWorkspaceId);
+    const previousSessionIds = new Set(this.sessions.keys());
+    const previousVisibleSessionIds = new Set(this.visibleTerminals);
+
     // Clear existing sessions and activity tracking
     this.sessions.clear();
     this.sessionActivity.clear();
@@ -1021,10 +1030,19 @@ class ClaudeOrchestrator {
       const isComplexSessionId = sessionId.includes('-') && sessionId.split('-').length > 2;
       this.sessionActivity.set(sessionId, isComplexSessionId ? 'active' : 'inactive');
 
-      // Add all terminals to visible set by default
-      this.visibleTerminals.add(sessionId);
+      // Visibility: default to visible, but preserve per-session hidden state if
+      // this is a refresh for the same workspace.
+      const isExistingSession = previousSessionIds.has(sessionId);
+      const shouldBeVisible = preserveVisibility
+        ? (isExistingSession ? previousVisibleSessionIds.has(sessionId) : true)
+        : true;
+      if (shouldBeVisible) {
+        this.visibleTerminals.add(sessionId);
+      }
       // Debug: console.log(`Added terminal ${sessionId} to visible set, activity: ${this.sessionActivity.get(sessionId)}`);
     }
+
+    this.lastSessionsWorkspaceId = currentWorkspaceId;
     
     // Hide loading message FIRST
     const loadingMessage = document.getElementById('loading-message');
@@ -7139,8 +7157,7 @@ class ClaudeOrchestrator {
 
       worktreeOptions.push(`
         <button class="worktree-option ${isInUse ? 'in-use' : 'available'}"
-                onclick="window.orchestrator.addWorktreeToWorkspace('${repo.path}', '${worktreeId}', '${repo.type}', '${repo.name}')"
-                ${isInUse ? 'disabled' : ''}>
+                onclick="window.orchestrator.addWorktreeToWorkspace('${repo.path}', '${worktreeId}', '${repo.type}', '${repo.name}', ${isInUse})">
           <span class="worktree-id">${worktreeId}</span>
           <span class="worktree-status">${statusIcon} ${statusText}</span>
         </button>
@@ -7177,6 +7194,11 @@ class ClaudeOrchestrator {
     // Session IDs follow patterns like: "work1-claude", "work1-server",
     // or for mixed-repo: "repoName-work1-claude", "repoName-work1-server"
     for (const [sessionId, session] of this.sessions) {
+      // Only consider sessions that belong to the current workspace
+      if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) {
+        continue;
+      }
+
       const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
       const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
 
@@ -7234,9 +7256,44 @@ class ClaudeOrchestrator {
     }
   }
 
-  async addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName) {
+  async addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName, isInUse = false) {
     try {
       console.log(`Adding ${worktreeId} from ${repoName} to workspace...`);
+
+      if (isInUse) {
+        // If the worktree already exists in this workspace, don't block selection.
+        // Instead, make sure it is visible again (user likely hid it).
+        const sessionIds = [];
+        const targetRepoName = (repoName || '').toLowerCase();
+
+        for (const [sessionId, session] of this.sessions) {
+          if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) {
+            continue;
+          }
+
+          const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+          if (sessionWorktreeId !== worktreeId) continue;
+
+          const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
+
+          // Mixed repo match by repo name; single repo match by workspace repo path
+          if (sessionRepoName && targetRepoName && sessionRepoName === targetRepoName) {
+            sessionIds.push(sessionId);
+          } else if (!sessionRepoName && this.currentWorkspace?.repository?.path === repoPath) {
+            sessionIds.push(sessionId);
+          }
+        }
+
+        if (sessionIds.length > 0) {
+          sessionIds.forEach(id => this.visibleTerminals.add(id));
+          this.updateTerminalGrid();
+          this.buildSidebar();
+          document.getElementById('add-worktree-modal')?.remove();
+          document.getElementById('quick-worktree-modal')?.remove();
+          this.showTemporaryMessage(`Showing ${repoName} ${worktreeId}`, 'success');
+          return;
+        }
+      }
 
       const response = await fetch('/api/workspaces/add-mixed-worktree', {
         method: 'POST',

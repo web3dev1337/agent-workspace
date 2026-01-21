@@ -320,3 +320,14 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Fix: skip fitting when the wrapper is hidden; if the container is still too small after retries, skip instead of “fit anyway”.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/133
+
+### Worktree add (advanced): preserve visibility + allow selecting “in use” (done)
+- Fixes two UX issues when adding a worktree via **Quick Work → Advanced**:
+  - Adding a worktree could reset the user’s hide/show toggles (all worktrees visible again) if a `sessions` refresh arrived for the same workspace.
+  - Worktrees marked “In use” were disabled; now they’re selectable and will simply re-show the existing worktree in the current workspace.
+- Changes:
+  - Preserve per-workspace `visibleTerminals` state across `sessions` refreshes for the same `workspaceId` (new sessions default visible).
+  - `isWorktreeInUse()` only considers sessions from the current workspace.
+  - “In use” buttons are no longer disabled; clicking them reveals the existing sessions instead of blocking.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: (pending)
