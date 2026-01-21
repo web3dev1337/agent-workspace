@@ -101,4 +101,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ### Docs: dev instance must not touch `master/` (in progress)
 - Added an explicit rule in `CLAUDE.md` that when developing in `claude-orchestrator-dev/` (feature branches / PRs), treat `~/GitHub/tools/automation/claude-orchestrator/master` as **run-only**.
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/93
