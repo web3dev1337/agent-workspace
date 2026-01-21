@@ -189,3 +189,12 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/108
 - Merged: commit `4e2ac9f`
+
+### Docs: update plans/log for PR 108 (done)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/109
+- Merged: commit `9d428e8`
+
+### Docs: capture Commander paste requirement (done)
+- Add the missing “Commander Ctrl/Cmd+V paste text” item to the requested changes source-of-truth doc.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/110
+- Merged: commit `2e7a238`
