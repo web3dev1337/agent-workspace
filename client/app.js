@@ -6280,7 +6280,8 @@ class ClaudeOrchestrator {
           repositoryPath: repoPath,
           repositoryType: repoType,
           repositoryName: repoName,
-          worktreeId: worktreeId
+          worktreeId: worktreeId,
+          socketId: this.socket?.id || null
         })
       });
 
@@ -6289,8 +6290,7 @@ class ClaudeOrchestrator {
         document.getElementById('add-worktree-modal')?.remove();
         document.getElementById('quick-worktree-modal')?.remove();
 
-        // workspace-config-updated event will be emitted by server
-        // No need to refresh entire workspace - new terminals will be initialized automatically
+        // Server will emit 'worktree-sessions-added' which is handled by our socket listener
       } else {
         const error = await response.text();
         this.showTemporaryMessage('Failed to add worktree: ' + error, 'error');
