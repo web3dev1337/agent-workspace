@@ -119,7 +119,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/95
 - Merged: commit `e64f023`
 
-### Status: align UI colors with `StatusDetector` (in progress)
+### Status: align UI colors with `StatusDetector` (done)
 - Defined status color variables in `client/styles.css` and aligned terminal header status colors with `server/statusDetector.js` semantics:
   - `waiting` → green
   - `busy` → orange
@@ -128,15 +128,18 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Removed the client-side `waiting` → `ready` remap so the UI uses the real status values consistently.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/97
+- Merged: commit `07143cd`
 
-### UI: modal close buttons are usable (in progress)
+### UI: modal close buttons are usable (done)
 - Added shared modal header + close button styles (`.modal-header`, `.close-btn`) to make the close affordance larger and consistent across modals (ports, worktree picker, conversation history).
 - Tests: `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/98
+- Merged: commit `81a7bb2`
 
-### UI copy: “Claude Orchestrator” → “Agent Orchestrator” (in progress)
+### UI copy: “Claude Orchestrator” → “Agent Orchestrator” (done)
 - Updated the visible app title (page `<title>` + header) and dashboard heading to “Agent Orchestrator”.
 - Renamed the per-worktree “🤖 Claude” terminal label to “🤖 Agent” (the dropdown still controls Claude vs Codex).
 - Updated Playwright title assertion to match.
 - Tests: `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/99
+- Merged: commit `a4ec556`
