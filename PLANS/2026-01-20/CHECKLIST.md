@@ -60,7 +60,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] “Ready for review” tagging (independent of PR creation)
 
 ### Naming / branding
-- [ ] UI copy updates: “Claude” → “Agent” where appropriate
+- [x] UI copy updates: “Claude” → “Agent” where appropriate
 
 ### Agents
 - [ ] Detect agent type where feasible (Claude vs Codex vs other)
