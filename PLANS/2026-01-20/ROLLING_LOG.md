@@ -279,3 +279,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Updated notification titles and the View Presets modal to use “Agent” wording where it’s not provider-specific.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/126
+
+### Agents: simplify Codex quick start defaults (done)
+- Removed hard-coded Codex `model` / `reasoning` / `verbosity` from the inline quick-start config so Codex can manage defaults.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/127

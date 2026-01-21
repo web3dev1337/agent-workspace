@@ -4607,9 +4607,6 @@ class ClaudeOrchestrator {
       config = {
         agentId: 'codex',
         mode: mode,
-        model: 'gpt-5-codex',  // Best model
-        reasoning: 'high',      // High reasoning
-        verbosity: 'high',      // Detailed output
         flags: [
           'yolo',               // --yolo: no approvals + full access
           'networkAccess',      // Enable network for package installs
