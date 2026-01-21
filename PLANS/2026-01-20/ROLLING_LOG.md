@@ -114,4 +114,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### Sidebar: active-only filter works for mixed-repo worktrees (in progress)
 - Fixed `isWorktreeActive()` / `showActiveWorktreesOnly()` to use the same mixed-repo worktree key as the sidebar (`RepoName-workN`), preventing “active only” mode from hiding mixed-repo worktrees.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/95
