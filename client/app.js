@@ -5984,6 +5984,7 @@ class ClaudeOrchestrator {
     const listEl = document.getElementById('quick-repo-list');
     const modal = document.getElementById('quick-worktree-modal');
     if (!listEl) return;
+    this.closeQuickWorktreeMenu();
 
     const repos = Array.isArray(this.quickWorktreeReposRaw) ? [...this.quickWorktreeReposRaw] : [];
     const now = Date.now();
@@ -6038,6 +6039,14 @@ class ClaudeOrchestrator {
         return;
       }
 
+      const menuBtn = event.target.closest('.quick-start-menu-btn');
+      if (menuBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.showQuickWorktreeMenu(menuBtn);
+        return;
+      }
+
       const btn = event.target.closest('.quick-start-btn');
       if (!btn) return;
 
@@ -6077,6 +6086,157 @@ class ClaudeOrchestrator {
     }
 
     localStorage.setItem('quick-worktree-favorites', JSON.stringify(Array.from(this.quickWorktreeFavorites)));
+  }
+
+  closeQuickWorktreeMenu() {
+    if (this.quickWorktreeMenuCleanup) {
+      this.quickWorktreeMenuCleanup();
+      this.quickWorktreeMenuCleanup = null;
+    }
+    if (this.quickWorktreeMenuEl) {
+      this.quickWorktreeMenuEl.remove();
+      this.quickWorktreeMenuEl = null;
+    }
+  }
+
+  showQuickWorktreeMenu(anchorButton) {
+    this.closeQuickWorktreeMenu();
+    if (!anchorButton) return;
+
+    const repoPath = anchorButton.dataset.repoPath;
+    const repoType = anchorButton.dataset.repoType;
+    const repoName = anchorButton.dataset.repoName;
+    const repositoryRoot = anchorButton.dataset.repoRoot || repoPath;
+
+    const repo = Array.isArray(this.quickWorktreeReposRaw)
+      ? this.quickWorktreeReposRaw.find(r => r.path === repoPath)
+      : null;
+
+    const resolvedRepo = repo || { path: repoPath, type: repoType, name: repoName, worktreeDirs: [] };
+
+    const oldest = this.getRecommendedWorktree(resolvedRepo);
+    const recent = this.getMostRecentWorktree(resolvedRepo);
+
+    const allWorktrees = (() => {
+      const entries = Array.isArray(resolvedRepo.worktreeDirs) ? resolvedRepo.worktreeDirs : [];
+      if (!entries.length) {
+        return [{ id: 'root', path: repoPath, number: 0 }];
+      }
+      return entries
+        .map(e => ({
+          id: e.id,
+          path: e.path || `${repoPath}/${e.id}`,
+          number: e.number || parseInt((e.id || '').replace('work', ''), 10) || 0
+        }))
+        .sort((a, b) => (a.number || 0) - (b.number || 0));
+    })();
+
+    const menu = document.createElement('div');
+    menu.className = 'quick-worktree-menu';
+    menu.innerHTML = `
+      <div class="quick-menu-section">
+        ${oldest ? `
+          <button class="quick-menu-item"
+                  data-repo-path="${this.escapeHtml(repoPath)}"
+                  data-repo-type="${this.escapeHtml(repoType)}"
+                  data-repo-name="${this.escapeHtml(repoName)}"
+                  data-repo-root="${this.escapeHtml(repositoryRoot)}"
+                  data-worktree-id="${this.escapeHtml(oldest.id)}"
+                  data-worktree-path="${this.escapeHtml(oldest.path)}">
+            🕰️ Start oldest (${this.escapeHtml(oldest.id)})
+          </button>
+        ` : ''}
+        ${recent && (!oldest || recent.id !== oldest.id) ? `
+          <button class="quick-menu-item"
+                  data-repo-path="${this.escapeHtml(repoPath)}"
+                  data-repo-type="${this.escapeHtml(repoType)}"
+                  data-repo-name="${this.escapeHtml(repoName)}"
+                  data-repo-root="${this.escapeHtml(repositoryRoot)}"
+                  data-worktree-id="${this.escapeHtml(recent.id)}"
+                  data-worktree-path="${this.escapeHtml(recent.path)}">
+            🆕 Start most recent (${this.escapeHtml(recent.id)})
+          </button>
+        ` : ''}
+      </div>
+
+      <div class="quick-menu-divider"></div>
+
+      <div class="quick-menu-section">
+        ${allWorktrees.map(entry => {
+          const inUse = this.isWorktreeInUse(repoPath, entry.id, repoName);
+          const disabled = inUse ? 'disabled' : '';
+          const statusLabel = inUse ? ' • in use' : '';
+          return `
+            <button class="quick-menu-item"
+                    ${disabled}
+                    data-repo-path="${this.escapeHtml(repoPath)}"
+                    data-repo-type="${this.escapeHtml(repoType)}"
+                    data-repo-name="${this.escapeHtml(repoName)}"
+                    data-repo-root="${this.escapeHtml(repositoryRoot)}"
+                    data-worktree-id="${this.escapeHtml(entry.id)}"
+                    data-worktree-path="${this.escapeHtml(entry.path)}">
+              ${this.escapeHtml(entry.id)}${statusLabel}
+            </button>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    document.body.appendChild(menu);
+    this.quickWorktreeMenuEl = menu;
+
+    const rect = anchorButton.getBoundingClientRect();
+    const menuWidth = 280;
+    const left = Math.min(window.innerWidth - menuWidth - 12, Math.max(12, rect.left));
+    const top = Math.min(window.innerHeight - 12, rect.bottom + 6);
+
+    menu.style.position = 'fixed';
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    menu.style.minWidth = `${menuWidth}px`;
+    menu.style.zIndex = '1100';
+
+    const onMenuClick = (e) => {
+      const item = e.target.closest('.quick-menu-item');
+      if (!item || item.disabled) return;
+      const keepOpen = e.ctrlKey || e.metaKey;
+
+      const worktreeId = item.dataset.worktreeId;
+      const worktreePath = item.dataset.worktreePath;
+      if (!worktreeId || !worktreePath) return;
+
+      this.quickStartWorktree({
+        repoPath: item.dataset.repoPath,
+        repoType: item.dataset.repoType,
+        repoName: item.dataset.repoName,
+        worktreeId,
+        worktreePath,
+        repositoryRoot: item.dataset.repoRoot || item.dataset.repoPath,
+        keepOpen
+      });
+
+      this.closeQuickWorktreeMenu();
+    };
+
+    menu.addEventListener('click', onMenuClick);
+
+    const onDocMouseDown = (e) => {
+      if (menu.contains(e.target) || e.target === anchorButton) return;
+      this.closeQuickWorktreeMenu();
+    };
+
+    const onDocKeyDown = (e) => {
+      if (e.key === 'Escape') this.closeQuickWorktreeMenu();
+    };
+
+    document.addEventListener('mousedown', onDocMouseDown);
+    document.addEventListener('keydown', onDocKeyDown);
+
+    this.quickWorktreeMenuCleanup = () => {
+      menu.removeEventListener('click', onMenuClick);
+      document.removeEventListener('mousedown', onDocMouseDown);
+      document.removeEventListener('keydown', onDocKeyDown);
+    };
   }
 
   renderQuickRepoList(repos) {
@@ -6184,6 +6344,7 @@ class ClaudeOrchestrator {
 
   renderQuickRepoRow(repo) {
     const recommended = this.getRecommendedWorktree(repo);
+    const mostRecent = this.getMostRecentWorktree(repo);
     const hasWorktrees = Array.isArray(repo.worktreeDirs) && repo.worktreeDirs.length > 0;
     const actionLabel = recommended ? `Start (${recommended.id})` : (hasWorktrees ? 'All busy' : 'No worktrees');
     const displayPath = repo.relativePath || repo.path || '';
@@ -6209,16 +6370,30 @@ class ClaudeOrchestrator {
             ${favoriteLabel}
           </button>
           ${recommended ? `<span class="quick-worktree-pill">${recommended.id}</span>` : ''}
-          <button class="btn-primary quick-start-btn"
-                  data-repo-path="${repo.path}"
-                  data-repo-type="${repo.type}"
-                  data-repo-name="${repo.name}"
-                  data-repo-root="${repo.path}"
-                  data-worktree-id="${recommended ? recommended.id : ''}"
-                  data-worktree-path="${recommended ? recommended.path : ''}"
-                  ${recommended ? '' : 'disabled'}>
-            ${actionLabel}
-          </button>
+          <div class="quick-start-group">
+            <button class="btn-primary quick-start-btn"
+                    data-repo-path="${repo.path}"
+                    data-repo-type="${repo.type}"
+                    data-repo-name="${repo.name}"
+                    data-repo-root="${repo.path}"
+                    data-worktree-id="${recommended ? recommended.id : ''}"
+                    data-worktree-path="${recommended ? recommended.path : ''}"
+                    ${recommended ? '' : 'disabled'}>
+              ${actionLabel}
+            </button>
+            <button class="btn-secondary quick-start-menu-btn"
+                    data-repo-path="${repo.path}"
+                    data-repo-type="${repo.type}"
+                    data-repo-name="${repo.name}"
+                    data-repo-root="${repo.path}"
+                    data-oldest-id="${recommended ? recommended.id : ''}"
+                    data-oldest-path="${recommended ? recommended.path : ''}"
+                    data-recent-id="${mostRecent ? mostRecent.id : ''}"
+                    data-recent-path="${mostRecent ? mostRecent.path : ''}"
+                    title="Choose worktree">
+              ▾
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -6252,6 +6427,48 @@ class ClaudeOrchestrator {
       const entryMtime = typeof entry.lastModifiedMs === 'number' ? entry.lastModifiedMs : 0;
       const effectiveLastUsed = Math.max(entryMtime, lastActivity || 0);
       if (effectiveLastUsed < bestTime) {
+        bestTime = effectiveLastUsed;
+        best = entry;
+      }
+    }
+
+    if (!best) return null;
+
+    return {
+      id: best.id,
+      path: best.path || `${repo.path}/${best.id}`,
+      lastModifiedMs: best.lastModifiedMs
+    };
+  }
+
+  getMostRecentWorktree(repo) {
+    const worktreeEntries = Array.isArray(repo.worktreeDirs) ? repo.worktreeDirs : [];
+    if (!worktreeEntries.length) {
+      if (!repo.path) return null;
+      const rootId = 'root';
+      if (this.isWorktreeInUse(repo.path, rootId, repo.name)) return null;
+      return {
+        id: rootId,
+        path: repo.path,
+        lastModifiedMs: repo.lastModifiedMs || 0
+      };
+    }
+
+    const available = worktreeEntries.filter(entry => {
+      if (!entry || !entry.id) return false;
+      return !this.isWorktreeInUse(repo.path, entry.id, repo.name);
+    });
+
+    if (!available.length) return null;
+
+    let best = null;
+    let bestTime = -Infinity;
+
+    for (const entry of available) {
+      const lastActivity = this.getWorktreeLastActivity(repo, entry.id);
+      const entryMtime = typeof entry.lastModifiedMs === 'number' ? entry.lastModifiedMs : 0;
+      const effectiveLastUsed = Math.max(entryMtime, lastActivity || 0);
+      if (effectiveLastUsed > bestTime) {
         bestTime = effectiveLastUsed;
         best = entry;
       }
@@ -6345,7 +6562,7 @@ class ClaudeOrchestrator {
   }
 
   getWorktreeLastActivity(repo, worktreeId) {
-    let oldest = null;
+    let latest = null;
     const repoName = repo.name?.toLowerCase();
 
     for (const [sessionId, session] of this.sessions) {
@@ -6356,11 +6573,11 @@ class ClaudeOrchestrator {
       if (repoName && sessionRepoName && sessionRepoName !== repoName) continue;
 
       if (typeof session.lastActivity === 'number') {
-        oldest = oldest === null ? session.lastActivity : Math.min(oldest, session.lastActivity);
+        latest = latest === null ? session.lastActivity : Math.max(latest, session.lastActivity);
       }
     }
 
-    return oldest;
+    return latest;
   }
 
   async loadQuickWorktreeConversations({ force = false } = {}) {
