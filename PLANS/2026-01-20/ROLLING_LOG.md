@@ -260,3 +260,11 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/122
 - Merged: commit `cc422cf`
+
+### PR management: ready-for-review tagging (done)
+- Added a per-worktree “R” toggle in the sidebar to mark a worktree **ready for review** (persisted by worktree path).
+- Added backend storage in `~/.orchestrator/worktree-tags.json` and API routes:
+  - `GET /api/worktree-tags`
+  - `POST /api/worktree-tags/ready`
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: (pending)

@@ -272,6 +272,15 @@ test.describe('API Health', () => {
     expect(data).toHaveProperty('git');
     expect(data).toHaveProperty('pr');
   });
+
+  test('should respond to worktree tags API', async ({ request }) => {
+    const response = await request.get(`${SERVER_URL}/api/worktree-tags`);
+    expect(response.ok()).toBeTruthy();
+
+    const data = await response.json();
+    expect(data).not.toBeNull();
+    expect(typeof data).toBe('object');
+  });
 });
 
 test.describe('Conversation Browser', () => {
