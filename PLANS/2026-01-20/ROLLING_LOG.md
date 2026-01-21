@@ -289,4 +289,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Server now includes `agent` / `agentMode` in session state (sourced from session recovery’s `lastAgent`).
 - Sidebar worktree rows show an icon for the last detected agent (Claude/Codex/OpenCode/Aider).
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/128
