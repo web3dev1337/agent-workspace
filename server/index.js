@@ -2066,6 +2066,71 @@ app.post('/api/worktree-metadata/refresh', async (req, res) => {
   }
 });
 
+// ============================================
+// Pull Requests API
+// ============================================
+
+app.get('/api/prs', async (req, res) => {
+  try {
+    const { execFile } = require('child_process');
+    const util = require('util');
+    const execFileAsync = util.promisify(execFile);
+
+    const mode = (req.query.mode || 'mine').toLowerCase(); // mine | involved
+    const state = (req.query.state || 'all').toLowerCase(); // all | open | closed
+    const limitRaw = parseInt(req.query.limit || '50', 10);
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
+
+    const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+
+    const args = [
+      'search',
+      'prs',
+      '--sort',
+      'updated',
+      '--order',
+      'desc',
+      '--limit',
+      String(limit),
+      '--json',
+      'number,title,state,url,isDraft,repository,createdAt,updatedAt,author'
+    ];
+
+    if (mode === 'mine') {
+      args.push('--author', '@me');
+    } else if (mode === 'involved') {
+      args.push('--involves', '@me');
+    } else {
+      return res.status(400).json({ error: 'Invalid mode (expected mine|involved)' });
+    }
+
+    if (state === 'open' || state === 'closed') {
+      args.push('--state', state);
+    } else if (state !== 'all') {
+      return res.status(400).json({ error: 'Invalid state (expected all|open|closed)' });
+    }
+
+    if (query) {
+      args.push(query);
+    }
+
+    const { stdout } = await execFileAsync('gh', args, { timeout: 20000 });
+    const prs = JSON.parse(stdout || '[]');
+
+    res.json({
+      mode,
+      state,
+      limit,
+      query,
+      count: Array.isArray(prs) ? prs.length : 0,
+      prs: Array.isArray(prs) ? prs : []
+    });
+  } catch (error) {
+    logger.error('Failed to list PRs', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to list PRs' });
+  }
+});
+
 // Continuity ledger API endpoints
 app.get('/api/continuity/ledger', async (req, res) => {
   try {

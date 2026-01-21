@@ -6395,6 +6395,128 @@ header h1 {
   color: var(--text-muted);
 }
 
+/* ============================================
+   PRs Panel Styles
+   ============================================ */
+
+.prs-modal .prs-content {
+  max-width: 1100px;
+  width: 96vw;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.prs-toolbar {
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.prs-toolbar-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.prs-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.prs-search {
+  min-width: 220px;
+  flex: 1;
+}
+
+.prs-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.pr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.pr-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pr-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pr-repo {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.pr-number {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.pr-badge {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.pr-badge.draft {
+  border-color: var(--accent-warning);
+}
+
+.pr-subtitle {
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pr-meta {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.pr-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
 /* Port panel - project detection styles */
 .port-name {
   cursor: pointer;
