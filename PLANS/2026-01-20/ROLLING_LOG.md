@@ -319,4 +319,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Root cause: `fitTerminal()` could run while the wrapper was `display:none`, resizing the PTY to tiny dimensions.
 - Fix: skip fitting when the wrapper is hidden; if the container is still too small after retries, skip instead of “fit anyway”.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/133
