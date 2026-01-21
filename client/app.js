@@ -2053,13 +2053,10 @@ class ClaudeOrchestrator {
   }
   
   updateSessionStatus(sessionId, status) {
-    // Convert 'waiting' to 'ready' for better UX (green instead of orange)
-    const displayStatus = status === 'waiting' ? 'ready' : status;
-
     const statusElement = document.getElementById(`status-${sessionId}`);
     if (statusElement) {
-      statusElement.className = `status-indicator ${displayStatus}`;
-      statusElement.title = displayStatus;
+      statusElement.className = `status-indicator ${status}`;
+      statusElement.title = status;
     }
 
     // Update session data

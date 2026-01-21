@@ -115,6 +115,11 @@ Order is chosen to fix reliability/state bugs first (tab switching + terminal in
 ### PR 5 — Status indicator correctness pass
 **Goal:** Define and implement correct status signals for the green/orange/gray circle(s).
 - Deliverables:
+  - **Status semantics (source of truth = `server/statusDetector.js`):**
+    - `waiting` = prompt/input needed (**green**)
+    - `busy` = agent actively working (**orange**)
+    - `idle` = no active agent work (**gray**)
+    - `error` = failure state (**red**)
   - Document status definition and sources (server status detector vs socket events).
   - Fix any mismatched state updates.
 - Validate:
