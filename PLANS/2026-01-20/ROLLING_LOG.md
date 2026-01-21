@@ -283,4 +283,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### Agents: simplify Codex quick start defaults (done)
 - Removed hard-coded Codex `model` / `reasoning` / `verbosity` from the inline quick-start config so Codex can manage defaults.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/127
