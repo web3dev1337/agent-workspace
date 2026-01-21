@@ -139,4 +139,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Renamed the per-worktree “🤖 Claude” terminal label to “🤖 Agent” (the dropdown still controls Claude vs Codex).
 - Updated Playwright title assertion to match.
 - Tests: `npm run test:e2e:safe`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/99
