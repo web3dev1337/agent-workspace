@@ -47,7 +47,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 
 ### Worktree picker UX
 - [x] Modal layout is large and usable without excessive scrolling
-- [ ] Grouping by category/framework + ungrouped sections
+- [x] Grouping by category/framework + ungrouped sections
 - [ ] Sorting: most recently edited + most recently created
 - [ ] Recency filters (radio buttons)
 - [ ] Favorites (persisted)
