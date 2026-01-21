@@ -66,6 +66,8 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 - PR 116 — Worktree picker: favorites: https://github.com/web3dev1337/claude-orchestrator/pull/116
 - PR 117 — Docs: mark favorites done: https://github.com/web3dev1337/claude-orchestrator/pull/117
 - PR 118 — Worktree picker: quick launch oldest/recent/choose: https://github.com/web3dev1337/claude-orchestrator/pull/118
+- PR 119 — Docs: mark quick launch done: https://github.com/web3dev1337/claude-orchestrator/pull/119
+- PR 120 — Worktree picker: show branch + PR status: https://github.com/web3dev1337/claude-orchestrator/pull/120
 
 ## Repo Understanding (High-level Architecture)
 
