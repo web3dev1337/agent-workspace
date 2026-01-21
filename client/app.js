@@ -40,6 +40,7 @@ class ClaudeOrchestrator {
     this.workspaceHierarchy = {};
     this.cascadedConfigs = {};  // Fully merged configs (Global → Category → Framework → Project)
     this.worktreeConfigs = new Map(); // Worktree-specific configs (sessionId → config)
+    this.worktreeTags = new Map(); // Worktree path → tags (e.g., readyForReview)
 
     // Button registry - all available buttons with their implementations
     this.buttonRegistry = this.initButtonRegistry();
@@ -120,6 +121,9 @@ class ClaudeOrchestrator {
       
       // Load user settings from server
       await this.loadUserSettings();
+
+      // Load worktree tags (ready-for-review, etc.)
+      await this.loadWorktreeTags();
       
       // Check for updates on startup
       this.checkForSettingsUpdates();
@@ -181,6 +185,13 @@ class ClaudeOrchestrator {
         }
 
         this.handleInitialSessions(sessionStates);
+      });
+
+      // Worktree tag updates (e.g., ready-for-review) from other clients
+      this.socket.on('worktree-tag-updated', ({ worktreePath, tag }) => {
+        if (!worktreePath) return;
+        this.worktreeTags.set(worktreePath, tag || {});
+        this.buildSidebar();
       });
       
       this.socket.on('terminal-output', ({ sessionId, data }) => {
@@ -695,6 +706,19 @@ class ClaudeOrchestrator {
     // Sidebar worktree clicks - use toggle instead of show
     if (elements['worktree-list']) {
       elements['worktree-list'].addEventListener('click', (e) => {
+        // Check if click was on ready-for-review toggle
+        const readyBtn = e.target.closest('.ready-review-btn');
+        if (readyBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const worktreePath = readyBtn.dataset.worktreePath;
+          if (worktreePath) {
+            this.toggleWorktreeReadyForReview(worktreePath);
+          }
+          return;
+        }
+
         // Check if click was on delete button
         if (e.target.closest('.delete-worktree-btn')) {
           return; // Let the button's onclick handler deal with it
@@ -1431,6 +1455,9 @@ class ClaudeOrchestrator {
 
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
+    if (!worktreeList) return;
+
+    const previousScrollTop = worktreeList.scrollTop;
 
     // Always ensure filter toggle exists and is updated FIRST
     this.ensureFilterToggleExists();
@@ -1498,6 +1525,10 @@ class ClaudeOrchestrator {
       // Single-dot sidebar status: prefer the agent (Claude) status
       const sidebarStatus = worktree.claude?.status || worktree.server?.status || 'idle';
 
+      const worktreePath = this.getWorktreePathForSidebarEntry(worktree);
+      const isReadyForReview = !!(worktreePath && this.worktreeTags.get(worktreePath)?.readyForReview);
+      const readyTitle = isReadyForReview ? 'Ready for review (click to clear)' : 'Mark ready for review';
+
       item.innerHTML = `
         <div class="worktree-header">
           <div class="worktree-title">
@@ -1506,11 +1537,20 @@ class ClaudeOrchestrator {
             <span class="worktree-name">${displayName}</span>
             <span class="worktree-branch">${branch}</span>
           </div>
-          <button class="delete-worktree-btn"
-                  onclick="event.stopPropagation(); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
-                  title="Remove worktree from workspace (keeps files intact)">
-            ✕
-          </button>
+          <div class="worktree-actions">
+            <button class="ready-review-btn ${isReadyForReview ? 'ready' : ''}"
+                    data-worktree-path="${this.escapeHtml(worktreePath || '')}"
+                    aria-pressed="${isReadyForReview ? 'true' : 'false'}"
+                    title="${this.escapeHtml(readyTitle)}"
+                    ${worktreePath ? '' : 'disabled'}>
+              R
+            </button>
+            <button class="delete-worktree-btn"
+                    onclick="event.stopPropagation(); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
+                    title="Remove worktree from workspace (keeps files intact)">
+              ✕
+            </button>
+          </div>
         </div>
       `;
       
@@ -1518,6 +1558,86 @@ class ClaudeOrchestrator {
       
       worktreeList.appendChild(item);
     }
+
+    worktreeList.scrollTop = previousScrollTop;
+  }
+
+  getWorktreePathForSidebarEntry(worktree) {
+    const workspace = this.currentWorkspace;
+    if (!workspace || !worktree) return null;
+
+    if (workspace.workspaceType === 'mixed-repo') {
+      const terminals = Array.isArray(workspace.terminals)
+        ? workspace.terminals
+        : workspace.terminals?.pairs;
+      if (!terminals) return null;
+
+      const sessionId = worktree.claude?.sessionId || worktree.server?.sessionId || '';
+      const repositoryName = worktree.repositoryName || this.extractRepositoryName(sessionId);
+
+      const terminal = terminals.find(t => t.repository?.name === repositoryName && t.worktree === worktree.worktreeId)
+        || terminals.find(t => t.id === worktree.claude?.sessionId)
+        || terminals.find(t => t.id === worktree.server?.sessionId);
+
+      if (terminal && terminal.repository && terminal.worktree) {
+        return terminal.worktreePath || `${terminal.repository.path}/${terminal.worktree}`;
+      }
+      return null;
+    }
+
+    if (workspace.repository?.path && worktree.worktreeId) {
+      return `${workspace.repository.path}/${worktree.worktreeId}`;
+    }
+
+    return null;
+  }
+
+  async loadWorktreeTags() {
+    try {
+      const response = await fetch('/api/worktree-tags');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const tags = await response.json();
+      this.worktreeTags = new Map(Object.entries(tags || {}));
+      this.buildSidebar();
+      return this.worktreeTags;
+    } catch (error) {
+      console.warn('Failed to load worktree tags:', error);
+      return null;
+    }
+  }
+
+  async setWorktreeReadyForReview(worktreePath, ready) {
+    try {
+      const response = await fetch('/api/worktree-tags/ready', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ worktreePath, ready })
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (result && result.worktreePath) {
+        this.worktreeTags.set(result.worktreePath, result.tag || {});
+      }
+      this.buildSidebar();
+      return result;
+    } catch (error) {
+      console.error('Failed to update ready-for-review tag:', error);
+      this.showTemporaryMessage('Failed to update ready-for-review tag', 'error');
+      return null;
+    }
+  }
+
+  async toggleWorktreeReadyForReview(worktreePath) {
+    const current = this.worktreeTags.get(worktreePath)?.readyForReview;
+    return this.setWorktreeReadyForReview(worktreePath, !current);
   }
   
   ensureFilterToggleExists() {
