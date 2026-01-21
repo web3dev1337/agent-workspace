@@ -49,6 +49,7 @@ const { QuickLinksService } = require('./quickLinksService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
 const { WorktreeMetadataService } = require('./worktreeMetadataService');
+const { WorktreeTagService } = require('./worktreeTagService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
@@ -153,6 +154,7 @@ const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
 const conversationService = ConversationService.getInstance();
 const worktreeMetadataService = WorktreeMetadataService.getInstance();
+const worktreeTagService = WorktreeTagService.getInstance();
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -2128,6 +2130,35 @@ app.get('/api/prs', async (req, res) => {
   } catch (error) {
     logger.error('Failed to list PRs', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to list PRs' });
+  }
+});
+
+// ============================================
+// Worktree Tags API
+// ============================================
+
+app.get('/api/worktree-tags', (req, res) => {
+  try {
+    res.json(worktreeTagService.getAll());
+  } catch (error) {
+    logger.error('Failed to get worktree tags', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get worktree tags' });
+  }
+});
+
+app.post('/api/worktree-tags/ready', express.json(), async (req, res) => {
+  try {
+    const { worktreePath, ready } = req.body || {};
+    if (!worktreePath) {
+      return res.status(400).json({ error: 'worktreePath is required' });
+    }
+
+    const tag = await worktreeTagService.setReadyForReview(worktreePath, ready);
+    io.emit('worktree-tag-updated', { worktreePath, tag });
+    res.json({ worktreePath, tag });
+  } catch (error) {
+    logger.error('Failed to update ready-for-review tag', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to update ready-for-review tag' });
   }
 });
 

@@ -57,7 +57,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 ### PR management
 - [x] PR list view (mine by default)
 - [x] Filter toggle for “others’ PRs”
-- [ ] “Ready for review” tagging (independent of PR creation)
+- [x] “Ready for review” tagging (independent of PR creation)
 
 ### Naming / branding
 - [ ] UI copy updates: “Claude” → “Agent” where appropriate
