@@ -36,7 +36,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Remove/hide non-functional “Dynamic layout”
 - [x] Remove or fix empty “Quick actions” strip
 - [x] Sidebar worktree list is compact
-- [ ] Modal close buttons are usable (ports + conversations + worktree picker)
+- [x] Modal close buttons are usable (ports + conversations + worktree picker)
 
 ### Ports / services
 - [x] Remove bottom-left “Services” list under worktrees
