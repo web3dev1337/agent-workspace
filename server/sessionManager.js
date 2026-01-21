@@ -1708,6 +1708,7 @@ class SessionManager extends EventEmitter {
   getSessionStates() {
     const states = {};
     for (const [id, session] of this.sessions) {
+      const recovery = session.workspace ? sessionRecoveryService.getSession(session.workspace, id) : null;
       states[id] = {
         status: session.status,
         branch: session.branch,
@@ -1718,6 +1719,8 @@ class SessionManager extends EventEmitter {
         worktreeId: session.worktreeId,
         repositoryName: session.repositoryName,  // For mixed-repo workspaces
         repositoryType: session.repositoryType,  // For dynamic launch options
+        agent: recovery?.lastAgent || null,
+        agentMode: recovery?.lastMode || null,
         lastActivity: session.lastActivity
       };
     }
