@@ -296,3 +296,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - This unblocks per-project config-driven buttons showing up in worktree terminals (plus any worktree-specific overrides).
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/129
+
+### Skill: folder/worktree conventions (done)
+- Added skill `skills/public/orchestrator-worktree-conventions/SKILL.md` with supporting examples in `skills/public/orchestrator-worktree-conventions/references/layout.md`.
+- Validated skill structure with `quick_validate.py`.
+- PR: (pending)
