@@ -22,12 +22,6 @@ class StatusDetector {
     this.waitingPatterns = [
       /\? for shortcuts$/m,           // Claude ready prompt (must be at line end)
       /^> $/m,                         // Input prompt (Claude waiting for input)
-      /Do you want to proceed\?$/m,   // Bash command confirmation
-      /\? 1\. Yes$/m,                  // Bash command options
-      /\(y\/N\)\s*$/,                  // Y/N prompt at line end
-      /\(Y\/n\)\s*$/,
-      /\[y\/n\]\s*$/i,
-      /Type 'yes' or 'no'.*$/m,
     ];
 
     // RELIABLE completion indicators - Claude shows these when done

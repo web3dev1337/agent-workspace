@@ -28,10 +28,10 @@ describe('StatusDetector', () => {
       expect(status).toBe('waiting');
     });
 
-    it('should detect waiting status from y/N prompt', () => {
+    it('should not treat y/N prompts as waiting', () => {
       const buffer = 'Do you want to continue? (y/N) ';
       const status = detector.detectStatus(buffer);
-      expect(status).toBe('waiting');
+      expect(status).not.toBe('waiting');
     });
 
     it('should detect waiting status from Cost line (completion)', () => {
