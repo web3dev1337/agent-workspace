@@ -69,7 +69,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 ### Config-driven buttons
 - [x] Custom buttons are wired from config JSON
 - [x] Cascaded config hierarchy works reliably
-- [ ] Dynamic port selection avoids collisions
+- [x] Dynamic port selection avoids collisions
 
 ### Skill + docs
 - [x] Skill doc added for folder/worktree conventions
