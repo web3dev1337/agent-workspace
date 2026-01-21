@@ -301,3 +301,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Added skill `skills/public/orchestrator-worktree-conventions/SKILL.md` with supporting examples in `skills/public/orchestrator-worktree-conventions/references/layout.md`.
 - Validated skill structure with `quick_validate.py`.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/130
+
+### Ports: dynamic port selection avoids collisions (done)
+- Port allocation uses `server/portRegistry.js` (8080–8199) with lsof-based availability checks and a per-(repoPath,worktreeId) cache.
+- Server start flow uses `PortRegistry.suggestPort()` and falls back to the next free port if the preferred one is taken.
+- PR: (pending)
