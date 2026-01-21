@@ -711,10 +711,17 @@ class ClaudeOrchestrator {
       });
     }
     
-    // View buttons
-    document.getElementById('view-all').addEventListener('click', () => {
-      this.showAllTerminals();
-    });
+	    // View buttons
+	    const dashboardBtn = document.getElementById('dashboard-btn');
+	    if (dashboardBtn) {
+	      dashboardBtn.addEventListener('click', () => {
+	        this.showDashboard();
+	      });
+	    }
+
+	    document.getElementById('view-all').addEventListener('click', () => {
+	      this.showAllTerminals();
+	    });
     
     document.getElementById('view-claude-only').addEventListener('click', () => {
       this.showClaudeOnly();
