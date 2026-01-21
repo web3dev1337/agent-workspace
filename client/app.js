@@ -1997,7 +1997,7 @@ class ClaudeOrchestrator {
       <div class="terminal-header">
         <div class="terminal-title">
           <span class="status-indicator ${session.status}" id="status-${sessionId}"></span>
-          <span>${isClaudeSession ? '🤖 Claude' : '💻 Server'} ${displayName}</span>
+          <span>${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
           <span class="terminal-branch ${(session.branch === 'master' || session.branch === 'main' || session.branch?.startsWith('master-') || session.branch?.startsWith('main-')) ? 'master-branch' : ''}">${session.branch || ''}</span>
         </div>
         <div class="terminal-controls">
@@ -4044,7 +4044,7 @@ class ClaudeOrchestrator {
       const isClaudeSession = sessionId.includes('-claude');
       const worktreeNumber = sessionId.split('-')[0].replace('work', '');
       
-      if (focusedTitle) focusedTitle.textContent = `${isClaudeSession ? '🤖 Claude' : '💻 Server'} ${worktreeNumber}`;
+      if (focusedTitle) focusedTitle.textContent = `${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${worktreeNumber}`;
       if (focusedBranch) focusedBranch.textContent = session.branch || '';
       if (focusedStatus) focusedStatus.className = `status-indicator ${session.status || 'idle'}`;
       
