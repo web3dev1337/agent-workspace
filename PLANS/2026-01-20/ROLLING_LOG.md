@@ -363,3 +363,19 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Docs updated: `diff-viewer/START_HERE.md`
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`, diff-viewer smoke (`node test-diff-engines.js`)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/140
+
+### Diff viewer: rich text analysis (server, non-breaking) (done)
+- Enhanced the text diff engine to compute “rich” operations: Updates (paired -/+), Moves (exact block move), Copy/Paste (repeated added lines), Find/Replace (repeated token substitutions).
+- Kept backwards compatibility by continuing to return `type: "text"` with `changes` + `stats`, while attaching `analysis.richText` for the richer representation.
+- Added smoke script: `diff-viewer/test-rich-text.js`
+- Tests: `node diff-viewer/test-rich-text.js`, `node diff-viewer/test-diff-engines.js`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/142
+
+### Diff viewer: rich diff UI (done)
+- Added a new `RichDiffView` UI that renders:
+  - Hunk headers + line numbers
+  - Updated lines as paired -/+ with inline segment highlights
+  - Summary badges + small lists for find/replace, moves, and copy/paste
+- Added a **Rich Diff** toggle (default on). Uses **Hide Noise** to collapse unchanged context lines.
+- Tests: `npm --prefix diff-viewer/client run build`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/143
