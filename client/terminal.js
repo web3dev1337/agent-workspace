@@ -24,6 +24,11 @@ class TerminalManager {
     this.terminalScrollStates = new Map();
     this.userScrolling = new Map();
     this.ephemeralLineState = new Map();
+
+    // Guardrail: never resize the PTY to tiny dimensions (can hard-wrap output irreversibly).
+    this.lastGoodPtyDimensions = new Map(); // sessionId -> { cols, rows }
+    this.minPtyCols = 40;
+    this.minPtyRows = 5;
     
     // Apply global terminal scrollbar styles
     this.applyScrollbarStyles();
@@ -503,27 +508,28 @@ class TerminalManager {
 
         fitAddon.fit();
 
-        // Verify fit produced reasonable dimensions
-        if (terminal.cols < 10 || terminal.rows < 3) {
-          console.warn(`Terminal ${sessionId} fit resulted in small dimensions: ${terminal.cols}x${terminal.rows}`);
-          // Schedule another fit attempt
+        // Get dimensions and (only if reasonable) notify server. Resizing the PTY to
+        // very small sizes can hard-wrap output in the shell, which can't be undone.
+        const cols = terminal?.cols || 0;
+        const rows = terminal?.rows || 0;
+        const isReasonablePtySize = cols >= this.minPtyCols && rows >= this.minPtyRows;
+
+        if (!isReasonablePtySize) {
+          console.warn(`Terminal ${sessionId} fit produced tiny size: ${cols}x${rows}; not resizing PTY`);
           if (retryCount < 3) {
             setTimeout(() => this.fitTerminal(sessionId, retryCount + 1), 200);
           }
+        } else {
+          this.lastGoodPtyDimensions.set(sessionId, { cols, rows });
+          this.orchestrator.resizeTerminal(sessionId, cols, rows);
         }
 
-        // Get dimensions and notify server
-        if (terminal) {
-          const dimensions = { cols: terminal.cols, rows: terminal.rows };
-          this.orchestrator.resizeTerminal(sessionId, dimensions.cols, dimensions.rows);
-
-          // Force refresh after resize to prevent rendering artifacts
-          requestAnimationFrame(() => {
-            if (terminal && !terminal._core?.disposed) {
-              terminal.refresh(0, terminal.rows - 1);
-            }
-          });
-        }
+        // Force refresh after fit to prevent rendering artifacts
+        requestAnimationFrame(() => {
+          if (terminal && !terminal._core?.disposed) {
+            terminal.refresh(0, Math.max(0, terminal.rows - 1));
+          }
+        });
       } catch (err) {
         console.error(`Failed to fit terminal ${sessionId}:`, err);
       }
