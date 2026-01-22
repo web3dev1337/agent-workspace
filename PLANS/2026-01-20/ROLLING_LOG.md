@@ -331,3 +331,11 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
   - “In use” buttons are no longer disabled; clicking them reveals the existing sessions instead of blocking.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/134
+
+### Terminal grid: allow scrolling when >16 visible (done)
+- Fixes the “tiny slivers at the bottom” issue when more than 16 terminals are visible (extra rows were being clipped because the grid used `overflow:hidden` and only defined layouts up to 16).
+- Adds a `terminal-grid-scrollable` mode when `data-visible-count > 16`:
+  - Enables vertical scrolling
+  - Uses fixed-ish `grid-auto-rows` so terminals remain usable
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: (pending)
