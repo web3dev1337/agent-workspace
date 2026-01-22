@@ -51,6 +51,7 @@ const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
 const { WorktreeMetadataService } = require('./worktreeMetadataService');
 const { WorktreeTagService } = require('./worktreeTagService');
+const { DiffViewerService } = require('./diffViewerService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
@@ -157,6 +158,7 @@ const productLauncherService = ProductLauncherService.getInstance();
 const conversationService = ConversationService.getInstance();
 const worktreeMetadataService = WorktreeMetadataService.getInstance();
 const worktreeTagService = WorktreeTagService.getInstance();
+const diffViewerService = DiffViewerService.getInstance();
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -2327,6 +2329,30 @@ app.post('/api/products/launch', async (req, res) => {
   } catch (error) {
     logger.error('Failed to launch product', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// Advanced Diff Viewer (on-demand auto-start)
+// ============================================
+
+app.get('/api/diff-viewer/status', async (req, res) => {
+  try {
+    const status = await diffViewerService.getStatus();
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to get diff viewer status', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get diff viewer status' });
+  }
+});
+
+app.post('/api/diff-viewer/ensure', async (req, res) => {
+  try {
+    const result = await diffViewerService.ensureRunning();
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to start diff viewer', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to start diff viewer', message: error.message });
   }
 });
 
