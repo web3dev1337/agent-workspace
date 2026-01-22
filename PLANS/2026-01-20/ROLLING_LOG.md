@@ -411,3 +411,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Adds a single scroll container plus an optional “Wheel advances files” mode so you can scroll through diffs file-by-file without constant clicking.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`, `npm --prefix diff-viewer/client run build`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/152
+
+### Diff viewer: rebuild client when stale (done)
+- Fixes a “stale UI” issue: `start-diff-viewer.sh` used to build the client only when `client/dist` was missing, which meant pulling updates could still serve old JS/CSS.
+- Now the script rebuilds when `client/src` (or key config files) are newer than `client/dist/index.html`.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/154
