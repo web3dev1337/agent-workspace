@@ -113,7 +113,7 @@
 
 .rich-line {
   display: grid;
-  grid-template-columns: 56px 56px 1fr;
+  grid-template-columns: 56px minmax(0, 1fr) 56px minmax(0, 1fr);
   align-items: stretch;
 }
 
@@ -123,17 +123,23 @@
   color: #666;
   user-select: none;
   border-right: 1px solid #161616;
+  background: #0b0b0b;
 }
 
 .rich-code {
   padding: 2px 10px;
   white-space: pre;
-  overflow-x: auto;
+  min-width: 0;
+  background: #0b0b0b;
 }
 
 .rich-code-muted {
   color: #888;
   font-style: italic;
+}
+
+.rich-code-old {
+  border-right: 1px solid #161616;
 }
 
 .rich-prefix {
@@ -143,27 +149,34 @@
   color: #888;
 }
 
-.rich-line-added {
+.rich-line-added .rich-code-new,
+.rich-line-added .rich-gutter.rich-new {
   background: rgba(40, 167, 69, 0.12);
 }
 
-.rich-line-deleted {
+.rich-line-deleted .rich-code-old,
+.rich-line-deleted .rich-gutter.rich-old {
   background: rgba(220, 53, 69, 0.12);
 }
 
-.rich-line-updated-old {
+.rich-line-updated .rich-code-old,
+.rich-line-updated .rich-gutter.rich-old {
   background: rgba(220, 53, 69, 0.10);
 }
 
-.rich-line-updated-new {
+.rich-line-updated .rich-code-new,
+.rich-line-updated .rich-gutter.rich-new {
   background: rgba(40, 167, 69, 0.10);
 }
 
-.rich-line-context {
-  background: #0b0b0b;
+.rich-line-context-collapsed {
+  background: #0f0f0f;
 }
 
-.rich-line-context-collapsed {
+.rich-collapsed {
+  grid-column: 1 / -1;
+  padding: 6px 10px;
+  border-bottom: 1px solid #141414;
   background: #0f0f0f;
 }
 
