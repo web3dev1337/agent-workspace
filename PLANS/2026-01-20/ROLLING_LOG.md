@@ -385,3 +385,12 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Uses `fitAddon.proposeDimensions()` + last-known-good cols heuristic to avoid fitting while the DOM/font/layout is unstable.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/145
+
+### Diff viewer: auto-start on open (done)
+- Clicking the 🔍 button now starts the diff viewer if it’s not running and redirects the new tab once ready.
+- Adds:
+  - `POST /api/diff-viewer/ensure`
+  - `GET /api/diff-viewer/status`
+  - `server/diffViewerService.js` (spawns `diff-viewer/start-diff-viewer.sh`, logs to `logs/diff-viewer.log`)
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/147
