@@ -405,3 +405,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Playwright tests set `AUTO_START_DIFF_VIEWER=false` to avoid extra background processes.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/150
+
+### Diff viewer: review UX (header sizing + scroll navigation) (done)
+- Fixes a flex/CSS issue where the per-file header could take most of the right panel.
+- Adds a single scroll container plus an optional “Wheel advances files” mode so you can scroll through diffs file-by-file without constant clicking.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`, `npm --prefix diff-viewer/client run build`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/152
