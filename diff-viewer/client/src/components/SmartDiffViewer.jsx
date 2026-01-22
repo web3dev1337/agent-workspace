@@ -3,7 +3,6 @@ import ReviewableFileTree from './ReviewableFileTree';
 import SmartDiffView from './SmartDiffView';
 import EnhancedDiffView from './EnhancedDiffView';
 import RichDiffView from './RichDiffView';
-import CollapsibleHeader from './CollapsibleHeader';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import './SmartDiffViewer.css';
 
@@ -17,10 +16,14 @@ const SmartDiffViewer = ({ data }) => {
     noise: false,
     richDiff: true,
     semanticView: false,
-    autoAdvance: false
+    autoAdvance: false,
+    scrollWheelAdvance: true
   });
 
   const { metadata, diff, type } = data;
+  const diffScrollRef = useRef(null);
+  const lastWheelNavAtRef = useRef(0);
+  const pendingScrollEdgeRef = useRef(null); // 'top' | 'bottom' | null
   
   // Extract PR info from metadata
   const prInfo = metadata && metadata.owner && metadata.repo && (metadata.number || metadata.pr) ? {
@@ -54,6 +57,25 @@ const SmartDiffViewer = ({ data }) => {
       setSelectedFile(files[0]);
     }
   }, [files]);
+
+  // When switching files via wheel navigation, adjust scroll to the correct edge.
+  useEffect(() => {
+    const edge = pendingScrollEdgeRef.current;
+    if (!edge) return;
+
+    pendingScrollEdgeRef.current = null;
+    const el = diffScrollRef.current;
+    if (!el) return;
+
+    // Wait for the next paint so the new content is in the DOM.
+    requestAnimationFrame(() => {
+      if (edge === 'top') {
+        el.scrollTop = 0;
+      } else if (edge === 'bottom') {
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+  }, [selectedFile?.path]);
 
   // Toggle review state for a file
   const toggleFileReview = (file) => {
@@ -90,6 +112,51 @@ const SmartDiffViewer = ({ data }) => {
       if (!reviewState[files[i].path]) return i;
     }
     return -1;
+  };
+
+  const selectAdjacentFile = (direction) => {
+    if (!selectedFile) return;
+    const currentIndex = files.findIndex(f => f.path === selectedFile.path);
+    if (currentIndex < 0) return;
+
+    if (direction === 'next' && currentIndex < files.length - 1) {
+      pendingScrollEdgeRef.current = 'top';
+      setSelectedFile(files[currentIndex + 1]);
+    } else if (direction === 'prev' && currentIndex > 0) {
+      pendingScrollEdgeRef.current = 'bottom';
+      setSelectedFile(files[currentIndex - 1]);
+    }
+  };
+
+  const handleDiffWheel = (e) => {
+    if (!expandedSections.scrollWheelAdvance) return;
+    if (!selectedFile) return;
+
+    const el = diffScrollRef.current;
+    if (!el) return;
+
+    const atTop = el.scrollTop <= 0;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
+
+    // Only navigate when user tries to scroll past the boundary.
+    const isTryingToGoNext = e.deltaY > 0;
+    const isTryingToGoPrev = e.deltaY < 0;
+    if ((isTryingToGoNext && !atBottom) || (isTryingToGoPrev && !atTop)) {
+      return;
+    }
+
+    // Debounce to avoid accidental rapid switching.
+    const now = Date.now();
+    if (now - lastWheelNavAtRef.current < 500) return;
+    lastWheelNavAtRef.current = now;
+
+    if (isTryingToGoNext && atBottom) {
+      e.preventDefault();
+      selectAdjacentFile('next');
+    } else if (isTryingToGoPrev && atTop) {
+      e.preventDefault();
+      selectAdjacentFile('prev');
+    }
   };
 
   // Use keyboard navigation
@@ -155,69 +222,83 @@ const SmartDiffViewer = ({ data }) => {
         <div className="right-panel">
           {selectedFile ? (
             <>
-              <CollapsibleHeader 
-                title={selectedFile.path}
-                stats={{
-                  additions: selectedFile.additions,
-                  deletions: selectedFile.deletions,
-                  reviewed: reviewState[selectedFile.path]
-                }}
-                onToggleReview={() => toggleFileReview(selectedFile)}
-              />
+              <div className="file-header-bar">
+                <div className="file-header-title" title={selectedFile.path}>
+                  {selectedFile.path}
+                </div>
+                <div className="file-header-meta">
+                  <span className="file-header-badge additions">+{selectedFile.additions || 0}</span>
+                  <span className="file-header-badge deletions">-{selectedFile.deletions || 0}</span>
+                  <button
+                    type="button"
+                    className="file-header-badge file-header-review"
+                    onClick={() => toggleFileReview(selectedFile)}
+                    title="Toggle reviewed"
+                  >
+                    {reviewState[selectedFile.path] ? 'Reviewed' : 'Mark reviewed'}
+                  </button>
+                </div>
+              </div>
               
               {/* Show smart diff if available with proper structure, otherwise standard diff */}
-              {selectedFile.analysis?.richText?.hunks?.length > 0 && expandedSections.richDiff ? (
-                <RichDiffView
-                  richText={selectedFile.analysis.richText}
-                  hideContext={!expandedSections.noise}
-                />
-              ) : selectedFile.analysis && expandedSections.semanticView && 
-                 selectedFile.analysis.significantChanges && selectedFile.analysis.significantChanges.length > 0 ? (
-                  <SmartDiffView 
-                    analysis={selectedFile.analysis}
-                    file={selectedFile}
-                    expandedSections={expandedSections}
-                    onToggleSection={toggleSection}
+              <div
+                ref={diffScrollRef}
+                className="diff-scroll-container"
+                onWheel={handleDiffWheel}
+              >
+                {selectedFile.analysis?.richText?.hunks?.length > 0 && expandedSections.richDiff ? (
+                  <RichDiffView
+                    richText={selectedFile.analysis.richText}
+                    hideContext={!expandedSections.noise}
                   />
-                ) : (
-                  <div style={{ height: '100%', overflow: 'auto', backgroundColor: '#1e1e1e' }}>
-                    {selectedFile.patch ? (
-                      <div style={{ padding: '20px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px' }}>
-                        {selectedFile.patch.split('\n').map((line, idx) => {
-                          let style = { margin: 0, padding: '2px 5px', whiteSpace: 'pre' };
-                          
-                          if (line.startsWith('+')) {
-                            style.backgroundColor = '#28a745';
-                            style.color = '#fff';
-                          } else if (line.startsWith('-')) {
-                            style.backgroundColor = '#dc3545';
-                            style.color = '#fff';
-                          } else if (line.startsWith('@@')) {
-                            style.backgroundColor = '#0366d6';
-                            style.color = '#fff';
-                            style.fontWeight = 'bold';
-                          } else {
-                            style.color = '#d4d4d4';
-                          }
-                          
-                          return (
-                            <div key={idx} style={style}>
-                              {line || ' '}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <EnhancedDiffView 
-                        file={selectedFile}
-                        diffData={{
-                          type: selectedFile.diffType || 'text',
-                          ...selectedFile
-                        }}
-                      />
-                    )}
-                  </div>
-                )}
+                ) : selectedFile.analysis && expandedSections.semanticView && 
+                   selectedFile.analysis.significantChanges && selectedFile.analysis.significantChanges.length > 0 ? (
+                    <SmartDiffView 
+                      analysis={selectedFile.analysis}
+                      file={selectedFile}
+                      expandedSections={expandedSections}
+                      onToggleSection={toggleSection}
+                    />
+                  ) : (
+                    <div style={{ backgroundColor: '#1e1e1e' }}>
+                      {selectedFile.patch ? (
+                        <div style={{ padding: '20px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px' }}>
+                          {selectedFile.patch.split('\n').map((line, idx) => {
+                            let style = { margin: 0, padding: '2px 5px', whiteSpace: 'pre' };
+                            
+                            if (line.startsWith('+')) {
+                              style.backgroundColor = '#28a745';
+                              style.color = '#fff';
+                            } else if (line.startsWith('-')) {
+                              style.backgroundColor = '#dc3545';
+                              style.color = '#fff';
+                            } else if (line.startsWith('@@')) {
+                              style.backgroundColor = '#0366d6';
+                              style.color = '#fff';
+                              style.fontWeight = 'bold';
+                            } else {
+                              style.color = '#d4d4d4';
+                            }
+                            
+                            return (
+                              <div key={idx} style={style}>
+                                {line || ' '}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <EnhancedDiffView 
+                          file={selectedFile}
+                          diffData={{
+                            type: selectedFile.diffType || 'text',
+                            ...selectedFile
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
+              </div>
             </>
           ) : (
             <div className="no-file-selected">
@@ -253,6 +334,14 @@ const SmartDiffViewer = ({ data }) => {
             onChange={() => toggleSection('autoAdvance')}
           />
           Auto-advance
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={expandedSections.scrollWheelAdvance}
+            onChange={() => toggleSection('scrollWheelAdvance')}
+          />
+          Wheel advances files
         </label>
         <label>
           <input

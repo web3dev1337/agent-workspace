@@ -185,8 +185,7 @@ const SmartDiffView = ({ analysis, file }) => {
                 backgroundColor: '#1e1e1e', 
                 padding: '10px',
                 fontFamily: 'monospace',
-                fontSize: '13px',
-                overflow: 'auto'
+                fontSize: '13px'
               }}>
                 {file.patch.split('\n').map((line, idx) => {
                   let style = { margin: 0, padding: '2px 5px' };
