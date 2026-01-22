@@ -4,7 +4,7 @@
 
 ### Option 1: Use the startup script (Recommended)
 ```bash
-cd /home/ab/HyFire2-work1/claude-orchestrator/diff-viewer
+cd /path/to/claude-orchestrator/diff-viewer
 chmod +x start-diff-viewer.sh
 ./start-diff-viewer.sh
 ```
@@ -56,3 +56,6 @@ If you see 500 errors, make sure:
 1. You've built the client (`npm run build` in client folder)
 2. You're accessing on port 7655 (not 7656)
 3. The server is running (`npm run dev` in main folder)
+4. Auth is configured:
+   - Preferred: `gh auth status` shows you're logged in (diff viewer falls back to `gh api`)
+   - Optional: set `GITHUB_TOKEN` in `.env` for Octokit auth
