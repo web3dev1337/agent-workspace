@@ -1543,9 +1543,12 @@ class ClaudeOrchestrator {
       // Single-dot sidebar status: prefer the agent (Claude) status
       const sidebarStatus = worktree.claude?.status || worktree.server?.status || 'idle';
 
-      const agentId = worktree.claude?.agent || null;
-      const agentIcon = this.getAgentIcon(agentId);
-      const agentTitle = agentId ? `Agent: ${agentId}` : 'Agent: unknown';
+      const agentId = worktree.claude?.agent || worktree.server?.agent || null;
+      const statusTitleParts = [
+        `Status: ${sidebarStatus}`,
+        agentId ? `Agent: ${agentId}` : null
+      ].filter(Boolean);
+      const statusTitle = statusTitleParts.join(' • ');
 
       const worktreePath = this.getWorktreePathForSidebarEntry(worktree);
       const isReadyForReview = !!(worktreePath && this.worktreeTags.get(worktreePath)?.readyForReview);
@@ -1554,11 +1557,9 @@ class ClaudeOrchestrator {
       item.innerHTML = `
         <div class="worktree-header">
           <div class="worktree-title">
-            <span class="visibility-indicator">${isVisible ? '👁' : '🚫'}</span>
-            <span class="status-dot worktree-status-dot ${sidebarStatus}"></span>
-            <span class="agent-type-icon" title="${this.escapeHtml(agentTitle)}">${agentIcon}</span>
-            <span class="worktree-name">${displayName}</span>
-            <span class="worktree-branch">${branch}</span>
+            <span class="status-dot worktree-status-dot ${sidebarStatus}" title="${this.escapeHtml(statusTitle)}"></span>
+            <span class="worktree-name" title="${this.escapeHtml(displayName)}">${displayName}</span>
+            <span class="worktree-branch" title="${this.escapeHtml(branch)}">@${branch}</span>
           </div>
           <div class="worktree-actions">
             <button class="ready-review-btn ${isReadyForReview ? 'ready' : ''}"
