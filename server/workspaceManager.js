@@ -299,8 +299,15 @@ class WorkspaceManager {
       for (const file of jsonFiles) {
         try {
           const filePath = path.join(this.workspacesPath, file);
+          const stats = await fs.stat(filePath).catch(() => null);
           const content = await fs.readFile(filePath, 'utf8');
           const workspace = JSON.parse(content);
+
+          // Backfill lastAccess for older configs so the dashboard has something meaningful to show.
+          // We use the config file mtime as a reasonable approximation until the user opens a workspace.
+          if (!workspace.lastAccess && stats?.mtime) {
+            workspace.lastAccess = new Date(stats.mtime).toISOString();
+          }
 
           // Validate workspace
           const validation = validateWorkspace(workspace);
@@ -489,6 +496,7 @@ class WorkspaceManager {
     }
 
     const newWorkspace = this.workspaces.get(workspaceId);
+    const nowIso = new Date().toISOString();
 
     // Save session states for current workspace (if any)
     if (this.activeWorkspace) {
@@ -502,8 +510,18 @@ class WorkspaceManager {
     this.config.activeWorkspace = workspaceId;
     await this.saveConfig();
 
-    logger.info(`Switched to workspace: ${newWorkspace.name}`);
+    // Track last access time for dashboard "Last used" display
+    // Persist so it survives refresh/restart.
+    try {
+      const updatedWorkspace = await this.updateWorkspace(workspaceId, { lastAccess: nowIso });
+      this.activeWorkspace = updatedWorkspace;
+      logger.info(`Switched to workspace: ${updatedWorkspace.name}`);
+      return updatedWorkspace;
+    } catch (error) {
+      logger.warn('Failed to persist workspace lastAccess', { workspaceId, error: error.message });
+    }
 
+    logger.info(`Switched to workspace: ${newWorkspace.name}`);
     return newWorkspace;
   }
 
