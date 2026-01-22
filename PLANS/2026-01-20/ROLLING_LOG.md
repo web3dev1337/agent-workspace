@@ -416,3 +416,23 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Fixes a “stale UI” issue: `start-diff-viewer.sh` used to build the client only when `client/dist` was missing, which meant pulling updates could still serve old JS/CSS.
 - Now the script rebuilds when `client/src` (or key config files) are newer than `client/dist/index.html`.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/154
+
+### Diff viewer: render updates as split rows + rebuild client on ensure (done)
+- Rich Diff “updated” operations now render as a single split row (old vs new) instead of two stacked +/- rows, reducing noise for small edits.
+- Orchestrator `POST /api/diff-viewer/ensure` now also rebuilds the diff-viewer client bundle when stale so UI-only changes apply even if the diff-viewer server is already running.
+- Tests: `npm run test:unit`, `npm --prefix diff-viewer/client run build`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/156
+
+### Conversation browser: autocomplete dropdown no longer blocks first result (done)
+- Clicking anywhere outside the search input now dismisses the autocomplete dropdown so it doesn't cover/cut off the first result.
+- Escape hides autocomplete first; Escape again closes the modal.
+- Ensures dismiss listeners are cleaned up even when the modal closes via “Resume”.
+- Tests: `npm run test:unit`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/157
+
+### Sidebar worktree list: remove extra icons + tighten layout (done)
+- Removed the agent icon (🤖/⚡) and visibility icon from the worktree sidebar row to reduce clutter.
+- Kept a single status dot and tightened padding/font sizing.
+- Repo/worktree/branch labels should now truncate less aggressively (and show full values on hover via tooltips).
+- Tests: `npm run test:unit`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/158
