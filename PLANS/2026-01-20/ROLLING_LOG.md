@@ -356,3 +356,10 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Backend `/api/prs` now supports: `mode=all`, `state=merged`, `sort=created`, `repo=...`, `owner=...`.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/138
+
+### Diff viewer: gh auth fallback + fixed start scripts (done)
+- Fixed `diff-viewer/start-diff-viewer.sh` to run from the repo (no hardcoded HyFire2 path) and build the client bundle if needed.
+- Diff viewer GitHub API now falls back to `gh api` when `GITHUB_TOKEN` is not set (works with `gh auth` for private repos).
+- Docs updated: `diff-viewer/START_HERE.md`
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`, diff-viewer smoke (`node test-diff-engines.js`)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/140
