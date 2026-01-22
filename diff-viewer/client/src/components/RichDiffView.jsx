@@ -24,14 +24,18 @@ function renderSegments(segments, flavor) {
   });
 }
 
-function LineRow({ kind, oldLine, newLine, prefix, children }) {
+function SplitLineRow({ kind, oldLine, oldPrefix, oldChildren, newLine, newPrefix, newChildren }) {
   return (
     <div className={`rich-line rich-line-${kind}`}>
       <div className="rich-gutter rich-old">{oldLine ?? ''}</div>
+      <div className="rich-code rich-code-old">
+        <span className="rich-prefix">{oldPrefix ?? ' '}</span>
+        {oldChildren}
+      </div>
       <div className="rich-gutter rich-new">{newLine ?? ''}</div>
-      <div className="rich-code">
-        <span className="rich-prefix">{prefix}</span>
-        {children}
+      <div className="rich-code rich-code-new">
+        <span className="rich-prefix">{newPrefix ?? ' '}</span>
+        {newChildren}
       </div>
     </div>
   );
@@ -45,9 +49,7 @@ function renderHunkRows(rows, { hideContext }) {
     if (!hideContext || hiddenContext === 0) return;
     rendered.push(
       <div key={`${keyPrefix}-ctx-${rendered.length}`} className="rich-line rich-line-context-collapsed">
-        <div className="rich-gutter rich-old" />
-        <div className="rich-gutter rich-new" />
-        <div className="rich-code rich-code-muted">
+        <div className="rich-code rich-code-muted rich-collapsed">
           … {hiddenContext} unchanged line{hiddenContext === 1 ? '' : 's'} hidden (toggle “Hide Noise” to show)
         </div>
       </div>
@@ -66,15 +68,16 @@ function renderHunkRows(rows, { hideContext }) {
 
       flushHiddenContext(`row-${idx}`);
       rendered.push(
-        <LineRow
+        <SplitLineRow
           key={`ctx-${idx}`}
           kind="context"
           oldLine={row.oldLine}
           newLine={row.newLine}
-          prefix=" "
-        >
-          <span className="seg-common">{row.content ?? ''}</span>
-        </LineRow>
+          oldPrefix=" "
+          newPrefix=" "
+          oldChildren={<span className="seg-common">{row.content ?? ''}</span>}
+          newChildren={<span className="seg-common">{row.content ?? ''}</span>}
+        />
       );
       return;
     }
@@ -83,65 +86,68 @@ function renderHunkRows(rows, { hideContext }) {
 
     if (type === 'added') {
       rendered.push(
-        <LineRow
+        <SplitLineRow
           key={`add-${idx}`}
           kind="added"
           oldLine={null}
           newLine={row.newLine}
-          prefix="+"
-        >
-          <span className="seg-common">{row.content ?? ''}</span>
-        </LineRow>
+          oldPrefix=" "
+          newPrefix="+"
+          oldChildren={null}
+          newChildren={<span className="seg-common">{row.content ?? ''}</span>}
+        />
       );
       return;
     }
 
     if (type === 'deleted') {
       rendered.push(
-        <LineRow
+        <SplitLineRow
           key={`del-${idx}`}
           kind="deleted"
           oldLine={row.oldLine}
           newLine={null}
-          prefix="-"
-        >
-          <span className="seg-common">{row.content ?? ''}</span>
-        </LineRow>
+          oldPrefix="-"
+          newPrefix=" "
+          oldChildren={<span className="seg-common">{row.content ?? ''}</span>}
+          newChildren={null}
+        />
       );
       return;
     }
 
     if (type === 'updated') {
       rendered.push(
-        <LineRow
-          key={`upd-old-${idx}`}
-          kind="updated-old"
+        <SplitLineRow
+          key={`upd-${idx}`}
+          kind="updated"
           oldLine={row.oldLine}
-          newLine={null}
-          prefix="-"
-        >
-          {renderSegments(row.oldSegments, 'old') ?? <span className="seg-common">{row.oldContent ?? ''}</span>}
-        </LineRow>
-      );
-      rendered.push(
-        <LineRow
-          key={`upd-new-${idx}`}
-          kind="updated-new"
-          oldLine={null}
           newLine={row.newLine}
-          prefix="+"
-        >
-          {renderSegments(row.newSegments, 'new') ?? <span className="seg-common">{row.newContent ?? ''}</span>}
-        </LineRow>
+          oldPrefix="-"
+          newPrefix="+"
+          oldChildren={
+            renderSegments(row.oldSegments, 'old') ?? <span className="seg-common">{row.oldContent ?? ''}</span>
+          }
+          newChildren={
+            renderSegments(row.newSegments, 'new') ?? <span className="seg-common">{row.newContent ?? ''}</span>
+          }
+        />
       );
       return;
     }
 
     // Unknown row type fallback
     rendered.push(
-      <LineRow key={`unk-${idx}`} kind="context" oldLine={row.oldLine} newLine={row.newLine} prefix=" ">
-        <span className="seg-common">{row.content ?? ''}</span>
-      </LineRow>
+      <SplitLineRow
+        key={`unk-${idx}`}
+        kind="context"
+        oldLine={row.oldLine}
+        newLine={row.newLine}
+        oldPrefix=" "
+        newPrefix=" "
+        oldChildren={<span className="seg-common">{row.content ?? ''}</span>}
+        newChildren={<span className="seg-common">{row.content ?? ''}</span>}
+      />
     );
   });
 
@@ -237,4 +243,3 @@ export default function RichDiffView({ richText, hideContext = true }) {
     </div>
   );
 }
-
