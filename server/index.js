@@ -2080,18 +2080,32 @@ app.get('/api/prs', async (req, res) => {
     const util = require('util');
     const execFileAsync = util.promisify(execFile);
 
-    const mode = (req.query.mode || 'mine').toLowerCase(); // mine | involved
-    const state = (req.query.state || 'all').toLowerCase(); // all | open | closed
+    const mode = (req.query.mode || 'mine').toLowerCase(); // mine | involved | all
+    const state = (req.query.state || 'all').toLowerCase(); // all | open | closed | merged
+    const sort = (req.query.sort || 'updated').toLowerCase(); // updated | created
     const limitRaw = parseInt(req.query.limit || '50', 10);
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
 
     const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const repoRaw = typeof req.query.repo === 'string' ? req.query.repo.trim() : '';
+    const ownerRaw = typeof req.query.owner === 'string' ? req.query.owner.trim() : '';
+
+    const repos = repoRaw
+      ? repoRaw.split(',').map(r => r.trim()).filter(Boolean).slice(0, 20)
+      : [];
+    const owners = ownerRaw
+      ? ownerRaw.split(',').map(o => o.trim()).filter(Boolean).slice(0, 20)
+      : [];
+
+    if (sort !== 'updated' && sort !== 'created') {
+      return res.status(400).json({ error: 'Invalid sort (expected updated|created)' });
+    }
 
     const args = [
       'search',
       'prs',
       '--sort',
-      'updated',
+      sort,
       '--order',
       'desc',
       '--limit',
@@ -2104,18 +2118,40 @@ app.get('/api/prs', async (req, res) => {
       args.push('--author', '@me');
     } else if (mode === 'involved') {
       args.push('--involves', '@me');
+    } else if (mode === 'all') {
+      // No author/involves filter
     } else {
-      return res.status(400).json({ error: 'Invalid mode (expected mine|involved)' });
+      return res.status(400).json({ error: 'Invalid mode (expected mine|involved|all)' });
     }
+
+    const queryParts = [];
 
     if (state === 'open' || state === 'closed') {
       args.push('--state', state);
+      // Treat "closed" as "closed but NOT merged" when the UI splits these states.
+      if (state === 'closed') {
+        queryParts.push('-is:merged');
+      }
+    } else if (state === 'merged') {
+      args.push('--merged');
     } else if (state !== 'all') {
-      return res.status(400).json({ error: 'Invalid state (expected all|open|closed)' });
+      return res.status(400).json({ error: 'Invalid state (expected all|open|closed|merged)' });
     }
 
+    owners.forEach(owner => {
+      args.push('--owner', owner);
+    });
+
+    repos.forEach(repo => {
+      args.push('--repo', repo);
+    });
+
     if (query) {
-      args.push(query);
+      queryParts.push(query);
+    }
+
+    if (queryParts.length) {
+      args.push('--', ...queryParts);
     }
 
     const { stdout } = await execFileAsync('gh', args, { timeout: 20000 });
@@ -2124,6 +2160,9 @@ app.get('/api/prs', async (req, res) => {
     res.json({
       mode,
       state,
+      sort,
+      repos,
+      owners,
       limit,
       query,
       count: Array.isArray(prs) ? prs.length : 0,

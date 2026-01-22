@@ -6507,6 +6507,11 @@ header h1 {
   flex: 1;
 }
 
+.prs-input {
+  min-width: 220px;
+  flex: 0 1 320px;
+}
+
 .prs-list {
   flex: 1;
   overflow-y: auto;
