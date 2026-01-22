@@ -2761,6 +2761,16 @@ httpServer.listen(PORT, HOST, () => {
   if (AUTH_TOKEN) {
     logger.info('Authentication enabled');
   }
+
+  // Start the Advanced Diff Viewer in the background (optional).
+  // Default: enabled, since users expect the 🔍 diff viewer to be ready without manual terminal steps.
+  const autoStartRaw = String(process.env.AUTO_START_DIFF_VIEWER ?? 'true').toLowerCase();
+  const shouldAutoStartDiffViewer = !['0', 'false', 'no'].includes(autoStartRaw);
+  if (shouldAutoStartDiffViewer) {
+    diffViewerService.ensureRunning().catch((error) => {
+      logger.warn('Diff viewer auto-start failed', { error: error.message });
+    });
+  }
   
   // Initialize sessions
   sessionManager.initializeSessions().catch(error => {
