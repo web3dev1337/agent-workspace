@@ -23,7 +23,7 @@ module.exports = defineConfig({
     },
   ],
   webServer: {
-    command: `ORCHESTRATOR_PORT=${SERVER_PORT} npm run dev:server`,
+    command: `AUTO_START_DIFF_VIEWER=false ORCHESTRATOR_PORT=${SERVER_PORT} npm run dev:server`,
     url: `http://localhost:${SERVER_PORT}`,
     timeout: 60000,
     reuseExistingServer: false,
