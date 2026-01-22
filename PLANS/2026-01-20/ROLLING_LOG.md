@@ -449,3 +449,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Older workspace configs backfill `lastAccess` from workspace JSON file mtime (best-effort) so existing cards aren’t all “never”.
 - Tests: `npm run test:unit`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/162
+
+### Commander panel: Ctrl/Cmd+V paste always inserts text (done)
+- Commander paste now uses the `paste` event (`clipboardData`) instead of `navigator.clipboard.readText()` for better reliability across browsers/webviews.
+- Prevents default xterm paste handling to avoid double-paste and the “no image found” style failure modes.
+- Tests: `npm run test:unit`
+- PR: (pending)
