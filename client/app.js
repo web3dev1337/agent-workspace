@@ -5599,8 +5599,11 @@ class ClaudeOrchestrator {
       : window.location.origin;
 
     const state = {
-      mode: localStorage.getItem('prs-panel-mode') || 'mine', // mine | involved
-      prsState: localStorage.getItem('prs-panel-state') || 'all', // all | open | closed
+      mode: localStorage.getItem('prs-panel-mode') || 'mine', // mine | involved | all
+      prsState: localStorage.getItem('prs-panel-state') || 'open', // all | open | merged | closed
+      sort: localStorage.getItem('prs-panel-sort') || 'updated', // updated | created
+      repo: localStorage.getItem('prs-panel-repo') || '', // comma-separated owner/repo
+      owner: localStorage.getItem('prs-panel-owner') || '', // comma-separated owner/org
       query: '',
       limit: 50
     };
@@ -5625,6 +5628,10 @@ class ClaudeOrchestrator {
               <input type="radio" name="prs-mode" value="involved">
               Include others
             </label>
+            <label class="quick-radio">
+              <input type="radio" name="prs-mode" value="all">
+              All
+            </label>
           </div>
           <div class="prs-toolbar-group">
             <span class="prs-label">State</span>
@@ -5637,10 +5644,27 @@ class ClaudeOrchestrator {
               Open
             </label>
             <label class="quick-radio">
+              <input type="radio" name="prs-state" value="merged">
+              Merged
+            </label>
+            <label class="quick-radio">
               <input type="radio" name="prs-state" value="closed">
-              Closed
+              Closed (unmerged)
             </label>
           </div>
+          <div class="prs-toolbar-group">
+            <span class="prs-label">Sort</span>
+            <label class="quick-radio">
+              <input type="radio" name="prs-sort" value="updated">
+              Updated
+            </label>
+            <label class="quick-radio">
+              <input type="radio" name="prs-sort" value="created">
+              Created
+            </label>
+          </div>
+          <input type="text" id="prs-repo" class="search-input prs-input" placeholder="Repo filter (owner/repo[,owner/repo])">
+          <input type="text" id="prs-owner" class="search-input prs-input" placeholder="Owner filter (org/user[,org])">
           <input type="text" id="prs-search" class="search-input prs-search" placeholder="Search PRs...">
           <button class="btn-secondary" id="prs-refresh">🔄 Refresh</button>
         </div>
@@ -5654,21 +5678,30 @@ class ClaudeOrchestrator {
 
     const listEl = modal.querySelector('#prs-list');
     const searchEl = modal.querySelector('#prs-search');
+    const repoEl = modal.querySelector('#prs-repo');
+    const ownerEl = modal.querySelector('#prs-owner');
     const refreshBtn = modal.querySelector('#prs-refresh');
     const modeInputs = modal.querySelectorAll('input[name="prs-mode"]');
     const stateInputs = modal.querySelectorAll('input[name="prs-state"]');
+    const sortInputs = modal.querySelectorAll('input[name="prs-sort"]');
 
     // Initialize UI state
     modeInputs.forEach(input => { input.checked = input.value === state.mode; });
     stateInputs.forEach(input => { input.checked = input.value === state.prsState; });
+    sortInputs.forEach(input => { input.checked = input.value === state.sort; });
+    if (repoEl) repoEl.value = state.repo || '';
+    if (ownerEl) ownerEl.value = state.owner || '';
 
     const fetchPRs = async () => {
       listEl.innerHTML = '<div class="loading">Loading PRs...</div>';
       const params = new URLSearchParams({
         mode: state.mode,
         state: state.prsState,
+        sort: state.sort,
         limit: String(state.limit)
       });
+      if (state.repo) params.set('repo', state.repo);
+      if (state.owner) params.set('owner', state.owner);
       if (state.query) params.set('q', state.query);
 
       try {
@@ -5692,7 +5725,11 @@ class ClaudeOrchestrator {
             stateLabel;
 
           const draftLabel = pr.isDraft ? '🟡 draft' : '';
+          const created = pr.createdAt ? new Date(pr.createdAt).toLocaleString() : '';
           const updated = pr.updatedAt ? new Date(pr.updatedAt).toLocaleString() : '';
+          const metaParts = [];
+          if (updated) metaParts.push(`Updated ${updated}`);
+          if (created) metaParts.push(`Created ${created}`);
 
           return `
             <div class="pr-row ${stateLabel}">
@@ -5704,10 +5741,11 @@ class ClaudeOrchestrator {
                   ${draftLabel ? `<span class="pr-badge draft">${draftLabel}</span>` : ''}
                 </div>
                 <div class="pr-subtitle">${this.escapeHtml(pr.title || '')}</div>
-                <div class="pr-meta">${updated}</div>
+                <div class="pr-meta">${this.escapeHtml(metaParts.join(' • '))}</div>
               </div>
               <div class="pr-actions">
                 <button class="btn-secondary pr-open-btn" data-url="${this.escapeHtml(pr.url)}">↗ Open</button>
+                <button class="btn-secondary pr-diff-btn" data-url="${this.escapeHtml(pr.url)}">🔍 Diff</button>
               </div>
             </div>
           `;
@@ -5742,10 +5780,42 @@ class ClaudeOrchestrator {
       });
     });
 
+    sortInputs.forEach(input => {
+      input.addEventListener('change', () => {
+        state.sort = input.value;
+        localStorage.setItem('prs-panel-sort', state.sort);
+        fetchPRs();
+      });
+    });
+
     if (searchEl) {
       searchEl.addEventListener('input', () => {
         state.query = (searchEl.value || '').trim();
         scheduleSearch();
+      });
+    }
+
+    const scheduleFilter = (() => {
+      let t;
+      return () => {
+        clearTimeout(t);
+        t = setTimeout(() => fetchPRs(), 250);
+      };
+    })();
+
+    if (repoEl) {
+      repoEl.addEventListener('input', () => {
+        state.repo = (repoEl.value || '').trim();
+        localStorage.setItem('prs-panel-repo', state.repo);
+        scheduleFilter();
+      });
+    }
+
+    if (ownerEl) {
+      ownerEl.addEventListener('input', () => {
+        state.owner = (ownerEl.value || '').trim();
+        localStorage.setItem('prs-panel-owner', state.owner);
+        scheduleFilter();
       });
     }
 
@@ -5754,16 +5824,27 @@ class ClaudeOrchestrator {
     }
 
     listEl.addEventListener('click', (e) => {
-      const btn = e.target.closest('.pr-open-btn');
+      const openBtn = e.target.closest('.pr-open-btn');
+      const diffBtn = e.target.closest('.pr-diff-btn');
+      const btn = openBtn || diffBtn;
       if (!btn) return;
+
       const url = btn.dataset.url;
       if (!url) return;
+
       try {
         new URL(url);
-        window.open(url, '_blank');
       } catch (error) {
         this.showToast('Invalid PR URL', 'error');
+        return;
       }
+
+      if (diffBtn) {
+        this.launchDiffViewer(url);
+        return;
+      }
+
+      window.open(url, '_blank');
     });
 
     // Close on backdrop click
