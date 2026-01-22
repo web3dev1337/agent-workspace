@@ -198,6 +198,15 @@ Update UI copy where it’s not specifically Claude-related:
 - “Claude” terminal pane → “Agent”
 - “Claude + Server” pair naming → “Agent + Server”
 
+## K. Advanced Diff Viewer: auto-start on open
+
+When clicking the Advanced Diff Viewer (🔍) from PR lists / GitHub links, the diff viewer should start automatically if it isn’t already running.
+
+**Acceptance criteria**
+- Clicking 🔍 opens a new tab that shows a “starting…” message and then redirects to the diff viewer when ready (no broken browser error page).
+- Orchestrator starts the diff viewer on-demand (default `http://localhost:7655`) and exposes status for polling.
+- Starting the diff viewer does not impact the separate orchestrator instance running from `master/` on port **3000**.
+
 Keep Claude-specific wording only when it truly is Claude-specific (Claude startup settings, Claude provider, etc).
 
 ## K. Codex/OpenCode detection + recovery improvements
