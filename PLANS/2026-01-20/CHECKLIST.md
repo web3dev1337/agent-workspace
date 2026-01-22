@@ -61,6 +61,8 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 
 ### Diff viewer
 - [x] Clicking 🔍 auto-starts diff viewer if needed
+- [x] Diff viewer works without native SQLite
+- [x] Diff viewer starts with orchestrator (`npm start`)
 
 ### Naming / branding
 - [x] UI copy updates: “Claude” → “Agent” where appropriate
