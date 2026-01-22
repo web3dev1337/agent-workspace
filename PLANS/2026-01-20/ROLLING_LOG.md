@@ -339,3 +339,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
   - Uses fixed-ish `grid-auto-rows` so terminals remain usable
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/135
+
+### Terminals: never resize PTY to tiny dimensions (done)
+- Further hardens terminal sizing against transient layout states (e.g. sidebar/tab/layout changes) that briefly produce tiny row/col counts.
+- Behavior: we still fit xterm, but we **skip resizing the PTY** if the computed size is below a safe minimum (prevents irreversible hard-wrapped output).
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/136
