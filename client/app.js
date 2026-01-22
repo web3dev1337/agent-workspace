@@ -4,6 +4,9 @@ class ClaudeOrchestrator {
     this.sessions = new Map();
     this.activeView = [];
     this.visibleTerminals = new Set(); // Track which terminals are visible
+    // Second-layer filter applied after per-worktree visibility toggles:
+    // 'all' | 'claude' | 'server'
+    this.viewMode = 'all';
     this.socket = null;
     this.terminalManager = null;
     this.notificationManager = null;
@@ -748,17 +751,17 @@ class ClaudeOrchestrator {
 	      });
 	    }
 
-	    document.getElementById('view-all').addEventListener('click', () => {
-	      this.showAllTerminals();
+    document.getElementById('view-all').addEventListener('click', () => {
+		      this.setViewMode('all');
+		    });
+	    
+	    document.getElementById('view-claude-only').addEventListener('click', () => {
+	      this.setViewMode('claude');
 	    });
-    
-    document.getElementById('view-claude-only').addEventListener('click', () => {
-      this.showClaudeOnly();
-    });
-    
-    document.getElementById('view-servers-only').addEventListener('click', () => {
-      this.showServersOnly();
-    });
+	    
+	    document.getElementById('view-servers-only').addEventListener('click', () => {
+	      this.setViewMode('server');
+	    });
     
     // Presets
     document.getElementById('view-presets').addEventListener('click', () => {
@@ -778,21 +781,21 @@ class ClaudeOrchestrator {
       });
     });
     
-    // Grid layout dropdown removed - using dynamic layout now
+	    // Grid layout dropdown removed - using dynamic layout now
     
-    // Settings
-    const settingsToggle = document.getElementById('settings-toggle');
-    if (settingsToggle) {
-      settingsToggle.addEventListener('click', () => {
-        const panel = document.getElementById('settings-panel');
-        if (panel) {
-          panel.classList.toggle('hidden');
-          console.log('Settings panel toggled');
-        }
-      });
-    } else {
-      console.error('Settings toggle button not found!');
-    }
+	    // Settings
+	    const settingsToggle = document.getElementById('settings-toggle');
+	    if (settingsToggle) {
+	      settingsToggle.addEventListener('click', () => {
+	        const panel = document.getElementById('settings-panel');
+	        if (panel) {
+	          panel.classList.toggle('hidden');
+	          console.log('Settings panel toggled');
+	        }
+	      });
+	    } else {
+	      console.error('Settings toggle button not found!');
+	    }
     
     document.getElementById('close-settings').addEventListener('click', () => {
       document.getElementById('settings-panel').classList.add('hidden');
@@ -968,23 +971,69 @@ class ClaudeOrchestrator {
     
     // Handle window resize to fix blank terminals
     let resizeTimeout;
-    window.addEventListener('resize', () => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
-        // Refit all visible terminals
-        this.activeView.forEach(sessionId => {
+	    window.addEventListener('resize', () => {
+	      clearTimeout(resizeTimeout);
+	      resizeTimeout = setTimeout(() => {
+	        // Refit all visible terminals
+	        this.activeView.forEach(sessionId => {
           this.terminalManager.fitTerminal(sessionId);
           const term = this.terminalManager.terminals.get(sessionId);
           if (term) {
             term.refresh(0, term.rows - 1);
           }
         });
-      }, 250);
-    });
-  }
-  
-  handleInitialSessions(sessionStates) {
-    console.log('Received initial sessions:', sessionStates);
+	      }, 250);
+	    });
+
+	    // Ensure the view buttons reflect the current view mode (radio behavior).
+	    this.updateViewModeButtons();
+	  }
+	  
+	  setViewMode(mode) {
+	    const normalized = String(mode || '').toLowerCase();
+	    if (!['all', 'claude', 'server'].includes(normalized)) return;
+	    if (this.viewMode === normalized) return;
+	
+	    this.viewMode = normalized;
+	    this.updateViewModeButtons();
+	    // Second-layer filter only: do NOT modify worktree visibility (visibleTerminals).
+	    this.updateTerminalGrid();
+	  }
+	  
+	  updateViewModeButtons() {
+	    const allBtn = document.getElementById('view-all');
+	    const claudeBtn = document.getElementById('view-claude-only');
+	    const serverBtn = document.getElementById('view-servers-only');
+	    if (!allBtn || !claudeBtn || !serverBtn) return;
+	
+	    allBtn.classList.toggle('active', this.viewMode === 'all');
+	    claudeBtn.classList.toggle('active', this.viewMode === 'claude');
+	    serverBtn.classList.toggle('active', this.viewMode === 'server');
+	  }
+	  
+	  matchesViewMode(sessionId) {
+	    if (this.viewMode === 'all') return true;
+	
+	    const session = this.sessions.get(sessionId);
+	    const type = session?.type;
+	
+	    if (this.viewMode === 'claude') {
+	      return type === 'claude' || sessionId.includes('-claude');
+	    }
+	
+	    if (this.viewMode === 'server') {
+	      return type === 'server' || sessionId.includes('-server');
+	    }
+	
+	    return true;
+	  }
+
+	  isSessionVisibleInCurrentView(sessionId) {
+	    return this.visibleTerminals.has(sessionId) && this.matchesViewMode(sessionId);
+	  }
+	  
+	  handleInitialSessions(sessionStates) {
+	    console.log('Received initial sessions:', sessionStates);
 
     // Preserve per-workspace worktree visibility (hide/show toggles) when we
     // receive a sessions refresh for the SAME workspace (e.g. after adding a
@@ -1934,10 +1983,10 @@ class ClaudeOrchestrator {
     this.renderTerminalsWithVisibility(allSessions);
   }
   
-  renderTerminalsWithVisibility(sessionIds) {
-    // Render all terminals but apply visibility using CSS (don't destroy DOM)
-    this.activeView = sessionIds.filter(id => this.visibleTerminals.has(id));
-    const grid = this.getTerminalGrid();
+	  renderTerminalsWithVisibility(sessionIds) {
+	    // Render all terminals but apply visibility using CSS (don't destroy DOM)
+	    this.activeView = sessionIds.filter(id => this.isSessionVisibleInCurrentView(id));
+	    const grid = this.getTerminalGrid();
 
     if (!grid) {
       console.error('Terminal grid not found!');
@@ -1956,9 +2005,9 @@ class ClaudeOrchestrator {
 
     sessionIds.forEach((sessionId) => {
       const session = this.sessions.get(sessionId);
-      const isVisible = this.visibleTerminals.has(sessionId);
-      const wrapperId = `wrapper-${sessionId}`;
-      let wrapper = document.getElementById(wrapperId);
+	      const isVisible = this.isSessionVisibleInCurrentView(sessionId);
+	      const wrapperId = `wrapper-${sessionId}`;
+	      let wrapper = document.getElementById(wrapperId);
 
       console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}, exists=${!!wrapper}`);
 
@@ -2002,43 +2051,30 @@ class ClaudeOrchestrator {
     }, 200);
   }
   
-  showClaudeOnly() {
-    // Clear visible terminals and add only Claude sessions
-    this.visibleTerminals.clear();
-    for (const sessionId of this.sessions.keys()) {
-      if (sessionId.includes('-claude')) {
-        this.visibleTerminals.add(sessionId);
-      }
-    }
-    this.updateTerminalGrid();
-    this.buildSidebar();
-  }
-  
-  showServersOnly() {
-    // Clear visible terminals and add only server sessions
-    this.visibleTerminals.clear();
-    for (const sessionId of this.sessions.keys()) {
-      if (sessionId.includes('-server')) {
-        this.visibleTerminals.add(sessionId);
-      }
-    }
-    this.updateTerminalGrid();
-    this.buildSidebar();
-  }
-  
-  applyPreset(preset) {
-    this.visibleTerminals.clear();
-    
-    switch (preset) {
-      case 'all':
-        this.showAllTerminals();
-        break;
-      case 'claude-all':
-        this.showClaudeOnly();
-        break;
-      case 'servers-all':
-        this.showServersOnly();
-        break;
+	  showClaudeOnly() {
+	    this.setViewMode('claude');
+	  }
+	  
+	  showServersOnly() {
+	    this.setViewMode('server');
+	  }
+	  
+	  applyPreset(preset) {
+	    this.visibleTerminals.clear();
+	    
+	    switch (preset) {
+	      case 'all':
+	        this.showAllTerminals();
+	        this.setViewMode('all');
+	        break;
+	      case 'claude-all':
+	        this.showAllTerminals();
+	        this.setViewMode('claude');
+	        break;
+	      case 'servers-all':
+	        this.showAllTerminals();
+	        this.setViewMode('server');
+	        break;
       case 'work-1-5':
         ['work1-claude', 'work1-server', 'work5-claude', 'work5-server'].forEach(id => {
           if (this.sessions.has(id)) {

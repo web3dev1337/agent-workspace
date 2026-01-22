@@ -718,6 +718,17 @@ header h1 {
   background: var(--bg-primary);
 }
 
+.button-secondary.active {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+
+.button-secondary.active:hover {
+  background: #388bfd;
+  border-color: #388bfd;
+}
+
 .icon-button {
   background: transparent;
   border: none;
