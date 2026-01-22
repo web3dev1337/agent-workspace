@@ -3,6 +3,7 @@
 // const JavaScript = require('tree-sitter-javascript');
 // const TypeScript = require('tree-sitter-typescript').typescript;
 // const Python = require('tree-sitter-python');
+const diff = require('diff');
 const MinifiedDiffEngine = require('./minified-diff');
 const JsonYamlDiffEngine = require('./json-yaml-diff');
 const BinaryDiffEngine = require('./binary-diff');
@@ -290,52 +291,151 @@ class DiffEngine {
 
   textBasedDiff(file) {
     // Fallback for files without AST support
-    const lines = file.patch.split('\n');
-    const changes = [];
-    
+    const patch = file?.patch || '';
+    const patchLines = patch.split('\n');
+
+    const hunks = [];
     let currentHunk = null;
-    
-    lines.forEach((line, index) => {
+    let oldLine = 0;
+    let newLine = 0;
+
+    patchLines.forEach((line) => {
       if (line.startsWith('@@')) {
         // Parse hunk header
         const match = line.match(/@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/);
         if (match) {
+          const oldStart = parseInt(match[1], 10);
+          const oldCount = parseInt(match[2] || '1', 10);
+          const newStart = parseInt(match[3], 10);
+          const newCount = parseInt(match[4] || '1', 10);
+
           currentHunk = {
-            oldStart: parseInt(match[1]),
-            oldCount: parseInt(match[2] || 1),
-            newStart: parseInt(match[3]),
-            newCount: parseInt(match[4] || 1)
+            header: line,
+            oldStart,
+            oldCount,
+            newStart,
+            newCount,
+            rows: []
           };
+          hunks.push(currentHunk);
+          oldLine = oldStart;
+          newLine = newStart;
+        } else {
+          currentHunk = null;
         }
-      } else if (line.startsWith('-')) {
-        changes.push({
-          type: 'deleted',
-          line: currentHunk?.oldStart + index,
-          content: line.substring(1),
-          significant: !this.isWhitespaceOnly(line.substring(1))
-        });
-      } else if (line.startsWith('+')) {
-        changes.push({
-          type: 'added',
-          line: currentHunk?.newStart + index,
-          content: line.substring(1),
-          significant: !this.isWhitespaceOnly(line.substring(1))
-        });
-      } else if (line.startsWith(' ')) {
-        // Context lines - these appear in both old and new
-        changes.push({
+        return;
+      }
+
+      if (!currentHunk) return;
+
+      // Ignore metadata lines inside patches
+      if (line.startsWith('+++') || line.startsWith('---')) return;
+      if (line.startsWith('\\ No newline at end of file')) return;
+
+      if (line.startsWith(' ')) {
+        currentHunk.rows.push({
           type: 'context',
-          line: currentHunk?.newStart + index,
-          content: line.substring(1),
-          significant: false
+          oldLine,
+          newLine,
+          content: line.substring(1)
         });
+        oldLine += 1;
+        newLine += 1;
+        return;
+      }
+
+      if (line.startsWith('-')) {
+        currentHunk.rows.push({
+          type: 'deleted',
+          oldLine,
+          newLine: null,
+          content: line.substring(1)
+        });
+        oldLine += 1;
+        return;
+      }
+
+      if (line.startsWith('+')) {
+        currentHunk.rows.push({
+          type: 'added',
+          oldLine: null,
+          newLine,
+          content: line.substring(1)
+        });
+        newLine += 1;
       }
     });
-    
+
+    const changes = hunks.flatMap(h =>
+      h.rows.map(r => {
+        if (r.type === 'context') {
+          return {
+            type: 'context',
+            line: r.newLine,
+            content: r.content,
+            significant: false
+          };
+        }
+
+        if (r.type === 'deleted') {
+          return {
+            type: 'deleted',
+            line: r.oldLine,
+            content: r.content,
+            significant: !this.isWhitespaceOnly(r.content || '')
+          };
+        }
+
+        if (r.type === 'added') {
+          return {
+            type: 'added',
+            line: r.newLine,
+            content: r.content,
+            significant: !this.isWhitespaceOnly(r.content || '')
+          };
+        }
+
+        return {
+          type: r.type,
+          line: r.newLine ?? r.oldLine,
+          content: r.content ?? '',
+          significant: false
+        };
+      })
+    );
+
+    // Pair delete+add runs into "updated" operations (line-level updates).
+    const richHunks = hunks.map(h => ({
+      ...h,
+      rows: this.pairUpdatedRows(h.rows)
+    }));
+
+    const findReplace = this.detectFindReplacePatterns(richHunks);
+    const movedBlocks = this.detectMovedBlocks(richHunks);
+    const copyPaste = this.detectCopyPaste(richHunks);
+    const operations = {
+      ...this.computeRichOperations(richHunks),
+      moved: movedBlocks.length,
+      copyPaste: copyPaste.length,
+      findReplace: findReplace.length
+    };
+
     return {
       type: 'text',
       changes,
-      stats: this.calculateStats(changes)
+      stats: this.calculateStats(changes),
+      richText: {
+        type: 'rich-text',
+        hunks: richHunks,
+        operations,
+        findReplace,
+        movedBlocks,
+        copyPaste,
+        stats: {
+          totalHunks: richHunks.length,
+          ...operations
+        }
+      }
     };
   }
 
@@ -358,6 +458,235 @@ class DiffEngine {
       : 0;
     
     return stats;
+  }
+
+  pairUpdatedRows(rows) {
+    const paired = [];
+    let idx = 0;
+
+    while (idx < rows.length) {
+      const row = rows[idx];
+      if (row.type !== 'deleted' && row.type !== 'added') {
+        paired.push(row);
+        idx += 1;
+        continue;
+      }
+
+      // Collect a run of deletes or adds
+      const deletes = [];
+      const adds = [];
+
+      if (row.type === 'deleted') {
+        while (idx < rows.length && rows[idx].type === 'deleted') {
+          deletes.push(rows[idx]);
+          idx += 1;
+        }
+        while (idx < rows.length && rows[idx].type === 'added') {
+          adds.push(rows[idx]);
+          idx += 1;
+        }
+      } else {
+        while (idx < rows.length && rows[idx].type === 'added') {
+          adds.push(rows[idx]);
+          idx += 1;
+        }
+        while (idx < rows.length && rows[idx].type === 'deleted') {
+          deletes.push(rows[idx]);
+          idx += 1;
+        }
+      }
+
+      // Pair 1:1 as updates when we have both sides.
+      const pairs = Math.min(deletes.length, adds.length);
+      for (let i = 0; i < pairs; i += 1) {
+        const oldContent = deletes[i].content || '';
+        const newContent = adds[i].content || '';
+
+        const wordDiff = diff.diffWordsWithSpace(oldContent, newContent);
+        const oldSegments = [];
+        const newSegments = [];
+        wordDiff.forEach(part => {
+          const value = part.value || '';
+          if (part.added) {
+            newSegments.push({ type: 'added', value });
+          } else if (part.removed) {
+            oldSegments.push({ type: 'removed', value });
+          } else {
+            oldSegments.push({ type: 'common', value });
+            newSegments.push({ type: 'common', value });
+          }
+        });
+
+        paired.push({
+          type: 'updated',
+          oldLine: deletes[i].oldLine,
+          newLine: adds[i].newLine,
+          oldContent,
+          newContent,
+          oldSegments,
+          newSegments
+        });
+      }
+
+      // Any leftover lines remain add/delete operations.
+      deletes.slice(pairs).forEach(d => paired.push(d));
+      adds.slice(pairs).forEach(a => paired.push(a));
+    }
+
+    return paired;
+  }
+
+  computeRichOperations(hunks) {
+    const ops = {
+      added: 0,
+      deleted: 0,
+      updated: 0,
+      context: 0,
+      moved: 0,
+      copyPaste: 0,
+      findReplace: 0
+    };
+
+    hunks.forEach(h => {
+      h.rows.forEach(r => {
+        if (r.type === 'added') ops.added += 1;
+        else if (r.type === 'deleted') ops.deleted += 1;
+        else if (r.type === 'updated') ops.updated += 1;
+        else ops.context += 1;
+      });
+    });
+
+    return ops;
+  }
+
+  detectFindReplacePatterns(hunks) {
+    const counts = new Map();
+
+    hunks.forEach(h => {
+      h.rows.forEach(r => {
+        if (r.type !== 'updated') return;
+
+        const parts = diff.diffWordsWithSpace(r.oldContent || '', r.newContent || '');
+        const removedParts = parts
+          .filter(p => p.removed)
+          .map(p => (p.value || '').trim())
+          .filter(Boolean);
+        const addedParts = parts
+          .filter(p => p.added)
+          .map(p => (p.value || '').trim())
+          .filter(Boolean);
+
+        // Heuristic: treat a single removed -> single added as a candidate replace pattern.
+        if (removedParts.length !== 1 || addedParts.length !== 1) return;
+
+        const from = removedParts[0];
+        const to = addedParts[0];
+        if (from.length < 1 || to.length < 1) return;
+        if (from.length > 80 || to.length > 80) return;
+
+        const key = `${from}=>${to}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+    });
+
+    const patterns = Array.from(counts.entries())
+      .map(([key, count]) => {
+        const [from, to] = key.split('=>');
+        return { from, to, count };
+      })
+      .filter(p => p.count >= 3)
+      .sort((a, b) => b.count - a.count);
+
+    return patterns;
+  }
+
+  detectMovedBlocks(hunks) {
+    // Exact-match moved blocks (min 2 lines) within the patch.
+    const buildBlocks = (type) => {
+      const blocks = [];
+      hunks.forEach((h, hunkIndex) => {
+        let i = 0;
+        while (i < h.rows.length) {
+          if (h.rows[i].type !== type) {
+            i += 1;
+            continue;
+          }
+          const start = i;
+          const lines = [];
+          while (i < h.rows.length && h.rows[i].type === type) {
+            const content = (h.rows[i].content || '').trimEnd();
+            lines.push({ rowIndex: i, content, oldLine: h.rows[i].oldLine, newLine: h.rows[i].newLine });
+            i += 1;
+          }
+          const nonEmpty = lines.filter(l => l.content.trim().length > 0);
+          if (nonEmpty.length >= 2) {
+            blocks.push({
+              hunkIndex,
+              startRow: start,
+              lines: nonEmpty
+            });
+          }
+        }
+      });
+      return blocks;
+    };
+
+    const deletedBlocks = buildBlocks('deleted');
+    const addedBlocks = buildBlocks('added');
+
+    const addedBySig = new Map();
+    addedBlocks.forEach((b, idx) => {
+      const signature = b.lines.map(l => l.content).join('\n');
+      const list = addedBySig.get(signature) || [];
+      list.push({ ...b, idx });
+      addedBySig.set(signature, list);
+    });
+
+    const usedAdded = new Set();
+    const moves = [];
+
+    deletedBlocks.forEach((delBlock) => {
+      const signature = delBlock.lines.map(l => l.content).join('\n');
+      const candidates = addedBySig.get(signature);
+      if (!candidates || candidates.length === 0) return;
+
+      const candidate = candidates.find(c => !usedAdded.has(c.idx));
+      if (!candidate) return;
+
+      usedAdded.add(candidate.idx);
+
+      moves.push({
+        lines: delBlock.lines.length,
+        from: {
+          hunk: delBlock.hunkIndex,
+          line: delBlock.lines[0].oldLine
+        },
+        to: {
+          hunk: candidate.hunkIndex,
+          line: candidate.lines[0].newLine
+        }
+      });
+    });
+
+    return moves;
+  }
+
+  detectCopyPaste(hunks) {
+    // Detect identical added lines added multiple times (within this patch).
+    const counts = new Map();
+    hunks.forEach(h => {
+      h.rows.forEach(r => {
+        if (r.type !== 'added') return;
+        const content = (r.content || '').trim();
+        if (!content) return;
+        counts.set(content, (counts.get(content) || 0) + 1);
+      });
+    });
+
+    return Array.from(counts.entries())
+      .map(([content, count]) => ({ content, count }))
+      .filter(item => item.count >= 2)
+      .sort((a, b) => b.count - a.count);
   }
   
   async analyzeBinaryDiff(file) {
