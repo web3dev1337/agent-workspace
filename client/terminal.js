@@ -506,6 +506,38 @@ class TerminalManager {
           }
         }
 
+        // Guard: if the fit addon predicts tiny dimensions, do NOT fit yet.
+        // This avoids resizing xterm (and potentially reflowing the buffer) while layout/fonts are unstable.
+        if (typeof fitAddon.proposeDimensions === 'function') {
+          const proposed = fitAddon.proposeDimensions();
+          const proposedCols = proposed?.cols || 0;
+          const proposedRows = proposed?.rows || 0;
+
+          const lastGood = this.lastGoodPtyDimensions.get(sessionId);
+          const minStableCols = lastGood
+            ? Math.max(this.minPtyCols, Math.floor(lastGood.cols * 0.6))
+            : this.minPtyCols;
+          const minStableRows = this.minPtyRows;
+
+          if (proposedCols < minStableCols || proposedRows < minStableRows) {
+            if (retryCount < 5) {
+              const retryDelay = 120 * (retryCount + 1);
+              console.log(
+                `Terminal ${sessionId} proposed fit too small (${proposedCols}x${proposedRows}; min ${minStableCols}x${minStableRows}), retrying in ${retryDelay}ms (attempt ${retryCount + 1}/5)`
+              );
+              this.fitTimers.delete(sessionId);
+              setTimeout(() => this.fitTerminal(sessionId, retryCount + 1), retryDelay);
+              return;
+            }
+
+            console.warn(
+              `Terminal ${sessionId} proposed fit still too small after 5 retries (${proposedCols}x${proposedRows}; min ${minStableCols}x${minStableRows}); skipping fit`
+            );
+            this.fitTimers.delete(sessionId);
+            return;
+          }
+        }
+
         fitAddon.fit();
 
         // Get dimensions and (only if reasonable) notify server. Resizing the PTY to
