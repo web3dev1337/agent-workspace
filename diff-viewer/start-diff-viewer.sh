@@ -2,16 +2,14 @@
 
 echo "🚀 Starting Advanced Diff Viewer..."
 
-# Navigate to diff-viewer directory
-cd ${WORKTREE_BASE:-$HOME}/HyFire2-work1/claude-orchestrator/diff-viewer
+# Navigate to this script's directory (diff-viewer/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 # Build client if dist doesn't exist
 if [ ! -d "client/dist" ]; then
   echo "📦 Building client..."
-  cd client
-  npm install
-  npm run build
-  cd ..
+  (cd client && npm install && npm run build)
   echo "✅ Client built successfully!"
 fi
 
