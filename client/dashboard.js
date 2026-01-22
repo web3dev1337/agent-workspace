@@ -138,7 +138,7 @@ class Dashboard {
   }
 
   generateWorkspaceCard(workspace, isActive) {
-    const lastUsed = this.getLastUsed(workspace.id);
+    const lastUsed = this.getLastUsed(workspace);
     const activityCount = this.getActivityCount(workspace.id);
     const terminalPairs = Array.isArray(workspace.terminals)
       ? Math.floor(workspace.terminals.length / 2)
@@ -478,16 +478,40 @@ class Dashboard {
     return workspace.id === this.orchestrator.currentWorkspace?.id;
   }
 
-  getLastUsed(workspaceId) {
-    // Placeholder - in future, track actual usage
-    if (workspaceId === 'hyfire2') return 'Last used: 2 hours ago';
-    return 'Last used: 3 days ago';
+  getLastUsed(workspace) {
+    if (!workspace || typeof workspace !== 'object') return 'Last used: unknown';
+
+    const timeAgo = this.formatTimeAgo(workspace.lastAccess);
+    if (!timeAgo) return 'Last used: never';
+    return `Last used: ${timeAgo}`;
   }
 
   getActivityCount(workspaceId) {
     // Placeholder - in future, track actual active sessions
     if (workspaceId === 'hyfire2') return '3/8';
     return '0/4';
+  }
+
+  /**
+   * Format timestamp as relative time (shared with QuickLinks)
+   */
+  formatTimeAgo(timestamp) {
+    if (!timestamp) return '';
+
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
   }
 
   getWorkspaceTypeLabel(type) {

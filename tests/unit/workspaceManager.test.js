@@ -3,27 +3,9 @@
  */
 
 const path = require('path');
-
-// Mock dependencies before requiring the module
-jest.mock('fs', () => ({
-  promises: {
-    readdir: jest.fn(),
-    readFile: jest.fn(),
-    writeFile: jest.fn(),
-    mkdir: jest.fn(),
-  },
-  existsSync: jest.fn(),
-}));
+const { WorkspaceManager } = require('../../server/workspaceManager');
 
 describe('WorkspaceManager', () => {
-  let WorkspaceManager;
-  let fs;
-
-  beforeEach(() => {
-    jest.resetModules();
-    fs = require('fs');
-  });
-
   describe('mergeConfigs', () => {
     // This tests the config merging bug fix
     it('should deep clone configs to prevent mutation', () => {
@@ -141,6 +123,45 @@ describe('WorkspaceManager', () => {
 
       expect(isValidWorkspace(validWorkspace)).toBe(true);
       expect(isValidWorkspace(invalidWorkspace)).toBe(false);
+    });
+  });
+
+  describe('switchWorkspace', () => {
+    it('should set lastAccess when switching', async () => {
+      const manager = new WorkspaceManager();
+
+      manager.workspaces = new Map();
+      manager.config = { activeWorkspace: null };
+      manager.saveConfig = jest.fn().mockResolvedValue();
+      manager.saveSessionStates = jest.fn().mockResolvedValue();
+
+      const ws = {
+        id: 'test-workspace',
+        name: 'Test Workspace',
+        type: 'hytopia-game',
+        repository: { path: path.join(__dirname, 'fixtures', 'repo') }
+      };
+
+      manager.workspaces.set(ws.id, ws);
+
+      manager.updateWorkspace = jest.fn().mockImplementation(async (workspaceId, updates) => {
+        const existing = manager.workspaces.get(workspaceId);
+        const updated = { ...existing, ...updates };
+        manager.workspaces.set(workspaceId, updated);
+        if (manager.activeWorkspace?.id === workspaceId) {
+          manager.activeWorkspace = updated;
+        }
+        return updated;
+      });
+
+      const result = await manager.switchWorkspace(ws.id);
+
+      expect(manager.updateWorkspace).toHaveBeenCalledWith(
+        ws.id,
+        expect.objectContaining({ lastAccess: expect.any(String) })
+      );
+      expect(result).toHaveProperty('lastAccess');
+      expect(manager.activeWorkspace).toHaveProperty('lastAccess', result.lastAccess);
     });
   });
 });
