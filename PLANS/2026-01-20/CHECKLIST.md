@@ -59,6 +59,9 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Filter toggle for “others’ PRs”
 - [x] “Ready for review” tagging (independent of PR creation)
 
+### Diff viewer
+- [x] Clicking 🔍 auto-starts diff viewer if needed
+
 ### Naming / branding
 - [x] UI copy updates: “Claude” → “Agent” where appropriate
 
