@@ -379,3 +379,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Added a **Rich Diff** toggle (default on). Uses **Hide Noise** to collapse unchanged context lines.
 - Tests: `npm --prefix diff-viewer/client run build`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/143
+
+### Terminals: avoid transient tiny fits (done)
+- Further reduces “bunched up” terminal output and fit warnings after layout transitions (e.g. hide/show worktrees sidebar).
+- Uses `fitAddon.proposeDimensions()` + last-known-good cols heuristic to avoid fitting while the DOM/font/layout is unstable.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/145
