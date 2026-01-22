@@ -4092,29 +4092,86 @@ class ClaudeOrchestrator {
     }, 5000);
   }
 
-  launchDiffViewer(githubUrl) {
+  async launchDiffViewer(githubUrl) {
     // Parse GitHub URL to extract owner, repo, and PR/commit
     const prMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
     const commitMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/);
     
-    let diffViewerUrl = 'http://localhost:7655';
+    let diffViewerPath = '';
     
     if (prMatch) {
       const [, owner, repo, pr] = prMatch;
-      diffViewerUrl += `/pr/${owner}/${repo}/${pr}`;
+      diffViewerPath = `/pr/${owner}/${repo}/${pr}`;
     } else if (commitMatch) {
       const [, owner, repo, sha] = commitMatch;
-      diffViewerUrl += `/commit/${owner}/${repo}/${sha}`;
+      diffViewerPath = `/commit/${owner}/${repo}/${sha}`;
     } else {
       this.showToast('Unable to parse GitHub URL', 'error');
       return;
     }
     
-    // Open in new tab
-    window.open(diffViewerUrl, '_blank');
-    
-    // Show info toast
-    this.showToast('Opening Advanced Diff Viewer...', 'info');
+    // Open a placeholder tab immediately (avoids popup blockers), then redirect once ready.
+    const popup = window.open('', '_blank');
+    if (!popup) {
+      this.showToast('Popup blocked - allow popups to open the diff viewer', 'warning');
+      return;
+    }
+
+    try {
+      popup.document.title = 'Starting Diff Viewer…';
+      popup.document.body.style.cssText = 'background:#0b0b0b;color:#d4d4d4;font-family:system-ui, sans-serif;padding:20px;';
+      popup.document.body.innerHTML = `
+        <h2 style="margin:0 0 8px 0;">Starting Advanced Diff Viewer…</h2>
+        <div style="color:#9a9a9a;margin-bottom:14px;">This may take a few seconds the first time.</div>
+        <div style="font-family:Consolas, Monaco, monospace;background:#111;border:1px solid #222;border-radius:10px;padding:10px;">
+          Target: ${diffViewerPath}
+        </div>
+      `;
+    } catch {
+      // Some browsers restrict about:blank manipulation; ignore.
+    }
+
+    this.showToast('Starting Advanced Diff Viewer…', 'info');
+
+    let baseUrl = 'http://localhost:7655';
+    try {
+      const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data?.message || data?.error || 'Failed to start diff viewer');
+      }
+      if (data?.baseUrl) baseUrl = data.baseUrl;
+
+      // If it’s still booting (e.g. first-time npm install/build), poll until healthy.
+      if (!data?.running) {
+        this.showToast('Diff viewer is starting… (first run may take a minute)', 'info');
+        const start = Date.now();
+        const timeoutMs = 120000;
+        while (Date.now() - start < timeoutMs) {
+          if (popup.closed) return;
+          await new Promise(r => setTimeout(r, 1000));
+          const statusResp = await fetch('/api/diff-viewer/status');
+          const status = await statusResp.json();
+          if (status?.baseUrl) baseUrl = status.baseUrl;
+          if (status?.running) break;
+        }
+      }
+    } catch (err) {
+      this.showToast(`Diff viewer failed to start: ${err.message}`, 'error');
+      try {
+        popup.document.title = 'Diff Viewer Error';
+        popup.document.body.innerHTML = `
+          <h2 style="margin:0 0 8px 0;color:#ff6b6b;">Failed to start diff viewer</h2>
+          <div style="color:#9a9a9a;margin-bottom:14px;">${err.message}</div>
+          <div style="color:#9a9a9a;">Try running <code style="background:#111;border:1px solid #222;border-radius:6px;padding:2px 6px;">./diff-viewer/start-diff-viewer.sh</code> in the repo.</div>
+        `;
+      } catch {}
+      return;
+    }
+
+    const diffViewerUrl = `${baseUrl}${diffViewerPath}`;
+    popup.location.href = diffViewerUrl;
+    this.showToast('Opening Advanced Diff Viewer…', 'success');
   }
 
   getAuthToken() {
