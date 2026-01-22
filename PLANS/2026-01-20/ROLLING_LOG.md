@@ -436,3 +436,10 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Repo/worktree/branch labels should now truncate less aggressively (and show full values on hover via tooltips).
 - Tests: `npm run test:unit`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/158
+
+### View mode (Agent/Servers): second-layer filter (done)
+- Makes **Agent Only / Servers Only / View All** a second-layer filter that does *not* modify per-worktree hide/show (left sidebar).
+- New worktrees added after selecting a view mode respect the current mode (e.g., Servers Only keeps agent terminals hidden).
+- Adds active styling to the view mode buttons.
+- Tests: `npm run test:unit`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/160
