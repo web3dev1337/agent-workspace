@@ -96,7 +96,7 @@ body {
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-xs);
-  padding: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
   cursor: pointer;
   transition: all 0.2s;
   border: 1px solid transparent;
@@ -207,10 +207,11 @@ body {
 
 .worktree-title {
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
+  line-height: 1.15;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -221,6 +222,8 @@ body {
 }
 
 .worktree-name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -232,6 +235,10 @@ body {
   font-family: var(--font-mono);
   opacity: 0.85;
   white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .worktree-item.active .worktree-branch {
