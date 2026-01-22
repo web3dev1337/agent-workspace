@@ -460,6 +460,16 @@ header h1 {
   grid-template-rows: repeat(4, 1fr);
 }
 
+/* If the user has more than 16 visible terminals, allow scrolling and use
+   fixed-ish row heights so additional terminals don't become inaccessible. */
+.terminal-grid.terminal-grid-scrollable {
+  overflow-y: auto;
+  overflow-x: hidden;
+  align-content: start;
+  grid-template-rows: minmax(260px, auto);
+  grid-auto-rows: minmax(260px, auto);
+}
+
 /* Terminal Container */
 .terminal-wrapper {
   background: var(--bg-tertiary);
