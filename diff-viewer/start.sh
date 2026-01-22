@@ -6,8 +6,7 @@ echo "🚀 Starting Advanced Diff Viewer..."
 if [ ! -f .env ]; then
     echo "⚠️  No .env file found. Creating from .env.example..."
     cp .env.example .env
-    echo "📝 Please edit .env and add your GitHub token"
-    exit 1
+    echo "📝 Optional: add GITHUB_TOKEN to .env for Octokit auth (otherwise uses gh CLI)"
 fi
 
 # Install dependencies if needed
