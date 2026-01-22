@@ -32,6 +32,9 @@ class ConversationBrowser {
       query: '',
       dateFilter: ''
     };
+
+    this._dismissPointerHandler = null;
+    this._dismissKeyHandler = null;
   }
 
   async show() {
@@ -45,6 +48,8 @@ class ConversationBrowser {
   }
 
   renderModal() {
+    this.cleanupDismissHandlers();
+
     // Remove existing modal
     const existing = document.getElementById('conversation-browser');
     if (existing) existing.remove();
@@ -56,14 +61,15 @@ class ConversationBrowser {
       <div class="modal-content browser-content">
         <div class="browser-header">
           <h2>Claude Conversations</h2>
-          <button class="close-btn" onclick="this.closest('.modal').remove()">X</button>
+          <button class="close-btn" onclick="window.conversationBrowser.close()">X</button>
         </div>
 
         <div class="browser-toolbar">
           <div class="browser-toolbar-row">
             <div class="search-container">
               <input type="text" id="conv-search" placeholder="Search all conversations..."
-                     oninput="window.conversationBrowser.handleSearch(this.value)">
+                     oninput="window.conversationBrowser.handleSearch(this.value)"
+                     onkeydown="window.conversationBrowser.handleSearchKeydown(event)">
               <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
             </div>
             <button class="btn-secondary" onclick="window.conversationBrowser.refresh()">
@@ -132,6 +138,7 @@ class ConversationBrowser {
 
     document.body.appendChild(modal);
     window.conversationBrowser = this;
+    this.attachDismissHandlers(modal);
 
     // Set checkbox states from saved values
     const yoloCheckbox = document.getElementById('yolo-mode-checkbox');
@@ -139,6 +146,59 @@ class ConversationBrowser {
 
     // Load projects for filter dropdown
     this.loadProjects();
+  }
+
+  close() {
+    this.cleanupDismissHandlers();
+    document.getElementById('conversation-browser')?.remove();
+  }
+
+  attachDismissHandlers(modal) {
+    // Hide autocomplete when clicking anywhere outside the search container,
+    // so the dropdown doesn't block the first search result.
+    this._dismissPointerHandler = (event) => {
+      const searchContainer = modal.querySelector('.search-container');
+      if (searchContainer && searchContainer.contains(event.target)) return;
+      this.hideAutocomplete();
+    };
+
+    this._dismissKeyHandler = (event) => {
+      if (event.key !== 'Escape') return;
+
+      const dropdown = document.getElementById('autocomplete-dropdown');
+      const isOpen = dropdown && dropdown.style.display !== 'none' && dropdown.innerHTML.trim().length > 0;
+
+      if (isOpen) {
+        event.preventDefault();
+        this.hideAutocomplete();
+        return;
+      }
+
+      // If autocomplete is not open, Escape closes the modal.
+      this.close();
+    };
+
+    document.addEventListener('pointerdown', this._dismissPointerHandler, true);
+    document.addEventListener('keydown', this._dismissKeyHandler, true);
+  }
+
+  cleanupDismissHandlers() {
+    if (this._dismissPointerHandler) {
+      document.removeEventListener('pointerdown', this._dismissPointerHandler, true);
+      this._dismissPointerHandler = null;
+    }
+
+    if (this._dismissKeyHandler) {
+      document.removeEventListener('keydown', this._dismissKeyHandler, true);
+      this._dismissKeyHandler = null;
+    }
+  }
+
+  handleSearchKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    this.hideAutocomplete();
+    event.target?.blur?.();
   }
 
   async loadRecent() {
@@ -796,7 +856,7 @@ class ConversationBrowser {
       });
 
       // Close browser
-      document.getElementById('conversation-browser')?.remove();
+      this.close();
       return;
     }
 
@@ -838,7 +898,7 @@ class ConversationBrowser {
         }
 
         // Close browser
-        document.getElementById('conversation-browser')?.remove();
+        this.close();
       }
     };
 
