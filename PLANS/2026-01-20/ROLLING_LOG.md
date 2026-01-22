@@ -448,4 +448,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Workspace switches now persist `workspace.lastAccess` so the dashboard can show accurate last-used times.
 - Older workspace configs backfill `lastAccess` from workspace JSON file mtime (best-effort) so existing cards aren’t all “never”.
 - Tests: `npm run test:unit`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/162
