@@ -394,3 +394,14 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
   - `server/diffViewerService.js` (spawns `diff-viewer/start-diff-viewer.sh`, logs to `logs/diff-viewer.log`)
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/147
+
+### Diff viewer: fix cache fallback (no native SQLite) (done)
+- Fixes `500` errors when `better-sqlite3` can’t load (Node version mismatch). We now fall back to an in-memory cache instead of using sqlite3 with an incompatible sync API.
+- This unblocks `GET /api/github/pr/:owner/:repo/:pr` and all downstream diff analysis.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/149
+
+### Diff viewer: start automatically with orchestrator (done)
+- `npm start` now auto-starts the diff viewer in the background by default (disable with `AUTO_START_DIFF_VIEWER=false`).
+- Playwright tests set `AUTO_START_DIFF_VIEWER=false` to avoid extra background processes.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/150
