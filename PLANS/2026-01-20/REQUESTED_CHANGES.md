@@ -102,6 +102,7 @@ Observed behavior: when adding worktrees, the new one sometimes doesn’t appear
 Requested changes:
 - Make items more vertically compact so more fit.
 - Remove redundant “client/server” sub-status; keep a single status indicator.
+- Remove extra sidebar icons (e.g. agent/robot + visibility) so repo/worktree/branch text is less likely to truncate.
 - Rename “Claude window” to **Agent** window (where not Claude-specific).
 
 ### D3) Unknown branch / “root unknown” fallbacks
@@ -161,6 +162,7 @@ In the Commander popup terminal, pasting via Ctrl/Cmd+V often fails with an erro
 - ↻ tooltip should read **“Start Agent with Options”** (not “Start Claude with Options”).
 - In the agent startup modal, **YOLO should be enabled by default**.
 - Improve “micro X” close buttons (ports modal, conversation history modal).
+- Conversation history search: autocomplete dropdown should dismiss easily and not block the first search result row.
 - Keep existing UI/UX rule: **do not darken the background** when a modal opens.
 
 ## H. Ports/Services UI
