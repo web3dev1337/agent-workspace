@@ -24,6 +24,7 @@ class DiffViewerService {
 
     this.processInfo = null; // { pid, startedAt, logPath }
     this.startingPromise = null;
+    this.buildingPromise = null;
   }
 
   static getInstance() {
@@ -45,12 +46,17 @@ class DiffViewerService {
 
   async ensureRunning() {
     if (await this.checkHealth()) {
+      const clientBuild = await this.ensureClientBuiltIfStale().catch((error) => {
+        logger.warn('Diff viewer client rebuild failed', { error: error.message });
+        return { attempted: true, built: false, error: error.message };
+      });
       return {
         running: true,
         started: false,
         baseUrl: this.baseUrl,
         port: this.port,
-        process: this.processInfo
+        process: this.processInfo,
+        clientBuild
       };
     }
 
@@ -70,6 +76,123 @@ class DiffViewerService {
       port: this.port,
       process: this.processInfo
     };
+  }
+
+  ensureClientBuiltIfStale() {
+    if (!this.needsClientBuild()) {
+      return Promise.resolve({ attempted: false, built: false });
+    }
+
+    if (!this.buildingPromise) {
+      this.buildingPromise = this.buildClient().finally(() => {
+        this.buildingPromise = null;
+      });
+    }
+
+    return this.buildingPromise;
+  }
+
+  needsClientBuild() {
+    const clientDir = path.join(this.diffViewerRoot, 'client');
+    const distIndex = path.join(clientDir, 'dist', 'index.html');
+
+    if (!fs.existsSync(distIndex)) return true;
+
+    let distMtimeMs = 0;
+    try {
+      distMtimeMs = fs.statSync(distIndex).mtimeMs;
+    } catch {
+      return true;
+    }
+
+    const candidates = [
+      path.join(clientDir, 'src'),
+      path.join(clientDir, 'index.html'),
+      path.join(clientDir, 'package.json'),
+      path.join(clientDir, 'vite.config.js'),
+      path.join(clientDir, 'vite.config.ts')
+    ];
+
+    return candidates.some((p) => this.anyFileNewerThan(p, distMtimeMs));
+  }
+
+  anyFileNewerThan(targetPath, mtimeMs) {
+    try {
+      if (!fs.existsSync(targetPath)) return false;
+      const stat = fs.statSync(targetPath);
+      if (stat.isFile()) {
+        return stat.mtimeMs > mtimeMs;
+      }
+      if (!stat.isDirectory()) return false;
+
+      const entries = fs.readdirSync(targetPath, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(targetPath, entry.name);
+        if (entry.isDirectory()) {
+          if (this.anyFileNewerThan(fullPath, mtimeMs)) return true;
+        } else if (entry.isFile()) {
+          const s = fs.statSync(fullPath);
+          if (s.mtimeMs > mtimeMs) return true;
+        }
+      }
+    } catch {
+      return false;
+    }
+
+    return false;
+  }
+
+  getNpmCommand() {
+    return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  }
+
+  async buildClient() {
+    const clientDir = path.join(this.diffViewerRoot, 'client');
+    if (!fs.existsSync(clientDir)) {
+      throw new Error(`diff-viewer client folder not found at ${clientDir}`);
+    }
+
+    const logPath = this.createClientBuildLogFile();
+    const npmCmd = this.getNpmCommand();
+
+    logger.info('Rebuilding diff viewer client (stale dist detected)', { clientDir, logPath });
+
+    // Install deps only if needed.
+    const nodeModulesPath = path.join(clientDir, 'node_modules');
+    if (!fs.existsSync(nodeModulesPath)) {
+      await this.runCommandToLog(npmCmd, ['install'], { cwd: clientDir, logPath });
+    }
+
+    await this.runCommandToLog(npmCmd, ['run', 'build'], { cwd: clientDir, logPath });
+
+    logger.info('Diff viewer client rebuild complete', { logPath });
+    return { attempted: true, built: true, logPath };
+  }
+
+  runCommandToLog(command, args, { cwd, logPath }) {
+    return new Promise((resolve, reject) => {
+      const fd = fs.openSync(logPath, 'a');
+      const child = spawn(command, args, {
+        cwd,
+        env: process.env,
+        stdio: ['ignore', fd, fd]
+      });
+
+      child.on('error', (error) => {
+        try {
+          fs.closeSync(fd);
+        } catch {}
+        reject(error);
+      });
+
+      child.on('close', (code) => {
+        try {
+          fs.closeSync(fd);
+        } catch {}
+        if (code === 0) resolve();
+        else reject(new Error(`${command} ${args.join(' ')} exited with code ${code}`));
+      });
+    });
   }
 
   checkHealth(timeoutMs = 800) {
@@ -175,6 +298,12 @@ class DiffViewerService {
     const logDir = path.join('logs');
     fs.mkdirSync(logDir, { recursive: true });
     return path.join(logDir, 'diff-viewer.log');
+  }
+
+  createClientBuildLogFile() {
+    const logDir = path.join('logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    return path.join(logDir, 'diff-viewer-client-build.log');
   }
 
   isPidRunning(pid) {
