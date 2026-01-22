@@ -1946,6 +1946,9 @@ class ClaudeOrchestrator {
     // Set the data attribute for dynamic layout based on visible count
     const visibleCount = this.activeView.length;
     grid.setAttribute('data-visible-count', visibleCount);
+    // If the user has more than 16 visible terminals, fall back to a scrollable grid
+    // instead of clipping extra rows (which shows up as tiny “slivers” at the bottom).
+    grid.classList.toggle('terminal-grid-scrollable', visibleCount > 16);
 
     // CRITICAL: Don't destroy terminals with innerHTML = ''
     // Instead, create missing terminals and hide/show existing ones
