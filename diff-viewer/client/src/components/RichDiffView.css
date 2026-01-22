@@ -1,7 +1,7 @@
 .rich-diff-view {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: auto;
   background: #0b0b0b;
   color: #d4d4d4;
 }
@@ -89,8 +89,7 @@
 }
 
 .rich-diff-body {
-  flex: 1;
-  overflow: auto;
+  overflow: visible;
 }
 
 .rich-hunk {
@@ -191,4 +190,3 @@
   border-radius: 3px;
   padding: 0 2px;
 }
-
