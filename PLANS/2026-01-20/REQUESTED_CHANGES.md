@@ -207,6 +207,14 @@ When clicking the Advanced Diff Viewer (🔍) from PR lists / GitHub links, the 
 - Orchestrator starts the diff viewer on-demand (default `http://localhost:7655`) and exposes status for polling.
 - Starting the diff viewer does not impact the separate orchestrator instance running from `master/` on port **3000**.
 
+## L. Advanced Diff Viewer: start automatically with orchestrator (`npm start`)
+
+The diff viewer should be started automatically as part of the orchestrator startup so you can paste/open `http://localhost:7655/pr/...` without getting connection refused.
+
+**Acceptance criteria**
+- `npm start` launches orchestrator and also starts diff viewer in the background by default.
+- Can be disabled via `AUTO_START_DIFF_VIEWER=false` (so tests/CI don’t spawn extra processes).
+
 Keep Claude-specific wording only when it truly is Claude-specific (Claude startup settings, Claude provider, etc).
 
 ## K. Codex/OpenCode detection + recovery improvements
