@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReviewableFileTree from './ReviewableFileTree';
 import SmartDiffView from './SmartDiffView';
 import EnhancedDiffView from './EnhancedDiffView';
+import RichDiffView from './RichDiffView';
 import CollapsibleHeader from './CollapsibleHeader';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import './SmartDiffViewer.css';
@@ -14,6 +15,7 @@ const SmartDiffViewer = ({ data }) => {
     moves: true,
     duplications: true,
     noise: false,
+    richDiff: true,
     semanticView: false,
     autoAdvance: false
   });
@@ -164,53 +166,58 @@ const SmartDiffViewer = ({ data }) => {
               />
               
               {/* Show smart diff if available with proper structure, otherwise standard diff */}
-              {selectedFile.analysis && expandedSections.semanticView && 
-               selectedFile.analysis.significantChanges && selectedFile.analysis.significantChanges.length > 0 ? (
-                <SmartDiffView 
-                  analysis={selectedFile.analysis}
-                  file={selectedFile}
-                  expandedSections={expandedSections}
-                  onToggleSection={toggleSection}
+              {selectedFile.analysis?.richText?.hunks?.length > 0 && expandedSections.richDiff ? (
+                <RichDiffView
+                  richText={selectedFile.analysis.richText}
+                  hideContext={!expandedSections.noise}
                 />
-              ) : (
-                <div style={{ height: '100%', overflow: 'auto', backgroundColor: '#1e1e1e' }}>
-                  {selectedFile.patch ? (
-                    <div style={{ padding: '20px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px' }}>
-                      {selectedFile.patch.split('\n').map((line, idx) => {
-                        let style = { margin: 0, padding: '2px 5px', whiteSpace: 'pre' };
-                        
-                        if (line.startsWith('+')) {
-                          style.backgroundColor = '#28a745';
-                          style.color = '#fff';
-                        } else if (line.startsWith('-')) {
-                          style.backgroundColor = '#dc3545';
-                          style.color = '#fff';
-                        } else if (line.startsWith('@@')) {
-                          style.backgroundColor = '#0366d6';
-                          style.color = '#fff';
-                          style.fontWeight = 'bold';
-                        } else {
-                          style.color = '#d4d4d4';
-                        }
-                        
-                        return (
-                          <div key={idx} style={style}>
-                            {line || ' '}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <EnhancedDiffView 
-                      file={selectedFile}
-                      diffData={{
-                        type: selectedFile.diffType || 'text',
-                        ...selectedFile
-                      }}
-                    />
-                  )}
-                </div>
-              )}
+              ) : selectedFile.analysis && expandedSections.semanticView && 
+                 selectedFile.analysis.significantChanges && selectedFile.analysis.significantChanges.length > 0 ? (
+                  <SmartDiffView 
+                    analysis={selectedFile.analysis}
+                    file={selectedFile}
+                    expandedSections={expandedSections}
+                    onToggleSection={toggleSection}
+                  />
+                ) : (
+                  <div style={{ height: '100%', overflow: 'auto', backgroundColor: '#1e1e1e' }}>
+                    {selectedFile.patch ? (
+                      <div style={{ padding: '20px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px' }}>
+                        {selectedFile.patch.split('\n').map((line, idx) => {
+                          let style = { margin: 0, padding: '2px 5px', whiteSpace: 'pre' };
+                          
+                          if (line.startsWith('+')) {
+                            style.backgroundColor = '#28a745';
+                            style.color = '#fff';
+                          } else if (line.startsWith('-')) {
+                            style.backgroundColor = '#dc3545';
+                            style.color = '#fff';
+                          } else if (line.startsWith('@@')) {
+                            style.backgroundColor = '#0366d6';
+                            style.color = '#fff';
+                            style.fontWeight = 'bold';
+                          } else {
+                            style.color = '#d4d4d4';
+                          }
+                          
+                          return (
+                            <div key={idx} style={style}>
+                              {line || ' '}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <EnhancedDiffView 
+                        file={selectedFile}
+                        diffData={{
+                          type: selectedFile.diffType || 'text',
+                          ...selectedFile
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
             </>
           ) : (
             <div className="no-file-selected">
@@ -223,6 +230,14 @@ const SmartDiffViewer = ({ data }) => {
 
       {/* Quick settings panel */}
       <div className="viewer-settings">
+        <label>
+          <input
+            type="checkbox"
+            checked={expandedSections.richDiff}
+            onChange={() => toggleSection('richDiff')}
+          />
+          Rich Diff
+        </label>
         <label>
           <input
             type="checkbox"

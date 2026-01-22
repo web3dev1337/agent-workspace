@@ -1,0 +1,194 @@
+.rich-diff-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #0b0b0b;
+  color: #d4d4d4;
+}
+
+.rich-diff-empty {
+  padding: 16px;
+  color: #888;
+}
+
+.rich-diff-summary {
+  padding: 10px 14px;
+  border-bottom: 1px solid #222;
+  background: #111;
+}
+
+.rich-diff-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.rich-badge {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid #333;
+  background: #181818;
+  color: #eee;
+}
+
+.badge-added {
+  border-color: rgba(40, 167, 69, 0.55);
+}
+.badge-deleted {
+  border-color: rgba(220, 53, 69, 0.55);
+}
+.badge-updated {
+  border-color: rgba(255, 193, 7, 0.6);
+}
+.badge-moved {
+  border-color: rgba(3, 102, 214, 0.65);
+}
+.badge-copy {
+  border-color: rgba(138, 43, 226, 0.6);
+}
+.badge-find {
+  border-color: rgba(0, 200, 255, 0.6);
+}
+
+.rich-summary-muted {
+  color: #888;
+  font-size: 12px;
+}
+
+.rich-summary-section {
+  margin-top: 10px;
+}
+
+.rich-summary-title {
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rich-summary-list {
+  display: grid;
+  gap: 4px;
+}
+
+.rich-summary-item {
+  font-size: 12px;
+  color: #cfcfcf;
+}
+
+.rich-code-inline {
+  font-family: Consolas, Monaco, monospace;
+  background: #1b1b1b;
+  border: 1px solid #2a2a2a;
+  padding: 1px 6px;
+  border-radius: 6px;
+  color: #fff;
+}
+
+.rich-diff-body {
+  flex: 1;
+  overflow: auto;
+}
+
+.rich-hunk {
+  border-bottom: 1px solid #141414;
+}
+
+.rich-hunk-header {
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  padding: 8px 10px;
+  background: rgba(3, 102, 214, 0.25);
+  border-top: 1px solid rgba(3, 102, 214, 0.35);
+  border-bottom: 1px solid rgba(3, 102, 214, 0.35);
+  color: #e6f0ff;
+}
+
+.rich-hunk-rows {
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+}
+
+.rich-line {
+  display: grid;
+  grid-template-columns: 56px 56px 1fr;
+  align-items: stretch;
+}
+
+.rich-gutter {
+  padding: 2px 8px;
+  text-align: right;
+  color: #666;
+  user-select: none;
+  border-right: 1px solid #161616;
+}
+
+.rich-code {
+  padding: 2px 10px;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.rich-code-muted {
+  color: #888;
+  font-style: italic;
+}
+
+.rich-prefix {
+  display: inline-block;
+  width: 14px;
+  margin-right: 6px;
+  color: #888;
+}
+
+.rich-line-added {
+  background: rgba(40, 167, 69, 0.12);
+}
+
+.rich-line-deleted {
+  background: rgba(220, 53, 69, 0.12);
+}
+
+.rich-line-updated-old {
+  background: rgba(220, 53, 69, 0.10);
+}
+
+.rich-line-updated-new {
+  background: rgba(40, 167, 69, 0.10);
+}
+
+.rich-line-context {
+  background: #0b0b0b;
+}
+
+.rich-line-context-collapsed {
+  background: #0f0f0f;
+}
+
+.seg-common {
+  color: #d4d4d4;
+}
+
+.seg-removed {
+  color: #ffd5da;
+}
+
+.seg-added {
+  color: #c8facc;
+}
+
+.seg-removed-strong {
+  background: rgba(220, 53, 69, 0.35);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+.seg-added-strong {
+  background: rgba(40, 167, 69, 0.35);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
