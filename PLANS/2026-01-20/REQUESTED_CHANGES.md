@@ -215,6 +215,16 @@ The diff viewer should be started automatically as part of the orchestrator star
 - `npm start` launches orchestrator and also starts diff viewer in the background by default.
 - Can be disabled via `AUTO_START_DIFF_VIEWER=false` (so tests/CI don’t spawn extra processes).
 
+## M. Advanced Diff Viewer: review UX (scroll + header sizing)
+
+The diff viewer should be optimized for fast review:
+- The per-file header should not consume large vertical space.
+- You should be able to scroll through diffs quickly without needing to click every file.
+
+**Acceptance criteria**
+- File header stays compact (single line).
+- A scroll mode exists where scrolling past the bottom/top moves to the next/previous file diff (while keeping click-to-jump available via the file list).
+
 Keep Claude-specific wording only when it truly is Claude-specific (Claude startup settings, Claude provider, etc).
 
 ## K. Codex/OpenCode detection + recovery improvements
