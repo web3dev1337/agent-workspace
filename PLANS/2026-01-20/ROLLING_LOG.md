@@ -345,3 +345,14 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Behavior: we still fit xterm, but we **skip resizing the PTY** if the computed size is below a safe minimum (prevents irreversible hard-wrapped output).
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/136
+
+### PRs panel: repo/owner filters + merged/closed split (done)
+- Header → **🔀 PRs** now supports:
+  - Scope: Mine / Include others / All
+  - State: Open / Merged / Closed (unmerged) / All
+  - Sort: Updated / Created
+  - Filters: `repo` and `owner` (comma-separated)
+  - Actions: ↗ Open (GitHub) + 🔍 Diff (local diff viewer)
+- Backend `/api/prs` now supports: `mode=all`, `state=merged`, `sort=created`, `repo=...`, `owner=...`.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/138
