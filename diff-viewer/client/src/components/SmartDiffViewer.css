@@ -74,6 +74,65 @@
   overflow: hidden;
 }
 
+.file-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #121212;
+  border-bottom: 1px solid #222;
+  flex: 0 0 auto;
+}
+
+.file-header-title {
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  color: #ddd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.file-header-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #333;
+  background: #1a1a1a;
+  color: #bbb;
+}
+
+.file-header-badge.additions {
+  border-color: rgba(40, 167, 69, 0.55);
+  color: #3fb950;
+}
+
+.file-header-badge.deletions {
+  border-color: rgba(220, 53, 69, 0.55);
+  color: #f85149;
+}
+
+.file-header-review {
+  border-color: rgba(3, 102, 214, 0.65);
+  color: #58a6ff;
+  cursor: pointer;
+}
+
+.diff-scroll-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: #0b0b0b;
+}
+
 /* No file selected */
 .no-file-selected {
   flex: 1;
@@ -159,12 +218,6 @@
   .viewer-settings {
     flex-wrap: wrap;
   }
-}
-
-/* Enhanced Monaco Integration */
-.right-panel > div {
-  flex: 1;
-  overflow: auto;
 }
 
 /* Loading State */
