@@ -12,9 +12,17 @@
 
 ### THE VERY FIRST THING YOU MUST DO (NO EXCEPTIONS):
 ```bash
-git fetch origin main:main
-git checkout -b fix/your-feature-name main
+git fetch origin --prune
+git checkout -b fix/your-feature-name origin/main
 ```
+
+**NOTE (worktrees):** This repo commonly runs as **two git worktrees**:
+- `~/GitHub/tools/automation/claude-orchestrator/master` (your daily “production” instance)
+- `~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev` (development)
+
+Because `main` is usually checked out in the `master/` worktree, **do not try to check out `main` inside `claude-orchestrator-dev/`** (Git will error: “branch 'main' is already used by worktree…”). Always branch from `origin/main` in dev.
+
+**CRITICAL SAFETY:** If you are working in `claude-orchestrator-dev/`, **do not edit, pull, or run commands in the `master/` folder** unless explicitly requested — that instance may be running on port **3000**.
 
 **DO NOT**:
 - ❌ Read any files first
