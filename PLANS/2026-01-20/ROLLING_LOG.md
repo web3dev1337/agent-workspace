@@ -454,4 +454,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Commander paste now uses the `paste` event (`clipboardData`) instead of `navigator.clipboard.readText()` for better reliability across browsers/webviews.
 - Prevents default xterm paste handling to avoid double-paste and the “no image found” style failure modes.
 - Tests: `npm run test:unit`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/164
