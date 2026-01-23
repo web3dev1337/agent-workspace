@@ -157,30 +157,32 @@ class CommanderPanel {
         return false;
       }
 
-      // Ctrl/Cmd+V: paste clipboard text
-      if (isModifier && key === 'v') {
+      return true;
+    });
+
+    // Paste handler: use the paste event (clipboardData) instead of navigator.clipboard.readText().
+    // This is more reliable across webviews and avoids image-only paste quirks.
+    if (!container._commanderPasteHandler) {
+      const onPaste = (e) => {
+        const text = e.clipboardData?.getData('text/plain') || e.clipboardData?.getData('text') || '';
+        if (!text) return;
+
+        // Intercept before xterm/default paste handling to avoid double-paste or unexpected behavior.
         e.preventDefault();
+        e.stopPropagation();
 
         const now = Date.now();
         if (now - this.lastPasteAt < this.pasteCooldownMs) {
-          return false;
+          return;
         }
         this.lastPasteAt = now;
 
-        navigator.clipboard.readText().then(text => {
-          if (text) {
-            this.sendInput(text);
-          }
-        }).catch(err => {
-          console.error('Failed to read clipboard:', err);
-          this.lastPasteAt = 0;
-        });
+        this.sendInput(text);
+      };
 
-        return false;
-      }
-
-      return true;
-    });
+      container.addEventListener('paste', onPaste, true);
+      container._commanderPasteHandler = onPaste;
+    }
 
     // Click to focus
     container.addEventListener('click', () => {
