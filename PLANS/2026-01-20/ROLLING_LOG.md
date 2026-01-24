@@ -22,6 +22,17 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/172
 - Merged: commit `1d7cf2f`
 
+### Process layer primitives: task abstraction (done)
+- Added unified “task” model across:
+  - PRs (via `gh search prs`)
+  - worktrees tagged ready-for-review
+  - sessions in `waiting` status
+- Added endpoint: `GET /api/process/tasks`
+- Refactored: `GET /api/prs` → `PullRequestService`
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/173
+- Merged: commit `bf53e98`
+
 ## 2026-01-20
 
 ### Repo status / setup
