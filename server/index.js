@@ -54,6 +54,7 @@ const { WorktreeTagService } = require('./worktreeTagService');
 const { DiffViewerService } = require('./diffViewerService');
 const { PullRequestService } = require('./pullRequestService');
 const { ProcessTaskService } = require('./processTaskService');
+const { TaskTicketingService } = require('./taskTicketingService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
@@ -163,6 +164,7 @@ const worktreeTagService = WorktreeTagService.getInstance();
 const diffViewerService = DiffViewerService.getInstance();
 const pullRequestService = PullRequestService.getInstance();
 const processTaskService = ProcessTaskService.getInstance({ sessionManager, worktreeTagService, pullRequestService });
+const taskTicketingService = TaskTicketingService.getInstance();
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -2143,6 +2145,144 @@ app.get('/api/process/tasks', async (req, res) => {
   } catch (error) {
     logger.error('Failed to list process tasks', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to list process tasks' });
+  }
+});
+
+// ============================================
+// Tasks API (Ticketing Providers)
+// ============================================
+
+app.get('/api/tasks/providers', (req, res) => {
+  try {
+    res.json({ providers: taskTicketingService.listProviders() });
+  } catch (error) {
+    logger.error('Failed to list task providers', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to list task providers' });
+  }
+});
+
+app.get('/api/tasks/boards', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const provider = taskTicketingService.getProvider(providerId);
+    const boards = await provider.listBoards({ refresh });
+    res.json({ provider: providerId, boards });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to list task boards', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.get('/api/tasks/boards/:boardId/lists', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const provider = taskTicketingService.getProvider(providerId);
+    const lists = await provider.listLists({ boardId: req.params.boardId, refresh });
+    res.json({ provider: providerId, boardId: req.params.boardId, lists });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to list task lists', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.get('/api/tasks/boards/:boardId/cards', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const q = req.query.q || '';
+    const updatedSince = req.query.updatedSince || null;
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.listBoardCards !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support board cards', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const cards = await provider.listBoardCards({ boardId: req.params.boardId, refresh, q, updatedSince });
+    res.json({ provider: providerId, boardId: req.params.boardId, cards });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to list task board cards', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.get('/api/tasks/lists/:listId/cards', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const q = req.query.q || '';
+    const updatedSince = req.query.updatedSince || null;
+    const provider = taskTicketingService.getProvider(providerId);
+    const cards = await provider.listCards({ listId: req.params.listId, refresh, q, updatedSince });
+    res.json({ provider: providerId, listId: req.params.listId, cards });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to list task cards', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.get('/api/tasks/cards/:cardId', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const provider = taskTicketingService.getProvider(providerId);
+    const card = await provider.getCard({ cardId: req.params.cardId, refresh });
+    res.json({ provider: providerId, cardId: req.params.cardId, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to get task card', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.post('/api/tasks/cards/:cardId/comments', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.addComment !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support comments', code: 'UNSUPPORTED_OPERATION' });
+    }
+
+    const text = req.body?.text;
+    if (!text || !String(text).trim()) {
+      return res.status(400).json({ error: 'text is required' });
+    }
+
+    const action = await provider.addComment({ cardId: req.params.cardId, text });
+    const card = typeof provider.getCard === 'function'
+      ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
+      : null;
+
+    res.json({ provider: providerId, cardId: req.params.cardId, action, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to add task comment', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.put('/api/tasks/cards/:cardId', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.updateCard !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support updates', code: 'UNSUPPORTED_OPERATION' });
+    }
+
+    const fields = req.body || {};
+    const updated = await provider.updateCard({ cardId: req.params.cardId, fields });
+    const card = typeof provider.getCard === 'function'
+      ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
+      : updated;
+
+    res.json({ provider: providerId, cardId: req.params.cardId, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to update task card', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
   }
 });
 
