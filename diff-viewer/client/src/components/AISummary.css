@@ -31,7 +31,7 @@
 }
 
 .generate-summary-btn:hover {
-  background: #388bfd;
+  background: var(--accent-primary-hover);
   transform: translateY(-1px);
 }
 

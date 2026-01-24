@@ -117,7 +117,7 @@
 .semantic-info {
   font-size: 12px;
   color: var(--accent-success);
-  background: rgba(63, 185, 80, 0.1);
+  background: var(--diff-added-bg);
   padding: 2px 8px;
   border-radius: 4px;
 }

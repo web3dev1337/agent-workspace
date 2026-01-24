@@ -84,12 +84,12 @@
 }
 
 .diff-badge.increase {
-  background: rgba(63, 185, 80, 0.1);
+  background: var(--diff-added-bg);
   color: var(--accent-success);
 }
 
 .diff-badge.decrease {
-  background: rgba(248, 81, 73, 0.1);
+  background: var(--diff-removed-bg);
   color: var(--accent-danger);
 }
 

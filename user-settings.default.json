@@ -10,7 +10,12 @@
       "mode": "fresh",
       "delay": 500
     },
-    "terminal": {}
+    "terminal": {},
+    "ui": {
+      "diffViewer": {
+        "theme": "light"
+      }
+    }
   },
   "perTerminal": {}
 }

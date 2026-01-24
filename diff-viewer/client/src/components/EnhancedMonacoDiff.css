@@ -1,0 +1,31 @@
+.diff-line-added {
+  background-color: var(--diff-added-bg);
+}
+
+.diff-line-added-gutter {
+  background-color: var(--diff-added-gutter);
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+.diff-line-removed {
+  background-color: var(--diff-removed-bg);
+}
+
+.diff-line-removed-gutter {
+  background-color: var(--diff-removed-gutter);
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+.diff-hunk-header {
+  background-color: var(--diff-hunk-bg);
+  font-weight: bold;
+}
+
+.diff-hunk-header-gutter {
+  background-color: var(--diff-hunk-gutter);
+  width: 3px !important;
+  margin-left: 3px;
+}
+

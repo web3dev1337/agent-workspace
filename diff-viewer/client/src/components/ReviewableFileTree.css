@@ -1,6 +1,6 @@
 .reviewable-file-tree {
-  background: #0d0d0d;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   display: flex;
   flex-direction: column;
@@ -9,13 +9,13 @@
 
 .file-tree-header {
   padding: 15px;
-  border-bottom: 1px solid #2a2a2a;
-  background: #1a1a1a;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
 }
 
 .file-tree-header h3 {
   margin: 0 0 10px 0;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 16px;
 }
 
@@ -29,27 +29,27 @@
 .progress-bar {
   flex: 1;
   height: 6px;
-  background: #2a2a2a;
+  background: var(--border-color);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: #4caf50;
+  background: var(--accent-success);
   transition: width 0.3s ease;
 }
 
 .progress-text {
   font-size: 12px;
-  color: #888;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
 /* Review Actions */
 .review-actions {
   padding: 10px 15px;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   gap: 10px;
 }
@@ -57,18 +57,18 @@
 .review-actions button {
   flex: 1;
   padding: 6px 12px;
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
-  color: #ccc;
+  color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .review-actions button:hover:not(:disabled) {
-  background: #2a2a2a;
-  color: #fff;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .review-actions button:disabled {
@@ -77,13 +77,13 @@
 }
 
 .mark-all-btn:hover:not(:disabled) {
-  border-color: #4caf50;
-  color: #4caf50;
+  border-color: var(--accent-success);
+  color: var(--accent-success);
 }
 
 .clear-all-btn:hover:not(:disabled) {
-  border-color: #f44336;
-  color: #f44336;
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
 }
 
 /* File Tree Content */
@@ -105,12 +105,12 @@
 }
 
 .file-item:hover {
-  background: #1a1a1a;
+  background: var(--bg-tertiary);
 }
 
 .file-item.selected {
-  background: #2a3f5f;
-  border-left: 3px solid #2196f3;
+  background: var(--selected-bg);
+  border-left: 3px solid var(--selected-border);
   padding-left: 12px;
 }
 
@@ -120,7 +120,7 @@
 
 .file-item.reviewed .file-name {
   text-decoration: line-through;
-  color: #666;
+  color: var(--text-tertiary);
 }
 
 /* Review Checkbox */
@@ -129,7 +129,7 @@
   height: 16px;
   margin: 0;
   cursor: pointer;
-  accent-color: #4caf50;
+  accent-color: var(--accent-success);
 }
 
 /* File Icons and Names */
@@ -139,7 +139,7 @@
 
 .file-name {
   flex: 1;
-  color: #ccc;
+  color: var(--text-primary);
   font-size: 13px;
   font-family: 'Monaco', 'Menlo', monospace;
   white-space: nowrap;
@@ -156,28 +156,28 @@
 }
 
 .additions {
-  color: #4caf50;
+  color: var(--accent-success);
 }
 
 .deletions {
-  color: #f44336;
+  color: var(--accent-danger);
 }
 
 /* Change Type Colors */
 .file-item.added .file-name {
-  color: #4caf50;
+  color: var(--accent-success);
 }
 
 .file-item.deleted .file-name {
-  color: #f44336;
+  color: var(--accent-danger);
 }
 
 .file-item.modified .file-name {
-  color: #ff9800;
+  color: var(--accent-warning);
 }
 
 .file-item.renamed .file-name {
-  color: #2196f3;
+  color: var(--accent-primary);
 }
 
 /* Directory Items */
@@ -192,16 +192,16 @@
 }
 
 .directory-header:hover {
-  background: #1a1a1a;
+  background: var(--bg-tertiary);
 }
 
 .directory-header.has-reviewed {
-  color: #4caf50;
+  color: var(--accent-success);
 }
 
 .expand-icon {
   font-size: 10px;
-  color: #666;
+  color: var(--text-tertiary);
 }
 
 .directory-icon {
@@ -209,7 +209,7 @@
 }
 
 .directory-name {
-  color: #aaa;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
 }
@@ -221,11 +221,11 @@
 /* Keyboard Hints */
 .keyboard-hints {
   padding: 10px 15px;
-  border-top: 1px solid #2a2a2a;
+  border-top: 1px solid var(--border-color);
   display: flex;
   gap: 15px;
   font-size: 11px;
-  color: #666;
+  color: var(--text-tertiary);
 }
 
 .hint {
@@ -236,12 +236,12 @@
 
 .hint kbd {
   padding: 2px 6px;
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 3px;
   font-family: monospace;
   font-size: 10px;
-  color: #aaa;
+  color: var(--text-secondary);
 }
 
 /* Scrollbar */
@@ -250,21 +250,21 @@
 }
 
 .file-tree-content::-webkit-scrollbar-track {
-  background: #0d0d0d;
+  background: var(--bg-secondary);
 }
 
 .file-tree-content::-webkit-scrollbar-thumb {
-  background: #333;
+  background: var(--border-color);
   border-radius: 4px;
 }
 
 .file-tree-content::-webkit-scrollbar-thumb:hover {
-  background: #444;
+  background: var(--text-tertiary);
 }
 
 /* Focus States */
 .file-item:focus {
-  outline: 1px solid #2196f3;
+  outline: 1px solid var(--accent-primary);
   outline-offset: -1px;
 }
 
@@ -273,7 +273,7 @@
   content: '•';
   position: absolute;
   left: 5px;
-  color: #ff9800;
+  color: var(--accent-warning);
   font-size: 16px;
   line-height: 1;
 }

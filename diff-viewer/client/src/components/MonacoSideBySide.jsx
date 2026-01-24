@@ -1,7 +1,9 @@
 import React, { useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
+import { useTheme } from '../context/theme';
 
 const MonacoSideBySide = ({ original, modified, language, height = "100%" }) => {
+  const { theme } = useTheme();
   const leftEditorRef = useRef(null);
   const rightEditorRef = useRef(null);
 
@@ -19,13 +21,13 @@ const MonacoSideBySide = ({ original, modified, language, height = "100%" }) => 
       height, 
       width: '100%',
       gap: '2px',
-      backgroundColor: '#1e1e1e'
+      backgroundColor: 'var(--bg-primary)'
     }}>
       {/* Original/Old content */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <Editor
           height="100%"
-          theme="vs-dark"
+          theme={theme === 'light' ? 'vs' : 'vs-dark'}
           value={original || '// No previous version'}
           language={language}
           options={{
@@ -47,13 +49,13 @@ const MonacoSideBySide = ({ original, modified, language, height = "100%" }) => 
       </div>
 
       {/* Divider */}
-      <div style={{ width: '2px', backgroundColor: '#444' }} />
+      <div style={{ width: '2px', backgroundColor: 'var(--border-color)' }} />
 
       {/* Modified/New content */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <Editor
           height="100%"
-          theme="vs-dark"
+          theme={theme === 'light' ? 'vs' : 'vs-dark'}
           value={modified || '// Empty'}
           language={language}
           options={{

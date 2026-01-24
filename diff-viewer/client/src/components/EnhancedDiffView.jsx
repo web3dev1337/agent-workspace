@@ -2,6 +2,7 @@ import React from 'react';
 import DiffEditor from '@monaco-editor/react';
 import SmartDiffView from './SmartDiffView';
 import './EnhancedDiffView.css';
+import { useTheme } from '../context/theme';
 
 const EnhancedDiffView = ({ file, diffData }) => {
   // Handle different diff types
@@ -173,31 +174,32 @@ const StructuredDiffView = ({ file, diff }) => {
 };
 
 const StandardDiffView = ({ file, diffData }) => {
+  const { theme } = useTheme();
   // If we have a patch, show it as a unified diff
   if (file.patch) {
     const lines = file.patch.split('\n');
     return (
-      <div className="standard-diff-view" style={{ height: '100%', overflow: 'auto', backgroundColor: '#1e1e1e' }}>
-        <div style={{ padding: '20px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px' }}>
+      <div className="standard-diff-view" style={{ height: '100%', overflow: 'auto', backgroundColor: 'var(--bg-primary)' }}>
+        <div style={{ padding: '20px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>
           {lines.map((line, idx) => {
             let className = '';
             let style = { margin: 0, padding: '2px 5px', whiteSpace: 'pre' };
             
             if (line.startsWith('+')) {
               className = 'added';
-              style.backgroundColor = '#28a745';
-              style.color = '#fff';
+              style.backgroundColor = 'var(--diff-added-bg)';
+              style.color = 'var(--text-primary)';
             } else if (line.startsWith('-')) {
               className = 'deleted';
-              style.backgroundColor = '#dc3545';
-              style.color = '#fff';
+              style.backgroundColor = 'var(--diff-removed-bg)';
+              style.color = 'var(--text-primary)';
             } else if (line.startsWith('@@')) {
               className = 'hunk-header';
-              style.backgroundColor = '#0366d6';
-              style.color = '#fff';
+              style.backgroundColor = 'var(--diff-hunk-bg)';
+              style.color = 'var(--text-primary)';
               style.fontWeight = 'bold';
             } else {
-              style.color = '#d4d4d4';
+              style.color = 'var(--text-primary)';
             }
             
             return (
@@ -218,7 +220,7 @@ const StandardDiffView = ({ file, diffData }) => {
   return (
     <DiffEditor
       height="100%"
-      theme="vs-dark"
+      theme={theme === 'light' ? 'vs' : 'vs-dark'}
       original={oldContent}
       modified={newContent}
       language={getLanguageFromPath(file.path || file.filename)}
