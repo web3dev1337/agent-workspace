@@ -14,11 +14,21 @@ Goal: define a **single “best default workflow”** for you (the user) that th
 
 ### WIP and Q (the only two numbers that matter day-to-day)
 - `WIP`: active projects you are currently moving forward (not “installed”, not “available”, but actively producing PRs).
-- `Q`: review queue depth (PRs / worktrees / tasks waiting for your review + merge).
+- `Q`: review queue depth, **segregated by tier** (not a single global number).
 
 **Defaults**
 - `WIP_max = 5` (Start Finishing “five projects rule”)
-- `Q_max = 3` (from work2: stop launching when queue is high)
+- Tiered queues (from `work2/DAILY_REFERENCE_CARD.md` + `work2/MASTER_SYNTHESIS_PLAN.md`):
+  - `Q1 ≤ 1` (Tier 1: primary focus)
+  - `Q2 ≤ 2` (Tier 2: gap fillers)
+  - `Q3 ≤ 5` (Tier 3: batch review)
+  - `Q4 ≤ 1` (Tier 4: dedicated review)
+
+Practical interpretation:
+- The “**queue > 3**” guardrail applies to **Tier 1+2** (the interactive queues). Tier 3/4 have their own caps.
+- Track both:
+  - `Q12 = Q1 + Q2` (interactive review pressure)
+  - `Q_total = Q1 + Q2 + Q3 + Q4` (overall load), but keep it **segregated**.
 
 ### The 4 Tiers (where orchestration decisions live)
 From `work2/DAILY_REFERENCE_CARD.md`:
@@ -44,7 +54,8 @@ Orchestrator’s job is to:
 
 ### 1. Morning “10 minute check-in” (Dashboard should be the default landing)
 Checklist (from Start Finishing + work2):
-- [ ] `Q` (review queue depth). If `Q > Q_max`: **no launches**.
+- [ ] `Q12` (Tier 1+2 review pressure). If `Q12 > 3`: **no Tier 1/2 launches** (review first).
+- [ ] `Q3` and `Q4`: respect their own caps (Tier 3 batch + Tier 4 dedicated).
 - [ ] `WIP` (active projects). If `WIP > WIP_max`: freeze new projects; finish/kill.
 - [ ] Pick 1 Tier 1 focus block (90–120 min).
 - [ ] Pick up to 2 Tier 2 gap fillers (same project if possible).
@@ -57,6 +68,10 @@ Checklist (from Start Finishing + work2):
   - worktrees tagged “ready for review”
   - stalled sessions needing input
 - A WIP counter (“Active projects last 24h”) + configurable caps.
+- A tier-segregated queue view:
+  - `Q1/Q2` (don’t let this explode; blocks launches)
+  - `Q3` (batch review later; allow more)
+  - `Q4` (one at a time; schedule review)
 
 ### 2. Launch phase (8:00–8:30)
 Goal: start background work *before* you enter deep work.
@@ -197,4 +212,3 @@ Translate this spec into a PR-by-PR roadmap:
 - start with WIP/Q visibility + gating (fast to implement, huge ROI)
 - then tier tagging and queue view
 - then batch review mode
-
