@@ -475,3 +475,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Updates top-level docs titles to use “Agent Orchestrator” while noting the repo remains `claude-orchestrator`.
 - Tests: `npm run test:unit`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/168
+
+### Quick Work: allow selecting “in use” worktrees (done)
+- Quick Worktree menu no longer disables “in use” entries; selecting one shows the existing sessions (or falls back to adding it) instead of blocking.
+- Tests: `npm run test:unit`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/171
