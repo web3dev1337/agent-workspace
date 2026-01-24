@@ -95,6 +95,7 @@ See:
 Notes:
 - Default “updated window” is **Any time** to avoid hiding older cards.
 - Default list selection is **All lists** (board-wide cards) to match the common mental model of “boards have cards”.
+- If Trello’s board-wide cards endpoint fails for a board, the provider falls back to aggregating cards per-list.
 
 Files:
 - `client/index.html` (header button)
