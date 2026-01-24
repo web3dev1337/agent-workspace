@@ -6674,11 +6674,10 @@ class ClaudeOrchestrator {
       <div class="quick-menu-section">
         ${allWorktrees.map(entry => {
           const inUse = this.isWorktreeInUse(repoPath, entry.id, repoName);
-          const disabled = inUse ? 'disabled' : '';
           const statusLabel = inUse ? ' • in use' : '';
           return `
             <button class="quick-menu-item"
-                    ${disabled}
+                    data-in-use="${inUse ? 'true' : 'false'}"
                     data-repo-path="${this.escapeHtml(repoPath)}"
                     data-repo-type="${this.escapeHtml(repoType)}"
                     data-repo-name="${this.escapeHtml(repoName)}"
@@ -6708,22 +6707,31 @@ class ClaudeOrchestrator {
 
     const onMenuClick = (e) => {
       const item = e.target.closest('.quick-menu-item');
-      if (!item || item.disabled) return;
+      if (!item) return;
       const keepOpen = e.ctrlKey || e.metaKey;
 
       const worktreeId = item.dataset.worktreeId;
       const worktreePath = item.dataset.worktreePath;
       if (!worktreeId || !worktreePath) return;
 
-      this.quickStartWorktree({
-        repoPath: item.dataset.repoPath,
-        repoType: item.dataset.repoType,
-        repoName: item.dataset.repoName,
-        worktreeId,
-        worktreePath,
-        repositoryRoot: item.dataset.repoRoot || item.dataset.repoPath,
-        keepOpen
-      });
+      const inUse = item.dataset.inUse === 'true';
+      const repoPath = item.dataset.repoPath;
+      const repoType = item.dataset.repoType;
+      const repoName = item.dataset.repoName;
+
+      if (inUse) {
+        this.addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName, true, keepOpen);
+      } else {
+        this.quickStartWorktree({
+          repoPath,
+          repoType,
+          repoName,
+          worktreeId,
+          worktreePath,
+          repositoryRoot: item.dataset.repoRoot || repoPath,
+          keepOpen
+        });
+      }
 
       this.closeQuickWorktreeMenu();
     };
@@ -7377,7 +7385,9 @@ class ClaudeOrchestrator {
         continue;
       }
 
-      const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+      const sessionWorktreeId = session.worktreeId
+        || sessionId.match(/-(work\d+)-/)?.[1]
+        || sessionId.split('-')[0];
       const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
 
       // For single-repo workspaces (no repo name in session)
@@ -7434,7 +7444,7 @@ class ClaudeOrchestrator {
     }
   }
 
-  async addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName, isInUse = false) {
+  async addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName, isInUse = false, keepOpen = false) {
     try {
       console.log(`Adding ${worktreeId} from ${repoName} to workspace...`);
 
@@ -7449,7 +7459,9 @@ class ClaudeOrchestrator {
             continue;
           }
 
-          const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
+          const sessionWorktreeId = session.worktreeId
+            || sessionId.match(/-(work\d+)-/)?.[1]
+            || sessionId.split('-')[0];
           if (sessionWorktreeId !== worktreeId) continue;
 
           const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
@@ -7466,8 +7478,10 @@ class ClaudeOrchestrator {
           sessionIds.forEach(id => this.visibleTerminals.add(id));
           this.updateTerminalGrid();
           this.buildSidebar();
-          document.getElementById('add-worktree-modal')?.remove();
-          document.getElementById('quick-worktree-modal')?.remove();
+          if (!keepOpen) {
+            document.getElementById('add-worktree-modal')?.remove();
+            document.getElementById('quick-worktree-modal')?.remove();
+          }
           this.showTemporaryMessage(`Showing ${repoName} ${worktreeId}`, 'success');
           return;
         }
@@ -7488,8 +7502,10 @@ class ClaudeOrchestrator {
 
       if (response.ok) {
         this.showTemporaryMessage(`Added ${repoName} ${worktreeId} to workspace!`, 'success');
-        document.getElementById('add-worktree-modal')?.remove();
-        document.getElementById('quick-worktree-modal')?.remove();
+        if (!keepOpen) {
+          document.getElementById('add-worktree-modal')?.remove();
+          document.getElementById('quick-worktree-modal')?.remove();
+        }
 
         // Server will emit 'worktree-sessions-added' which is handled by our socket listener
       } else {
