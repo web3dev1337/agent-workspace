@@ -6,8 +6,8 @@
 
 /* Summary Section */
 .diff-summary {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
@@ -15,12 +15,12 @@
 
 .diff-summary h3 {
   margin: 0 0 10px 0;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 20px;
 }
 
 .summary-text {
-  color: #aaa;
+  color: var(--text-secondary);
   margin: 0 0 20px 0;
   font-size: 16px;
 }
@@ -39,19 +39,19 @@
 .stat-value {
   font-size: 28px;
   font-weight: bold;
-  color: #4caf50;
+  color: var(--accent-success);
 }
 
 .stat-label {
   font-size: 12px;
-  color: #888;
+  color: var(--text-tertiary);
   text-transform: uppercase;
 }
 
 /* Section Styles */
 .diff-section {
-  background: #0d0d0d;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   margin-bottom: 15px;
   overflow: hidden;
@@ -59,7 +59,7 @@
 
 .section-header {
   padding: 15px 20px;
-  background: #1a1a1a;
+  background: var(--bg-tertiary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -69,24 +69,24 @@
 }
 
 .section-header:hover {
-  background: #222;
+  background: var(--bg-primary);
 }
 
 .section-header h4 {
   margin: 0;
   flex: 1;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 16px;
 }
 
 .toggle-icon {
-  color: #666;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 
 .section-hint {
   font-size: 12px;
-  color: #666;
+  color: var(--text-tertiary);
   font-style: italic;
 }
 
@@ -101,13 +101,13 @@
   gap: 15px;
   padding: 10px;
   margin-bottom: 8px;
-  background: #0a0a0a;
-  border-left: 3px solid #2196f3;
+  background: var(--bg-primary);
+  border-left: 3px solid var(--accent-primary);
   border-radius: 3px;
 }
 
 .ref-type {
-  color: #2196f3;
+  color: var(--accent-primary);
   text-transform: capitalize;
   font-weight: 500;
   min-width: 120px;
@@ -115,20 +115,20 @@
 
 .ref-detail {
   flex: 1;
-  color: #ccc;
+  color: var(--text-primary);
 }
 
 .ref-detail code {
-  background: #1a1a1a;
+  background: var(--code-inline-bg);
   padding: 2px 6px;
   border-radius: 3px;
-  color: #ffa726;
+  color: var(--accent-warning);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
 }
 
 .confidence {
-  color: #666;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 
@@ -139,7 +139,7 @@
   gap: 15px;
   padding: 8px 10px;
   margin-bottom: 5px;
-  background: #0a0a0a;
+  background: var(--bg-primary);
   border-left: 3px solid #9c27b0;
 }
 
@@ -149,14 +149,14 @@
 }
 
 .move-detail {
-  color: #999;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
 /* Duplications */
 .section-header.warning {
-  background: #3d2a00;
-  border: 1px solid #ffa726;
+  background: rgba(154, 103, 0, 0.15);
+  border: 1px solid var(--accent-warning);
 }
 
 .duplication-item {
@@ -165,7 +165,7 @@
   gap: 15px;
   padding: 10px;
   margin-bottom: 8px;
-  background: #1a0a00;
+  background: rgba(154, 103, 0, 0.10);
   border-left: 3px solid #ff9800;
   border-radius: 3px;
 }
@@ -176,7 +176,7 @@
 }
 
 .dup-detail {
-  color: #999;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -187,7 +187,7 @@
 
 .change-group h5 {
   margin: 0 0 10px 0;
-  color: #aaa;
+  color: var(--text-secondary);
   font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -201,13 +201,13 @@
 }
 
 .change-group h5.collapsible:hover {
-  color: #ccc;
+  color: var(--text-primary);
 }
 
 /* Change Items */
 .change-item {
   margin-bottom: 8px;
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   overflow: hidden;
   transition: all 0.2s;
@@ -222,13 +222,13 @@
   align-items: center;
   gap: 10px;
   padding: 10px 15px;
-  background: #0a0a0a;
+  background: var(--bg-primary);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .change-header:hover {
-  background: #111;
+  background: var(--bg-secondary);
 }
 
 .change-icon {
@@ -238,31 +238,31 @@
 }
 
 .change-item.added .change-icon {
-  color: #4caf50;
+  color: var(--accent-success);
 }
 
 .change-item.deleted .change-icon {
-  color: #f44336;
+  color: var(--accent-danger);
 }
 
 .change-item.modified .change-icon {
-  color: #ff9800;
+  color: var(--accent-warning);
 }
 
 .change-name {
   flex: 1;
-  color: #fff;
+  color: var(--text-primary);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 14px;
 }
 
 .change-lines {
-  color: #666;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 
 .change-similarity {
-  color: #888;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -276,38 +276,38 @@
 }
 
 .complexity-badge.high {
-  background: #d32f2f;
-  color: #fff;
+  background: var(--accent-danger);
+  color: var(--bg-primary);
 }
 
 .complexity-badge.medium {
-  background: #f57c00;
-  color: #fff;
+  background: var(--accent-warning);
+  color: var(--bg-primary);
 }
 
 /* Noise Section */
 .section-header.collapsed {
-  background: #0a0a0a;
-  color: #666;
+  background: var(--bg-primary);
+  color: var(--text-tertiary);
 }
 
 .noise .section-header h4 {
-  color: #666;
+  color: var(--text-tertiary);
 }
 
 /* Progressive Disclosure */
 .change-details {
   padding: 15px;
-  background: #050505;
-  border-top: 1px solid #1a1a1a;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
-  color: #aaa;
+  color: var(--text-secondary);
 }
 
 /* Animations */
 @keyframes highlight {
-  0% { background: #333; }
+  0% { background: var(--bg-tertiary); }
   100% { background: transparent; }
 }
 
