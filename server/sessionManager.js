@@ -38,6 +38,9 @@ class SessionManager extends EventEmitter {
     this.io = io;
     this.agentManager = agentManager;
     this.sessions = new Map();
+    // Keep inactive workspaces' sessions alive (PTYs keep running), keyed by workspace id.
+    // The active workspace is always `this.workspace`, and its sessions live in `this.sessions`.
+    this.workspaceSessionMaps = new Map(); // workspaceId -> Map(sessionId -> session)
     this.statusDetector = null; // Will be set later
     this.gitHelper = null; // Will be set later
     this.fileWatchers = new Map(); // Store file watchers for .git/HEAD files
@@ -109,6 +112,43 @@ class SessionManager extends EventEmitter {
     logger.info('Setting workspace for SessionManager', { workspace: workspace.name });
     this.workspace = workspace;
     this.buildWorktreesFromWorkspace();
+
+    // Ensure we have a session map reserved for this workspace.
+    if (this.workspace?.id && !this.workspaceSessionMaps.has(this.workspace.id)) {
+      this.workspaceSessionMaps.set(this.workspace.id, new Map());
+    }
+  }
+
+  /**
+   * Switch active workspace while preserving existing PTY sessions.
+   * - Stashes the current `this.sessions` map under the previous workspace id
+   * - Restores (or creates) the session map for the new workspace id as `this.sessions`
+   * - Ensures sessions exist for the new workspace without killing old PTYs
+   */
+  async switchWorkspacePreservingSessions(workspace) {
+    if (!workspace?.id) {
+      throw new Error('Workspace missing id');
+    }
+
+    const previousWorkspaceId = this.workspace?.id || null;
+    if (previousWorkspaceId && previousWorkspaceId !== workspace.id) {
+      this.workspaceSessionMaps.set(previousWorkspaceId, this.sessions);
+    }
+
+    // Activate new workspace and restore its session map
+    this.setWorkspace(workspace);
+    const restored = this.workspaceSessionMaps.get(workspace.id);
+    this.sessions = restored || new Map();
+    this.workspaceSessionMaps.set(workspace.id, this.sessions);
+
+    // Ensure sessions exist for the active workspace without clearing existing ones.
+    await this.initializeSessions({ preserveExisting: true });
+
+    // Return any buffered output that occurred while this workspace was inactive.
+    return {
+      sessions: this.getSessionStates(),
+      backlog: this.getUndeliveredOutputAndMarkDelivered()
+    };
   }
 
   buildWorktreesFromWorkspace() {
@@ -165,13 +205,22 @@ class SessionManager extends EventEmitter {
     });
   }
   
-  async initializeSessions() {
+  async initializeSessions(options = {}) {
+    const preserveExisting = !!options.preserveExisting;
     // Set flag to prevent auto-restart during initialization
     this.isWorkspaceSwitching = true;
 
-    // Clear ALL existing sessions first
-    logger.info('Clearing existing sessions before workspace initialization');
-    this.cleanupAllSessions();
+    if (!preserveExisting) {
+      // Clear ALL existing sessions first
+      logger.info('Clearing existing sessions before workspace initialization');
+      this.cleanupAllSessions();
+    } else {
+      // When preserving sessions (workspace tab switching), keep PTYs alive and only
+      // reset branch refresh/watchers for the active workspace.
+      logger.info('Preserving existing sessions during workspace initialization');
+      this.stopBranchRefresh();
+      this.cleanupGitWatchers();
+    }
 
     logger.info('Initializing sessions', { count: this.worktrees.length });
 
@@ -254,6 +303,9 @@ class SessionManager extends EventEmitter {
         sessionPromises.push(
           Promise.resolve().then(() => {
             const sessionId = terminal.id;
+            if (this.sessions.has(sessionId)) {
+              return;
+            }
             let command, args;
 
             if (terminal.terminalType === 'claude') {
@@ -288,7 +340,11 @@ class SessionManager extends EventEmitter {
         // Add Claude session creation to promises array
         sessionPromises.push(
           Promise.resolve().then(() => {
-            this.createSession(`${worktree.id}-claude`, {
+            const sessionId = `${worktree.id}-claude`;
+            if (this.sessions.has(sessionId)) {
+              return;
+            }
+            this.createSession(sessionId, {
               command: 'bash',
               args: ['-c', `cd "${worktree.path}" && exec bash`],
               cwd: worktree.path,
@@ -306,7 +362,11 @@ class SessionManager extends EventEmitter {
         // Add server session creation to promises array
         sessionPromises.push(
           Promise.resolve().then(() => {
-            this.createSession(`${worktree.id}-server`, {
+            const sessionId = `${worktree.id}-server`;
+            if (this.sessions.has(sessionId)) {
+              return;
+            }
+            this.createSession(sessionId, {
               command: 'bash',
               args: ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
               cwd: worktree.path,
@@ -357,6 +417,11 @@ class SessionManager extends EventEmitter {
     // Wait for all sessions to be created in parallel
     await Promise.all(sessionPromises);
     logger.info('All sessions initialized', { count: sessionPromises.length });
+
+    // Keep an authoritative reference from workspace id -> session map for tab switching.
+    if (this.workspace?.id) {
+      this.workspaceSessionMaps.set(this.workspace.id, this.sessions);
+    }
 
     // Clear workspace switching flag
     this.isWorkspaceSwitching = false;
@@ -560,6 +625,7 @@ class SessionManager extends EventEmitter {
         status: 'idle',
         branch: 'unknown',
         buffer: '',
+        deliveredBufferLength: 0, // how much of `buffer` has been emitted to clients while active
         lastActivity: Date.now(),
         tokenUsage: 0,
         config: config,
@@ -586,16 +652,27 @@ class SessionManager extends EventEmitter {
       ptyProcess.onData((data) => {
         session.buffer += data;
         session.lastActivity = Date.now();
-        this.handleTerminalOutput(sessionId, data);
+        this.handleTerminalOutputForSession(session, data);
 
         // Reset inactivity timer
         this.resetInactivityTimer(session);
 
-        // Emit to clients
-        this.io.emit('terminal-output', {
-          sessionId,
-          data
-        });
+        // Clamp delivered cursor if the buffer was truncated previously.
+        if (session.deliveredBufferLength > session.buffer.length) {
+          session.deliveredBufferLength = session.buffer.length;
+        }
+
+        // Emit to clients ONLY if this session is part of the active workspace map.
+        // When a workspace is inactive, we keep its PTYs alive, but don't stream output
+        // to the UI (avoids cross-workspace/tab contamination).
+        const isActive = this.sessions.get(sessionId) === session;
+        if (isActive) {
+          this.io.emit('terminal-output', {
+            sessionId,
+            data
+          });
+          session.deliveredBufferLength = session.buffer.length;
+        }
 
         // Update status based on output (for Claude sessions)
         if (config.type === 'claude' && this.statusDetector) {
@@ -608,6 +685,9 @@ class SessionManager extends EventEmitter {
         // Keep buffer size manageable
         if (session.buffer.length > this.maxBufferSize) {
           session.buffer = session.buffer.slice(-Math.floor(this.maxBufferSize / 2));
+          if (session.deliveredBufferLength > session.buffer.length) {
+            session.deliveredBufferLength = session.buffer.length;
+          }
         }
       });
       
@@ -623,16 +703,19 @@ class SessionManager extends EventEmitter {
         session.status = 'exited';
         this.emitStatusUpdate(sessionId, 'exited');
         
-        // Notify clients
-        this.io.emit('session-exited', {
-          sessionId,
-          exitCode,
-          signal
-        });
+        const isActive = this.sessions.get(sessionId) === session;
+        if (isActive) {
+          // Notify clients
+          this.io.emit('session-exited', {
+            sessionId,
+            exitCode,
+            signal
+          });
+        }
         
         // Auto-restart Claude sessions that exit from CTRL+C or other interrupts
         // This ensures the terminal remains usable after CTRL+C
-        if (config.type === 'claude' && !this.isWorkspaceSwitching) {
+        if (isActive && config.type === 'claude' && !this.isWorkspaceSwitching) {
           logger.info('Claude session exited, auto-restarting for usability', {
             sessionId,
             signal,
@@ -802,6 +885,14 @@ class SessionManager extends EventEmitter {
     const session = this.sessions.get(sessionId);
     if (!session || !data) return;
 
+    const oscCwd = this.extractOsc7Cwd(data);
+    if (oscCwd) {
+      this.updateSessionCwd(session, oscCwd, 'osc7');
+    }
+  }
+
+  handleTerminalOutputForSession(session, data) {
+    if (!session || !data) return;
     const oscCwd = this.extractOsc7Cwd(data);
     if (oscCwd) {
       this.updateSessionCwd(session, oscCwd, 'osc7');
@@ -1702,7 +1793,24 @@ class SessionManager extends EventEmitter {
   }
 
   emitStatusUpdate(sessionId, status) {
+    // Only emit status updates for sessions in the active workspace map.
+    if (!this.sessions.has(sessionId)) return;
     this.io.emit('status-update', { sessionId, status });
+  }
+
+  getUndeliveredOutputAndMarkDelivered(maxBytesPerSession = 100000) {
+    const output = {};
+    for (const [id, session] of this.sessions) {
+      const delivered = Math.max(0, Math.min(session.deliveredBufferLength || 0, session.buffer.length));
+      const delta = session.buffer.slice(delivered);
+      if (!delta) {
+        session.deliveredBufferLength = session.buffer.length;
+        continue;
+      }
+      output[id] = delta.length > maxBytesPerSession ? delta.slice(-maxBytesPerSession) : delta;
+      session.deliveredBufferLength = session.buffer.length;
+    }
+    return output;
   }
   
   getSessionStates() {
@@ -1905,7 +2013,18 @@ class SessionManager extends EventEmitter {
   }
   
   terminateSession(sessionId) {
-    const session = this.sessions.get(sessionId);
+    // Terminate across both active and stashed workspaces.
+    let session = this.sessions.get(sessionId);
+    let sessionMap = this.sessions;
+    if (!session) {
+      for (const map of this.workspaceSessionMaps.values()) {
+        if (map.has(sessionId)) {
+          session = map.get(sessionId);
+          sessionMap = map;
+          break;
+        }
+      }
+    }
     if (!session) return;
 
     logger.info('Terminating session', { sessionId });
@@ -1945,7 +2064,7 @@ class SessionManager extends EventEmitter {
     }
 
     // Remove from sessions map
-    this.sessions.delete(sessionId);
+    sessionMap.delete(sessionId);
   }
   
   restartSession(sessionId) {
