@@ -455,3 +455,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Prevents default xterm paste handling to avoid double-paste and the “no image found” style failure modes.
 - Tests: `npm run test:unit`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/164
+
+### Dashboard: show repo visibility (public/private/team) (done)
+- Server enriches workspace entries with GitHub repo visibility using `gh repo view` (cached), falling back to unauth GitHub API for public repos.
+- Dashboard now displays `unknown` instead of defaulting everything to `private` when no access info is available.
+- Tests: `npm run test:unit`
+- PR: (pending)
