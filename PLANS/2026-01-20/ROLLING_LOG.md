@@ -461,3 +461,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Dashboard now displays `unknown` instead of defaulting everything to `private` when no access info is available.
 - Tests: `npm run test:unit`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/166
+
+### Docs: clarify “Agent Orchestrator” branding (done)
+- Updates top-level docs titles to use “Agent Orchestrator” while noting the repo remains `claude-orchestrator`.
+- Tests: `npm run test:unit`
+- PR: (pending)

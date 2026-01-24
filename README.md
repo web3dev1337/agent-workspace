@@ -1,6 +1,8 @@
-# Claude Orchestrator - Multi-Workspace Development Environment
+# Agent Orchestrator (repo: `claude-orchestrator`)
 
-A revolutionary multi-workspace development environment for Claude Code sessions with dynamic repository management, mixed-repo workspaces, and one-click startup.
+A multi-workspace development environment for AI coding agent sessions (Claude Code, Codex) with dynamic repository management, mixed-repo workspaces, and one-click startup.
+
+> Note: the repository is still named `claude-orchestrator` for historical reasons. The UI/product name is **Agent Orchestrator**.
 
 ## 🚀 Features
 

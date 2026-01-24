@@ -1,8 +1,8 @@
-# 🚀 Claude Orchestrator - Quick Start Guide
+# 🚀 Agent Orchestrator - Quick Start Guide (repo: `claude-orchestrator`)
 
 ## One-Click Launch Options
 
-You now have **THREE** ways to launch the Claude Orchestrator with full automation:
+You now have **THREE** ways to launch the Agent Orchestrator with full automation:
 
 ### Option 1: Windows Desktop Batch File (Simplest)
 **Location:** `Desktop/Launch-Orchestrator.bat`
