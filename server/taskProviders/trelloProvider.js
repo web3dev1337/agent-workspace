@@ -93,6 +93,33 @@ class TrelloTaskProvider {
     return filtered;
   }
 
+  async listBoardCards({ boardId, refresh = false, q = '', updatedSince = null } = {}) {
+    if (!boardId) throw new Error('boardId is required');
+    const url = this._buildUrl(`/boards/${encodeURIComponent(boardId)}/cards`, {
+      fields: 'name,url,dateLastActivity,closed,idList,idBoard,pos,labels',
+      filter: 'open'
+    });
+    const cacheKey = `trello:cards:board:${boardId}:open`;
+    const cards = await this._getCached(cacheKey, url, { ttlMs: 20_000, force: refresh });
+
+    let filtered = Array.isArray(cards) ? cards : [];
+    if (q) {
+      const needle = String(q).toLowerCase();
+      filtered = filtered.filter(c => String(c?.name || '').toLowerCase().includes(needle));
+    }
+    if (updatedSince) {
+      const sinceMs = Date.parse(updatedSince);
+      if (!Number.isNaN(sinceMs)) {
+        filtered = filtered.filter(c => {
+          const t = Date.parse(c?.dateLastActivity || '');
+          return !Number.isNaN(t) && t >= sinceMs;
+        });
+      }
+    }
+
+    return filtered;
+  }
+
   async getCard({ cardId, refresh = false } = {}) {
     if (!cardId) throw new Error('cardId is required');
     const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}`, {
@@ -107,4 +134,3 @@ class TrelloTaskProvider {
 }
 
 module.exports = { TrelloTaskProvider };
-

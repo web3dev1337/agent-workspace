@@ -40,6 +40,7 @@ Never commit these values.
   - Returns configured providers + capabilities.
 - `GET /api/tasks/boards?provider=trello[&refresh=true]`
 - `GET /api/tasks/boards/:boardId/lists?provider=trello[&refresh=true]`
+- `GET /api/tasks/boards/:boardId/cards?provider=trello[&q=...][&updatedSince=ISO][&refresh=true]`
 - `GET /api/tasks/lists/:listId/cards?provider=trello[&q=...][&updatedSince=ISO][&refresh=true]`
 - `GET /api/tasks/cards/:cardId?provider=trello[&refresh=true]`
 
@@ -91,8 +92,11 @@ See:
 - filters cards by text + “updated window”
 - shows card detail on click (desc + link)
 
+Notes:
+- Default “updated window” is **Any time** to avoid hiding older cards.
+- Default list selection is **All lists** (board-wide cards) to match the common mental model of “boards have cards”.
+
 Files:
 - `client/index.html` (header button)
 - `client/app.js` (`showTasksPanel()`)
 - `client/styles.css` (modal styles)
-

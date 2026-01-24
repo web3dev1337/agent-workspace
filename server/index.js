@@ -2189,6 +2189,25 @@ app.get('/api/tasks/boards/:boardId/lists', async (req, res) => {
   }
 });
 
+app.get('/api/tasks/boards/:boardId/cards', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const q = req.query.q || '';
+    const updatedSince = req.query.updatedSince || null;
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.listBoardCards !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support board cards', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const cards = await provider.listBoardCards({ boardId: req.params.boardId, refresh, q, updatedSince });
+    res.json({ provider: providerId, boardId: req.params.boardId, cards });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to list task board cards', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
 app.get('/api/tasks/lists/:listId/cards', async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';

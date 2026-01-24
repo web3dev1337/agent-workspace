@@ -5987,7 +5987,7 @@ class ClaudeOrchestrator {
       boardId: localStorage.getItem('tasks-board') || '',
       listId: localStorage.getItem('tasks-list') || '',
       query: '',
-      updatedWindow: localStorage.getItem('tasks-updated-window') || '7d' // any | 1h | 24h | 7d | 30d
+      updatedWindow: localStorage.getItem('tasks-updated-window') || 'any' // any | 1h | 24h | 7d | 30d
     };
 
     const modal = document.createElement('div');
@@ -6069,6 +6069,16 @@ class ClaudeOrchestrator {
     };
 
     const renderCards = (cards) => {
+      if (!state.boardId) {
+        cardsEl.innerHTML = `<div class="no-ports">Select a board to view cards.</div>`;
+        return;
+      }
+
+      if (!state.listId) {
+        cardsEl.innerHTML = `<div class="no-ports">Select a list (or “All lists”) to view cards.</div>`;
+        return;
+      }
+
       if (!Array.isArray(cards) || cards.length === 0) {
         cardsEl.innerHTML = `<div class="no-ports">No cards found.</div>`;
         return;
@@ -6147,12 +6157,29 @@ class ClaudeOrchestrator {
     };
 
     const fetchCards = async ({ refresh = false } = {}) => {
+      if (!state.boardId) return [];
+
+      const updatedSince = computeUpdatedSince();
+      const q = state.query;
+
       if (!state.listId) return [];
+
+      if (state.listId === '__all__') {
+        const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/cards`);
+        url.searchParams.set('provider', state.provider);
+        if (refresh) url.searchParams.set('refresh', 'true');
+        if (q) url.searchParams.set('q', q);
+        if (updatedSince) url.searchParams.set('updatedSince', updatedSince);
+        const res = await fetch(url.toString());
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || 'Failed to load cards');
+        return data.cards || [];
+      }
+
       const url = new URL(`${serverUrl}/api/tasks/lists/${encodeURIComponent(state.listId)}/cards`);
       url.searchParams.set('provider', state.provider);
       if (refresh) url.searchParams.set('refresh', 'true');
-      if (state.query) url.searchParams.set('q', state.query);
-      const updatedSince = computeUpdatedSince();
+      if (q) url.searchParams.set('q', q);
       if (updatedSince) url.searchParams.set('updatedSince', updatedSince);
       const res = await fetch(url.toString());
       const data = await res.json().catch(() => ({}));
@@ -6196,8 +6223,20 @@ class ClaudeOrchestrator {
         if (state.boardId) boardEl.value = state.boardId;
 
         const lists = await fetchLists({ refresh: force });
-        setSelectOptions(listEl, lists, { placeholder: 'Select list...', valueKey: 'id', labelKey: 'name' });
-        if (state.listId) listEl.value = state.listId;
+        setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
+        // Insert an explicit "All lists" option at the top (better default for users who think in boards).
+        const allOpt = document.createElement('option');
+        allOpt.value = '__all__';
+        allOpt.textContent = 'All lists';
+        listEl.insertBefore(allOpt, listEl.firstChild);
+
+        if (state.listId) {
+          listEl.value = state.listId;
+        } else if (state.boardId) {
+          state.listId = '__all__';
+          localStorage.setItem('tasks-list', state.listId);
+          listEl.value = state.listId;
+        }
 
         const cards = await fetchCards({ refresh: force });
         renderCards(cards);
@@ -6222,8 +6261,8 @@ class ClaudeOrchestrator {
     boardEl.addEventListener('change', async () => {
       state.boardId = boardEl.value || '';
       localStorage.setItem('tasks-board', state.boardId);
-      state.listId = '';
-      localStorage.removeItem('tasks-list');
+      state.listId = '__all__';
+      localStorage.setItem('tasks-list', state.listId);
       await refreshAll({ force: true });
     });
 
@@ -6244,7 +6283,7 @@ class ClaudeOrchestrator {
 
     if (updatedEl) {
       updatedEl.addEventListener('change', () => {
-        state.updatedWindow = updatedEl.value || '7d';
+        state.updatedWindow = updatedEl.value || 'any';
         localStorage.setItem('tasks-updated-window', state.updatedWindow);
         refreshAll({ force: false });
       });
