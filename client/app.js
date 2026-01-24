@@ -493,29 +493,30 @@ class ClaudeOrchestrator {
             if (this.workspaceSwitcher) {
               this.workspaceSwitcher.updateCurrentWorkspace();
             }
-          } else {
-            // Create new tab for this workspace
-            const tabId = this.tabManager.createTab(workspace, sessions);
-            console.log(`Created new tab ${tabId} for workspace ${workspace.name}`);
+	          } else {
+	            // Create new tab for this workspace
+	            const tabId = this.tabManager.createTab(workspace, sessions);
+	            console.log(`Created new tab ${tabId} for workspace ${workspace.name}`);
 
-            // CRITICAL: Set currentTabId FIRST before anything else
-            // Terminals need this to register to the correct tab
-            this.currentTabId = tabId;
+	            // Set current workspace BEFORE switching tabs so WorkspaceTabManager doesn't
+	            // re-request a backend workspace switch (we're already in 'workspace-changed').
+	            this.currentWorkspace = workspace;
+	            this.isDashboardMode = false;
 
-            // Switch to the new tab so it becomes active
-            await this.tabManager.switchTab(tabId);
-            this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, tabId);
+	            // CRITICAL: Set currentTabId FIRST before anything else
+	            // Terminals need this to register to the correct tab
+	            this.currentTabId = tabId;
 
-            // Pre-fetch worktree-specific configs for all terminals
-            await this.prefetchWorktreeConfigs(workspace, sessions);
+	            // Switch to the new tab so it becomes active
+	            await this.tabManager.switchTab(tabId);
+	            this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, tabId);
 
-            // Set current workspace
-            this.currentWorkspace = workspace;
-            this.isDashboardMode = false;
+	            // Pre-fetch worktree-specific configs for all terminals
+	            await this.prefetchWorktreeConfigs(workspace, sessions);
 
-            // Rebuild with new workspace sessions
-            // Terminals will now register to the correct tab via currentTabId
-            this.handleInitialSessions(sessions);
+	            // Rebuild with new workspace sessions
+	            // Terminals will now register to the correct tab via currentTabId
+	            this.handleInitialSessions(sessions);
 
             // Update workspace switcher
             if (this.workspaceSwitcher) {
