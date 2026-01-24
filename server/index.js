@@ -507,23 +507,17 @@ io.on('connection', (socket) => {
     try {
       logger.info('Workspace switch requested', { workspaceId });
 
-      // IMPORTANT: Stop all current sessions first
-      logger.info('Stopping all current sessions before workspace switch');
-      sessionManager.isWorkspaceSwitching = true; // Set flag BEFORE cleanup
-      sessionManager.cleanup();
-
       const newWorkspace = await workspaceManager.switchWorkspace(workspaceId);
 
       // Ensure worktrees exist for the new workspace
       logger.info('Ensuring worktrees exist for new workspace');
       await worktreeHelper.ensureWorktreesExist(newWorkspace);
 
-      // Set workspace and initialize fresh sessions
-      sessionManager.setWorkspace(newWorkspace);
-      await sessionManager.initializeSessions();
+      // Switch active workspace while preserving existing PTYs for other workspace tabs.
+      const { sessions: newSessions, backlog } =
+        await sessionManager.switchWorkspacePreservingSessions(newWorkspace);
 
-      // Emit success with ONLY new workspace sessions
-      const newSessions = sessionManager.getSessionStates();
+      // Emit success with ONLY the new workspace sessions (active workspace map)
       logger.info('Sending workspace-changed event', {
         workspace: newWorkspace.name,
         sessionCount: Object.keys(newSessions).length
@@ -535,6 +529,15 @@ io.on('connection', (socket) => {
         workspace: newWorkspace,
         sessions: newSessions
       });
+
+      // Send any buffered output that occurred while this workspace was inactive,
+      // so terminals pick up where they left off after tab switching.
+      if (backlog && typeof backlog === 'object') {
+        for (const [sessionId, data] of Object.entries(backlog)) {
+          if (!data) continue;
+          socket.emit('terminal-output', { sessionId, data });
+        }
+      }
 
       logger.info('Workspace switched successfully', { workspace: newWorkspace.name });
     } catch (error) {
