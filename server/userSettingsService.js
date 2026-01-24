@@ -46,7 +46,7 @@ class UserSettingsService {
         },
         ui: {
           diffViewer: {
-            theme: 'light'
+            theme: 'dark'
           }
         }
       },
