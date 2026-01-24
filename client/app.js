@@ -100,6 +100,11 @@ class ClaudeOrchestrator {
         this.showPRsPanel();
       });
 
+      // Tasks panel (ticketing providers like Trello)
+      document.getElementById('tasks-btn')?.addEventListener('click', () => {
+        this.showTasksPanel();
+      });
+
       // Initialize Ports panel
       document.getElementById('ports-btn')?.addEventListener('click', () => {
         this.showPortsPanel();
@@ -5965,6 +5970,314 @@ class ClaudeOrchestrator {
     });
 
     await fetchPRs();
+  }
+
+  async showTasksPanel() {
+    console.log('Opening Tasks panel...');
+
+    const existing = document.getElementById('tasks-panel');
+    if (existing) existing.remove();
+
+    const serverUrl = window.location.port === '2080'
+      ? 'http://localhost:3000'
+      : window.location.origin;
+
+    const state = {
+      provider: localStorage.getItem('tasks-provider') || 'trello',
+      boardId: localStorage.getItem('tasks-board') || '',
+      listId: localStorage.getItem('tasks-list') || '',
+      query: '',
+      updatedWindow: localStorage.getItem('tasks-updated-window') || '7d' // any | 1h | 24h | 7d | 30d
+    };
+
+    const modal = document.createElement('div');
+    modal.id = 'tasks-panel';
+    modal.className = 'modal tasks-modal';
+    modal.innerHTML = `
+      <div class="modal-content tasks-content">
+        <div class="modal-header">
+          <h2>✅ Tasks</h2>
+          <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
+        </div>
+
+        <div class="tasks-toolbar">
+          <select id="tasks-provider" class="tasks-select" title="Provider"></select>
+          <select id="tasks-board" class="tasks-select" title="Board"></select>
+          <select id="tasks-list" class="tasks-select" title="List"></select>
+          <input type="text" id="tasks-search" class="search-input tasks-search" placeholder="Search cards...">
+          <select id="tasks-updated" class="tasks-select" title="Updated window">
+            <option value="any">Any time</option>
+            <option value="1h">Last 1h</option>
+            <option value="24h">Last 24h</option>
+            <option value="7d">Last 7d</option>
+            <option value="30d">Last 30d</option>
+          </select>
+          <button class="btn-secondary" id="tasks-refresh">🔄 Refresh</button>
+        </div>
+
+        <div class="tasks-body">
+          <div class="tasks-cards" id="tasks-cards">
+            <div class="loading">Loading providers...</div>
+          </div>
+          <div class="tasks-detail" id="tasks-detail">
+            <div class="tasks-detail-empty">Select a card to see details.</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const providerEl = modal.querySelector('#tasks-provider');
+    const boardEl = modal.querySelector('#tasks-board');
+    const listEl = modal.querySelector('#tasks-list');
+    const searchEl = modal.querySelector('#tasks-search');
+    const updatedEl = modal.querySelector('#tasks-updated');
+    const refreshBtn = modal.querySelector('#tasks-refresh');
+    const cardsEl = modal.querySelector('#tasks-cards');
+    const detailEl = modal.querySelector('#tasks-detail');
+
+    const computeUpdatedSince = () => {
+      const now = Date.now();
+      const windowValue = state.updatedWindow;
+      if (!windowValue || windowValue === 'any') return null;
+      const msByKey = {
+        '1h': 60 * 60 * 1000,
+        '24h': 24 * 60 * 60 * 1000,
+        '7d': 7 * 24 * 60 * 60 * 1000,
+        '30d': 30 * 24 * 60 * 60 * 1000
+      };
+      const delta = msByKey[windowValue];
+      if (!delta) return null;
+      return new Date(now - delta).toISOString();
+    };
+
+    const setSelectOptions = (select, options, { placeholder = 'Select...', valueKey = 'id', labelKey = 'name' } = {}) => {
+      if (!select) return;
+      select.innerHTML = '';
+      const ph = document.createElement('option');
+      ph.value = '';
+      ph.textContent = placeholder;
+      select.appendChild(ph);
+
+      for (const item of options) {
+        const opt = document.createElement('option');
+        opt.value = item?.[valueKey] || item?.id || '';
+        opt.textContent = item?.[labelKey] || item?.name || opt.value;
+        select.appendChild(opt);
+      }
+    };
+
+    const renderCards = (cards) => {
+      if (!Array.isArray(cards) || cards.length === 0) {
+        cardsEl.innerHTML = `<div class="no-ports">No cards found.</div>`;
+        return;
+      }
+
+      cardsEl.innerHTML = cards
+        .map((c) => {
+          const title = (c?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
+          return `
+            <div class="task-card-row" data-card-id="${c.id}" data-url="${c.url || ''}">
+              <div class="task-card-title">${title}</div>
+              <div class="task-card-meta">${last}</div>
+            </div>
+          `;
+        })
+        .join('');
+    };
+
+    const renderDetail = (card) => {
+      if (!card) {
+        detailEl.innerHTML = `<div class="tasks-detail-empty">Select a card to see details.</div>`;
+        return;
+      }
+      const title = (card?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const desc = (card?.desc || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const last = card?.dateLastActivity ? new Date(card.dateLastActivity).toLocaleString() : '';
+      const url = card?.url || '';
+      detailEl.innerHTML = `
+        <div class="tasks-detail-header">
+          <div class="tasks-detail-title">${title}</div>
+          ${url ? `<a class="btn-secondary tasks-open" href="${url}" target="_blank" rel="noreferrer">↗ Open</a>` : ''}
+        </div>
+        <div class="tasks-detail-meta">Last activity: ${last || 'unknown'}</div>
+        <pre class="tasks-detail-desc">${desc || '(no description)'}</pre>
+      `;
+    };
+
+    const showConfigHint = (providerLabel = 'Trello') => {
+      cardsEl.innerHTML = `
+        <div class="tasks-config-hint">
+          <div class="tasks-config-title">${providerLabel} not configured</div>
+          <div class="tasks-config-text">
+            Set <code>TRELLO_API_KEY</code> and <code>TRELLO_TOKEN</code> in your environment (or create <code>~/.trello-credentials</code> with <code>API_KEY=...</code> and <code>TOKEN=...</code>).
+          </div>
+        </div>
+      `;
+      renderDetail(null);
+    };
+
+    const fetchProviders = async () => {
+      const res = await fetch(`${serverUrl}/api/tasks/providers`);
+      if (!res.ok) throw new Error('Failed to load task providers');
+      return res.json();
+    };
+
+    const fetchBoards = async ({ refresh = false } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/boards`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load boards');
+      return data.boards || [];
+    };
+
+    const fetchLists = async ({ refresh = false } = {}) => {
+      if (!state.boardId) return [];
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/lists`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load lists');
+      return data.lists || [];
+    };
+
+    const fetchCards = async ({ refresh = false } = {}) => {
+      if (!state.listId) return [];
+      const url = new URL(`${serverUrl}/api/tasks/lists/${encodeURIComponent(state.listId)}/cards`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      if (state.query) url.searchParams.set('q', state.query);
+      const updatedSince = computeUpdatedSince();
+      if (updatedSince) url.searchParams.set('updatedSince', updatedSince);
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load cards');
+      return data.cards || [];
+    };
+
+    const fetchCardDetail = async (cardId) => {
+      const url = new URL(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}`);
+      url.searchParams.set('provider', state.provider);
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load card');
+      return data.card || null;
+    };
+
+    const refreshAll = async ({ force = false } = {}) => {
+      cardsEl.innerHTML = `<div class="loading">Loading…</div>`;
+      renderDetail(null);
+
+      try {
+        const providersData = await fetchProviders();
+        const providers = providersData.providers || [];
+        providerEl.innerHTML = '';
+        for (const p of providers) {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = `${p.label}${p.configured ? '' : ' (not configured)'}`;
+          providerEl.appendChild(opt);
+        }
+        providerEl.value = state.provider;
+
+        const selected = providers.find(p => p.id === state.provider);
+        if (!selected || !selected.configured) {
+          showConfigHint(selected?.label || 'Provider');
+          return;
+        }
+
+        const boards = await fetchBoards({ refresh: force });
+        setSelectOptions(boardEl, boards, { placeholder: 'Select board...', valueKey: 'id', labelKey: 'name' });
+        if (state.boardId) boardEl.value = state.boardId;
+
+        const lists = await fetchLists({ refresh: force });
+        setSelectOptions(listEl, lists, { placeholder: 'Select list...', valueKey: 'id', labelKey: 'name' });
+        if (state.listId) listEl.value = state.listId;
+
+        const cards = await fetchCards({ refresh: force });
+        renderCards(cards);
+      } catch (error) {
+        console.error('Tasks panel refresh failed:', error);
+        cardsEl.innerHTML = `<div class="no-ports">${String(error?.message || error)}</div>`;
+      }
+    };
+
+    if (updatedEl) updatedEl.value = state.updatedWindow;
+
+    providerEl.addEventListener('change', async () => {
+      state.provider = providerEl.value || 'trello';
+      localStorage.setItem('tasks-provider', state.provider);
+      state.boardId = '';
+      state.listId = '';
+      localStorage.removeItem('tasks-board');
+      localStorage.removeItem('tasks-list');
+      await refreshAll({ force: true });
+    });
+
+    boardEl.addEventListener('change', async () => {
+      state.boardId = boardEl.value || '';
+      localStorage.setItem('tasks-board', state.boardId);
+      state.listId = '';
+      localStorage.removeItem('tasks-list');
+      await refreshAll({ force: true });
+    });
+
+    listEl.addEventListener('change', async () => {
+      state.listId = listEl.value || '';
+      localStorage.setItem('tasks-list', state.listId);
+      await refreshAll({ force: true });
+    });
+
+    if (searchEl) {
+      let t = null;
+      searchEl.addEventListener('input', () => {
+        state.query = (searchEl.value || '').trim();
+        if (t) clearTimeout(t);
+        t = setTimeout(() => refreshAll({ force: false }), 200);
+      });
+    }
+
+    if (updatedEl) {
+      updatedEl.addEventListener('change', () => {
+        state.updatedWindow = updatedEl.value || '7d';
+        localStorage.setItem('tasks-updated-window', state.updatedWindow);
+        refreshAll({ force: false });
+      });
+    }
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => refreshAll({ force: true }));
+    }
+
+    cardsEl.addEventListener('click', async (e) => {
+      const row = e.target.closest('.task-card-row');
+      if (!row) return;
+      const cardId = row.dataset.cardId;
+      if (!cardId) return;
+
+      cardsEl.querySelectorAll('.task-card-row.active').forEach(el => el.classList.remove('active'));
+      row.classList.add('active');
+
+      detailEl.innerHTML = `<div class="loading">Loading card…</div>`;
+      try {
+        const card = await fetchCardDetail(cardId);
+        renderDetail(card);
+      } catch (error) {
+        console.error('Failed to fetch card detail:', error);
+        detailEl.innerHTML = `<div class="no-ports">${String(error?.message || error)}</div>`;
+      }
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+
+    await refreshAll({ force: false });
   }
 
   async showPortsPanel() {
