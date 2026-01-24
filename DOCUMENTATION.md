@@ -1,4 +1,4 @@
-# Claude Orchestrator Documentation
+# Agent Orchestrator Documentation (repo: `claude-orchestrator`)
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -14,7 +14,9 @@
 
 ## Overview
 
-Claude Orchestrator is a web-based multi-terminal management system designed specifically for running multiple Claude Code sessions in parallel. It provides real-time monitoring, status tracking, and unified control over multiple AI coding agents.
+Agent Orchestrator is a web-based multi-terminal management system for running multiple AI coding agent sessions in parallel (Claude Code, Codex, etc.). It provides real-time monitoring, status tracking, and unified control over multiple agent terminals.
+
+> Note: the repository is still named `claude-orchestrator` for historical reasons. The UI/product name is **Agent Orchestrator**.
 
 ### Key Features
 - **16 Terminal Dashboard**: 8 Claude + 8 server terminals
