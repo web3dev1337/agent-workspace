@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Editor from '@monaco-editor/react';
+import { useTheme } from '../context/theme';
+import './EnhancedMonacoDiff.css';
 
 const EnhancedMonacoDiff = ({ file }) => {
+  const { theme } = useTheme();
   const [decorations, setDecorations] = useState([]);
   const [isReady, setIsReady] = useState(false);
   const editorRef = useRef(null);
@@ -25,8 +28,8 @@ const EnhancedMonacoDiff = ({ file }) => {
           range: new monacoRef.current.Range(lineNumber, 1, lineNumber, 1000),
           options: {
             isWholeLine: true,
-            className: 'line-added',
-            linesDecorationsClassName: 'line-added-gutter'
+            className: 'diff-line-added',
+            linesDecorationsClassName: 'diff-line-added-gutter'
           }
         });
         lineNumber++;
@@ -44,8 +47,8 @@ const EnhancedMonacoDiff = ({ file }) => {
             range: new monacoRef.current.Range(lineNumber, 1, lineNumber, 1000),
             options: {
               isWholeLine: true,
-              className: 'hunk-header',
-              linesDecorationsClassName: 'hunk-header-gutter'
+              className: 'diff-hunk-header',
+              linesDecorationsClassName: 'diff-hunk-header-gutter'
             }
           });
           lineNumber++;
@@ -56,8 +59,8 @@ const EnhancedMonacoDiff = ({ file }) => {
             range: new monacoRef.current.Range(lineNumber, 1, lineNumber, 1000),
             options: {
               isWholeLine: true,
-              className: 'line-added',
-              linesDecorationsClassName: 'line-added-gutter'
+              className: 'diff-line-added',
+              linesDecorationsClassName: 'diff-line-added-gutter'
             }
           });
           lineNumber++;
@@ -68,8 +71,8 @@ const EnhancedMonacoDiff = ({ file }) => {
             range: new monacoRef.current.Range(lineNumber, 1, lineNumber, 1000),
             options: {
               isWholeLine: true,
-              className: 'line-removed',
-              linesDecorationsClassName: 'line-removed-gutter'
+              className: 'diff-line-removed',
+              linesDecorationsClassName: 'diff-line-removed-gutter'
             }
           });
           lineNumber++;
@@ -96,8 +99,8 @@ const EnhancedMonacoDiff = ({ file }) => {
           range: new monacoRef.current.Range(lineNumber, 1, lineNumber, 1000),
           options: {
             isWholeLine: true,
-            className: 'line-removed',
-            linesDecorationsClassName: 'line-removed-gutter'
+            className: 'diff-line-removed',
+            linesDecorationsClassName: 'diff-line-removed-gutter'
           }
         });
         lineNumber++;
@@ -122,48 +125,6 @@ const EnhancedMonacoDiff = ({ file }) => {
     monacoRef.current = monaco;
     console.log('🎨 Monaco editor mounted');
     setIsReady(true);
-
-    // Define custom theme with diff colors
-    monaco.editor.defineTheme('diff-theme', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [],
-      colors: {
-        'editor.background': '#1e1e1e',
-      }
-    });
-    monaco.editor.setTheme('diff-theme');
-
-    // Add CSS for diff highlighting
-    const style = document.createElement('style');
-    style.textContent = `
-      .line-added {
-        background-color: rgba(0, 255, 0, 0.1);
-      }
-      .line-added-gutter {
-        background-color: #00ff00;
-        width: 3px !important;
-        margin-left: 3px;
-      }
-      .line-removed {
-        background-color: rgba(255, 0, 0, 0.1);
-      }
-      .line-removed-gutter {
-        background-color: #ff0000;
-        width: 3px !important;
-        margin-left: 3px;
-      }
-      .hunk-header {
-        background-color: rgba(0, 100, 255, 0.2);
-        font-weight: bold;
-      }
-      .hunk-header-gutter {
-        background-color: #0064ff;
-        width: 3px !important;
-        margin-left: 3px;
-      }
-    `;
-    document.head.appendChild(style);
   };
 
   if (!file) return <div>No file selected</div>;
@@ -172,7 +133,7 @@ const EnhancedMonacoDiff = ({ file }) => {
     <div style={{ height: '100%', width: '100%' }}>
       <Editor
         height="100%"
-        theme="diff-theme"
+        theme={theme === 'light' ? 'vs' : 'vs-dark'}
         language={getLanguageFromPath(file.path || file.filename)}
         options={{
           readOnly: true,

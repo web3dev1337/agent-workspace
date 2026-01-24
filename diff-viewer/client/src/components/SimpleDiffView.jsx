@@ -26,13 +26,13 @@ const SimpleDiffView = ({ file }) => {
       {/* Old content */}
       <div style={{ 
         flex: 1, 
-        backgroundColor: '#1e1e1e',
-        color: '#d4d4d4',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
         padding: '20px',
         overflow: 'auto',
-        borderRight: '1px solid #444'
+        borderRight: '1px solid var(--border-color)'
       }}>
-        <h3 style={{ margin: '0 0 10px 0', color: '#f48771' }}>
+        <h3 style={{ margin: '0 0 10px 0', color: 'var(--accent-danger)' }}>
           {status === 'added' ? 'New File' : 'Original'}
         </h3>
         <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
@@ -43,12 +43,12 @@ const SimpleDiffView = ({ file }) => {
       {/* New content */}
       <div style={{ 
         flex: 1, 
-        backgroundColor: '#1e1e1e',
-        color: '#d4d4d4',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
         padding: '20px',
         overflow: 'auto'
       }}>
-        <h3 style={{ margin: '0 0 10px 0', color: '#98c379' }}>
+        <h3 style={{ margin: '0 0 10px 0', color: 'var(--accent-success)' }}>
           {status === 'removed' ? 'Deleted File' : 'Modified'}
         </h3>
         <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>

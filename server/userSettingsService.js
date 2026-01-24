@@ -43,6 +43,11 @@ class UserSettingsService {
         },
         terminal: {
           // Add other global terminal settings here in the future
+        },
+        ui: {
+          diffViewer: {
+            theme: 'dark'
+          }
         }
       },
       perTerminal: {
@@ -200,6 +205,18 @@ class UserSettingsService {
       if (userSettings.global.terminal) {
         Object.assign(merged.global.terminal, userSettings.global.terminal);
       }
+      if (userSettings.global.ui) {
+        merged.global.ui = {
+          ...(merged.global.ui || {}),
+          ...(userSettings.global.ui || {})
+        };
+        if (userSettings.global.ui.diffViewer) {
+          merged.global.ui.diffViewer = {
+            ...(merged.global.ui.diffViewer || {}),
+            ...(userSettings.global.ui.diffViewer || {})
+          };
+        }
+      }
     }
 
     if (userSettings.perTerminal) {
@@ -277,6 +294,19 @@ class UserSettingsService {
           ...this.getDefaultSettings().global.terminal,
           ...newGlobal.terminal
         };
+      }
+
+      if (newGlobal.ui) {
+        this.settings.global.ui = {
+          ...this.getDefaultSettings().global.ui,
+          ...newGlobal.ui
+        };
+        if (newGlobal.ui.diffViewer) {
+          this.settings.global.ui.diffViewer = {
+            ...this.getDefaultSettings().global.ui.diffViewer,
+            ...newGlobal.ui.diffViewer
+          };
+        }
       }
       
       const saved = this.saveSettings();

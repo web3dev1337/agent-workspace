@@ -27,6 +27,7 @@ app.use('/api/github', require('./api/github'));
 app.use('/api/diff', require('./api/diff'));
 app.use('/api/export', require('./api/export'));
 app.use('/api/review', require('./api/review'));
+app.use('/api/settings', require('./api/settings'));
 
 // Optional AI route - only load if Anthropic SDK is available
 try {

@@ -182,7 +182,7 @@ const SmartDiffView = ({ analysis, file }) => {
             {/* If we have a patch, show it */}
             {file.patch ? (
               <div style={{ 
-                backgroundColor: '#1e1e1e', 
+                backgroundColor: 'var(--bg-primary)', 
                 padding: '10px',
                 fontFamily: 'monospace',
                 fontSize: '13px'
@@ -190,16 +190,16 @@ const SmartDiffView = ({ analysis, file }) => {
                 {file.patch.split('\n').map((line, idx) => {
                   let style = { margin: 0, padding: '2px 5px' };
                   if (line.startsWith('+')) {
-                    style.backgroundColor = '#28a745';
-                    style.color = '#fff';
+                    style.backgroundColor = 'var(--diff-added-bg)';
+                    style.color = 'var(--text-primary)';
                   } else if (line.startsWith('-')) {
-                    style.backgroundColor = '#dc3545';
-                    style.color = '#fff';
+                    style.backgroundColor = 'var(--diff-removed-bg)';
+                    style.color = 'var(--text-primary)';
                   } else if (line.startsWith('@@')) {
-                    style.backgroundColor = '#0366d6';
-                    style.color = '#fff';
+                    style.backgroundColor = 'var(--diff-hunk-bg)';
+                    style.color = 'var(--text-primary)';
                   } else {
-                    style.color = '#d4d4d4';
+                    style.color = 'var(--text-primary)';
                   }
                   return <div key={idx} style={style}>{line || ' '}</div>;
                 })}
@@ -215,7 +215,7 @@ const SmartDiffView = ({ analysis, file }) => {
                 </div>
               ))
             ) : (
-              <div style={{ padding: '20px', color: '#999' }}>
+              <div style={{ padding: '20px', color: 'var(--text-secondary)' }}>
                 No significant changes detected. The changes might be formatting or whitespace only.
               </div>
             )}

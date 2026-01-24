@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 import axios from 'axios';
 import './styles/App.css';
+import { ThemeProvider } from './context/theme';
 
 // Configure axios defaults
 axios.defaults.baseURL = '/api';
@@ -88,21 +89,22 @@ function DiffViewerRoute() {
 function App() {
   return (
     <ErrorBoundary>
-      <Router>
-        <div className="app">
-          
-          <Routes>
-            <Route path="/pr/:owner/:repo/:pr" element={<DiffViewerRoute />} />
-            <Route path="/commit/:owner/:repo/:sha" element={<DiffViewerRoute />} />
-            <Route path="/" element={
-              <div className="welcome-container">
-                <h2>Welcome to Advanced Diff Viewer</h2>
-                <p>Open a PR or commit from Claude Orchestrator to view diffs.</p>
-              </div>
-            } />
-          </Routes>
-        </div>
-      </Router>
+      <ThemeProvider>
+        <Router>
+          <div className="app">
+            <Routes>
+              <Route path="/pr/:owner/:repo/:pr" element={<DiffViewerRoute />} />
+              <Route path="/commit/:owner/:repo/:sha" element={<DiffViewerRoute />} />
+              <Route path="/" element={
+                <div className="welcome-container">
+                  <h2>Welcome to Advanced Diff Viewer</h2>
+                  <p>Open a PR or commit from Claude Orchestrator to view diffs.</p>
+                </div>
+              } />
+            </Routes>
+          </div>
+        </Router>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }
