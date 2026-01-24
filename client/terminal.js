@@ -480,6 +480,18 @@ class TerminalManager {
 
         // Check that container has valid dimensions before fitting
         const terminalElement = document.getElementById(`terminal-${sessionId}`);
+        if (!terminalElement) {
+          // Terminal DOM may not be mounted yet (e.g., tab switching before wrappers are rendered).
+          // Avoid fitting (and noisy retries) until the element exists.
+          if (retryCount < 3) {
+            const retryDelay = 100 * (retryCount + 1);
+            this.fitTimers.delete(sessionId);
+            setTimeout(() => this.fitTerminal(sessionId, retryCount + 1), retryDelay);
+          } else {
+            this.fitTimers.delete(sessionId);
+          }
+          return;
+        }
         const terminalBody = terminalElement?.closest('.terminal-body');
         const wrapper = document.getElementById(`wrapper-${sessionId}`);
 
