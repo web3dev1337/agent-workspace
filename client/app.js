@@ -1614,8 +1614,12 @@ class ClaudeOrchestrator {
         <div class="worktree-header">
           <div class="worktree-title">
             <span class="status-dot worktree-status-dot ${sidebarStatus}" title="${this.escapeHtml(statusTitle)}"></span>
-            <span class="worktree-name" title="${this.escapeHtml(displayName)}">${displayName}</span>
-            <span class="worktree-branch" title="${this.escapeHtml(branch)}">@${branch}</span>
+            <div class="worktree-text">
+              <div class="worktree-name" title="${this.escapeHtml(displayName)}">${displayName}</div>
+              <div class="worktree-meta">
+                <span class="worktree-branch" title="${this.escapeHtml(branch)}">@${branch}</span>
+              </div>
+            </div>
           </div>
           <div class="worktree-actions">
             <button class="ready-review-btn ${isReadyForReview ? 'ready' : ''}"
