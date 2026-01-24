@@ -42,6 +42,13 @@ Goal: recommend *safe parallelism* (lower rework/conflicts, lower switching cost
 - Expose:
   - `GET /api/process/pairing` → ranked safe pairings for Tier 2/3 while Tier 1 runs
 
+### PR 0.4 — Ticketing providers: Tasks (Trello v0)
+- Add a provider-agnostic “Tasks” API for external ticketing systems.
+- First provider: Trello (read-only).
+- Cache results (don’t spam Trello API).
+- Minimal UI: browse boards → lists → cards.
+- Notes/design doc: `PLANS/2026-01-24/TASKS_TICKETING.md`.
+
 ---
 
 ## Phase 1: Make overload visible and prevent “accidental overload”
