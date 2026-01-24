@@ -515,8 +515,18 @@ class WorkspaceTabManager {
     const tab = this.tabs.get(tabId);
     if (!tab || !tab.isActive) return;
 
+    const terminalManager = this.orchestrator?.terminalManager;
+
     tab.terminals.forEach((termData, sessionId) => {
       if (termData.xtermInstance) {
+        // Prefer the orchestrator's TerminalManager, which has visibility guards and
+        // retry logic to avoid shrinking terminals while layout is transient.
+        if (terminalManager && typeof terminalManager.fitTerminal === 'function') {
+          terminalManager.fitTerminal(sessionId);
+          return;
+        }
+
+        // Fallback: direct fit (best-effort).
         try {
           const fitAddon = termData.xtermInstance._fitAddon;
           if (fitAddon && typeof fitAddon.fit === 'function') {
