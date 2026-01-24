@@ -4,6 +4,15 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ## 2026-01-24
 
+### Tasks panel: Trello ticketing provider (v0) (open)
+- Adds a provider-agnostic Tasks API (`/api/tasks/*`) with a first read-only Trello provider (boards/lists/cards + card detail).
+- Adds a minimal “✅ Tasks” modal to browse provider → board → list → cards, with a details pane.
+- Credentials (local only): `TRELLO_API_KEY` + `TRELLO_TOKEN` (or `~/.trello-credentials`).
+- Caching: in-memory TTL cache (reduces API calls).
+- Docs: `PLANS/2026-01-24/TASKS_TICKETING.md`
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/178
+
 ### Terminal layout: avoid fitting while hidden (done)
 - Symptom: after hiding/showing a worktree (or other UI that temporarily hides terminals), existing terminal output can appear “bunched up” due to a tiny intermediate resize.
 - Fix: treat any hidden-by-layout terminal as non-fit-able (not just `wrapper.style.display = 'none'`), and observe `.terminal-body` size changes so refits trigger reliably after layout changes.
