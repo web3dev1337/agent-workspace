@@ -2,6 +2,15 @@
 
 Purpose: keep a terse but complete log of what changed, why, and where to resume if context is lost.
 
+## 2026-01-24
+
+### Terminal layout: avoid fitting while hidden (in progress)
+- Symptom: after hiding/showing a worktree (or other UI that temporarily hides terminals), existing terminal output can appear “bunched up” due to a tiny intermediate resize.
+- Fix: treat any hidden-by-layout terminal as non-fit-able (not just `wrapper.style.display = 'none'`), and observe `.terminal-body` size changes so refits trigger reliably after layout changes.
+- Branch: `many-changes`
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/170
+
 ## 2026-01-20
 
 ### Repo status / setup
