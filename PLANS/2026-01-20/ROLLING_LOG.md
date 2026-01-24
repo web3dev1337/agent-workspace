@@ -460,4 +460,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Server enriches workspace entries with GitHub repo visibility using `gh repo view` (cached), falling back to unauth GitHub API for public repos.
 - Dashboard now displays `unknown` instead of defaulting everything to `private` when no access info is available.
 - Tests: `npm run test:unit`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/166
