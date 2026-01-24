@@ -445,6 +445,10 @@ class TerminalManager {
     const terminalElement = document.getElementById(`terminal-${sessionId}`);
     if (!terminalElement) return;
 
+    // Observe the element whose size actually changes with layout.
+    // In practice, the `.terminal-body` resizes with grid/sidebar/tab changes.
+    const observeTarget = terminalElement.closest('.terminal-body') || terminalElement;
+
     const resizeObserver = new ResizeObserver(() => {
       // Use requestAnimationFrame to ensure renderer is ready before fitting
       requestAnimationFrame(() => {
@@ -452,9 +456,10 @@ class TerminalManager {
       });
     });
 
-    resizeObserver.observe(terminalElement);
+    resizeObserver.observe(observeTarget);
 
     // Store observer for cleanup
+    observeTarget._resizeObserver = resizeObserver;
     terminalElement._resizeObserver = resizeObserver;
   }
   
@@ -478,15 +483,19 @@ class TerminalManager {
         const terminalBody = terminalElement?.closest('.terminal-body');
         const wrapper = document.getElementById(`wrapper-${sessionId}`);
 
+        // If the terminal isn't visible (hidden tab/dashboard, hidden worktree, etc), NEVER fit.
+        // Fitting while hidden can shrink the PTY to tiny dimensions and cause hard-wrapped output.
+        const hiddenByWrapper = wrapper && wrapper.style.display === 'none';
+        const hiddenByLayout = terminalElement && terminalElement.offsetParent === null;
+        const detached = terminalElement && !terminalElement.isConnected;
+
+        if (hiddenByWrapper || hiddenByLayout || detached) {
+          this.fitTimers.delete(sessionId);
+          return;
+        }
+
         if (terminalBody) {
           const bodyRect = terminalBody.getBoundingClientRect();
-
-          // If the terminal is hidden (e.g. worktree toggled off), NEVER fit.
-          // Fitting while hidden can shrink the PTY to tiny dimensions and cause hard-wrapped output.
-          if (wrapper && wrapper.style.display === 'none') {
-            this.fitTimers.delete(sessionId);
-            return;
-          }
 
           // If container is too small (hidden or not laid out yet), retry
           if (bodyRect.width < 100 || bodyRect.height < 50) {
@@ -892,9 +901,10 @@ class TerminalManager {
     // Clean up resize observer
     const terminalElement = document.getElementById(`terminal-${sessionId}`);
     if (terminalElement) {
-      if (terminalElement._resizeObserver) {
-        terminalElement._resizeObserver.disconnect();
-      }
+      // Disconnect any observer (may be stored on terminal body or on terminal element)
+      const terminalBody = terminalElement.closest('.terminal-body');
+      const observer = terminalElement._resizeObserver || terminalBody?._resizeObserver;
+      if (observer) observer.disconnect();
       // Clear the element
       terminalElement.innerHTML = '';
     }
