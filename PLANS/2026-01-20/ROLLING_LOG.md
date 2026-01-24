@@ -4,12 +4,23 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ## 2026-01-24
 
-### Terminal layout: avoid fitting while hidden (in progress)
+### Terminal layout: avoid fitting while hidden (done)
 - Symptom: after hiding/showing a worktree (or other UI that temporarily hides terminals), existing terminal output can appear “bunched up” due to a tiny intermediate resize.
 - Fix: treat any hidden-by-layout terminal as non-fit-able (not just `wrapper.style.display = 'none'`), and observe `.terminal-body` size changes so refits trigger reliably after layout changes.
-- Branch: `many-changes`
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/170
+- Merged: commit `12dca52`
+
+### Quick Work modal: allow selecting “in use” worktrees (done)
+- Goal: keep “in use” visibility as an indicator, but do not block selection in the advanced worktree picker.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/171
+- Merged: commit `a6955bd`
+
+### Docs: optimal orchestrator workflow + roadmap (done)
+- Added: `PLANS/2026-01-24/*` and refined queue/tier model + four-queues mapping.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/172
+- Merged: commit `1d7cf2f`
 
 ## 2026-01-20
 
