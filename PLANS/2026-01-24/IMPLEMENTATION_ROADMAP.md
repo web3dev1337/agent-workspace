@@ -21,9 +21,26 @@ Principle: ship in small PRs; each PR is measurable and reversible.
   - Tiered queue depth (segregated by tier):
     - `Q1/Q2/Q3/Q4` + `Q12 = Q1+Q2`
     - `Q_total = Q1+Q2+Q3+Q4` (informational; avoid using this as a single gating signal)
+  - Four-queues snapshot (for “why am I overloaded?” diagnosis):
+    - `B(t)` backlog count (tagged tasks not started)
+    - `W(t)` in-flight count (active agent sessions)
+    - `Q(t)` review count (PRs/diffs waiting)
+    - `X(t)` rework count (requested-changes / fix tasks)
 - Endpoints:
   - `GET /api/process/status` → { wip, wipMax, qByTier, q12, qTotal, qCaps, launchAllowed, reasons[] }
   - `POST /api/process/settings` → { wipMax, qMax, lookbackHours }
+
+### PR 0.3 — Conflict + context distance heuristics (no UI yet)
+Goal: recommend *safe parallelism* (lower rework/conflicts, lower switching cost).
+- Estimate conflict probability `q(i,j)` using cheap signals:
+  - file overlap in uncommitted changes / PR diffs
+  - same top-level directories
+  - same config hotspots (package.json, lockfiles, infra folders)
+- Estimate context distance `d(i,j)` using:
+  - repo match (same repo = lowest)
+  - category/framework match (hytopia/monogame/web/etc.)
+- Expose:
+  - `GET /api/process/pairing` → ranked safe pairings for Tier 2/3 while Tier 1 runs
 
 ---
 

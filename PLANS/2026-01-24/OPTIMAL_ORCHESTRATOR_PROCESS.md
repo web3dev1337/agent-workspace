@@ -30,6 +30,22 @@ Practical interpretation:
   - `Q12 = Q1 + Q2` (interactive review pressure)
   - `Q_total = Q1 + Q2 + Q3 + Q4` (overall load), but keep it **segregated**.
 
+### The Four Queues model (B/W/Q/X)
+From `work2/X_ARTICLE.md` and `work2/FINAL_ARTICLE.md`, interpret the system as four queues:
+- `B(t)` Backlog: defined tasks not started yet
+- `W(t)` In-flight: agent work currently running
+- `Q(t)` Review: PRs / diffs waiting for human review
+- `X(t)` Rework: items bounced back by review (changes requested)
+
+Mapping to orchestrator:
+- `B(t)`: “Ready” tasks with no active session (tagged tasks, PR inbox, saved quick-work picks)
+- `W(t)`: active agent sessions (Claude/Codex/OpenCode), running servers, long jobs
+- `Q(t)`: open PRs + worktrees tagged “ready for review” + diffs to verify
+- `X(t)`: PRs with requested changes + follow-up fix tasks spawned from review
+
+Why this matters:
+- Most “it feels chaotic” states are actually `Q(t)` and/or `X(t)` spikes. The orchestrator should surface these first and gate new launches accordingly.
+
 ### The 4 Tiers (where orchestration decisions live)
 From `work2/DAILY_REFERENCE_CARD.md`:
 - Tier 1: Primary focus (deep work; you interrupt for this)
@@ -47,6 +63,24 @@ Orchestrator’s job is to:
 - make `P` smaller (templates, skills, reuse)
 - make `A` predictable (stable commands, ports, reliable terminals)
 - make `R` short and safe (diff viewer + tests + risk-based verification)
+
+### Conflict and context distance (choose parallelism intelligently)
+From `work2/X_ARTICLE.md` variables:
+- `q(i,j)`: probability two tasks will conflict (same files/same components/same review surface)
+- `d(i,j)`: context distance between tasks (switching cost)
+
+Orchestrator should bias parallel work toward:
+- low `q(i,j)` (disjoint files/modules) to reduce rebase/conflict/rework
+- low `d(i,j)` (same repo/domain) to reduce context switching and review time
+
+### Queueing cliff (utilization target)
+From `work2/X_ARTICLE.md` / `work2/FINAL_ARTICLE.md` queueing guidance:
+- keep utilization `ρ ≤ 0.85` (once you saturate, queues and latency explode)
+
+Orchestrator interpretation:
+- treat “launching more work” as increasing `ρ` (system load)
+- treat “reviewing” as reducing `Q(t)` and preventing the latency cliff
+- default guardrails should stop you from creating review debt faster than you can pay it down
 
 ---
 
@@ -77,7 +111,7 @@ Checklist (from Start Finishing + work2):
 Goal: start background work *before* you enter deep work.
 
 Rules:
-- If `Q > Q_max`: skip launch; review first.
+- If `Q12 > 3`: skip Tier 1/2 launches; review first.
 - Prefer Tier 3 tasks that touch disjoint files/modules from your Tier 1 work.
 - Prefer same repo/domain to reduce context switching.
 
@@ -191,7 +225,10 @@ Missing “process layer” features:
 2) Tier tagging + tier-aware queue views
 3) Batch review mode (fast merge pipeline)
 4) Focus Mode (reduce context switching)
-5) Telemetry loop: P/A/R + rework rate `p` (feedback that drives behavior)
+5) Conflict-aware parallelism:
+  - estimate conflict risk (file overlap) and context distance (repo/domain)
+  - recommend “safe” Tier 2/3 pairings while Tier 1 runs
+6) Telemetry loop: P/A/R + rework rate `p` + four-queues (`B/W/Q/X`) (feedback that drives behavior)
 
 ---
 
