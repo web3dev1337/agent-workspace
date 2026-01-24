@@ -5987,7 +5987,9 @@ class ClaudeOrchestrator {
       boardId: localStorage.getItem('tasks-board') || '',
       listId: localStorage.getItem('tasks-list') || '',
       query: '',
-      updatedWindow: localStorage.getItem('tasks-updated-window') || 'any' // any | 1h | 24h | 7d | 30d
+      updatedWindow: localStorage.getItem('tasks-updated-window') || 'any', // any | 1h | 24h | 7d | 30d
+      lists: [],
+      selectedCardId: null
     };
 
     const modal = document.createElement('div');
@@ -6103,17 +6105,88 @@ class ClaudeOrchestrator {
         detailEl.innerHTML = `<div class="tasks-detail-empty">Select a card to see details.</div>`;
         return;
       }
+
+      state.selectedCardId = card.id || null;
+
       const title = (card?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const desc = (card?.desc || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const last = card?.dateLastActivity ? new Date(card.dateLastActivity).toLocaleString() : '';
       const url = card?.url || '';
+
+      const members = Array.isArray(card?.members) ? card.members : [];
+      const memberLabel = members.length
+        ? members.map(m => (m?.fullName || m?.username || '')).filter(Boolean).join(', ')
+        : 'none';
+
+      const labels = Array.isArray(card?.labels) ? card.labels : [];
+      const labelLabel = labels.length
+        ? labels.map(l => l?.name || l?.color || '').filter(Boolean).join(', ')
+        : 'none';
+
+      const listsById = new Map((state.lists || []).map(l => [l.id, l]));
+      const currentListName = listsById.get(card?.idList)?.name || '';
+
+      const actions = Array.isArray(card?.actions) ? card.actions : [];
+      const comments = actions
+        .filter(a => a?.type === 'commentCard' && a?.data?.text)
+        .map(a => ({
+          id: a.id,
+          text: a.data.text,
+          date: a.date,
+          author: a.memberCreator?.fullName || a.memberCreator?.username || a.idMemberCreator || 'unknown'
+        }))
+        .sort((a, b) => (Date.parse(b.date || '') || 0) - (Date.parse(a.date || '') || 0));
+
       detailEl.innerHTML = `
         <div class="tasks-detail-header">
-          <div class="tasks-detail-title">${title}</div>
-          ${url ? `<a class="btn-secondary tasks-open" href="${url}" target="_blank" rel="noreferrer">↗ Open</a>` : ''}
+          <div class="tasks-detail-title">
+            <input id="tasks-card-title" class="tasks-input" value="${title.replace(/\"/g, '&quot;')}" />
+          </div>
+          <div class="tasks-detail-actions">
+            ${url ? `<a class="btn-secondary tasks-open" href="${url}" target="_blank" rel="noreferrer">↗ Open in Trello</a>` : ''}
+            <button class="btn-secondary" id="tasks-card-save">💾 Save</button>
+          </div>
         </div>
-        <div class="tasks-detail-meta">Last activity: ${last || 'unknown'}</div>
-        <pre class="tasks-detail-desc">${desc || '(no description)'}</pre>
+        <div class="tasks-detail-meta">Last activity: ${last || 'unknown'} • List: ${currentListName || card?.idList || 'unknown'}</div>
+        <div class="tasks-detail-meta">Members: ${memberLabel}</div>
+        <div class="tasks-detail-meta">Labels: ${labelLabel}</div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Description</div>
+          <textarea id="tasks-card-desc" class="tasks-textarea" rows="10" placeholder="(no description)">${desc}</textarea>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Move</div>
+          <div class="tasks-move-row">
+            <select id="tasks-card-move" class="tasks-select tasks-select-inline">
+              ${(state.lists || []).map(l => `
+                <option value="${l.id}" ${l.id === card?.idList ? 'selected' : ''}>${(l?.name || l.id).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</option>
+              `).join('')}
+            </select>
+            <button class="btn-secondary" id="tasks-card-move-btn">➡ Move</button>
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Add Comment</div>
+          <div class="tasks-comment-row">
+            <textarea id="tasks-card-comment" class="tasks-textarea" rows="3" placeholder="Write a comment..."></textarea>
+            <button class="btn-secondary" id="tasks-card-comment-btn">💬 Comment</button>
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Comments (${comments.length})</div>
+          <div class="tasks-comments">
+            ${comments.length === 0 ? `<div class="tasks-detail-empty">No comments.</div>` : comments.slice(0, 50).map(c => `
+              <div class="tasks-comment">
+                <div class="tasks-comment-meta">${String(c.author).replace(/</g, '&lt;').replace(/>/g, '&gt;')} • ${c.date ? new Date(c.date).toLocaleString() : ''}</div>
+                <div class="tasks-comment-text">${String(c.text).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
       `;
     };
 
@@ -6196,6 +6269,39 @@ class ClaudeOrchestrator {
       return data.card || null;
     };
 
+    const saveCard = async ({ cardId, name, desc } = {}) => {
+      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}?provider=${encodeURIComponent(state.provider)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, desc })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to save card');
+      return data.card || null;
+    };
+
+    const moveCard = async ({ cardId, listId } = {}) => {
+      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}?provider=${encodeURIComponent(state.provider)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idList: listId })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to move card');
+      return data.card || null;
+    };
+
+    const addComment = async ({ cardId, text } = {}) => {
+      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/comments?provider=${encodeURIComponent(state.provider)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to add comment');
+      return data.card || null;
+    };
+
     const refreshAll = async ({ force = false } = {}) => {
       cardsEl.innerHTML = `<div class="loading">Loading…</div>`;
       renderDetail(null);
@@ -6223,6 +6329,7 @@ class ClaudeOrchestrator {
         if (state.boardId) boardEl.value = state.boardId;
 
         const lists = await fetchLists({ refresh: force });
+        state.lists = lists || [];
         setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
         // Insert an explicit "All lists" option at the top (better default for users who think in boards).
         const allOpt = document.createElement('option');
@@ -6306,6 +6413,67 @@ class ClaudeOrchestrator {
       try {
         const card = await fetchCardDetail(cardId);
         renderDetail(card);
+
+        // Wire up actions for the currently rendered card.
+        const saveBtn = detailEl.querySelector('#tasks-card-save');
+        const moveBtn = detailEl.querySelector('#tasks-card-move-btn');
+        const commentBtn = detailEl.querySelector('#tasks-card-comment-btn');
+
+        saveBtn?.addEventListener('click', async () => {
+          const titleEl = detailEl.querySelector('#tasks-card-title');
+          const descEl = detailEl.querySelector('#tasks-card-desc');
+          const name = (titleEl?.value || '').trim();
+          const desc = descEl?.value ?? '';
+          if (!state.selectedCardId) return;
+
+          try {
+            saveBtn.disabled = true;
+            const updated = await saveCard({ cardId: state.selectedCardId, name, desc });
+            if (updated) renderDetail(updated);
+            this.showToast('Saved', 'success');
+          } catch (err) {
+            console.error('Save card failed:', err);
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            saveBtn.disabled = false;
+          }
+        });
+
+        moveBtn?.addEventListener('click', async () => {
+          const sel = detailEl.querySelector('#tasks-card-move');
+          const listId = sel?.value;
+          if (!state.selectedCardId || !listId) return;
+          try {
+            moveBtn.disabled = true;
+            const updated = await moveCard({ cardId: state.selectedCardId, listId });
+            if (updated) renderDetail(updated);
+            await refreshAll({ force: true });
+            this.showToast('Moved', 'success');
+          } catch (err) {
+            console.error('Move card failed:', err);
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            moveBtn.disabled = false;
+          }
+        });
+
+        commentBtn?.addEventListener('click', async () => {
+          const textarea = detailEl.querySelector('#tasks-card-comment');
+          const text = (textarea?.value || '').trim();
+          if (!state.selectedCardId || !text) return;
+          try {
+            commentBtn.disabled = true;
+            const updated = await addComment({ cardId: state.selectedCardId, text });
+            if (textarea) textarea.value = '';
+            if (updated) renderDetail(updated);
+            this.showToast('Comment added', 'success');
+          } catch (err) {
+            console.error('Add comment failed:', err);
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            commentBtn.disabled = false;
+          }
+        });
       } catch (error) {
         console.error('Failed to fetch card detail:', error);
         detailEl.innerHTML = `<div class="no-ports">${String(error?.message || error)}</div>`;

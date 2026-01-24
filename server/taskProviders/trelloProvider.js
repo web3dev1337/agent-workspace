@@ -47,6 +47,14 @@ class TrelloTaskProvider {
     return this.cache.getOrCompute(cacheKey, () => requestJson(url), { ttlMs, force });
   }
 
+  _invalidateCacheKeys(keys) {
+    if (!this.cache || !Array.isArray(keys)) return;
+    for (const key of keys) {
+      if (!key) continue;
+      this.cache.delete(key);
+    }
+  }
+
   async listBoards({ refresh = false } = {}) {
     const url = this._buildUrl('/members/me/boards', {
       filter: 'open',
@@ -190,10 +198,49 @@ class TrelloTaskProvider {
       fields: 'name,desc,url,dateLastActivity,closed,idList,idBoard,labels',
       members: 'true',
       member_fields: 'fullName,username',
-      checklists: 'all'
+      checklists: 'all',
+      actions: 'commentCard',
+      actions_limit: '100',
+      actions_fields: 'data,date,idMemberCreator,type',
+      action_memberCreator: 'true',
+      action_memberCreator_fields: 'fullName,username'
     });
     const cacheKey = `trello:card:${cardId}`;
     return this._getCached(cacheKey, url, { ttlMs: 20_000, force: refresh });
+  }
+
+  async addComment({ cardId, text } = {}) {
+    if (!cardId) throw new Error('cardId is required');
+    if (!text || !String(text).trim()) throw new Error('text is required');
+
+    const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}/actions/comments`, {
+      text: String(text)
+    });
+
+    // POST returns the created action.
+    const action = await requestJson(url, { method: 'POST' });
+    this._invalidateCacheKeys([`trello:card:${cardId}`]);
+    return action;
+  }
+
+  async updateCard({ cardId, fields = {} } = {}) {
+    if (!cardId) throw new Error('cardId is required');
+    if (!fields || typeof fields !== 'object') throw new Error('fields must be an object');
+
+    const allowed = ['name', 'desc', 'due', 'idList', 'idMembers', 'closed'];
+    const params = {};
+    for (const key of allowed) {
+      if (fields[key] === undefined) continue;
+      params[key] = fields[key];
+    }
+
+    // Trello accepts updates via query params.
+    const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}`, params);
+    const card = await requestJson(url, { method: 'PUT' });
+
+    // Invalidate common caches. (List/board caches are short TTL; client refreshes after writes anyway.)
+    this._invalidateCacheKeys([`trello:card:${cardId}`]);
+    return card;
   }
 }
 

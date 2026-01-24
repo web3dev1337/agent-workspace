@@ -2238,6 +2238,54 @@ app.get('/api/tasks/cards/:cardId', async (req, res) => {
   }
 });
 
+app.post('/api/tasks/cards/:cardId/comments', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.addComment !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support comments', code: 'UNSUPPORTED_OPERATION' });
+    }
+
+    const text = req.body?.text;
+    if (!text || !String(text).trim()) {
+      return res.status(400).json({ error: 'text is required' });
+    }
+
+    const action = await provider.addComment({ cardId: req.params.cardId, text });
+    const card = typeof provider.getCard === 'function'
+      ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
+      : null;
+
+    res.json({ provider: providerId, cardId: req.params.cardId, action, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to add task comment', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.put('/api/tasks/cards/:cardId', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.updateCard !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support updates', code: 'UNSUPPORTED_OPERATION' });
+    }
+
+    const fields = req.body || {};
+    const updated = await provider.updateCard({ cardId: req.params.cardId, fields });
+    const card = typeof provider.getCard === 'function'
+      ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
+      : updated;
+
+    res.json({ provider: providerId, cardId: req.params.cardId, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to update task card', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
 // ============================================
 // Worktree Tags API
 // ============================================

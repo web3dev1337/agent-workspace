@@ -6738,6 +6738,91 @@ header h1 {
   line-height: 1.2;
 }
 
+.tasks-detail-actions {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tasks-input {
+  width: 100%;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.tasks-textarea {
+  width: 100%;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  resize: vertical;
+}
+
+.tasks-detail-block {
+  margin-top: var(--space-md);
+}
+
+.tasks-detail-block-title {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.tasks-move-row {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.tasks-select-inline {
+  min-width: 240px;
+}
+
+.tasks-comment-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.tasks-comments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.tasks-comment {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.tasks-comment-meta {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.tasks-comment-text {
+  white-space: pre-wrap;
+  color: var(--text-primary);
+  line-height: 1.35;
+  font-size: 0.85rem;
+}
+
 .tasks-detail-meta {
   font-size: 0.8rem;
   color: var(--text-tertiary);
