@@ -158,7 +158,7 @@ Order is chosen to fix reliability/state bugs first (tab switching + terminal in
 
 Status:
 - Empty “Quick actions” strip + Yes/No UI removed in PR 85.
-- “Dynamic layout” control still pending.
+- “Dynamic layout” header/control removed/hidden in PR 87.
 
 ### PR 7 — Ports/Services modal redesign + remove bottom-left services list
 **Goal:** A larger modal, card/grid layout, grouping, and quick actions (open/copy URL).
