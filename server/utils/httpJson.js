@@ -1,17 +1,35 @@
 const https = require('https');
 const { URL } = require('url');
 
-function requestJson(urlString, { method = 'GET', headers = {}, timeoutMs = 15000 } = {}) {
+function requestJson(
+  urlString,
+  { method = 'GET', headers = {}, body = null, timeoutMs = 15000 } = {}
+) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlString);
+
+    let requestBody = null;
+    if (body !== null && body !== undefined) {
+      requestBody = typeof body === 'string' ? body : JSON.stringify(body);
+    }
+
+    const finalHeaders = {
+      accept: 'application/json',
+      ...headers
+    };
+
+    if (requestBody !== null) {
+      if (!finalHeaders['content-type']) {
+        finalHeaders['content-type'] = 'application/json';
+      }
+      finalHeaders['content-length'] = Buffer.byteLength(requestBody);
+    }
+
     const req = https.request(
       url,
       {
         method,
-        headers: {
-          accept: 'application/json',
-          ...headers
-        }
+        headers: finalHeaders
       },
       (res) => {
         const chunks = [];
@@ -44,9 +62,12 @@ function requestJson(urlString, { method = 'GET', headers = {}, timeoutMs = 1500
     req.setTimeout(timeoutMs, () => {
       req.destroy(new Error(`Request timeout after ${timeoutMs}ms`));
     });
+
+    if (requestBody !== null) {
+      req.write(requestBody);
+    }
     req.end();
   });
 }
 
 module.exports = { requestJson };
-
