@@ -826,6 +826,13 @@ class ClaudeOrchestrator {
       this.applyTheme();
     });
 
+    const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
+    if (diffViewerThemeSelect) {
+      diffViewerThemeSelect.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.diffViewer.theme', e.target.value);
+      });
+    }
+
     // User settings (terminal flags)
     document.getElementById('global-skip-permissions').addEventListener('change', (e) => {
       this.updateGlobalUserSetting('claudeFlags.skipPermissions', e.target.checked);
@@ -5164,6 +5171,12 @@ class ClaudeOrchestrator {
       if (autoStartDelay) {
         autoStartDelay.value = this.userSettings.global.autoStart.delay || 500;
       }
+    }
+
+    // Update diff viewer settings UI
+    const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
+    if (diffViewerThemeSelect) {
+      diffViewerThemeSelect.value = this.userSettings.global?.ui?.diffViewer?.theme || 'light';
     }
 
     // Update session recovery settings UI

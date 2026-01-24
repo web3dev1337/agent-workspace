@@ -77,7 +77,7 @@
 }
 
 .reset-button:hover {
-  background: #388bfd;
+  background: var(--accent-primary-hover);
 }
 
 .back-button {

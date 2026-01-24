@@ -2,19 +2,19 @@
   display: flex;
   flex-direction: column;
   height: auto;
-  background: #0b0b0b;
-  color: #d4d4d4;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .rich-diff-empty {
   padding: 16px;
-  color: #888;
+  color: var(--text-secondary);
 }
 
 .rich-diff-summary {
   padding: 10px 14px;
-  border-bottom: 1px solid #222;
-  background: #111;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 
 .rich-diff-badges {
@@ -28,32 +28,32 @@
   font-size: 12px;
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid #333;
-  background: #181818;
-  color: #eee;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .badge-added {
-  border-color: rgba(40, 167, 69, 0.55);
+  border-color: var(--badge-border-success);
 }
 .badge-deleted {
-  border-color: rgba(220, 53, 69, 0.55);
+  border-color: var(--badge-border-danger);
 }
 .badge-updated {
-  border-color: rgba(255, 193, 7, 0.6);
+  border-color: var(--badge-border-warning);
 }
 .badge-moved {
-  border-color: rgba(3, 102, 214, 0.65);
+  border-color: var(--badge-border-primary);
 }
 .badge-copy {
-  border-color: rgba(138, 43, 226, 0.6);
+  border-color: var(--badge-border-purple);
 }
 .badge-find {
-  border-color: rgba(0, 200, 255, 0.6);
+  border-color: var(--badge-border-cyan);
 }
 
 .rich-summary-muted {
-  color: #888;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -63,7 +63,7 @@
 
 .rich-summary-title {
   font-size: 12px;
-  color: #aaa;
+  color: var(--text-secondary);
   margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -76,16 +76,16 @@
 
 .rich-summary-item {
   font-size: 12px;
-  color: #cfcfcf;
+  color: var(--text-primary);
 }
 
 .rich-code-inline {
   font-family: Consolas, Monaco, monospace;
-  background: #1b1b1b;
-  border: 1px solid #2a2a2a;
+  background: var(--code-inline-bg);
+  border: 1px solid var(--code-inline-border);
   padding: 1px 6px;
   border-radius: 6px;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .rich-diff-body {
@@ -93,17 +93,17 @@
 }
 
 .rich-hunk {
-  border-bottom: 1px solid #141414;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .rich-hunk-header {
   font-family: Consolas, Monaco, monospace;
   font-size: 12px;
   padding: 8px 10px;
-  background: rgba(3, 102, 214, 0.25);
-  border-top: 1px solid rgba(3, 102, 214, 0.35);
-  border-bottom: 1px solid rgba(3, 102, 214, 0.35);
-  color: #e6f0ff;
+  background: var(--diff-hunk-bg);
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
 }
 
 .rich-hunk-rows {
@@ -120,86 +120,86 @@
 .rich-gutter {
   padding: 2px 8px;
   text-align: right;
-  color: #666;
+  color: var(--text-tertiary);
   user-select: none;
-  border-right: 1px solid #161616;
-  background: #0b0b0b;
+  border-right: 1px solid var(--border-color);
+  background: var(--bg-primary);
 }
 
 .rich-code {
   padding: 2px 10px;
   white-space: pre;
   min-width: 0;
-  background: #0b0b0b;
+  background: var(--bg-primary);
 }
 
 .rich-code-muted {
-  color: #888;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
 .rich-code-old {
-  border-right: 1px solid #161616;
+  border-right: 1px solid var(--border-color);
 }
 
 .rich-prefix {
   display: inline-block;
   width: 14px;
   margin-right: 6px;
-  color: #888;
+  color: var(--text-secondary);
 }
 
 .rich-line-added .rich-code-new,
 .rich-line-added .rich-gutter.rich-new {
-  background: rgba(40, 167, 69, 0.12);
+  background: var(--diff-added-bg);
 }
 
 .rich-line-deleted .rich-code-old,
 .rich-line-deleted .rich-gutter.rich-old {
-  background: rgba(220, 53, 69, 0.12);
+  background: var(--diff-removed-bg);
 }
 
 .rich-line-updated .rich-code-old,
 .rich-line-updated .rich-gutter.rich-old {
-  background: rgba(220, 53, 69, 0.10);
+  background: var(--diff-removed-bg);
 }
 
 .rich-line-updated .rich-code-new,
 .rich-line-updated .rich-gutter.rich-new {
-  background: rgba(40, 167, 69, 0.10);
+  background: var(--diff-added-bg);
 }
 
 .rich-line-context-collapsed {
-  background: #0f0f0f;
+  background: var(--bg-secondary);
 }
 
 .rich-collapsed {
   grid-column: 1 / -1;
   padding: 6px 10px;
-  border-bottom: 1px solid #141414;
-  background: #0f0f0f;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 
 .seg-common {
-  color: #d4d4d4;
+  color: var(--text-primary);
 }
 
 .seg-removed {
-  color: #ffd5da;
+  color: var(--text-primary);
 }
 
 .seg-added {
-  color: #c8facc;
+  color: var(--text-primary);
 }
 
 .seg-removed-strong {
-  background: rgba(220, 53, 69, 0.35);
+  background: var(--diff-removed-strong-bg);
   border-radius: 3px;
   padding: 0 2px;
 }
 
 .seg-added-strong {
-  background: rgba(40, 167, 69, 0.35);
+  background: var(--diff-added-strong-bg);
   border-radius: 3px;
   padding: 0 2px;
 }

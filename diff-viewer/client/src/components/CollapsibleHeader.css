@@ -50,18 +50,18 @@
 }
 
 .stat-badge.additions {
-  background: rgba(63, 185, 80, 0.2);
-  color: #3fb950;
+  background: var(--badge-bg-success);
+  color: var(--accent-success);
 }
 
 .stat-badge.deletions {
-  background: rgba(248, 81, 73, 0.2);
-  color: #f85149;
+  background: var(--badge-bg-danger);
+  color: var(--accent-danger);
 }
 
 .stat-badge.files {
-  background: rgba(31, 111, 235, 0.2);
-  color: #58a6ff;
+  background: var(--badge-bg-primary);
+  color: var(--accent-primary);
 }
 
 .header-actions {
@@ -145,7 +145,7 @@
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px var(--shadow-color);
   z-index: 1000;
   margin-top: 8px;
 }

@@ -4,9 +4,11 @@ import SmartDiffView from './SmartDiffView';
 import EnhancedDiffView from './EnhancedDiffView';
 import RichDiffView from './RichDiffView';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
+import { useTheme } from '../context/theme';
 import './SmartDiffViewer.css';
 
 const SmartDiffViewer = ({ data }) => {
+  const { theme, setTheme } = useTheme();
   const [selectedFile, setSelectedFile] = useState(null);
   const [reviewState, setReviewState] = useState({});
   const [expandedSections, setExpandedSections] = useState({
@@ -205,6 +207,17 @@ const SmartDiffViewer = ({ data }) => {
             </div>
           )}
         </div>
+
+        <div className="viewer-actions">
+          <button
+            className="viewer-action-btn"
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            title="Toggle theme"
+            type="button"
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+        </div>
       </div>
 
       <div className="viewer-content">
@@ -260,24 +273,24 @@ const SmartDiffViewer = ({ data }) => {
                       onToggleSection={toggleSection}
                     />
                   ) : (
-                    <div style={{ backgroundColor: '#1e1e1e' }}>
+                    <div style={{ backgroundColor: 'var(--bg-primary)' }}>
                       {selectedFile.patch ? (
-                        <div style={{ padding: '20px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px' }}>
+                        <div style={{ padding: '20px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>
                           {selectedFile.patch.split('\n').map((line, idx) => {
                             let style = { margin: 0, padding: '2px 5px', whiteSpace: 'pre' };
                             
                             if (line.startsWith('+')) {
-                              style.backgroundColor = '#28a745';
-                              style.color = '#fff';
+                              style.backgroundColor = 'var(--diff-added-bg)';
+                              style.color = 'var(--text-primary)';
                             } else if (line.startsWith('-')) {
-                              style.backgroundColor = '#dc3545';
-                              style.color = '#fff';
+                              style.backgroundColor = 'var(--diff-removed-bg)';
+                              style.color = 'var(--text-primary)';
                             } else if (line.startsWith('@@')) {
-                              style.backgroundColor = '#0366d6';
-                              style.color = '#fff';
+                              style.backgroundColor = 'var(--diff-hunk-bg)';
+                              style.color = 'var(--text-primary)';
                               style.fontWeight = 'bold';
                             } else {
-                              style.color = '#d4d4d4';
+                              style.color = 'var(--text-primary)';
                             }
                             
                             return (

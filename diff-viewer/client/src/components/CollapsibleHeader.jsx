@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import './CollapsibleHeader.css';
+import { useTheme } from '../context/theme';
 
 const CollapsibleHeader = ({ metadata, diff, onToggleView, showSemanticView }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [showAI, setShowAI] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   const pr = metadata?.pr;
   const stats = diff?.stats;
@@ -44,6 +46,15 @@ const CollapsibleHeader = ({ metadata, diff, onToggleView, showSemanticView }) =
         </div>
         
         <div className="header-actions">
+          <button
+            className="toggle-btn"
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            title="Toggle theme"
+            type="button"
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+
           <button 
             className="toggle-btn"
             onClick={() => onToggleView(!showSemanticView)}

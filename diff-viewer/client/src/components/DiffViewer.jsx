@@ -192,9 +192,9 @@ const DiffViewer = ({ data }) => {
           {selectedFile ? (
             <>
               <div style={{ 
-                background: '#2d2d30', 
+                background: 'var(--bg-tertiary)', 
                 padding: '4px 12px', 
-                borderBottom: '1px solid #3e3e42',
+                borderBottom: '1px solid var(--border-color)',
                 height: '28px',
                 display: 'flex',
                 alignItems: 'center',
@@ -203,7 +203,7 @@ const DiffViewer = ({ data }) => {
                 <span style={{ 
                   fontFamily: 'monospace', 
                   fontSize: '12px',
-                  color: '#cccccc' 
+                  color: 'var(--text-primary)' 
                 }}>
                   {selectedFile.path}
                 </span>
