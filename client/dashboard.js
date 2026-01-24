@@ -143,6 +143,7 @@ class Dashboard {
     const terminalPairs = Array.isArray(workspace.terminals)
       ? Math.floor(workspace.terminals.length / 2)
       : (workspace.terminals?.pairs ?? 0);
+    const access = (workspace.access || 'unknown').toLowerCase();
 
     return `
       <div class="workspace-card ${isActive ? 'active' : ''}" data-workspace-id="${workspace.id}">
@@ -168,7 +169,7 @@ class Dashboard {
 
           <div class="workspace-meta">
             <p class="last-used">${lastUsed}</p>
-            <p class="access-level">${this.getAccessLevelIcon(workspace.access)} ${workspace.access || 'private'}</p>
+            <p class="access-level">${this.getAccessLevelIcon(access)} ${access}</p>
           </div>
         </div>
 
@@ -530,7 +531,8 @@ class Dashboard {
     const icons = {
       'private': '🔒',
       'team': '👥',
-      'public': '🌍'
+      'public': '🌍',
+      'unknown': '❔'
     };
     return icons[access] || '🔒';
   }

@@ -5,6 +5,7 @@ const os = require('os');
 const winston = require('winston');
 const { validateWorkspace, getWorkspaceTypeInfo, getDefaultWorkspaceConfig } = require('./workspaceTypes');
 const { ConfigDiscoveryService } = require('./configDiscoveryService');
+const { GitHubRepoService } = require('./githubRepoService');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -33,6 +34,9 @@ class WorkspaceManager {
     this.discoveredWorkspaceTypes = null;
     this.discoveryInProgress = false;
     this.discoveryComplete = false;
+
+    // GitHub metadata enrichment (repo visibility/access)
+    this.githubRepoService = GitHubRepoService.getInstance();
   }
 
   static getInstance() {
@@ -566,6 +570,64 @@ class WorkspaceManager {
     }
 
     return workspaces;
+  }
+
+  async listWorkspacesEnriched(requestingUser = null) {
+    const workspaces = this.listWorkspaces(requestingUser);
+
+    // Best-effort: enrich repo access/visibility without blocking indefinitely.
+    const refreshTasks = [];
+    const now = Date.now();
+    const refreshAfterMs = 7 * 24 * 60 * 60 * 1000; // 7d
+
+    for (const workspace of workspaces) {
+      const remote = workspace?.repository?.remote;
+      if (!remote) continue;
+
+      const fetchedAt = workspace.accessFetchedAt ? Date.parse(workspace.accessFetchedAt) : 0;
+      const isStale = !fetchedAt || Number.isNaN(fetchedAt) || (now - fetchedAt) > refreshAfterMs;
+      if (!isStale) continue;
+
+      refreshTasks.push(async () => {
+        const visibility = await this.githubRepoService.getRepoVisibility(remote);
+        if (!visibility) return;
+
+        const updates = {
+          access: visibility,
+          accessFetchedAt: new Date().toISOString()
+        };
+
+        // Persist only if it changed or was missing.
+        const currentAccess = (workspace.access || '').toLowerCase();
+        if (currentAccess !== visibility || !workspace.accessFetchedAt) {
+          await this.updateWorkspace(workspace.id, updates);
+        }
+      });
+    }
+
+    // Concurrency limit to avoid spawning too many `gh` calls.
+    const limit = 4;
+    const runners = [];
+    let i = 0;
+
+    const runNext = async () => {
+      const fn = refreshTasks[i];
+      i += 1;
+      if (!fn) return;
+      try {
+        await fn();
+      } catch {
+        // Best-effort only.
+      }
+      return runNext();
+    };
+
+    for (let j = 0; j < Math.min(limit, refreshTasks.length); j += 1) {
+      runners.push(runNext());
+    }
+
+    await Promise.all(runners);
+    return this.listWorkspaces(requestingUser);
   }
 
   async createWorkspace(workspaceData) {

@@ -539,9 +539,14 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('list-workspaces', () => {
-    const workspaces = workspaceManager.listWorkspaces();
-    socket.emit('workspaces-list', workspaces);
+  socket.on('list-workspaces', async () => {
+    try {
+      const workspaces = await workspaceManager.listWorkspacesEnriched();
+      socket.emit('workspaces-list', workspaces);
+    } catch (error) {
+      logger.warn('Failed to list workspaces (enriched)', { error: error.message });
+      socket.emit('workspaces-list', workspaceManager.listWorkspaces());
+    }
   });
 
   // Add sessions for a new worktree without destroying existing sessions
