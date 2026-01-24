@@ -52,6 +52,8 @@ const { ConversationService } = require('./conversationService');
 const { WorktreeMetadataService } = require('./worktreeMetadataService');
 const { WorktreeTagService } = require('./worktreeTagService');
 const { DiffViewerService } = require('./diffViewerService');
+const { PullRequestService } = require('./pullRequestService');
+const { ProcessTaskService } = require('./processTaskService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
@@ -159,6 +161,8 @@ const conversationService = ConversationService.getInstance();
 const worktreeMetadataService = WorktreeMetadataService.getInstance();
 const worktreeTagService = WorktreeTagService.getInstance();
 const diffViewerService = DiffViewerService.getInstance();
+const pullRequestService = PullRequestService.getInstance();
+const processTaskService = ProcessTaskService.getInstance({ sessionManager, worktreeTagService, pullRequestService });
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -2083,101 +2087,59 @@ app.post('/api/worktree-metadata/refresh', async (req, res) => {
 
 app.get('/api/prs', async (req, res) => {
   try {
-    const { execFile } = require('child_process');
-    const util = require('util');
-    const execFileAsync = util.promisify(execFile);
-
-    const mode = (req.query.mode || 'mine').toLowerCase(); // mine | involved | all
-    const state = (req.query.state || 'all').toLowerCase(); // all | open | closed | merged
-    const sort = (req.query.sort || 'updated').toLowerCase(); // updated | created
-    const limitRaw = parseInt(req.query.limit || '50', 10);
-    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
-
     const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const repoRaw = typeof req.query.repo === 'string' ? req.query.repo.trim() : '';
     const ownerRaw = typeof req.query.owner === 'string' ? req.query.owner.trim() : '';
 
-    const repos = repoRaw
-      ? repoRaw.split(',').map(r => r.trim()).filter(Boolean).slice(0, 20)
-      : [];
-    const owners = ownerRaw
-      ? ownerRaw.split(',').map(o => o.trim()).filter(Boolean).slice(0, 20)
-      : [];
+    const repos = repoRaw ? repoRaw.split(',').map(r => r.trim()).filter(Boolean).slice(0, 20) : [];
+    const owners = ownerRaw ? ownerRaw.split(',').map(o => o.trim()).filter(Boolean).slice(0, 20) : [];
 
-    if (sort !== 'updated' && sort !== 'created') {
-      return res.status(400).json({ error: 'Invalid sort (expected updated|created)' });
-    }
-
-    const args = [
-      'search',
-      'prs',
-      '--sort',
-      sort,
-      '--order',
-      'desc',
-      '--limit',
-      String(limit),
-      '--json',
-      'number,title,state,url,isDraft,repository,createdAt,updatedAt,author'
-    ];
-
-    if (mode === 'mine') {
-      args.push('--author', '@me');
-    } else if (mode === 'involved') {
-      args.push('--involves', '@me');
-    } else if (mode === 'all') {
-      // No author/involves filter
-    } else {
-      return res.status(400).json({ error: 'Invalid mode (expected mine|involved|all)' });
-    }
-
-    const queryParts = [];
-
-    if (state === 'open' || state === 'closed') {
-      args.push('--state', state);
-      // Treat "closed" as "closed but NOT merged" when the UI splits these states.
-      if (state === 'closed') {
-        queryParts.push('-is:merged');
-      }
-    } else if (state === 'merged') {
-      args.push('--merged');
-    } else if (state !== 'all') {
-      return res.status(400).json({ error: 'Invalid state (expected all|open|closed|merged)' });
-    }
-
-    owners.forEach(owner => {
-      args.push('--owner', owner);
-    });
-
-    repos.forEach(repo => {
-      args.push('--repo', repo);
-    });
-
-    if (query) {
-      queryParts.push(query);
-    }
-
-    if (queryParts.length) {
-      args.push('--', ...queryParts);
-    }
-
-    const { stdout } = await execFileAsync('gh', args, { timeout: 20000 });
-    const prs = JSON.parse(stdout || '[]');
-
-    res.json({
-      mode,
-      state,
-      sort,
-      repos,
-      owners,
-      limit,
+    const result = await pullRequestService.searchPullRequests({
+      mode: req.query.mode || 'mine',
+      state: req.query.state || 'all',
+      sort: req.query.sort || 'updated',
+      limit: req.query.limit || '50',
       query,
-      count: Array.isArray(prs) ? prs.length : 0,
-      prs: Array.isArray(prs) ? prs : []
+      repos,
+      owners
     });
+
+    res.json(result);
   } catch (error) {
     logger.error('Failed to list PRs', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to list PRs' });
+  }
+});
+
+// ============================================
+// Process tasks API (PR/worktree/session unified list)
+// ============================================
+
+app.get('/api/process/tasks', async (req, res) => {
+  try {
+    const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const repoRaw = typeof req.query.repo === 'string' ? req.query.repo.trim() : '';
+    const ownerRaw = typeof req.query.owner === 'string' ? req.query.owner.trim() : '';
+
+    const repos = repoRaw ? repoRaw.split(',').map(r => r.trim()).filter(Boolean).slice(0, 20) : [];
+    const owners = ownerRaw ? ownerRaw.split(',').map(o => o.trim()).filter(Boolean).slice(0, 20) : [];
+
+    const tasks = await processTaskService.listTasks({
+      prs: {
+        mode: req.query.mode || 'mine',
+        state: req.query.state || 'open',
+        sort: req.query.sort || 'updated',
+        limit: req.query.limit || '50',
+        query,
+        repos,
+        owners
+      }
+    });
+
+    res.json({ count: tasks.length, tasks });
+  } catch (error) {
+    logger.error('Failed to list process tasks', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to list process tasks' });
   }
 });
 
