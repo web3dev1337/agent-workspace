@@ -89,14 +89,14 @@ body {
 .worktree-list {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-xs);
+  padding: 4px;
 }
 
 .worktree-item {
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
-  margin-bottom: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
+  margin-bottom: 3px;
+  padding: 2px 6px;
   cursor: pointer;
   transition: all 0.2s;
   border: 1px solid transparent;
@@ -115,7 +115,7 @@ body {
 .worktree-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .worktree-actions {
@@ -208,11 +208,22 @@ body {
 .worktree-title {
   font-weight: 600;
   font-size: 0.78rem;
-  line-height: 1.15;
+  line-height: 1.05;
   display: flex;
-  align-items: center;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 6px;
   min-width: 0;
+}
+
+.worktree-status-dot {
+  margin-top: 1px;
+}
+
+.worktree-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0;
 }
 
 .agent-type-icon {
@@ -222,18 +233,27 @@ body {
 }
 
 .worktree-name {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  line-height: 1.05;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.worktree-meta {
+  display: flex;
+  gap: 6px;
+  line-height: 1;
+  min-width: 0;
+}
+
 .worktree-branch {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-secondary);
   font-family: var(--font-mono);
   opacity: 0.85;
+  line-height: 1;
   white-space: nowrap;
   flex: 0 1 auto;
   min-width: 0;
