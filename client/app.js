@@ -100,6 +100,11 @@ class ClaudeOrchestrator {
         this.showPRsPanel();
       });
 
+      // Queue / Review inbox panel (process tasks)
+      document.getElementById('queue-btn')?.addEventListener('click', () => {
+        this.showQueuePanel();
+      });
+
       // Tasks panel (ticketing providers like Trello)
       document.getElementById('tasks-btn')?.addEventListener('click', () => {
         this.showTasksPanel();
@@ -6283,7 +6288,9 @@ class ClaudeOrchestrator {
     const escapeHtml = (value) => String(value ?? '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
 
     const toTrelloAvatarUrl = (avatarUrl, size = 50) => {
       const raw = String(avatarUrl || '').trim();
@@ -7843,6 +7850,417 @@ class ClaudeOrchestrator {
     });
 
     await refreshAll({ force: false });
+  }
+
+  async showQueuePanel() {
+    console.log('Opening Queue panel...');
+
+    const existing = document.getElementById('queue-panel');
+    if (existing) existing.remove();
+
+    const serverUrl = window.location.origin;
+
+    const state = {
+      mode: 'mine', // mine | all
+      query: '',
+      tasks: [],
+      selectedId: null
+    };
+
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    const modal = document.createElement('div');
+    modal.id = 'queue-panel';
+    modal.className = 'modal tasks-modal';
+    const tasksThemeSetting = this.userSettings?.global?.ui?.tasks?.theme;
+    const resolvedTheme = (tasksThemeSetting === 'light' || tasksThemeSetting === 'dark')
+      ? tasksThemeSetting
+      : (this.settings.theme === 'light' ? 'light' : 'dark');
+    modal.classList.add(`tasks-theme-${resolvedTheme}`);
+    modal.innerHTML = `
+      <div class="modal-content tasks-content">
+        <div class="modal-header">
+          <h2>📥 Queue</h2>
+          <button class="close-btn tasks-close-btn" id="queue-close-btn" aria-label="Close Queue" title="Close (Esc)">×</button>
+        </div>
+        <div class="tasks-toolbar">
+          <input type="text" id="queue-search" class="search-input tasks-search" placeholder="Search PRs/worktrees/sessions…">
+          <div class="tasks-view-toggle" role="group" aria-label="Queue mode">
+            <button class="btn-secondary tasks-view-btn" id="queue-mode-mine" data-mode="mine" title="My PRs">Mine</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-mode-all" data-mode="all" title="All PRs">All</button>
+          </div>
+          <button class="btn-secondary" id="queue-refresh">🔄 Refresh</button>
+        </div>
+        <div class="tasks-body">
+          <div class="tasks-cards" id="queue-list">
+            <div class="loading">Loading queue…</div>
+          </div>
+          <div class="tasks-detail" id="queue-detail">
+            <div class="tasks-detail-empty">Select an item to edit tier/risk or open it.</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const listEl = modal.querySelector('#queue-list');
+    const detailEl = modal.querySelector('#queue-detail');
+    const searchEl = modal.querySelector('#queue-search');
+    const refreshBtn = modal.querySelector('#queue-refresh');
+    const mineBtn = modal.querySelector('#queue-mode-mine');
+    const allBtn = modal.querySelector('#queue-mode-all');
+    const closeBtn = modal.querySelector('#queue-close-btn');
+
+    const setMode = (mode) => {
+      state.mode = mode === 'all' ? 'all' : 'mine';
+      mineBtn.classList.toggle('active', state.mode === 'mine');
+      allBtn.classList.toggle('active', state.mode === 'all');
+    };
+    setMode('mine');
+
+    const calcTierCounts = (tasks) => {
+      const counts = { 1: 0, 2: 0, 3: 0, 4: 0, none: 0 };
+      for (const t of tasks) {
+        const tier = Number(t?.record?.tier);
+        if (tier >= 1 && tier <= 4) counts[tier] += 1;
+        else counts.none += 1;
+      }
+      return counts;
+    };
+
+    const renderList = () => {
+      const q = String(state.query || '').trim().toLowerCase();
+      const tasks = (Array.isArray(state.tasks) ? state.tasks : []).filter((t) => {
+        if (!q) return true;
+        const hay = [
+          t?.title,
+          t?.repository,
+          t?.worktreePath,
+          t?.sessionId,
+          t?.url
+        ].filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(q);
+      });
+
+      const counts = calcTierCounts(tasks);
+      const header = `
+        <div class="queue-summary">
+          <span class="pr-badge">Q1 ${counts[1]}</span>
+          <span class="pr-badge">Q2 ${counts[2]}</span>
+          <span class="pr-badge">Q3 ${counts[3]}</span>
+          <span class="pr-badge">Q4 ${counts[4]}</span>
+          <span class="pr-badge">No tier ${counts.none}</span>
+        </div>
+      `;
+
+      if (tasks.length === 0) {
+        listEl.innerHTML = `${header}<div class="no-ports">No items.</div>`;
+        return;
+      }
+
+      const row = (t) => {
+        const kind = t.kind || 'task';
+        const title = escapeHtml(t.title || t.id || '');
+        const sub = escapeHtml(t.repository || t.worktreePath || t.sessionId || '');
+        const tier = t?.record?.tier ? `T${t.record.tier}` : '';
+        const risk = t?.record?.changeRisk ? `risk:${t.record.changeRisk}` : '';
+        const meta = [tier, risk].filter(Boolean).join(' • ');
+        const selected = state.selectedId === t.id;
+        return `
+          <div class="task-card-row ${selected ? 'selected' : ''}" data-queue-id="${escapeHtml(t.id)}">
+            <div class="task-card-title">${title}</div>
+            <div class="task-card-meta">${escapeHtml(kind)}${sub ? ` • ${sub}` : ''}${meta ? ` • ${escapeHtml(meta)}` : ''}</div>
+          </div>
+        `;
+      };
+
+      listEl.innerHTML = header + tasks.map(row).join('');
+    };
+
+    const fetchTasks = async () => {
+      const url = new URL(`${serverUrl}/api/process/tasks`);
+      url.searchParams.set('mode', state.mode);
+      url.searchParams.set('state', 'open');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load queue');
+      state.tasks = data.tasks || [];
+      renderList();
+    };
+
+    const upsertRecord = async (id, patch) => {
+      const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch || {})
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to save record');
+      return data.record || null;
+    };
+
+    const openPromptEditor = async (promptId) => {
+      const pid = String(promptId || '').trim();
+      if (!pid) return;
+
+      const existing = document.getElementById('prompt-editor');
+      if (existing) existing.remove();
+
+      const editor = document.createElement('div');
+      editor.id = 'prompt-editor';
+      editor.className = 'modal tasks-modal';
+      editor.classList.add(`tasks-theme-${resolvedTheme}`);
+      editor.innerHTML = `
+        <div class="modal-content tasks-content">
+          <div class="modal-header">
+            <h2>📝 Prompt: ${escapeHtml(pid)}</h2>
+            <button class="close-btn tasks-close-btn" aria-label="Close" onclick="this.closest('.modal').remove()">×</button>
+          </div>
+          <div class="tasks-body" style="grid-template-columns: 1fr;">
+            <div class="tasks-detail" style="overflow:auto;">
+              <div class="tasks-inline-row" style="margin-bottom: 10px;">
+                <button class="btn-secondary" id="prompt-save">💾 Save</button>
+                <span class="tasks-detail-meta" id="prompt-sha" style="margin-left: 10px;"></span>
+              </div>
+              <textarea id="prompt-text" class="tasks-textarea" rows="24" placeholder="Write your prompt…"></textarea>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(editor);
+
+      const shaEl = editor.querySelector('#prompt-sha');
+      const textEl = editor.querySelector('#prompt-text');
+      const saveBtn = editor.querySelector('#prompt-save');
+
+      const load = async () => {
+        const res = await fetch(`${serverUrl}/api/prompts/${encodeURIComponent(pid)}`);
+        if (res.status === 404) {
+          shaEl.textContent = 'new';
+          textEl.value = '';
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || 'Failed to load prompt');
+        textEl.value = data.text || '';
+        shaEl.textContent = data.sha256 ? `sha256: ${data.sha256.slice(0, 12)}…` : '';
+      };
+
+      const save = async () => {
+        saveBtn.disabled = true;
+        try {
+          const res = await fetch(`${serverUrl}/api/prompts/${encodeURIComponent(pid)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: textEl.value })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || 'Failed to save prompt');
+          shaEl.textContent = data.sha256 ? `sha256: ${data.sha256.slice(0, 12)}…` : '';
+          this.showToast('Prompt saved', 'success');
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          saveBtn.disabled = false;
+        }
+      };
+
+      saveBtn.addEventListener('click', save);
+      await load();
+    };
+
+    const renderDetail = (t) => {
+      if (!t) {
+        detailEl.innerHTML = `<div class="tasks-detail-empty">Select an item to edit tier/risk or open it.</div>`;
+        return;
+      }
+
+      const record = t.record || {};
+      const tier = record.tier ?? '';
+      const tierValue = tier === '' || tier === null || tier === undefined ? '' : String(tier);
+      const changeRisk = record.changeRisk || '';
+      const pFail = record.pFailFirstPass ?? '';
+      const verify = record.verifyMinutes ?? '';
+      const promptRef = record.promptRef || '';
+
+      const url = t.url || '';
+      const hasPR = t.kind === 'pr' && url;
+
+      detailEl.innerHTML = `
+        <div class="tasks-detail-header">
+          <div class="tasks-detail-title">
+            <div class="pr-subtitle">${escapeHtml(t.title || t.id)}</div>
+            <div class="tasks-detail-meta">${escapeHtml(t.id)}</div>
+          </div>
+          <div class="tasks-detail-actions">
+            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
+            ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Tier + Risk</div>
+          <div class="tasks-kv">
+            <div class="tasks-kv-row tasks-kv-row-edit">
+              <div class="tasks-kv-key">Tier</div>
+              <div class="tasks-kv-val tasks-kv-val-edit">
+                <select id="queue-tier" class="tasks-select tasks-select-inline">
+                  <option value="">(none)</option>
+                  <option value="1" ${tierValue === '1' ? 'selected' : ''}>Tier 1</option>
+                  <option value="2" ${tierValue === '2' ? 'selected' : ''}>Tier 2</option>
+                  <option value="3" ${tierValue === '3' ? 'selected' : ''}>Tier 3</option>
+                  <option value="4" ${tierValue === '4' ? 'selected' : ''}>Tier 4</option>
+                </select>
+              </div>
+            </div>
+            <div class="tasks-kv-row tasks-kv-row-edit">
+              <div class="tasks-kv-key">Change Risk</div>
+              <div class="tasks-kv-val tasks-kv-val-edit">
+                <select id="queue-change-risk" class="tasks-select tasks-select-inline">
+                  <option value="">(none)</option>
+                  <option value="low" ${changeRisk === 'low' ? 'selected' : ''}>low</option>
+                  <option value="medium" ${changeRisk === 'medium' ? 'selected' : ''}>medium</option>
+                  <option value="high" ${changeRisk === 'high' ? 'selected' : ''}>high</option>
+                  <option value="critical" ${changeRisk === 'critical' ? 'selected' : ''}>critical</option>
+                </select>
+              </div>
+            </div>
+            <div class="tasks-kv-row tasks-kv-row-edit">
+              <div class="tasks-kv-key">pFailFirstPass</div>
+              <div class="tasks-kv-val tasks-kv-val-edit">
+                <input id="queue-pfail" class="tasks-input tasks-input-inline" type="number" step="0.05" min="0" max="1" value="${escapeHtml(pFail)}" placeholder="0..1" style="width:120px;" />
+              </div>
+            </div>
+            <div class="tasks-kv-row tasks-kv-row-edit">
+              <div class="tasks-kv-key">Verify (min)</div>
+              <div class="tasks-kv-val tasks-kv-val-edit">
+                <input id="queue-verify" class="tasks-input tasks-input-inline" type="number" step="1" min="0" value="${escapeHtml(verify)}" placeholder="minutes" style="width:120px;" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Prompt Artifact</div>
+          <div class="tasks-inline-row">
+            <input id="queue-prompt-ref" class="tasks-input" value="${escapeHtml(promptRef)}" placeholder="e.g. pr:web3dev1337/repo#123" />
+            <button class="btn-secondary" id="queue-open-prompt">📝 Open</button>
+          </div>
+          <div class="tasks-detail-meta">Saved locally in <code>~/.orchestrator/prompts</code>.</div>
+        </div>
+      `;
+
+      const tierEl = detailEl.querySelector('#queue-tier');
+      const riskEl = detailEl.querySelector('#queue-change-risk');
+      const pfEl = detailEl.querySelector('#queue-pfail');
+      const vEl = detailEl.querySelector('#queue-verify');
+      const prEl = detailEl.querySelector('#queue-prompt-ref');
+      const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
+      const openDiffBtn = detailEl.querySelector('#queue-open-diff');
+
+      const savePatch = async () => {
+        try {
+          const patch = {
+            tier: tierEl?.value ? Number(tierEl.value) : null,
+            changeRisk: riskEl?.value || null,
+            pFailFirstPass: pfEl?.value === '' ? null : Number(pfEl.value),
+            verifyMinutes: vEl?.value === '' ? null : Number(vEl.value),
+            promptRef: prEl?.value || null
+          };
+          const rec = await upsertRecord(t.id, patch);
+          // Update local state
+          const idx = state.tasks.findIndex(x => x.id === t.id);
+          if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: rec };
+          this.showToast('Saved', 'success');
+          renderList();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        }
+      };
+
+      [tierEl, riskEl, pfEl, vEl, prEl].forEach((el) => {
+        el?.addEventListener('change', () => savePatch());
+        el?.addEventListener('blur', () => savePatch());
+      });
+
+      openPromptBtn?.addEventListener('click', async () => {
+        const pid = (prEl?.value || t.id).trim();
+        await openPromptEditor(pid);
+      });
+
+      openDiffBtn?.addEventListener('click', async () => {
+        try {
+          if (!url) return;
+          const m = url.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+          if (!m) {
+            window.open(url, '_blank', 'noreferrer');
+            return;
+          }
+          const [, owner, repo, prNum] = m;
+          const diffUrl = `${serverUrl.replace(/:\\d+$/, '')}:7655/pr/${owner}/${repo}/${prNum}`;
+          window.open(diffUrl, '_blank', 'noreferrer');
+        } catch {
+          window.open(url, '_blank', 'noreferrer');
+        }
+      });
+    };
+
+    listEl.addEventListener('click', (e) => {
+      const row = e.target.closest('.task-card-row[data-queue-id]');
+      if (!row) return;
+      const id = row.getAttribute('data-queue-id');
+      state.selectedId = id;
+      const t = state.tasks.find(x => x.id === id) || null;
+      renderList();
+      renderDetail(t);
+    });
+
+    searchEl.addEventListener('input', () => {
+      state.query = searchEl.value || '';
+      renderList();
+    });
+
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.disabled = true;
+      try {
+        await fetchTasks();
+      } catch (e) {
+        this.showToast(String(e?.message || e), 'error');
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    });
+
+    mineBtn.addEventListener('click', async () => {
+      setMode('mine');
+      await fetchTasks().catch((e) => this.showToast(String(e?.message || e), 'error'));
+    });
+    allBtn.addEventListener('click', async () => {
+      setMode('all');
+      await fetchTasks().catch((e) => this.showToast(String(e?.message || e), 'error'));
+    });
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') close();
+    };
+    const close = () => {
+      document.removeEventListener('keydown', onKey);
+      modal.remove();
+    };
+
+    document.addEventListener('keydown', onKey);
+    closeBtn?.addEventListener('click', close);
+
+    try {
+      await fetchTasks();
+    } catch (e) {
+      this.showToast(String(e?.message || e), 'error');
+      listEl.innerHTML = `<div class="no-ports">Failed to load queue.</div>`;
+    }
   }
 
   async showPortsPanel() {
