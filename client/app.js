@@ -8068,21 +8068,24 @@ class ClaudeOrchestrator {
         return;
       }
 
-      const row = (t) => {
-        const kind = t.kind || 'task';
-        const title = escapeHtml(t.title || t.id || '');
-        const sub = escapeHtml(t.repository || t.worktreePath || t.sessionId || '');
-        const tier = t?.record?.tier ? `T${t.record.tier}` : '';
-        const risk = t?.record?.changeRisk ? `risk:${t.record.changeRisk}` : '';
-        const meta = [tier, risk].filter(Boolean).join(' • ');
-        const selected = state.selectedId === t.id;
-        return `
+    const row = (t) => {
+      const kind = t.kind || 'task';
+      const title = escapeHtml(t.title || t.id || '');
+      const sub = escapeHtml(t.repository || t.worktreePath || t.sessionId || '');
+      const tier = t?.record?.tier ? `T${t.record.tier}` : '';
+      const risk = t?.record?.changeRisk ? `risk:${t.record.changeRisk}` : '';
+      const depTotal = t?.dependencySummary?.total ? `deps:${t.dependencySummary.total}` : '';
+      const depBlocked = t?.dependencySummary?.blocked ? `blocked:${t.dependencySummary.blocked}` : '';
+      const meta = [tier, risk].filter(Boolean).join(' • ');
+      const meta2 = [depTotal, depBlocked].filter(Boolean).join(' • ');
+      const selected = state.selectedId === t.id;
+      return `
           <div class="task-card-row ${selected ? 'selected' : ''}" data-queue-id="${escapeHtml(t.id)}">
             <div class="task-card-title">${title}</div>
-            <div class="task-card-meta">${escapeHtml(kind)}${sub ? ` • ${sub}` : ''}${meta ? ` • ${escapeHtml(meta)}` : ''}</div>
+            <div class="task-card-meta">${escapeHtml(kind)}${sub ? ` • ${sub}` : ''}${meta ? ` • ${escapeHtml(meta)}` : ''}${meta2 ? ` • ${escapeHtml(meta2)}` : ''}</div>
           </div>
         `;
-      };
+    };
 
       listEl.innerHTML = header + tasks.map(row).join('');
     };
@@ -8091,6 +8094,7 @@ class ClaudeOrchestrator {
       const url = new URL(`${serverUrl}/api/process/tasks`);
       url.searchParams.set('mode', state.mode);
       url.searchParams.set('state', 'open');
+      url.searchParams.set('include', 'dependencySummary');
       const res = await fetch(url.toString());
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to load queue');
@@ -8192,6 +8196,7 @@ class ClaudeOrchestrator {
       const pFail = record.pFailFirstPass ?? '';
       const verify = record.verifyMinutes ?? '';
       const promptRef = record.promptRef || '';
+      const doneAt = record.doneAt || '';
 
       const url = t.url || '';
       const hasPR = t.kind === 'pr' && url;
@@ -8241,32 +8246,93 @@ class ClaudeOrchestrator {
                 <input id="queue-pfail" class="tasks-input tasks-input-inline" type="number" step="0.05" min="0" max="1" value="${escapeHtml(pFail)}" placeholder="0..1" style="width:120px;" />
               </div>
             </div>
-            <div class="tasks-kv-row tasks-kv-row-edit">
-              <div class="tasks-kv-key">Verify (min)</div>
-              <div class="tasks-kv-val tasks-kv-val-edit">
-                <input id="queue-verify" class="tasks-input tasks-input-inline" type="number" step="1" min="0" value="${escapeHtml(verify)}" placeholder="minutes" style="width:120px;" />
-              </div>
-            </div>
-          </div>
-        </div>
+	            <div class="tasks-kv-row tasks-kv-row-edit">
+	              <div class="tasks-kv-key">Verify (min)</div>
+	              <div class="tasks-kv-val tasks-kv-val-edit">
+	                <input id="queue-verify" class="tasks-input tasks-input-inline" type="number" step="1" min="0" value="${escapeHtml(verify)}" placeholder="minutes" style="width:120px;" />
+	              </div>
+	            </div>
+	            <div class="tasks-kv-row tasks-kv-row-edit">
+	              <div class="tasks-kv-key">Done</div>
+	              <div class="tasks-kv-val tasks-kv-val-edit">
+	                <label style="display:flex;align-items:center;gap:8px;">
+	                  <input id="queue-done" type="checkbox" ${doneAt ? 'checked' : ''} />
+	                  <span class="tasks-detail-meta">${doneAt ? `doneAt: ${escapeHtml(doneAt)}` : 'not done'}</span>
+	                </label>
+	              </div>
+	            </div>
+	          </div>
+	        </div>
 
-        <div class="tasks-detail-block">
-          <div class="tasks-detail-block-title">Prompt Artifact</div>
-          <div class="tasks-inline-row">
-            <input id="queue-prompt-ref" class="tasks-input" value="${escapeHtml(promptRef)}" placeholder="e.g. pr:web3dev1337/repo#123" />
-            <button class="btn-secondary" id="queue-open-prompt">📝 Open</button>
-          </div>
-          <div class="tasks-detail-meta">Saved locally in <code>~/.orchestrator/prompts</code>.</div>
-        </div>
-      `;
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Prompt Artifact</div>
+	          <div class="tasks-inline-row">
+	            <input id="queue-prompt-ref" class="tasks-input" value="${escapeHtml(promptRef)}" placeholder="e.g. pr:web3dev1337/repo#123" />
+	            <button class="btn-secondary" id="queue-open-prompt">📝 Open</button>
+	          </div>
+	          <div class="tasks-detail-meta">Saved locally in <code>~/.orchestrator/prompts</code>.</div>
+	        </div>
+
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Dependencies</div>
+	          <div class="tasks-inline-row" style="margin-bottom: 10px;">
+	            <input id="queue-dep-add" class="tasks-input" placeholder="Add dependency id (e.g. pr:owner/repo#123)" />
+	            <button class="btn-secondary" id="queue-dep-add-btn">➕ Add</button>
+	          </div>
+	          <div id="queue-deps" class="tasks-detail-meta">Loading…</div>
+	        </div>
+	      `;
 
       const tierEl = detailEl.querySelector('#queue-tier');
       const riskEl = detailEl.querySelector('#queue-change-risk');
       const pfEl = detailEl.querySelector('#queue-pfail');
       const vEl = detailEl.querySelector('#queue-verify');
       const prEl = detailEl.querySelector('#queue-prompt-ref');
+      const doneEl = detailEl.querySelector('#queue-done');
       const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
       const openDiffBtn = detailEl.querySelector('#queue-open-diff');
+      const depsEl = detailEl.querySelector('#queue-deps');
+      const depAddEl = detailEl.querySelector('#queue-dep-add');
+      const depAddBtn = detailEl.querySelector('#queue-dep-add-btn');
+
+      const loadDeps = async () => {
+        if (!depsEl) return;
+        try {
+          const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies`);
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || 'Failed to load dependencies');
+          const deps = Array.isArray(data.dependencies) ? data.dependencies : [];
+          if (!deps.length) {
+            depsEl.innerHTML = 'No dependencies.';
+            return;
+          }
+
+          depsEl.innerHTML = deps.map((d) => {
+            const status = d.satisfied ? '✅' : '⛔';
+            const reason = escapeHtml(d.reason || '');
+            const id = escapeHtml(d.id || '');
+            return `<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;margin:6px 0;">
+              <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${status} <code>${id}</code> <span style="opacity:0.75">${reason ? `(${reason})` : ''}</span></div>
+              <button class="btn-secondary queue-dep-remove" data-dep="${id}" title="Remove">✕</button>
+            </div>`;
+          }).join('');
+
+          depsEl.querySelectorAll('.queue-dep-remove').forEach((btn) => {
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              const dep = btn.getAttribute('data-dep');
+              if (!dep) return;
+              const del = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies/${encodeURIComponent(dep)}`, { method: 'DELETE' });
+              const delData = await del.json().catch(() => ({}));
+              if (!del.ok) throw new Error(delData?.error || 'Failed to remove dependency');
+              await fetchTasks();
+              await loadDeps();
+            });
+          });
+        } catch (e) {
+          depsEl.textContent = String(e?.message || e);
+        }
+      };
 
       const savePatch = async () => {
         try {
@@ -8296,6 +8362,41 @@ class ClaudeOrchestrator {
         el?.addEventListener('blur', () => savePatch());
       });
 
+      doneEl?.addEventListener('change', async () => {
+        try {
+          const rec = await upsertRecord(t.id, { done: !!doneEl.checked });
+          const idx = state.tasks.findIndex(x => x.id === t.id);
+          if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: rec };
+          if (rec) this.taskRecords.set(t.id, rec);
+          await fetchTasks();
+          await loadDeps();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        }
+      });
+
+      depAddBtn?.addEventListener('click', async () => {
+        try {
+          const depId = String(depAddEl?.value || '').trim();
+          if (!depId) return;
+          depAddBtn.disabled = true;
+          const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dependencyId: depId })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || 'Failed to add dependency');
+          depAddEl.value = '';
+          await fetchTasks();
+          await loadDeps();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          depAddBtn.disabled = false;
+        }
+      });
+
       openPromptBtn?.addEventListener('click', async () => {
         const pid = (prEl?.value || t.id).trim();
         await openPromptEditor(pid);
@@ -8316,6 +8417,8 @@ class ClaudeOrchestrator {
           window.open(url, '_blank', 'noreferrer');
         }
       });
+
+      loadDeps().catch(() => {});
     };
 
     listEl.addEventListener('click', (e) => {

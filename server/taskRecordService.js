@@ -46,6 +46,16 @@ const normalizeVisibility = (v) => {
   return allowed.has(s) ? s : null;
 };
 
+const normalizeDependencies = (deps) => {
+  if (deps === null) return [];
+  if (!Array.isArray(deps)) return null;
+  const cleaned = deps
+    .map(d => String(d || '').trim())
+    .filter(Boolean)
+    .slice(0, 200);
+  return [...new Set(cleaned)];
+};
+
 class TaskRecordService {
   constructor({ filePath } = {}) {
     this.filePath = filePath || DEFAULT_PATH;
@@ -96,33 +106,97 @@ class TaskRecordService {
   normalizePatch(patch) {
     const p = patch && typeof patch === 'object' ? patch : {};
     const next = {};
+    const clear = new Set();
 
-    if (p.title !== undefined) next.title = String(p.title || '').trim();
-    if (p.tier !== undefined) next.tier = normalizeTier(p.tier);
-    if (p.changeRisk !== undefined) next.changeRisk = normalizeRisk(p.changeRisk);
-    if (p.baseImpactRisk !== undefined) next.baseImpactRisk = normalizeRisk(p.baseImpactRisk);
-    if (p.pFailFirstPass !== undefined) next.pFailFirstPass = clamp01(p.pFailFirstPass);
-
-    if (p.verifyMinutes !== undefined) {
-      const n = Number(p.verifyMinutes);
-      next.verifyMinutes = Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+    if (p.title !== undefined) {
+      if (p.title === null) clear.add('title');
+      else next.title = String(p.title || '').trim();
+    }
+    if (p.tier !== undefined) {
+      if (p.tier === null) clear.add('tier');
+      else {
+        const t = normalizeTier(p.tier);
+        if (t !== null) next.tier = t;
+      }
+    }
+    if (p.changeRisk !== undefined) {
+      if (p.changeRisk === null) clear.add('changeRisk');
+      else {
+        const r = normalizeRisk(p.changeRisk);
+        if (r !== null) next.changeRisk = r;
+      }
+    }
+    if (p.baseImpactRisk !== undefined) {
+      if (p.baseImpactRisk === null) clear.add('baseImpactRisk');
+      else {
+        const r = normalizeRisk(p.baseImpactRisk);
+        if (r !== null) next.baseImpactRisk = r;
+      }
+    }
+    if (p.pFailFirstPass !== undefined) {
+      if (p.pFailFirstPass === null) clear.add('pFailFirstPass');
+      else {
+        const v = clamp01(p.pFailFirstPass);
+        if (v !== null) next.pFailFirstPass = v;
+      }
     }
 
-    if (p.promptRef !== undefined) next.promptRef = String(p.promptRef || '').trim();
-    if (p.promptVisibility !== undefined) next.promptVisibility = normalizeVisibility(p.promptVisibility);
+    if (p.verifyMinutes !== undefined) {
+      if (p.verifyMinutes === null) {
+        clear.add('verifyMinutes');
+      } else {
+        const n = Number(p.verifyMinutes);
+        if (Number.isFinite(n) && n >= 0) next.verifyMinutes = Math.round(n);
+      }
+    }
+
+    if (p.promptRef !== undefined) {
+      if (p.promptRef === null) clear.add('promptRef');
+      else next.promptRef = String(p.promptRef || '').trim();
+    }
+    if (p.promptVisibility !== undefined) {
+      if (p.promptVisibility === null) clear.add('promptVisibility');
+      else {
+        const v = normalizeVisibility(p.promptVisibility);
+        if (v !== null) next.promptVisibility = v;
+      }
+    }
+
+    if (p.dependencies !== undefined) {
+      if (p.dependencies === null) {
+        clear.add('dependencies');
+      } else {
+        const normalized = normalizeDependencies(p.dependencies);
+        if (normalized !== null) next.dependencies = normalized;
+      }
+    }
+
+    if (p.done !== undefined) {
+      const done = !!p.done;
+      if (done) next.doneAt = new Date().toISOString();
+      else clear.add('doneAt');
+    }
+
+    if (p.doneAt !== undefined) {
+      const v = p.doneAt;
+      if (v === null || v === '') {
+        clear.add('doneAt');
+      } else {
+        const dt = new Date(v);
+        if (Number.isFinite(dt.getTime())) next.doneAt = dt.toISOString();
+      }
+    }
 
     if (p.linked) {
       next.linked = p.linked;
     }
 
-    if (p.notes !== undefined) next.notes = String(p.notes || '');
-
-    // Drop nulls for optional fields so we can "clear" by sending null.
-    for (const [k, v] of Object.entries(next)) {
-      if (v === null) delete next[k];
+    if (p.notes !== undefined) {
+      if (p.notes === null) clear.add('notes');
+      else next.notes = String(p.notes || '');
     }
 
-    return next;
+    return { next, clear: Array.from(clear) };
   }
 
   async upsert(id, patch) {
@@ -130,8 +204,11 @@ class TaskRecordService {
     if (!this.data.records) this.data.records = {};
 
     const existing = this.data.records[id] || {};
-    const normalized = this.normalizePatch(patch);
-    const merged = { ...existing, ...normalized, updatedAt: new Date().toISOString() };
+    const { next, clear } = this.normalizePatch(patch);
+    const merged = { ...existing, ...next, updatedAt: new Date().toISOString() };
+    for (const k of clear) {
+      delete merged[k];
+    }
     this.data.records[id] = merged;
     await this.save();
     return merged;
@@ -148,4 +225,3 @@ class TaskRecordService {
 }
 
 module.exports = { TaskRecordService };
-
