@@ -6904,18 +6904,26 @@ header h1 {
 }
 
 .tasks-column.is-collapsed .tasks-column-header {
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
+  flex-direction: column;
   height: 100%;
+  padding: 10px 8px;
+  gap: 14px;
 }
 
 .tasks-column.is-collapsed .tasks-column-count {
   display: inline-flex;
-  margin-top: 8px;
-  padding: 2px 8px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .task-card-top {
