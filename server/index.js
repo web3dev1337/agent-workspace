@@ -2279,7 +2279,12 @@ app.post('/api/tasks/cards/:cardId/comments', express.json(), async (req, res) =
   } catch (error) {
     const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
     logger.error('Failed to add task comment', { error: error.message, code: error.code, stack: error.stack });
-    res.status(status).json({ error: error.message, code: error.code });
+    res.status(status).json({
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      details: error.body
+    });
   }
 });
 

@@ -213,12 +213,18 @@ class TrelloTaskProvider {
     if (!cardId) throw new Error('cardId is required');
     if (!text || !String(text).trim()) throw new Error('text is required');
 
-    const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}/actions/comments`, {
-      text: String(text)
-    });
+    // Trello allows passing `text` as a query param, but long text and special
+    // chars can cause issues. Send text in the request body (form-encoded),
+    // keeping auth (key/token) on the URL.
+    const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}/actions/comments`);
+    const body = new URLSearchParams({ text: String(text) }).toString();
 
-    // POST returns the created action.
-    const action = await requestJson(url, { method: 'POST' });
+    // POST returns the created action (JSON).
+    const action = await requestJson(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body
+    });
     this._invalidateCacheKeys([`trello:card:${cardId}`]);
     return action;
   }
