@@ -16,6 +16,8 @@ class ClaudeOrchestrator {
     this.focusHideTier2WhenTier1Busy = true;
     this.tier1Busy = false;
     this.queuePanelPreset = null;
+    this.processStatus = null;
+    this.processStatusInterval = null;
     this.socket = null;
     this.terminalManager = null;
     this.notificationManager = null;
@@ -169,6 +171,9 @@ class ClaudeOrchestrator {
 
       // Load task records (tiers/risk/prompt refs) for tier-aware UI
       await this.loadTaskRecords();
+
+      // WIP / Queue banner (process status)
+      this.startProcessStatusBanner();
       
       // Check for updates on startup
       this.checkForSettingsUpdates();
@@ -1170,6 +1175,53 @@ class ClaudeOrchestrator {
         ? (this.tier1Busy ? 'Focus: Tier 2 hidden while Tier 1 is busy' : 'Focus: Tier 2 will show when Tier 1 is idle')
         : 'Focus: Tier 2 always visible';
     }
+  }
+
+  startProcessStatusBanner() {
+    const renderInto = (banner, status) => {
+      if (!banner) return;
+      if (!banner.dataset.bound) {
+        banner.dataset.bound = 'true';
+        banner.addEventListener('click', () => this.showQueuePanel());
+      }
+
+      if (!status || typeof status !== 'object') {
+        banner.innerHTML = `<span class="process-chip level-warn">WIP —</span><span class="process-chip">Q1 —</span><span class="process-chip">Q2 —</span><span class="process-chip">Q3 —</span><span class="process-chip">Q4 —</span>`;
+        return;
+      }
+
+      const level = status.level === 'warn' || status.level === 'blocked' ? status.level : 'ok';
+      const q = status.qByTier || {};
+      banner.innerHTML = `
+        <span class="process-chip level-${level}">WIP ${Number(status.wip ?? 0)}</span>
+        <span class="process-chip">Q1 ${Number(q[1] ?? 0)}</span>
+        <span class="process-chip">Q2 ${Number(q[2] ?? 0)}</span>
+        <span class="process-chip">Q3 ${Number(q[3] ?? 0)}</span>
+        <span class="process-chip">Q4 ${Number(q[4] ?? 0)}</span>
+      `;
+    };
+
+    const render = (status) => {
+      renderInto(document.getElementById('process-banner'), status);
+      renderInto(document.getElementById('dashboard-process-banner'), status);
+    };
+
+    const refresh = async () => {
+      try {
+        const res = await fetch(`${window.location.origin}/api/process/status?mode=mine`);
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        const status = await res.json();
+        this.processStatus = status;
+        render(status);
+      } catch (error) {
+        console.warn('Failed to refresh process status', error);
+        render(null);
+      }
+    };
+
+    if (this.processStatusInterval) clearInterval(this.processStatusInterval);
+    this.processStatusInterval = setInterval(refresh, 30_000);
+    refresh();
   }
 
   refreshTier1Busy({ suppressRerender } = {}) {

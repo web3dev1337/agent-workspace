@@ -342,6 +342,52 @@ header h1 {
   gap: var(--space-md);
 }
 
+.process-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.process-banner:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-secondary);
+}
+
+.process-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.process-chip.level-ok {
+  border-color: rgba(46, 160, 67, 0.6);
+  background: rgba(46, 160, 67, 0.12);
+}
+
+.process-chip.level-warn {
+  border-color: rgba(210, 153, 34, 0.65);
+  background: rgba(210, 153, 34, 0.12);
+}
+
+.process-chip.level-blocked {
+  border-color: rgba(248, 81, 73, 0.65);
+  background: rgba(248, 81, 73, 0.12);
+}
+
 .workflow-toggle {
   display: flex;
   align-items: stretch;
@@ -3736,7 +3782,8 @@ header h1 {
 .dashboard-topbar {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 1rem;
 }
 
