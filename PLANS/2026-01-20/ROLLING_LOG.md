@@ -677,3 +677,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Handles window resize and collapsed/expanded columns.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/tasks-kanban-wrap-expand-layout.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/217 (merged 2026-01-25)
+
+### Docs: remove Q1–Q4 tier terminology (merged)
+- Process docs now refer to tiers as `T1–T4` and interactive pressure as `T1+T2`.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/219 (merged 2026-01-25)
