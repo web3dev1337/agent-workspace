@@ -27,6 +27,14 @@ const ensureWorkspaceLoaded = async (page) => {
   await page.waitForSelector('.sidebar:not(.hidden)', { timeout: 10000 });
 };
 
+const dismissFocusOverlay = async (page) => {
+  const overlay = page.locator('#focus-overlay.active');
+  if (await overlay.isVisible().catch(() => false)) {
+    await page.locator('#focus-overlay .focus-close-btn').click();
+    await expect(overlay).toBeHidden();
+  }
+};
+
 const mockTasksApi = async (page) => {
   await page.route('**/api/tasks/providers**', async (route) => {
     await route.fulfill({
@@ -57,21 +65,14 @@ const mockTasksApi = async (page) => {
     });
   });
 
-  await page.route('**/api/tasks/boards/b1/snapshot**', async (route) => {
+  await page.route('**/api/tasks/boards/b1/lists**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         provider: 'trello',
         boardId: 'b1',
-        lists: [
-          { id: 'l1', name: 'To Do', pos: 1 },
-          { id: 'l2', name: 'Doing', pos: 2 }
-        ],
-        cardsByList: {
-          l1: [{ id: 'c1', idList: 'l1', idMembers: ['m1'], name: 'Card 1', pos: 1, dateLastActivity: '2026-01-01T00:00:00Z' }],
-          l2: [{ id: 'c2', idList: 'l2', idMembers: ['m1'], name: 'Card 2', pos: 1, dateLastActivity: '2026-01-01T00:00:00Z' }]
-        }
+        lists: [{ id: 'l1', name: 'To Do', pos: 1 }]
       })
     });
   });
@@ -80,15 +81,14 @@ const mockTasksApi = async (page) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ provider: 'trello', boardId: 'b1', members: [] })
-    });
-  });
-
-  await page.route('**/api/tasks/boards/b1/custom-fields**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ provider: 'trello', boardId: 'b1', customFields: [] })
+      body: JSON.stringify({
+        provider: 'trello',
+        boardId: 'b1',
+        members: [
+          { id: 'm1', fullName: 'Me', username: 'me' },
+          { id: 'm2', fullName: 'Other', username: 'other' }
+        ]
+      })
     });
   });
 
@@ -99,48 +99,44 @@ const mockTasksApi = async (page) => {
       body: JSON.stringify({ provider: 'trello', boardId: 'b1', labels: [] })
     });
   });
+
+  await page.route('**/api/tasks/boards/b1/cards**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        provider: 'trello',
+        boardId: 'b1',
+        cards: [
+          { id: 'c1', idMembers: ['m1'], name: 'Mine', dateLastActivity: '2026-01-01T00:00:00Z' },
+          { id: 'c2', idMembers: ['m2'], name: 'Not mine', dateLastActivity: '2026-01-01T00:00:00Z' }
+        ]
+      })
+    });
+  });
 };
 
-test.describe('Tasks Kanban persistence', () => {
-  test('remembers collapsed columns per board', async ({ page }) => {
+test.describe('Tasks assignee filtering', () => {
+  test('defaults to me and can show any', async ({ page }) => {
     await mockUserSettings(page);
     await mockTasksApi(page);
-
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.goto('/');
     await ensureWorkspaceLoaded(page);
-    const overlay = page.locator('#focus-overlay.active');
-    if (await overlay.isVisible().catch(() => false)) {
-      await page.locator('#focus-overlay .focus-close-btn').click();
-      await expect(overlay).toBeHidden();
-    }
+    await dismissFocusOverlay(page);
 
-    // Open Tasks
     await page.evaluate(() => document.getElementById('tasks-btn')?.click());
     await expect(page.locator('#tasks-panel')).toBeVisible({ timeout: 10000 });
 
-    // Select the mock board and switch to Board view.
     await page.locator('#tasks-board').selectOption('b1');
-    await page.locator('#tasks-view-board').click();
 
-    // Wait for columns to render.
-    await expect(page.locator('.tasks-column[data-list-id="l1"]')).toBeVisible();
-    await expect(page.locator('.tasks-column[data-list-id="l2"]')).toBeVisible();
+    // Default should be "me" -> only show one card.
+    await expect(page.locator('.task-card-row')).toHaveCount(1);
+    await expect(page.locator('.task-card-title')).toHaveText('Mine');
 
-    // Collapse one column (desktop behavior).
-    await page.evaluate(() => document.querySelector('[data-col-toggle="l1"]')?.click());
-    await expect(page.locator('.tasks-column[data-list-id="l1"]')).toHaveClass(/is-collapsed/);
-
-    // Close and reopen Tasks.
-    await page.locator('.tasks-close-btn').click();
-    await expect(page.locator('#tasks-panel')).toHaveCount(0);
-    await page.evaluate(() => document.getElementById('tasks-btn')?.click());
-    await expect(page.locator('#tasks-panel')).toBeVisible({ timeout: 10000 });
-
-    // Restore selection and board view (localStorage keeps board + view).
-    // Ensure the collapsed state is restored.
-    await expect(page.locator('#tasks-board')).toHaveValue('b1');
-    await page.locator('#tasks-view-board').click();
-    await expect(page.locator('.tasks-column[data-list-id="l1"]')).toHaveClass(/is-collapsed/);
+    // Switch to Any -> show both.
+    await page.locator('#tasks-assignees-filter > summary').click();
+    await page.locator('#tasks-assignees-any').click();
+    await expect(page.locator('.task-card-row')).toHaveCount(2);
   });
 });
