@@ -660,8 +660,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/queue-panel.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/211 (merged 2026-01-25)
 
-### UI: rename Q1–Q4 to T1–T4 (merged)
-- UI labels now use `T1–T4` instead of `Q1–Q4` (banner, sidebar filters, queue filters, tier dropdown).
+### UI: tiers labeled T1–T4 (merged)
+- UI labels now use `T1–T4` for tiers (banner, sidebar filters, queue filters, tier dropdown).
 - Launch gate modal message also uses `T1+T2`, `T3`, `T4` caps wording.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/process-banner.spec.js tests/e2e/review-workflow.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/213 (merged 2026-01-25)
