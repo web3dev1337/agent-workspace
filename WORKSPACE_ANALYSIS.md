@@ -226,7 +226,7 @@ echo -e "${BLUE}🚀 Starting Claude Orchestrator...${NC}"
 # 1. Navigate to orchestrator directory
 cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 
-# 2. Pull latest changes (optional, can be flag)
+# 2. Pull latest changes by default (add a flag to skip if needed)
 if [ "$1" == "--update" ] || [ -z "$1" ]; then
   echo -e "${BLUE}📥 Pulling latest changes...${NC}"
   git pull origin main

@@ -9,7 +9,7 @@ Goal: store and reuse **massive prompts** for tiered work (especially Tier 4 gre
 - **Trello comments are not canonical storage**.
 - Canonical storage for private prompts is local:
   - `~/.orchestrator/prompts/<id>.md`
-- If a Trello card exists, we can optionally **embed** the prompt into comments:
+- If a Trello card exists, the orchestrator can **embed** the prompt into comments:
   - modes: `snippet | full | chunks`
   - includes `sha256` to detect drift
 

@@ -556,12 +556,12 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Includes server-side theme setting (`global.ui.theme`) and Trello color accents + labels/members/custom fields read-only display.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/179 (merged 2026-01-25)
 
-### Tasks: Trello parity iteration (labels + custom field editing) (next)
+### Tasks: Trello parity iteration (labels + custom field editing) (merged)
 - Adds label editing (board labels list + card label toggles).
 - Adds custom field editing (text/number/checkbox/date/list) via provider-agnostic API.
 - Makes Tasks API calls port-agnostic in split dev (no hard-coded `:3000` inside Tasks panel).
 - Test updates: unit tests for Trello provider writes + new e2e mocks for label/custom-field edits.
-- PR: https://github.com/web3dev1337/claude-orchestrator/pull/180
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/180 (merged 2026-01-25)
 
 ### Workflow: Focus/Review/Background modes + Queue Next/Prev (merged)
 - Adds a header workflow toggle:
@@ -571,8 +571,13 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/workflow-modes.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/189
 
-### Workflow: dynamic Focus Tier-2 gating + review outcomes (next)
+### Workflow: dynamic Focus Tier-2 gating + review outcomes (merged)
 - Focus includes `T2 Auto | T2 Always` to hide Tier 2 while Tier 1 is busy.
 - Queue adds review controls (tier scope, unreviewed filter, auto diff, start review) and persists `reviewedAt` + `reviewOutcome`.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/review-workflow.spec.js`
-- PR: https://github.com/web3dev1337/claude-orchestrator/pull/191
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/191 (merged 2026-01-25)
+
+### Docs: remove “optional” language everywhere (PR)
+- Removes “optional/optionally” wording in docs/plans so the backlog reads as mandatory items.
+- Updates older docs where they described steps/variables as optional.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/192
