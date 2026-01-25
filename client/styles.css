@@ -815,7 +815,7 @@ header h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2000;
 }
 
 .modal.hidden {
@@ -6642,6 +6642,7 @@ header h1 {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   border-radius: 0;
   padding: var(--space-md);
   --tasks-board-accent: var(--accent-primary);
@@ -6938,6 +6939,34 @@ header h1 {
   white-space: nowrap;
 }
 
+.tasks-label-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tasks-label-toggle {
+  appearance: none;
+  cursor: pointer;
+}
+
+.tasks-label-toggle.is-selected {
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.25);
+}
+
+.tasks-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.tasks-checkbox input {
+  margin: 0;
+  accent-color: var(--accent-primary);
+}
+
 .tasks-label--green { border-color: #2ea043; background: rgba(46, 160, 67, 0.12); color: var(--text-primary); }
 .tasks-label--yellow { border-color: #d29922; background: rgba(210, 153, 34, 0.14); color: var(--text-primary); }
 .tasks-label--orange { border-color: #f78166; background: rgba(247, 129, 102, 0.14); color: var(--text-primary); }
@@ -7004,6 +7033,10 @@ header h1 {
   background: var(--bg-secondary);
 }
 
+.tasks-kv-row-edit {
+  align-items: center;
+}
+
 .tasks-kv-key {
   color: var(--text-secondary);
   font-size: 0.8rem;
@@ -7019,6 +7052,15 @@ header h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tasks-kv-val-edit {
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .task-card-board {
