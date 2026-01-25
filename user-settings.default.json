@@ -12,6 +12,7 @@
     },
     "terminal": {},
     "ui": {
+      "theme": "dark",
       "diffViewer": {
         "theme": "dark"
       }

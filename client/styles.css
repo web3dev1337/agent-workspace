@@ -6644,6 +6644,7 @@ header h1 {
   flex-direction: column;
   border-radius: 0;
   padding: var(--space-md);
+  --tasks-board-accent: var(--accent-primary);
 }
 
 .tasks-modal {
@@ -6819,7 +6820,7 @@ header h1 {
 }
 
 .tasks-column.hover {
-  border-color: var(--accent-primary);
+  border-color: var(--tasks-board-accent);
   box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15);
 }
 
@@ -6885,7 +6886,8 @@ header h1 {
   white-space: nowrap;
   overflow: visible;
   text-overflow: unset;
-  font-size: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -6897,7 +6899,126 @@ header h1 {
 }
 
 .tasks-column.is-collapsed .tasks-column-count {
-  display: none;
+  display: inline-flex;
+  margin-top: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.task-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.task-card-labels {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tasks-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-label--green { border-color: #2ea043; background: rgba(46, 160, 67, 0.12); color: var(--text-primary); }
+.tasks-label--yellow { border-color: #d29922; background: rgba(210, 153, 34, 0.14); color: var(--text-primary); }
+.tasks-label--orange { border-color: #f78166; background: rgba(247, 129, 102, 0.14); color: var(--text-primary); }
+.tasks-label--red { border-color: #f85149; background: rgba(248, 81, 73, 0.14); color: var(--text-primary); }
+.tasks-label--purple { border-color: #a371f7; background: rgba(163, 113, 247, 0.14); color: var(--text-primary); }
+.tasks-label--blue { border-color: #1f6feb; background: rgba(31, 111, 235, 0.14); color: var(--text-primary); }
+.tasks-label--sky { border-color: #79c0ff; background: rgba(121, 192, 255, 0.14); color: var(--text-primary); }
+.tasks-label--lime { border-color: #7ee787; background: rgba(126, 231, 135, 0.14); color: var(--text-primary); }
+.tasks-label--pink { border-color: #ff80c8; background: rgba(255, 128, 200, 0.14); color: var(--text-primary); }
+.tasks-label--black { border-color: #30363d; background: rgba(48, 54, 61, 0.6); color: var(--text-primary); }
+
+.task-card-assignees {
+  display: inline-flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tasks-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+
+.tasks-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tasks-avatar-more {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.task-card-due {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.tasks-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tasks-kv-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.tasks-kv-key {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-kv-val {
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-card-board {
@@ -7027,6 +7148,24 @@ header h1 {
   background: var(--bg-secondary);
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.tasks-chip-avatar {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: inline-block;
+}
+
+.tasks-chip-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.tasks-chip-link:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
 }
 
 .tasks-chip-muted {
