@@ -6004,7 +6004,7 @@ class ClaudeOrchestrator {
       <div class="modal-content tasks-content">
         <div class="modal-header">
           <h2>✅ Tasks</h2>
-          <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
+          <button class="close-btn tasks-close-btn" aria-label="Close Tasks" title="Close (Esc)" onclick="this.closest('.modal').remove()">×</button>
         </div>
 
         <div class="tasks-toolbar">
@@ -6975,6 +6975,22 @@ class ClaudeOrchestrator {
     modal.addEventListener('click', (e) => {
       if (e.target === modal) modal.remove();
     });
+
+    // Allow closing the full-screen Tasks panel quickly.
+    // (Clicking outside doesn't work when the panel is full-viewport.)
+    const onTasksKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        modal.remove();
+      }
+    };
+    document.addEventListener('keydown', onTasksKeyDown);
+
+    const originalRemove = modal.remove.bind(modal);
+    modal.remove = () => {
+      document.removeEventListener('keydown', onTasksKeyDown);
+      originalRemove();
+    };
 
     // Drag/drop (board view): inspired by Fizzy's simple DnD controller.
     let dragCardId = null;
