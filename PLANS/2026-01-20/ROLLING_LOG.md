@@ -2,6 +2,16 @@
 
 Purpose: keep a terse but complete log of what changed, why, and where to resume if context is lost.
 
+## 2026-01-25
+
+### Tasks panel: Trello Kanban board + write ops diagnostics (in progress)
+- Branch: `feat/trello-kanban-board`
+- Adds: board snapshot API + board view toggle + drag/drop moves (optimistic UI).
+- Fix: add-comment uses form body (more reliable) and errors from Trello are surfaced back to the UI.
+- Fix: card update/move errors now include Trello status/details for debugging.
+- Plan for next work (metadata + dependencies): `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/179
+
 ## 2026-01-24
 
 ### Tasks panel: Trello ticketing provider (v0) (open)
