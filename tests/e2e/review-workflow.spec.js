@@ -119,16 +119,19 @@ test.describe('Focus Mode gating', () => {
 
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.goto('/');
-    await ensureWorkspaceLoaded(page);
+    await page.waitForFunction(() => !!window.orchestrator, { timeout: 30000 });
 
     const seeded = await page.evaluate(() => {
       if (!window.orchestrator) return { ok: false };
       try { window.orchestrator?.socket?.disconnect?.(); } catch {}
+      // Prevent any late socket/session events from resetting our seeded state.
+      window.orchestrator.socket = { connected: false, emit: () => {} };
       window.orchestrator.updateTerminalGrid = () => {};
       window.orchestrator.buildSidebar = () => {};
       window.orchestrator.sessions = new Map();
       window.orchestrator.visibleTerminals = new Set();
       window.orchestrator.taskRecords = new Map();
+      window.orchestrator.loadTaskRecords = async () => {};
       window.orchestrator.viewMode = 'all';
 
       const t1 = 'demo-work1-claude';
