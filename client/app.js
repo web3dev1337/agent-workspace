@@ -10,6 +10,9 @@ class ClaudeOrchestrator {
     // Second-layer filter for tiered workflow:
     // 'all' | 'none' | 1 | 2 | 3 | 4
     this.tierFilter = 'all';
+    // Workflow mode (tier-aware) applied after viewMode + tierFilter:
+    // 'focus' (Tier 1–2) | 'review' (all) | 'background' (Tier 3–4)
+    this.workflowMode = 'review';
     this.socket = null;
     this.terminalManager = null;
     this.notificationManager = null;
@@ -109,6 +112,18 @@ class ClaudeOrchestrator {
         this.showQueuePanel();
       });
 
+      // Workflow mode toggles (tier-aware visibility rules)
+      document.getElementById('workflow-focus')?.addEventListener('click', () => {
+        this.setWorkflowMode('focus');
+      });
+      document.getElementById('workflow-review')?.addEventListener('click', () => {
+        this.setWorkflowMode('review');
+        this.showQueuePanel();
+      });
+      document.getElementById('workflow-background')?.addEventListener('click', () => {
+        this.setWorkflowMode('background');
+      });
+
       // Tasks panel (ticketing providers like Trello)
       document.getElementById('tasks-btn')?.addEventListener('click', () => {
         this.showTasksPanel();
@@ -138,6 +153,7 @@ class ClaudeOrchestrator {
       
       // Load user settings from server
       await this.loadUserSettings();
+      this.syncWorkflowModeFromUserSettings();
 
       // Load worktree tags (ready-for-review, etc.)
       await this.loadWorktreeTags();
@@ -1081,6 +1097,58 @@ class ClaudeOrchestrator {
     return tier === this.tierFilter;
   }
 
+  setWorkflowMode(mode) {
+    const normalized = String(mode || '').trim().toLowerCase();
+    if (!['focus', 'review', 'background'].includes(normalized)) return;
+    if (this.workflowMode === normalized) return;
+
+    this.workflowMode = normalized;
+    this.updateWorkflowModeButtons();
+    // Second-layer filter only: do NOT modify worktree visibility (visibleTerminals) or tierFilter.
+    this.updateTerminalGrid();
+    this.buildSidebar();
+
+    // Persist for the user.
+    this.updateGlobalUserSetting('ui.workflow.mode', normalized);
+  }
+
+  syncWorkflowModeFromUserSettings() {
+    const mode = this.userSettings?.global?.ui?.workflow?.mode;
+    const normalized = String(mode || '').trim().toLowerCase();
+    this.workflowMode = ['focus', 'review', 'background'].includes(normalized) ? normalized : 'review';
+    this.updateWorkflowModeButtons();
+  }
+
+  updateWorkflowModeButtons() {
+    const focusBtn = document.getElementById('workflow-focus');
+    const reviewBtn = document.getElementById('workflow-review');
+    const backgroundBtn = document.getElementById('workflow-background');
+    if (!focusBtn || !reviewBtn || !backgroundBtn) return;
+
+    focusBtn.classList.toggle('active', this.workflowMode === 'focus');
+    reviewBtn.classList.toggle('active', this.workflowMode === 'review');
+    backgroundBtn.classList.toggle('active', this.workflowMode === 'background');
+
+    focusBtn.setAttribute('aria-pressed', this.workflowMode === 'focus' ? 'true' : 'false');
+    reviewBtn.setAttribute('aria-pressed', this.workflowMode === 'review' ? 'true' : 'false');
+    backgroundBtn.setAttribute('aria-pressed', this.workflowMode === 'background' ? 'true' : 'false');
+  }
+
+  matchesWorkflowMode(sessionId) {
+    if (this.workflowMode === 'review') return true;
+    const tier = this.getTierForSession(sessionId);
+
+    if (this.workflowMode === 'focus') {
+      return tier === 1 || tier === 2;
+    }
+
+    if (this.workflowMode === 'background') {
+      return tier === 3 || tier === 4;
+    }
+
+    return true;
+  }
+
   getPRTaskIdFromUrl(url) {
     const raw = String(url || '').trim();
     const m = raw.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
@@ -1131,7 +1199,10 @@ class ClaudeOrchestrator {
 	  }
 
 	  isSessionVisibleInCurrentView(sessionId) {
-	    return this.visibleTerminals.has(sessionId) && this.matchesViewMode(sessionId) && this.matchesTierFilter(sessionId);
+	    return this.visibleTerminals.has(sessionId)
+        && this.matchesViewMode(sessionId)
+        && this.matchesTierFilter(sessionId)
+        && this.matchesWorkflowMode(sessionId);
 	  }
 	  
 	  handleInitialSessions(sessionStates) {
@@ -1711,6 +1782,7 @@ class ClaudeOrchestrator {
 	        ? true
 	        : (this.tierFilter === 'none' ? tier === null : tier === this.tierFilter);
 	      if (!tierMatches) continue;
+	      if (tierSessionId && !this.matchesWorkflowMode(tierSessionId)) continue;
 
 	      const tierBadge = tier ? `<span class="worktree-tier-badge tier-${tier}" title="Tier ${tier}">Q${tier}</span>` : '';
 
@@ -4401,7 +4473,7 @@ class ClaudeOrchestrator {
     // Show only this worktree (hides all others)
     this.showOnlyWorktree(worktreeId);
 
-    // Optional: scroll to the terminal if needed
+    // Note: scroll to the terminal if needed
     const terminalWrapper = document.getElementById(`wrapper-${sessionId}`);
     if (terminalWrapper) {
       terminalWrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -7998,6 +8070,10 @@ class ClaudeOrchestrator {
             <button class="btn-secondary tasks-view-btn" id="queue-mode-mine" data-mode="mine" title="My PRs">Mine</button>
             <button class="btn-secondary tasks-view-btn" id="queue-mode-all" data-mode="all" title="All PRs">All</button>
           </div>
+          <div class="tasks-view-toggle" role="group" aria-label="Queue navigation">
+            <button class="btn-secondary tasks-view-btn" id="queue-prev" title="Previous item (unblocked first)">Prev</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-next" title="Next item (unblocked first)">Next</button>
+          </div>
           <button class="btn-secondary" id="queue-refresh">🔄 Refresh</button>
         </div>
         <div class="tasks-body">
@@ -8019,6 +8095,8 @@ class ClaudeOrchestrator {
     const refreshBtn = modal.querySelector('#queue-refresh');
     const mineBtn = modal.querySelector('#queue-mode-mine');
     const allBtn = modal.querySelector('#queue-mode-all');
+    const prevBtn = modal.querySelector('#queue-prev');
+    const nextBtn = modal.querySelector('#queue-next');
     const closeBtn = modal.querySelector('#queue-close-btn');
 
     const setMode = (mode) => {
@@ -8038,9 +8116,9 @@ class ClaudeOrchestrator {
       return counts;
     };
 
-    const renderList = () => {
+    const getFilteredTasks = () => {
       const q = String(state.query || '').trim().toLowerCase();
-      const tasks = (Array.isArray(state.tasks) ? state.tasks : []).filter((t) => {
+      return (Array.isArray(state.tasks) ? state.tasks : []).filter((t) => {
         if (!q) return true;
         const hay = [
           t?.title,
@@ -8051,6 +8129,24 @@ class ClaudeOrchestrator {
         ].filter(Boolean).join(' ').toLowerCase();
         return hay.includes(q);
       });
+    };
+
+    const getOrderedTasks = (tasks) => {
+      const unblocked = [];
+      const blocked = [];
+      for (const t of (Array.isArray(tasks) ? tasks : [])) {
+        const blockedCount = Number(t?.dependencySummary?.blocked || 0);
+        if (blockedCount > 0) blocked.push(t);
+        else unblocked.push(t);
+      }
+      return unblocked.concat(blocked);
+    };
+
+    const getTaskById = (id) => (Array.isArray(state.tasks) ? state.tasks : []).find(x => x.id === id) || null;
+
+    const renderList = () => {
+      const tasks = getFilteredTasks();
+      const ordered = getOrderedTasks(tasks);
 
       const counts = calcTierCounts(tasks);
       const header = `
@@ -8087,7 +8183,7 @@ class ClaudeOrchestrator {
         `;
     };
 
-      listEl.innerHTML = header + tasks.map(row).join('');
+      listEl.innerHTML = header + ordered.map(row).join('');
     };
 
     const fetchTasks = async () => {
@@ -8099,6 +8195,11 @@ class ClaudeOrchestrator {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to load queue');
       state.tasks = data.tasks || [];
+      const selectedStillExists = !!(state.selectedId && getTaskById(state.selectedId));
+      if (!selectedStillExists) {
+        const ordered = getOrderedTasks(getFilteredTasks());
+        state.selectedId = ordered[0]?.id || null;
+      }
       renderList();
     };
 
@@ -8421,19 +8522,24 @@ class ClaudeOrchestrator {
       loadDeps().catch(() => {});
     };
 
+    const selectById = (id) => {
+      state.selectedId = id;
+      const t = getTaskById(id);
+      renderList();
+      renderDetail(t);
+    };
+
     listEl.addEventListener('click', (e) => {
       const row = e.target.closest('.task-card-row[data-queue-id]');
       if (!row) return;
       const id = row.getAttribute('data-queue-id');
-      state.selectedId = id;
-      const t = state.tasks.find(x => x.id === id) || null;
-      renderList();
-      renderDetail(t);
+      selectById(id);
     });
 
     searchEl.addEventListener('input', () => {
       state.query = searchEl.value || '';
       renderList();
+      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     });
 
     refreshBtn.addEventListener('click', async () => {
@@ -8450,11 +8556,26 @@ class ClaudeOrchestrator {
     mineBtn.addEventListener('click', async () => {
       setMode('mine');
       await fetchTasks().catch((e) => this.showToast(String(e?.message || e), 'error'));
+      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     });
     allBtn.addEventListener('click', async () => {
       setMode('all');
       await fetchTasks().catch((e) => this.showToast(String(e?.message || e), 'error'));
+      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     });
+
+    const navigate = (dir) => {
+      const ordered = getOrderedTasks(getFilteredTasks());
+      if (!ordered.length) return;
+      const currentIndex = state.selectedId ? ordered.findIndex(t => t.id === state.selectedId) : -1;
+      const nextIndex = currentIndex === -1
+        ? 0
+        : (currentIndex + dir + ordered.length) % ordered.length;
+      selectById(ordered[nextIndex].id);
+    };
+
+    prevBtn?.addEventListener('click', () => navigate(-1));
+    nextBtn?.addEventListener('click', () => navigate(1));
 
     const onKey = (e) => {
       if (e.key === 'Escape') close();
@@ -8469,6 +8590,7 @@ class ClaudeOrchestrator {
 
     try {
       await fetchTasks();
+      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     } catch (e) {
       this.showToast(String(e?.message || e), 'error');
       listEl.innerHTML = `<div class="no-ports">Failed to load queue.</div>`;

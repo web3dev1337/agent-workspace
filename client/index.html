@@ -58,6 +58,11 @@
                 <button id="queue-btn" class="header-btn" title="Review inbox (tiers/queue)">
                     📥 Queue
                 </button>
+                <div class="workflow-toggle" role="group" aria-label="Workflow mode">
+                    <button id="workflow-focus" class="header-btn workflow-btn" title="Focus (Tier 1–2)">🎯 Focus</button>
+                    <button id="workflow-review" class="header-btn workflow-btn" title="Review (Queue)">🧾 Review</button>
+                    <button id="workflow-background" class="header-btn workflow-btn" title="Background (Tier 3–4)">🌙 Background</button>
+                </div>
                 <button id="tasks-btn" class="header-btn" title="Browse tasks (Trello)">
                     ✅ Tasks
                 </button>
@@ -201,7 +206,7 @@
                     Trello Username (Me):
                     <input id="trello-me-username" type="text" placeholder="(auto)" style="width: 180px;" />
                 </label>
-                <p class="setting-description">Optional override for “assigned to me” filtering.</p>
+                <p class="setting-description">Override for “assigned to me” filtering.</p>
             </div>
 
             <div class="setting-section">
