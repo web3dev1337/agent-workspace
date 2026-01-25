@@ -4,6 +4,22 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ## 2026-01-25
 
+### Docs: resume-safe workflow status (tiers/risk/prompts) (open)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/182
+- Adds: resume pointers + `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md`.
+
+### Process: task records API (tier/risk/pFail/promptRef) (open)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/183
+- Adds: `~/.orchestrator/task-records.json` store and CRUD API under `/api/process/task-records`.
+- Enriches: `/api/process/tasks` includes `task.record` when present.
+- Plan: `PLANS/2026-01-25/TASK_RECORDS_PR.md`
+
+### Tasks panel: Trello parity (labels/custom fields, assignees filter, avatars, layouts) (open)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/180
+
+### Project risk metadata + conflict detection (open)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/181
+
 ### Tasks panel: Trello Kanban board + write ops diagnostics (in progress)
 - Branch: `feat/trello-kanban-board`
 - Adds: board snapshot API + board view toggle + drag/drop moves (optimistic UI).
