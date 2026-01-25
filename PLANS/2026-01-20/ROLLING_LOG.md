@@ -624,9 +624,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe` (adds `tests/e2e/tier-dropdown-persists.spec.js`)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/202 (merged 2026-01-25)
 
-### Diff Viewer: render Markdown + Mermaid (pending)
+### Diff Viewer: render Markdown + Mermaid (merged)
 - Adds a `Render Markdown` toggle for `*.md`/`*.markdown` in the Advanced Diff Viewer.
 - Rendered mode shows Original vs Changed side-by-side and renders Mermaid fences.
 - Adds a dedicated Playwright smoke test for diff viewer (`npm run test:e2e:diff-viewer`).
 - Tests: `npm run test:unit`, `npm run test:e2e:diff-viewer -- tests/e2e-diff-viewer/markdown-render.spec.js`
-- PR: https://github.com/web3dev1337/claude-orchestrator/pull/204
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/204 (merged 2026-01-26)
