@@ -8100,9 +8100,9 @@ class ClaudeOrchestrator {
     const paths = Array.from(new Set(items.map(btn => btn.dataset.worktreePath).filter(Boolean)));
     if (!paths.length) return;
 
-    const serverUrl = window.location.port === '2080'
-      ? 'http://localhost:3000'
-      : window.location.origin;
+    // In dev, the client dev server proxies `/api` to the backend (ORCHESTRATOR_PORT),
+    // so always using the current origin keeps this working across ports.
+    const serverUrl = window.location.origin;
 
     const response = await fetch(`${serverUrl}/api/worktree-metadata/batch`, {
       method: 'POST',
@@ -8119,6 +8119,7 @@ class ClaudeOrchestrator {
 
       const branch = meta.git?.branch || 'unknown';
       const pr = meta.pr || {};
+      const risk = String(meta.project?.baseImpactRisk || '').toLowerCase();
 
       let prLabel = '';
       let prClass = '';
@@ -8139,7 +8140,15 @@ class ClaudeOrchestrator {
       }
 
       const id = btn.dataset.worktreeId || '';
-      const suffix = prLabel ? ` • ${prLabel}` : '';
+      let suffix = prLabel ? ` • ${prLabel}` : '';
+      if (risk) {
+        suffix += ` • risk: ${risk}`;
+        btn.classList.remove('risk-low', 'risk-medium', 'risk-high', 'risk-critical');
+        if (risk === 'critical') btn.classList.add('risk-critical');
+        else if (risk === 'high') btn.classList.add('risk-high');
+        else if (risk === 'medium') btn.classList.add('risk-medium');
+        else if (risk === 'low') btn.classList.add('risk-low');
+      }
 
       // Keep the special "Start ..." labels intact, but append metadata.
       if (btn.textContent.includes('Start oldest') || btn.textContent.includes('Start most recent')) {

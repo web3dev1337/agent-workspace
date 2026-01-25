@@ -1358,6 +1358,22 @@ header h1 {
   border-left: 3px solid var(--border-color);
 }
 
+.quick-menu-item.risk-low {
+  border-right: 3px solid rgba(34, 197, 94, 0.7);
+}
+
+.quick-menu-item.risk-medium {
+  border-right: 3px solid rgba(245, 158, 11, 0.85);
+}
+
+.quick-menu-item.risk-high {
+  border-right: 3px solid rgba(248, 81, 73, 0.9);
+}
+
+.quick-menu-item.risk-critical {
+  border-right: 3px solid rgba(220, 38, 38, 1);
+}
+
 .quick-menu-item:disabled {
   opacity: 0.55;
   cursor: not-allowed;
