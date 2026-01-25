@@ -6519,8 +6519,7 @@ class ClaudeOrchestrator {
   async showTasksPanel() {
     console.log('Opening Tasks panel...');
 
-    const existing = document.getElementById('tasks-panel');
-    if (existing) existing.remove();
+    this.closeTasksPanel();
 
     // Always talk to the current origin. In split dev, `client/dev-server.js`
     // proxies `/api` + `/socket.io` to the backend (using `ORCHESTRATOR_PORT`),
@@ -6560,7 +6559,7 @@ class ClaudeOrchestrator {
       <div class="modal-content tasks-content">
         <div class="modal-header">
           <h2>✅ Tasks</h2>
-          <button class="close-btn tasks-close-btn" aria-label="Close Tasks" title="Close (Esc)" onclick="this.closest('.modal').remove()">×</button>
+          <button class="close-btn tasks-close-btn" id="tasks-close-btn" aria-label="Close Tasks" title="Close (Esc)">×</button>
         </div>
 
         <div class="tasks-toolbar">
@@ -6618,6 +6617,17 @@ class ClaudeOrchestrator {
     `;
 
     document.body.appendChild(modal);
+
+    // Centralized close behavior (cleans up resize/keydown handlers).
+    this.tasksPanelModalEl = modal;
+    modal.querySelector('#tasks-close-btn')?.addEventListener('click', () => this.closeTasksPanel());
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) this.closeTasksPanel();
+    });
+    this.tasksPanelKeydownHandler = (e) => {
+      if (e.key === 'Escape') this.closeTasksPanel();
+    };
+    document.addEventListener('keydown', this.tasksPanelKeydownHandler);
 
     const providerEl = modal.querySelector('#tasks-provider');
     const boardEl = modal.querySelector('#tasks-board');
@@ -7338,7 +7348,7 @@ class ClaudeOrchestrator {
       const lists = snapshot.lists || [];
       const cardsByList = snapshot.cardsByList || {};
       const layoutMode = state.boardLayout || 'scroll';
-      const isWrap = layoutMode === 'wrap' || layoutMode === 'wrap-expand';
+      const isWrap = layoutMode === 'wrap';
       const isWrapExpand = layoutMode === 'wrap-expand';
 
       const board = Array.isArray(state.boards) ? state.boards.find(b => b?.id === state.boardId) : null;
@@ -7394,7 +7404,7 @@ class ClaudeOrchestrator {
       };
 
       cardsEl.innerHTML = `
-        <div class="tasks-board ${isWrap ? 'tasks-board-wrap tasks-board-grid' : ''} ${isWrapExpand ? 'tasks-board-wrap-expand' : ''}" id="tasks-board-view">
+        <div class="tasks-board ${isWrap ? 'tasks-board-wrap tasks-board-grid' : ''} ${isWrapExpand ? 'tasks-board-expand tasks-board-grid' : ''}" id="tasks-board-view">
           ${lists.map(list => {
             const raw = Array.isArray(cardsByList[list.id]) ? cardsByList[list.id] : [];
             const cards = sortCards(raw);
@@ -7447,9 +7457,100 @@ class ClaudeOrchestrator {
       // Layout behavior:
       // - scroll: 1-row lists, horizontal scroll, per-list vertical scroll
       // - wrap: multi-row lists (no horizontal scroll), per-list vertical scroll
-      // - wrap-expand: multi-row lists, single vertical scroll (lists expand to fit cards)
+      // - wrap-expand: 1-row lists, horizontal scroll, expanded lists widen into multiple card columns (no vertical scrolling)
       bodyEl?.classList.toggle('tasks-kanban-wrap', !!isWrap);
       bodyEl?.classList.toggle('tasks-kanban-wrap-expand', !!isWrapExpand);
+
+      if (!isWrapExpand && this.tasksWrapExpandResizeHandler) {
+        window.removeEventListener('resize', this.tasksWrapExpandResizeHandler);
+        this.tasksWrapExpandResizeHandler = null;
+      }
+
+      const applyWrapExpandColumns = () => {
+        if (!isWrapExpand) return;
+        const boardEl = cardsEl.querySelector('#tasks-board-view');
+        if (!boardEl) return;
+
+        const columns = Array.from(boardEl.querySelectorAll('.tasks-column'));
+
+        const computeForColumn = (col) => {
+          if (!col || col.classList.contains('is-collapsed')) return;
+          const cardsContainer = col.querySelector('.tasks-column-cards');
+          const header = col.querySelector('.tasks-column-header');
+          if (!cardsContainer || !header) return;
+
+          // Measure the "single column" width (default CSS width) so we can expand
+          // the column horizontally without relying on CSS calc multiplication support.
+          col.style.width = '';
+          col.style.minWidth = '';
+          const baseWidth = col.getBoundingClientRect().width;
+
+          const cards = Array.from(cardsContainer.querySelectorAll('.task-card-board'));
+          const cardCount = cards.length;
+          if (cardCount === 0) {
+            col.style.setProperty('--tasks-card-columns', '1');
+            col.style.setProperty('--tasks-card-rows', '1');
+            return;
+          }
+
+          const containerHeight = cardsContainer.clientHeight;
+          if (!containerHeight || containerHeight < 40) return;
+
+          const styles = window.getComputedStyle(cardsContainer);
+          const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
+          const sample = cards.slice(0, Math.min(6, cardCount));
+          const heights = sample.map(el => el.getBoundingClientRect().height).filter(Boolean);
+          const avg = heights.length ? (heights.reduce((a, b) => a + b, 0) / heights.length) : 80;
+          const denom = Math.max(1, avg + rowGap);
+          let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
+          // Prefer widening into multiple columns instead of long vertical stacks.
+          // 12 keeps columns readable while still avoiding vertical scrolling.
+          const maxRowsPerColumn = 12;
+          rowsFit = Math.min(rowsFit, maxRowsPerColumn);
+
+          const apply = (rows) => {
+            const r = Math.max(1, Number(rows) || 1);
+            const cols = Math.max(1, Math.ceil(cardCount / r));
+            col.style.setProperty('--tasks-card-rows', String(r));
+            col.style.setProperty('--tasks-card-columns', String(cols));
+
+            if (cols <= 1) {
+              col.style.width = '';
+              col.style.minWidth = '';
+            } else {
+              const target = Math.max(baseWidth, baseWidth * cols);
+              col.style.width = `${Math.round(target)}px`;
+              col.style.minWidth = `${Math.round(target)}px`;
+            }
+          };
+
+          apply(rowsFit);
+
+          // If we still overflow vertically, reduce rows (creating more columns) until we fit.
+          for (let attempt = 0; attempt < 6; attempt++) {
+            // Force reflow and then check overflow.
+            void cardsContainer.offsetHeight;
+            if (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1) break;
+            rowsFit = Math.max(1, rowsFit - 1);
+            apply(rowsFit);
+          }
+        };
+
+        // Clear variables for collapsed columns to avoid stale widths.
+        for (const col of columns) {
+          if (col.classList.contains('is-collapsed')) {
+            col.style.removeProperty('--tasks-card-columns');
+            col.style.removeProperty('--tasks-card-rows');
+            col.style.width = '';
+            col.style.minWidth = '';
+          }
+        }
+
+        // Compute after layout has settled.
+        window.requestAnimationFrame(() => {
+          columns.forEach(computeForColumn);
+        });
+      };
 
       // Fizzy-like collapsible columns (lightweight):
       // - Persist per-board expanded column on narrow screens.
@@ -7563,10 +7664,23 @@ class ClaudeOrchestrator {
             set.add(listId);
           }
           saveCollapsedSet(set);
+          applyWrapExpandColumns();
         });
       });
 
       applyDefaultExpanded();
+      applyWrapExpandColumns();
+
+      if (isWrapExpand) {
+        clearTimeout(this.tasksWrapExpandResizeDebounce);
+        const onResize = () => {
+          clearTimeout(this.tasksWrapExpandResizeDebounce);
+          this.tasksWrapExpandResizeDebounce = setTimeout(() => applyWrapExpandColumns(), 120);
+        };
+        window.removeEventListener('resize', this.tasksWrapExpandResizeHandler);
+        this.tasksWrapExpandResizeHandler = onResize;
+        window.addEventListener('resize', this.tasksWrapExpandResizeHandler);
+      }
     };
 
     const applyView = () => {
@@ -10795,6 +10909,27 @@ class ClaudeOrchestrator {
       console.error('Error creating worktree:', error);
       this.showTemporaryMessage('Error creating worktree: ' + error.message, 'error');
     }
+  }
+
+  closeTasksPanel() {
+    const modal = this.tasksPanelModalEl || document.getElementById('tasks-panel');
+
+    if (this.tasksWrapExpandResizeHandler) {
+      window.removeEventListener('resize', this.tasksWrapExpandResizeHandler);
+      this.tasksWrapExpandResizeHandler = null;
+    }
+    if (this.tasksWrapExpandResizeDebounce) {
+      clearTimeout(this.tasksWrapExpandResizeDebounce);
+      this.tasksWrapExpandResizeDebounce = null;
+    }
+
+    if (this.tasksPanelKeydownHandler) {
+      document.removeEventListener('keydown', this.tasksPanelKeydownHandler);
+      this.tasksPanelKeydownHandler = null;
+    }
+
+    if (modal) modal.remove();
+    this.tasksPanelModalEl = null;
   }
 
   showSettings() {

@@ -7046,18 +7046,22 @@ header h1 {
   scroll-snap-type: none;
 }
 
-.tasks-board.tasks-board-wrap-expand .tasks-column {
-  max-height: none;
-}
-
-.tasks-board.tasks-board-wrap-expand .tasks-column-cards {
-  overflow: visible;
-}
-
-.tasks-board.tasks-board-grid .tasks-column-cards {
+.tasks-board.tasks-board-wrap.tasks-board-grid .tasks-column-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   align-content: start;
+}
+
+.tasks-board.tasks-board-expand .tasks-column-cards {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(var(--tasks-card-rows, 1), min-content);
+  grid-template-columns: repeat(var(--tasks-card-columns, 1), minmax(180px, 1fr));
+  align-content: start;
+  gap: var(--space-sm);
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
 }
 
 .tasks-board.tasks-board-grid .task-card-board {
@@ -7067,6 +7071,8 @@ header h1 {
 .tasks-column {
   --tasks-col-expanded: clamp(240px, 22vw, 360px);
   --tasks-col-collapsed: 56px;
+  --tasks-card-columns: 1;
+  --tasks-card-rows: 1;
   width: var(--tasks-col-expanded);
   min-width: var(--tasks-col-expanded);
   background: var(--bg-secondary);
