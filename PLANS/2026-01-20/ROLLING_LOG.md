@@ -9,6 +9,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Adds: board snapshot API + board view toggle + drag/drop moves (optimistic UI).
 - Fix: add-comment uses form body (more reliable) and errors from Trello are surfaced back to the UI.
 - Fix: card update/move errors now include Trello status/details for debugging.
+- Fix: Tasks API calls no longer hard-code port 3000 (works with whatever port the UI is served on; client dev server proxies `/api`).
+- Tests: added e2e coverage for client-dev-server proxy mode (`npm run test:e2e:proxy`).
 - Plan for next work (metadata + dependencies): `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/179
 
