@@ -19,6 +19,8 @@ Date: 2026-01-25
 - Docs: remove ambiguous language: https://github.com/web3dev1337/claude-orchestrator/pull/187
 - Orchestrator-native dependencies: https://github.com/web3dev1337/claude-orchestrator/pull/188
 - Workflow modes + Queue Next/Prev: https://github.com/web3dev1337/claude-orchestrator/pull/189
+- Process status banner (WIP + Q1–Q4): https://github.com/web3dev1337/claude-orchestrator/pull/193
+- Launch gating (prompt on overload): https://github.com/web3dev1337/claude-orchestrator/pull/194
 
 ---
 
