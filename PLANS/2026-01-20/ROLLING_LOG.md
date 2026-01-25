@@ -631,25 +631,31 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:diff-viewer -- tests/e2e-diff-viewer/markdown-render.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/204 (merged 2026-01-26)
 
-### Diff Viewer: reduce sqlite warning noise (pending)
+### Diff Viewer: reduce sqlite warning noise (merged)
 - When `better-sqlite3` is compiled for a different Node version, the diff viewer now logs a single-line warning and falls back to in-memory cache.
 - Tests: `npm run test:unit`, `npm run test:e2e:diff-viewer -- tests/e2e-diff-viewer/markdown-render.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/206 (merged 2026-01-25)
 
-### Tasks: default to Wrap+Expand + no dim overlay (pending)
+### Tasks: default to Wrap+Expand + no dim overlay (merged)
 - Board view now defaults to `Wrap+Expand` to avoid horizontal scrolling for kanban columns.
 - Tasks panel no longer dims the app behind it; close state for collapsed columns still persists.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/tasks-panel.spec.js tests/e2e/tasks-kanban-persist.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/207 (merged 2026-01-25)
 
-### Terminals: reduce fit retry log spam (pending)
+### Terminals: reduce fit retry log spam (merged)
 - Terminal fit retries no longer spam the console; debug logs are gated behind `localStorage['debug-terminal-fit']=true`.
 - Warnings for tiny containers/proposed sizes are throttled per terminal.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/terminal-fit-guard.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/209 (merged 2026-01-25)
 
-### Tiers: Alt+↑ / Alt+↓ hotkey (pending)
+### Tiers: Alt+↑ / Alt+↓ hotkey (merged)
 - Adds Alt+↑ / Alt+↓ to cycle a terminal’s tier quickly (uses the last clicked terminal, or focused terminal if in focus mode).
 - Keeps the tier dropdown on Agent tiles as the primary UI.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/tier-hotkey.spec.js`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/210 (merged 2026-01-25)
+
+### Queue: show project/worktree/branch tags (pending)
+- `GET /api/process/tasks` enriches tasks with `project`, `worktree`, and `branch` when possible.
+- Queue list displays these as compact badges and includes them in search.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/queue-panel.spec.js`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/211 (pending)
