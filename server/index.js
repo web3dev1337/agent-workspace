@@ -54,6 +54,7 @@ const { WorktreeTagService } = require('./worktreeTagService');
 const { DiffViewerService } = require('./diffViewerService');
 const { PullRequestService } = require('./pullRequestService');
 const { ProcessTaskService } = require('./processTaskService');
+const { TaskRecordService } = require('./taskRecordService');
 const { TaskTicketingService } = require('./taskTicketingService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
@@ -164,6 +165,7 @@ const worktreeTagService = WorktreeTagService.getInstance();
 const diffViewerService = DiffViewerService.getInstance();
 const pullRequestService = PullRequestService.getInstance();
 const processTaskService = ProcessTaskService.getInstance({ sessionManager, worktreeTagService, pullRequestService });
+const taskRecordService = TaskRecordService.getInstance();
 const taskTicketingService = TaskTicketingService.getInstance();
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
@@ -2141,10 +2143,63 @@ app.get('/api/process/tasks', async (req, res) => {
       }
     });
 
-    res.json({ count: tasks.length, tasks });
+    const enriched = tasks.map((t) => {
+      const record = taskRecordService.get(t.id);
+      return record ? { ...t, record } : t;
+    });
+
+    res.json({ count: enriched.length, tasks: enriched });
   } catch (error) {
     logger.error('Failed to list process tasks', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to list process tasks' });
+  }
+});
+
+// ============================================
+// Task records API (tier/risk/prompt metadata)
+// ============================================
+
+app.get('/api/process/task-records', (req, res) => {
+  try {
+    const records = taskRecordService.list();
+    res.json({ count: records.length, records });
+  } catch (error) {
+    logger.error('Failed to list task records', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to list task records' });
+  }
+});
+
+app.get('/api/process/task-records/:id', (req, res) => {
+  try {
+    const id = req.params.id;
+    const record = taskRecordService.get(id);
+    if (!record) return res.status(404).json({ error: 'Not found' });
+    res.json({ id, record });
+  } catch (error) {
+    logger.error('Failed to get task record', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get task record' });
+  }
+});
+
+app.put('/api/process/task-records/:id', express.json(), async (req, res) => {
+  try {
+    const id = req.params.id;
+    const record = await taskRecordService.upsert(id, req.body || {});
+    res.json({ id, record });
+  } catch (error) {
+    logger.error('Failed to upsert task record', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to upsert task record' });
+  }
+});
+
+app.delete('/api/process/task-records/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const removed = await taskRecordService.remove(id);
+    res.json({ id, removed });
+  } catch (error) {
+    logger.error('Failed to delete task record', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to delete task record' });
   }
 });
 
