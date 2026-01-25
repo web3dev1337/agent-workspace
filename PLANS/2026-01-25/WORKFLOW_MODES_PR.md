@@ -8,6 +8,9 @@ Add orchestrator workflow modes that make the Tier 1–4 system usable day-to-da
 
 These are required so the UI becomes a workflow manager, not just a grid of terminals.
 
+## PR
+- https://github.com/web3dev1337/claude-orchestrator/pull/189
+
 ## UI
 - Header control: `Focus | Review | Background`
 - Persisted in user settings:
