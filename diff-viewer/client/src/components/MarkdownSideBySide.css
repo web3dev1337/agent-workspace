@@ -1,0 +1,134 @@
+.md-side-by-side {
+  height: 100%;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-primary);
+}
+
+.md-pane {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.md-pane-header {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.md-pane-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.md-pane-body {
+  padding: 14px 16px;
+  overflow: auto;
+  min-height: 0;
+  color: var(--text-primary);
+  line-height: 1.55;
+}
+
+.md-pane-body :where(h1, h2, h3, h4, h5, h6) {
+  margin: 14px 0 8px;
+  line-height: 1.25;
+}
+
+.md-pane-body :where(h1) {
+  font-size: 24px;
+}
+
+.md-pane-body :where(h2) {
+  font-size: 20px;
+}
+
+.md-pane-body :where(h3) {
+  font-size: 16px;
+}
+
+.md-pane-body :where(p, ul, ol, blockquote, pre, table) {
+  margin: 8px 0;
+}
+
+.md-pane-body :where(a) {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.md-pane-body :where(a:hover) {
+  text-decoration: underline;
+}
+
+.md-pane-body :where(code) {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--code-inline-bg);
+  border: 1px solid var(--code-inline-border);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.md-pane-body :where(pre) {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  padding: 10px 12px;
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.md-pane-body :where(pre code) {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.md-pane-body :where(blockquote) {
+  border-left: 3px solid var(--border-color);
+  padding-left: 12px;
+  color: var(--text-secondary);
+}
+
+.md-pane-body :where(hr) {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 16px 0;
+}
+
+.md-pane-body :where(table) {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.md-pane-body :where(th, td) {
+  border: 1px solid var(--border-color);
+  padding: 8px;
+}
+
+.md-pane-body :where(th) {
+  background: var(--bg-tertiary);
+}
+
+.md-pane-body :where(.mermaid) {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow: auto;
+}
+

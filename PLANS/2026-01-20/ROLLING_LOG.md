@@ -623,3 +623,10 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Adds an **Interrupt (Ctrl+C)** button to terminal controls so you can recover from stuck CLI states even when keystrokes don’t get through (e.g. `claude --resume` with no conversations).
 - Tests: `npm run test:unit`, `npm run test:e2e:safe` (adds `tests/e2e/tier-dropdown-persists.spec.js`)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/202 (merged 2026-01-25)
+
+### Diff Viewer: render Markdown + Mermaid (pending)
+- Adds a `Render Markdown` toggle for `*.md`/`*.markdown` in the Advanced Diff Viewer.
+- Rendered mode shows Original vs Changed side-by-side and renders Mermaid fences.
+- Adds a dedicated Playwright smoke test for diff viewer (`npm run test:e2e:diff-viewer`).
+- Tests: `npm run test:unit`, `npm run test:e2e:diff-viewer -- tests/e2e-diff-viewer/markdown-render.spec.js`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/204

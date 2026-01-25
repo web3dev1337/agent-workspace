@@ -250,3 +250,16 @@ You want “product” links that:
 - Open the relevant page
 
 Also consider a simple port “reservation” doc (markdown list) to avoid collisions.
+
+## N. Advanced Diff Viewer: Markdown + Mermaid rendering (raw toggle)
+
+When reviewing a PR that changes Markdown files, you want to:
+- Render Markdown (GitHub-like) for fast scanning
+- Still be able to switch back to raw diff view instantly
+- Render Mermaid diagrams inside Markdown (code fences with `mermaid`)
+
+**Acceptance criteria**
+- For `*.md`/`*.markdown`, the diff viewer exposes a **Render Markdown** toggle.
+- Rendered mode shows **Original** vs **Changed** side-by-side.
+- Mermaid code fences render into diagrams (best-effort; if render fails, raw text remains visible).
+- Raw diff mode remains available (no loss of the standard diff view).
