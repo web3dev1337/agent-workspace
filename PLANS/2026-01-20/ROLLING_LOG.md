@@ -629,4 +629,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Rendered mode shows Original vs Changed side-by-side and renders Mermaid fences.
 - Adds a dedicated Playwright smoke test for diff viewer (`npm run test:e2e:diff-viewer`).
 - Tests: `npm run test:unit`, `npm run test:e2e:diff-viewer -- tests/e2e-diff-viewer/markdown-render.spec.js`
-- PR: (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/204
