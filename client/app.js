@@ -6008,9 +6008,10 @@ class ClaudeOrchestrator {
     const existing = document.getElementById('tasks-panel');
     if (existing) existing.remove();
 
-    const serverUrl = window.location.port === '2080'
-      ? 'http://localhost:3000'
-      : window.location.origin;
+    // Always talk to the current origin. In split dev, `client/dev-server.js`
+    // proxies `/api` + `/socket.io` to the backend (using `ORCHESTRATOR_PORT`),
+    // so hard-coding `:3000` breaks when running the orchestrator on other ports.
+    const serverUrl = window.location.origin;
 
     const state = {
       provider: localStorage.getItem('tasks-provider') || 'trello',
@@ -6023,6 +6024,7 @@ class ClaudeOrchestrator {
       hideEmptyColumns: localStorage.getItem('tasks-hide-empty') === 'true',
       lists: [],
       boardMembers: [],
+      boardLabels: [],
       boards: [],
       boardCustomFields: [],
       selectedCardId: null
@@ -6204,37 +6206,100 @@ class ClaudeOrchestrator {
       const availableMembers = allMembers.filter(m => m?.id && !memberById.has(m.id));
 
       const labels = Array.isArray(card?.labels) ? card.labels : [];
-      const labelLabel = labels.length
-        ? labels.map(l => l?.name || l?.color || '').filter(Boolean).join(', ')
-        : 'none';
+      const selectedLabelIds = new Set(labels.map(l => l?.id).filter(Boolean));
+      const boardLabels = Array.isArray(state.boardLabels) ? state.boardLabels : [];
+      const labelsForEditor = boardLabels.length ? boardLabels : labels;
+      const trelloLabelColor = (label) => {
+        const c = String(label?.color || '').toLowerCase();
+        if (!c) return '';
+        const allowed = new Set(['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black']);
+        return allowed.has(c) ? c : '';
+      };
+      const labelsEditorHtml = labelsForEditor.length
+        ? labelsForEditor
+          .map((l) => {
+            const id = l?.id || '';
+            const name = String(l?.name || '').trim();
+            const color = trelloLabelColor(l);
+            const selected = id && selectedLabelIds.has(id);
+            const labelText = name || (color ? color : 'label');
+            const cls = [
+              'tasks-label',
+              'tasks-label-toggle',
+              color ? `tasks-label--${color}` : '',
+              selected ? 'is-selected' : ''
+            ].filter(Boolean).join(' ');
+            return `
+              <button type="button" class="${cls}" data-toggle-label="${escapeHtml(id)}" title="${escapeHtml(labelText)}">
+                ${selected ? '✓ ' : ''}${escapeHtml(labelText)}
+              </button>
+            `;
+          })
+          .join('')
+        : `<div class="tasks-detail-empty">No labels.</div>`;
 
       const customFields = Array.isArray(state.boardCustomFields) ? state.boardCustomFields : [];
-      const customFieldsById = new Map(customFields.map(f => [f?.id, f]).filter(([id]) => !!id));
       const customFieldItems = Array.isArray(card?.customFieldItems) ? card.customFieldItems : [];
-      const renderCustomFieldValue = (item) => {
-        const field = customFieldsById.get(item?.idCustomField);
-        if (!field) return null;
+      const customFieldItemsById = new Map(customFieldItems.map(i => [i?.idCustomField, i]).filter(([id]) => !!id));
+      const escapeAttr = (value) => escapeHtml(value).replace(/\"/g, '&quot;');
+      const renderCustomFieldInput = (field) => {
+        const id = field?.id;
+        if (!id) return '';
         const type = String(field?.type || '').toLowerCase();
+        const item = customFieldItemsById.get(id) || null;
+
         if (type === 'list') {
           const options = Array.isArray(field?.options) ? field.options : [];
-          const opt = options.find(o => o?.id && item?.idValue && o.id === item.idValue);
-          return opt?.value?.text || opt?.value?.name || null;
+          const current = item?.idValue || '';
+          return `
+            <select class="tasks-select tasks-select-inline tasks-cf-input" data-cf-id="${escapeHtml(id)}" data-cf-type="list" data-cf-initial="${escapeAttr(current)}">
+              <option value="">(none)</option>
+              ${options.map(o => `
+                <option value="${escapeHtml(o?.id || '')}" ${o?.id === current ? 'selected' : ''}>${escapeHtml(o?.value?.text || o?.value?.name || o?.id || '')}</option>
+              `).join('')}
+            </select>
+          `;
         }
+
         if (type === 'checkbox') {
-          const checked = item?.value?.checked;
-          if (checked === 'true') return '✅';
-          if (checked === 'false') return '⬜';
-          return null;
+          const checked = String(item?.value?.checked || '').toLowerCase() === 'true';
+          return `
+            <label class="tasks-checkbox">
+              <input type="checkbox" class="tasks-cf-input" data-cf-id="${escapeHtml(id)}" data-cf-type="checkbox" data-cf-initial="${checked ? 'true' : 'false'}" ${checked ? 'checked' : ''} />
+              <span>${checked ? 'checked' : 'unchecked'}</span>
+            </label>
+          `;
         }
+
         if (type === 'date') {
-          const d = item?.value?.date;
-          return d ? new Date(d).toLocaleString() : null;
+          const value = toDatetimeLocalValue(item?.value?.date);
+          return `
+            <input type="datetime-local" class="tasks-input tasks-input-inline tasks-cf-input" value="${escapeAttr(value)}" data-cf-id="${escapeHtml(id)}" data-cf-type="date" data-cf-initial="${escapeAttr(value)}" />
+          `;
         }
+
         if (type === 'number') {
-          return item?.value?.number ?? null;
+          const value = item?.value?.number ?? '';
+          return `
+            <input type="number" step="any" class="tasks-input tasks-input-inline tasks-cf-input" value="${escapeAttr(value)}" data-cf-id="${escapeHtml(id)}" data-cf-type="number" data-cf-initial="${escapeAttr(value)}" />
+          `;
         }
-        return item?.value?.text ?? null;
+
+        const value = item?.value?.text ?? '';
+        return `
+          <input type="text" class="tasks-input tasks-input-inline tasks-cf-input" value="${escapeAttr(value)}" data-cf-id="${escapeHtml(id)}" data-cf-type="text" data-cf-initial="${escapeAttr(value)}" />
+        `;
       };
+      const customFieldsEditorHtml = customFields.length
+        ? customFields
+          .map((field) => `
+            <div class="tasks-kv-row tasks-kv-row-edit">
+              <div class="tasks-kv-key">${escapeHtml(field?.name || field?.id || '')}</div>
+              <div class="tasks-kv-val tasks-kv-val-edit">${renderCustomFieldInput(field)}</div>
+            </div>
+          `)
+          .join('')
+        : `<div class="tasks-detail-empty">None.</div>`;
 
       const listsById = new Map((state.lists || []).map(l => [l.id, l]));
       const currentListName = listsById.get(card?.idList)?.name || '';
@@ -6291,7 +6356,6 @@ class ClaudeOrchestrator {
             `).join('')}
           </span>
         </div>
-        <div class="tasks-detail-meta">Labels: ${labelLabel}</div>
         <div class="tasks-detail-meta">
           Due:
           <input id="tasks-card-due" class="tasks-input tasks-input-inline" type="datetime-local" value="${escapeHtml(dueValue)}" />
@@ -6313,20 +6377,16 @@ class ClaudeOrchestrator {
         </div>
 
         <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Labels (${selectedLabelIds.size})</div>
+          <div class="tasks-label-editor" id="tasks-label-editor">
+            ${labelsEditorHtml}
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
           <div class="tasks-detail-block-title">Custom Fields</div>
           <div class="tasks-kv">
-            ${customFieldItems.length === 0 ? `<div class="tasks-detail-empty">None.</div>` : customFieldItems.map(item => {
-              const field = customFieldsById.get(item?.idCustomField);
-              if (!field) return '';
-              const value = renderCustomFieldValue(item);
-              if (value === null || value === undefined || value === '') return '';
-              return `
-                <div class="tasks-kv-row">
-                  <div class="tasks-kv-key">${escapeHtml(field.name || '')}</div>
-                  <div class="tasks-kv-val">${escapeHtml(String(value))}</div>
-                </div>
-              `;
-            }).join('')}
+            ${customFieldsEditorHtml}
           </div>
         </div>
 
@@ -6428,6 +6488,17 @@ class ClaudeOrchestrator {
       return data.customFields || [];
     };
 
+    const fetchBoardLabels = async ({ refresh = false } = {}) => {
+      if (!state.boardId) return [];
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/labels`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load board labels');
+      return data.labels || [];
+    };
+
     const fetchBoards = async ({ refresh = false } = {}) => {
       const url = new URL(`${serverUrl}/api/tasks/boards`);
       url.searchParams.set('provider', state.provider);
@@ -6522,6 +6593,17 @@ class ClaudeOrchestrator {
       });
       const { raw, json } = await parseResponseJson(res);
       if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to update card');
+      return json.card || null;
+    };
+
+    const updateCustomField = async ({ cardId, customFieldId, payload } = {}) => {
+      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/custom-fields/${encodeURIComponent(customFieldId)}?provider=${encodeURIComponent(state.provider)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {})
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to update custom field');
       return json.card || null;
     };
 
@@ -6810,15 +6892,21 @@ class ClaudeOrchestrator {
         if (state.boardId) boardEl.value = state.boardId;
 
         if (state.view === 'list') {
-          const [lists, members] = await Promise.all([
+          const [lists, members, labels] = await Promise.all([
             fetchLists({ refresh: force }),
             fetchBoardMembers({ refresh: force }).catch((e) => {
               console.warn('Failed to load board members:', e?.message || e);
               return [];
             })
+            ,
+            fetchBoardLabels({ refresh: force }).catch((e) => {
+              console.warn('Failed to load board labels:', e?.message || e);
+              return [];
+            })
           ]);
           state.lists = lists || [];
           state.boardMembers = members || [];
+          state.boardLabels = labels || [];
           state.boardCustomFields = [];
 
           setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
@@ -6839,7 +6927,7 @@ class ClaudeOrchestrator {
           const cards = await fetchCards({ refresh: force });
           renderCards(cards);
         } else {
-          const [snapshot, members, customFields] = await Promise.all([
+          const [snapshot, members, customFields, labels] = await Promise.all([
             fetchSnapshot({ refresh: force }),
             fetchBoardMembers({ refresh: force }).catch((e) => {
               console.warn('Failed to load board members:', e?.message || e);
@@ -6850,10 +6938,16 @@ class ClaudeOrchestrator {
               console.warn('Failed to load board custom fields:', e?.message || e);
               return [];
             })
+            ,
+            fetchBoardLabels({ refresh: force }).catch((e) => {
+              console.warn('Failed to load board labels:', e?.message || e);
+              return [];
+            })
           ]);
           state.boardMembers = members || [];
           state.lists = snapshot?.lists || [];
           state.boardCustomFields = customFields || [];
+          state.boardLabels = labels || [];
           renderBoard(snapshot);
         }
       } catch (error) {
@@ -6963,6 +7057,7 @@ class ClaudeOrchestrator {
       try {
         const cardPromise = fetchCardDetail(cardId);
         const needsCustomFields = state.boardId && (!Array.isArray(state.boardCustomFields) || state.boardCustomFields.length === 0);
+        const needsLabels = state.boardId && (!Array.isArray(state.boardLabels) || state.boardLabels.length === 0);
         const customFieldsPromise = needsCustomFields
           ? fetchBoardCustomFields({ refresh: false }).catch((err) => {
             console.warn('Failed to load board custom fields:', err?.message || err);
@@ -6970,8 +7065,16 @@ class ClaudeOrchestrator {
           })
           : Promise.resolve(state.boardCustomFields);
 
-        const [card, customFields] = await Promise.all([cardPromise, customFieldsPromise]);
+        const labelsPromise = needsLabels
+          ? fetchBoardLabels({ refresh: false }).catch((err) => {
+            console.warn('Failed to load board labels:', err?.message || err);
+            return [];
+          })
+          : Promise.resolve(state.boardLabels);
+
+        const [card, customFields, labels] = await Promise.all([cardPromise, customFieldsPromise, labelsPromise]);
         if (needsCustomFields) state.boardCustomFields = customFields || [];
+        if (needsLabels) state.boardLabels = labels || [];
         const setDetail = (c) => {
           renderDetail(c);
 
@@ -7106,6 +7209,90 @@ class ClaudeOrchestrator {
                 btn.disabled = false;
               }
             });
+          });
+
+          detailEl.querySelectorAll('[data-toggle-label]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const labelId = btn.getAttribute('data-toggle-label');
+              if (!state.selectedCardId || !labelId) return;
+              const current = Array.isArray(c?.labels) ? c.labels : [];
+              const ids = current.map(l => l?.id).filter(Boolean);
+              const next = ids.includes(labelId)
+                ? ids.filter(id => id !== labelId)
+                : [...ids, labelId];
+
+              try {
+                btn.disabled = true;
+                const updated = await updateCard({ cardId: state.selectedCardId, fields: { idLabels: next } });
+                if (updated) setDetail(updated);
+                this.showToast('Labels updated', 'success');
+              } catch (err) {
+                console.error('Update labels failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+
+          detailEl.querySelectorAll('.tasks-cf-input').forEach((el) => {
+            const type = el.getAttribute('data-cf-type') || '';
+            const customFieldId = el.getAttribute('data-cf-id') || '';
+            if (!type || !customFieldId) return;
+
+            const currentValueString = () => {
+              if (type === 'checkbox') return el.checked ? 'true' : 'false';
+              return String(el.value ?? '');
+            };
+
+            const buildPayload = () => {
+              if (type === 'list') {
+                return { idValue: String(el.value || '') };
+              }
+              if (type === 'checkbox') {
+                return { value: { checked: el.checked ? 'true' : 'false' } };
+              }
+              if (type === 'date') {
+                const iso = fromDatetimeLocalValue(el.value || '');
+                return { value: { date: iso || '' } };
+              }
+              if (type === 'number') {
+                return { value: { number: String(el.value || '') } };
+              }
+              return { value: { text: String(el.value || '') } };
+            };
+
+            const save = async () => {
+              if (!state.selectedCardId) return;
+              const initial = el.getAttribute('data-cf-initial') ?? '';
+              const currentVal = currentValueString();
+              if (currentVal === initial) return;
+              try {
+                el.disabled = true;
+                const updated = await updateCustomField({ cardId: state.selectedCardId, customFieldId, payload: buildPayload() });
+                el.setAttribute('data-cf-initial', currentVal);
+                if (updated) setDetail(updated);
+                this.showToast('Custom field updated', 'success');
+              } catch (err) {
+                console.error('Custom field update failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                el.disabled = false;
+              }
+            };
+
+            const saveOnBlur = type === 'text' || type === 'number';
+            if (saveOnBlur) {
+              el.addEventListener('blur', save);
+              el.addEventListener('keydown', (evt) => {
+                if (evt.key === 'Enter') {
+                  evt.preventDefault();
+                  save();
+                }
+              });
+            } else {
+              el.addEventListener('change', save);
+            }
           });
 
           const depAddBtn = detailEl.querySelector('#tasks-dep-add-btn');
