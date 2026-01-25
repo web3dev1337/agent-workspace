@@ -2287,6 +2287,23 @@ app.get('/api/tasks/providers', (req, res) => {
   }
 });
 
+app.get('/api/tasks/me', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.getMe !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support me lookup', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const member = await provider.getMe({ refresh });
+    res.json({ provider: providerId, member });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to fetch task provider me', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
 app.get('/api/tasks/boards', async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';
@@ -2345,6 +2362,23 @@ app.get('/api/tasks/boards/:boardId/custom-fields', async (req, res) => {
   } catch (error) {
     const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
     logger.error('Failed to list task board custom fields', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.get('/api/tasks/boards/:boardId/labels', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.listBoardLabels !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support labels', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const labels = await provider.listBoardLabels({ boardId: req.params.boardId, refresh });
+    res.json({ provider: providerId, boardId: req.params.boardId, labels });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to list task board labels', { error: error.message, code: error.code, stack: error.stack });
     res.status(status).json({ error: error.message, code: error.code });
   }
 });
@@ -2563,6 +2597,33 @@ app.put('/api/tasks/cards/:cardId', express.json(), async (req, res) => {
   } catch (error) {
     const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
     logger.error('Failed to update task card', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      details: error.body
+    });
+  }
+});
+
+app.put('/api/tasks/cards/:cardId/custom-fields/:customFieldId', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.setCustomFieldItem !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support custom field updates', code: 'UNSUPPORTED_OPERATION' });
+    }
+
+    const payload = req.body || {};
+    await provider.setCustomFieldItem({ cardId: req.params.cardId, customFieldId: req.params.customFieldId, payload });
+    const card = typeof provider.getCard === 'function'
+      ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
+      : null;
+
+    res.json({ provider: providerId, cardId: req.params.cardId, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to update task custom field', { error: error.message, code: error.code, stack: error.stack });
     res.status(status).json({
       error: error.message,
       code: error.code,

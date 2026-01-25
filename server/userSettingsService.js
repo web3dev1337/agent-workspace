@@ -46,6 +46,28 @@ class UserSettingsService {
         },
         ui: {
           theme: 'dark',
+          tasks: {
+            // 'inherit' uses the main UI theme; 'light'/'dark' force the Tasks panel theme.
+            theme: 'inherit',
+            me: {
+              // Optional override (useful if you want "me" to match a specific board member).
+              // If unset, the UI will use `/api/tasks/me` from the provider credentials.
+              trelloUsername: ''
+            },
+            kanban: {
+              // Persist kanban UI state server-side (survives refresh and works across ports/origins).
+              // Keyed by `${provider}:${boardId}` -> string[] listIds
+              collapsedByBoard: {},
+              // Keyed by `${provider}:${boardId}` -> string listId (narrow layout)
+              expandedByBoard: {},
+              // Keyed by `${provider}:${boardId}` -> 'scroll' | 'wrap' | 'wrap-expand'
+              layoutByBoard: {}
+            },
+            filters: {
+              // Keyed by `${provider}:${boardId}` -> string[] memberIds
+              assigneesByBoard: {}
+            }
+          },
           diffViewer: {
             theme: 'dark'
           }

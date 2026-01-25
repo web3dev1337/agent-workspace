@@ -13,6 +13,20 @@
     "terminal": {},
     "ui": {
       "theme": "dark",
+      "tasks": {
+        "theme": "inherit",
+        "me": {
+          "trelloUsername": ""
+        },
+        "kanban": {
+          "collapsedByBoard": {},
+          "expandedByBoard": {},
+          "layoutByBoard": {}
+        },
+        "filters": {
+          "assigneesByBoard": {}
+        }
+      },
       "diffViewer": {
         "theme": "dark"
       }
