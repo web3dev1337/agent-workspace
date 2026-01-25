@@ -34,8 +34,16 @@ test.describe('Tasks Panel', () => {
     const tasksBtn = page.locator('#tasks-btn');
     await expect(tasksBtn).toBeVisible();
 
+    const providersReqPromise = page.waitForRequest((req) => req.url().includes('/api/tasks/providers'), { timeout: 5000 });
+
     await tasksBtn.click();
     await expect(page.locator('#tasks-panel')).toBeVisible();
+
+    const providersReq = await providersReqPromise.catch(() => null);
+    if (providersReq) {
+      const origin = new URL(page.url()).origin;
+      expect(providersReq.url().startsWith(`${origin}/api/tasks/providers`)).toBeTruthy();
+    }
 
     // Default filter should not hide older cards.
     await expect(page.locator('#tasks-updated')).toHaveValue('any');

@@ -5711,9 +5711,10 @@ class ClaudeOrchestrator {
     const existing = document.getElementById('prs-panel');
     if (existing) existing.remove();
 
-    const serverUrl = window.location.port === '2080'
-      ? 'http://localhost:3000'
-      : window.location.origin;
+    // Use same-origin API calls so the app works on any port:
+    // - Backend-served UI: `/api/*` is handled by the backend.
+    // - Client dev-server UI: `/api/*` is proxied to the backend (see `client/dev-server.js`).
+    const serverUrl = window.location.origin;
 
     const state = {
       mode: localStorage.getItem('prs-panel-mode') || 'mine', // mine | involved | all
