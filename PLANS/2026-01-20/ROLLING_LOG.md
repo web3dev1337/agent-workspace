@@ -4,7 +4,17 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ## 2026-01-25
 
-### Tasks panel: Trello parity (labels/custom fields, assignees filter, avatars, layouts) (open)
+### Tasks panel: Trello Kanban board + write ops diagnostics (merged)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/179
+- Notes:
+  - Adds board snapshot API + board view toggle + drag/drop moves (optimistic UI).
+  - Fix: add-comment uses form body (more reliable) and errors from Trello are surfaced back to the UI.
+  - Fix: card update/move errors now include Trello status/details for debugging.
+  - Fix: Tasks API calls no longer hard-code port 3000 (works with whatever port the UI is served on; client dev server proxies `/api`).
+  - Tests: added e2e coverage for client-dev-server proxy mode (`npm run test:e2e:proxy`).
+  - Plan for next work (metadata + dependencies): `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
+
+### Tasks panel: Trello parity (labels/custom fields, assignees filter, avatars, layouts) (merged)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/180
 - Notes:
   - Adds labels + custom field editing, assignee filtering (“Only me” / “Any”), Trello avatar sizing fix, kanban layout modes, per-board collapse persistence.
@@ -22,22 +32,18 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### Docs: resume-safe workflow status (merged)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/182
 
-### Process: task records API (tier/risk/pFail/promptRef) (open)
+### Process: task records API (tier/risk/pFail/promptRef) (merged)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/183
 
-### Tasks panel: Trello Kanban board + write ops diagnostics (in progress)
-- Branch: `feat/trello-kanban-board`
-- Adds: board snapshot API + board view toggle + drag/drop moves (optimistic UI).
-- Fix: add-comment uses form body (more reliable) and errors from Trello are surfaced back to the UI.
-- Fix: card update/move errors now include Trello status/details for debugging.
-- Fix: Tasks API calls no longer hard-code port 3000 (works with whatever port the UI is served on; client dev server proxies `/api`).
-- Tests: added e2e coverage for client-dev-server proxy mode (`npm run test:e2e:proxy`).
-- Plan for next work (metadata + dependencies): `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
-- PR: https://github.com/web3dev1337/claude-orchestrator/pull/179
+### Prompts: prompt artifacts API + optional Trello embed (merged)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/184
+
+### Queue: Review Inbox (tiers + risk + prompt refs) (merged)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/185
 
 ## 2026-01-24
 
-### Tasks panel: Trello ticketing provider (v0) (open)
+### Tasks panel: Trello ticketing provider (v0) (merged)
 - Adds a provider-agnostic Tasks API (`/api/tasks/*`) with a first read-only Trello provider (boards/lists/cards + card detail).
 - Adds a minimal “✅ Tasks” modal to browse provider → board → list → cards, with a details pane.
 - Credentials (local only): `TRELLO_API_KEY` + `TRELLO_TOKEN` (or `~/.trello-credentials`).
