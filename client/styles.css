@@ -6817,7 +6817,7 @@ header h1 {
 }
 
 .tasks-modal {
-  background: rgba(0, 0, 0, 0.35);
+  background: transparent;
 }
 
 .tasks-modal.tasks-theme-light {
@@ -7173,6 +7173,7 @@ header h1 {
   justify-content: center;
   font-weight: 700;
   color: var(--text-primary);
+  order: -1;
 }
 
 .task-card-top {

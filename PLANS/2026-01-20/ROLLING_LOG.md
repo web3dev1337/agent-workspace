@@ -634,4 +634,10 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### Diff Viewer: reduce sqlite warning noise (pending)
 - When `better-sqlite3` is compiled for a different Node version, the diff viewer now logs a single-line warning and falls back to in-memory cache.
 - Tests: `npm run test:unit`, `npm run test:e2e:diff-viewer -- tests/e2e-diff-viewer/markdown-render.spec.js`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/206 (merged 2026-01-25)
+
+### Tasks: default to Wrap+Expand + no dim overlay (pending)
+- Board view now defaults to `Wrap+Expand` to avoid horizontal scrolling for kanban columns.
+- Tasks panel no longer dims the app behind it; close state for collapsed columns still persists.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/tasks-panel.spec.js tests/e2e/tasks-kanban-persist.spec.js`
 - PR: (pending)
