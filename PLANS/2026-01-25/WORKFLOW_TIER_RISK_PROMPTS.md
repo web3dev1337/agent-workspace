@@ -46,16 +46,26 @@ We still need dependencies for:
 
 ## Tiers (Tier 1/2/3/4)
 
-### ❌ Not shipped yet
+### ✅ Partially shipped
 
 Tier is an **orchestrator/agent workflow concept**, not purely a Trello concept:
 - a tiered task may have no ticket,
 - tiers can change (e.g. T4 exploration → T1 focus).
 
-What’s needed:
-- tier tagging for worktrees/PRs/sessions
-- tier-aware UI: show/hide based on focus and “review mode”
-- a “Review Inbox / Batch Review” workflow that drives the diff viewer + checklists
+What’s shipped (as of 2026-01-25):
+- Task record storage (local) supports `tier`, `changeRisk`, `pFailFirstPass`, `verifyMinutes`, `promptRef`
+  - API: `GET|PUT /api/process/task-records/:id`
+- Review Inbox v0 (“📥 Queue”) for process tasks (PR/worktree/session)
+  - edit tier/risk/pFail/verify/promptRef
+  - open prompt editor and diff viewer
+- Tier filters + badges (sidebar + terminal grid)
+  - fast filter buttons: All/Q1/Q2/Q3/Q4/None
+  - tier badge shown on sidebar worktree rows
+
+What’s still needed:
+- tier-aware *workflow modes* (Focus vs Review vs Background), not just filters
+- scheduling/automation rules (e.g. auto-hide Q3/Q4 except in Review mode)
+- “review conveyor belt” UX (next/prev, mark reviewed, request changes, launch fix agent)
 
 Roadmap reference: `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md`
 
@@ -75,19 +85,22 @@ We will support **prompt artifacts**:
 If a Trello card exists:
 - post a short Trello comment pointing to the artifact (PR/commit + path), not the full prompt
 
-### ❌ Not shipped yet
+### ✅ Shipped
 
-We still need:
-- storage + API for prompt artifacts and task records
-- UI workflow to “promote private → shared”
+Shipped:
+- Prompt artifacts API (local/private):
+  - `GET /api/prompts`, `GET|PUT|DELETE /api/prompts/:id`
+  - default storage: `~/.orchestrator/prompts/<id>.md`
+- Optional Trello embed endpoint (pointer/snippet/full/chunks)
+
+Still needed:
+- “promote private → shared/encrypted” workflow + UI
 
 ---
 
 ## Project/base risk metadata
 
-### ✅ Shipped (PR open)
-
-PR: https://github.com/web3dev1337/claude-orchestrator/pull/181
+### ✅ Shipped (merged to `main`)
 
 Adds project-level base impact risk metadata with optional local overrides, and exposes it via:
 - `GET /api/worktree-metadata?path=...` (includes `project.baseImpactRisk`)
@@ -126,35 +139,22 @@ If we later want ticket↔ticket “conflict probability”, it should be a heur
 
 ---
 
-## Open PRs (as of 2026-01-25)
-
-- PR #180 (open): Tasks: Trello parity (labels + custom fields editing)
-  - https://github.com/web3dev1337/claude-orchestrator/pull/180
-- PR #181 (open): Project risk metadata + conflict detection
-  - https://github.com/web3dev1337/claude-orchestrator/pull/181
-
----
-
 ## Next recommended PRs (small, shippable)
 
-1) **Task record store (orchestrator-native)**
-   - Store: tier, changeRisk, pFailFirstPass, verifyMinutes, promptRef, linked ticket/PR/worktree
-   - Support local-only by default; allow share later
-2) **Review Inbox (v0)**
-   - list “ready for review” items (PRs + tagged worktrees)
-   - open diff viewer + show checklist
-3) **Prompt artifacts**
-   - create/edit prompt artifact
-   - optional “post pointer comment to Trello”
+1) **Tier workflow modes**
+   - Focus vs Review vs Background (tier-aware visibility rules)
+2) **Orchestrator-native dependencies**
+   - dependencies for tasks with no Trello card + cross-entity (PR/worktree/session) links
+3) **Prompt artifact promotion**
+   - private → shared/encrypted + pointer comment policy (Trello)
 
 ---
 
 ## Checklist (to keep us honest)
 
-- [ ] Tier tagging exists (worktree/PR/session)
+- [x] Tier tagging exists (task records for PR/worktree/session)
 - [ ] Tier-aware visibility rules exist (focus + review modes)
-- [ ] changeRisk + pFailFirstPass + verifyMinutes stored per task
-- [ ] Review Inbox exists and drives diff viewer
-- [ ] Prompt artifacts exist (private/shared)
+- [x] changeRisk + pFailFirstPass + verifyMinutes stored per task
+- [x] Review Inbox exists and drives diff viewer
+- [x] Prompt artifacts exist (private; shared/encrypted WIP)
 - [ ] Dependency model extends beyond Trello when no card exists
-
