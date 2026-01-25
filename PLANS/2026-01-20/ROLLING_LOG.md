@@ -654,8 +654,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/tier-hotkey.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/210 (merged 2026-01-25)
 
-### Queue: show project/worktree/branch tags (pending)
+### Queue: show project/worktree/branch tags (merged)
 - `GET /api/process/tasks` enriches tasks with `project`, `worktree`, and `branch` when possible.
 - Queue list displays these as compact badges and includes them in search.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/queue-panel.spec.js`
-- PR: https://github.com/web3dev1337/claude-orchestrator/pull/211 (pending)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/211 (merged 2026-01-25)
