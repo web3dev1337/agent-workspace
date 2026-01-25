@@ -1202,7 +1202,7 @@ When creating workspaces, need to consider **repository access**.
 ✅ Can't bypass access control
 ✅ UI clearly shows access level
 
-**Note**: This phase is optional for MVP. Can defer if not immediately needed.
+**Note**: This phase is part of the full workflow; schedule it after the core process work if needed.
 
 ---
 
@@ -1565,7 +1565,7 @@ Currently in HyFire 2 workspace, working on work1. Epic Survivors workspace has 
 
    chmod +x ~/Desktop/Claude-Orchestrator.desktop
 
-   # 3. Add to application menu (optional)
+   # 3. Add to application menu
    mkdir -p ~/.local/share/applications
    cp ~/Desktop/Claude-Orchestrator.desktop ~/.local/share/applications/
 

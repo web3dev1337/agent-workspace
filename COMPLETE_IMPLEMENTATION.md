@@ -60,7 +60,7 @@ Transformed Claude Orchestrator from single HyFire project into full workspace m
 ### **Phase 8: One-Click Startup** ✅
 - ✅ `orchestrator-startup.sh` - Complete startup script
 - ✅ `install-startup.sh` - Install desktop/command shortcuts
-- ✅ Auto-update capability - Git pull on startup (optional)
+- ✅ Auto-update capability - Git pull on startup
 - ✅ Already-running detection - Smart browser opening
 
 ---
@@ -150,7 +150,7 @@ scripts/
 ### **Zero-Friction Startup**
 - ✅ **One-click startup** - `orchestrator` command launches everything
 - ✅ **Desktop shortcut** - Click icon to start
-- ✅ **Auto-update** - Git pull on startup (optional)
+- ✅ **Auto-update** - Git pull on startup
 - ✅ **Smart detection** - Opens browser if already running
 
 ---
@@ -228,7 +228,7 @@ window.orchestrator.switchToWorkspace('hyfire2');
 
 ### **Minor Issues (Non-blocking)**
 1. **Diff-viewer disabled** - Node v18 vs v20 module conflict (can re-enable later)
-2. **Tauri fails** - Cargo not found (optional native app)
+2. **Tauri fails** - Cargo not found (native app)
 3. **Terminal timing** - Some "DOM element not ready" warnings (safe to ignore)
 
 ### **Not Yet Implemented**

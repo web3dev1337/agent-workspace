@@ -44,7 +44,7 @@ Also support “ungrouped” buckets:
 
 ### A4) Sorting, recency filters, favorites
 Desired controls (prefer **fast click** UI like radio buttons over dropdowns):
-- Sort by **most recently edited** (default) and optionally **most recently created**.
+- Sort by **most recently edited** (default) and **most recently created**.
 - Filter by activity recency: show only edited in last **week / month / 2 months / 3 months / 6 months / 1 year**.
 - Ability to mark items as **favorites** and show favorites at top.
 - Toggle to hide items not touched in the last N months.
