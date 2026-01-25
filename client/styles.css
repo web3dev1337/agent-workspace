@@ -6637,9 +6637,11 @@ header h1 {
 .tasks-modal .tasks-content {
   /* Tasks is a primary workflow: prefer a robust, full-viewport panel. */
   max-width: none;
-  width: 100vw;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100vw;
   max-height: 100vh;
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -6699,6 +6701,57 @@ header h1 {
 .tasks-view-btn.active {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15);
+}
+
+.tasks-filter {
+  position: relative;
+}
+
+.tasks-filter summary {
+  list-style: none;
+}
+
+.tasks-filter summary::-webkit-details-marker {
+  display: none;
+}
+
+.tasks-filter-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 240px;
+  max-height: 320px;
+  overflow: auto;
+  z-index: 5;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+  padding: 10px;
+}
+
+.tasks-filter-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.tasks-filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tasks-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.tasks-filter-item input {
+  accent-color: var(--accent-primary);
 }
 
 .tasks-toolbar {

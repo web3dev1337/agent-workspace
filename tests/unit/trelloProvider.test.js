@@ -120,4 +120,18 @@ describe('TrelloTaskProvider', () => {
     expect(opts.headers['content-type']).toBe('application/json');
     expect(opts.body).toEqual(payload);
   });
+
+  test('getMe hits /members/me with fields', async () => {
+    const provider = new TrelloTaskProvider({ cache: null, logger: { warn: jest.fn() } });
+    provider.getCredentials = () => ({ apiKey: 'k', token: 't', source: 'test' });
+
+    provider._getCached = jest.fn().mockResolvedValue({ id: 'm1', username: 'me' });
+
+    const me = await provider.getMe({ refresh: false });
+    expect(me).toEqual({ id: 'm1', username: 'me' });
+    expect(provider._getCached).toHaveBeenCalledTimes(1);
+    const [, url] = provider._getCached.mock.calls[0];
+    expect(url).toContain('/members/me');
+    expect(url).toContain('fields=fullName%2Cusername%2CavatarUrl');
+  });
 });
