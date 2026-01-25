@@ -50,6 +50,8 @@ const { ProductLauncherService } = require('./productLauncherService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
 const { WorktreeMetadataService } = require('./worktreeMetadataService');
+const { ProjectMetadataService } = require('./projectMetadataService');
+const { WorktreeConflictService } = require('./worktreeConflictService');
 const { WorktreeTagService } = require('./worktreeTagService');
 const { DiffViewerService } = require('./diffViewerService');
 const { PullRequestService } = require('./pullRequestService');
@@ -161,6 +163,8 @@ const quickLinksService = QuickLinksService.getInstance();
 const productLauncherService = ProductLauncherService.getInstance();
 const conversationService = ConversationService.getInstance();
 const worktreeMetadataService = WorktreeMetadataService.getInstance();
+const projectMetadataService = ProjectMetadataService.getInstance();
+const worktreeConflictService = new WorktreeConflictService({ projectMetadataService, worktreeMetadataService });
 const worktreeTagService = WorktreeTagService.getInstance();
 const diffViewerService = DiffViewerService.getInstance();
 const pullRequestService = PullRequestService.getInstance();
@@ -2049,6 +2053,8 @@ app.get('/api/worktree-metadata', async (req, res) => {
     }
 
     const metadata = await worktreeMetadataService.getMetadata(worktreePath);
+    const project = await projectMetadataService.getForWorktree(worktreePath);
+    metadata.project = project;
     res.json(metadata);
   } catch (error) {
     logger.error('Failed to get worktree metadata', { error: error.message });
@@ -2065,6 +2071,14 @@ app.post('/api/worktree-metadata/batch', async (req, res) => {
     }
 
     const metadata = await worktreeMetadataService.getMultipleMetadata(paths);
+    await Promise.all(paths.map(async (p) => {
+      try {
+        const project = await projectMetadataService.getForWorktree(p);
+        if (metadata[p]) metadata[p].project = project;
+      } catch {
+        // ignore
+      }
+    }));
     res.json(metadata);
   } catch (error) {
     logger.error('Failed to get batch worktree metadata', { error: error.message });
@@ -2081,10 +2095,67 @@ app.post('/api/worktree-metadata/refresh', async (req, res) => {
     }
 
     const metadata = await worktreeMetadataService.refresh(worktreePath);
+    const project = await projectMetadataService.getForWorktree(worktreePath, { refresh: true });
+    metadata.project = project;
     res.json(metadata);
   } catch (error) {
     logger.error('Failed to refresh worktree metadata', { error: error.message });
     res.status(500).json({ error: 'Failed to refresh metadata' });
+  }
+});
+
+// ============================================
+// Project Metadata API
+// ============================================
+
+app.get('/api/project-metadata', async (req, res) => {
+  try {
+    const { path: worktreePath } = req.query;
+    if (!worktreePath) {
+      return res.status(400).json({ error: 'path query parameter is required' });
+    }
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const project = await projectMetadataService.getForWorktree(worktreePath, { refresh });
+    res.json({ project });
+  } catch (error) {
+    logger.error('Failed to get project metadata', { error: error.message });
+    res.status(500).json({ error: 'Failed to get project metadata' });
+  }
+});
+
+app.post('/api/project-metadata/batch', async (req, res) => {
+  try {
+    const { paths } = req.body;
+    if (!paths || !Array.isArray(paths)) {
+      return res.status(400).json({ error: 'paths array is required' });
+    }
+    const results = {};
+    await Promise.all(paths.map(async (p) => {
+      results[p] = await projectMetadataService.getForWorktree(p);
+    }));
+    res.json({ projects: results });
+  } catch (error) {
+    logger.error('Failed to batch project metadata', { error: error.message });
+    res.status(500).json({ error: 'Failed to batch project metadata' });
+  }
+});
+
+// ============================================
+// Worktree Conflicts API
+// ============================================
+
+app.post('/api/worktree-conflicts', async (req, res) => {
+  try {
+    const { paths } = req.body;
+    if (!paths || !Array.isArray(paths)) {
+      return res.status(400).json({ error: 'paths array is required' });
+    }
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const result = await worktreeConflictService.analyze({ paths, refresh });
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to analyze worktree conflicts', { error: error.message });
+    res.status(500).json({ error: 'Failed to analyze worktree conflicts' });
   }
 });
 
