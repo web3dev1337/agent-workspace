@@ -371,6 +371,21 @@ header h1 {
   color: #ffffff;
 }
 
+#workflow-focus-tier2.hidden {
+  display: none;
+}
+
+.header-btn.focus-tier2-on {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
+}
+
+.header-btn.focus-tier2-on:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
 .header-btn {
   padding: 6px 12px;
   background: var(--bg-tertiary);

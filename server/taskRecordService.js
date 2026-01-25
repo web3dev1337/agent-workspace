@@ -46,6 +46,13 @@ const normalizeVisibility = (v) => {
   return allowed.has(s) ? s : null;
 };
 
+const normalizeReviewOutcome = (v) => {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return null;
+  const allowed = new Set(['approved', 'needs_fix', 'commented', 'skipped']);
+  return allowed.has(s) ? s : null;
+};
+
 const normalizeDependencies = (deps) => {
   if (deps === null) return [];
   if (!Array.isArray(deps)) return null;
@@ -184,6 +191,34 @@ class TaskRecordService {
       } else {
         const dt = new Date(v);
         if (Number.isFinite(dt.getTime())) next.doneAt = dt.toISOString();
+      }
+    }
+
+    if (p.reviewed !== undefined) {
+      const reviewed = !!p.reviewed;
+      if (reviewed) next.reviewedAt = new Date().toISOString();
+      else clear.add('reviewedAt');
+    }
+
+    if (p.reviewedAt !== undefined) {
+      const v = p.reviewedAt;
+      if (v === null || v === '') {
+        clear.add('reviewedAt');
+      } else {
+        const dt = new Date(v);
+        if (Number.isFinite(dt.getTime())) next.reviewedAt = dt.toISOString();
+      }
+    }
+
+    if (p.reviewOutcome !== undefined) {
+      if (p.reviewOutcome === null || p.reviewOutcome === '') {
+        clear.add('reviewOutcome');
+      } else {
+        const outcome = normalizeReviewOutcome(p.reviewOutcome);
+        if (outcome !== null) {
+          next.reviewOutcome = outcome;
+          if (!next.reviewedAt) next.reviewedAt = new Date().toISOString();
+        }
       }
     }
 
