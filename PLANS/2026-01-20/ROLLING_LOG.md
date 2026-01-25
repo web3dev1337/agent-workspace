@@ -665,3 +665,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Launch gate modal message also uses `T1+T2`, `T3`, `T4` caps wording.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/process-banner.spec.js tests/e2e/review-workflow.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/213 (merged 2026-01-25)
+
+### Quick Work: choose tier when starting worktree (merged)
+- Quick Work → Start work includes a `Start tier` selector (`T1–T4`) stored in localStorage.
+- New worktree sessions created from Quick Work are immediately tagged with that tier for the new `*-claude` session(s) (persisted to task records).
+- Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/quick-work-start-tier.spec.js`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/215 (merged 2026-01-25)
