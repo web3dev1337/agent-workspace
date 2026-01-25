@@ -640,4 +640,10 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Board view now defaults to `Wrap+Expand` to avoid horizontal scrolling for kanban columns.
 - Tasks panel no longer dims the app behind it; close state for collapsed columns still persists.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/tasks-panel.spec.js tests/e2e/tasks-kanban-persist.spec.js`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/207 (merged 2026-01-25)
+
+### Terminals: reduce fit retry log spam (pending)
+- Terminal fit retries no longer spam the console; debug logs are gated behind `localStorage['debug-terminal-fit']=true`.
+- Warnings for tiny containers/proposed sizes are throttled per terminal.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/terminal-fit-guard.spec.js`
 - PR: (pending)
