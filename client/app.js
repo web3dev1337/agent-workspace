@@ -1535,6 +1535,13 @@ class ClaudeOrchestrator {
         showWhen: 'always',
         terminalType: 'both'
       },
+      interrupt: {
+        icon: '⛔',
+        title: 'Interrupt (Ctrl+C)',
+        action: 'interruptSession',
+        showWhen: 'always',
+        terminalType: 'both'
+      },
 
       // Claude terminal buttons
       replay: {
@@ -1689,6 +1696,7 @@ class ClaudeOrchestrator {
     // Map action name to actual method call
     const actionMap = {
       focusTerminal: `window.orchestrator.focusTerminal('${sessionId}')`,
+      interruptSession: `window.orchestrator.interruptSession('${sessionId}')`,
       openReplayViewer: `window.orchestrator.openReplayViewer('${sessionId}')`,
       autoStartClaude: `window.orchestrator.autoStartClaude('${sessionId}')`,
       showClaudeStartupModal: `window.orchestrator.showClaudeStartupModal('${sessionId}')`,
@@ -1716,6 +1724,7 @@ class ClaudeOrchestrator {
         this.renderButton('claudeStart', this.buttonRegistry.claudeStart, sessionId),
         this.renderButton('claudeModal', this.buttonRegistry.claudeModal, sessionId),
         this.renderButton('refresh', this.buttonRegistry.refresh, sessionId),
+        this.renderButton('interrupt', this.buttonRegistry.interrupt, sessionId),
         this.renderButton('review', this.buttonRegistry.review, sessionId),
         this.renderButton('build', this.buttonRegistry.build, sessionId)
       ];
@@ -1723,9 +1732,24 @@ class ClaudeOrchestrator {
       return [
         this.renderButton('focus', this.buttonRegistry.focus, sessionId),
         this.renderButton('build', this.buttonRegistry.build, sessionId),
+        this.renderButton('interrupt', this.buttonRegistry.interrupt, sessionId),
         this.renderButton('kill', this.buttonRegistry.kill, sessionId)
       ];
     }
+  }
+
+  getTierDropdownHTML(sessionId) {
+    const tier = this.getTierForSession(sessionId);
+    const tierValue = tier ? String(tier) : '';
+    return `
+      <select class="tier-dropdown" data-session-id="${sessionId}" aria-label="Tier" title="Tier" onchange="window.orchestrator.setTierForSession('${sessionId}', this.value)">
+        <option value="" ${tierValue === '' ? 'selected' : ''}>None</option>
+        <option value="1" ${tierValue === '1' ? 'selected' : ''}>Q1</option>
+        <option value="2" ${tierValue === '2' ? 'selected' : ''}>Q2</option>
+        <option value="3" ${tierValue === '3' ? 'selected' : ''}>Q3</option>
+        <option value="4" ${tierValue === '4' ? 'selected' : ''}>Q4</option>
+      </select>
+    `;
   }
 
   /**
@@ -2608,9 +2632,6 @@ class ClaudeOrchestrator {
     const repositoryName = this.extractRepositoryName(sessionId);
     const worktreeId = session.worktreeId;
     const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
-    const tier = isClaudeSession ? this.getTierForSession(sessionId) : null;
-    const tierValue = tier ? String(tier) : '';
-
     wrapper.innerHTML = `
       <div class="terminal-header">
         <div class="terminal-title">
@@ -2620,13 +2641,7 @@ class ClaudeOrchestrator {
         </div>
         <div class="terminal-controls">
           ${isClaudeSession ? `
-            <select class="tier-dropdown" data-session-id="${sessionId}" aria-label="Tier" title="Tier" onchange="window.orchestrator.setTierForSession('${sessionId}', this.value)">
-              <option value="" ${tierValue === '' ? 'selected' : ''}>None</option>
-              <option value="1" ${tierValue === '1' ? 'selected' : ''}>Q1</option>
-              <option value="2" ${tierValue === '2' ? 'selected' : ''}>Q2</option>
-              <option value="3" ${tierValue === '3' ? 'selected' : ''}>Q3</option>
-              <option value="4" ${tierValue === '4' ? 'selected' : ''}>Q4</option>
-            </select>
+            ${this.getTierDropdownHTML(sessionId)}
             ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
             ${this.getGitHubButtons(sessionId)}
           ` : ''}
@@ -3072,19 +3087,22 @@ class ClaudeOrchestrator {
   }
   
   updateTerminalControls(sessionId) {
-    // Trigger a refresh of the terminal element to update buttons
-    const terminalWrapper = document.querySelector(`[id*="${sessionId}"]`);
-    if (terminalWrapper) {
-      // Find the controls div and update it
-      const controlsDiv = terminalWrapper.querySelector('.terminal-controls');
-      if (controlsDiv && sessionId.includes('-claude')) {
-        const focusBtn = `<button class="control-btn focus-btn" onclick="window.orchestrator.focusTerminal('${sessionId}')" title="Show Only This Worktree">🔍</button>`;
-        const restartBtn = `<button class="control-btn" onclick="window.orchestrator.restartClaudeSession('${sessionId}')" title="Restart Claude">↻</button>`;
-        const refreshBtn = `<button class="control-btn" onclick="window.orchestrator.refreshTerminal('${sessionId}')" title="Refresh Terminal Display">🔄</button>`;
-        const reviewBtn = `<button class="control-btn review-btn" onclick="window.orchestrator.showCodeReviewDropdown('${sessionId}')" title="Assign Code Review">👥</button>`;
-        controlsDiv.innerHTML = focusBtn + restartBtn + refreshBtn + reviewBtn + this.getGitHubButtons(sessionId);
-      }
+    const wrapper = document.getElementById(`wrapper-${sessionId}`);
+    if (!wrapper) return;
+    const controlsDiv = wrapper.querySelector('.terminal-controls');
+    if (!controlsDiv) return;
+
+    if (sessionId.includes('-claude')) {
+      controlsDiv.innerHTML = `
+        ${this.getTierDropdownHTML(sessionId)}
+        ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
+        ${this.getGitHubButtons(sessionId)}
+      `;
+      return;
     }
+
+    // Server terminals: keep the existing launch controls.
+    controlsDiv.innerHTML = this.getServerControlsHTML(sessionId);
   }
   
   updateServerStatus(sessionId, output) {
@@ -3223,6 +3241,16 @@ class ClaudeOrchestrator {
     }
     
     this.socket.emit('terminal-input', { sessionId, data });
+  }
+
+  interruptSession(sessionId) {
+    // Always prefer a direct socket emit over relying on xterm key handling.
+    // This is useful when a CLI tool tells you to Ctrl+C (e.g. `claude --resume` with no conversations).
+    try {
+      this.sendTerminalInput(sessionId, '\x03');
+    } catch (e) {
+      console.error('Failed to interrupt session', e);
+    }
   }
   
   resizeTerminal(sessionId, cols, rows) {
