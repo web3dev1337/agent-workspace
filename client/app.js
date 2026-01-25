@@ -6139,6 +6139,20 @@ class ClaudeOrchestrator {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
+    const toTrelloAvatarUrl = (avatarUrl, size = 50) => {
+      const raw = String(avatarUrl || '').trim();
+      if (!raw) return '';
+      // Trello commonly returns a base avatarUrl like:
+      //   https://trello-avatars.s3.amazonaws.com/<hash>
+      // which must be suffixed with `/<size>.png` (otherwise it can 403 / look like an S3 root fetch).
+      const lower = raw.toLowerCase();
+      if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp') || lower.includes('.png?') || lower.includes('.jpg?') || lower.includes('.jpeg?') || lower.includes('.webp?')) {
+        return raw;
+      }
+      const safeSize = Number.isFinite(Number(size)) ? Math.max(10, Math.min(512, Number(size))) : 50;
+      return `${raw.replace(/\/$/, '')}/${safeSize}.png`;
+    };
+
     const toDatetimeLocalValue = (iso) => {
       if (!iso) return '';
       const d = new Date(iso);
@@ -6373,7 +6387,7 @@ class ClaudeOrchestrator {
           <span class="tasks-chips" id="tasks-member-chips">
             ${members.length === 0 ? `<span class="tasks-chip tasks-chip-muted">none</span>` : members.map(m => `
               <span class="tasks-chip" data-member-id="${escapeHtml(m?.id || '')}">
-                ${m?.avatarUrl ? `<img class="tasks-chip-avatar" src="${escapeHtml(m.avatarUrl)}" alt="">` : ''}
+                ${m?.avatarUrl ? `<img class="tasks-chip-avatar" src="${escapeHtml(toTrelloAvatarUrl(m.avatarUrl, 50))}" alt="">` : ''}
                 ${m?.username ? `<a class="tasks-chip-link" href="https://trello.com/${escapeHtml(m.username)}" target="_blank" rel="noreferrer">${escapeHtml(m?.fullName || m?.username || m?.id || '')}</a>` : escapeHtml(m?.fullName || m?.username || m?.id || '')}
                 <button class="tasks-chip-x" type="button" title="Unassign" data-remove-member="${escapeHtml(m?.id || '')}">×</button>
               </span>
@@ -6762,7 +6776,7 @@ class ClaudeOrchestrator {
                             ${members.map(m => {
                               const url = m?.username ? `https://trello.com/${m.username}` : '';
                               const initial = String(m?.fullName || m?.username || '?').trim().slice(0, 1).toUpperCase();
-                              const avatar = m?.avatarUrl || '';
+                              const avatar = m?.avatarUrl ? toTrelloAvatarUrl(m.avatarUrl, 50) : '';
                               return `
                                 <a class="tasks-avatar" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="${escapeHtml(m?.fullName || m?.username || '')}">
                                   ${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : `<span>${escapeHtml(initial)}</span>`}
