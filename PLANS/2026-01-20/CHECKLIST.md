@@ -65,7 +65,7 @@ This checklist tracks completion for the roadmap in `PLANS/2026-01-20/IMPLEMENTA
 - [x] Diff viewer works without native SQLite
 - [x] Diff viewer starts with orchestrator (`npm start`)
 - [x] Diff viewer: compact header + scroll wheel navigation
-- [ ] Diff viewer: render Markdown + Mermaid (toggle raw/rendered)
+- [x] Diff viewer: render Markdown + Mermaid (toggle raw/rendered)
 
 ### Naming / branding
 - [x] UI copy updates: “Claude” → “Agent” where appropriate
