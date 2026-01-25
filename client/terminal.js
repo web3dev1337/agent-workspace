@@ -432,6 +432,14 @@ class TerminalManager {
         
         return false;
       }
+
+      // Alt+↑ / Alt+↓: cycle tier for this terminal quickly.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        const delta = e.key === 'ArrowUp' ? 1 : -1;
+        this.orchestrator?.cycleTierForSession?.(sessionId, delta);
+        return false;
+      }
       
       // Ctrl+Backspace or Alt+Backspace for word deletion with debouncing
       if ((e.ctrlKey || e.altKey) && e.key === 'Backspace') {
