@@ -29,6 +29,16 @@ class TerminalManager {
     this.lastGoodPtyDimensions = new Map(); // sessionId -> { cols, rows }
     this.minPtyCols = 40;
     this.minPtyRows = 5;
+
+    // Terminal fit logging (reduce console noise during layout transitions).
+    this.fitLogLastAt = new Map(); // `${sessionId}:${key}` -> epoch ms
+    this.fitLogCooldownMs = 2_000;
+    this.debugTerminalFit = false;
+    try {
+      this.debugTerminalFit = window?.localStorage?.getItem('debug-terminal-fit') === 'true';
+    } catch {
+      // ignore
+    }
     
     // Apply global terminal scrollbar styles
     this.applyScrollbarStyles();
@@ -82,6 +92,26 @@ class TerminalManager {
       brightCyan: '#3192aa',
       brightWhite: '#8c959f'
     };
+  }
+
+  shouldLogFit(sessionId, key) {
+    const now = Date.now();
+    const mapKey = `${sessionId}:${key}`;
+    const lastAt = this.fitLogLastAt.get(mapKey) || 0;
+    if (now - lastAt < this.fitLogCooldownMs) return false;
+    this.fitLogLastAt.set(mapKey, now);
+    return true;
+  }
+
+  debugFit(sessionId, key, message) {
+    if (!this.debugTerminalFit) return;
+    if (!this.shouldLogFit(sessionId, `debug:${key}`)) return;
+    console.log(message);
+  }
+
+  warnFit(sessionId, key, message) {
+    if (!this.shouldLogFit(sessionId, `warn:${key}`)) return;
+    console.warn(message);
   }
   
   applyScrollbarStyles() {
@@ -517,7 +547,11 @@ class TerminalManager {
             if (retryCount < 5) {
               // Schedule retry with increasing delay
               const retryDelay = 100 * (retryCount + 1);
-              console.log(`Terminal ${sessionId} container too small (${bodyRect.width}x${bodyRect.height}), retrying in ${retryDelay}ms (attempt ${retryCount + 1}/5)`);
+              this.debugFit(
+                sessionId,
+                'container-too-small',
+                `Terminal ${sessionId} container too small (${bodyRect.width}x${bodyRect.height}), retrying in ${retryDelay}ms (attempt ${retryCount + 1}/5)`
+              );
               this.fitTimers.delete(sessionId);
               setTimeout(() => this.fitTerminal(sessionId, retryCount + 1), retryDelay);
               return;
@@ -525,7 +559,11 @@ class TerminalManager {
               // If we still can't get a reasonable size, do NOT fit. We'll retry on the next resize/show,
               // and also schedule a delayed retry in case the browser doesn't emit a resize event after
               // a display/layout transition.
-              console.warn(`Terminal ${sessionId} container still too small after 5 retries (${bodyRect.width}x${bodyRect.height}); skipping fit`);
+              this.warnFit(
+                sessionId,
+                'container-still-too-small',
+                `Terminal ${sessionId} container still too small after 5 retries (${bodyRect.width}x${bodyRect.height}); skipping fit`
+              );
               if (!this.delayedFitTimers) this.delayedFitTimers = new Map();
               if (!this.delayedFitTimers.has(sessionId)) {
                 const t = setTimeout(() => {
@@ -556,7 +594,9 @@ class TerminalManager {
           if (proposedCols < minStableCols || proposedRows < minStableRows) {
             if (retryCount < 5) {
               const retryDelay = 120 * (retryCount + 1);
-              console.log(
+              this.debugFit(
+                sessionId,
+                'proposed-too-small',
                 `Terminal ${sessionId} proposed fit too small (${proposedCols}x${proposedRows}; min ${minStableCols}x${minStableRows}), retrying in ${retryDelay}ms (attempt ${retryCount + 1}/5)`
               );
               this.fitTimers.delete(sessionId);
@@ -564,7 +604,9 @@ class TerminalManager {
               return;
             }
 
-            console.warn(
+            this.warnFit(
+              sessionId,
+              'proposed-still-too-small',
               `Terminal ${sessionId} proposed fit still too small after 5 retries (${proposedCols}x${proposedRows}; min ${minStableCols}x${minStableRows}); skipping fit`
             );
             this.fitTimers.delete(sessionId);
@@ -581,7 +623,11 @@ class TerminalManager {
         const isReasonablePtySize = cols >= this.minPtyCols && rows >= this.minPtyRows;
 
         if (!isReasonablePtySize) {
-          console.warn(`Terminal ${sessionId} fit produced tiny size: ${cols}x${rows}; not resizing PTY`);
+          this.warnFit(
+            sessionId,
+            'fit-produced-tiny-size',
+            `Terminal ${sessionId} fit produced tiny size: ${cols}x${rows}; not resizing PTY`
+          );
           if (retryCount < 3) {
             setTimeout(() => this.fitTerminal(sessionId, retryCount + 1), 200);
           }
