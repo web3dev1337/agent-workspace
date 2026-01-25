@@ -6548,7 +6548,27 @@ class ClaudeOrchestrator {
       // - Persist per-board expanded column on narrow screens.
       // - Allow collapsing/expanding columns by clicking the header.
       const storageKey = `tasks-board-expanded:${state.provider}:${state.boardId}`;
+      const collapsedKey = `tasks-board-collapsed:${state.provider}:${state.boardId}`;
       const isNarrow = () => window.matchMedia('(max-width: 980px)').matches;
+
+      const loadCollapsedSet = () => {
+        try {
+          const raw = localStorage.getItem(collapsedKey);
+          const arr = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(arr)) return new Set();
+          return new Set(arr.filter(Boolean));
+        } catch {
+          return new Set();
+        }
+      };
+
+      const saveCollapsedSet = (set) => {
+        try {
+          localStorage.setItem(collapsedKey, JSON.stringify(Array.from(set)));
+        } catch {
+          // ignore
+        }
+      };
 
       const collapseAllExcept = (keepId) => {
         cardsEl.querySelectorAll('.tasks-column').forEach(col => {
@@ -6563,12 +6583,15 @@ class ClaudeOrchestrator {
 
       const applyDefaultExpanded = () => {
         if (!isNarrow()) {
-          // Desktop: expand all (no forced collapse).
+          // Desktop: restore collapsed columns (persisted).
+          const collapsed = loadCollapsedSet();
           cardsEl.querySelectorAll('.tasks-column').forEach(col => {
             const header = col.querySelector('[data-col-toggle]');
-            col.classList.remove('is-collapsed');
-            col.classList.add('is-expanded');
-            header?.setAttribute('aria-expanded', 'true');
+            const id = col.dataset.listId;
+            const isCollapsed = id && collapsed.has(id);
+            col.classList.toggle('is-collapsed', !!isCollapsed);
+            col.classList.toggle('is-expanded', !isCollapsed);
+            header?.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
           });
           return;
         }
@@ -6603,6 +6626,14 @@ class ClaudeOrchestrator {
           col.classList.toggle('is-collapsed', !collapsed);
           col.classList.toggle('is-expanded', collapsed);
           btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+
+          const set = loadCollapsedSet();
+          if (collapsed) {
+            set.delete(listId);
+          } else {
+            set.add(listId);
+          }
+          saveCollapsedSet(set);
         });
       });
 
