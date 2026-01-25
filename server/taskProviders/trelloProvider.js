@@ -100,6 +100,16 @@ class TrelloTaskProvider {
     return this._getCached(cacheKey, url, { ttlMs: 5 * 60_000, force: refresh });
   }
 
+  async listBoardLabels({ boardId, refresh = false } = {}) {
+    if (!boardId) throw new Error('boardId is required');
+    const url = this._buildUrl(`/boards/${encodeURIComponent(boardId)}/labels`, {
+      fields: 'name,color',
+      limit: '1000'
+    });
+    const cacheKey = `trello:labels:${boardId}:all`;
+    return this._getCached(cacheKey, url, { ttlMs: 5 * 60_000, force: refresh });
+  }
+
   async listCards({ listId, refresh = false, q = '', updatedSince = null } = {}) {
     if (!listId) throw new Error('listId is required');
     const url = this._buildUrl(`/lists/${encodeURIComponent(listId)}/cards`, {
@@ -260,12 +270,23 @@ class TrelloTaskProvider {
     if (!cardId) throw new Error('cardId is required');
     if (!fields || typeof fields !== 'object') throw new Error('fields must be an object');
 
-    const allowed = ['name', 'desc', 'due', 'idList', 'idMembers', 'closed', 'pos'];
+    const allowed = ['name', 'desc', 'due', 'idList', 'idMembers', 'idLabels', 'closed', 'pos'];
     const params = {};
     for (const key of allowed) {
       if (fields[key] === undefined) continue;
       const val = fields[key];
       if (key === 'idMembers') {
+        if (Array.isArray(val)) {
+          params[key] = val.filter(Boolean).join(',');
+        } else if (val === null) {
+          params[key] = '';
+        } else {
+          params[key] = val;
+        }
+        continue;
+      }
+
+      if (key === 'idLabels') {
         if (Array.isArray(val)) {
           params[key] = val.filter(Boolean).join(',');
         } else if (val === null) {
@@ -304,6 +325,22 @@ class TrelloTaskProvider {
       card?.idBoard ? `trello:lists:${card.idBoard}:open` : null
     ]);
     return card;
+  }
+
+  async setCustomFieldItem({ cardId, customFieldId, payload } = {}) {
+    if (!cardId) throw new Error('cardId is required');
+    if (!customFieldId) throw new Error('customFieldId is required');
+    if (!payload || typeof payload !== 'object') throw new Error('payload must be an object');
+
+    const url = this._buildUrl(`/card/${encodeURIComponent(cardId)}/customField/${encodeURIComponent(customFieldId)}/item`);
+    await requestJson(url, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: payload
+    });
+
+    this._invalidateCacheKeys([`trello:card:${cardId}`]);
+    return true;
   }
 
   async getDependencies({ cardId, refresh = false } = {}) {
