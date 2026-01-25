@@ -59,4 +59,4 @@ Card detail panel:
 - [x] UI: labels editor
 - [x] UI: custom fields editor
 - [x] Tests: unit + e2e
-- [ ] Commit + push + open PR
+- [x] Commit + push + open PR (https://github.com/web3dev1337/claude-orchestrator/pull/180)

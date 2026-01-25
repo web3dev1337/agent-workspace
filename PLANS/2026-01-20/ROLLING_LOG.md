@@ -534,4 +534,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Adds custom field editing (text/number/checkbox/date/list) via provider-agnostic API.
 - Makes Tasks API calls port-agnostic in split dev (no hard-coded `:3000` inside Tasks panel).
 - Test updates: unit tests for Trello provider writes + new e2e mocks for label/custom-field edits.
-- PR: (to be created from branch `feat/trello-parity`)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/180
