@@ -8,6 +8,19 @@
 ## 🚨 IMPORTANT: ALWAYS PROVIDE PR URL 🚨
 **When creating any pull request, ALWAYS provide the PR URL in your response to the user. This is mandatory for all PRs.**
 
+## Resume / Context Reset (read this if you lose context)
+
+If you ever lose context mid-run, do **not** improvise. Resume from these files:
+
+- `PLANS/2026-01-20/REQUESTED_CHANGES.md` (master list of requested fixes)
+- `PLANS/2026-01-20/ROLLING_LOG.md` (what shipped; PR links; where to resume)
+- `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md` (tier + queue model)
+- `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md` (current open items: tiers, risk, prompts, review inbox)
+
+Current open PRs (must keep updated in the rolling log):
+- Tasks/Trello parity: PR #180
+- Project risk + conflict detection: PR #181
+
 ## 🚨 STOP! DO THIS FIRST BEFORE ANYTHING ELSE! 🚨
 
 ### THE VERY FIRST THING YOU MUST DO (NO EXCEPTIONS):
@@ -23,6 +36,10 @@ git checkout -b fix/your-feature-name origin/main
 Because `main` is usually checked out in the `master/` worktree, **do not try to check out `main` inside `claude-orchestrator-dev/`** (Git will error: “branch 'main' is already used by worktree…”). Always branch from `origin/main` in dev.
 
 **CRITICAL SAFETY:** If you are working in `claude-orchestrator-dev/`, **do not edit, pull, or run commands in the `master/` folder** unless explicitly requested — that instance may be running on port **3000**.
+
+**TEST SAFETY (ports):**
+- Never use port `3000` for dev/test runs.
+- Use `npm run test:e2e:safe` (defaults to a dedicated port) for Playwright.
 
 **DO NOT**:
 - ❌ Read any files first
