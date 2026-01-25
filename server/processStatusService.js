@@ -125,16 +125,24 @@ const computeLevel = ({ wip, q12, q3, q4, caps }) => {
 };
 
 const computeLaunchAllowedByTier = ({ wip, qByTier, q12, caps }) => {
-  const wipOk = wip <= (caps?.wipMax ?? DEFAULT_WIP_MAX);
-  const q12Ok = q12 <= (caps?.q12 ?? DEFAULT_Q12_CAP);
-  const q3Ok = Number(qByTier?.[3] ?? 0) <= (caps?.q3 ?? DEFAULT_Q3_CAP);
-  const q4Ok = Number(qByTier?.[4] ?? 0) <= (caps?.q4 ?? DEFAULT_Q4_CAP);
+  const maximumAllowedWip = caps?.wipMax ?? DEFAULT_WIP_MAX;
+  const maximumAllowedTier12Queue = caps?.q12 ?? DEFAULT_Q12_CAP;
+  const maximumAllowedTier3Queue = caps?.q3 ?? DEFAULT_Q3_CAP;
+  const maximumAllowedTier4Queue = caps?.q4 ?? DEFAULT_Q4_CAP;
+
+  const isWorkInProgressWithinCap = wip <= maximumAllowedWip;
+  const isTier12QueueWithinCap = q12 <= maximumAllowedTier12Queue;
+
+  const tier3QueueSize = Number(qByTier?.[3] ?? 0);
+  const tier4QueueSize = Number(qByTier?.[4] ?? 0);
+  const isTier3QueueWithinCap = tier3QueueSize <= maximumAllowedTier3Queue;
+  const isTier4QueueWithinCap = tier4QueueSize <= maximumAllowedTier4Queue;
 
   return {
-    1: wipOk && q12Ok,
-    2: wipOk && q12Ok,
-    3: wipOk && q3Ok,
-    4: wipOk && q4Ok
+    1: isWorkInProgressWithinCap && isTier12QueueWithinCap,
+    2: isWorkInProgressWithinCap && isTier12QueueWithinCap,
+    3: isWorkInProgressWithinCap && isTier3QueueWithinCap,
+    4: isWorkInProgressWithinCap && isTier4QueueWithinCap
   };
 };
 
