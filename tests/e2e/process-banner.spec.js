@@ -48,9 +48,9 @@ test.describe('Process banner', () => {
     const banner = (await dashboardBanner.isVisible().catch(() => false)) ? dashboardBanner : headerBanner;
 
     await expect(banner.locator('.process-chip').first()).toHaveText('WIP 2');
-    await expect(banner).toContainText('Q1 1');
-    await expect(banner).toContainText('Q2 0');
-    await expect(banner).toContainText('Q3 2');
-    await expect(banner).toContainText('Q4 0');
+    await expect(banner).toContainText('T1 1');
+    await expect(banner).toContainText('T2 0');
+    await expect(banner).toContainText('T3 2');
+    await expect(banner).toContainText('T4 0');
   });
 });

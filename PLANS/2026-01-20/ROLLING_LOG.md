@@ -584,13 +584,13 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ### Process: WIP + Q banner in header (merged)
 - Adds `/api/process/status` with cached WIP + tiered queue counts.
-- Adds a click-to-open header pill that shows `WIP`, `Q1–Q4`.
+- Adds a click-to-open header pill that shows `WIP`, `T1–T4`.
 - Tests: `npm run test:unit`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/193
 
 ### Process: launch gating on overload (merged)
 - Adds `launchAllowedByTier` to `/api/process/status`.
-- Before starting any agent, prompts if workload caps are exceeded (Tier 1–2 uses `Q12`, Tier 3 uses `Q3`, Tier 4 uses `Q4`).
+- Before starting any agent, prompts if workload caps are exceeded (Tier 1–2 uses `T1+T2` / `qCaps.q12`, Tier 3 uses `T3` / `qCaps.q3`, Tier 4 uses `T4` / `qCaps.q4`).
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/launch-gating.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/194
 
@@ -607,7 +607,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/196 (merged 2026-01-25)
 
 ### UI: tier dropdown on Agent tiles (merged)
-- Adds a per-Agent tier dropdown (`None/Q1–Q4`) directly on each Agent tile; persists to task records under `session:<id>`.
+- Adds a per-Agent tier dropdown (`None/T1–T4`) directly on each Agent tile; persists to task records under `session:<id>`.
 - Updates sidebar + terminal grid immediately so Focus/Review/Background gating reacts without opening Queue.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe` (adds `tests/e2e/inline-tier-selector.spec.js`)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/198 (merged 2026-01-25)

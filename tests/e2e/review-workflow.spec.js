@@ -102,7 +102,7 @@ test.describe('Review Workflow', () => {
     });
     await expect(page.locator('#queue-panel')).toBeVisible({ timeout: 10000 });
 
-    // Preset should activate Q3 + Unreviewed.
+    // Preset should activate Tier 3 + Unreviewed.
     await expect(page.locator('#queue-tier-3.active')).toHaveCount(1);
     await expect(page.locator('#queue-unreviewed.active')).toHaveCount(1);
 
