@@ -242,6 +242,46 @@ class TrelloTaskProvider {
     this._invalidateCacheKeys([`trello:card:${cardId}`]);
     return card;
   }
+
+  async getBoardSnapshot({ boardId, refresh = false, q = '', updatedSince = null } = {}) {
+    if (!boardId) throw new Error('boardId is required');
+
+    const cacheKey = `trello:snapshot:${boardId}:${q || ''}:${updatedSince || ''}`;
+    const ttlMs = 15_000;
+
+    const compute = async () => {
+      const [lists, cards] = await Promise.all([
+        this.listLists({ boardId, refresh }),
+        this.listBoardCards({ boardId, refresh, q, updatedSince })
+      ]);
+
+      const listArr = Array.isArray(lists) ? lists : [];
+      const cardArr = Array.isArray(cards) ? cards : [];
+
+      listArr.sort((a, b) => (a?.pos ?? 0) - (b?.pos ?? 0));
+
+      const cardsByList = {};
+      for (const c of cardArr) {
+        const idList = c?.idList;
+        if (!idList) continue;
+        if (!cardsByList[idList]) cardsByList[idList] = [];
+        cardsByList[idList].push(c);
+      }
+
+      for (const [idList, arr] of Object.entries(cardsByList)) {
+        arr.sort((a, b) => (a?.pos ?? 0) - (b?.pos ?? 0));
+        cardsByList[idList] = arr;
+      }
+
+      return { lists: listArr, cardsByList };
+    };
+
+    if (!this.cache) {
+      return compute();
+    }
+
+    return this.cache.getOrCompute(cacheKey, compute, { ttlMs, force: refresh });
+  }
 }
 
 module.exports = { TrelloTaskProvider };

@@ -41,6 +41,7 @@ Never commit these values.
 - `GET /api/tasks/boards?provider=trello[&refresh=true]`
 - `GET /api/tasks/boards/:boardId/lists?provider=trello[&refresh=true]`
 - `GET /api/tasks/boards/:boardId/cards?provider=trello[&q=...][&updatedSince=ISO][&refresh=true]`
+- `GET /api/tasks/boards/:boardId/snapshot?provider=trello[&q=...][&updatedSince=ISO][&refresh=true]`
 - `GET /api/tasks/lists/:listId/cards?provider=trello[&q=...][&updatedSince=ISO][&refresh=true]`
 - `GET /api/tasks/cards/:cardId?provider=trello[&refresh=true]`
 

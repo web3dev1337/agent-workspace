@@ -5984,6 +5984,7 @@ class ClaudeOrchestrator {
 
     const state = {
       provider: localStorage.getItem('tasks-provider') || 'trello',
+      view: localStorage.getItem('tasks-view') || 'list', // list | board
       boardId: localStorage.getItem('tasks-board') || '',
       listId: localStorage.getItem('tasks-list') || '',
       query: '',
@@ -6014,6 +6015,10 @@ class ClaudeOrchestrator {
             <option value="7d">Last 7d</option>
             <option value="30d">Last 30d</option>
           </select>
+          <div class="tasks-view-toggle" role="group" aria-label="Tasks view">
+            <button class="btn-secondary tasks-view-btn" id="tasks-view-list" data-view="list" title="List view">List</button>
+            <button class="btn-secondary tasks-view-btn" id="tasks-view-board" data-view="board" title="Board view">Board</button>
+          </div>
           <button class="btn-secondary" id="tasks-refresh">🔄 Refresh</button>
         </div>
 
@@ -6036,6 +6041,9 @@ class ClaudeOrchestrator {
     const searchEl = modal.querySelector('#tasks-search');
     const updatedEl = modal.querySelector('#tasks-updated');
     const refreshBtn = modal.querySelector('#tasks-refresh');
+    const viewListBtn = modal.querySelector('#tasks-view-list');
+    const viewBoardBtn = modal.querySelector('#tasks-view-board');
+    const bodyEl = modal.querySelector('.tasks-body');
     const cardsEl = modal.querySelector('#tasks-cards');
     const detailEl = modal.querySelector('#tasks-detail');
 
@@ -6073,6 +6081,11 @@ class ClaudeOrchestrator {
     const renderCards = (cards) => {
       if (!state.boardId) {
         cardsEl.innerHTML = `<div class="no-ports">Select a board to view cards.</div>`;
+        return;
+      }
+
+      if (state.view === 'board') {
+        cardsEl.innerHTML = `<div class="no-ports">Board view uses the board snapshot. Click Refresh if needed.</div>`;
         return;
       }
 
@@ -6229,6 +6242,21 @@ class ClaudeOrchestrator {
       return data.lists || [];
     };
 
+    const fetchSnapshot = async ({ refresh = false } = {}) => {
+      if (!state.boardId) return null;
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/snapshot`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      if (state.query) url.searchParams.set('q', state.query);
+      const updatedSince = computeUpdatedSince();
+      if (updatedSince) url.searchParams.set('updatedSince', updatedSince);
+
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load board snapshot');
+      return data;
+    };
+
     const fetchCards = async ({ refresh = false } = {}) => {
       if (!state.boardId) return [];
 
@@ -6302,6 +6330,57 @@ class ClaudeOrchestrator {
       return data.card || null;
     };
 
+    const renderBoard = (snapshot) => {
+      if (!state.boardId) {
+        cardsEl.innerHTML = `<div class="no-ports">Select a board to view cards.</div>`;
+        return;
+      }
+
+      if (!snapshot || !Array.isArray(snapshot.lists)) {
+        cardsEl.innerHTML = `<div class="no-ports">No board data.</div>`;
+        return;
+      }
+
+      const lists = snapshot.lists || [];
+      const cardsByList = snapshot.cardsByList || {};
+
+      cardsEl.innerHTML = `
+        <div class="tasks-board" id="tasks-board-view">
+          ${lists.map(list => {
+            const cards = Array.isArray(cardsByList[list.id]) ? cardsByList[list.id] : [];
+            return `
+              <div class="tasks-column" data-list-id="${list.id}">
+                <div class="tasks-column-header">
+                  <div class="tasks-column-title">${String(list.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                  <div class="tasks-column-count" data-count>${cards.length}</div>
+                </div>
+                <div class="tasks-column-cards" data-dropzone>
+                  ${cards.map(c => {
+                    const title = String(c?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
+                    return `
+                      <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-origin-list-id="${list.id}">
+                        <div class="task-card-title">${title}</div>
+                        <div class="task-card-meta">${last}</div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    };
+
+    const applyView = () => {
+      const isBoard = state.view === 'board';
+      if (listEl) listEl.style.display = isBoard ? 'none' : '';
+      if (bodyEl) bodyEl.classList.toggle('tasks-body-board', isBoard);
+      viewListBtn?.classList.toggle('active', !isBoard);
+      viewBoardBtn?.classList.toggle('active', isBoard);
+    };
+
     const refreshAll = async ({ force = false } = {}) => {
       cardsEl.innerHTML = `<div class="loading">Loading…</div>`;
       renderDetail(null);
@@ -6330,23 +6409,28 @@ class ClaudeOrchestrator {
 
         const lists = await fetchLists({ refresh: force });
         state.lists = lists || [];
-        setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
-        // Insert an explicit "All lists" option at the top (better default for users who think in boards).
-        const allOpt = document.createElement('option');
-        allOpt.value = '__all__';
-        allOpt.textContent = 'All lists';
-        listEl.insertBefore(allOpt, listEl.firstChild);
+        if (state.view === 'list') {
+          setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
+          // Insert an explicit "All lists" option at the top (better default for users who think in boards).
+          const allOpt = document.createElement('option');
+          allOpt.value = '__all__';
+          allOpt.textContent = 'All lists';
+          listEl.insertBefore(allOpt, listEl.firstChild);
 
-        if (state.listId) {
-          listEl.value = state.listId;
-        } else if (state.boardId) {
-          state.listId = '__all__';
-          localStorage.setItem('tasks-list', state.listId);
-          listEl.value = state.listId;
+          if (state.listId) {
+            listEl.value = state.listId;
+          } else if (state.boardId) {
+            state.listId = '__all__';
+            localStorage.setItem('tasks-list', state.listId);
+            listEl.value = state.listId;
+          }
+
+          const cards = await fetchCards({ refresh: force });
+          renderCards(cards);
+        } else {
+          const snapshot = await fetchSnapshot({ refresh: force });
+          renderBoard(snapshot);
         }
-
-        const cards = await fetchCards({ refresh: force });
-        renderCards(cards);
       } catch (error) {
         console.error('Tasks panel refresh failed:', error);
         cardsEl.innerHTML = `<div class="no-ports">${String(error?.message || error)}</div>`;
@@ -6354,6 +6438,21 @@ class ClaudeOrchestrator {
     };
 
     if (updatedEl) updatedEl.value = state.updatedWindow;
+    applyView();
+
+    viewListBtn?.addEventListener('click', async () => {
+      state.view = 'list';
+      localStorage.setItem('tasks-view', state.view);
+      applyView();
+      await refreshAll({ force: false });
+    });
+
+    viewBoardBtn?.addEventListener('click', async () => {
+      state.view = 'board';
+      localStorage.setItem('tasks-view', state.view);
+      applyView();
+      await refreshAll({ force: false });
+    });
 
     providerEl.addEventListener('change', async () => {
       state.provider = providerEl.value || 'trello';
@@ -6482,6 +6581,85 @@ class ClaudeOrchestrator {
 
     modal.addEventListener('click', (e) => {
       if (e.target === modal) modal.remove();
+    });
+
+    // Drag/drop (board view): inspired by Fizzy's simple DnD controller.
+    let dragCardId = null;
+    let dragFromListId = null;
+
+    cardsEl.addEventListener('dragstart', (e) => {
+      if (state.view !== 'board') return;
+      const row = e.target.closest('.task-card-board');
+      if (!row) return;
+      dragCardId = row.dataset.cardId || null;
+      dragFromListId = row.dataset.originListId || null;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.dropEffect = 'move';
+    });
+
+    cardsEl.addEventListener('dragend', (e) => {
+      const row = e.target.closest('.task-card-board');
+      row?.classList.remove('dragging');
+      cardsEl.querySelectorAll('.tasks-column.hover').forEach(col => col.classList.remove('hover'));
+      dragCardId = null;
+      dragFromListId = null;
+    });
+
+    cardsEl.addEventListener('dragover', (e) => {
+      if (state.view !== 'board') return;
+      if (!dragCardId) return;
+      const column = e.target.closest('.tasks-column');
+      if (!column) return;
+      e.preventDefault();
+      cardsEl.querySelectorAll('.tasks-column.hover').forEach(col => col.classList.remove('hover'));
+      column.classList.add('hover');
+    });
+
+    cardsEl.addEventListener('drop', async (e) => {
+      if (state.view !== 'board') return;
+      const column = e.target.closest('.tasks-column');
+      if (!column) return;
+      e.preventDefault();
+
+      const toListId = column.dataset.listId;
+      if (!dragCardId || !toListId || toListId === dragFromListId) return;
+
+      const draggedEl = cardsEl.querySelector(`.task-card-board[data-card-id="${dragCardId}"]`);
+      const targetContainer = column.querySelector('[data-dropzone]');
+      const fromColumn = dragFromListId ? cardsEl.querySelector(`.tasks-column[data-list-id="${dragFromListId}"]`) : null;
+      const fromContainer = fromColumn?.querySelector('[data-dropzone]') || null;
+
+      const updateCount = (col) => {
+        if (!col) return;
+        const countEl = col.querySelector('[data-count]');
+        if (!countEl) return;
+        countEl.textContent = String(col.querySelectorAll('.task-card-board').length);
+      };
+
+      // Optimistic DOM move: append to bottom of target column
+      if (draggedEl && targetContainer) {
+        targetContainer.appendChild(draggedEl);
+        draggedEl.dataset.originListId = toListId;
+      }
+      updateCount(column);
+      updateCount(fromColumn);
+
+      try {
+        await moveCard({ cardId: dragCardId, listId: toListId });
+        this.showToast('Moved', 'success');
+      } catch (err) {
+        console.error('Move card failed:', err);
+        if (draggedEl && fromContainer) {
+          fromContainer.appendChild(draggedEl);
+          draggedEl.dataset.originListId = dragFromListId || '';
+        }
+        updateCount(column);
+        updateCount(fromColumn);
+        this.showToast(String(err?.message || err), 'error');
+      } finally {
+        cardsEl.querySelectorAll('.tasks-column.hover').forEach(col => col.classList.remove('hover'));
+      }
     });
 
     await refreshAll({ force: false });
