@@ -46,6 +46,10 @@ class UserSettingsService {
         },
         ui: {
           theme: 'dark',
+          tasks: {
+            // 'inherit' uses the main UI theme; 'light'/'dark' force the Tasks panel theme.
+            theme: 'inherit'
+          },
           diffViewer: {
             theme: 'dark'
           }

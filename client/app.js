@@ -694,6 +694,7 @@ class ClaudeOrchestrator {
       'enable-sounds': null,
       'auto-scroll': null,
       'theme-select': null,
+      'tasks-theme-select': null,
       'global-skip-permissions': null,
       'reset-to-defaults': null,
       'save-as-default': null,
@@ -834,6 +835,14 @@ class ClaudeOrchestrator {
       // Persist via server user settings so it survives reloads across devices/worktrees.
       this.updateGlobalUserSetting('ui.theme', e.target.value);
     });
+
+    const tasksThemeSelect = document.getElementById('tasks-theme-select');
+    if (tasksThemeSelect) {
+      tasksThemeSelect.addEventListener('change', (e) => {
+        const next = e.target.value;
+        this.updateGlobalUserSetting('ui.tasks.theme', next);
+      });
+    }
 
     const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
     if (diffViewerThemeSelect) {
@@ -5218,6 +5227,16 @@ class ClaudeOrchestrator {
       }
     }
 
+    const tasksThemeSelect = document.getElementById('tasks-theme-select');
+    if (tasksThemeSelect) {
+      const tasksTheme = this.userSettings.global?.ui?.tasks?.theme;
+      if (tasksTheme === 'light' || tasksTheme === 'dark' || tasksTheme === 'inherit') {
+        tasksThemeSelect.value = tasksTheme;
+      } else {
+        tasksThemeSelect.value = 'inherit';
+      }
+    }
+
     // Update session recovery settings UI
     const sessionRecoveryEnabled = document.getElementById('session-recovery-enabled');
     const sessionRecoveryOptions = document.getElementById('session-recovery-options');
@@ -6033,6 +6052,11 @@ class ClaudeOrchestrator {
     const modal = document.createElement('div');
     modal.id = 'tasks-panel';
     modal.className = 'modal tasks-modal';
+    const tasksThemeSetting = this.userSettings?.global?.ui?.tasks?.theme;
+    const resolvedTasksTheme = (tasksThemeSetting === 'light' || tasksThemeSetting === 'dark')
+      ? tasksThemeSetting
+      : (this.settings.theme === 'light' ? 'light' : 'dark');
+    modal.classList.add(`tasks-theme-${resolvedTasksTheme}`);
     modal.innerHTML = `
       <div class="modal-content tasks-content">
         <div class="modal-header">

@@ -13,6 +13,9 @@
     "terminal": {},
     "ui": {
       "theme": "dark",
+      "tasks": {
+        "theme": "inherit"
+      },
       "diffViewer": {
         "theme": "dark"
       }
