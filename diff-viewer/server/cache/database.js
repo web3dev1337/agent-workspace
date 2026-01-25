@@ -20,7 +20,9 @@ try {
   BetterSqlite = TestDB;
   console.log('Using better-sqlite3 (synchronous)');
 } catch (error) {
-  console.warn('better-sqlite3 unavailable; using in-memory cache:', error.message);
+  const raw = String(error?.message || error || '');
+  const firstLine = raw.split('\n')[0] || 'unknown error';
+  console.warn(`better-sqlite3 unavailable; using in-memory cache: ${firstLine}`);
 }
 
 class MemoryDiffCache {
@@ -433,4 +435,3 @@ module.exports = {
   },
   DiffCache: CacheImpl
 };
-

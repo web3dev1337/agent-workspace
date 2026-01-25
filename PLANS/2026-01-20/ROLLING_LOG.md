@@ -630,3 +630,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Adds a dedicated Playwright smoke test for diff viewer (`npm run test:e2e:diff-viewer`).
 - Tests: `npm run test:unit`, `npm run test:e2e:diff-viewer -- tests/e2e-diff-viewer/markdown-render.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/204 (merged 2026-01-26)
+
+### Diff Viewer: reduce sqlite warning noise (pending)
+- When `better-sqlite3` is compiled for a different Node version, the diff viewer now logs a single-line warning and falls back to in-memory cache.
+- Tests: `npm run test:unit`, `npm run test:e2e:diff-viewer -- tests/e2e-diff-viewer/markdown-render.spec.js`
+- PR: (pending)
