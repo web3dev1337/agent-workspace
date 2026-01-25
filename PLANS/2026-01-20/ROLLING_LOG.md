@@ -523,3 +523,15 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Quick Worktree menu no longer disables “in use” entries; selecting one shows the existing sessions (or falls back to adding it) instead of blocking.
 - Tests: `npm run test:unit`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/171
+
+### Tasks: Trello Kanban board view + metadata + writes (merged)
+- Adds a full-screen Tasks modal with Trello provider support, board snapshot + kanban view, and common write actions (comments/move/assign/due/dependencies).
+- Includes server-side theme setting (`global.ui.theme`) and Trello color accents + labels/members/custom fields read-only display.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/179 (merged 2026-01-25)
+
+### Tasks: Trello parity iteration (labels + custom field editing) (next)
+- Adds label editing (board labels list + card label toggles).
+- Adds custom field editing (text/number/checkbox/date/list) via provider-agnostic API.
+- Makes Tasks API calls port-agnostic in split dev (no hard-coded `:3000` inside Tasks panel).
+- Test updates: unit tests for Trello provider writes + new e2e mocks for label/custom-field edits.
+- PR: (to be created from branch `feat/trello-parity`)
