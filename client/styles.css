@@ -6844,6 +6844,16 @@ header h1 {
   font-weight: 700;
 }
 
+.tasks-input-inline {
+  width: auto;
+  min-width: 220px;
+  display: inline-flex;
+  margin: 0 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 6px 10px;
+}
+
 .tasks-textarea {
   width: 100%;
   background: var(--bg-secondary);
@@ -6854,6 +6864,51 @@ header h1 {
   font-size: 0.85rem;
   font-family: var(--font-mono);
   resize: vertical;
+}
+
+.tasks-inline-row {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.tasks-chips {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: 6px;
+}
+
+.tasks-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.tasks-chip-muted {
+  opacity: 0.7;
+}
+
+.tasks-chip-x {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.tasks-chip-x:hover {
+  color: var(--text-primary);
 }
 
 .tasks-detail-block {
@@ -6909,6 +6964,49 @@ header h1 {
   color: var(--text-primary);
   line-height: 1.35;
   font-size: 0.85rem;
+}
+
+.tasks-deps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tasks-dep-row {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.tasks-dep-row.done {
+  opacity: 0.75;
+}
+
+.tasks-dep-row.done .tasks-dep-text {
+  text-decoration: line-through;
+}
+
+.tasks-dep-text a {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.tasks-dep-text a:hover {
+  text-decoration: underline;
+}
+
+.tasks-dep-remove {
+  padding: 4px 8px;
+  font-weight: 700;
+}
+
+.tasks-dep-add {
+  margin-top: var(--space-sm);
 }
 
 .tasks-detail-meta {

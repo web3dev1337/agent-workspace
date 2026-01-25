@@ -5990,6 +5990,7 @@ class ClaudeOrchestrator {
       query: '',
       updatedWindow: localStorage.getItem('tasks-updated-window') || 'any', // any | 1h | 24h | 7d | 30d
       lists: [],
+      boardMembers: [],
       selectedCardId: null
     };
 
@@ -6062,6 +6063,32 @@ class ClaudeOrchestrator {
       return new Date(now - delta).toISOString();
     };
 
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    const toDatetimeLocalValue = (iso) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      const pad = (n) => String(n).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      const mm = pad(d.getMonth() + 1);
+      const dd = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const mi = pad(d.getMinutes());
+      return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+    };
+
+    const fromDatetimeLocalValue = (value) => {
+      const v = String(value || '').trim();
+      if (!v) return null;
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toISOString();
+    };
+
     const setSelectOptions = (select, options, { placeholder = 'Select...', valueKey = 'id', labelKey = 'name' } = {}) => {
       if (!select) return;
       select.innerHTML = '';
@@ -6121,15 +6148,15 @@ class ClaudeOrchestrator {
 
       state.selectedCardId = card.id || null;
 
-      const title = (card?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const desc = (card?.desc || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const title = escapeHtml(card?.name || '');
+      const desc = escapeHtml(card?.desc || '');
       const last = card?.dateLastActivity ? new Date(card.dateLastActivity).toLocaleString() : '';
       const url = card?.url || '';
 
       const members = Array.isArray(card?.members) ? card.members : [];
-      const memberLabel = members.length
-        ? members.map(m => (m?.fullName || m?.username || '')).filter(Boolean).join(', ')
-        : 'none';
+      const memberById = new Map(members.map(m => [m?.id, m]).filter(([id]) => !!id));
+      const allMembers = Array.isArray(state.boardMembers) ? state.boardMembers : [];
+      const availableMembers = allMembers.filter(m => m?.id && !memberById.has(m.id));
 
       const labels = Array.isArray(card?.labels) ? card.labels : [];
       const labelLabel = labels.length
@@ -6150,6 +6177,24 @@ class ClaudeOrchestrator {
         }))
         .sort((a, b) => (Date.parse(b.date || '') || 0) - (Date.parse(a.date || '') || 0));
 
+      const checklists = Array.isArray(card?.checklists) ? card.checklists : [];
+      const depChecklist = checklists.find(cl => String(cl?.name || '').trim().toLowerCase() === 'dependencies');
+      const depItemsRaw = Array.isArray(depChecklist?.checkItems) ? depChecklist.checkItems : [];
+      const dependencies = depItemsRaw.map(i => {
+        const name = String(i?.name || '').trim();
+        const match = name.match(/https?:\/\/\S+/);
+        const url = match ? match[0] : '';
+        const isComplete = String(i?.state || '').toLowerCase() === 'complete';
+        return {
+          id: i?.id || '',
+          name,
+          url,
+          isComplete
+        };
+      }).filter(d => !!d.id);
+
+      const dueValue = toDatetimeLocalValue(card?.due);
+
       detailEl.innerHTML = `
         <div class="tasks-detail-header">
           <div class="tasks-detail-title">
@@ -6161,8 +6206,56 @@ class ClaudeOrchestrator {
           </div>
         </div>
         <div class="tasks-detail-meta">Last activity: ${last || 'unknown'} • List: ${currentListName || card?.idList || 'unknown'}</div>
-        <div class="tasks-detail-meta">Members: ${memberLabel}</div>
+        <div class="tasks-detail-meta">
+          Members:
+          <span class="tasks-chips" id="tasks-member-chips">
+            ${members.length === 0 ? `<span class="tasks-chip tasks-chip-muted">none</span>` : members.map(m => `
+              <span class="tasks-chip" data-member-id="${escapeHtml(m?.id || '')}">
+                ${escapeHtml(m?.fullName || m?.username || m?.id || '')}
+                <button class="tasks-chip-x" type="button" title="Unassign" data-remove-member="${escapeHtml(m?.id || '')}">×</button>
+              </span>
+            `).join('')}
+          </span>
+        </div>
         <div class="tasks-detail-meta">Labels: ${labelLabel}</div>
+        <div class="tasks-detail-meta">
+          Due:
+          <input id="tasks-card-due" class="tasks-input tasks-input-inline" type="datetime-local" value="${escapeHtml(dueValue)}" />
+          <button class="btn-secondary" id="tasks-card-due-save" title="Set due date">Set</button>
+          <button class="btn-secondary" id="tasks-card-due-clear" title="Clear due date">Clear</button>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Assign Member</div>
+          <div class="tasks-inline-row">
+            <select id="tasks-assign-member" class="tasks-select tasks-select-inline">
+              <option value="">Select member…</option>
+              ${availableMembers.map(m => `
+                <option value="${escapeHtml(m?.id || '')}">${escapeHtml(m?.fullName || m?.username || m?.id || '')}</option>
+              `).join('')}
+            </select>
+            <button class="btn-secondary" id="tasks-assign-member-btn">＋ Assign</button>
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Dependencies (${dependencies.length})</div>
+          <div class="tasks-deps">
+            ${dependencies.length === 0 ? `<div class="tasks-detail-empty">No dependencies.</div>` : dependencies.map(d => `
+              <div class="tasks-dep-row ${d.isComplete ? 'done' : ''}">
+                <input type="checkbox" class="tasks-dep-checkbox" data-dep-id="${escapeHtml(d.id)}" ${d.isComplete ? 'checked' : ''} />
+                <div class="tasks-dep-text">
+                  ${d.url ? `<a href="${escapeHtml(d.url)}" target="_blank" rel="noreferrer">${escapeHtml(d.name)}</a>` : escapeHtml(d.name)}
+                </div>
+                <button class="btn-secondary tasks-dep-remove" type="button" title="Remove dependency" data-remove-dep="${escapeHtml(d.id)}">×</button>
+              </div>
+            `).join('')}
+          </div>
+          <div class="tasks-inline-row tasks-dep-add">
+            <input id="tasks-dep-input" class="tasks-input" placeholder="Paste Trello card URL or shortLink…" />
+            <button class="btn-secondary" id="tasks-dep-add-btn">＋ Add</button>
+          </div>
+        </div>
 
         <div class="tasks-detail-block">
           <div class="tasks-detail-block-title">Description</div>
@@ -6219,6 +6312,17 @@ class ClaudeOrchestrator {
       const res = await fetch(`${serverUrl}/api/tasks/providers`);
       if (!res.ok) throw new Error('Failed to load task providers');
       return res.json();
+    };
+
+    const fetchBoardMembers = async ({ refresh = false } = {}) => {
+      if (!state.boardId) return [];
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/members`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load board members');
+      return data.members || [];
     };
 
     const fetchBoards = async ({ refresh = false } = {}) => {
@@ -6307,25 +6411,14 @@ class ClaudeOrchestrator {
       }
     };
 
-    const saveCard = async ({ cardId, name, desc } = {}) => {
+    const updateCard = async ({ cardId, fields } = {}) => {
       const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}?provider=${encodeURIComponent(state.provider)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, desc })
+        body: JSON.stringify(fields || {})
       });
       const { raw, json } = await parseResponseJson(res);
-      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to save card');
-      return json.card || null;
-    };
-
-    const moveCard = async ({ cardId, listId } = {}) => {
-      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}?provider=${encodeURIComponent(state.provider)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idList: listId })
-      });
-      const { raw, json } = await parseResponseJson(res);
-      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to move card');
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to update card');
       return json.card || null;
     };
 
@@ -6337,6 +6430,44 @@ class ClaudeOrchestrator {
       });
       const { raw, json } = await parseResponseJson(res);
       if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to add comment');
+      return json.card || null;
+    };
+
+    const addDependency = async ({ cardId, value } = {}) => {
+      const trimmed = String(value || '').trim();
+      if (!trimmed) return null;
+
+      const body = trimmed.includes('http')
+        ? { url: trimmed }
+        : { shortLink: trimmed };
+
+      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/dependencies?provider=${encodeURIComponent(state.provider)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to add dependency');
+      return json.card || null;
+    };
+
+    const removeDependency = async ({ cardId, itemId } = {}) => {
+      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/dependencies/${encodeURIComponent(itemId)}?provider=${encodeURIComponent(state.provider)}`, {
+        method: 'DELETE'
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to remove dependency');
+      return json.card || null;
+    };
+
+    const setDependencyState = async ({ cardId, itemId, state: nextState } = {}) => {
+      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/dependencies/${encodeURIComponent(itemId)}?provider=${encodeURIComponent(state.provider)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: nextState })
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to update dependency');
       return json.card || null;
     };
 
@@ -6419,6 +6550,12 @@ class ClaudeOrchestrator {
 
         const lists = await fetchLists({ refresh: force });
         state.lists = lists || [];
+        try {
+          state.boardMembers = await fetchBoardMembers({ refresh: force });
+        } catch (e) {
+          console.warn('Failed to load board members:', e?.message || e);
+          state.boardMembers = [];
+        }
         if (state.view === 'list') {
           setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
           // Insert an explicit "All lists" option at the top (better default for users who think in boards).
@@ -6521,68 +6658,201 @@ class ClaudeOrchestrator {
       detailEl.innerHTML = `<div class="loading">Loading card…</div>`;
       try {
         const card = await fetchCardDetail(cardId);
-        renderDetail(card);
+        const setDetail = (c) => {
+          renderDetail(c);
 
-        // Wire up actions for the currently rendered card.
-        const saveBtn = detailEl.querySelector('#tasks-card-save');
-        const moveBtn = detailEl.querySelector('#tasks-card-move-btn');
-        const commentBtn = detailEl.querySelector('#tasks-card-comment-btn');
+          const saveBtn = detailEl.querySelector('#tasks-card-save');
+          const moveBtn = detailEl.querySelector('#tasks-card-move-btn');
+          const commentBtn = detailEl.querySelector('#tasks-card-comment-btn');
+          const dueSaveBtn = detailEl.querySelector('#tasks-card-due-save');
+          const dueClearBtn = detailEl.querySelector('#tasks-card-due-clear');
+          const assignBtn = detailEl.querySelector('#tasks-assign-member-btn');
 
-        saveBtn?.addEventListener('click', async () => {
-          const titleEl = detailEl.querySelector('#tasks-card-title');
-          const descEl = detailEl.querySelector('#tasks-card-desc');
-          const name = (titleEl?.value || '').trim();
-          const desc = descEl?.value ?? '';
-          if (!state.selectedCardId) return;
+          saveBtn?.addEventListener('click', async () => {
+            const titleEl = detailEl.querySelector('#tasks-card-title');
+            const descEl = detailEl.querySelector('#tasks-card-desc');
+            const name = (titleEl?.value || '').trim();
+            const desc = descEl?.value ?? '';
+            if (!state.selectedCardId) return;
+            try {
+              saveBtn.disabled = true;
+              const updated = await updateCard({ cardId: state.selectedCardId, fields: { name, desc } });
+              if (updated) setDetail(updated);
+              this.showToast('Saved', 'success');
+            } catch (err) {
+              console.error('Save card failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              saveBtn.disabled = false;
+            }
+          });
 
-          try {
-            saveBtn.disabled = true;
-            const updated = await saveCard({ cardId: state.selectedCardId, name, desc });
-            if (updated) renderDetail(updated);
-            this.showToast('Saved', 'success');
-          } catch (err) {
-            console.error('Save card failed:', err);
-            this.showToast(String(err?.message || err), 'error');
-          } finally {
-            saveBtn.disabled = false;
-          }
-        });
+          moveBtn?.addEventListener('click', async () => {
+            const sel = detailEl.querySelector('#tasks-card-move');
+            const listId = sel?.value;
+            if (!state.selectedCardId || !listId) return;
+            try {
+              moveBtn.disabled = true;
+              const updated = await updateCard({ cardId: state.selectedCardId, fields: { idList: listId } });
+              if (updated) setDetail(updated);
+              await refreshAll({ force: true });
+              this.showToast('Moved', 'success');
+            } catch (err) {
+              console.error('Move card failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              moveBtn.disabled = false;
+            }
+          });
 
-        moveBtn?.addEventListener('click', async () => {
-          const sel = detailEl.querySelector('#tasks-card-move');
-          const listId = sel?.value;
-          if (!state.selectedCardId || !listId) return;
-          try {
-            moveBtn.disabled = true;
-            const updated = await moveCard({ cardId: state.selectedCardId, listId });
-            if (updated) renderDetail(updated);
-            await refreshAll({ force: true });
-            this.showToast('Moved', 'success');
-          } catch (err) {
-            console.error('Move card failed:', err);
-            this.showToast(String(err?.message || err), 'error');
-          } finally {
-            moveBtn.disabled = false;
-          }
-        });
+          commentBtn?.addEventListener('click', async () => {
+            const textarea = detailEl.querySelector('#tasks-card-comment');
+            const text = (textarea?.value || '').trim();
+            if (!state.selectedCardId || !text) return;
+            try {
+              commentBtn.disabled = true;
+              const updated = await addComment({ cardId: state.selectedCardId, text });
+              if (textarea) textarea.value = '';
+              if (updated) setDetail(updated);
+              this.showToast('Comment added', 'success');
+            } catch (err) {
+              console.error('Add comment failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              commentBtn.disabled = false;
+            }
+          });
 
-        commentBtn?.addEventListener('click', async () => {
-          const textarea = detailEl.querySelector('#tasks-card-comment');
-          const text = (textarea?.value || '').trim();
-          if (!state.selectedCardId || !text) return;
-          try {
-            commentBtn.disabled = true;
-            const updated = await addComment({ cardId: state.selectedCardId, text });
-            if (textarea) textarea.value = '';
-            if (updated) renderDetail(updated);
-            this.showToast('Comment added', 'success');
-          } catch (err) {
-            console.error('Add comment failed:', err);
-            this.showToast(String(err?.message || err), 'error');
-          } finally {
-            commentBtn.disabled = false;
-          }
-        });
+          dueSaveBtn?.addEventListener('click', async () => {
+            const dueEl = detailEl.querySelector('#tasks-card-due');
+            const due = fromDatetimeLocalValue(dueEl?.value || '');
+            if (!state.selectedCardId) return;
+            try {
+              dueSaveBtn.disabled = true;
+              const updated = await updateCard({ cardId: state.selectedCardId, fields: { due } });
+              if (updated) setDetail(updated);
+              this.showToast('Due date updated', 'success');
+            } catch (err) {
+              console.error('Set due failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              dueSaveBtn.disabled = false;
+            }
+          });
+
+          dueClearBtn?.addEventListener('click', async () => {
+            if (!state.selectedCardId) return;
+            try {
+              dueClearBtn.disabled = true;
+              const updated = await updateCard({ cardId: state.selectedCardId, fields: { due: null } });
+              if (updated) setDetail(updated);
+              this.showToast('Due date cleared', 'success');
+            } catch (err) {
+              console.error('Clear due failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              dueClearBtn.disabled = false;
+            }
+          });
+
+          assignBtn?.addEventListener('click', async () => {
+            const select = detailEl.querySelector('#tasks-assign-member');
+            const memberId = select?.value;
+            if (!state.selectedCardId || !memberId) return;
+            const currentMembers = Array.isArray(c?.members) ? c.members : [];
+            const ids = Array.from(new Set([...currentMembers.map(m => m?.id).filter(Boolean), memberId]));
+            try {
+              assignBtn.disabled = true;
+              const updated = await updateCard({ cardId: state.selectedCardId, fields: { idMembers: ids } });
+              if (updated) setDetail(updated);
+              this.showToast('Member assigned', 'success');
+            } catch (err) {
+              console.error('Assign member failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              assignBtn.disabled = false;
+            }
+          });
+
+          detailEl.querySelectorAll('[data-remove-member]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const removeId = btn.getAttribute('data-remove-member');
+              if (!state.selectedCardId || !removeId) return;
+              const currentMembers = Array.isArray(c?.members) ? c.members : [];
+              const ids = currentMembers.map(m => m?.id).filter(Boolean).filter(id => id !== removeId);
+              try {
+                btn.disabled = true;
+                const updated = await updateCard({ cardId: state.selectedCardId, fields: { idMembers: ids } });
+                if (updated) setDetail(updated);
+                this.showToast('Member unassigned', 'success');
+              } catch (err) {
+                console.error('Unassign member failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+
+          const depAddBtn = detailEl.querySelector('#tasks-dep-add-btn');
+          depAddBtn?.addEventListener('click', async () => {
+            const input = detailEl.querySelector('#tasks-dep-input');
+            const value = input?.value || '';
+            if (!state.selectedCardId) return;
+            try {
+              depAddBtn.disabled = true;
+              const updated = await addDependency({ cardId: state.selectedCardId, value });
+              if (input) input.value = '';
+              if (updated) setDetail(updated);
+              this.showToast('Dependency added', 'success');
+            } catch (err) {
+              console.error('Add dependency failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              depAddBtn.disabled = false;
+            }
+          });
+
+          detailEl.querySelectorAll('[data-remove-dep]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const itemId = btn.getAttribute('data-remove-dep');
+              if (!state.selectedCardId || !itemId) return;
+              try {
+                btn.disabled = true;
+                const updated = await removeDependency({ cardId: state.selectedCardId, itemId });
+                if (updated) setDetail(updated);
+                this.showToast('Dependency removed', 'success');
+              } catch (err) {
+                console.error('Remove dependency failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+
+          detailEl.querySelectorAll('[data-dep-id]').forEach((checkbox) => {
+            checkbox.addEventListener('change', async () => {
+              const itemId = checkbox.getAttribute('data-dep-id');
+              if (!state.selectedCardId || !itemId) return;
+              const desired = checkbox.checked ? 'complete' : 'incomplete';
+              try {
+                checkbox.disabled = true;
+                const updated = await setDependencyState({ cardId: state.selectedCardId, itemId, state: desired });
+                if (updated) setDetail(updated);
+                this.showToast('Dependency updated', 'success');
+              } catch (err) {
+                console.error('Toggle dependency failed:', err);
+                checkbox.checked = !checkbox.checked;
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                checkbox.disabled = false;
+              }
+            });
+          });
+        };
+
+        setDetail(card);
       } catch (error) {
         console.error('Failed to fetch card detail:', error);
         detailEl.innerHTML = `<div class="no-ports">${String(error?.message || error)}</div>`;
@@ -6656,7 +6926,7 @@ class ClaudeOrchestrator {
       updateCount(fromColumn);
 
       try {
-        await moveCard({ cardId: dragCardId, listId: toListId });
+        await updateCard({ cardId: dragCardId, fields: { idList: toListId } });
         this.showToast('Moved', 'success');
       } catch (err) {
         console.error('Move card failed:', err);

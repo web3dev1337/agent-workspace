@@ -1,4 +1,4 @@
-const { TrelloTaskProvider } = require('../../server/taskProviders/trelloProvider');
+const { TrelloTaskProvider, parseTrelloDependenciesFromCard } = require('../../server/taskProviders/trelloProvider');
 
 describe('TrelloTaskProvider', () => {
   test('listBoardCards falls back to per-list aggregation when board endpoint fails', async () => {
@@ -39,5 +39,28 @@ describe('TrelloTaskProvider', () => {
     expect(snap.lists.map(l => l.id)).toEqual(['l1', 'l2']);
     expect(snap.cardsByList.l1.map(c => c.id)).toEqual(['c1', 'c2']);
     expect(snap.cardsByList.l2.map(c => c.id)).toEqual(['c3']);
+  });
+
+  test('parseTrelloDependenciesFromCard extracts Dependencies checklist items', () => {
+    const card = {
+      checklists: [
+        { id: 'cl-other', name: 'Todo', checkItems: [{ id: 'x', name: 'nope', state: 'incomplete' }] },
+        {
+          id: 'cl-deps',
+          name: 'Dependencies',
+          checkItems: [
+            { id: 'i1', name: 'https://trello.com/c/AbCdEf12/some-card', state: 'incomplete' },
+            { id: 'i2', name: 'Blocked by https://example.com/thing', state: 'complete' }
+          ]
+        }
+      ]
+    };
+
+    const deps = parseTrelloDependenciesFromCard(card);
+    expect(deps.checklistId).toBe('cl-deps');
+    expect(deps.items.map(i => i.id)).toEqual(['i1', 'i2']);
+    expect(deps.items[0].shortLink).toBe('AbCdEf12');
+    expect(deps.items[0].url).toBe('https://trello.com/c/AbCdEf12/some-card');
+    expect(deps.items[1].state).toBe('complete');
   });
 });
