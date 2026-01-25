@@ -6643,15 +6643,17 @@ class ClaudeOrchestrator {
         setSelectOptions(boardEl, boards, { placeholder: 'Select board...', valueKey: 'id', labelKey: 'name' });
         if (state.boardId) boardEl.value = state.boardId;
 
-        const lists = await fetchLists({ refresh: force });
-        state.lists = lists || [];
-        try {
-          state.boardMembers = await fetchBoardMembers({ refresh: force });
-        } catch (e) {
-          console.warn('Failed to load board members:', e?.message || e);
-          state.boardMembers = [];
-        }
         if (state.view === 'list') {
+          const [lists, members] = await Promise.all([
+            fetchLists({ refresh: force }),
+            fetchBoardMembers({ refresh: force }).catch((e) => {
+              console.warn('Failed to load board members:', e?.message || e);
+              return [];
+            })
+          ]);
+          state.lists = lists || [];
+          state.boardMembers = members || [];
+
           setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
           // Insert an explicit "All lists" option at the top (better default for users who think in boards).
           const allOpt = document.createElement('option');
@@ -6670,7 +6672,15 @@ class ClaudeOrchestrator {
           const cards = await fetchCards({ refresh: force });
           renderCards(cards);
         } else {
-          const snapshot = await fetchSnapshot({ refresh: force });
+          const [snapshot, members] = await Promise.all([
+            fetchSnapshot({ refresh: force }),
+            fetchBoardMembers({ refresh: force }).catch((e) => {
+              console.warn('Failed to load board members:', e?.message || e);
+              return [];
+            })
+          ]);
+          state.boardMembers = members || [];
+          state.lists = snapshot?.lists || [];
           renderBoard(snapshot);
         }
       } catch (error) {
