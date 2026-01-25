@@ -47,6 +47,7 @@ test.describe('Claude Orchestrator', () => {
   });
 
   test('should show sidebar with worktree list', async ({ page }) => {
+    await ensureWorkspaceLoaded(page);
     const sidebar = page.locator('.sidebar');
     await expect(sidebar).toBeVisible({ timeout: 10000 });
 
