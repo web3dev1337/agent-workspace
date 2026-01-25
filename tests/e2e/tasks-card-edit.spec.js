@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { mockUserSettings } = require('./_mockUserSettings');
 
 const ensureWorkspaceLoaded = async (page) => {
   const sidebar = page.locator('.sidebar');
@@ -42,6 +43,7 @@ const mockTasksApi = async (page) => {
     url: 'https://trello.com/c/AbCdEf12/card-1',
     dateLastActivity: '2026-01-01T00:00:00Z',
     labels: [{ id: 'lab1', name: 'Bug', color: 'red' }],
+    idMembers: ['m1'],
     members: [
       { id: 'm1', fullName: 'Alice', username: 'alice', avatarUrl: 'https://trello-avatars.s3.amazonaws.com/abc123' }
     ],
@@ -60,6 +62,14 @@ const mockTasksApi = async (page) => {
       body: JSON.stringify({
         providers: [{ id: 'trello', label: 'Trello', configured: true, capabilities: { read: true, write: true } }]
       })
+    });
+  });
+
+  await page.route('**/api/tasks/me**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ provider: 'trello', member: { id: 'm1', fullName: 'Alice', username: 'alice' } })
     });
   });
 
@@ -216,6 +226,7 @@ const mockTasksApi = async (page) => {
 
 test.describe('Tasks card edits', () => {
   test('can toggle labels and edit custom fields', async ({ page }) => {
+    await mockUserSettings(page);
     await mockTasksApi(page);
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.goto('/');
@@ -254,7 +265,7 @@ test.describe('Tasks card edits', () => {
     const cfTextReqPromise = page.waitForRequest((req) => req.method() === 'PUT' && req.url().includes('/api/tasks/cards/c1/custom-fields/cf_text'), { timeout: 5000 });
     const notesInput = page.locator('.tasks-cf-input[data-cf-id="cf_text"]');
     await notesInput.fill('hello');
-    await notesInput.blur();
+    await notesInput.press('Enter');
     const cfTextReq = await cfTextReqPromise;
     expect(cfTextReq.postDataJSON()).toEqual({ value: { text: 'hello' } });
 
