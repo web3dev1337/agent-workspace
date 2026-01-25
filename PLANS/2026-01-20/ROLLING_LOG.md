@@ -575,4 +575,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Focus includes `T2 Auto | T2 Always` to hide Tier 2 while Tier 1 is busy.
 - Queue adds review controls (tier scope, unreviewed filter, auto diff, start review) and persists `reviewedAt` + `reviewOutcome`.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/review-workflow.spec.js`
-- PR: (pending) branch `many-changes`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/191
