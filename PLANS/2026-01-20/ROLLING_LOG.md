@@ -646,4 +646,10 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Terminal fit retries no longer spam the console; debug logs are gated behind `localStorage['debug-terminal-fit']=true`.
 - Warnings for tiny containers/proposed sizes are throttled per terminal.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/terminal-fit-guard.spec.js`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/209 (merged 2026-01-25)
+
+### Tiers: Alt+↑ / Alt+↓ hotkey (pending)
+- Adds Alt+↑ / Alt+↓ to cycle a terminal’s tier quickly (uses the last clicked terminal, or focused terminal if in focus mode).
+- Keeps the tier dropdown on Agent tiles as the primary UI.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/tier-hotkey.spec.js`
 - PR: (pending)
