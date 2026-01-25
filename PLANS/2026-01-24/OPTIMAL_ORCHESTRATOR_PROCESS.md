@@ -19,16 +19,16 @@ Goal: define a **single “best default workflow”** for you (the user) that th
 **Defaults**
 - `WIP_max = 5` (Start Finishing “five projects rule”)
 - Tiered queues (from `work2/DAILY_REFERENCE_CARD.md` + `work2/MASTER_SYNTHESIS_PLAN.md`):
-  - `Q1 ≤ 1` (Tier 1: primary focus)
-  - `Q2 ≤ 2` (Tier 2: gap fillers)
-  - `Q3 ≤ 5` (Tier 3: batch review)
-  - `Q4 ≤ 1` (Tier 4: dedicated review)
+  - `T1 ≤ 1` (Tier 1: primary focus)
+  - `T2 ≤ 2` (Tier 2: gap fillers)
+  - `T3 ≤ 5` (Tier 3: batch review)
+  - `T4 ≤ 1` (Tier 4: dedicated review)
 
 Practical interpretation:
 - The “**queue > 3**” guardrail applies to **Tier 1+2** (the interactive queues). Tier 3/4 have their own caps.
 - Track both:
-  - `Q12 = Q1 + Q2` (interactive review pressure)
-  - `Q_total = Q1 + Q2 + Q3 + Q4` (overall load), but keep it **segregated**.
+  - `T1+T2` (interactive review pressure)
+  - `Q_total = T1 + T2 + T3 + T4` (overall load), but keep it **segregated**.
 
 ### The Four Queues model (B/W/Q/X)
 From `work2/X_ARTICLE.md` and `work2/FINAL_ARTICLE.md`, interpret the system as four queues:
@@ -88,8 +88,8 @@ Orchestrator interpretation:
 
 ### 1. Morning “10 minute check-in” (Dashboard should be the default landing)
 Checklist (from Start Finishing + work2):
-- [ ] `Q12` (Tier 1+2 review pressure). If `Q12 > 3`: **no Tier 1/2 launches** (review first).
-- [ ] `Q3` and `Q4`: respect their own caps (Tier 3 batch + Tier 4 dedicated).
+- [ ] `T1+T2` (Tier 1+2 review pressure). If `T1+T2 > 3`: **no Tier 1/2 launches** (review first).
+- [ ] `T3` and `T4`: respect their own caps (Tier 3 batch + Tier 4 dedicated).
 - [ ] `WIP` (active projects). If `WIP > WIP_max`: freeze new projects; finish/kill.
 - [ ] Pick 1 Tier 1 focus block (90–120 min).
 - [ ] Pick up to 2 Tier 2 gap fillers (same project if possible).
@@ -103,15 +103,15 @@ Checklist (from Start Finishing + work2):
   - stalled sessions needing input
 - A WIP counter (“Active projects last 24h”) + configurable caps.
 - A tier-segregated queue view:
-  - `Q1/Q2` (don’t let this explode; blocks launches)
-  - `Q3` (batch review later; allow more)
-  - `Q4` (one at a time; schedule review)
+  - `T1/T2` (don’t let this explode; blocks launches)
+  - `T3` (batch review later; allow more)
+  - `T4` (one at a time; schedule review)
 
 ### 2. Launch phase (8:00–8:30)
 Goal: start background work *before* you enter deep work.
 
 Rules:
-- If `Q12 > 3`: skip Tier 1/2 launches; review first.
+- If `T1+T2 > 3`: skip Tier 1/2 launches; review first.
 - Prefer Tier 3 tasks that touch disjoint files/modules from your Tier 1 work.
 - Prefer same repo/domain to reduce context switching.
 
