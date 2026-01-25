@@ -57,6 +57,9 @@ test.describe('Queue Panel', () => {
               title: 'Mock PR',
               url: 'https://github.com/web3dev1337/incremental-game/pull/4',
               repository: 'web3dev1337/incremental-game',
+              project: 'incremental-game',
+              worktree: 'work2',
+              branch: 'feature/mock-queue',
               updatedAt: '2026-01-25T00:00:00Z',
               record: { tier: 2, changeRisk: 'low' },
               dependencySummary: { total: 2, blocked: 1 }
@@ -172,6 +175,9 @@ test.describe('Queue Panel', () => {
     await page.waitForFunction(() => Array.isArray(window.__fetchUrls) && window.__fetchUrls.some(u => u.includes('/api/process/tasks')), { timeout: 10000 });
 
     await expect(page.locator('#queue-list .task-card-row')).toHaveCount(1);
+    await expect(page.locator('#queue-list .task-card-row .pr-badge', { hasText: 'incremental-game' })).toBeVisible();
+    await expect(page.locator('#queue-list .task-card-row .pr-badge', { hasText: 'work2' })).toBeVisible();
+    await expect(page.locator('#queue-list .task-card-row .pr-badge', { hasText: 'feature/mock-queue' })).toBeVisible();
     expect(pageErrors).toEqual([]);
     await page.locator('#queue-list .task-card-row').click();
     await expect(page.locator('#queue-tier')).toBeVisible();

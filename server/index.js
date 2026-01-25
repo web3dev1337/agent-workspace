@@ -2225,9 +2225,43 @@ app.get('/api/process/tasks', async (req, res) => {
       return record ? { ...t, record } : t;
     });
 
+    const deriveLabelsFromWorktreePath = (worktreePath) => {
+      const raw = String(worktreePath || '').trim();
+      if (!raw) return { project: null, worktree: null };
+
+      const base = path.basename(raw);
+      const parent = path.basename(path.dirname(raw));
+
+      if (/^work\d+$/.test(base)) {
+        return { project: parent || null, worktree: base };
+      }
+
+      return { project: base || null, worktree: 'root' };
+    };
+
+    const deriveProjectFromRepository = (repoSlug) => {
+      const raw = String(repoSlug || '').trim();
+      if (!raw) return null;
+      const parts = raw.split('/').filter(Boolean);
+      return parts[parts.length - 1] || null;
+    };
+
+    const worktreePaths = Array.from(new Set(enriched.map(t => t?.worktreePath).filter(Boolean)));
+    const metadataByPath = worktreePaths.length
+      ? await worktreeMetadataService.getMultipleMetadata(worktreePaths)
+      : {};
+
+    const withLabels = enriched.map((t) => {
+      const fromPath = deriveLabelsFromWorktreePath(t?.worktreePath);
+      const project = t?.project || fromPath.project || deriveProjectFromRepository(t?.repository) || t?.repositoryName || null;
+      const worktree = t?.worktree || fromPath.worktree || t?.worktreeId || null;
+      const branch = t?.branch || (t?.worktreePath ? metadataByPath?.[t.worktreePath]?.git?.branch : null) || null;
+      return { ...t, project, worktree, branch };
+    });
+
     const include = String(req.query.include || '').toLowerCase();
     if (include.includes('dependencysummary')) {
-      const summaries = await Promise.all(enriched.map(async (t) => {
+      const summaries = await Promise.all(withLabels.map(async (t) => {
         try {
           const summary = await taskDependencyService.getDependencySummary(t.id);
           return [t.id, summary];
@@ -2236,12 +2270,12 @@ app.get('/api/process/tasks', async (req, res) => {
         }
       }));
       const map = Object.fromEntries(summaries);
-      const withDeps = enriched.map((t) => ({ ...t, dependencySummary: map[t.id] || { total: 0, blocked: 0 } }));
+      const withDeps = withLabels.map((t) => ({ ...t, dependencySummary: map[t.id] || { total: 0, blocked: 0 } }));
       res.json({ count: withDeps.length, tasks: withDeps });
       return;
     }
 
-    res.json({ count: enriched.length, tasks: enriched });
+    res.json({ count: withLabels.length, tasks: withLabels });
   } catch (error) {
     logger.error('Failed to list process tasks', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to list process tasks' });
