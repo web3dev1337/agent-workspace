@@ -447,7 +447,8 @@ class TerminalManager {
 
     // Observe the element whose size actually changes with layout.
     // In practice, the `.terminal-body` resizes with grid/sidebar/tab changes.
-    const observeTarget = terminalElement.closest('.terminal-body') || terminalElement;
+    const wrapper = document.getElementById(`wrapper-${sessionId}`);
+    const observeTarget = wrapper || terminalElement.closest('.terminal-body') || terminalElement;
 
     const resizeObserver = new ResizeObserver(() => {
       // Use requestAnimationFrame to ensure renderer is ready before fitting
@@ -510,7 +511,9 @@ class TerminalManager {
           const bodyRect = terminalBody.getBoundingClientRect();
 
           // If container is too small (hidden or not laid out yet), retry
-          if (bodyRect.width < 100 || bodyRect.height < 50) {
+          // Note: tiny containers can show up briefly during layout transitions (tab swaps, hide/show).
+          // Fitting xterm while tiny causes hard reflow/wrapping that doesn't recover cleanly.
+          if (bodyRect.width < 180 || bodyRect.height < 120) {
             if (retryCount < 5) {
               // Schedule retry with increasing delay
               const retryDelay = 100 * (retryCount + 1);
@@ -519,8 +522,18 @@ class TerminalManager {
               setTimeout(() => this.fitTerminal(sessionId, retryCount + 1), retryDelay);
               return;
             } else {
-              // If we still can't get a reasonable size, do NOT fit. We'll retry on the next resize/show.
+              // If we still can't get a reasonable size, do NOT fit. We'll retry on the next resize/show,
+              // and also schedule a delayed retry in case the browser doesn't emit a resize event after
+              // a display/layout transition.
               console.warn(`Terminal ${sessionId} container still too small after 5 retries (${bodyRect.width}x${bodyRect.height}); skipping fit`);
+              if (!this.delayedFitTimers) this.delayedFitTimers = new Map();
+              if (!this.delayedFitTimers.has(sessionId)) {
+                const t = setTimeout(() => {
+                  this.delayedFitTimers.delete(sessionId);
+                  this.fitTerminal(sessionId, 0);
+                }, 1200);
+                this.delayedFitTimers.set(sessionId, t);
+              }
               this.fitTimers.delete(sessionId);
               return;
             }
