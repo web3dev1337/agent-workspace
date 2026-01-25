@@ -47,7 +47,7 @@ Desired controls (prefer **fast click** UI like radio buttons over dropdowns):
 - Sort by **most recently edited** (default) and optionally **most recently created**.
 - Filter by activity recency: show only edited in last **week / month / 2 months / 3 months / 6 months / 1 year**.
 - Ability to mark items as **favorites** and show favorites at top.
-- Optional toggle to hide items not touched in the last N months.
+- Toggle to hide items not touched in the last N months.
 
 **Acceptance criteria**
 - Favorites persist across sessions.
@@ -232,7 +232,7 @@ Keep Claude-specific wording only when it truly is Claude-specific (Claude start
 ## K. Codex/OpenCode detection + recovery improvements
 
 - Detect whether an agent terminal is running Claude vs Codex vs OpenCode if feasible.
-- “Z.ai within Claude” is acknowledged as harder; treat as stretch goal.
+- “Z.ai within Claude” is acknowledged as harder; still required, but scheduled after the core agent-type detection work.
 - Improve Codex start command: remove unnecessary hard-coded flags; rely on Codex defaults where appropriate.
 
 ## L. Document project folder structure as a Skill

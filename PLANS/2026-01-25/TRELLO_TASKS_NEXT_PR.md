@@ -28,11 +28,11 @@ Related:
 - **Dependencies** are supported and usable by humans + agents:
   - display dependencies for a card
   - add/remove dependency
-  - mark dependency satisfied (optional v1)
+- mark dependency satisfied (v1)
 - **Agent-ready API** exists for all actions above (not just UI buttons).
 - **No port 3000 usage** for tests (keep Playwright safe port flow).
 
-Non-goals (defer):
+Out of scope for this PR (next PRs):
 - Full Trello parity (attachments upload, cover images, full label CRUD, rules/automations).
 - Perfect card ordering within a list (pos math) beyond “top/bottom”.
 - Multi-provider aggregation UX (we keep the interface compatible, but focus on Trello first).
@@ -89,7 +89,7 @@ Keep endpoints provider-agnostic. Proposed additions:
 
 - `DELETE /api/tasks/cards/:cardId/dependencies/:itemId?provider=trello`
 
-Optional:
+Follow-up items (next PRs):
 - `PUT /api/tasks/cards/:cardId/dependencies/:itemId?provider=trello` (toggle complete)
 
 ### 3) Trello provider methods (new)
@@ -98,7 +98,7 @@ Optional:
 - `getDependencies({ cardId })`
 - `addDependency({ cardId, … })`
 - `removeDependency({ cardId, itemId })`
-- `toggleDependency({ cardId, itemId, state })` (optional)
+- `toggleDependency({ cardId, itemId, state })`
 
 ---
 
@@ -118,7 +118,7 @@ Add minimal, fast controls:
   - add dependency input (URL/shortLink)
   - remove buttons
 
-### 2) Board view improvements (optional)
+### 2) Board view improvements
 
 If time:
 - better column scrolling / more compact headers
@@ -150,4 +150,3 @@ If time:
 - [ ] Tests: unit + e2e
 - [ ] Docs updated (`PLANS/*` + rolling log)
 - [ ] PR opened + link added to rolling log
-
