@@ -342,6 +342,35 @@ header h1 {
   gap: var(--space-md);
 }
 
+.workflow-toggle {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.workflow-toggle .workflow-btn {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  white-space: nowrap;
+}
+
+.workflow-toggle .workflow-btn + .workflow-btn {
+  border-left: 1px solid var(--border-color);
+}
+
+.workflow-toggle .workflow-btn:hover {
+  background: var(--bg-secondary);
+  border-color: transparent;
+}
+
+.workflow-toggle .workflow-btn.active {
+  background: var(--accent-primary);
+  color: #ffffff;
+}
+
 .header-btn {
   padding: 6px 12px;
   background: var(--bg-tertiary);
