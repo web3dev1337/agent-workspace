@@ -6787,6 +6787,10 @@ header h1 {
   grid-template-columns: 1fr 420px;
 }
 
+.tasks-body.tasks-body-board.tasks-kanban-wrap .tasks-cards {
+  overflow: auto;
+}
+
 .tasks-cards {
   overflow-y: auto;
   padding: var(--space-md);
@@ -6813,6 +6817,32 @@ header h1 {
   overflow-y: hidden;
   padding-bottom: var(--space-sm);
   scroll-snap-type: x mandatory;
+}
+
+.tasks-board.tasks-board-wrap {
+  flex-wrap: wrap;
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-content: flex-start;
+  scroll-snap-type: none;
+}
+
+.tasks-board.tasks-board-wrap-expand .tasks-column {
+  max-height: none;
+}
+
+.tasks-board.tasks-board-wrap-expand .tasks-column-cards {
+  overflow: visible;
+}
+
+.tasks-board.tasks-board-grid .tasks-column-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  align-content: start;
+}
+
+.tasks-board.tasks-board-grid .task-card-board {
+  height: fit-content;
 }
 
 .tasks-column {
@@ -6937,7 +6967,8 @@ header h1 {
 .task-card-labels {
   display: inline-flex;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
   min-width: 0;
 }
 
@@ -6995,6 +7026,7 @@ header h1 {
 .tasks-label--lime { border-color: #7ee787; background: rgba(126, 231, 135, 0.14); color: var(--text-primary); }
 .tasks-label--pink { border-color: #ff80c8; background: rgba(255, 128, 200, 0.14); color: var(--text-primary); }
 .tasks-label--black { border-color: #30363d; background: rgba(48, 54, 61, 0.6); color: var(--text-primary); }
+.tasks-label--more { border-color: var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-family: var(--font-mono); }
 
 .task-card-assignees {
   display: inline-flex;

@@ -17,7 +17,8 @@
         "theme": "inherit",
         "kanban": {
           "collapsedByBoard": {},
-          "expandedByBoard": {}
+          "expandedByBoard": {},
+          "layoutByBoard": {}
         }
       },
       "diffViewer": {
