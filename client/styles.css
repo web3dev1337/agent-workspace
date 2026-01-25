@@ -659,6 +659,15 @@ header h1 {
 
 .filter-toggle {
   margin-bottom: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-toggle-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .filter-toggle button {
@@ -675,6 +684,28 @@ header h1 {
   background: var(--accent-primary);
   color: white;
 }
+
+.worktree-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+}
+
+.worktree-tier-badge.tier-1 { border-color: rgba(46, 204, 113, 0.55); color: rgba(46, 204, 113, 0.95); }
+.worktree-tier-badge.tier-2 { border-color: rgba(52, 152, 219, 0.55); color: rgba(52, 152, 219, 0.95); }
+.worktree-tier-badge.tier-3 { border-color: rgba(241, 196, 15, 0.55); color: rgba(241, 196, 15, 0.95); }
+.worktree-tier-badge.tier-4 { border-color: rgba(231, 76, 60, 0.55); color: rgba(231, 76, 60, 0.95); }
 
 .status-indicator.running {
   background: var(--accent-success);

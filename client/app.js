@@ -7,6 +7,9 @@ class ClaudeOrchestrator {
     // Second-layer filter applied after per-worktree visibility toggles:
     // 'all' | 'claude' | 'server'
     this.viewMode = 'all';
+    // Second-layer filter for tiered workflow:
+    // 'all' | 'none' | 1 | 2 | 3 | 4
+    this.tierFilter = 'all';
     this.socket = null;
     this.terminalManager = null;
     this.notificationManager = null;
@@ -44,6 +47,7 @@ class ClaudeOrchestrator {
     this.cascadedConfigs = {};  // Fully merged configs (Global → Category → Framework → Project)
     this.worktreeConfigs = new Map(); // Worktree-specific configs (sessionId → config)
     this.worktreeTags = new Map(); // Worktree path → tags (e.g., readyForReview)
+    this.taskRecords = new Map(); // taskId → record (tier/risk/pFail/promptRef)
 
     // Button registry - all available buttons with their implementations
     this.buttonRegistry = this.initButtonRegistry();
@@ -137,6 +141,9 @@ class ClaudeOrchestrator {
 
       // Load worktree tags (ready-for-review, etc.)
       await this.loadWorktreeTags();
+
+      // Load task records (tiers/risk/prompt refs) for tier-aware UI
+      await this.loadTaskRecords();
       
       // Check for updates on startup
       this.checkForSettingsUpdates();
@@ -1039,16 +1046,72 @@ class ClaudeOrchestrator {
 	    this.updateTerminalGrid();
 	  }
 	  
-	  updateViewModeButtons() {
-	    const allBtn = document.getElementById('view-all');
-	    const claudeBtn = document.getElementById('view-claude-only');
-	    const serverBtn = document.getElementById('view-servers-only');
-	    if (!allBtn || !claudeBtn || !serverBtn) return;
-	
-	    allBtn.classList.toggle('active', this.viewMode === 'all');
-	    claudeBtn.classList.toggle('active', this.viewMode === 'claude');
-	    serverBtn.classList.toggle('active', this.viewMode === 'server');
-	  }
+  updateViewModeButtons() {
+    const allBtn = document.getElementById('view-all');
+    const claudeBtn = document.getElementById('view-claude-only');
+    const serverBtn = document.getElementById('view-servers-only');
+    if (!allBtn || !claudeBtn || !serverBtn) return;
+
+    allBtn.classList.toggle('active', this.viewMode === 'all');
+    claudeBtn.classList.toggle('active', this.viewMode === 'claude');
+    serverBtn.classList.toggle('active', this.viewMode === 'server');
+  }
+
+  setTierFilter(filter) {
+    const raw = String(filter ?? '').trim().toLowerCase();
+    const normalized = raw === '' || raw === 'all'
+      ? 'all'
+      : (raw === 'none' ? 'none' : Number.parseInt(raw, 10));
+
+    if (normalized !== 'all' && normalized !== 'none' && !(normalized >= 1 && normalized <= 4)) {
+      return;
+    }
+
+    if (this.tierFilter === normalized) return;
+    this.tierFilter = normalized;
+    this.ensureFilterToggleExists();
+    this.updateTerminalGrid();
+    this.buildSidebar();
+  }
+
+  matchesTierFilter(sessionId) {
+    if (this.tierFilter === 'all') return true;
+    const tier = this.getTierForSession(sessionId);
+    if (this.tierFilter === 'none') return tier === null;
+    return tier === this.tierFilter;
+  }
+
+  getPRTaskIdFromUrl(url) {
+    const raw = String(url || '').trim();
+    const m = raw.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+    if (!m) return null;
+    const [, owner, repo, prNum] = m;
+    return `pr:${owner}/${repo}#${prNum}`;
+  }
+
+  getTierForSession(sessionId) {
+    const session = this.sessions.get(sessionId);
+    const prUrl = this.githubLinks.get(sessionId)?.pr || null;
+    const prTaskId = prUrl ? this.getPRTaskIdFromUrl(prUrl) : null;
+    if (prTaskId) {
+      const record = this.taskRecords.get(prTaskId);
+      const tier = Number(record?.tier);
+      if (tier >= 1 && tier <= 4) return tier;
+    }
+
+    const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
+    if (worktreePath) {
+      const record = this.taskRecords.get(`worktree:${worktreePath}`);
+      const tier = Number(record?.tier);
+      if (tier >= 1 && tier <= 4) return tier;
+    }
+
+    const record = this.taskRecords.get(`session:${sessionId}`);
+    const tier = Number(record?.tier);
+    if (tier >= 1 && tier <= 4) return tier;
+
+    return null;
+  }
 	  
 	  matchesViewMode(sessionId) {
 	    if (this.viewMode === 'all') return true;
@@ -1068,7 +1131,7 @@ class ClaudeOrchestrator {
 	  }
 
 	  isSessionVisibleInCurrentView(sessionId) {
-	    return this.visibleTerminals.has(sessionId) && this.matchesViewMode(sessionId);
+	    return this.visibleTerminals.has(sessionId) && this.matchesViewMode(sessionId) && this.matchesTierFilter(sessionId);
 	  }
 	  
 	  handleInitialSessions(sessionStates) {
@@ -1638,22 +1701,32 @@ class ClaudeOrchestrator {
       ].filter(Boolean);
       const statusTitle = statusTitleParts.join(' • ');
 
-      const worktreePath = this.getWorktreePathForSidebarEntry(worktree);
-      const isReadyForReview = !!(worktreePath && this.worktreeTags.get(worktreePath)?.readyForReview);
-      const readyTitle = isReadyForReview ? 'Ready for review (click to clear)' : 'Mark ready for review';
+	      const worktreePath = this.getWorktreePathForSidebarEntry(worktree);
+	      const isReadyForReview = !!(worktreePath && this.worktreeTags.get(worktreePath)?.readyForReview);
+	      const readyTitle = isReadyForReview ? 'Ready for review (click to clear)' : 'Mark ready for review';
 
-      item.innerHTML = `
-        <div class="worktree-header">
-          <div class="worktree-title">
-            <span class="status-dot worktree-status-dot ${sidebarStatus}" title="${this.escapeHtml(statusTitle)}"></span>
-            <div class="worktree-text">
-              <div class="worktree-name" title="${this.escapeHtml(displayName)}">${displayName}</div>
-              <div class="worktree-meta">
-                <span class="worktree-branch" title="${this.escapeHtml(branch)}">@${branch}</span>
-              </div>
-            </div>
-          </div>
-          <div class="worktree-actions">
+	      const tierSessionId = worktree.claude?.sessionId || worktree.server?.sessionId || null;
+	      const tier = tierSessionId ? this.getTierForSession(tierSessionId) : null;
+	      const tierMatches = this.tierFilter === 'all'
+	        ? true
+	        : (this.tierFilter === 'none' ? tier === null : tier === this.tierFilter);
+	      if (!tierMatches) continue;
+
+	      const tierBadge = tier ? `<span class="worktree-tier-badge tier-${tier}" title="Tier ${tier}">Q${tier}</span>` : '';
+
+	      item.innerHTML = `
+	        <div class="worktree-header">
+	          <div class="worktree-title">
+	            <span class="status-dot worktree-status-dot ${sidebarStatus}" title="${this.escapeHtml(statusTitle)}"></span>
+	            <div class="worktree-text">
+	              <div class="worktree-name" title="${this.escapeHtml(displayName)}">${displayName}</div>
+	              <div class="worktree-meta">
+	                ${tierBadge}
+	                <span class="worktree-branch" title="${this.escapeHtml(branch)}">@${branch}</span>
+	              </div>
+	            </div>
+	          </div>
+	          <div class="worktree-actions">
             <button class="ready-review-btn ${isReadyForReview ? 'ready' : ''}"
                     data-worktree-path="${this.escapeHtml(worktreePath || '')}"
                     aria-pressed="${isReadyForReview ? 'true' : 'false'}"
@@ -1725,6 +1798,29 @@ class ClaudeOrchestrator {
     }
   }
 
+  async loadTaskRecords() {
+    try {
+      const response = await fetch('/api/process/task-records');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json().catch(() => ({}));
+      const records = Array.isArray(data.records) ? data.records : [];
+
+      this.taskRecords = new Map();
+      for (const r of records) {
+        if (!r?.id) continue;
+        this.taskRecords.set(r.id, r.record || {});
+      }
+
+      // If sessions already exist, tier badges/filters can update immediately.
+      this.buildSidebar();
+      this.updateTerminalGrid();
+      return this.taskRecords;
+    } catch (error) {
+      console.warn('Failed to load task records:', error);
+      return null;
+    }
+  }
+
   async setWorktreeReadyForReview(worktreePath, ready) {
     try {
       const response = await fetch('/api/worktree-tags/ready', {
@@ -1756,27 +1852,37 @@ class ClaudeOrchestrator {
     return this.setWorktreeReadyForReview(worktreePath, !current);
   }
   
-  ensureFilterToggleExists() {
-    let filterToggle = document.getElementById('filter-toggle');
-    
-    if (!filterToggle) {
-      // Create the filter toggle element
-      filterToggle = document.createElement('div');
-      filterToggle.className = 'filter-toggle';
-      filterToggle.id = 'filter-toggle';
-      
-      // Insert it right before the worktree list
-      const worktreeList = document.getElementById('worktree-list');
-      worktreeList.parentNode.insertBefore(filterToggle, worktreeList);
-    }
-    
-    // Always update the button content
-    filterToggle.innerHTML = `
-      <button class="${this.showActiveOnly ? 'active' : ''}" onclick="window.orchestrator.toggleActivityFilter()">
-        ${this.showActiveOnly ? 'Show All' : 'Active Only'}
-      </button>
-    `;
-  }
+	  ensureFilterToggleExists() {
+	    let filterToggle = document.getElementById('filter-toggle');
+	    
+	    if (!filterToggle) {
+	      // Create the filter toggle element
+	      filterToggle = document.createElement('div');
+	      filterToggle.className = 'filter-toggle';
+	      filterToggle.id = 'filter-toggle';
+	      
+	      // Insert it right before the worktree list
+	      const worktreeList = document.getElementById('worktree-list');
+	      worktreeList.parentNode.insertBefore(filterToggle, worktreeList);
+	    }
+	    
+	    // Always update the button content
+	    filterToggle.innerHTML = `
+	      <div class="filter-toggle-row">
+	        <button class="${this.showActiveOnly ? 'active' : ''}" onclick="window.orchestrator.toggleActivityFilter()">
+	          ${this.showActiveOnly ? 'Show All' : 'Active Only'}
+	        </button>
+	      </div>
+	      <div class="filter-toggle-row filter-toggle-tier" role="group" aria-label="Tier filter">
+	        <button class="${this.tierFilter === 'all' ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('all')" title="Show all tiers">All</button>
+	        <button class="${this.tierFilter === 1 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('1')" title="Tier 1">Q1</button>
+	        <button class="${this.tierFilter === 2 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('2')" title="Tier 2">Q2</button>
+	        <button class="${this.tierFilter === 3 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('3')" title="Tier 3">Q3</button>
+	        <button class="${this.tierFilter === 4 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('4')" title="Tier 4">Q4</button>
+	        <button class="${this.tierFilter === 'none' ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('none')" title="No tier set">None</button>
+	      </div>
+	    `;
+	  }
 
   getServerStatusClass(sessionId) {
     const status = this.serverStatuses.get(sessionId);
@@ -8171,16 +8277,19 @@ class ClaudeOrchestrator {
             verifyMinutes: vEl?.value === '' ? null : Number(vEl.value),
             promptRef: prEl?.value || null
           };
-          const rec = await upsertRecord(t.id, patch);
-          // Update local state
-          const idx = state.tasks.findIndex(x => x.id === t.id);
-          if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: rec };
-          this.showToast('Saved', 'success');
-          renderList();
-        } catch (e) {
-          this.showToast(String(e?.message || e), 'error');
-        }
-      };
+	          const rec = await upsertRecord(t.id, patch);
+	          // Update local state
+	          const idx = state.tasks.findIndex(x => x.id === t.id);
+	          if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: rec };
+	          if (rec) this.taskRecords.set(t.id, rec);
+	          this.showToast('Saved', 'success');
+	          renderList();
+	          this.buildSidebar();
+	          this.updateTerminalGrid();
+	        } catch (e) {
+	          this.showToast(String(e?.message || e), 'error');
+	        }
+	      };
 
       [tierEl, riskEl, pfEl, vEl, prEl].forEach((el) => {
         el?.addEventListener('change', () => savePatch());
