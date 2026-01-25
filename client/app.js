@@ -6488,7 +6488,7 @@ class ClaudeOrchestrator {
       updatedWindow: localStorage.getItem('tasks-updated-window') || 'any', // any | 1h | 24h | 7d | 30d
       sort: localStorage.getItem('tasks-sort') || 'pos', // pos | activity | name
       hideEmptyColumns: localStorage.getItem('tasks-hide-empty') === 'true',
-      boardLayout: 'scroll', // scroll | wrap | wrap-expand (board view)
+      boardLayout: 'wrap-expand', // scroll | wrap | wrap-expand (board view)
       assigneeFilterMode: 'selected', // selected | any
       assigneeFilterIds: [],
       me: null,
@@ -6678,7 +6678,7 @@ class ClaudeOrchestrator {
       } catch {
         // ignore
       }
-      return 'scroll';
+      return 'wrap-expand';
     };
 
     const persistBoardLayout = (layout) => {
