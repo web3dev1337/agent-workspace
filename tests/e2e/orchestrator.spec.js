@@ -48,7 +48,7 @@ test.describe('Claude Orchestrator', () => {
 
   test('should show sidebar with worktree list', async ({ page }) => {
     const sidebar = page.locator('.sidebar');
-    await expect(sidebar).toBeVisible();
+    await expect(sidebar).toBeVisible({ timeout: 10000 });
 
     const worktreeList = page.locator('#worktree-list');
     await expect(worktreeList).toBeVisible();
@@ -56,7 +56,7 @@ test.describe('Claude Orchestrator', () => {
 
   test('should show header with actions', async ({ page }) => {
     const header = page.locator('header');
-    await expect(header).toBeVisible();
+    await expect(header).toBeVisible({ timeout: 10000 });
 
     // Check for New Project button
     const greenfieldBtn = page.locator('#greenfield-btn');

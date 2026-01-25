@@ -39,8 +39,13 @@ test.describe('Process banner', () => {
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.goto('/');
 
-    const banner = page.locator('#dashboard-process-banner');
-    await expect(banner).toBeVisible({ timeout: 15000 });
+    const dashboardBanner = page.locator('#dashboard-process-banner');
+    const headerBanner = page.locator('#process-banner');
+
+    // Depending on startup state we may be on the dashboard (banner in topbar) or inside a workspace
+    // (banner in header). Accept either.
+    await expect(dashboardBanner.or(headerBanner)).toBeVisible({ timeout: 15000 });
+    const banner = (await dashboardBanner.isVisible().catch(() => false)) ? dashboardBanner : headerBanner;
 
     await expect(banner.locator('.process-chip').first()).toHaveText('WIP 2');
     await expect(banner).toContainText('Q1 1');

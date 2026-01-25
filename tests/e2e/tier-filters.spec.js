@@ -41,12 +41,19 @@ test.describe('Tier Filters', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ count: 0, records: [] })
+        body: JSON.stringify({
+          count: 2,
+          records: [
+            { id: 'session:demo-work1-claude', tier: 1 },
+            { id: 'session:demo-work2-claude', tier: 2 }
+          ]
+        })
       });
     });
 
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.goto('/');
+    await page.waitForResponse(/\/api\/process\/task-records$/, { timeout: 10000 }).catch(() => {});
     await page.waitForFunction(() => !!window.orchestrator, { timeout: 30000 });
     await dismissFocusOverlay(page);
 
@@ -57,10 +64,17 @@ test.describe('Tier Filters', () => {
 
       window.orchestrator.updateTerminalGrid = () => {};
       window.orchestrator.buildSidebar = () => {};
+      // Make this test independent of userSettings workflow mode.
+      window.orchestrator.workflowMode = 'review';
+      window.orchestrator.viewMode = 'all';
       window.orchestrator.currentWorkspace = null;
       window.orchestrator.sessions = new Map();
       window.orchestrator.visibleTerminals = new Set();
-      window.orchestrator.taskRecords = new Map();
+      window.orchestrator.taskRecords = new Map([
+        ['session:demo-work1-claude', { tier: 1 }],
+        ['session:demo-work2-claude', { tier: 2 }]
+      ]);
+      window.orchestrator.loadTaskRecords = async () => {};
 
       const aId = 'demo-work1-claude';
       const bId = 'demo-work2-claude';
@@ -68,9 +82,6 @@ test.describe('Tier Filters', () => {
       window.orchestrator.sessions.set(bId, { sessionId: bId, type: 'claude', status: 'idle', branch: 'main', worktreeId: 'work2' });
       window.orchestrator.visibleTerminals.add(aId);
       window.orchestrator.visibleTerminals.add(bId);
-
-      window.orchestrator.taskRecords.set(`session:${aId}`, { tier: 1 });
-      window.orchestrator.taskRecords.set(`session:${bId}`, { tier: 2 });
 
       return { aId, bId };
     });
