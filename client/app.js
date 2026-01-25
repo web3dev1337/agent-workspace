@@ -376,6 +376,7 @@ class ClaudeOrchestrator {
         console.log('User settings updated:', settings);
         this.userSettings = settings;
         this.syncUserSettingsUI();
+        this.applyThemeFromUserSettings();
       });
 
       // Workspace events
@@ -830,6 +831,8 @@ class ClaudeOrchestrator {
       this.settings.theme = e.target.value;
       this.saveSettings();
       this.applyTheme();
+      // Persist via server user settings so it survives reloads across devices/worktrees.
+      this.updateGlobalUserSetting('ui.theme', e.target.value);
     });
 
     const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
@@ -3873,6 +3876,22 @@ class ClaudeOrchestrator {
     } else {
       document.body.classList.remove('light-theme');
     }
+
+    // Keep terminals visually consistent with UI theme.
+    this.terminalManager?.updateTheme?.(this.settings.theme);
+  }
+
+  applyThemeFromUserSettings() {
+    const userTheme = this.userSettings?.global?.ui?.theme;
+    if (userTheme !== 'dark' && userTheme !== 'light') return;
+    if (this.settings.theme === userTheme) return;
+
+    this.settings.theme = userTheme;
+    this.saveSettings();
+    this.applyTheme();
+
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) themeSelect.value = userTheme;
   }
   
   syncSettingsUI() {
@@ -5035,6 +5054,7 @@ class ClaudeOrchestrator {
         this.userSettings = await response.json();
         console.log('User settings loaded:', this.userSettings);
         this.syncUserSettingsUI();
+        this.applyThemeFromUserSettings();
       } else {
         console.error('Failed to load user settings:', response.statusText);
       }
@@ -5187,6 +5207,15 @@ class ClaudeOrchestrator {
     const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
     if (diffViewerThemeSelect) {
       diffViewerThemeSelect.value = this.userSettings.global?.ui?.diffViewer?.theme || 'light';
+    }
+
+    // Sync UI theme (light/dark) from server settings if present.
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) {
+      const theme = this.userSettings.global?.ui?.theme;
+      if (theme === 'light' || theme === 'dark') {
+        themeSelect.value = theme;
+      }
     }
 
     // Update session recovery settings UI
@@ -5994,6 +6023,8 @@ class ClaudeOrchestrator {
       hideEmptyColumns: localStorage.getItem('tasks-hide-empty') === 'true',
       lists: [],
       boardMembers: [],
+      boards: [],
+      boardCustomFields: [],
       selectedCardId: null
     };
 
@@ -6177,6 +6208,34 @@ class ClaudeOrchestrator {
         ? labels.map(l => l?.name || l?.color || '').filter(Boolean).join(', ')
         : 'none';
 
+      const customFields = Array.isArray(state.boardCustomFields) ? state.boardCustomFields : [];
+      const customFieldsById = new Map(customFields.map(f => [f?.id, f]).filter(([id]) => !!id));
+      const customFieldItems = Array.isArray(card?.customFieldItems) ? card.customFieldItems : [];
+      const renderCustomFieldValue = (item) => {
+        const field = customFieldsById.get(item?.idCustomField);
+        if (!field) return null;
+        const type = String(field?.type || '').toLowerCase();
+        if (type === 'list') {
+          const options = Array.isArray(field?.options) ? field.options : [];
+          const opt = options.find(o => o?.id && item?.idValue && o.id === item.idValue);
+          return opt?.value?.text || opt?.value?.name || null;
+        }
+        if (type === 'checkbox') {
+          const checked = item?.value?.checked;
+          if (checked === 'true') return '✅';
+          if (checked === 'false') return '⬜';
+          return null;
+        }
+        if (type === 'date') {
+          const d = item?.value?.date;
+          return d ? new Date(d).toLocaleString() : null;
+        }
+        if (type === 'number') {
+          return item?.value?.number ?? null;
+        }
+        return item?.value?.text ?? null;
+      };
+
       const listsById = new Map((state.lists || []).map(l => [l.id, l]));
       const currentListName = listsById.get(card?.idList)?.name || '';
 
@@ -6225,7 +6284,8 @@ class ClaudeOrchestrator {
           <span class="tasks-chips" id="tasks-member-chips">
             ${members.length === 0 ? `<span class="tasks-chip tasks-chip-muted">none</span>` : members.map(m => `
               <span class="tasks-chip" data-member-id="${escapeHtml(m?.id || '')}">
-                ${escapeHtml(m?.fullName || m?.username || m?.id || '')}
+                ${m?.avatarUrl ? `<img class="tasks-chip-avatar" src="${escapeHtml(m.avatarUrl)}" alt="">` : ''}
+                ${m?.username ? `<a class="tasks-chip-link" href="https://trello.com/${escapeHtml(m.username)}" target="_blank" rel="noreferrer">${escapeHtml(m?.fullName || m?.username || m?.id || '')}</a>` : escapeHtml(m?.fullName || m?.username || m?.id || '')}
                 <button class="tasks-chip-x" type="button" title="Unassign" data-remove-member="${escapeHtml(m?.id || '')}">×</button>
               </span>
             `).join('')}
@@ -6249,6 +6309,24 @@ class ClaudeOrchestrator {
               `).join('')}
             </select>
             <button class="btn-secondary" id="tasks-assign-member-btn">＋ Assign</button>
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Custom Fields</div>
+          <div class="tasks-kv">
+            ${customFieldItems.length === 0 ? `<div class="tasks-detail-empty">None.</div>` : customFieldItems.map(item => {
+              const field = customFieldsById.get(item?.idCustomField);
+              if (!field) return '';
+              const value = renderCustomFieldValue(item);
+              if (value === null || value === undefined || value === '') return '';
+              return `
+                <div class="tasks-kv-row">
+                  <div class="tasks-kv-key">${escapeHtml(field.name || '')}</div>
+                  <div class="tasks-kv-val">${escapeHtml(String(value))}</div>
+                </div>
+              `;
+            }).join('')}
           </div>
         </div>
 
@@ -6337,6 +6415,17 @@ class ClaudeOrchestrator {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to load board members');
       return data.members || [];
+    };
+
+    const fetchBoardCustomFields = async ({ refresh = false } = {}) => {
+      if (!state.boardId) return [];
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/custom-fields`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load board custom fields');
+      return data.customFields || [];
     };
 
     const fetchBoards = async ({ refresh = false } = {}) => {
@@ -6499,6 +6588,22 @@ class ClaudeOrchestrator {
       const lists = snapshot.lists || [];
       const cardsByList = snapshot.cardsByList || {};
 
+      const board = Array.isArray(state.boards) ? state.boards.find(b => b?.id === state.boardId) : null;
+      const boardColor = board?.prefs?.backgroundColor || '';
+      if (boardColor) {
+        cardsEl.style.setProperty('--tasks-board-accent', String(boardColor));
+      } else {
+        cardsEl.style.removeProperty('--tasks-board-accent');
+      }
+
+      const membersById = new Map((state.boardMembers || []).map(m => [m?.id, m]).filter(([id]) => !!id));
+      const trelloLabelColor = (label) => {
+        const c = String(label?.color || '').toLowerCase();
+        if (!c) return '';
+        const allowed = new Set(['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black']);
+        return allowed.has(c) ? c : '';
+      };
+
       const sortCards = (arr) => {
         const cards = Array.isArray(arr) ? [...arr] : [];
         if (state.sort === 'activity') {
@@ -6530,10 +6635,39 @@ class ClaudeOrchestrator {
                   ${cards.map(c => {
                     const title = String(c?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                     const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
+                    const due = c?.due ? new Date(c.due).toLocaleDateString() : '';
+                    const labels = Array.isArray(c?.labels) ? c.labels : [];
+                    const memberIds = Array.isArray(c?.idMembers) ? c.idMembers : [];
+                    const members = memberIds.map(id => membersById.get(id)).filter(Boolean).slice(0, 3);
+                    const moreMembers = Math.max(0, memberIds.length - members.length);
                     return `
                       <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-origin-list-id="${list.id}">
+                        <div class="task-card-top">
+                          <div class="task-card-labels">
+                            ${labels.slice(0, 6).map(l => {
+                              const color = trelloLabelColor(l);
+                              const name = String(l?.name || '').trim();
+                              const titleAttr = escapeHtml(name || color || 'label');
+                              const cls = color ? `tasks-label tasks-label--${color}` : 'tasks-label';
+                              return `<span class="${cls}" title="${titleAttr}">${name ? escapeHtml(name) : ''}</span>`;
+                            }).join('')}
+                          </div>
+                          <div class="task-card-assignees">
+                            ${members.map(m => {
+                              const url = m?.username ? `https://trello.com/${m.username}` : '';
+                              const initial = String(m?.fullName || m?.username || '?').trim().slice(0, 1).toUpperCase();
+                              const avatar = m?.avatarUrl || '';
+                              return `
+                                <a class="tasks-avatar" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="${escapeHtml(m?.fullName || m?.username || '')}">
+                                  ${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : `<span>${escapeHtml(initial)}</span>`}
+                                </a>
+                              `;
+                            }).join('')}
+                            ${moreMembers ? `<span class="tasks-avatar tasks-avatar-more" title="${moreMembers} more">+${moreMembers}</span>` : ''}
+                          </div>
+                        </div>
                         <div class="task-card-title">${title}</div>
-                        <div class="task-card-meta">${last}</div>
+                        <div class="task-card-meta">${due ? `<span class="task-card-due" title="Due">${escapeHtml(due)}</span> • ` : ''}${last}</div>
                       </div>
                     `;
                   }).join('')}
@@ -6671,6 +6805,7 @@ class ClaudeOrchestrator {
         }
 
         const boards = await fetchBoards({ refresh: force });
+        state.boards = boards || [];
         setSelectOptions(boardEl, boards, { placeholder: 'Select board...', valueKey: 'id', labelKey: 'name' });
         if (state.boardId) boardEl.value = state.boardId;
 
@@ -6684,6 +6819,7 @@ class ClaudeOrchestrator {
           ]);
           state.lists = lists || [];
           state.boardMembers = members || [];
+          state.boardCustomFields = [];
 
           setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
           // Insert an explicit "All lists" option at the top (better default for users who think in boards).
@@ -6703,15 +6839,21 @@ class ClaudeOrchestrator {
           const cards = await fetchCards({ refresh: force });
           renderCards(cards);
         } else {
-          const [snapshot, members] = await Promise.all([
+          const [snapshot, members, customFields] = await Promise.all([
             fetchSnapshot({ refresh: force }),
             fetchBoardMembers({ refresh: force }).catch((e) => {
               console.warn('Failed to load board members:', e?.message || e);
               return [];
             })
+            ,
+            fetchBoardCustomFields({ refresh: force }).catch((e) => {
+              console.warn('Failed to load board custom fields:', e?.message || e);
+              return [];
+            })
           ]);
           state.boardMembers = members || [];
           state.lists = snapshot?.lists || [];
+          state.boardCustomFields = customFields || [];
           renderBoard(snapshot);
         }
       } catch (error) {
@@ -6819,7 +6961,17 @@ class ClaudeOrchestrator {
 
       detailEl.innerHTML = `<div class="loading">Loading card…</div>`;
       try {
-        const card = await fetchCardDetail(cardId);
+        const cardPromise = fetchCardDetail(cardId);
+        const needsCustomFields = state.boardId && (!Array.isArray(state.boardCustomFields) || state.boardCustomFields.length === 0);
+        const customFieldsPromise = needsCustomFields
+          ? fetchBoardCustomFields({ refresh: false }).catch((err) => {
+            console.warn('Failed to load board custom fields:', err?.message || err);
+            return [];
+          })
+          : Promise.resolve(state.boardCustomFields);
+
+        const [card, customFields] = await Promise.all([cardPromise, customFieldsPromise]);
+        if (needsCustomFields) state.boardCustomFields = customFields || [];
         const setDetail = (c) => {
           renderDetail(c);
 

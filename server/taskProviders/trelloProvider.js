@@ -65,7 +65,7 @@ class TrelloTaskProvider {
   async listBoards({ refresh = false } = {}) {
     const url = this._buildUrl('/members/me/boards', {
       filter: 'open',
-      fields: 'name,url,dateLastActivity,closed'
+      fields: 'name,url,dateLastActivity,closed,prefs'
     });
     const cacheKey = `trello:boards:me:open`;
     return this._getCached(cacheKey, url, { ttlMs: 5 * 60_000, force: refresh });
@@ -84,16 +84,26 @@ class TrelloTaskProvider {
   async listBoardMembers({ boardId, refresh = false } = {}) {
     if (!boardId) throw new Error('boardId is required');
     const url = this._buildUrl(`/boards/${encodeURIComponent(boardId)}/members`, {
-      fields: 'fullName,username'
+      fields: 'fullName,username,avatarUrl'
     });
     const cacheKey = `trello:members:${boardId}:all`;
     return this._getCached(cacheKey, url, { ttlMs: 60_000, force: refresh });
   }
 
+  async listBoardCustomFields({ boardId, refresh = false } = {}) {
+    if (!boardId) throw new Error('boardId is required');
+    const url = this._buildUrl(`/boards/${encodeURIComponent(boardId)}/customFields`, {
+      fields: 'name,type,pos,options',
+      filter: 'all'
+    });
+    const cacheKey = `trello:customFields:${boardId}:all`;
+    return this._getCached(cacheKey, url, { ttlMs: 5 * 60_000, force: refresh });
+  }
+
   async listCards({ listId, refresh = false, q = '', updatedSince = null } = {}) {
     if (!listId) throw new Error('listId is required');
     const url = this._buildUrl(`/lists/${encodeURIComponent(listId)}/cards`, {
-      fields: 'name,url,dateLastActivity,closed,idList,idBoard,pos,labels',
+      fields: 'name,url,dateLastActivity,closed,idList,idBoard,pos,labels,idMembers,due',
       filter: 'open'
     });
     const cacheKey = `trello:cards:list:${listId}:open`;
@@ -120,7 +130,7 @@ class TrelloTaskProvider {
   async listBoardCards({ boardId, refresh = false, q = '', updatedSince = null } = {}) {
     if (!boardId) throw new Error('boardId is required');
     const url = this._buildUrl(`/boards/${encodeURIComponent(boardId)}/cards`, {
-      fields: 'name,url,dateLastActivity,closed,idList,idBoard,pos,labels',
+      fields: 'name,url,dateLastActivity,closed,idList,idBoard,pos,labels,idMembers,due',
       filter: 'open'
     });
 
@@ -213,8 +223,9 @@ class TrelloTaskProvider {
     const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}`, {
       fields: 'name,desc,url,dateLastActivity,closed,idList,idBoard,labels,due,dueComplete',
       members: 'true',
-      member_fields: 'fullName,username',
+      member_fields: 'fullName,username,avatarUrl',
       checklists: 'all',
+      customFieldItems: 'true',
       actions: 'commentCard',
       actions_limit: '100',
       actions_fields: 'data,date,idMemberCreator,type',
