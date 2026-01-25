@@ -19,7 +19,7 @@ Date: 2026-01-25
 - Docs: remove ambiguous language: https://github.com/web3dev1337/claude-orchestrator/pull/187
 - Orchestrator-native dependencies: https://github.com/web3dev1337/claude-orchestrator/pull/188
 - Workflow modes + Queue Next/Prev: https://github.com/web3dev1337/claude-orchestrator/pull/189
-- Process status banner (WIP + Q1–Q4): https://github.com/web3dev1337/claude-orchestrator/pull/193
+- Process status banner (WIP + T1–T4): https://github.com/web3dev1337/claude-orchestrator/pull/193
 - Launch gating (prompt on overload): https://github.com/web3dev1337/claude-orchestrator/pull/194
 
 ---
@@ -85,11 +85,11 @@ What’s shipped (as of 2026-01-25):
   - edit tier/risk/pFail/verify/promptRef
   - open prompt editor and diff viewer
 - Tier filters + badges (sidebar + terminal grid)
-  - fast filter buttons: All/Q1/Q2/Q3/Q4/None
+  - fast filter buttons: All/T1/T2/T3/T4/None
   - tier badge shown on sidebar worktree rows
 
 What’s still needed:
-- scheduling/automation rules (e.g. auto-hide Q3/Q4 while Tier 1 is busy)
+- scheduling/automation rules (e.g. auto-hide T3/T4 while Tier 1 is busy)
 - “review conveyor belt” UX expansion (mark reviewed, request changes, launch fix agent)
 
 Roadmap reference: `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md`
@@ -104,7 +104,7 @@ Header includes:
 Queue includes:
 - **Prev/Next** navigation with unblocked items ordered first.
 - Review controls (one-by-one workflow):
-  - Tier scope buttons (All/Q1/Q2/Q3/Q4/None)
+  - Tier scope buttons (All/T1/T2/T3/T4/None)
   - `Unreviewed`, `Auto Diff`, and `Start Review`
 - Focus includes a Tier-2 gating toggle:
   - `T2 Auto` hides Tier 2 while Tier 1 is busy
