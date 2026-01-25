@@ -92,11 +92,12 @@ class Dashboard {
     const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
 
     return `
-      ${canReturnToWorkspaces ? `
-        <div class="dashboard-topbar">
+      <div class="dashboard-topbar">
+        ${canReturnToWorkspaces ? `
           <button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to Workspaces</button>
-        </div>
-      ` : ''}
+        ` : `<div></div>`}
+        <div id="dashboard-process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div>
+      </div>
       <div class="dashboard-header">
         <h1>🎯 Agent Orchestrator Dashboard</h1>
         <p>Select a workspace to begin development</p>

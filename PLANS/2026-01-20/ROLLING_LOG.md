@@ -581,3 +581,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Removes “optional/optionally” wording in docs/plans so the backlog reads as mandatory items.
 - Updates older docs where they described steps/variables as optional.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/192
+
+### Process: WIP + Q banner in header (in progress)
+- Adds `/api/process/status` with cached WIP + tiered queue counts.
+- Adds a click-to-open header pill that shows `WIP`, `Q1–Q4`.
+- Tests: `npm run test:unit`
