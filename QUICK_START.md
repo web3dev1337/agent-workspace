@@ -1,5 +1,12 @@
 # 🚀 Agent Orchestrator - Quick Start Guide (repo: `claude-orchestrator`)
 
+## Morning-safe dev (recommended)
+
+If you already run another orchestrator instance from the separate `/master` worktree (often on port `3000`), use the dev worktree safe commands so nothing collides.
+
+- Start web UI on safe ports (server `:4001`, client `:4100`): `npm run dev:web:safe`
+- Run end-to-end tests on a safe port (auto-picks a free port starting at `:4001`): `npm run test:e2e:safe`
+
 ## One-Click Launch Options
 
 You now have **THREE** ways to launch the Agent Orchestrator with full automation:
@@ -45,9 +52,11 @@ If you want to launch without auto-start:
 
 ```bash
 # From WSL terminal
-cd ~/GitHub/tools/automation/claude-orchestrator/master
+cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 code orchestrator.code-workspace
 ```
+
+If you also have a separate live worktree at `~/GitHub/tools/automation/claude-orchestrator/master` (often running on port `3000`), do not edit that folder while developing here.
 
 Then manually run `npm start` in the integrated terminal if auto-start didn't work.
 
@@ -99,6 +108,8 @@ When `npm start` executes, it launches:
 4. **Diff Viewer** (PR review tool) - Port 7655
 
 You can access the web UI at `http://localhost:2080` or use the native Tauri app.
+
+If you use `npm run dev:web:safe`, it runs only the web UI and avoids port `3000`.
 
 ---
 

@@ -3411,7 +3411,7 @@ httpServer.listen(PORT, HOST, () => {
     logger.info('Authentication enabled');
   }
 
-  // Start the Advanced Diff Viewer in the background (optional).
+  // Start the Advanced Diff Viewer in the background.
   // Default: enabled, since users expect the 🔍 diff viewer to be ready without manual terminal steps.
   const autoStartRaw = String(process.env.AUTO_START_DIFF_VIEWER ?? 'true').toLowerCase();
   const shouldAutoStartDiffViewer = !['0', 'false', 'no'].includes(autoStartRaw);

@@ -550,7 +550,8 @@ class SessionManager extends EventEmitter {
       const { execSync } = require('child_process');
       const gitDir = execSync('git rev-parse --git-dir', { 
         cwd: repoPath,
-        encoding: 'utf8' 
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe']
       }).trim();
       
       const headPath = path.join(gitDir, 'HEAD');
