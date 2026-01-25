@@ -25,7 +25,7 @@ Server reads credentials from:
 - `TRELLO_API_KEY`
 - `TRELLO_TOKEN` (or `TRELLO_API_TOKEN`)
 
-2) Fallback file (optional):
+2) Fallback file (if present):
 - `~/.trello-credentials` with:
   - `API_KEY=...`
   - `TOKEN=...`
@@ -64,7 +64,7 @@ Rationale:
 - Cards change frequently; keep short TTL.
 - Boards/lists are relatively stable; longer TTL is safe and reduces API load.
 
-Future: replace TTL-only cache with “stale-while-revalidate” + optional persistence (so a restart doesn’t cause an immediate API spike).
+Future: replace TTL-only cache with “stale-while-revalidate” + persistence (so a restart doesn’t cause an immediate API spike).
 
 ---
 

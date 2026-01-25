@@ -78,7 +78,7 @@ Edit `.env` file:
 ORCHESTRATOR_PORT=3000
 HOST=0.0.0.0
 
-# Security (optional)
+# Security
 AUTH_TOKEN=your-secret-token
 
 # Paths
@@ -152,7 +152,7 @@ When Claude is waiting for input:
 - [x] Quick action buttons
 - [x] Session restart capability
 - [x] Local network access
-- [x] Optional authentication
+- [x] Authentication support (can be disabled)
 
 ### Phase 2 (Enhancements) 🚧
 - [x] Token usage tracking (basic)

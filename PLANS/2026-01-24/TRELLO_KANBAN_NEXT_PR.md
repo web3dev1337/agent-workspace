@@ -14,7 +14,7 @@ This PR is scoped to a **single board view UI** + the minimum backend shape need
 - Must not spam Trello: use server-side caching and a single “snapshot” fetch per refresh when possible.
 - Works even when Trello board-wide cards endpoint fails (fall back to per-list).
 
-Non-goals (later PRs):
+Follow-up items (next PRs):
 - Full Trello parity (labels editing, member assignment, checklists editing, attachments).
 - Perfect reordering within a list (pos math), swimlanes, WIP limits.
 
@@ -46,7 +46,7 @@ Implementation (Trello):
 ### 2) Move card API
 
 Already present:
-- `PUT /api/tasks/cards/:cardId` with `{ idList }` (and optional `pos`).
+- `PUT /api/tasks/cards/:cardId` with `{ idList }` (and `pos` support).
 
 For kanban v1:
 - Use `PUT /api/tasks/cards/:cardId` to move card to list.
@@ -109,4 +109,3 @@ We will not copy their stack; we’ll reproduce the UX patterns in our existing 
 - Keep current list-based Tasks view as default.
 - Board view is additive; if any Trello edge case occurs, user can still use list view.
 - Caching + `refresh=true` avoids Trello API spam while allowing manual refresh.
-
