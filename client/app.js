@@ -8534,8 +8534,12 @@ class ClaudeOrchestrator {
         if (!q) return true;
         const hay = [
           t?.title,
+          t?.project,
           t?.repository,
+          t?.worktree,
+          t?.worktreeId,
           t?.worktreePath,
+          t?.branch,
           t?.sessionId,
           t?.url
         ].filter(Boolean).join(' ').toLowerCase();
@@ -8579,7 +8583,11 @@ class ClaudeOrchestrator {
     const row = (t) => {
       const kind = t.kind || 'task';
       const title = escapeHtml(t.title || t.id || '');
-      const sub = escapeHtml(t.repository || t.worktreePath || t.sessionId || '');
+      const projectLabel = escapeHtml(t.project || '');
+      const worktreeLabel = escapeHtml(t.worktree || '');
+      const branchLabel = escapeHtml(t.branch || '');
+      const repoLabel = escapeHtml(t.repository || '');
+      const worktreePathLabel = escapeHtml(t.worktreePath || '');
       const tier = t?.record?.tier ? `T${t.record.tier}` : '';
       const risk = t?.record?.changeRisk ? `risk:${t.record.changeRisk}` : '';
       const depTotal = t?.dependencySummary?.total ? `deps:${t.dependencySummary.total}` : '';
@@ -8589,10 +8597,25 @@ class ClaudeOrchestrator {
       const meta = [tier, risk].filter(Boolean).join(' • ');
       const meta2 = [depTotal, depBlocked, reviewed, outcome].filter(Boolean).join(' • ');
       const selected = state.selectedId === t.id;
+
+      const tags = [];
+      if (projectLabel) tags.push(`<span class="pr-badge" title="Project">${projectLabel}</span>`);
+      if (worktreeLabel) tags.push(`<span class="pr-badge" title="Worktree">${worktreeLabel}</span>`);
+      if (branchLabel) tags.push(`<span class="pr-badge" title="Branch">${branchLabel}</span>`);
+
+      const hover = [repoLabel, worktreePathLabel, t?.sessionId ? `session:${escapeHtml(t.sessionId)}` : '']
+        .filter(Boolean)
+        .join(' • ');
+
       return `
-          <div class="task-card-row ${selected ? 'selected' : ''}" data-queue-id="${escapeHtml(t.id)}">
+          <div class="task-card-row ${selected ? 'selected' : ''}" data-queue-id="${escapeHtml(t.id)}" ${hover ? `title="${hover}"` : ''}>
             <div class="task-card-title">${title}</div>
-            <div class="task-card-meta">${escapeHtml(kind)}${sub ? ` • ${sub}` : ''}${meta ? ` • ${escapeHtml(meta)}` : ''}${meta2 ? ` • ${escapeHtml(meta2)}` : ''}</div>
+            <div class="task-card-meta">
+              <span class="queue-kind">${escapeHtml(kind)}</span>
+              ${tags.length ? ` ${tags.join(' ')}` : ''}
+              ${meta ? ` • ${escapeHtml(meta)}` : ''}
+              ${meta2 ? ` • ${escapeHtml(meta2)}` : ''}
+            </div>
           </div>
         `;
     };
