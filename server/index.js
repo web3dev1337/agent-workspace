@@ -571,7 +571,7 @@ io.on('connection', (socket) => {
   });
 
   // Add sessions for a new worktree without destroying existing sessions
-  socket.on('add-worktree-sessions', async ({ worktreeId, worktreePath, repositoryName, repositoryType, repositoryRoot }) => {
+  socket.on('add-worktree-sessions', async ({ worktreeId, worktreePath, repositoryName, repositoryType, repositoryRoot, startTier }) => {
     try {
       logger.info('Adding sessions for new worktree', { worktreeId, worktreePath, repositoryName });
 
@@ -644,9 +644,11 @@ io.on('connection', (socket) => {
       }
 
       // Emit the new sessions to the requesting client only
+      const tier = Number(startTier);
       socket.emit('worktree-sessions-added', {
         worktreeId,
-        sessions: newSessions
+        sessions: newSessions,
+        startTier: (tier >= 1 && tier <= 4) ? tier : undefined
       });
 
       logger.info('Worktree sessions added successfully', {

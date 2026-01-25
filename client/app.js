@@ -345,7 +345,7 @@ class ClaudeOrchestrator {
       });
 
       // Handle new worktree sessions being added without destroying existing ones
-      this.socket.on('worktree-sessions-added', ({ worktreeId, sessions }) => {
+      this.socket.on('worktree-sessions-added', ({ worktreeId, sessions, startTier }) => {
         console.log('New worktree sessions added:', worktreeId, sessions);
 
         // Add the new sessions to our sessions map (don't clear existing!)
@@ -383,6 +383,13 @@ class ClaudeOrchestrator {
 
         // Update terminal grid to display new terminals
         this.updateTerminalGrid();
+
+        // Apply selected start tier (Quick Work) to new Agent sessions.
+        const tier = Number(startTier);
+        if (tier >= 1 && tier <= 4) {
+          const sessionIds = Object.keys(sessions || {});
+          this.applyStartTierToNewSessions(sessionIds, tier);
+        }
 
         // Show success message
         this.showTemporaryMessage(`Worktree ${worktreeId} terminals ready!`, 'success');
@@ -2127,7 +2134,7 @@ class ClaudeOrchestrator {
       this.refreshTier1Busy();
       this.buildSidebar();
       this.updateTerminalGrid();
-      this.showToast(nextTier ? `Tier set to Q${nextTier}` : 'Tier cleared', 'success');
+      this.showToast(nextTier ? `Tier set to T${nextTier}` : 'Tier cleared', 'success');
     } catch (e) {
       this.showToast(String(e?.message || e), 'error');
       // Re-render to ensure the selector reflects stored data.
@@ -9364,6 +9371,15 @@ class ClaudeOrchestrator {
     this.quickWorktreeSortMode = localStorage.getItem('quick-worktree-sort') || 'edited';
     this.quickWorktreeRecencyFilter = localStorage.getItem('quick-worktree-recency') || 'all';
     this.quickWorktreeFavoritesOnly = localStorage.getItem('quick-worktree-favorites-only') === 'true';
+    this.quickWorktreeStartTier = localStorage.getItem('quick-worktree-start-tier') || '';
+    if (!['', '1', '2', '3', '4'].includes(this.quickWorktreeStartTier)) {
+      this.quickWorktreeStartTier = '';
+    }
+    if (!this.quickWorktreeStartTier) {
+      const tierFilter = Number(this.tierFilter);
+      this.quickWorktreeStartTier = (tierFilter >= 1 && tierFilter <= 4) ? String(tierFilter) : '2';
+      localStorage.setItem('quick-worktree-start-tier', this.quickWorktreeStartTier);
+    }
     if (!this.quickWorktreeFavorites) {
       try {
         const stored = JSON.parse(localStorage.getItem('quick-worktree-favorites') || '[]');
@@ -9404,6 +9420,25 @@ class ClaudeOrchestrator {
                 <label class="quick-radio">
                   <input type="radio" name="quick-sort" value="created">
                   Created
+                </label>
+              </div>
+              <div class="quick-control-group">
+                <span class="quick-control-label">Start tier</span>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-tier" value="1">
+                  T1
+                </label>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-tier" value="2">
+                  T2
+                </label>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-tier" value="3">
+                  T3
+                </label>
+                <label class="quick-radio">
+                  <input type="radio" name="quick-tier" value="4">
+                  T4
                 </label>
               </div>
               <div class="quick-control-group">
@@ -9476,6 +9511,9 @@ class ClaudeOrchestrator {
     modal.querySelectorAll('input[name="quick-sort"]').forEach(input => {
       input.checked = input.value === this.quickWorktreeSortMode;
     });
+    modal.querySelectorAll('input[name="quick-tier"]').forEach(input => {
+      input.checked = input.value === this.quickWorktreeStartTier;
+    });
     modal.querySelectorAll('input[name="quick-recency"]').forEach(input => {
       input.checked = input.value === this.quickWorktreeRecencyFilter;
     });
@@ -9490,6 +9528,13 @@ class ClaudeOrchestrator {
         this.quickWorktreeSortMode = sortInput.value;
         localStorage.setItem('quick-worktree-sort', this.quickWorktreeSortMode);
         this.renderQuickWorktreeRepoList();
+        return;
+      }
+
+      const tierInput = e.target.closest('input[name="quick-tier"]');
+      if (tierInput) {
+        this.quickWorktreeStartTier = tierInput.value;
+        localStorage.setItem('quick-worktree-start-tier', this.quickWorktreeStartTier);
         return;
       }
 
@@ -10586,6 +10631,35 @@ class ClaudeOrchestrator {
     return false;
   }
 
+  async applyStartTierToNewSessions(sessionIds, tier) {
+    const selectedTier = Number(tier);
+    if (!(selectedTier >= 1 && selectedTier <= 4)) return;
+
+    const ids = Array.isArray(sessionIds)
+      ? sessionIds.map(x => String(x || '').trim()).filter(Boolean)
+      : [];
+    if (!ids.length) return;
+
+    const agentSessionIds = ids.filter(id => id.includes('-claude'));
+    if (!agentSessionIds.length) return;
+
+    // Update local state immediately so gating/UI reads the tier before async persistence completes.
+    for (const sid of agentSessionIds) {
+      const recordId = `session:${sid}`;
+      const prev = this.taskRecords.get(recordId) || {};
+      this.taskRecords.set(recordId, { ...prev, tier: selectedTier });
+    }
+
+    try {
+      await Promise.all(agentSessionIds.map((sid) => this.upsertTaskRecord(`session:${sid}`, { tier: selectedTier })));
+      this.refreshTier1Busy({ suppressRerender: true });
+      this.buildSidebar();
+      this.updateTerminalGrid();
+    } catch (error) {
+      console.warn('Failed to persist start tier for new sessions', error);
+    }
+  }
+
   quickStartWorktree({ repoPath, repoType, repoName, worktreeId, worktreePath, repositoryRoot, keepOpen = false }) {
     if (!this.socket) {
       this.showTemporaryMessage('Socket not connected', 'error');
@@ -10593,12 +10667,14 @@ class ClaudeOrchestrator {
     }
 
     this.showTemporaryMessage(`Starting ${repoName} ${worktreeId}...`, 'success');
+    const startTier = Number(this.quickWorktreeStartTier);
     this.socket.emit('add-worktree-sessions', {
       worktreeId,
       worktreePath,
       repositoryName: repoName,
       repositoryType: repoType,
-      repositoryRoot: repositoryRoot || repoPath
+      repositoryRoot: repositoryRoot || repoPath,
+      startTier: (startTier >= 1 && startTier <= 4) ? startTier : undefined
     });
 
     if (!keepOpen) {
