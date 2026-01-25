@@ -21,6 +21,38 @@ class PullRequestService {
     return PullRequestService.instance;
   }
 
+  async getPullRequest({ owner, repo, number }) {
+    const o = String(owner || '').trim();
+    const r = String(repo || '').trim();
+    const n = Number(number);
+    if (!o || !r || !Number.isFinite(n)) {
+      throw new Error('Invalid PR identifier');
+    }
+
+    const args = [
+      'pr',
+      'view',
+      String(n),
+      '--repo',
+      `${o}/${r}`,
+      '--json',
+      'number,title,state,url,isDraft,createdAt,updatedAt,author'
+    ];
+
+    const { stdout } = await new Promise((resolve, reject) => {
+      execFile('gh', args, { timeout: 20000 }, (error, stdout, stderr) => {
+        if (error) {
+          logger.error('gh pr view failed', { error: error.message, stderr, owner: o, repo: r, number: n });
+          reject(error);
+          return;
+        }
+        resolve({ stdout, stderr });
+      });
+    });
+
+    return JSON.parse(stdout || '{}');
+  }
+
   normalizeListParams(params = {}) {
     const mode = String(params.mode || 'mine').toLowerCase(); // mine | involved | all
     const state = String(params.state || 'all').toLowerCase(); // all | open | closed | merged

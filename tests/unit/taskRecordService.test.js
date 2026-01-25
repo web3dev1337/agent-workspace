@@ -31,5 +31,22 @@ describe('TaskRecordService', () => {
     const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     expect(raw.records[id].tier).toBe(3);
   });
-});
 
+  test('upsert normalizes dependencies and supports done', async () => {
+    const { TaskRecordService } = require('../../server/taskRecordService');
+    const os = require('os');
+    const path = require('path');
+    const fs = require('fs').promises;
+
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'orchestrator-task-records-'));
+    const filePath = path.join(tmp, 'task-records.json');
+    const svc = new TaskRecordService({ filePath });
+
+    const rec = await svc.upsert('task:1', { dependencies: ['  a ', 'a', '', 'b'], done: true });
+    expect(rec.dependencies).toEqual(['a', 'b']);
+    expect(typeof rec.doneAt).toBe('string');
+
+    const rec2 = await svc.upsert('task:1', { done: false });
+    expect(rec2.doneAt).toBeUndefined();
+  });
+});

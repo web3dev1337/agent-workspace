@@ -58,7 +58,8 @@ test.describe('Queue Panel', () => {
               url: 'https://github.com/web3dev1337/incremental-game/pull/4',
               repository: 'web3dev1337/incremental-game',
               updatedAt: '2026-01-25T00:00:00Z',
-              record: { tier: 2, changeRisk: 'low' }
+              record: { tier: 2, changeRisk: 'low' },
+              dependencySummary: { total: 2, blocked: 1 }
             }
           ]
         })
@@ -81,6 +82,47 @@ test.describe('Queue Panel', () => {
           }
         })
       });
+    });
+
+    // Dependencies: return a small list and allow add/remove.
+    await page.route(/.*\/api\/process\/task-records\/.+\/dependencies.*/, async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'pr:web3dev1337/incremental-game#4',
+            dependencies: [
+              { id: 'pr:web3dev1337/other-repo#1', satisfied: false, reason: 'pr_open' },
+              { id: 'worktree:/tmp/demo/work1', satisfied: true, reason: 'doneAt' }
+            ]
+          })
+        });
+        return;
+      }
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'pr:web3dev1337/incremental-game#4',
+            record: { dependencies: ['x'] }
+          })
+        });
+        return;
+      }
+      if (route.request().method() === 'DELETE') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'pr:web3dev1337/incremental-game#4',
+            record: { dependencies: [] }
+          })
+        });
+        return;
+      }
+      return route.fallback();
     });
 
     // Prompts: return 404 for read, allow write

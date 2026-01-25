@@ -58,6 +58,7 @@ const { PullRequestService } = require('./pullRequestService');
 const { ProcessTaskService } = require('./processTaskService');
 const { TaskRecordService } = require('./taskRecordService');
 const { PromptArtifactService } = require('./promptArtifactService');
+const { TaskDependencyService } = require('./taskDependencyService');
 const { TaskTicketingService } = require('./taskTicketingService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
@@ -172,6 +173,7 @@ const pullRequestService = PullRequestService.getInstance();
 const processTaskService = ProcessTaskService.getInstance({ sessionManager, worktreeTagService, pullRequestService });
 const taskRecordService = TaskRecordService.getInstance();
 const promptArtifactService = PromptArtifactService.getInstance();
+const taskDependencyService = TaskDependencyService.getInstance({ taskRecordService, pullRequestService });
 const taskTicketingService = TaskTicketingService.getInstance();
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
@@ -2221,6 +2223,22 @@ app.get('/api/process/tasks', async (req, res) => {
       return record ? { ...t, record } : t;
     });
 
+    const include = String(req.query.include || '').toLowerCase();
+    if (include.includes('dependencysummary')) {
+      const summaries = await Promise.all(enriched.map(async (t) => {
+        try {
+          const summary = await taskDependencyService.getDependencySummary(t.id);
+          return [t.id, summary];
+        } catch {
+          return [t.id, { total: 0, blocked: 0 }];
+        }
+      }));
+      const map = Object.fromEntries(summaries);
+      const withDeps = enriched.map((t) => ({ ...t, dependencySummary: map[t.id] || { total: 0, blocked: 0 } }));
+      res.json({ count: withDeps.length, tasks: withDeps });
+      return;
+    }
+
     res.json({ count: enriched.length, tasks: enriched });
   } catch (error) {
     logger.error('Failed to list process tasks', { error: error.message, stack: error.stack });
@@ -2273,6 +2291,46 @@ app.delete('/api/process/task-records/:id', async (req, res) => {
   } catch (error) {
     logger.error('Failed to delete task record', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to delete task record' });
+  }
+});
+
+// ============================================
+// Task record dependencies (orchestrator-native)
+// ============================================
+
+app.get('/api/process/task-records/:id/dependencies', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const dependencies = await taskDependencyService.resolveDependencies(id);
+    res.json({ id, dependencies });
+  } catch (error) {
+    logger.error('Failed to resolve task dependencies', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to resolve task dependencies' });
+  }
+});
+
+app.post('/api/process/task-records/:id/dependencies', express.json(), async (req, res) => {
+  try {
+    const id = req.params.id;
+    const depId = String(req.body?.dependencyId || '').trim();
+    if (!depId) return res.status(400).json({ error: 'dependencyId is required' });
+    const record = await taskDependencyService.addDependency(id, depId);
+    res.json({ id, record });
+  } catch (error) {
+    logger.error('Failed to add task dependency', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to add task dependency' });
+  }
+});
+
+app.delete('/api/process/task-records/:id/dependencies/:depId', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const depId = decodeURIComponent(req.params.depId || '');
+    const record = await taskDependencyService.removeDependency(id, depId);
+    res.json({ id, record });
+  } catch (error) {
+    logger.error('Failed to remove task dependency', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to remove task dependency' });
   }
 });
 
