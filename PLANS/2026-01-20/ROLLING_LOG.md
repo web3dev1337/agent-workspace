@@ -4,6 +4,21 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ## 2026-01-25
 
+### Tasks panel: Trello parity (labels/custom fields, assignees filter, avatars, layouts) (open)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/180
+- Notes:
+  - Adds labels + custom field editing, assignee filtering (“Only me” / “Any”), Trello avatar sizing fix, kanban layout modes, per-board collapse persistence.
+  - E2E tests mock user settings per test to avoid cross-test flake.
+
+### Project risk metadata + conflict detection (open)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/181
+- Adds:
+  - project/base impact risk (`low|medium|high|critical`) via cascaded `.orchestrator-config.json` + optional `~/.orchestrator/project-metadata.json`
+  - worktree metadata enriched with `project.baseImpactRisk`
+  - `POST /api/worktree-conflicts` minimal conflict signals (file overlap / parallel PRs / parallel dirty)
+  - Quick Work menu displays risk indicator
+- Resume doc: `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md`
+
 ### Tasks panel: Trello Kanban board + write ops diagnostics (in progress)
 - Branch: `feat/trello-kanban-board`
 - Adds: board snapshot API + board view toggle + drag/drop moves (optimistic UI).
