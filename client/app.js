@@ -2050,6 +2050,46 @@ class ClaudeOrchestrator {
     }
   }
 
+  async upsertTaskRecord(id, patch) {
+    const taskId = String(id || '').trim();
+    if (!taskId) throw new Error('Missing task record id');
+
+    const res = await fetch(`/api/process/task-records/${encodeURIComponent(taskId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch || {})
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || 'Failed to save task record');
+    return data.record || null;
+  }
+
+  async setTierForSession(sessionId, tierValue) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+
+    const raw = String(tierValue ?? '').trim();
+    const tier = raw ? Number(raw) : null;
+    const nextTier = (tier >= 1 && tier <= 4) ? tier : null;
+
+    try {
+      const recordId = `session:${sid}`;
+      const rec = await this.upsertTaskRecord(recordId, { tier: nextTier });
+      if (rec) this.taskRecords.set(recordId, rec);
+      else this.taskRecords.delete(recordId);
+
+      this.refreshTier1Busy();
+      this.buildSidebar();
+      this.updateTerminalGrid();
+      this.showToast('Saved', 'success');
+    } catch (e) {
+      this.showToast(String(e?.message || e), 'error');
+      // Re-render to ensure the selector reflects stored data.
+      this.buildSidebar();
+      this.updateTerminalGrid();
+    }
+  }
+
   async setWorktreeReadyForReview(worktreePath, ready) {
     try {
       const response = await fetch('/api/worktree-tags/ready', {
@@ -2568,6 +2608,8 @@ class ClaudeOrchestrator {
     const repositoryName = this.extractRepositoryName(sessionId);
     const worktreeId = session.worktreeId;
     const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
+    const tier = isClaudeSession ? this.getTierForSession(sessionId) : null;
+    const tierValue = tier ? String(tier) : '';
 
     wrapper.innerHTML = `
       <div class="terminal-header">
@@ -2578,6 +2620,13 @@ class ClaudeOrchestrator {
         </div>
         <div class="terminal-controls">
           ${isClaudeSession ? `
+            <select class="tier-dropdown" data-session-id="${sessionId}" aria-label="Tier" title="Tier" onchange="window.orchestrator.setTierForSession('${sessionId}', this.value)">
+              <option value="" ${tierValue === '' ? 'selected' : ''}>None</option>
+              <option value="1" ${tierValue === '1' ? 'selected' : ''}>Q1</option>
+              <option value="2" ${tierValue === '2' ? 'selected' : ''}>Q2</option>
+              <option value="3" ${tierValue === '3' ? 'selected' : ''}>Q3</option>
+              <option value="4" ${tierValue === '4' ? 'selected' : ''}>Q4</option>
+            </select>
             ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
             ${this.getGitHubButtons(sessionId)}
           ` : ''}
