@@ -57,6 +57,7 @@ const { DiffViewerService } = require('./diffViewerService');
 const { PullRequestService } = require('./pullRequestService');
 const { ProcessTaskService } = require('./processTaskService');
 const { TaskRecordService } = require('./taskRecordService');
+const { PromptArtifactService } = require('./promptArtifactService');
 const { TaskTicketingService } = require('./taskTicketingService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
@@ -170,6 +171,7 @@ const diffViewerService = DiffViewerService.getInstance();
 const pullRequestService = PullRequestService.getInstance();
 const processTaskService = ProcessTaskService.getInstance({ sessionManager, worktreeTagService, pullRequestService });
 const taskRecordService = TaskRecordService.getInstance();
+const promptArtifactService = PromptArtifactService.getInstance();
 const taskTicketingService = TaskTicketingService.getInstance();
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
@@ -2271,6 +2273,122 @@ app.delete('/api/process/task-records/:id', async (req, res) => {
   } catch (error) {
     logger.error('Failed to delete task record', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to delete task record' });
+  }
+});
+
+// ============================================
+// Prompt artifacts API (large prompts; local/private by default)
+// ============================================
+
+app.get('/api/prompts', async (req, res) => {
+  try {
+    const limit = Number(req.query.limit || 200);
+    const list = await promptArtifactService.list({ limit });
+    res.json({ count: list.length, prompts: list });
+  } catch (error) {
+    logger.error('Failed to list prompts', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to list prompts' });
+  }
+});
+
+app.get('/api/prompts/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const prompt = await promptArtifactService.read(id);
+    if (!prompt) return res.status(404).json({ error: 'Not found' });
+    res.json(prompt);
+  } catch (error) {
+    logger.error('Failed to read prompt', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to read prompt' });
+  }
+});
+
+app.put('/api/prompts/:id', express.json({ limit: '25mb' }), async (req, res) => {
+  try {
+    const id = req.params.id;
+    const text = req.body?.text;
+    if (typeof text !== 'string') {
+      return res.status(400).json({ error: 'Body must be JSON with { "text": "..." }' });
+    }
+    const result = await promptArtifactService.write(id, text);
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to write prompt', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to write prompt' });
+  }
+});
+
+app.delete('/api/prompts/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const removed = await promptArtifactService.remove(id);
+    res.json({ id, removed });
+  } catch (error) {
+    logger.error('Failed to delete prompt', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to delete prompt' });
+  }
+});
+
+// Optional: embed prompt into a task card comment (Trello or future providers).
+// Supports chunking for very large prompts.
+app.post('/api/prompts/:id/embed', express.json({ limit: '2mb' }), async (req, res) => {
+  try {
+    const id = req.params.id;
+    const providerId = req.body?.provider || 'trello';
+    const cardId = req.body?.cardId;
+    const mode = String(req.body?.mode || 'chunks').toLowerCase(); // snippet|full|chunks
+    const maxChars = Number(req.body?.maxCharsPerComment || 8000);
+
+    if (!cardId) return res.status(400).json({ error: 'cardId is required' });
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.addComment !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support comments', code: 'UNSUPPORTED_OPERATION' });
+    }
+
+    const prompt = await promptArtifactService.read(id);
+    if (!prompt) return res.status(404).json({ error: 'Prompt not found' });
+
+    const header = `Prompt artifact: ${prompt.id}\nsha256: ${prompt.sha256}\n`;
+    const body = String(prompt.text || '');
+    const safeMax = Number.isFinite(maxChars) ? Math.max(1000, Math.min(15000, maxChars)) : 8000;
+
+    const makeChunks = (text) => {
+      const chunks = [];
+      let i = 0;
+      while (i < text.length) {
+        chunks.push(text.slice(i, i + safeMax));
+        i += safeMax;
+      }
+      return chunks;
+    };
+
+    let comments = [];
+    if (mode === 'snippet') {
+      const snippet = body.slice(0, safeMax);
+      comments = [`${header}\n${snippet}\n\n(embedded snippet)`];
+    } else if (mode === 'full') {
+      if (header.length + body.length <= safeMax) {
+        comments = [`${header}\n${body}`];
+      } else {
+        return res.status(400).json({ error: 'Prompt too large for single comment; use mode="chunks"' });
+      }
+    } else {
+      const chunks = makeChunks(body);
+      comments = chunks.map((c, idx) => `${header}\n(part ${idx + 1}/${chunks.length})\n\n${c}`);
+    }
+
+    const created = [];
+    for (const text of comments) {
+      // eslint-disable-next-line no-await-in-loop
+      const action = await provider.addComment({ cardId, text });
+      created.push(action?.id || null);
+    }
+
+    res.json({ provider: providerId, cardId, promptId: prompt.id, comments: created, count: created.length });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to embed prompt into task card', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code, statusCode: error.statusCode, details: error.body });
   }
 });
 
