@@ -35,12 +35,20 @@ Dependencies are represented in Trello via a **Checklist named `Dependencies`** 
   - `DELETE /api/tasks/cards/:cardId/dependencies/:itemId?provider=trello`
   - `PUT /api/tasks/cards/:cardId/dependencies/:itemId?provider=trello`
 
-### ❌ Missing (orchestrator-native dependencies)
+### ✅ Shipped (orchestrator-native dependencies)
 
-We still need dependencies for:
-- greenfield/T4 tasks with **no Trello card**
-- cross-entity dependencies (PR ↔ PR, branch ↔ ticket, worktree ↔ ticket)
-- a blocked/unblocked overview / graph view
+Dependencies also exist for tasks with **no Trello card** via orchestrator task records.
+
+- Stored in `~/.orchestrator/task-records.json` under `dependencies: string[]`
+- Supported IDs (v1): `pr:owner/repo#num`, `worktree:/abs/path`, `session:<id>`
+- Satisfaction rules (v1):
+  - `doneAt` marks any dependency satisfied
+  - PR dependencies are satisfied when GitHub reports the PR is **merged**
+- UI: Queue shows `deps:X blocked:Y` and a dependencies editor.
+- API for humans/agents:
+  - `GET /api/process/task-records/:id/dependencies`
+  - `POST /api/process/task-records/:id/dependencies`
+  - `DELETE /api/process/task-records/:id/dependencies/:depId`
 
 ---
 
@@ -63,11 +71,20 @@ What’s shipped (as of 2026-01-25):
   - tier badge shown on sidebar worktree rows
 
 What’s still needed:
-- tier-aware *workflow modes* (Focus vs Review vs Background), not just filters
-- scheduling/automation rules (e.g. auto-hide Q3/Q4 except in Review mode)
-- “review conveyor belt” UX (next/prev, mark reviewed, request changes, launch fix agent)
+- scheduling/automation rules (e.g. auto-hide Q3/Q4 while Tier 1 is busy)
+- “review conveyor belt” UX expansion (mark reviewed, request changes, launch fix agent)
 
 Roadmap reference: `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md`
+
+### ✅ Shipped (workflow modes)
+
+Header includes:
+- **Focus** (Tier 1–2)
+- **Review** (all tiers; opens Queue)
+- **Background** (Tier 3–4)
+
+Queue includes:
+- **Prev/Next** navigation with unblocked items ordered first.
 
 ---
 
@@ -141,20 +158,20 @@ If we later want ticket↔ticket “conflict probability”, it should be a heur
 
 ## Next recommended PRs (small, shippable)
 
-1) **Tier workflow modes**
-   - Focus vs Review vs Background (tier-aware visibility rules)
-2) **Orchestrator-native dependencies**
-   - dependencies for tasks with no Trello card + cross-entity (PR/worktree/session) links
-3) **Prompt artifact promotion**
+1) **Prompt artifact promotion**
    - private → shared/encrypted + pointer comment policy (Trello)
+2) **Review workflow expansion**
+   - mark reviewed, request changes, launch fix agent
+3) **Automation rules**
+   - e.g. hide Tier 3/4 while Tier 1 busy; simple launch gating
 
 ---
 
 ## Checklist (to keep us honest)
 
 - [x] Tier tagging exists (task records for PR/worktree/session)
-- [ ] Tier-aware visibility rules exist (focus + review modes)
+- [x] Tier-aware visibility rules exist (focus + review modes)
 - [x] changeRisk + pFailFirstPass + verifyMinutes stored per task
 - [x] Review Inbox exists and drives diff viewer
 - [x] Prompt artifacts exist (private; shared/encrypted WIP)
-- [ ] Dependency model extends beyond Trello when no card exists
+- [x] Dependency model extends beyond Trello when no card exists

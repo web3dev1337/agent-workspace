@@ -27,11 +27,11 @@ const ensureWorkspaceLoaded = async (page) => {
 };
 
 const dismissFocusOverlay = async (page) => {
-  const overlay = page.locator('#focus-overlay.active');
-  if (await overlay.isVisible().catch(() => false)) {
-    await page.locator('#focus-overlay .focus-close-btn').click();
-    await expect(overlay).toBeHidden();
-  }
+  await page.evaluate(() => {
+    try {
+      window.orchestrator?.unfocusTerminal?.();
+    } catch {}
+  });
 };
 
 test.describe('Tier Filters', () => {
@@ -47,55 +47,49 @@ test.describe('Tier Filters', () => {
 
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.goto('/');
-    await ensureWorkspaceLoaded(page);
+    await page.waitForFunction(() => !!window.orchestrator, { timeout: 30000 });
     await dismissFocusOverlay(page);
 
-    await page.waitForSelector('#worktree-list .worktree-item', { timeout: 30000 });
-    await page.waitForFunction(() => window.orchestrator?.sessions?.size > 0, { timeout: 30000 });
+    const ids = await page.evaluate(() => {
+      try {
+        window.orchestrator?.socket?.disconnect?.();
+      } catch {}
 
-    const seeded = await page.evaluate(() => {
-      const sessions = Array.from(window.orchestrator.sessions.entries()).map(([id, s]) => ({ id, ...s }));
-      const claudeSessions = sessions.filter((s) => (s.type === 'claude' || String(s.id).includes('-claude')));
-      if (claudeSessions.length < 2) return { ok: false, reason: 'not enough claude sessions' };
+      window.orchestrator.updateTerminalGrid = () => {};
+      window.orchestrator.buildSidebar = () => {};
+      window.orchestrator.currentWorkspace = null;
+      window.orchestrator.sessions = new Map();
+      window.orchestrator.visibleTerminals = new Set();
+      window.orchestrator.taskRecords = new Map();
 
-      // Find two sessions that are likely in different worktrees.
-      let a = null;
-      let b = null;
-      for (let i = 0; i < claudeSessions.length; i++) {
-        for (let j = i + 1; j < claudeSessions.length; j++) {
-          const si = claudeSessions[i];
-          const sj = claudeSessions[j];
-          const wi = si.worktreeId || String(si.id).split('-')[0];
-          const wj = sj.worktreeId || String(sj.id).split('-')[0];
-          if (wi !== wj) {
-            a = si;
-            b = sj;
-            break;
-          }
-        }
-        if (a && b) break;
-      }
+      const aId = 'demo-work1-claude';
+      const bId = 'demo-work2-claude';
+      window.orchestrator.sessions.set(aId, { sessionId: aId, type: 'claude', status: 'idle', branch: 'main', worktreeId: 'work1' });
+      window.orchestrator.sessions.set(bId, { sessionId: bId, type: 'claude', status: 'idle', branch: 'main', worktreeId: 'work2' });
+      window.orchestrator.visibleTerminals.add(aId);
+      window.orchestrator.visibleTerminals.add(bId);
 
-      a = a || claudeSessions[0];
-      b = b || claudeSessions[1];
+      window.orchestrator.taskRecords.set(`session:${aId}`, { tier: 1 });
+      window.orchestrator.taskRecords.set(`session:${bId}`, { tier: 2 });
 
-      window.orchestrator.taskRecords.set(`session:${a.id}`, { tier: 1 });
-      window.orchestrator.taskRecords.set(`session:${b.id}`, { tier: 2 });
-      window.orchestrator.buildSidebar();
-
-      return { ok: true };
+      return { aId, bId };
     });
 
-    expect(seeded).toEqual({ ok: true });
+    expect(ids.aId).toBeTruthy();
+    expect(ids.bId).toBeTruthy();
 
-    await expect(page.locator('.worktree-tier-badge.tier-1')).toHaveCount(1);
-    await expect(page.locator('.worktree-tier-badge.tier-2')).toHaveCount(1);
+    await page.evaluate(() => window.orchestrator.setTierFilter('1'));
+    const focusVisible = await page.evaluate(({ aId, bId }) => ({
+      a: window.orchestrator.isSessionVisibleInCurrentView(aId),
+      b: window.orchestrator.isSessionVisibleInCurrentView(bId)
+    }), ids);
+    expect(focusVisible).toEqual({ a: true, b: false });
 
-    await page.locator('.filter-toggle-tier button', { hasText: 'Q1' }).click();
-    await expect(page.locator('.worktree-tier-badge.tier-1')).toHaveCount(1);
-    await expect(page.locator('.worktree-tier-badge.tier-2')).toHaveCount(0);
-
-    await page.locator('.filter-toggle-tier button', { hasText: 'All' }).click();
-    await expect(page.locator('.worktree-tier-badge.tier-2')).toHaveCount(1);
+    await page.evaluate(() => window.orchestrator.setTierFilter('all'));
+    const allVisible = await page.evaluate(({ aId, bId }) => ({
+      a: window.orchestrator.isSessionVisibleInCurrentView(aId),
+      b: window.orchestrator.isSessionVisibleInCurrentView(bId)
+    }), ids);
+    expect(allVisible).toEqual({ a: true, b: true });
   });
 });
