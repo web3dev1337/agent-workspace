@@ -90,6 +90,14 @@ class TrelloTaskProvider {
     return this._getCached(cacheKey, url, { ttlMs: 60_000, force: refresh });
   }
 
+  async getMe({ refresh = false } = {}) {
+    const url = this._buildUrl('/members/me', {
+      fields: 'fullName,username,avatarUrl'
+    });
+    const cacheKey = 'trello:me';
+    return this._getCached(cacheKey, url, { ttlMs: 5 * 60_000, force: refresh });
+  }
+
   async listBoardCustomFields({ boardId, refresh = false } = {}) {
     if (!boardId) throw new Error('boardId is required');
     const url = this._buildUrl(`/boards/${encodeURIComponent(boardId)}/customFields`, {

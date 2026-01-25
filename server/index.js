@@ -2161,6 +2161,23 @@ app.get('/api/tasks/providers', (req, res) => {
   }
 });
 
+app.get('/api/tasks/me', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.getMe !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support me lookup', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const member = await provider.getMe({ refresh });
+    res.json({ provider: providerId, member });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to fetch task provider me', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
 app.get('/api/tasks/boards', async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';

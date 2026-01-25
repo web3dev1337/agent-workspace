@@ -695,6 +695,7 @@ class ClaudeOrchestrator {
       'auto-scroll': null,
       'theme-select': null,
       'tasks-theme-select': null,
+      'trello-me-username': null,
       'global-skip-permissions': null,
       'reset-to-defaults': null,
       'save-as-default': null,
@@ -841,6 +842,14 @@ class ClaudeOrchestrator {
       tasksThemeSelect.addEventListener('change', (e) => {
         const next = e.target.value;
         this.updateGlobalUserSetting('ui.tasks.theme', next);
+      });
+    }
+
+    const trelloMeUsername = document.getElementById('trello-me-username');
+    if (trelloMeUsername) {
+      trelloMeUsername.addEventListener('change', (e) => {
+        const v = String(e.target.value || '').trim();
+        this.updateGlobalUserSetting('ui.tasks.me.trelloUsername', v);
       });
     }
 
@@ -5237,6 +5246,11 @@ class ClaudeOrchestrator {
       }
     }
 
+    const trelloMeUsername = document.getElementById('trello-me-username');
+    if (trelloMeUsername) {
+      trelloMeUsername.value = this.userSettings.global?.ui?.tasks?.me?.trelloUsername || '';
+    }
+
     // Update session recovery settings UI
     const sessionRecoveryEnabled = document.getElementById('session-recovery-enabled');
     const sessionRecoveryOptions = document.getElementById('session-recovery-options');
@@ -6042,6 +6056,9 @@ class ClaudeOrchestrator {
       sort: localStorage.getItem('tasks-sort') || 'pos', // pos | activity | name
       hideEmptyColumns: localStorage.getItem('tasks-hide-empty') === 'true',
       boardLayout: 'scroll', // scroll | wrap | wrap-expand (board view)
+      assigneeFilterMode: 'selected', // selected | any
+      assigneeFilterIds: [],
+      me: null,
       lists: [],
       boardMembers: [],
       boardLabels: [],
@@ -6075,6 +6092,16 @@ class ClaudeOrchestrator {
             <label class="tasks-radio-option"><input type="radio" name="tasks-layout" value="wrap">Wrap</label>
             <label class="tasks-radio-option"><input type="radio" name="tasks-layout" value="wrap-expand">Wrap+Expand</label>
           </div>
+          <details class="tasks-filter tasks-filter-assignees" id="tasks-assignees-filter">
+            <summary class="btn-secondary" title="Filter by assignees">Assignees</summary>
+            <div class="tasks-filter-popover">
+              <div class="tasks-filter-actions">
+                <button class="btn-secondary" type="button" id="tasks-assignees-me">Only me</button>
+                <button class="btn-secondary" type="button" id="tasks-assignees-any">Any</button>
+              </div>
+              <div class="tasks-filter-list" id="tasks-assignees-list"></div>
+            </div>
+          </details>
           <div class="tasks-radio" role="radiogroup" aria-label="Updated window" id="tasks-updated">
             <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="any">Any</label>
             <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="1h">1h</label>
@@ -6127,6 +6154,86 @@ class ClaudeOrchestrator {
     let lastSnapshot = null;
 
     const boardKey = () => `${state.provider}:${state.boardId}`;
+    const readAssigneeFilter = () => {
+      const key = boardKey();
+      const fromServer = this.userSettings?.global?.ui?.tasks?.filters?.assigneesByBoard?.[key];
+      if (fromServer && typeof fromServer === 'object' && !Array.isArray(fromServer)) {
+        const mode = fromServer.mode;
+        const ids = Array.isArray(fromServer.ids) ? fromServer.ids.filter(Boolean) : [];
+        if (mode === 'any') return { mode: 'any', ids: [] };
+        return { mode: 'selected', ids };
+      }
+      if (Array.isArray(fromServer)) return { mode: 'selected', ids: fromServer.filter(Boolean) }; // legacy
+      try {
+        const raw = localStorage.getItem(`tasks-assignees:${key}`);
+        const arr = raw ? JSON.parse(raw) : [];
+        if (arr && typeof arr === 'object' && !Array.isArray(arr)) {
+          const mode = arr.mode;
+          const ids = Array.isArray(arr.ids) ? arr.ids.filter(Boolean) : [];
+          if (mode === 'any') return { mode: 'any', ids: [] };
+          return { mode: 'selected', ids };
+        }
+        return Array.isArray(arr) ? { mode: 'selected', ids: arr.filter(Boolean) } : { mode: 'selected', ids: [] };
+      } catch {
+        return { mode: 'selected', ids: [] };
+      }
+    };
+
+    const persistAssigneeFilter = ({ mode, ids } = {}) => {
+      const key = boardKey();
+      const cleanMode = mode === 'any' ? 'any' : 'selected';
+      const cleanIds = Array.from(new Set((Array.isArray(ids) ? ids : []).filter(Boolean)));
+      const payload = cleanMode === 'any'
+        ? { mode: 'any', ids: [] }
+        : { mode: 'selected', ids: cleanIds };
+      try {
+        localStorage.setItem(`tasks-assignees:${key}`, JSON.stringify(payload));
+      } catch {
+        // ignore
+      }
+      try {
+        const current = this.userSettings?.global?.ui?.tasks?.filters?.assigneesByBoard || {};
+        const next = { ...(current || {}) };
+        next[key] = payload;
+        this.updateGlobalUserSetting('ui.tasks.filters.assigneesByBoard', next);
+      } catch {
+        // ignore
+      }
+    };
+
+    const fetchMe = async ({ refresh = false } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/me`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load me');
+      return data.member || null;
+    };
+
+    const resolveMeId = () => {
+      const overrideUsername = String(this.userSettings?.global?.ui?.tasks?.me?.trelloUsername || '').trim().toLowerCase();
+      const members = Array.isArray(state.boardMembers) ? state.boardMembers : [];
+      if (overrideUsername) {
+        const found = members.find(m => String(m?.username || '').toLowerCase() === overrideUsername);
+        if (found?.id) return found.id;
+      }
+      const meUsername = String(state.me?.username || '').trim().toLowerCase();
+      if (meUsername) {
+        const found = members.find(m => String(m?.username || '').toLowerCase() === meUsername);
+        if (found?.id) return found.id;
+      }
+      return state.me?.id || null;
+    };
+
+    const passesAssigneeFilter = (card) => {
+      if (state.assigneeFilterMode === 'any') return true;
+      const ids = Array.isArray(state.assigneeFilterIds) ? state.assigneeFilterIds.filter(Boolean) : [];
+      if (ids.length === 0) return true;
+      const memberIds = Array.isArray(card?.idMembers) ? card.idMembers : [];
+      if (memberIds.length === 0) return false;
+      return memberIds.some(id => ids.includes(id));
+    };
     const readBoardLayout = () => {
       const key = boardKey();
       const fromServer = this.userSettings?.global?.ui?.tasks?.kanban?.layoutByBoard?.[key];
@@ -6245,12 +6352,13 @@ class ClaudeOrchestrator {
         return;
       }
 
-      if (!Array.isArray(cards) || cards.length === 0) {
+      const filtered = (Array.isArray(cards) ? cards : []).filter(passesAssigneeFilter);
+      if (filtered.length === 0) {
         cardsEl.innerHTML = `<div class="no-ports">No cards found.</div>`;
         return;
       }
 
-      cardsEl.innerHTML = cards
+      cardsEl.innerHTML = filtered
         .map((c) => {
           const title = (c?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
@@ -6788,7 +6896,7 @@ class ClaudeOrchestrator {
       };
 
       const sortCards = (arr) => {
-        const cards = Array.isArray(arr) ? [...arr] : [];
+        const cards = (Array.isArray(arr) ? [...arr] : []).filter(passesAssigneeFilter);
         if (state.sort === 'activity') {
           cards.sort((a, b) => (Date.parse(b?.dateLastActivity || '') || 0) - (Date.parse(a?.dateLastActivity || '') || 0));
           return cards;
@@ -6995,6 +7103,33 @@ class ClaudeOrchestrator {
       if (radio) radio.checked = true;
     };
 
+    const renderAssigneeFilter = () => {
+      const details = modal.querySelector('#tasks-assignees-filter');
+      const list = modal.querySelector('#tasks-assignees-list');
+      if (!details || !list) return;
+      const isConfigured = !!state.boardId;
+      details.style.display = isConfigured ? '' : 'none';
+
+      const members = Array.isArray(state.boardMembers) ? state.boardMembers : [];
+      const selected = new Set((Array.isArray(state.assigneeFilterIds) ? state.assigneeFilterIds : []).filter(Boolean));
+
+      list.innerHTML = members.length === 0
+        ? `<div class="tasks-detail-empty">No members.</div>`
+        : members
+          .map((m) => {
+            const id = m?.id || '';
+            const label = (m?.fullName || m?.username || id || '').toString();
+            if (!id) return '';
+            return `
+              <label class="tasks-filter-item">
+                <input type="checkbox" data-assignee-id="${escapeHtml(id)}" ${state.assigneeFilterMode !== 'any' && selected.has(id) ? 'checked' : ''} />
+                <span>${escapeHtml(label)}</span>
+              </label>
+            `;
+          })
+          .join('');
+    };
+
     const refreshAll = async ({ force = false } = {}) => {
       cardsEl.innerHTML = `<div class="loading">Loading…</div>`;
       renderDetail(null);
@@ -7022,6 +7157,13 @@ class ClaudeOrchestrator {
         setSelectOptions(boardEl, boards, { placeholder: 'Select board...', valueKey: 'id', labelKey: 'name' });
         if (state.boardId) boardEl.value = state.boardId;
 
+        // Fetch "me" (best-effort) so we can default the assignee filter.
+        try {
+          state.me = await fetchMe({ refresh: false });
+        } catch (e) {
+          state.me = null;
+        }
+
         if (state.view === 'list') {
           const [lists, members, labels] = await Promise.all([
             fetchLists({ refresh: force }),
@@ -7039,6 +7181,19 @@ class ClaudeOrchestrator {
           state.boardMembers = members || [];
           state.boardLabels = labels || [];
           state.boardCustomFields = [];
+          // Restore/default assignee filter for this board.
+          const assignee = readAssigneeFilter();
+          state.assigneeFilterMode = assignee.mode;
+          state.assigneeFilterIds = assignee.ids;
+          if (state.assigneeFilterMode !== 'any' && state.assigneeFilterIds.length === 0) {
+            const meId = resolveMeId();
+            if (meId) {
+              state.assigneeFilterIds = [meId];
+              state.assigneeFilterMode = 'selected';
+              persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
+            }
+          }
+          renderAssigneeFilter();
 
           setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
           // Insert an explicit "All lists" option at the top (better default for users who think in boards).
@@ -7079,6 +7234,18 @@ class ClaudeOrchestrator {
           state.lists = snapshot?.lists || [];
           state.boardCustomFields = customFields || [];
           state.boardLabels = labels || [];
+          const assignee = readAssigneeFilter();
+          state.assigneeFilterMode = assignee.mode;
+          state.assigneeFilterIds = assignee.ids;
+          if (state.assigneeFilterMode !== 'any' && state.assigneeFilterIds.length === 0) {
+            const meId = resolveMeId();
+            if (meId) {
+              state.assigneeFilterIds = [meId];
+              state.assigneeFilterMode = 'selected';
+              persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
+            }
+          }
+          renderAssigneeFilter();
           lastSnapshot = snapshot;
           renderBoard(snapshot);
         }
@@ -7134,6 +7301,61 @@ class ClaudeOrchestrator {
         refreshAll({ force: false });
       });
     }
+
+    const assigneesDetails = modal.querySelector('#tasks-assignees-filter');
+    if (assigneesDetails) {
+      assigneesDetails.addEventListener('toggle', () => {
+        if (!assigneesDetails.open) return;
+        // Keep the list in sync each time it opens.
+        renderAssigneeFilter();
+      });
+    }
+
+    const assigneesMeBtn = modal.querySelector('#tasks-assignees-me');
+    assigneesMeBtn?.addEventListener('click', () => {
+      const meId = resolveMeId();
+      state.assigneeFilterIds = meId ? [meId] : [];
+      state.assigneeFilterMode = 'selected';
+      persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
+      renderAssigneeFilter();
+      if (state.view === 'board' && lastSnapshot) {
+        renderBoard(lastSnapshot);
+        return;
+      }
+      refreshAll({ force: false });
+    });
+
+    const assigneesAnyBtn = modal.querySelector('#tasks-assignees-any');
+    assigneesAnyBtn?.addEventListener('click', () => {
+      state.assigneeFilterIds = [];
+      state.assigneeFilterMode = 'any';
+      persistAssigneeFilter({ mode: 'any', ids: [] });
+      renderAssigneeFilter();
+      if (state.view === 'board' && lastSnapshot) {
+        renderBoard(lastSnapshot);
+        return;
+      }
+      refreshAll({ force: false });
+    });
+
+    const assigneesList = modal.querySelector('#tasks-assignees-list');
+    assigneesList?.addEventListener('change', (e) => {
+      const checkbox = e.target?.closest?.('input[type="checkbox"][data-assignee-id]');
+      if (!checkbox) return;
+      const id = checkbox.getAttribute('data-assignee-id');
+      if (!id) return;
+      const set = new Set((Array.isArray(state.assigneeFilterIds) ? state.assigneeFilterIds : []).filter(Boolean));
+      if (checkbox.checked) set.add(id);
+      else set.delete(id);
+      state.assigneeFilterIds = Array.from(set);
+      state.assigneeFilterMode = 'selected';
+      persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
+      if (state.view === 'board' && lastSnapshot) {
+        renderBoard(lastSnapshot);
+        return;
+      }
+      refreshAll({ force: false });
+    });
 
     providerEl.addEventListener('change', async () => {
       state.provider = providerEl.value || 'trello';
