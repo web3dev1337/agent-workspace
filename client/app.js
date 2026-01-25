@@ -5990,6 +5990,8 @@ class ClaudeOrchestrator {
       listId: localStorage.getItem('tasks-list') || '',
       query: '',
       updatedWindow: localStorage.getItem('tasks-updated-window') || 'any', // any | 1h | 24h | 7d | 30d
+      sort: localStorage.getItem('tasks-sort') || 'pos', // pos | activity | name
+      hideEmptyColumns: localStorage.getItem('tasks-hide-empty') === 'true',
       lists: [],
       boardMembers: [],
       selectedCardId: null
@@ -6017,6 +6019,15 @@ class ClaudeOrchestrator {
             <option value="7d">Last 7d</option>
             <option value="30d">Last 30d</option>
           </select>
+          <select id="tasks-sort" class="tasks-select" title="Sort">
+            <option value="pos">Sort: Trello order</option>
+            <option value="activity">Sort: recent activity</option>
+            <option value="name">Sort: name</option>
+          </select>
+          <label class="tasks-toggle" title="Hide empty columns (board view)">
+            <input type="checkbox" id="tasks-hide-empty">
+            <span>Hide empty</span>
+          </label>
           <div class="tasks-view-toggle" role="group" aria-label="Tasks view">
             <button class="btn-secondary tasks-view-btn" id="tasks-view-list" data-view="list" title="List view">List</button>
             <button class="btn-secondary tasks-view-btn" id="tasks-view-board" data-view="board" title="Board view">Board</button>
@@ -6042,6 +6053,8 @@ class ClaudeOrchestrator {
     const listEl = modal.querySelector('#tasks-list');
     const searchEl = modal.querySelector('#tasks-search');
     const updatedEl = modal.querySelector('#tasks-updated');
+    const sortEl = modal.querySelector('#tasks-sort');
+    const hideEmptyEl = modal.querySelector('#tasks-hide-empty');
     const refreshBtn = modal.querySelector('#tasks-refresh');
     const viewListBtn = modal.querySelector('#tasks-view-list');
     const viewBoardBtn = modal.querySelector('#tasks-view-board');
@@ -6486,17 +6499,34 @@ class ClaudeOrchestrator {
       const lists = snapshot.lists || [];
       const cardsByList = snapshot.cardsByList || {};
 
+      const sortCards = (arr) => {
+        const cards = Array.isArray(arr) ? [...arr] : [];
+        if (state.sort === 'activity') {
+          cards.sort((a, b) => (Date.parse(b?.dateLastActivity || '') || 0) - (Date.parse(a?.dateLastActivity || '') || 0));
+          return cards;
+        }
+        if (state.sort === 'name') {
+          cards.sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+          return cards;
+        }
+        // Default: Trello order / pos
+        cards.sort((a, b) => (a?.pos ?? 0) - (b?.pos ?? 0));
+        return cards;
+      };
+
       cardsEl.innerHTML = `
         <div class="tasks-board" id="tasks-board-view">
           ${lists.map(list => {
-            const cards = Array.isArray(cardsByList[list.id]) ? cardsByList[list.id] : [];
+            const raw = Array.isArray(cardsByList[list.id]) ? cardsByList[list.id] : [];
+            const cards = sortCards(raw);
+            if (state.hideEmptyColumns && cards.length === 0) return '';
             return `
-              <div class="tasks-column" data-list-id="${list.id}">
-                <div class="tasks-column-header">
-                  <div class="tasks-column-title">${String(list.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+              <div class="tasks-column is-expanded" id="tasks-col-${list.id}" data-list-id="${list.id}" data-column-name="${escapeHtml(list.name || '')}">
+                <button class="tasks-column-header" type="button" data-col-toggle="${list.id}" aria-expanded="true">
+                  <div class="tasks-column-title">${escapeHtml(list.name || '')}</div>
                   <div class="tasks-column-count" data-count>${cards.length}</div>
-                </div>
-                <div class="tasks-column-cards" data-dropzone>
+                </button>
+                <div class="tasks-column-cards" data-dropzone data-dropzone-list="${list.id}">
                   ${cards.map(c => {
                     const title = String(c?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                     const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
@@ -6513,6 +6543,70 @@ class ClaudeOrchestrator {
           }).join('')}
         </div>
       `;
+
+      // Fizzy-like collapsible columns (lightweight):
+      // - Persist per-board expanded column on narrow screens.
+      // - Allow collapsing/expanding columns by clicking the header.
+      const storageKey = `tasks-board-expanded:${state.provider}:${state.boardId}`;
+      const isNarrow = () => window.matchMedia('(max-width: 980px)').matches;
+
+      const collapseAllExcept = (keepId) => {
+        cardsEl.querySelectorAll('.tasks-column').forEach(col => {
+          const id = col.dataset.listId;
+          const shouldKeep = keepId && id === keepId;
+          const header = col.querySelector('[data-col-toggle]');
+          col.classList.toggle('is-collapsed', !shouldKeep);
+          col.classList.toggle('is-expanded', shouldKeep);
+          header?.setAttribute('aria-expanded', shouldKeep ? 'true' : 'false');
+        });
+      };
+
+      const applyDefaultExpanded = () => {
+        if (!isNarrow()) {
+          // Desktop: expand all (no forced collapse).
+          cardsEl.querySelectorAll('.tasks-column').forEach(col => {
+            const header = col.querySelector('[data-col-toggle]');
+            col.classList.remove('is-collapsed');
+            col.classList.add('is-expanded');
+            header?.setAttribute('aria-expanded', 'true');
+          });
+          return;
+        }
+
+        const saved = localStorage.getItem(storageKey);
+        const first = cardsEl.querySelector('.tasks-column')?.dataset?.listId || null;
+        const toExpand = saved || first;
+        collapseAllExcept(toExpand);
+        if (toExpand) {
+          const col = cardsEl.querySelector(`.tasks-column[data-list-id="${CSS.escape(toExpand)}"]`);
+          col?.scrollIntoView?.({ behavior: 'smooth', inline: 'center' });
+        }
+      };
+
+      cardsEl.querySelectorAll('[data-col-toggle]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const listId = btn.getAttribute('data-col-toggle');
+          const col = listId ? cardsEl.querySelector(`.tasks-column[data-list-id="${CSS.escape(listId)}"]`) : null;
+          if (!col || !listId) return;
+
+          const collapsed = col.classList.contains('is-collapsed');
+
+          if (isNarrow()) {
+            // Narrow: behave like Fizzy (one expanded at a time).
+            collapseAllExcept(listId);
+            localStorage.setItem(storageKey, listId);
+            col.scrollIntoView?.({ behavior: 'smooth', inline: 'center' });
+            return;
+          }
+
+          // Desktop: toggle collapsed/expanded for this column only.
+          col.classList.toggle('is-collapsed', !collapsed);
+          col.classList.toggle('is-expanded', collapsed);
+          btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+        });
+      });
+
+      applyDefaultExpanded();
     };
 
     const applyView = () => {
@@ -6586,6 +6680,8 @@ class ClaudeOrchestrator {
     };
 
     if (updatedEl) updatedEl.value = state.updatedWindow;
+    if (sortEl) sortEl.value = state.sort;
+    if (hideEmptyEl) hideEmptyEl.checked = !!state.hideEmptyColumns;
     applyView();
 
     viewListBtn?.addEventListener('click', async () => {
@@ -6643,6 +6739,22 @@ class ClaudeOrchestrator {
       });
     }
 
+    if (sortEl) {
+      sortEl.addEventListener('change', () => {
+        state.sort = sortEl.value || 'pos';
+        localStorage.setItem('tasks-sort', state.sort);
+        refreshAll({ force: false });
+      });
+    }
+
+    if (hideEmptyEl) {
+      hideEmptyEl.addEventListener('change', () => {
+        state.hideEmptyColumns = !!hideEmptyEl.checked;
+        localStorage.setItem('tasks-hide-empty', state.hideEmptyColumns ? 'true' : 'false');
+        refreshAll({ force: false });
+      });
+    }
+
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => refreshAll({ force: true }));
     }
@@ -6694,7 +6806,7 @@ class ClaudeOrchestrator {
             if (!state.selectedCardId || !listId) return;
             try {
               moveBtn.disabled = true;
-              const updated = await updateCard({ cardId: state.selectedCardId, fields: { idList: listId } });
+              const updated = await updateCard({ cardId: state.selectedCardId, fields: { idList: listId, pos: 'top' } });
               if (updated) setDetail(updated);
               await refreshAll({ force: true });
               this.showToast('Moved', 'success');
@@ -6877,6 +6989,11 @@ class ClaudeOrchestrator {
       row.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.dropEffect = 'move';
+
+      // If the board view is in a narrow (single-expanded) mode, ensure the source column is expanded.
+      const sourceCol = dragFromListId ? cardsEl.querySelector(`.tasks-column[data-list-id="${CSS.escape(dragFromListId)}"]`) : null;
+      sourceCol?.classList?.remove?.('is-collapsed');
+      sourceCol?.classList?.add?.('is-expanded');
     });
 
     cardsEl.addEventListener('dragend', (e) => {
@@ -6918,16 +7035,16 @@ class ClaudeOrchestrator {
         countEl.textContent = String(col.querySelectorAll('.task-card-board').length);
       };
 
-      // Optimistic DOM move: append to bottom of target column
+      // Optimistic DOM move: place at top of target column
       if (draggedEl && targetContainer) {
-        targetContainer.appendChild(draggedEl);
+        targetContainer.prepend(draggedEl);
         draggedEl.dataset.originListId = toListId;
       }
       updateCount(column);
       updateCount(fromColumn);
 
       try {
-        await updateCard({ cardId: dragCardId, fields: { idList: toListId } });
+        await updateCard({ cardId: dragCardId, fields: { idList: toListId, pos: 'top' } });
         this.showToast('Moved', 'success');
       } catch (err) {
         console.error('Move card failed:', err);

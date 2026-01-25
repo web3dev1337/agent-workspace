@@ -6663,6 +6663,19 @@ header h1 {
   flex-wrap: wrap;
 }
 
+.tasks-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.tasks-toggle input {
+  accent-color: var(--accent-primary);
+}
+
 .tasks-select {
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -6714,17 +6727,22 @@ header h1 {
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: var(--space-sm);
+  scroll-snap-type: x mandatory;
 }
 
 .tasks-column {
-  width: 320px;
-  min-width: 320px;
+  --tasks-col-expanded: 320px;
+  --tasks-col-collapsed: 56px;
+  width: var(--tasks-col-expanded);
+  min-width: var(--tasks-col-expanded);
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   max-height: 100%;
+  scroll-snap-align: center;
+  position: relative;
 }
 
 .tasks-column.hover {
@@ -6739,6 +6757,10 @@ header h1 {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-sm);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
 }
 
 .tasks-column-title {
@@ -6761,6 +6783,36 @@ header h1 {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+}
+
+.tasks-column.is-collapsed {
+  width: var(--tasks-col-collapsed);
+  min-width: var(--tasks-col-collapsed);
+}
+
+.tasks-column.is-collapsed .tasks-column-cards {
+  display: none;
+}
+
+.tasks-column.is-collapsed .tasks-column-title {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: unset;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tasks-column.is-collapsed .tasks-column-header {
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.tasks-column.is-collapsed .tasks-column-count {
+  display: none;
 }
 
 .task-card-board {

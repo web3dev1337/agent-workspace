@@ -249,7 +249,7 @@ class TrelloTaskProvider {
     if (!cardId) throw new Error('cardId is required');
     if (!fields || typeof fields !== 'object') throw new Error('fields must be an object');
 
-    const allowed = ['name', 'desc', 'due', 'idList', 'idMembers', 'closed'];
+    const allowed = ['name', 'desc', 'due', 'idList', 'idMembers', 'closed', 'pos'];
     const params = {};
     for (const key of allowed) {
       if (fields[key] === undefined) continue;
