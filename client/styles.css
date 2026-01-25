@@ -6650,6 +6650,34 @@ header h1 {
   background: rgba(0, 0, 0, 0.35);
 }
 
+.tasks-modal .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg-secondary);
+  padding-bottom: var(--space-sm);
+}
+
+.tasks-modal .tasks-close-btn {
+  width: 44px;
+  height: 44px;
+  font-size: 1.6rem;
+  color: var(--accent-danger);
+  border: 1px solid rgba(248, 81, 73, 0.35);
+  background: rgba(248, 81, 73, 0.12);
+}
+
+.tasks-modal .tasks-close-btn:hover {
+  background: rgba(248, 81, 73, 0.2);
+  border-color: rgba(248, 81, 73, 0.55);
+  color: var(--accent-danger);
+}
+
+.tasks-modal .tasks-close-btn:focus-visible {
+  outline: 2px solid var(--accent-danger);
+  outline-offset: 2px;
+}
+
 .tasks-view-toggle {
   display: flex;
   gap: 6px;
