@@ -611,3 +611,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Updates sidebar + terminal grid immediately so Focus/Review/Background gating reacts without opening Queue.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe` (adds `tests/e2e/inline-tier-selector.spec.js`)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/198 (merged 2026-01-25)
+
+### Fix: prevent terminal fit while containers are tiny (merged)
+- Avoids fitting xterm while the terminal container is a tiny “sliver” during hide/show and tab/layout transitions (prevents hard wrapping into a narrow column).
+- Improves resize observation by watching the terminal wrapper element.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe` (adds `tests/e2e/terminal-fit-guard.spec.js`)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/200 (merged 2026-01-25)
