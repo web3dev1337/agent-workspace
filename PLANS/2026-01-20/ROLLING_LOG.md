@@ -563,7 +563,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Test updates: unit tests for Trello provider writes + new e2e mocks for label/custom-field edits.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/180
 
-### Workflow: Focus/Review/Background modes + Queue Next/Prev (in progress)
+### Workflow: Focus/Review/Background modes + Queue Next/Prev (merged)
 - Adds a header workflow toggle:
   - Focus (Tier 1–2), Review (all; opens Queue), Background (Tier 3–4)
 - Adds Queue navigation buttons (Prev/Next) and orders unblocked items first.
