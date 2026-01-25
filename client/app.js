@@ -13,6 +13,9 @@ class ClaudeOrchestrator {
     // Workflow mode (tier-aware) applied after viewMode + tierFilter:
     // 'focus' (Tier 1–2) | 'review' (all) | 'background' (Tier 3–4)
     this.workflowMode = 'review';
+    this.focusHideTier2WhenTier1Busy = true;
+    this.tier1Busy = false;
+    this.queuePanelPreset = null;
     this.socket = null;
     this.terminalManager = null;
     this.notificationManager = null;
@@ -118,10 +121,15 @@ class ClaudeOrchestrator {
       });
       document.getElementById('workflow-review')?.addEventListener('click', () => {
         this.setWorkflowMode('review');
+        this.queuePanelPreset = { reviewTier: 3, unreviewedOnly: true, autoOpenDiff: true };
         this.showQueuePanel();
       });
       document.getElementById('workflow-background')?.addEventListener('click', () => {
         this.setWorkflowMode('background');
+      });
+
+      document.getElementById('workflow-focus-tier2')?.addEventListener('click', () => {
+        this.setFocusHideTier2WhenTier1Busy(!this.focusHideTier2WhenTier1Busy);
       });
 
       // Tasks panel (ticketing providers like Trello)
@@ -154,6 +162,7 @@ class ClaudeOrchestrator {
       // Load user settings from server
       await this.loadUserSettings();
       this.syncWorkflowModeFromUserSettings();
+      this.syncFocusBehaviorFromUserSettings();
 
       // Load worktree tags (ready-for-review, etc.)
       await this.loadWorktreeTags();
@@ -1119,6 +1128,23 @@ class ClaudeOrchestrator {
     this.updateWorkflowModeButtons();
   }
 
+  syncFocusBehaviorFromUserSettings() {
+    const v = this.userSettings?.global?.ui?.workflow?.focus?.hideTier2WhenTier1Busy;
+    this.focusHideTier2WhenTier1Busy = v !== false;
+    this.refreshTier1Busy();
+    this.updateWorkflowModeButtons();
+  }
+
+  setFocusHideTier2WhenTier1Busy(enabled) {
+    const next = !!enabled;
+    if (this.focusHideTier2WhenTier1Busy === next) return;
+    this.focusHideTier2WhenTier1Busy = next;
+    this.updateWorkflowModeButtons();
+    this.updateTerminalGrid();
+    this.buildSidebar();
+    this.updateGlobalUserSetting('ui.workflow.focus.hideTier2WhenTier1Busy', next);
+  }
+
   updateWorkflowModeButtons() {
     const focusBtn = document.getElementById('workflow-focus');
     const reviewBtn = document.getElementById('workflow-review');
@@ -1132,6 +1158,47 @@ class ClaudeOrchestrator {
     focusBtn.setAttribute('aria-pressed', this.workflowMode === 'focus' ? 'true' : 'false');
     reviewBtn.setAttribute('aria-pressed', this.workflowMode === 'review' ? 'true' : 'false');
     backgroundBtn.setAttribute('aria-pressed', this.workflowMode === 'background' ? 'true' : 'false');
+
+    const tier2Btn = document.getElementById('workflow-focus-tier2');
+    if (tier2Btn) {
+      const show = this.workflowMode === 'focus';
+      tier2Btn.classList.toggle('hidden', !show);
+      tier2Btn.classList.toggle('focus-tier2-on', this.focusHideTier2WhenTier1Busy);
+      tier2Btn.textContent = this.focusHideTier2WhenTier1Busy ? 'T2 Auto' : 'T2 Always';
+      tier2Btn.setAttribute('aria-pressed', this.focusHideTier2WhenTier1Busy ? 'true' : 'false');
+      tier2Btn.title = this.focusHideTier2WhenTier1Busy
+        ? (this.tier1Busy ? 'Focus: Tier 2 hidden while Tier 1 is busy' : 'Focus: Tier 2 will show when Tier 1 is idle')
+        : 'Focus: Tier 2 always visible';
+    }
+  }
+
+  refreshTier1Busy({ suppressRerender } = {}) {
+    const prev = this.tier1Busy;
+    this.tier1Busy = this.computeTier1Busy();
+    if (prev !== this.tier1Busy) {
+      this.updateWorkflowModeButtons();
+      if (!suppressRerender && this.workflowMode === 'focus' && this.focusHideTier2WhenTier1Busy) {
+        this.updateTerminalGrid();
+        this.buildSidebar();
+      }
+    }
+  }
+
+  computeTier1Busy() {
+    for (const [sessionId, session] of this.sessions) {
+      if (!this.visibleTerminals.has(sessionId)) continue;
+      if (!this.matchesViewMode(sessionId)) continue;
+      if (!(session?.type === 'claude' || String(sessionId).includes('-claude'))) continue;
+
+      const tier = this.getTierForSession(sessionId);
+      if (tier !== 1) continue;
+
+      const status = String(session?.status || '').toLowerCase();
+      if (status === 'busy' || status === 'starting' || status === 'restarting' || status === 'running') {
+        return true;
+      }
+    }
+    return false;
   }
 
   matchesWorkflowMode(sessionId) {
@@ -1139,7 +1206,10 @@ class ClaudeOrchestrator {
     const tier = this.getTierForSession(sessionId);
 
     if (this.workflowMode === 'focus') {
-      return tier === 1 || tier === 2;
+      if (tier === 1) return true;
+      if (tier !== 2) return false;
+      if (!this.focusHideTier2WhenTier1Busy) return true;
+      return !this.tier1Busy;
     }
 
     if (this.workflowMode === 'background') {
@@ -2199,6 +2269,9 @@ class ClaudeOrchestrator {
   }
 
   updateTerminalGrid() {
+    // Keep derived workflow state up to date before filtering/rending.
+    this.refreshTier1Busy({ suppressRerender: true });
+
     // Get ALL sessions (works for both traditional and mixed-repo workspaces)
     const allSessions = Array.from(this.sessions.keys());
     this.renderTerminalsWithVisibility(allSessions);
@@ -2480,6 +2553,7 @@ class ClaudeOrchestrator {
     const previousStatus = session ? session.status : null;
     if (session) {
       session.status = status;
+      this.refreshTier1Busy();
 
       // Track that user has interacted if going from waiting to busy
       if (previousStatus === 'waiting' && status === 'busy') {
@@ -8042,8 +8116,28 @@ class ClaudeOrchestrator {
       mode: 'mine', // mine | all
       query: '',
       tasks: [],
-      selectedId: null
+      selectedId: null,
+      reviewTier: 'all', // all | none | 1..4
+      unreviewedOnly: false,
+      autoOpenDiff: false,
+      reviewActive: false
     };
+
+    // Apply any one-shot preset (e.g. workflow review button).
+    if (this.queuePanelPreset && typeof this.queuePanelPreset === 'object') {
+      const preset = this.queuePanelPreset;
+      this.queuePanelPreset = null;
+      if (preset.reviewTier !== undefined) {
+        state.reviewTier = preset.reviewTier === 'all' || preset.reviewTier === 'none'
+          ? preset.reviewTier
+          : Number.parseInt(String(preset.reviewTier), 10);
+      }
+      if (preset.unreviewedOnly !== undefined) state.unreviewedOnly = !!preset.unreviewedOnly;
+      if (preset.autoOpenDiff !== undefined) state.autoOpenDiff = !!preset.autoOpenDiff;
+      state.reviewActive = true;
+    }
+
+    state.allowAutoOpenDiff = false;
 
     const escapeHtml = (value) => String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -8070,6 +8164,19 @@ class ClaudeOrchestrator {
             <button class="btn-secondary tasks-view-btn" id="queue-mode-mine" data-mode="mine" title="My PRs">Mine</button>
             <button class="btn-secondary tasks-view-btn" id="queue-mode-all" data-mode="all" title="All PRs">All</button>
           </div>
+          <div class="tasks-view-toggle" role="group" aria-label="Review tier">
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-all" data-tier="all" title="All tiers">All</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-1" data-tier="1" title="Tier 1">Q1</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-2" data-tier="2" title="Tier 2">Q2</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-3" data-tier="3" title="Tier 3">Q3</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-4" data-tier="4" title="Tier 4">Q4</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-none" data-tier="none" title="No tier">None</button>
+          </div>
+          <div class="tasks-view-toggle" role="group" aria-label="Review filters">
+            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
+          </div>
           <div class="tasks-view-toggle" role="group" aria-label="Queue navigation">
             <button class="btn-secondary tasks-view-btn" id="queue-prev" title="Previous item (unblocked first)">Prev</button>
             <button class="btn-secondary tasks-view-btn" id="queue-next" title="Next item (unblocked first)">Next</button>
@@ -8095,6 +8202,15 @@ class ClaudeOrchestrator {
     const refreshBtn = modal.querySelector('#queue-refresh');
     const mineBtn = modal.querySelector('#queue-mode-mine');
     const allBtn = modal.querySelector('#queue-mode-all');
+    const tierAllBtn = modal.querySelector('#queue-tier-all');
+    const tier1Btn = modal.querySelector('#queue-tier-1');
+    const tier2Btn = modal.querySelector('#queue-tier-2');
+    const tier3Btn = modal.querySelector('#queue-tier-3');
+    const tier4Btn = modal.querySelector('#queue-tier-4');
+    const tierNoneBtn = modal.querySelector('#queue-tier-none');
+    const unreviewedBtn = modal.querySelector('#queue-unreviewed');
+    const autoDiffBtn = modal.querySelector('#queue-auto-diff');
+    const startReviewBtn = modal.querySelector('#queue-start-review');
     const prevBtn = modal.querySelector('#queue-prev');
     const nextBtn = modal.querySelector('#queue-next');
     const closeBtn = modal.querySelector('#queue-close-btn');
@@ -8105,6 +8221,74 @@ class ClaudeOrchestrator {
       allBtn.classList.toggle('active', state.mode === 'all');
     };
     setMode('mine');
+
+    const normalizeReviewTier = (tier) => {
+      const raw = String(tier ?? '').trim().toLowerCase();
+      if (raw === '' || raw === 'all') return 'all';
+      if (raw === 'none') return 'none';
+      const n = Number.parseInt(raw, 10);
+      if (n >= 1 && n <= 4) return n;
+      return 'all';
+    };
+
+    const syncReviewControlsUI = () => {
+      const tier = normalizeReviewTier(state.reviewTier);
+      tierAllBtn?.classList.toggle('active', tier === 'all');
+      tierNoneBtn?.classList.toggle('active', tier === 'none');
+      tier1Btn?.classList.toggle('active', tier === 1);
+      tier2Btn?.classList.toggle('active', tier === 2);
+      tier3Btn?.classList.toggle('active', tier === 3);
+      tier4Btn?.classList.toggle('active', tier === 4);
+
+      unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
+      autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
+      startReviewBtn?.classList.toggle('active', !!state.reviewActive);
+    };
+
+    const setReviewTier = (tier) => {
+      state.reviewTier = normalizeReviewTier(tier);
+      syncReviewControlsUI();
+      renderList();
+
+      const ordered = getOrderedTasks(getFilteredTasks());
+      if (state.selectedId && !ordered.some(t => t.id === state.selectedId)) {
+        state.selectedId = ordered[0]?.id || null;
+      }
+      if (state.selectedId) {
+        renderDetail(getTaskById(state.selectedId));
+      }
+    };
+
+    tierAllBtn?.addEventListener('click', () => setReviewTier('all'));
+    tier1Btn?.addEventListener('click', () => setReviewTier(1));
+    tier2Btn?.addEventListener('click', () => setReviewTier(2));
+    tier3Btn?.addEventListener('click', () => setReviewTier(3));
+    tier4Btn?.addEventListener('click', () => setReviewTier(4));
+    tierNoneBtn?.addEventListener('click', () => setReviewTier('none'));
+
+    unreviewedBtn?.addEventListener('click', () => {
+      state.unreviewedOnly = !state.unreviewedOnly;
+      syncReviewControlsUI();
+      renderList();
+      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+    });
+
+    autoDiffBtn?.addEventListener('click', () => {
+      state.autoOpenDiff = !state.autoOpenDiff;
+      syncReviewControlsUI();
+      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+    });
+
+    startReviewBtn?.addEventListener('click', () => {
+      state.reviewActive = true;
+      syncReviewControlsUI();
+      const ordered = getOrderedTasks(getFilteredTasks());
+      if (!ordered.length) {
+        this.showToast('No items to review', 'info');
+        return;
+      }
+      selectById(ordered[0].id, { allowAutoOpenDiff: true });
+    });
 
     const calcTierCounts = (tasks) => {
       const counts = { 1: 0, 2: 0, 3: 0, 4: 0, none: 0 };
@@ -8119,6 +8303,17 @@ class ClaudeOrchestrator {
     const getFilteredTasks = () => {
       const q = String(state.query || '').trim().toLowerCase();
       return (Array.isArray(state.tasks) ? state.tasks : []).filter((t) => {
+        const tier = Number(t?.record?.tier);
+        if (state.reviewTier !== 'all') {
+          if (state.reviewTier === 'none') {
+            if (Number.isFinite(tier)) return false;
+          } else if (tier !== state.reviewTier) {
+            return false;
+          }
+        }
+        if (state.unreviewedOnly) {
+          if (t?.record?.reviewedAt) return false;
+        }
         if (!q) return true;
         const hay = [
           t?.title,
@@ -8172,8 +8367,10 @@ class ClaudeOrchestrator {
       const risk = t?.record?.changeRisk ? `risk:${t.record.changeRisk}` : '';
       const depTotal = t?.dependencySummary?.total ? `deps:${t.dependencySummary.total}` : '';
       const depBlocked = t?.dependencySummary?.blocked ? `blocked:${t.dependencySummary.blocked}` : '';
+      const reviewed = t?.record?.reviewedAt ? 'reviewed' : '';
+      const outcome = t?.record?.reviewOutcome ? `review:${t.record.reviewOutcome}` : '';
       const meta = [tier, risk].filter(Boolean).join(' • ');
-      const meta2 = [depTotal, depBlocked].filter(Boolean).join(' • ');
+      const meta2 = [depTotal, depBlocked, reviewed, outcome].filter(Boolean).join(' • ');
       const selected = state.selectedId === t.id;
       return `
           <div class="task-card-row ${selected ? 'selected' : ''}" data-queue-id="${escapeHtml(t.id)}">
@@ -8298,6 +8495,8 @@ class ClaudeOrchestrator {
       const verify = record.verifyMinutes ?? '';
       const promptRef = record.promptRef || '';
       const doneAt = record.doneAt || '';
+      const reviewedAt = record.reviewedAt || '';
+      const reviewOutcome = record.reviewOutcome || '';
 
       const url = t.url || '';
       const hasPR = t.kind === 'pr' && url;
@@ -8362,6 +8561,27 @@ class ClaudeOrchestrator {
 	                </label>
 	              </div>
 	            </div>
+	            <div class="tasks-kv-row tasks-kv-row-edit">
+	              <div class="tasks-kv-key">Reviewed</div>
+	              <div class="tasks-kv-val tasks-kv-val-edit">
+	                <label style="display:flex;align-items:center;gap:8px;">
+	                  <input id="queue-reviewed" type="checkbox" ${reviewedAt ? 'checked' : ''} />
+	                  <span class="tasks-detail-meta">${reviewedAt ? `reviewedAt: ${escapeHtml(reviewedAt)}` : 'not reviewed'}</span>
+	                </label>
+	              </div>
+	            </div>
+	            <div class="tasks-kv-row tasks-kv-row-edit">
+	              <div class="tasks-kv-key">Outcome</div>
+	              <div class="tasks-kv-val tasks-kv-val-edit">
+	                <select id="queue-review-outcome" class="tasks-select tasks-select-inline" style="width:180px;">
+	                  <option value="">(none)</option>
+	                  <option value="approved" ${reviewOutcome === 'approved' ? 'selected' : ''}>approved</option>
+	                  <option value="needs_fix" ${reviewOutcome === 'needs_fix' ? 'selected' : ''}>needs_fix</option>
+	                  <option value="commented" ${reviewOutcome === 'commented' ? 'selected' : ''}>commented</option>
+	                  <option value="skipped" ${reviewOutcome === 'skipped' ? 'selected' : ''}>skipped</option>
+	                </select>
+	              </div>
+	            </div>
 	          </div>
 	        </div>
 
@@ -8390,6 +8610,8 @@ class ClaudeOrchestrator {
       const vEl = detailEl.querySelector('#queue-verify');
       const prEl = detailEl.querySelector('#queue-prompt-ref');
       const doneEl = detailEl.querySelector('#queue-done');
+      const reviewedEl = detailEl.querySelector('#queue-reviewed');
+      const outcomeEl = detailEl.querySelector('#queue-review-outcome');
       const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
       const openDiffBtn = detailEl.querySelector('#queue-open-diff');
       const depsEl = detailEl.querySelector('#queue-deps');
@@ -8513,17 +8735,56 @@ class ClaudeOrchestrator {
           }
           const [, owner, repo, prNum] = m;
           const diffUrl = `${serverUrl.replace(/:\\d+$/, '')}:7655/pr/${owner}/${repo}/${prNum}`;
-          window.open(diffUrl, '_blank', 'noreferrer');
+          window.open(diffUrl, 'orchestrator_diff', 'noreferrer');
         } catch {
           window.open(url, '_blank', 'noreferrer');
         }
       });
 
+      reviewedEl?.addEventListener('change', async () => {
+        try {
+          reviewedEl.disabled = true;
+          const rec = await upsertRecord(t.id, { reviewed: !!reviewedEl.checked });
+          const idx = state.tasks.findIndex(x => x.id === t.id);
+          if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: rec };
+          if (rec) this.taskRecords.set(t.id, rec);
+          renderList();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          reviewedEl.disabled = false;
+        }
+      });
+
+      outcomeEl?.addEventListener('change', async () => {
+        try {
+          outcomeEl.disabled = true;
+          const value = String(outcomeEl.value || '').trim();
+          const rec = await upsertRecord(t.id, { reviewOutcome: value || null });
+          const idx = state.tasks.findIndex(x => x.id === t.id);
+          if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: rec };
+          if (rec) this.taskRecords.set(t.id, rec);
+          await fetchTasks();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          outcomeEl.disabled = false;
+        }
+      });
+
       loadDeps().catch(() => {});
+
+      if (state.autoOpenDiff && t.kind === 'pr') {
+        if (state.allowAutoOpenDiff) {
+          state.allowAutoOpenDiff = false;
+          openDiffBtn?.click?.();
+        }
+      }
     };
 
-    const selectById = (id) => {
+    const selectById = (id, { allowAutoOpenDiff } = {}) => {
       state.selectedId = id;
+      state.allowAutoOpenDiff = !!allowAutoOpenDiff;
       const t = getTaskById(id);
       renderList();
       renderDetail(t);
@@ -8533,7 +8794,7 @@ class ClaudeOrchestrator {
       const row = e.target.closest('.task-card-row[data-queue-id]');
       if (!row) return;
       const id = row.getAttribute('data-queue-id');
-      selectById(id);
+      selectById(id, { allowAutoOpenDiff: true });
     });
 
     searchEl.addEventListener('input', () => {
@@ -8571,7 +8832,7 @@ class ClaudeOrchestrator {
       const nextIndex = currentIndex === -1
         ? 0
         : (currentIndex + dir + ordered.length) % ordered.length;
-      selectById(ordered[nextIndex].id);
+      selectById(ordered[nextIndex].id, { allowAutoOpenDiff: true });
     };
 
     prevBtn?.addEventListener('click', () => navigate(-1));
@@ -8590,7 +8851,11 @@ class ClaudeOrchestrator {
 
     try {
       await fetchTasks();
-      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+      syncReviewControlsUI();
+      setReviewTier(state.reviewTier);
+      if (state.selectedId) {
+        selectById(state.selectedId, { allowAutoOpenDiff: state.reviewActive });
+      }
     } catch (e) {
       this.showToast(String(e?.message || e), 'error');
       listEl.innerHTML = `<div class="no-ports">Failed to load queue.</div>`;

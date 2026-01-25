@@ -101,6 +101,12 @@ Header includes:
 
 Queue includes:
 - **Prev/Next** navigation with unblocked items ordered first.
+- Review controls (one-by-one workflow):
+  - Tier scope buttons (All/Q1/Q2/Q3/Q4/None)
+  - `Unreviewed`, `Auto Diff`, and `Start Review`
+- Focus includes a Tier-2 gating toggle:
+  - `T2 Auto` hides Tier 2 while Tier 1 is busy
+  - `T2 Always` always shows Tier 2 in Focus
 
 ---
 
