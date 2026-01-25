@@ -593,3 +593,15 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Before starting any agent, prompts if workload caps are exceeded (Tier 1–2 uses `Q12`, Tier 3 uses `Q3`, Tier 4 uses `Q4`).
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/launch-gating.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/194
+
+### Docs: log PRs 193–194 (merged)
+- Updates rolling log + workflow status docs to include PRs 193 and 194.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/195 (merged 2026-01-25)
+
+### Chore: morning-safe ports + stable E2E (merged)
+- Default `npm start` / `npm run dev` runs web-only (avoid Tauri/Cargo failures); Tauri is still available via `npm run dev:full`.
+- Adds safe dev helper `npm run dev:web:safe` (server `:4001`, client `:4100`) so dev work doesn’t collide with the live `/master` instance (often `:3000`).
+- Makes `npm run test:e2e:safe` auto-pick a free port (starting `:4001`) and support `-- <playwright args>` passthrough.
+- Suppresses noisy git stderr from non-repo folders during startup.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/196 (merged 2026-01-25)
