@@ -582,12 +582,14 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Updates older docs where they described steps/variables as optional.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/192
 
-### Process: WIP + Q banner in header (in progress)
+### Process: WIP + Q banner in header (merged)
 - Adds `/api/process/status` with cached WIP + tiered queue counts.
 - Adds a click-to-open header pill that shows `WIP`, `Q1–Q4`.
 - Tests: `npm run test:unit`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/193
 
-### Process: launch gating on overload (in progress)
+### Process: launch gating on overload (merged)
 - Adds `launchAllowedByTier` to `/api/process/status`.
 - Before starting any agent, prompts if workload caps are exceeded (Tier 1–2 uses `Q12`, Tier 3 uses `Q3`, Tier 4 uses `Q4`).
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/launch-gating.spec.js`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/194
