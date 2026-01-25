@@ -562,3 +562,11 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Makes Tasks API calls port-agnostic in split dev (no hard-coded `:3000` inside Tasks panel).
 - Test updates: unit tests for Trello provider writes + new e2e mocks for label/custom-field edits.
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/180
+
+### Workflow: Focus/Review/Background modes + Queue Next/Prev (in progress)
+- Adds a header workflow toggle:
+  - Focus (Tier 1–2), Review (all; opens Queue), Background (Tier 3–4)
+- Adds Queue navigation buttons (Prev/Next) and orders unblocked items first.
+- Persists selection to `userSettings.global.ui.workflow.mode`.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/workflow-modes.spec.js`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/189
