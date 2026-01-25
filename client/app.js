@@ -6297,15 +6297,25 @@ class ClaudeOrchestrator {
       return data.card || null;
     };
 
+    const parseResponseJson = async (res) => {
+      const raw = await res.text().catch(() => '');
+      if (!raw) return { raw: '', json: {} };
+      try {
+        return { raw, json: JSON.parse(raw) };
+      } catch {
+        return { raw, json: {} };
+      }
+    };
+
     const saveCard = async ({ cardId, name, desc } = {}) => {
       const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}?provider=${encodeURIComponent(state.provider)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, desc })
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'Failed to save card');
-      return data.card || null;
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to save card');
+      return json.card || null;
     };
 
     const moveCard = async ({ cardId, listId } = {}) => {
@@ -6314,9 +6324,9 @@ class ClaudeOrchestrator {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idList: listId })
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'Failed to move card');
-      return data.card || null;
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to move card');
+      return json.card || null;
     };
 
     const addComment = async ({ cardId, text } = {}) => {
@@ -6325,9 +6335,9 @@ class ClaudeOrchestrator {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'Failed to add comment');
-      return data.card || null;
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to add comment');
+      return json.card || null;
     };
 
     const renderBoard = (snapshot) => {
