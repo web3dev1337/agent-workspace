@@ -6,6 +6,22 @@ Date: 2026-01-25
 
 ---
 
+## PR Index (for resume)
+
+- Trello Tasks (kanban + writes): https://github.com/web3dev1337/claude-orchestrator/pull/179
+- Tasks parity (labels + custom fields editing): https://github.com/web3dev1337/claude-orchestrator/pull/180
+- Project risk + bounded conflicts: https://github.com/web3dev1337/claude-orchestrator/pull/181
+- Docs (resume-safe workflow status): https://github.com/web3dev1337/claude-orchestrator/pull/182
+- Task records API (tier/risk/promptRef): https://github.com/web3dev1337/claude-orchestrator/pull/183
+- Prompt artifacts (local/private): https://github.com/web3dev1337/claude-orchestrator/pull/184
+- Queue (review inbox v0): https://github.com/web3dev1337/claude-orchestrator/pull/185
+- Tier filters + badges: https://github.com/web3dev1337/claude-orchestrator/pull/186
+- Remove “optional” wording: https://github.com/web3dev1337/claude-orchestrator/pull/187
+- Orchestrator-native dependencies: https://github.com/web3dev1337/claude-orchestrator/pull/188
+- Workflow modes + Queue Next/Prev: https://github.com/web3dev1337/claude-orchestrator/pull/189
+
+---
+
 ## What we mean by “risk”
 
 We use **two risk dimensions** (plus an uncertainty metric):
