@@ -49,4 +49,17 @@ describe('TaskRecordService', () => {
     const rec2 = await svc.upsert('task:1', { done: false });
     expect(rec2.doneAt).toBeUndefined();
   });
+
+  test('upsert supports reviewedAt and reviewOutcome', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
+    const filePath = path.join(tmp, 'task-records.json');
+    const svc = new TaskRecordService({ filePath });
+
+    const rec = await svc.upsert('task:2', { reviewOutcome: 'NEEDS_FIX' });
+    expect(rec.reviewOutcome).toBe('needs_fix');
+    expect(typeof rec.reviewedAt).toBe('string');
+
+    const rec2 = await svc.upsert('task:2', { reviewed: false });
+    expect(rec2.reviewedAt).toBeUndefined();
+  });
 });

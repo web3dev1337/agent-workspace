@@ -23,10 +23,23 @@ These are required so the UI becomes a workflow manager, not just a grid of term
   - Review: allow {1,2,3,4} (but Queue “Next” prioritizes unblocked + higher risk)
   - Background: allow {3,4}
 
+## Focus behavior (dynamic Tier 2)
+- Focus includes a header toggle `T2 Auto | T2 Always`.
+- When `T2 Auto` is on, Tier 2 is hidden while any visible Tier 1 agent is **busy**.
+- This behavior is persisted:
+  - `userSettings.global.ui.workflow.focus.hideTier2WhenTier1Busy = true|false`
+
 ## Queue conveyor (v1)
 - Add `Next` / `Prev` buttons in Queue toolbar:
   - navigate the filtered list
   - `Next` prefers `dependencySummary.blocked === 0`
+
+## Review workflow (Queue)
+- Queue adds review controls:
+  - Tier scope: `All | Q1 | Q2 | Q3 | Q4 | None`
+  - Toggles: `Unreviewed`, `Auto Diff`, `Start Review`
+- Review state persists on the task record:
+  - `reviewedAt`, `reviewOutcome`
 
 ## Tests
 - E2E: open Queue, click Next, ensure selection changes.
