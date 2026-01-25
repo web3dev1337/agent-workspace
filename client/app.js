@@ -6789,9 +6789,12 @@ class ClaudeOrchestrator {
       // - Allow collapsing/expanding columns by clicking the header.
       const storageKey = `tasks-board-expanded:${state.provider}:${state.boardId}`;
       const collapsedKey = `tasks-board-collapsed:${state.provider}:${state.boardId}`;
+      const boardKey = `${state.provider}:${state.boardId}`;
       const isNarrow = () => window.matchMedia('(max-width: 980px)').matches;
 
       const loadCollapsedSet = () => {
+        const fromServer = this.userSettings?.global?.ui?.tasks?.kanban?.collapsedByBoard?.[boardKey];
+        if (Array.isArray(fromServer)) return new Set(fromServer.filter(Boolean));
         try {
           const raw = localStorage.getItem(collapsedKey);
           const arr = raw ? JSON.parse(raw) : [];
@@ -6805,6 +6808,16 @@ class ClaudeOrchestrator {
       const saveCollapsedSet = (set) => {
         try {
           localStorage.setItem(collapsedKey, JSON.stringify(Array.from(set)));
+        } catch {
+          // ignore
+        }
+
+        // Also persist to server-side user settings so state survives across ports/origins.
+        try {
+          const current = this.userSettings?.global?.ui?.tasks?.kanban?.collapsedByBoard || {};
+          const next = { ...(current || {}) };
+          next[boardKey] = Array.from(set);
+          this.updateGlobalUserSetting('ui.tasks.kanban.collapsedByBoard', next);
         } catch {
           // ignore
         }
@@ -6836,7 +6849,8 @@ class ClaudeOrchestrator {
           return;
         }
 
-        const saved = localStorage.getItem(storageKey);
+        const savedFromServer = this.userSettings?.global?.ui?.tasks?.kanban?.expandedByBoard?.[boardKey];
+        const saved = savedFromServer || localStorage.getItem(storageKey);
         const first = cardsEl.querySelector('.tasks-column')?.dataset?.listId || null;
         const toExpand = saved || first;
         collapseAllExcept(toExpand);
@@ -6858,6 +6872,14 @@ class ClaudeOrchestrator {
             // Narrow: behave like Fizzy (one expanded at a time).
             collapseAllExcept(listId);
             localStorage.setItem(storageKey, listId);
+            try {
+              const current = this.userSettings?.global?.ui?.tasks?.kanban?.expandedByBoard || {};
+              const next = { ...(current || {}) };
+              next[boardKey] = listId;
+              this.updateGlobalUserSetting('ui.tasks.kanban.expandedByBoard', next);
+            } catch {
+              // ignore
+            }
             col.scrollIntoView?.({ behavior: 'smooth', inline: 'center' });
             return;
           }

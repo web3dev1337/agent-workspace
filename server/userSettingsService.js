@@ -48,7 +48,14 @@ class UserSettingsService {
           theme: 'dark',
           tasks: {
             // 'inherit' uses the main UI theme; 'light'/'dark' force the Tasks panel theme.
-            theme: 'inherit'
+            theme: 'inherit',
+            kanban: {
+              // Persist kanban UI state server-side (survives refresh and works across ports/origins).
+              // Keyed by `${provider}:${boardId}` -> string[] listIds
+              collapsedByBoard: {},
+              // Keyed by `${provider}:${boardId}` -> string listId (narrow layout)
+              expandedByBoard: {}
+            }
           },
           diffViewer: {
             theme: 'dark'
