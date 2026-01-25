@@ -14,7 +14,11 @@
     "ui": {
       "theme": "dark",
       "tasks": {
-        "theme": "inherit"
+        "theme": "inherit",
+        "kanban": {
+          "collapsedByBoard": {},
+          "expandedByBoard": {}
+        }
       },
       "diffViewer": {
         "theme": "dark"
