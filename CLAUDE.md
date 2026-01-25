@@ -55,7 +55,7 @@ Because `main` is usually checked out in the `master/` worktree, **do not try to
 **4. Read `PR_SUMMARY.md`** - Technical implementation details (FOR CHANGES)
 
 ## 🚨 CRITICAL: ALWAYS CREATE A PR WHEN DONE 🚨
-**When you complete ANY feature or fix, you MUST create a pull request using `gh pr create`. This is NOT optional. Add "Create PR" as your final todo item to ensure you never forget.**
+**When you complete ANY feature or fix, you MUST create a pull request using `gh pr create`. This is mandatory. Add "Create PR" as your final todo item to ensure you never forget.**
 
 ## Git Workflow Notes
 - Always work on fresh branches from updated main

@@ -344,7 +344,7 @@ const scriptPath = path.join(workspace.repository.path, worktreeId, 'build-produ
 ### Frontend Files to Create
 - [ ] `client/dashboard.js` - Dashboard component with workspace cards
 - [ ] `client/workspace-switcher.js` - Header dropdown switcher
-- [ ] `client/workspace-card.js` - Individual workspace card component (optional, can be in dashboard.js)
+- [ ] `client/workspace-card.js` - Individual workspace card component (can be in dashboard.js)
 
 ### Frontend Files to Modify
 - [ ] `client/app.js`
