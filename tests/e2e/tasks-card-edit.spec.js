@@ -42,7 +42,9 @@ const mockTasksApi = async (page) => {
     url: 'https://trello.com/c/AbCdEf12/card-1',
     dateLastActivity: '2026-01-01T00:00:00Z',
     labels: [{ id: 'lab1', name: 'Bug', color: 'red' }],
-    members: [],
+    members: [
+      { id: 'm1', fullName: 'Alice', username: 'alice', avatarUrl: 'https://trello-avatars.s3.amazonaws.com/abc123' }
+    ],
     customFieldItems: [
       { idCustomField: 'cf_text', value: { text: 'old' } },
       { idCustomField: 'cf_check', value: { checked: 'false' } }
@@ -91,7 +93,11 @@ const mockTasksApi = async (page) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ provider: 'trello', boardId: 'b1', members: [] })
+      body: JSON.stringify({
+        provider: 'trello',
+        boardId: 'b1',
+        members: [{ id: 'm1', fullName: 'Alice', username: 'alice', avatarUrl: 'https://trello-avatars.s3.amazonaws.com/abc123' }]
+      })
     });
   });
 
@@ -227,6 +233,9 @@ test.describe('Tasks card edits', () => {
     // Open the card detail.
     await page.locator('.task-card-row[data-card-id="c1"]').click();
     await expect(page.locator('#tasks-card-title')).toHaveValue('Card 1');
+
+    // Trello avatarUrl needs a `/<size>.png` suffix to load (otherwise it can look like an S3 root fetch).
+    await expect(page.locator('.tasks-chip-avatar')).toHaveAttribute('src', /trello-avatars\.s3\.amazonaws\.com\/abc123\/50\.png$/);
 
     // Toggle a label (add UI label).
     const labelReqPromise = page.waitForRequest((req) => {
