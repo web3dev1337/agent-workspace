@@ -376,6 +376,7 @@ class ClaudeOrchestrator {
         console.log('User settings updated:', settings);
         this.userSettings = settings;
         this.syncUserSettingsUI();
+        this.applyThemeFromUserSettings();
       });
 
       // Workspace events
@@ -830,6 +831,8 @@ class ClaudeOrchestrator {
       this.settings.theme = e.target.value;
       this.saveSettings();
       this.applyTheme();
+      // Persist via server user settings so it survives reloads across devices/worktrees.
+      this.updateGlobalUserSetting('ui.theme', e.target.value);
     });
 
     const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
@@ -3873,6 +3876,22 @@ class ClaudeOrchestrator {
     } else {
       document.body.classList.remove('light-theme');
     }
+
+    // Keep terminals visually consistent with UI theme.
+    this.terminalManager?.updateTheme?.(this.settings.theme);
+  }
+
+  applyThemeFromUserSettings() {
+    const userTheme = this.userSettings?.global?.ui?.theme;
+    if (userTheme !== 'dark' && userTheme !== 'light') return;
+    if (this.settings.theme === userTheme) return;
+
+    this.settings.theme = userTheme;
+    this.saveSettings();
+    this.applyTheme();
+
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) themeSelect.value = userTheme;
   }
   
   syncSettingsUI() {
@@ -5035,6 +5054,7 @@ class ClaudeOrchestrator {
         this.userSettings = await response.json();
         console.log('User settings loaded:', this.userSettings);
         this.syncUserSettingsUI();
+        this.applyThemeFromUserSettings();
       } else {
         console.error('Failed to load user settings:', response.statusText);
       }
@@ -5187,6 +5207,15 @@ class ClaudeOrchestrator {
     const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
     if (diffViewerThemeSelect) {
       diffViewerThemeSelect.value = this.userSettings.global?.ui?.diffViewer?.theme || 'light';
+    }
+
+    // Sync UI theme (light/dark) from server settings if present.
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) {
+      const theme = this.userSettings.global?.ui?.theme;
+      if (theme === 'light' || theme === 'dark') {
+        themeSelect.value = theme;
+      }
     }
 
     // Update session recovery settings UI
@@ -5711,9 +5740,10 @@ class ClaudeOrchestrator {
     const existing = document.getElementById('prs-panel');
     if (existing) existing.remove();
 
-    const serverUrl = window.location.port === '2080'
-      ? 'http://localhost:3000'
-      : window.location.origin;
+    // Use same-origin API calls so the app works on any port:
+    // - Backend-served UI: `/api/*` is handled by the backend.
+    // - Client dev-server UI: `/api/*` is proxied to the backend (see `client/dev-server.js`).
+    const serverUrl = window.location.origin;
 
     const state = {
       mode: localStorage.getItem('prs-panel-mode') || 'mine', // mine | involved | all
@@ -5984,11 +6014,17 @@ class ClaudeOrchestrator {
 
     const state = {
       provider: localStorage.getItem('tasks-provider') || 'trello',
+      view: localStorage.getItem('tasks-view') || 'list', // list | board
       boardId: localStorage.getItem('tasks-board') || '',
       listId: localStorage.getItem('tasks-list') || '',
       query: '',
       updatedWindow: localStorage.getItem('tasks-updated-window') || 'any', // any | 1h | 24h | 7d | 30d
+      sort: localStorage.getItem('tasks-sort') || 'pos', // pos | activity | name
+      hideEmptyColumns: localStorage.getItem('tasks-hide-empty') === 'true',
       lists: [],
+      boardMembers: [],
+      boards: [],
+      boardCustomFields: [],
       selectedCardId: null
     };
 
@@ -5999,7 +6035,7 @@ class ClaudeOrchestrator {
       <div class="modal-content tasks-content">
         <div class="modal-header">
           <h2>✅ Tasks</h2>
-          <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
+          <button class="close-btn tasks-close-btn" aria-label="Close Tasks" title="Close (Esc)" onclick="this.closest('.modal').remove()">×</button>
         </div>
 
         <div class="tasks-toolbar">
@@ -6007,13 +6043,26 @@ class ClaudeOrchestrator {
           <select id="tasks-board" class="tasks-select" title="Board"></select>
           <select id="tasks-list" class="tasks-select" title="List"></select>
           <input type="text" id="tasks-search" class="search-input tasks-search" placeholder="Search cards...">
-          <select id="tasks-updated" class="tasks-select" title="Updated window">
-            <option value="any">Any time</option>
-            <option value="1h">Last 1h</option>
-            <option value="24h">Last 24h</option>
-            <option value="7d">Last 7d</option>
-            <option value="30d">Last 30d</option>
-          </select>
+          <div class="tasks-radio" role="radiogroup" aria-label="Updated window" id="tasks-updated">
+            <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="any">Any</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="1h">1h</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="24h">24h</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="7d">7d</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="30d">30d</label>
+          </div>
+          <div class="tasks-radio" role="radiogroup" aria-label="Sort order" id="tasks-sort">
+            <label class="tasks-radio-option"><input type="radio" name="tasks-sort" value="pos">Order</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-sort" value="activity">Recent</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-sort" value="name">Name</label>
+          </div>
+          <label class="tasks-toggle" title="Hide empty columns (board view)">
+            <input type="checkbox" id="tasks-hide-empty">
+            <span>Hide empty</span>
+          </label>
+          <div class="tasks-view-toggle" role="group" aria-label="Tasks view">
+            <button class="btn-secondary tasks-view-btn" id="tasks-view-list" data-view="list" title="List view">List</button>
+            <button class="btn-secondary tasks-view-btn" id="tasks-view-board" data-view="board" title="Board view">Board</button>
+          </div>
           <button class="btn-secondary" id="tasks-refresh">🔄 Refresh</button>
         </div>
 
@@ -6035,7 +6084,12 @@ class ClaudeOrchestrator {
     const listEl = modal.querySelector('#tasks-list');
     const searchEl = modal.querySelector('#tasks-search');
     const updatedEl = modal.querySelector('#tasks-updated');
+    const sortEl = modal.querySelector('#tasks-sort');
+    const hideEmptyEl = modal.querySelector('#tasks-hide-empty');
     const refreshBtn = modal.querySelector('#tasks-refresh');
+    const viewListBtn = modal.querySelector('#tasks-view-list');
+    const viewBoardBtn = modal.querySelector('#tasks-view-board');
+    const bodyEl = modal.querySelector('.tasks-body');
     const cardsEl = modal.querySelector('#tasks-cards');
     const detailEl = modal.querySelector('#tasks-detail');
 
@@ -6052,6 +6106,32 @@ class ClaudeOrchestrator {
       const delta = msByKey[windowValue];
       if (!delta) return null;
       return new Date(now - delta).toISOString();
+    };
+
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    const toDatetimeLocalValue = (iso) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      const pad = (n) => String(n).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      const mm = pad(d.getMonth() + 1);
+      const dd = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const mi = pad(d.getMinutes());
+      return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+    };
+
+    const fromDatetimeLocalValue = (value) => {
+      const v = String(value || '').trim();
+      if (!v) return null;
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toISOString();
     };
 
     const setSelectOptions = (select, options, { placeholder = 'Select...', valueKey = 'id', labelKey = 'name' } = {}) => {
@@ -6073,6 +6153,11 @@ class ClaudeOrchestrator {
     const renderCards = (cards) => {
       if (!state.boardId) {
         cardsEl.innerHTML = `<div class="no-ports">Select a board to view cards.</div>`;
+        return;
+      }
+
+      if (state.view === 'board') {
+        cardsEl.innerHTML = `<div class="no-ports">Board view uses the board snapshot. Click Refresh if needed.</div>`;
         return;
       }
 
@@ -6108,20 +6193,48 @@ class ClaudeOrchestrator {
 
       state.selectedCardId = card.id || null;
 
-      const title = (card?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const desc = (card?.desc || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const title = escapeHtml(card?.name || '');
+      const desc = escapeHtml(card?.desc || '');
       const last = card?.dateLastActivity ? new Date(card.dateLastActivity).toLocaleString() : '';
       const url = card?.url || '';
 
       const members = Array.isArray(card?.members) ? card.members : [];
-      const memberLabel = members.length
-        ? members.map(m => (m?.fullName || m?.username || '')).filter(Boolean).join(', ')
-        : 'none';
+      const memberById = new Map(members.map(m => [m?.id, m]).filter(([id]) => !!id));
+      const allMembers = Array.isArray(state.boardMembers) ? state.boardMembers : [];
+      const availableMembers = allMembers.filter(m => m?.id && !memberById.has(m.id));
 
       const labels = Array.isArray(card?.labels) ? card.labels : [];
       const labelLabel = labels.length
         ? labels.map(l => l?.name || l?.color || '').filter(Boolean).join(', ')
         : 'none';
+
+      const customFields = Array.isArray(state.boardCustomFields) ? state.boardCustomFields : [];
+      const customFieldsById = new Map(customFields.map(f => [f?.id, f]).filter(([id]) => !!id));
+      const customFieldItems = Array.isArray(card?.customFieldItems) ? card.customFieldItems : [];
+      const renderCustomFieldValue = (item) => {
+        const field = customFieldsById.get(item?.idCustomField);
+        if (!field) return null;
+        const type = String(field?.type || '').toLowerCase();
+        if (type === 'list') {
+          const options = Array.isArray(field?.options) ? field.options : [];
+          const opt = options.find(o => o?.id && item?.idValue && o.id === item.idValue);
+          return opt?.value?.text || opt?.value?.name || null;
+        }
+        if (type === 'checkbox') {
+          const checked = item?.value?.checked;
+          if (checked === 'true') return '✅';
+          if (checked === 'false') return '⬜';
+          return null;
+        }
+        if (type === 'date') {
+          const d = item?.value?.date;
+          return d ? new Date(d).toLocaleString() : null;
+        }
+        if (type === 'number') {
+          return item?.value?.number ?? null;
+        }
+        return item?.value?.text ?? null;
+      };
 
       const listsById = new Map((state.lists || []).map(l => [l.id, l]));
       const currentListName = listsById.get(card?.idList)?.name || '';
@@ -6137,6 +6250,24 @@ class ClaudeOrchestrator {
         }))
         .sort((a, b) => (Date.parse(b.date || '') || 0) - (Date.parse(a.date || '') || 0));
 
+      const checklists = Array.isArray(card?.checklists) ? card.checklists : [];
+      const depChecklist = checklists.find(cl => String(cl?.name || '').trim().toLowerCase() === 'dependencies');
+      const depItemsRaw = Array.isArray(depChecklist?.checkItems) ? depChecklist.checkItems : [];
+      const dependencies = depItemsRaw.map(i => {
+        const name = String(i?.name || '').trim();
+        const match = name.match(/https?:\/\/\S+/);
+        const url = match ? match[0] : '';
+        const isComplete = String(i?.state || '').toLowerCase() === 'complete';
+        return {
+          id: i?.id || '',
+          name,
+          url,
+          isComplete
+        };
+      }).filter(d => !!d.id);
+
+      const dueValue = toDatetimeLocalValue(card?.due);
+
       detailEl.innerHTML = `
         <div class="tasks-detail-header">
           <div class="tasks-detail-title">
@@ -6148,8 +6279,75 @@ class ClaudeOrchestrator {
           </div>
         </div>
         <div class="tasks-detail-meta">Last activity: ${last || 'unknown'} • List: ${currentListName || card?.idList || 'unknown'}</div>
-        <div class="tasks-detail-meta">Members: ${memberLabel}</div>
+        <div class="tasks-detail-meta">
+          Members:
+          <span class="tasks-chips" id="tasks-member-chips">
+            ${members.length === 0 ? `<span class="tasks-chip tasks-chip-muted">none</span>` : members.map(m => `
+              <span class="tasks-chip" data-member-id="${escapeHtml(m?.id || '')}">
+                ${m?.avatarUrl ? `<img class="tasks-chip-avatar" src="${escapeHtml(m.avatarUrl)}" alt="">` : ''}
+                ${m?.username ? `<a class="tasks-chip-link" href="https://trello.com/${escapeHtml(m.username)}" target="_blank" rel="noreferrer">${escapeHtml(m?.fullName || m?.username || m?.id || '')}</a>` : escapeHtml(m?.fullName || m?.username || m?.id || '')}
+                <button class="tasks-chip-x" type="button" title="Unassign" data-remove-member="${escapeHtml(m?.id || '')}">×</button>
+              </span>
+            `).join('')}
+          </span>
+        </div>
         <div class="tasks-detail-meta">Labels: ${labelLabel}</div>
+        <div class="tasks-detail-meta">
+          Due:
+          <input id="tasks-card-due" class="tasks-input tasks-input-inline" type="datetime-local" value="${escapeHtml(dueValue)}" />
+          <button class="btn-secondary" id="tasks-card-due-save" title="Set due date">Set</button>
+          <button class="btn-secondary" id="tasks-card-due-clear" title="Clear due date">Clear</button>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Assign Member</div>
+          <div class="tasks-inline-row">
+            <select id="tasks-assign-member" class="tasks-select tasks-select-inline">
+              <option value="">Select member…</option>
+              ${availableMembers.map(m => `
+                <option value="${escapeHtml(m?.id || '')}">${escapeHtml(m?.fullName || m?.username || m?.id || '')}</option>
+              `).join('')}
+            </select>
+            <button class="btn-secondary" id="tasks-assign-member-btn">＋ Assign</button>
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Custom Fields</div>
+          <div class="tasks-kv">
+            ${customFieldItems.length === 0 ? `<div class="tasks-detail-empty">None.</div>` : customFieldItems.map(item => {
+              const field = customFieldsById.get(item?.idCustomField);
+              if (!field) return '';
+              const value = renderCustomFieldValue(item);
+              if (value === null || value === undefined || value === '') return '';
+              return `
+                <div class="tasks-kv-row">
+                  <div class="tasks-kv-key">${escapeHtml(field.name || '')}</div>
+                  <div class="tasks-kv-val">${escapeHtml(String(value))}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Dependencies (${dependencies.length})</div>
+          <div class="tasks-deps">
+            ${dependencies.length === 0 ? `<div class="tasks-detail-empty">No dependencies.</div>` : dependencies.map(d => `
+              <div class="tasks-dep-row ${d.isComplete ? 'done' : ''}">
+                <input type="checkbox" class="tasks-dep-checkbox" data-dep-id="${escapeHtml(d.id)}" ${d.isComplete ? 'checked' : ''} />
+                <div class="tasks-dep-text">
+                  ${d.url ? `<a href="${escapeHtml(d.url)}" target="_blank" rel="noreferrer">${escapeHtml(d.name)}</a>` : escapeHtml(d.name)}
+                </div>
+                <button class="btn-secondary tasks-dep-remove" type="button" title="Remove dependency" data-remove-dep="${escapeHtml(d.id)}">×</button>
+              </div>
+            `).join('')}
+          </div>
+          <div class="tasks-inline-row tasks-dep-add">
+            <input id="tasks-dep-input" class="tasks-input" placeholder="Paste Trello card URL or shortLink…" />
+            <button class="btn-secondary" id="tasks-dep-add-btn">＋ Add</button>
+          </div>
+        </div>
 
         <div class="tasks-detail-block">
           <div class="tasks-detail-block-title">Description</div>
@@ -6208,6 +6406,28 @@ class ClaudeOrchestrator {
       return res.json();
     };
 
+    const fetchBoardMembers = async ({ refresh = false } = {}) => {
+      if (!state.boardId) return [];
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/members`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load board members');
+      return data.members || [];
+    };
+
+    const fetchBoardCustomFields = async ({ refresh = false } = {}) => {
+      if (!state.boardId) return [];
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/custom-fields`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load board custom fields');
+      return data.customFields || [];
+    };
+
     const fetchBoards = async ({ refresh = false } = {}) => {
       const url = new URL(`${serverUrl}/api/tasks/boards`);
       url.searchParams.set('provider', state.provider);
@@ -6227,6 +6447,21 @@ class ClaudeOrchestrator {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to load lists');
       return data.lists || [];
+    };
+
+    const fetchSnapshot = async ({ refresh = false } = {}) => {
+      if (!state.boardId) return null;
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/snapshot`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      if (state.query) url.searchParams.set('q', state.query);
+      const updatedSince = computeUpdatedSince();
+      if (updatedSince) url.searchParams.set('updatedSince', updatedSince);
+
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load board snapshot');
+      return data;
     };
 
     const fetchCards = async ({ refresh = false } = {}) => {
@@ -6269,26 +6504,25 @@ class ClaudeOrchestrator {
       return data.card || null;
     };
 
-    const saveCard = async ({ cardId, name, desc } = {}) => {
-      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}?provider=${encodeURIComponent(state.provider)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, desc })
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'Failed to save card');
-      return data.card || null;
+    const parseResponseJson = async (res) => {
+      const raw = await res.text().catch(() => '');
+      if (!raw) return { raw: '', json: {} };
+      try {
+        return { raw, json: JSON.parse(raw) };
+      } catch {
+        return { raw, json: {} };
+      }
     };
 
-    const moveCard = async ({ cardId, listId } = {}) => {
+    const updateCard = async ({ cardId, fields } = {}) => {
       const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}?provider=${encodeURIComponent(state.provider)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idList: listId })
+        body: JSON.stringify(fields || {})
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'Failed to move card');
-      return data.card || null;
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to update card');
+      return json.card || null;
     };
 
     const addComment = async ({ cardId, text } = {}) => {
@@ -6297,9 +6531,255 @@ class ClaudeOrchestrator {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'Failed to add comment');
-      return data.card || null;
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to add comment');
+      return json.card || null;
+    };
+
+    const addDependency = async ({ cardId, value } = {}) => {
+      const trimmed = String(value || '').trim();
+      if (!trimmed) return null;
+
+      const body = trimmed.includes('http')
+        ? { url: trimmed }
+        : { shortLink: trimmed };
+
+      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/dependencies?provider=${encodeURIComponent(state.provider)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to add dependency');
+      return json.card || null;
+    };
+
+    const removeDependency = async ({ cardId, itemId } = {}) => {
+      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/dependencies/${encodeURIComponent(itemId)}?provider=${encodeURIComponent(state.provider)}`, {
+        method: 'DELETE'
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to remove dependency');
+      return json.card || null;
+    };
+
+    const setDependencyState = async ({ cardId, itemId, state: nextState } = {}) => {
+      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/dependencies/${encodeURIComponent(itemId)}?provider=${encodeURIComponent(state.provider)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: nextState })
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to update dependency');
+      return json.card || null;
+    };
+
+    const renderBoard = (snapshot) => {
+      if (!state.boardId) {
+        cardsEl.innerHTML = `<div class="no-ports">Select a board to view cards.</div>`;
+        return;
+      }
+
+      if (!snapshot || !Array.isArray(snapshot.lists)) {
+        cardsEl.innerHTML = `<div class="no-ports">No board data.</div>`;
+        return;
+      }
+
+      const lists = snapshot.lists || [];
+      const cardsByList = snapshot.cardsByList || {};
+
+      const board = Array.isArray(state.boards) ? state.boards.find(b => b?.id === state.boardId) : null;
+      const boardColor = board?.prefs?.backgroundColor || '';
+      if (boardColor) {
+        cardsEl.style.setProperty('--tasks-board-accent', String(boardColor));
+      } else {
+        cardsEl.style.removeProperty('--tasks-board-accent');
+      }
+
+      const membersById = new Map((state.boardMembers || []).map(m => [m?.id, m]).filter(([id]) => !!id));
+      const trelloLabelColor = (label) => {
+        const c = String(label?.color || '').toLowerCase();
+        if (!c) return '';
+        const allowed = new Set(['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black']);
+        return allowed.has(c) ? c : '';
+      };
+
+      const sortCards = (arr) => {
+        const cards = Array.isArray(arr) ? [...arr] : [];
+        if (state.sort === 'activity') {
+          cards.sort((a, b) => (Date.parse(b?.dateLastActivity || '') || 0) - (Date.parse(a?.dateLastActivity || '') || 0));
+          return cards;
+        }
+        if (state.sort === 'name') {
+          cards.sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+          return cards;
+        }
+        // Default: Trello order / pos
+        cards.sort((a, b) => (a?.pos ?? 0) - (b?.pos ?? 0));
+        return cards;
+      };
+
+      cardsEl.innerHTML = `
+        <div class="tasks-board" id="tasks-board-view">
+          ${lists.map(list => {
+            const raw = Array.isArray(cardsByList[list.id]) ? cardsByList[list.id] : [];
+            const cards = sortCards(raw);
+            if (state.hideEmptyColumns && cards.length === 0) return '';
+            return `
+              <div class="tasks-column is-expanded" id="tasks-col-${list.id}" data-list-id="${list.id}" data-column-name="${escapeHtml(list.name || '')}">
+                <button class="tasks-column-header" type="button" data-col-toggle="${list.id}" aria-expanded="true">
+                  <div class="tasks-column-title">${escapeHtml(list.name || '')}</div>
+                  <div class="tasks-column-count" data-count>${cards.length}</div>
+                </button>
+                <div class="tasks-column-cards" data-dropzone data-dropzone-list="${list.id}">
+                  ${cards.map(c => {
+                    const title = String(c?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
+                    const due = c?.due ? new Date(c.due).toLocaleDateString() : '';
+                    const labels = Array.isArray(c?.labels) ? c.labels : [];
+                    const memberIds = Array.isArray(c?.idMembers) ? c.idMembers : [];
+                    const members = memberIds.map(id => membersById.get(id)).filter(Boolean).slice(0, 3);
+                    const moreMembers = Math.max(0, memberIds.length - members.length);
+                    return `
+                      <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-origin-list-id="${list.id}">
+                        <div class="task-card-top">
+                          <div class="task-card-labels">
+                            ${labels.slice(0, 6).map(l => {
+                              const color = trelloLabelColor(l);
+                              const name = String(l?.name || '').trim();
+                              const titleAttr = escapeHtml(name || color || 'label');
+                              const cls = color ? `tasks-label tasks-label--${color}` : 'tasks-label';
+                              return `<span class="${cls}" title="${titleAttr}">${name ? escapeHtml(name) : ''}</span>`;
+                            }).join('')}
+                          </div>
+                          <div class="task-card-assignees">
+                            ${members.map(m => {
+                              const url = m?.username ? `https://trello.com/${m.username}` : '';
+                              const initial = String(m?.fullName || m?.username || '?').trim().slice(0, 1).toUpperCase();
+                              const avatar = m?.avatarUrl || '';
+                              return `
+                                <a class="tasks-avatar" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="${escapeHtml(m?.fullName || m?.username || '')}">
+                                  ${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : `<span>${escapeHtml(initial)}</span>`}
+                                </a>
+                              `;
+                            }).join('')}
+                            ${moreMembers ? `<span class="tasks-avatar tasks-avatar-more" title="${moreMembers} more">+${moreMembers}</span>` : ''}
+                          </div>
+                        </div>
+                        <div class="task-card-title">${title}</div>
+                        <div class="task-card-meta">${due ? `<span class="task-card-due" title="Due">${escapeHtml(due)}</span> • ` : ''}${last}</div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+
+      // Fizzy-like collapsible columns (lightweight):
+      // - Persist per-board expanded column on narrow screens.
+      // - Allow collapsing/expanding columns by clicking the header.
+      const storageKey = `tasks-board-expanded:${state.provider}:${state.boardId}`;
+      const collapsedKey = `tasks-board-collapsed:${state.provider}:${state.boardId}`;
+      const isNarrow = () => window.matchMedia('(max-width: 980px)').matches;
+
+      const loadCollapsedSet = () => {
+        try {
+          const raw = localStorage.getItem(collapsedKey);
+          const arr = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(arr)) return new Set();
+          return new Set(arr.filter(Boolean));
+        } catch {
+          return new Set();
+        }
+      };
+
+      const saveCollapsedSet = (set) => {
+        try {
+          localStorage.setItem(collapsedKey, JSON.stringify(Array.from(set)));
+        } catch {
+          // ignore
+        }
+      };
+
+      const collapseAllExcept = (keepId) => {
+        cardsEl.querySelectorAll('.tasks-column').forEach(col => {
+          const id = col.dataset.listId;
+          const shouldKeep = keepId && id === keepId;
+          const header = col.querySelector('[data-col-toggle]');
+          col.classList.toggle('is-collapsed', !shouldKeep);
+          col.classList.toggle('is-expanded', shouldKeep);
+          header?.setAttribute('aria-expanded', shouldKeep ? 'true' : 'false');
+        });
+      };
+
+      const applyDefaultExpanded = () => {
+        if (!isNarrow()) {
+          // Desktop: restore collapsed columns (persisted).
+          const collapsed = loadCollapsedSet();
+          cardsEl.querySelectorAll('.tasks-column').forEach(col => {
+            const header = col.querySelector('[data-col-toggle]');
+            const id = col.dataset.listId;
+            const isCollapsed = id && collapsed.has(id);
+            col.classList.toggle('is-collapsed', !!isCollapsed);
+            col.classList.toggle('is-expanded', !isCollapsed);
+            header?.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+          });
+          return;
+        }
+
+        const saved = localStorage.getItem(storageKey);
+        const first = cardsEl.querySelector('.tasks-column')?.dataset?.listId || null;
+        const toExpand = saved || first;
+        collapseAllExcept(toExpand);
+        if (toExpand) {
+          const col = cardsEl.querySelector(`.tasks-column[data-list-id="${CSS.escape(toExpand)}"]`);
+          col?.scrollIntoView?.({ behavior: 'smooth', inline: 'center' });
+        }
+      };
+
+      cardsEl.querySelectorAll('[data-col-toggle]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const listId = btn.getAttribute('data-col-toggle');
+          const col = listId ? cardsEl.querySelector(`.tasks-column[data-list-id="${CSS.escape(listId)}"]`) : null;
+          if (!col || !listId) return;
+
+          const collapsed = col.classList.contains('is-collapsed');
+
+          if (isNarrow()) {
+            // Narrow: behave like Fizzy (one expanded at a time).
+            collapseAllExcept(listId);
+            localStorage.setItem(storageKey, listId);
+            col.scrollIntoView?.({ behavior: 'smooth', inline: 'center' });
+            return;
+          }
+
+          // Desktop: toggle collapsed/expanded for this column only.
+          col.classList.toggle('is-collapsed', !collapsed);
+          col.classList.toggle('is-expanded', collapsed);
+          btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+
+          const set = loadCollapsedSet();
+          if (collapsed) {
+            set.delete(listId);
+          } else {
+            set.add(listId);
+          }
+          saveCollapsedSet(set);
+        });
+      });
+
+      applyDefaultExpanded();
+    };
+
+    const applyView = () => {
+      const isBoard = state.view === 'board';
+      if (listEl) listEl.style.display = isBoard ? 'none' : '';
+      if (bodyEl) bodyEl.classList.toggle('tasks-body-board', isBoard);
+      viewListBtn?.classList.toggle('active', !isBoard);
+      viewBoardBtn?.classList.toggle('active', isBoard);
     };
 
     const refreshAll = async ({ force = false } = {}) => {
@@ -6325,35 +6805,87 @@ class ClaudeOrchestrator {
         }
 
         const boards = await fetchBoards({ refresh: force });
+        state.boards = boards || [];
         setSelectOptions(boardEl, boards, { placeholder: 'Select board...', valueKey: 'id', labelKey: 'name' });
         if (state.boardId) boardEl.value = state.boardId;
 
-        const lists = await fetchLists({ refresh: force });
-        state.lists = lists || [];
-        setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
-        // Insert an explicit "All lists" option at the top (better default for users who think in boards).
-        const allOpt = document.createElement('option');
-        allOpt.value = '__all__';
-        allOpt.textContent = 'All lists';
-        listEl.insertBefore(allOpt, listEl.firstChild);
+        if (state.view === 'list') {
+          const [lists, members] = await Promise.all([
+            fetchLists({ refresh: force }),
+            fetchBoardMembers({ refresh: force }).catch((e) => {
+              console.warn('Failed to load board members:', e?.message || e);
+              return [];
+            })
+          ]);
+          state.lists = lists || [];
+          state.boardMembers = members || [];
+          state.boardCustomFields = [];
 
-        if (state.listId) {
-          listEl.value = state.listId;
-        } else if (state.boardId) {
-          state.listId = '__all__';
-          localStorage.setItem('tasks-list', state.listId);
-          listEl.value = state.listId;
+          setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
+          // Insert an explicit "All lists" option at the top (better default for users who think in boards).
+          const allOpt = document.createElement('option');
+          allOpt.value = '__all__';
+          allOpt.textContent = 'All lists';
+          listEl.insertBefore(allOpt, listEl.firstChild);
+
+          if (state.listId) {
+            listEl.value = state.listId;
+          } else if (state.boardId) {
+            state.listId = '__all__';
+            localStorage.setItem('tasks-list', state.listId);
+            listEl.value = state.listId;
+          }
+
+          const cards = await fetchCards({ refresh: force });
+          renderCards(cards);
+        } else {
+          const [snapshot, members, customFields] = await Promise.all([
+            fetchSnapshot({ refresh: force }),
+            fetchBoardMembers({ refresh: force }).catch((e) => {
+              console.warn('Failed to load board members:', e?.message || e);
+              return [];
+            })
+            ,
+            fetchBoardCustomFields({ refresh: force }).catch((e) => {
+              console.warn('Failed to load board custom fields:', e?.message || e);
+              return [];
+            })
+          ]);
+          state.boardMembers = members || [];
+          state.lists = snapshot?.lists || [];
+          state.boardCustomFields = customFields || [];
+          renderBoard(snapshot);
         }
-
-        const cards = await fetchCards({ refresh: force });
-        renderCards(cards);
       } catch (error) {
         console.error('Tasks panel refresh failed:', error);
         cardsEl.innerHTML = `<div class="no-ports">${String(error?.message || error)}</div>`;
       }
     };
 
-    if (updatedEl) updatedEl.value = state.updatedWindow;
+    if (updatedEl) {
+      const radio = updatedEl.querySelector(`input[name="tasks-updated"][value="${CSS.escape(state.updatedWindow)}"]`);
+      if (radio) radio.checked = true;
+    }
+    if (sortEl) {
+      const radio = sortEl.querySelector(`input[name="tasks-sort"][value="${CSS.escape(state.sort)}"]`);
+      if (radio) radio.checked = true;
+    }
+    if (hideEmptyEl) hideEmptyEl.checked = !!state.hideEmptyColumns;
+    applyView();
+
+    viewListBtn?.addEventListener('click', async () => {
+      state.view = 'list';
+      localStorage.setItem('tasks-view', state.view);
+      applyView();
+      await refreshAll({ force: false });
+    });
+
+    viewBoardBtn?.addEventListener('click', async () => {
+      state.view = 'board';
+      localStorage.setItem('tasks-view', state.view);
+      applyView();
+      await refreshAll({ force: false });
+    });
 
     providerEl.addEventListener('change', async () => {
       state.provider = providerEl.value || 'trello';
@@ -6389,9 +6921,27 @@ class ClaudeOrchestrator {
     }
 
     if (updatedEl) {
-      updatedEl.addEventListener('change', () => {
-        state.updatedWindow = updatedEl.value || 'any';
+      updatedEl.addEventListener('change', (e) => {
+        const value = e?.target?.value;
+        state.updatedWindow = value || 'any';
         localStorage.setItem('tasks-updated-window', state.updatedWindow);
+        refreshAll({ force: false });
+      });
+    }
+
+    if (sortEl) {
+      sortEl.addEventListener('change', (e) => {
+        const value = e?.target?.value;
+        state.sort = value || 'pos';
+        localStorage.setItem('tasks-sort', state.sort);
+        refreshAll({ force: false });
+      });
+    }
+
+    if (hideEmptyEl) {
+      hideEmptyEl.addEventListener('change', () => {
+        state.hideEmptyColumns = !!hideEmptyEl.checked;
+        localStorage.setItem('tasks-hide-empty', state.hideEmptyColumns ? 'true' : 'false');
         refreshAll({ force: false });
       });
     }
@@ -6411,69 +6961,212 @@ class ClaudeOrchestrator {
 
       detailEl.innerHTML = `<div class="loading">Loading card…</div>`;
       try {
-        const card = await fetchCardDetail(cardId);
-        renderDetail(card);
+        const cardPromise = fetchCardDetail(cardId);
+        const needsCustomFields = state.boardId && (!Array.isArray(state.boardCustomFields) || state.boardCustomFields.length === 0);
+        const customFieldsPromise = needsCustomFields
+          ? fetchBoardCustomFields({ refresh: false }).catch((err) => {
+            console.warn('Failed to load board custom fields:', err?.message || err);
+            return [];
+          })
+          : Promise.resolve(state.boardCustomFields);
 
-        // Wire up actions for the currently rendered card.
-        const saveBtn = detailEl.querySelector('#tasks-card-save');
-        const moveBtn = detailEl.querySelector('#tasks-card-move-btn');
-        const commentBtn = detailEl.querySelector('#tasks-card-comment-btn');
+        const [card, customFields] = await Promise.all([cardPromise, customFieldsPromise]);
+        if (needsCustomFields) state.boardCustomFields = customFields || [];
+        const setDetail = (c) => {
+          renderDetail(c);
 
-        saveBtn?.addEventListener('click', async () => {
-          const titleEl = detailEl.querySelector('#tasks-card-title');
-          const descEl = detailEl.querySelector('#tasks-card-desc');
-          const name = (titleEl?.value || '').trim();
-          const desc = descEl?.value ?? '';
-          if (!state.selectedCardId) return;
+          const saveBtn = detailEl.querySelector('#tasks-card-save');
+          const moveBtn = detailEl.querySelector('#tasks-card-move-btn');
+          const commentBtn = detailEl.querySelector('#tasks-card-comment-btn');
+          const dueSaveBtn = detailEl.querySelector('#tasks-card-due-save');
+          const dueClearBtn = detailEl.querySelector('#tasks-card-due-clear');
+          const assignBtn = detailEl.querySelector('#tasks-assign-member-btn');
 
-          try {
-            saveBtn.disabled = true;
-            const updated = await saveCard({ cardId: state.selectedCardId, name, desc });
-            if (updated) renderDetail(updated);
-            this.showToast('Saved', 'success');
-          } catch (err) {
-            console.error('Save card failed:', err);
-            this.showToast(String(err?.message || err), 'error');
-          } finally {
-            saveBtn.disabled = false;
-          }
-        });
+          saveBtn?.addEventListener('click', async () => {
+            const titleEl = detailEl.querySelector('#tasks-card-title');
+            const descEl = detailEl.querySelector('#tasks-card-desc');
+            const name = (titleEl?.value || '').trim();
+            const desc = descEl?.value ?? '';
+            if (!state.selectedCardId) return;
+            try {
+              saveBtn.disabled = true;
+              const updated = await updateCard({ cardId: state.selectedCardId, fields: { name, desc } });
+              if (updated) setDetail(updated);
+              this.showToast('Saved', 'success');
+            } catch (err) {
+              console.error('Save card failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              saveBtn.disabled = false;
+            }
+          });
 
-        moveBtn?.addEventListener('click', async () => {
-          const sel = detailEl.querySelector('#tasks-card-move');
-          const listId = sel?.value;
-          if (!state.selectedCardId || !listId) return;
-          try {
-            moveBtn.disabled = true;
-            const updated = await moveCard({ cardId: state.selectedCardId, listId });
-            if (updated) renderDetail(updated);
-            await refreshAll({ force: true });
-            this.showToast('Moved', 'success');
-          } catch (err) {
-            console.error('Move card failed:', err);
-            this.showToast(String(err?.message || err), 'error');
-          } finally {
-            moveBtn.disabled = false;
-          }
-        });
+          moveBtn?.addEventListener('click', async () => {
+            const sel = detailEl.querySelector('#tasks-card-move');
+            const listId = sel?.value;
+            if (!state.selectedCardId || !listId) return;
+            try {
+              moveBtn.disabled = true;
+              const updated = await updateCard({ cardId: state.selectedCardId, fields: { idList: listId, pos: 'top' } });
+              if (updated) setDetail(updated);
+              await refreshAll({ force: true });
+              this.showToast('Moved', 'success');
+            } catch (err) {
+              console.error('Move card failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              moveBtn.disabled = false;
+            }
+          });
 
-        commentBtn?.addEventListener('click', async () => {
-          const textarea = detailEl.querySelector('#tasks-card-comment');
-          const text = (textarea?.value || '').trim();
-          if (!state.selectedCardId || !text) return;
-          try {
-            commentBtn.disabled = true;
-            const updated = await addComment({ cardId: state.selectedCardId, text });
-            if (textarea) textarea.value = '';
-            if (updated) renderDetail(updated);
-            this.showToast('Comment added', 'success');
-          } catch (err) {
-            console.error('Add comment failed:', err);
-            this.showToast(String(err?.message || err), 'error');
-          } finally {
-            commentBtn.disabled = false;
-          }
-        });
+          commentBtn?.addEventListener('click', async () => {
+            const textarea = detailEl.querySelector('#tasks-card-comment');
+            const text = (textarea?.value || '').trim();
+            if (!state.selectedCardId || !text) return;
+            try {
+              commentBtn.disabled = true;
+              const updated = await addComment({ cardId: state.selectedCardId, text });
+              if (textarea) textarea.value = '';
+              if (updated) setDetail(updated);
+              this.showToast('Comment added', 'success');
+            } catch (err) {
+              console.error('Add comment failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              commentBtn.disabled = false;
+            }
+          });
+
+          dueSaveBtn?.addEventListener('click', async () => {
+            const dueEl = detailEl.querySelector('#tasks-card-due');
+            const due = fromDatetimeLocalValue(dueEl?.value || '');
+            if (!state.selectedCardId) return;
+            try {
+              dueSaveBtn.disabled = true;
+              const updated = await updateCard({ cardId: state.selectedCardId, fields: { due } });
+              if (updated) setDetail(updated);
+              this.showToast('Due date updated', 'success');
+            } catch (err) {
+              console.error('Set due failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              dueSaveBtn.disabled = false;
+            }
+          });
+
+          dueClearBtn?.addEventListener('click', async () => {
+            if (!state.selectedCardId) return;
+            try {
+              dueClearBtn.disabled = true;
+              const updated = await updateCard({ cardId: state.selectedCardId, fields: { due: null } });
+              if (updated) setDetail(updated);
+              this.showToast('Due date cleared', 'success');
+            } catch (err) {
+              console.error('Clear due failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              dueClearBtn.disabled = false;
+            }
+          });
+
+          assignBtn?.addEventListener('click', async () => {
+            const select = detailEl.querySelector('#tasks-assign-member');
+            const memberId = select?.value;
+            if (!state.selectedCardId || !memberId) return;
+            const currentMembers = Array.isArray(c?.members) ? c.members : [];
+            const ids = Array.from(new Set([...currentMembers.map(m => m?.id).filter(Boolean), memberId]));
+            try {
+              assignBtn.disabled = true;
+              const updated = await updateCard({ cardId: state.selectedCardId, fields: { idMembers: ids } });
+              if (updated) setDetail(updated);
+              this.showToast('Member assigned', 'success');
+            } catch (err) {
+              console.error('Assign member failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              assignBtn.disabled = false;
+            }
+          });
+
+          detailEl.querySelectorAll('[data-remove-member]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const removeId = btn.getAttribute('data-remove-member');
+              if (!state.selectedCardId || !removeId) return;
+              const currentMembers = Array.isArray(c?.members) ? c.members : [];
+              const ids = currentMembers.map(m => m?.id).filter(Boolean).filter(id => id !== removeId);
+              try {
+                btn.disabled = true;
+                const updated = await updateCard({ cardId: state.selectedCardId, fields: { idMembers: ids } });
+                if (updated) setDetail(updated);
+                this.showToast('Member unassigned', 'success');
+              } catch (err) {
+                console.error('Unassign member failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+
+          const depAddBtn = detailEl.querySelector('#tasks-dep-add-btn');
+          depAddBtn?.addEventListener('click', async () => {
+            const input = detailEl.querySelector('#tasks-dep-input');
+            const value = input?.value || '';
+            if (!state.selectedCardId) return;
+            try {
+              depAddBtn.disabled = true;
+              const updated = await addDependency({ cardId: state.selectedCardId, value });
+              if (input) input.value = '';
+              if (updated) setDetail(updated);
+              this.showToast('Dependency added', 'success');
+            } catch (err) {
+              console.error('Add dependency failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              depAddBtn.disabled = false;
+            }
+          });
+
+          detailEl.querySelectorAll('[data-remove-dep]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const itemId = btn.getAttribute('data-remove-dep');
+              if (!state.selectedCardId || !itemId) return;
+              try {
+                btn.disabled = true;
+                const updated = await removeDependency({ cardId: state.selectedCardId, itemId });
+                if (updated) setDetail(updated);
+                this.showToast('Dependency removed', 'success');
+              } catch (err) {
+                console.error('Remove dependency failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+
+          detailEl.querySelectorAll('[data-dep-id]').forEach((checkbox) => {
+            checkbox.addEventListener('change', async () => {
+              const itemId = checkbox.getAttribute('data-dep-id');
+              if (!state.selectedCardId || !itemId) return;
+              const desired = checkbox.checked ? 'complete' : 'incomplete';
+              try {
+                checkbox.disabled = true;
+                const updated = await setDependencyState({ cardId: state.selectedCardId, itemId, state: desired });
+                if (updated) setDetail(updated);
+                this.showToast('Dependency updated', 'success');
+              } catch (err) {
+                console.error('Toggle dependency failed:', err);
+                checkbox.checked = !checkbox.checked;
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                checkbox.disabled = false;
+              }
+            });
+          });
+        };
+
+        setDetail(card);
       } catch (error) {
         console.error('Failed to fetch card detail:', error);
         detailEl.innerHTML = `<div class="no-ports">${String(error?.message || error)}</div>`;
@@ -6482,6 +7175,106 @@ class ClaudeOrchestrator {
 
     modal.addEventListener('click', (e) => {
       if (e.target === modal) modal.remove();
+    });
+
+    // Allow closing the full-screen Tasks panel quickly.
+    // (Clicking outside doesn't work when the panel is full-viewport.)
+    const onTasksKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        modal.remove();
+      }
+    };
+    document.addEventListener('keydown', onTasksKeyDown);
+
+    const originalRemove = modal.remove.bind(modal);
+    modal.remove = () => {
+      document.removeEventListener('keydown', onTasksKeyDown);
+      originalRemove();
+    };
+
+    // Drag/drop (board view): inspired by Fizzy's simple DnD controller.
+    let dragCardId = null;
+    let dragFromListId = null;
+
+    cardsEl.addEventListener('dragstart', (e) => {
+      if (state.view !== 'board') return;
+      const row = e.target.closest('.task-card-board');
+      if (!row) return;
+      dragCardId = row.dataset.cardId || null;
+      dragFromListId = row.dataset.originListId || null;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.dropEffect = 'move';
+
+      // If the board view is in a narrow (single-expanded) mode, ensure the source column is expanded.
+      const sourceCol = dragFromListId ? cardsEl.querySelector(`.tasks-column[data-list-id="${CSS.escape(dragFromListId)}"]`) : null;
+      sourceCol?.classList?.remove?.('is-collapsed');
+      sourceCol?.classList?.add?.('is-expanded');
+    });
+
+    cardsEl.addEventListener('dragend', (e) => {
+      const row = e.target.closest('.task-card-board');
+      row?.classList.remove('dragging');
+      cardsEl.querySelectorAll('.tasks-column.hover').forEach(col => col.classList.remove('hover'));
+      dragCardId = null;
+      dragFromListId = null;
+    });
+
+    cardsEl.addEventListener('dragover', (e) => {
+      if (state.view !== 'board') return;
+      if (!dragCardId) return;
+      const column = e.target.closest('.tasks-column');
+      if (!column) return;
+      e.preventDefault();
+      cardsEl.querySelectorAll('.tasks-column.hover').forEach(col => col.classList.remove('hover'));
+      column.classList.add('hover');
+    });
+
+    cardsEl.addEventListener('drop', async (e) => {
+      if (state.view !== 'board') return;
+      const column = e.target.closest('.tasks-column');
+      if (!column) return;
+      e.preventDefault();
+
+      const toListId = column.dataset.listId;
+      if (!dragCardId || !toListId || toListId === dragFromListId) return;
+
+      const draggedEl = cardsEl.querySelector(`.task-card-board[data-card-id="${dragCardId}"]`);
+      const targetContainer = column.querySelector('[data-dropzone]');
+      const fromColumn = dragFromListId ? cardsEl.querySelector(`.tasks-column[data-list-id="${dragFromListId}"]`) : null;
+      const fromContainer = fromColumn?.querySelector('[data-dropzone]') || null;
+
+      const updateCount = (col) => {
+        if (!col) return;
+        const countEl = col.querySelector('[data-count]');
+        if (!countEl) return;
+        countEl.textContent = String(col.querySelectorAll('.task-card-board').length);
+      };
+
+      // Optimistic DOM move: place at top of target column
+      if (draggedEl && targetContainer) {
+        targetContainer.prepend(draggedEl);
+        draggedEl.dataset.originListId = toListId;
+      }
+      updateCount(column);
+      updateCount(fromColumn);
+
+      try {
+        await updateCard({ cardId: dragCardId, fields: { idList: toListId, pos: 'top' } });
+        this.showToast('Moved', 'success');
+      } catch (err) {
+        console.error('Move card failed:', err);
+        if (draggedEl && fromContainer) {
+          fromContainer.appendChild(draggedEl);
+          draggedEl.dataset.originListId = dragFromListId || '';
+        }
+        updateCount(column);
+        updateCount(fromColumn);
+        this.showToast(String(err?.message || err), 'error');
+      } finally {
+        cardsEl.querySelectorAll('.tasks-column.hover').forEach(col => col.classList.remove('hover'));
+      }
     });
 
     await refreshAll({ force: false });

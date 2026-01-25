@@ -12,7 +12,14 @@ class TrelloTaskProvider {
   getCapabilities() {
     return {
       read: true,
-      write: false
+      write: true,
+      operations: {
+        updateCard: true,
+        addComment: true,
+        moveCard: true,
+        listBoardMembers: true,
+        dependencies: true
+      }
     };
   }
 
@@ -58,7 +65,7 @@ class TrelloTaskProvider {
   async listBoards({ refresh = false } = {}) {
     const url = this._buildUrl('/members/me/boards', {
       filter: 'open',
-      fields: 'name,url,dateLastActivity,closed'
+      fields: 'name,url,dateLastActivity,closed,prefs'
     });
     const cacheKey = `trello:boards:me:open`;
     return this._getCached(cacheKey, url, { ttlMs: 5 * 60_000, force: refresh });
@@ -74,10 +81,29 @@ class TrelloTaskProvider {
     return this._getCached(cacheKey, url, { ttlMs: 60_000, force: refresh });
   }
 
+  async listBoardMembers({ boardId, refresh = false } = {}) {
+    if (!boardId) throw new Error('boardId is required');
+    const url = this._buildUrl(`/boards/${encodeURIComponent(boardId)}/members`, {
+      fields: 'fullName,username,avatarUrl'
+    });
+    const cacheKey = `trello:members:${boardId}:all`;
+    return this._getCached(cacheKey, url, { ttlMs: 60_000, force: refresh });
+  }
+
+  async listBoardCustomFields({ boardId, refresh = false } = {}) {
+    if (!boardId) throw new Error('boardId is required');
+    const url = this._buildUrl(`/boards/${encodeURIComponent(boardId)}/customFields`, {
+      fields: 'name,type,pos,options',
+      filter: 'all'
+    });
+    const cacheKey = `trello:customFields:${boardId}:all`;
+    return this._getCached(cacheKey, url, { ttlMs: 5 * 60_000, force: refresh });
+  }
+
   async listCards({ listId, refresh = false, q = '', updatedSince = null } = {}) {
     if (!listId) throw new Error('listId is required');
     const url = this._buildUrl(`/lists/${encodeURIComponent(listId)}/cards`, {
-      fields: 'name,url,dateLastActivity,closed,idList,idBoard,pos,labels',
+      fields: 'name,url,dateLastActivity,closed,idList,idBoard,pos,labels,idMembers,due',
       filter: 'open'
     });
     const cacheKey = `trello:cards:list:${listId}:open`;
@@ -104,7 +130,7 @@ class TrelloTaskProvider {
   async listBoardCards({ boardId, refresh = false, q = '', updatedSince = null } = {}) {
     if (!boardId) throw new Error('boardId is required');
     const url = this._buildUrl(`/boards/${encodeURIComponent(boardId)}/cards`, {
-      fields: 'name,url,dateLastActivity,closed,idList,idBoard,pos,labels',
+      fields: 'name,url,dateLastActivity,closed,idList,idBoard,pos,labels,idMembers,due',
       filter: 'open'
     });
 
@@ -195,10 +221,11 @@ class TrelloTaskProvider {
   async getCard({ cardId, refresh = false } = {}) {
     if (!cardId) throw new Error('cardId is required');
     const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}`, {
-      fields: 'name,desc,url,dateLastActivity,closed,idList,idBoard,labels',
+      fields: 'name,desc,url,dateLastActivity,closed,idList,idBoard,labels,due,dueComplete',
       members: 'true',
-      member_fields: 'fullName,username',
+      member_fields: 'fullName,username,avatarUrl',
       checklists: 'all',
+      customFieldItems: 'true',
       actions: 'commentCard',
       actions_limit: '100',
       actions_fields: 'data,date,idMemberCreator,type',
@@ -213,12 +240,18 @@ class TrelloTaskProvider {
     if (!cardId) throw new Error('cardId is required');
     if (!text || !String(text).trim()) throw new Error('text is required');
 
-    const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}/actions/comments`, {
-      text: String(text)
-    });
+    // Trello allows passing `text` as a query param, but long text and special
+    // chars can cause issues. Send text in the request body (form-encoded),
+    // keeping auth (key/token) on the URL.
+    const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}/actions/comments`);
+    const body = new URLSearchParams({ text: String(text) }).toString();
 
-    // POST returns the created action.
-    const action = await requestJson(url, { method: 'POST' });
+    // POST returns the created action (JSON).
+    const action = await requestJson(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body
+    });
     this._invalidateCacheKeys([`trello:card:${cardId}`]);
     return action;
   }
@@ -227,21 +260,201 @@ class TrelloTaskProvider {
     if (!cardId) throw new Error('cardId is required');
     if (!fields || typeof fields !== 'object') throw new Error('fields must be an object');
 
-    const allowed = ['name', 'desc', 'due', 'idList', 'idMembers', 'closed'];
+    const allowed = ['name', 'desc', 'due', 'idList', 'idMembers', 'closed', 'pos'];
     const params = {};
     for (const key of allowed) {
       if (fields[key] === undefined) continue;
-      params[key] = fields[key];
+      const val = fields[key];
+      if (key === 'idMembers') {
+        if (Array.isArray(val)) {
+          params[key] = val.filter(Boolean).join(',');
+        } else if (val === null) {
+          params[key] = '';
+        } else {
+          params[key] = val;
+        }
+        continue;
+      }
+
+      if (key === 'due') {
+        // Trello clears due when it receives an empty value.
+        // Prefer explicit empty body field over omitting query params.
+        params[key] = val === null ? '' : val;
+        continue;
+      }
+
+      params[key] = val === null ? '' : val;
     }
 
-    // Trello accepts updates via query params.
-    const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}`, params);
-    const card = await requestJson(url, { method: 'PUT' });
+    // Trello accepts updates via query params, but empty fields (clears) are
+    // easier/reliable via form body. Keep auth in URL; send fields in body.
+    const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}`);
+    const body = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
+    const card = await requestJson(url, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body
+    });
 
     // Invalidate common caches. (List/board caches are short TTL; client refreshes after writes anyway.)
-    this._invalidateCacheKeys([`trello:card:${cardId}`]);
+    this._invalidateCacheKeys([
+      `trello:card:${cardId}`,
+      card?.idList ? `trello:cards:list:${card.idList}:open` : null,
+      card?.idBoard ? `trello:cards:board:${card.idBoard}:open` : null,
+      card?.idBoard ? `trello:lists:${card.idBoard}:open` : null
+    ]);
     return card;
+  }
+
+  async getDependencies({ cardId, refresh = false } = {}) {
+    const card = await this.getCard({ cardId, refresh });
+    return parseTrelloDependenciesFromCard(card);
+  }
+
+  async addDependency({ cardId, name, url, shortLink } = {}) {
+    if (!cardId) throw new Error('cardId is required');
+
+    const normalized = normalizeDependencyInput({ name, url, shortLink });
+    if (!normalized) throw new Error('Dependency url/shortLink is required');
+
+    const card = await this.getCard({ cardId, refresh: true });
+    const existing = parseTrelloDependenciesFromCard(card);
+
+    let checklistId = existing.checklistId;
+    if (!checklistId) {
+      // Create the checklist on the card.
+      const createUrl = this._buildUrl(`/cards/${encodeURIComponent(cardId)}/checklists`, { name: 'Dependencies' });
+      const created = await requestJson(createUrl, { method: 'POST' });
+      checklistId = created?.id;
+    }
+    if (!checklistId) throw new Error('Failed to create/find Dependencies checklist');
+
+    // Add a new check item to the checklist.
+    const itemName = normalized.url || normalized.name;
+    const addUrl = this._buildUrl(`/checklists/${encodeURIComponent(checklistId)}/checkItems`);
+    const body = new URLSearchParams({ name: itemName }).toString();
+    await requestJson(addUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body
+    });
+
+    this._invalidateCacheKeys([`trello:card:${cardId}`]);
+    return true;
+  }
+
+  async removeDependency({ cardId, itemId } = {}) {
+    if (!cardId) throw new Error('cardId is required');
+    if (!itemId) throw new Error('itemId is required');
+
+    const card = await this.getCard({ cardId, refresh: true });
+    const deps = parseTrelloDependenciesFromCard(card);
+    const checklistId = deps.checklistId;
+    const item = deps.items.find(i => i.id === itemId);
+    if (!checklistId || !item) throw new Error('Dependency item not found');
+
+    const delUrl = this._buildUrl(`/checklists/${encodeURIComponent(checklistId)}/checkItems/${encodeURIComponent(itemId)}`);
+    await requestJson(delUrl, { method: 'DELETE' });
+    this._invalidateCacheKeys([`trello:card:${cardId}`]);
+    return true;
+  }
+
+  async setDependencyState({ cardId, itemId, state } = {}) {
+    if (!cardId) throw new Error('cardId is required');
+    if (!itemId) throw new Error('itemId is required');
+    const next = state === 'complete' ? 'complete' : 'incomplete';
+
+    const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}/checkItem/${encodeURIComponent(itemId)}`, {
+      state: next
+    });
+    await requestJson(url, { method: 'PUT' });
+    this._invalidateCacheKeys([`trello:card:${cardId}`]);
+    return true;
+  }
+
+  async getBoardSnapshot({ boardId, refresh = false, q = '', updatedSince = null } = {}) {
+    if (!boardId) throw new Error('boardId is required');
+
+    const cacheKey = `trello:snapshot:${boardId}:${q || ''}:${updatedSince || ''}`;
+    const ttlMs = 15_000;
+
+    const compute = async () => {
+      const [lists, cards] = await Promise.all([
+        this.listLists({ boardId, refresh }),
+        this.listBoardCards({ boardId, refresh, q, updatedSince })
+      ]);
+
+      const listArr = Array.isArray(lists) ? lists : [];
+      const cardArr = Array.isArray(cards) ? cards : [];
+
+      listArr.sort((a, b) => (a?.pos ?? 0) - (b?.pos ?? 0));
+
+      const cardsByList = {};
+      for (const c of cardArr) {
+        const idList = c?.idList;
+        if (!idList) continue;
+        if (!cardsByList[idList]) cardsByList[idList] = [];
+        cardsByList[idList].push(c);
+      }
+
+      for (const [idList, arr] of Object.entries(cardsByList)) {
+        arr.sort((a, b) => (a?.pos ?? 0) - (b?.pos ?? 0));
+        cardsByList[idList] = arr;
+      }
+
+      return { lists: listArr, cardsByList };
+    };
+
+    if (!this.cache) {
+      return compute();
+    }
+
+    return this.cache.getOrCompute(cacheKey, compute, { ttlMs, force: refresh });
   }
 }
 
-module.exports = { TrelloTaskProvider };
+function normalizeDependencyInput({ name, url, shortLink } = {}) {
+  const rawUrl = String(url || '').trim();
+  const rawShort = String(shortLink || '').trim();
+  const rawName = String(name || '').trim();
+
+  if (rawUrl) {
+    const m = rawUrl.match(/trello\.com\/c\/([a-zA-Z0-9]+)/);
+    if (m?.[1]) return { name: rawName || rawUrl, url: rawUrl, shortLink: m[1] };
+    return { name: rawName || rawUrl, url: rawUrl, shortLink: null };
+  }
+
+  if (rawShort) {
+    const u = `https://trello.com/c/${rawShort}`;
+    return { name: rawName || u, url: u, shortLink: rawShort };
+  }
+
+  if (rawName) {
+    const m = rawName.match(/trello\.com\/c\/([a-zA-Z0-9]+)/);
+    if (m?.[1]) return { name: rawName, url: m[0], shortLink: m[1] };
+  }
+
+  return null;
+}
+
+function parseTrelloDependenciesFromCard(card) {
+  const checklists = Array.isArray(card?.checklists) ? card.checklists : [];
+  const deps = checklists.find(c => String(c?.name || '').trim().toLowerCase() === 'dependencies');
+  const checklistId = deps?.id || null;
+
+  const items = Array.isArray(deps?.checkItems) ? deps.checkItems : [];
+  const parsed = items.map(i => {
+    const name = String(i?.name || '').trim();
+    const id = i?.id || null;
+    const state = i?.state || 'incomplete';
+    const match = name.match(/https?:\/\/\S+/);
+    const url = match ? match[0] : null;
+    const shortMatch = name.match(/trello\.com\/c\/([a-zA-Z0-9]+)/);
+    const shortLink = shortMatch?.[1] || null;
+    return { id, name, url, shortLink, state };
+  }).filter(i => !!i.id);
+
+  return { checklistId, items: parsed };
+}
+
+module.exports = { TrelloTaskProvider, parseTrelloDependenciesFromCard };
