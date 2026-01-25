@@ -54,7 +54,9 @@ class UserSettingsService {
               // Keyed by `${provider}:${boardId}` -> string[] listIds
               collapsedByBoard: {},
               // Keyed by `${provider}:${boardId}` -> string listId (narrow layout)
-              expandedByBoard: {}
+              expandedByBoard: {},
+              // Keyed by `${provider}:${boardId}` -> 'scroll' | 'wrap' | 'wrap-expand'
+              layoutByBoard: {}
             }
           },
           diffViewer: {

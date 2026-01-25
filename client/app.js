@@ -6041,6 +6041,7 @@ class ClaudeOrchestrator {
       updatedWindow: localStorage.getItem('tasks-updated-window') || 'any', // any | 1h | 24h | 7d | 30d
       sort: localStorage.getItem('tasks-sort') || 'pos', // pos | activity | name
       hideEmptyColumns: localStorage.getItem('tasks-hide-empty') === 'true',
+      boardLayout: 'scroll', // scroll | wrap | wrap-expand (board view)
       lists: [],
       boardMembers: [],
       boardLabels: [],
@@ -6069,6 +6070,11 @@ class ClaudeOrchestrator {
           <select id="tasks-board" class="tasks-select" title="Board"></select>
           <select id="tasks-list" class="tasks-select" title="List"></select>
           <input type="text" id="tasks-search" class="search-input tasks-search" placeholder="Search cards...">
+          <div class="tasks-radio" role="radiogroup" aria-label="Kanban layout" id="tasks-layout" style="display:none">
+            <label class="tasks-radio-option"><input type="radio" name="tasks-layout" value="scroll">Scroll</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-layout" value="wrap">Wrap</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-layout" value="wrap-expand">Wrap+Expand</label>
+          </div>
           <div class="tasks-radio" role="radiogroup" aria-label="Updated window" id="tasks-updated">
             <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="any">Any</label>
             <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="1h">1h</label>
@@ -6118,6 +6124,39 @@ class ClaudeOrchestrator {
     const bodyEl = modal.querySelector('.tasks-body');
     const cardsEl = modal.querySelector('#tasks-cards');
     const detailEl = modal.querySelector('#tasks-detail');
+    let lastSnapshot = null;
+
+    const boardKey = () => `${state.provider}:${state.boardId}`;
+    const readBoardLayout = () => {
+      const key = boardKey();
+      const fromServer = this.userSettings?.global?.ui?.tasks?.kanban?.layoutByBoard?.[key];
+      const allowed = new Set(['scroll', 'wrap', 'wrap-expand']);
+      if (allowed.has(fromServer)) return fromServer;
+      try {
+        const fromLocal = localStorage.getItem(`tasks-board-layout:${key}`);
+        if (allowed.has(fromLocal)) return fromLocal;
+      } catch {
+        // ignore
+      }
+      return 'scroll';
+    };
+
+    const persistBoardLayout = (layout) => {
+      const key = boardKey();
+      try {
+        localStorage.setItem(`tasks-board-layout:${key}`, layout);
+      } catch {
+        // ignore
+      }
+      try {
+        const current = this.userSettings?.global?.ui?.tasks?.kanban?.layoutByBoard || {};
+        const next = { ...(current || {}) };
+        next[key] = layout;
+        this.updateGlobalUserSetting('ui.tasks.kanban.layoutByBoard', next);
+      } catch {
+        // ignore
+      }
+    };
 
     const computeUpdatedSince = () => {
       const now = Date.now();
@@ -6707,6 +6746,9 @@ class ClaudeOrchestrator {
 
       const lists = snapshot.lists || [];
       const cardsByList = snapshot.cardsByList || {};
+      const layoutMode = state.boardLayout || 'scroll';
+      const isWrap = layoutMode === 'wrap' || layoutMode === 'wrap-expand';
+      const isWrapExpand = layoutMode === 'wrap-expand';
 
       const board = Array.isArray(state.boards) ? state.boards.find(b => b?.id === state.boardId) : null;
       const boardColor = board?.prefs?.backgroundColor || '';
@@ -6722,6 +6764,27 @@ class ClaudeOrchestrator {
         if (!c) return '';
         const allowed = new Set(['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black']);
         return allowed.has(c) ? c : '';
+      };
+
+      const renderCompactLabels = (labels) => {
+        const arr = Array.isArray(labels) ? labels : [];
+        if (arr.length === 0) return '';
+        const max = 2;
+        const shown = arr.slice(0, max);
+        const more = arr.length - shown.length;
+        return `
+          <div class="task-card-labels">
+            ${shown.map((l) => {
+              const color = trelloLabelColor(l);
+              const name = String(l?.name || '').trim();
+              const text = name || color || '';
+              if (!text) return '';
+              const cls = ['tasks-label', color ? `tasks-label--${color}` : ''].filter(Boolean).join(' ');
+              return `<span class="${cls}" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+            }).join('')}
+            ${more > 0 ? `<span class="tasks-label tasks-label--more" title="${more} more">+${more}</span>` : ''}
+          </div>
+        `;
       };
 
       const sortCards = (arr) => {
@@ -6740,7 +6803,7 @@ class ClaudeOrchestrator {
       };
 
       cardsEl.innerHTML = `
-        <div class="tasks-board" id="tasks-board-view">
+        <div class="tasks-board ${isWrap ? 'tasks-board-wrap tasks-board-grid' : ''} ${isWrapExpand ? 'tasks-board-wrap-expand' : ''}" id="tasks-board-view">
           ${lists.map(list => {
             const raw = Array.isArray(cardsByList[list.id]) ? cardsByList[list.id] : [];
             const cards = sortCards(raw);
@@ -6763,15 +6826,7 @@ class ClaudeOrchestrator {
                     return `
                       <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-origin-list-id="${list.id}">
                         <div class="task-card-top">
-                          <div class="task-card-labels">
-                            ${labels.slice(0, 6).map(l => {
-                              const color = trelloLabelColor(l);
-                              const name = String(l?.name || '').trim();
-                              const titleAttr = escapeHtml(name || color || 'label');
-                              const cls = color ? `tasks-label tasks-label--${color}` : 'tasks-label';
-                              return `<span class="${cls}" title="${titleAttr}">${name ? escapeHtml(name) : ''}</span>`;
-                            }).join('')}
-                          </div>
+                          ${renderCompactLabels(labels)}
                           <div class="task-card-assignees">
                             ${members.map(m => {
                               const url = m?.username ? `https://trello.com/${m.username}` : '';
@@ -6797,6 +6852,13 @@ class ClaudeOrchestrator {
           }).join('')}
         </div>
       `;
+
+      // Layout behavior:
+      // - scroll: 1-row lists, horizontal scroll, per-list vertical scroll
+      // - wrap: multi-row lists (no horizontal scroll), per-list vertical scroll
+      // - wrap-expand: multi-row lists, single vertical scroll (lists expand to fit cards)
+      bodyEl?.classList.toggle('tasks-kanban-wrap', !!isWrap);
+      bodyEl?.classList.toggle('tasks-kanban-wrap-expand', !!isWrapExpand);
 
       // Fizzy-like collapsible columns (lightweight):
       // - Persist per-board expanded column on narrow screens.
@@ -6924,6 +6986,15 @@ class ClaudeOrchestrator {
       viewBoardBtn?.classList.toggle('active', isBoard);
     };
 
+    const syncBoardLayoutUI = () => {
+      const layoutEl = modal.querySelector('#tasks-layout');
+      const isBoard = state.view === 'board';
+      if (!layoutEl) return;
+      layoutEl.style.display = isBoard ? '' : 'none';
+      const radio = layoutEl.querySelector(`input[name="tasks-layout"][value="${CSS.escape(state.boardLayout)}"]`);
+      if (radio) radio.checked = true;
+    };
+
     const refreshAll = async ({ force = false } = {}) => {
       cardsEl.innerHTML = `<div class="loading">Loading…</div>`;
       renderDetail(null);
@@ -7008,6 +7079,7 @@ class ClaudeOrchestrator {
           state.lists = snapshot?.lists || [];
           state.boardCustomFields = customFields || [];
           state.boardLabels = labels || [];
+          lastSnapshot = snapshot;
           renderBoard(snapshot);
         }
       } catch (error) {
@@ -7025,12 +7097,15 @@ class ClaudeOrchestrator {
       if (radio) radio.checked = true;
     }
     if (hideEmptyEl) hideEmptyEl.checked = !!state.hideEmptyColumns;
+    state.boardLayout = readBoardLayout();
     applyView();
+    syncBoardLayoutUI();
 
     viewListBtn?.addEventListener('click', async () => {
       state.view = 'list';
       localStorage.setItem('tasks-view', state.view);
       applyView();
+      syncBoardLayoutUI();
       await refreshAll({ force: false });
     });
 
@@ -7038,8 +7113,27 @@ class ClaudeOrchestrator {
       state.view = 'board';
       localStorage.setItem('tasks-view', state.view);
       applyView();
+      state.boardLayout = readBoardLayout();
+      syncBoardLayoutUI();
       await refreshAll({ force: false });
     });
+
+    const layoutEl = modal.querySelector('#tasks-layout');
+    if (layoutEl) {
+      layoutEl.addEventListener('change', (e) => {
+        const value = e?.target?.value;
+        if (value !== 'scroll' && value !== 'wrap' && value !== 'wrap-expand') return;
+        state.boardLayout = value;
+        persistBoardLayout(value);
+        syncBoardLayoutUI();
+
+        if (state.view === 'board' && lastSnapshot) {
+          renderBoard(lastSnapshot);
+          return;
+        }
+        refreshAll({ force: false });
+      });
+    }
 
     providerEl.addEventListener('change', async () => {
       state.provider = providerEl.value || 'trello';
@@ -7056,6 +7150,8 @@ class ClaudeOrchestrator {
       localStorage.setItem('tasks-board', state.boardId);
       state.listId = '__all__';
       localStorage.setItem('tasks-list', state.listId);
+      state.boardLayout = readBoardLayout();
+      syncBoardLayoutUI();
       await refreshAll({ force: true });
     });
 
