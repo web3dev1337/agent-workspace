@@ -112,7 +112,7 @@ Located at `~/.claude/`, this system provides **AI-agnostic configuration manage
 │  ├── 📁 hooks/                                                           │
 │  │   ├── safety-guard.py    ──► Prevents destructive operations         │
 │  │   ├── git-safety.sh      ──► Git operation protector                 │
-│  │   └── pre-tool.sh        ──► Token usage monitoring (optional)       │
+│  │   └── pre-tool.sh        ──► Token usage monitoring                  │
 │  │                                                                       │
 │  ├── 📁 scripts/                                                         │
 │  │   ├── bootstrap.sh       ──► Install all agent repos                 │

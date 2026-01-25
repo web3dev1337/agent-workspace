@@ -543,7 +543,7 @@ fi
 echo -e "${GREEN}🎉 Claude Orchestrator ready at http://localhost:$CLIENT_PORT${NC}"
 echo -e "${BLUE}💡 Tip: Close this terminal to keep orchestrator running in background${NC}"
 
-# Keep script running to show logs (optional)
+# Keep script running to show logs
 # wait $ORCH_PID
 ```
 
@@ -601,7 +601,7 @@ fi
 # 4. Create startup script and shortcuts
 ./scripts/create-shortcut.sh
 
-# 5. Build Tauri app (optional)
+# 5. Build Tauri app (native)
 read -p "Build native Tauri app? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then

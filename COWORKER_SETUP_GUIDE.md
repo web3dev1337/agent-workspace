@@ -80,12 +80,12 @@ This system manages AI agent instructions (CLAUDE.md files) across all projects 
 │   │   └── games/
 │   │       └── HyFire2/
 │   │           └── master/
-│   │               └── CLAUDE.md      # Project-specific (optional)
+│   │               └── CLAUDE.md      # Project-specific overrides
 │   └── monogame/
 │       ├── CLAUDE.md → ~/.claude/installed/monogame/AGENTS.md  # SYMLINK
 │       └── epic-survivors/
 │           └── master/
-│               └── CLAUDE.md          # Project-specific (optional)
+│               └── CLAUDE.md          # Project-specific overrides
 ```
 
 ### Configuration Hierarchy (How Claude Reads Instructions)
