@@ -617,3 +617,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Improves resize observation by watching the terminal wrapper element.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe` (adds `tests/e2e/terminal-fit-guard.spec.js`)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/200 (merged 2026-01-25)
+
+### Fix: preserve tier dropdown + add Interrupt button (merged)
+- `updateTerminalControls()` no longer wipes out the per-Agent tier dropdown; it now re-renders controls consistently.
+- Adds an **Interrupt (Ctrl+C)** button to terminal controls so you can recover from stuck CLI states even when keystrokes don’t get through (e.g. `claude --resume` with no conversations).
+- Tests: `npm run test:unit`, `npm run test:e2e:safe` (adds `tests/e2e/tier-dropdown-persists.spec.js`)
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/202 (merged 2026-01-25)
