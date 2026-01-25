@@ -56,6 +56,7 @@ const { WorktreeTagService } = require('./worktreeTagService');
 const { DiffViewerService } = require('./diffViewerService');
 const { PullRequestService } = require('./pullRequestService');
 const { ProcessTaskService } = require('./processTaskService');
+const { ProcessStatusService } = require('./processStatusService');
 const { TaskRecordService } = require('./taskRecordService');
 const { PromptArtifactService } = require('./promptArtifactService');
 const { TaskDependencyService } = require('./taskDependencyService');
@@ -172,6 +173,7 @@ const diffViewerService = DiffViewerService.getInstance();
 const pullRequestService = PullRequestService.getInstance();
 const processTaskService = ProcessTaskService.getInstance({ sessionManager, worktreeTagService, pullRequestService });
 const taskRecordService = TaskRecordService.getInstance();
+const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager });
 const promptArtifactService = PromptArtifactService.getInstance();
 const taskDependencyService = TaskDependencyService.getInstance({ taskRecordService, pullRequestService });
 const taskTicketingService = TaskTicketingService.getInstance();
@@ -2243,6 +2245,20 @@ app.get('/api/process/tasks', async (req, res) => {
   } catch (error) {
     logger.error('Failed to list process tasks', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to list process tasks' });
+  }
+});
+
+app.get('/api/process/status', async (req, res) => {
+  try {
+    const mode = req.query.mode || 'mine';
+    const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
+    const force = String(req.query.force || '').toLowerCase() === 'true';
+
+    const status = await processStatusService.getStatus({ mode, lookbackHours, force });
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to fetch process status', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to fetch process status' });
   }
 });
 
