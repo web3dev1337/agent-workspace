@@ -31,11 +31,13 @@ if [ ! -d "node_modules" ]; then
   npm install
 fi
 
-echo "🎯 Starting server on port 7655..."
-echo "📋 Access the diff viewer at: http://localhost:7655"
+PORT="${DIFF_VIEWER_PORT:-7655}"
+
+echo "🎯 Starting server on port ${PORT}..."
+echo "📋 Access the diff viewer at: http://localhost:${PORT}"
 echo ""
 echo "To test, open a URL like:"
-echo "http://localhost:7655/pr/facebook/react/27000"
+echo "http://localhost:${PORT}/pr/facebook/react/27000"
 echo ""
 
 # Start the server
