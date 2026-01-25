@@ -694,6 +694,8 @@ class ClaudeOrchestrator {
       'enable-sounds': null,
       'auto-scroll': null,
       'theme-select': null,
+      'tasks-theme-select': null,
+      'trello-me-username': null,
       'global-skip-permissions': null,
       'reset-to-defaults': null,
       'save-as-default': null,
@@ -834,6 +836,22 @@ class ClaudeOrchestrator {
       // Persist via server user settings so it survives reloads across devices/worktrees.
       this.updateGlobalUserSetting('ui.theme', e.target.value);
     });
+
+    const tasksThemeSelect = document.getElementById('tasks-theme-select');
+    if (tasksThemeSelect) {
+      tasksThemeSelect.addEventListener('change', (e) => {
+        const next = e.target.value;
+        this.updateGlobalUserSetting('ui.tasks.theme', next);
+      });
+    }
+
+    const trelloMeUsername = document.getElementById('trello-me-username');
+    if (trelloMeUsername) {
+      trelloMeUsername.addEventListener('change', (e) => {
+        const v = String(e.target.value || '').trim();
+        this.updateGlobalUserSetting('ui.tasks.me.trelloUsername', v);
+      });
+    }
 
     const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
     if (diffViewerThemeSelect) {
@@ -5218,6 +5236,21 @@ class ClaudeOrchestrator {
       }
     }
 
+    const tasksThemeSelect = document.getElementById('tasks-theme-select');
+    if (tasksThemeSelect) {
+      const tasksTheme = this.userSettings.global?.ui?.tasks?.theme;
+      if (tasksTheme === 'light' || tasksTheme === 'dark' || tasksTheme === 'inherit') {
+        tasksThemeSelect.value = tasksTheme;
+      } else {
+        tasksThemeSelect.value = 'inherit';
+      }
+    }
+
+    const trelloMeUsername = document.getElementById('trello-me-username');
+    if (trelloMeUsername) {
+      trelloMeUsername.value = this.userSettings.global?.ui?.tasks?.me?.trelloUsername || '';
+    }
+
     // Update session recovery settings UI
     const sessionRecoveryEnabled = document.getElementById('session-recovery-enabled');
     const sessionRecoveryOptions = document.getElementById('session-recovery-options');
@@ -6008,9 +6041,10 @@ class ClaudeOrchestrator {
     const existing = document.getElementById('tasks-panel');
     if (existing) existing.remove();
 
-    const serverUrl = window.location.port === '2080'
-      ? 'http://localhost:3000'
-      : window.location.origin;
+    // Always talk to the current origin. In split dev, `client/dev-server.js`
+    // proxies `/api` + `/socket.io` to the backend (using `ORCHESTRATOR_PORT`),
+    // so hard-coding `:3000` breaks when running the orchestrator on other ports.
+    const serverUrl = window.location.origin;
 
     const state = {
       provider: localStorage.getItem('tasks-provider') || 'trello',
@@ -6021,8 +6055,13 @@ class ClaudeOrchestrator {
       updatedWindow: localStorage.getItem('tasks-updated-window') || 'any', // any | 1h | 24h | 7d | 30d
       sort: localStorage.getItem('tasks-sort') || 'pos', // pos | activity | name
       hideEmptyColumns: localStorage.getItem('tasks-hide-empty') === 'true',
+      boardLayout: 'scroll', // scroll | wrap | wrap-expand (board view)
+      assigneeFilterMode: 'selected', // selected | any
+      assigneeFilterIds: [],
+      me: null,
       lists: [],
       boardMembers: [],
+      boardLabels: [],
       boards: [],
       boardCustomFields: [],
       selectedCardId: null
@@ -6031,6 +6070,11 @@ class ClaudeOrchestrator {
     const modal = document.createElement('div');
     modal.id = 'tasks-panel';
     modal.className = 'modal tasks-modal';
+    const tasksThemeSetting = this.userSettings?.global?.ui?.tasks?.theme;
+    const resolvedTasksTheme = (tasksThemeSetting === 'light' || tasksThemeSetting === 'dark')
+      ? tasksThemeSetting
+      : (this.settings.theme === 'light' ? 'light' : 'dark');
+    modal.classList.add(`tasks-theme-${resolvedTasksTheme}`);
     modal.innerHTML = `
       <div class="modal-content tasks-content">
         <div class="modal-header">
@@ -6043,6 +6087,21 @@ class ClaudeOrchestrator {
           <select id="tasks-board" class="tasks-select" title="Board"></select>
           <select id="tasks-list" class="tasks-select" title="List"></select>
           <input type="text" id="tasks-search" class="search-input tasks-search" placeholder="Search cards...">
+          <div class="tasks-radio" role="radiogroup" aria-label="Kanban layout" id="tasks-layout" style="display:none">
+            <label class="tasks-radio-option"><input type="radio" name="tasks-layout" value="scroll">Scroll</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-layout" value="wrap">Wrap</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-layout" value="wrap-expand">Wrap+Expand</label>
+          </div>
+          <details class="tasks-filter tasks-filter-assignees" id="tasks-assignees-filter">
+            <summary class="btn-secondary" title="Filter by assignees">Assignees</summary>
+            <div class="tasks-filter-popover">
+              <div class="tasks-filter-actions">
+                <button class="btn-secondary" type="button" id="tasks-assignees-me">Only me</button>
+                <button class="btn-secondary" type="button" id="tasks-assignees-any">Any</button>
+              </div>
+              <div class="tasks-filter-list" id="tasks-assignees-list"></div>
+            </div>
+          </details>
           <div class="tasks-radio" role="radiogroup" aria-label="Updated window" id="tasks-updated">
             <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="any">Any</label>
             <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="1h">1h</label>
@@ -6092,6 +6151,119 @@ class ClaudeOrchestrator {
     const bodyEl = modal.querySelector('.tasks-body');
     const cardsEl = modal.querySelector('#tasks-cards');
     const detailEl = modal.querySelector('#tasks-detail');
+    let lastSnapshot = null;
+
+    const boardKey = () => `${state.provider}:${state.boardId}`;
+    const readAssigneeFilter = () => {
+      const key = boardKey();
+      const fromServer = this.userSettings?.global?.ui?.tasks?.filters?.assigneesByBoard?.[key];
+      if (fromServer && typeof fromServer === 'object' && !Array.isArray(fromServer)) {
+        const mode = fromServer.mode;
+        const ids = Array.isArray(fromServer.ids) ? fromServer.ids.filter(Boolean) : [];
+        if (mode === 'any') return { mode: 'any', ids: [] };
+        return { mode: 'selected', ids };
+      }
+      if (Array.isArray(fromServer)) return { mode: 'selected', ids: fromServer.filter(Boolean) }; // legacy
+      try {
+        const raw = localStorage.getItem(`tasks-assignees:${key}`);
+        const arr = raw ? JSON.parse(raw) : [];
+        if (arr && typeof arr === 'object' && !Array.isArray(arr)) {
+          const mode = arr.mode;
+          const ids = Array.isArray(arr.ids) ? arr.ids.filter(Boolean) : [];
+          if (mode === 'any') return { mode: 'any', ids: [] };
+          return { mode: 'selected', ids };
+        }
+        return Array.isArray(arr) ? { mode: 'selected', ids: arr.filter(Boolean) } : { mode: 'selected', ids: [] };
+      } catch {
+        return { mode: 'selected', ids: [] };
+      }
+    };
+
+    const persistAssigneeFilter = ({ mode, ids } = {}) => {
+      const key = boardKey();
+      const cleanMode = mode === 'any' ? 'any' : 'selected';
+      const cleanIds = Array.from(new Set((Array.isArray(ids) ? ids : []).filter(Boolean)));
+      const payload = cleanMode === 'any'
+        ? { mode: 'any', ids: [] }
+        : { mode: 'selected', ids: cleanIds };
+      try {
+        localStorage.setItem(`tasks-assignees:${key}`, JSON.stringify(payload));
+      } catch {
+        // ignore
+      }
+      try {
+        const current = this.userSettings?.global?.ui?.tasks?.filters?.assigneesByBoard || {};
+        const next = { ...(current || {}) };
+        next[key] = payload;
+        this.updateGlobalUserSetting('ui.tasks.filters.assigneesByBoard', next);
+      } catch {
+        // ignore
+      }
+    };
+
+    const fetchMe = async ({ refresh = false } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/me`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load me');
+      return data.member || null;
+    };
+
+    const resolveMeId = () => {
+      const overrideUsername = String(this.userSettings?.global?.ui?.tasks?.me?.trelloUsername || '').trim().toLowerCase();
+      const members = Array.isArray(state.boardMembers) ? state.boardMembers : [];
+      if (overrideUsername) {
+        const found = members.find(m => String(m?.username || '').toLowerCase() === overrideUsername);
+        if (found?.id) return found.id;
+      }
+      const meUsername = String(state.me?.username || '').trim().toLowerCase();
+      if (meUsername) {
+        const found = members.find(m => String(m?.username || '').toLowerCase() === meUsername);
+        if (found?.id) return found.id;
+      }
+      return state.me?.id || null;
+    };
+
+    const passesAssigneeFilter = (card) => {
+      if (state.assigneeFilterMode === 'any') return true;
+      const ids = Array.isArray(state.assigneeFilterIds) ? state.assigneeFilterIds.filter(Boolean) : [];
+      if (ids.length === 0) return true;
+      const memberIds = Array.isArray(card?.idMembers) ? card.idMembers : [];
+      if (memberIds.length === 0) return false;
+      return memberIds.some(id => ids.includes(id));
+    };
+    const readBoardLayout = () => {
+      const key = boardKey();
+      const fromServer = this.userSettings?.global?.ui?.tasks?.kanban?.layoutByBoard?.[key];
+      const allowed = new Set(['scroll', 'wrap', 'wrap-expand']);
+      if (allowed.has(fromServer)) return fromServer;
+      try {
+        const fromLocal = localStorage.getItem(`tasks-board-layout:${key}`);
+        if (allowed.has(fromLocal)) return fromLocal;
+      } catch {
+        // ignore
+      }
+      return 'scroll';
+    };
+
+    const persistBoardLayout = (layout) => {
+      const key = boardKey();
+      try {
+        localStorage.setItem(`tasks-board-layout:${key}`, layout);
+      } catch {
+        // ignore
+      }
+      try {
+        const current = this.userSettings?.global?.ui?.tasks?.kanban?.layoutByBoard || {};
+        const next = { ...(current || {}) };
+        next[key] = layout;
+        this.updateGlobalUserSetting('ui.tasks.kanban.layoutByBoard', next);
+      } catch {
+        // ignore
+      }
+    };
 
     const computeUpdatedSince = () => {
       const now = Date.now();
@@ -6112,6 +6284,20 @@ class ClaudeOrchestrator {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+
+    const toTrelloAvatarUrl = (avatarUrl, size = 50) => {
+      const raw = String(avatarUrl || '').trim();
+      if (!raw) return '';
+      // Trello commonly returns a base avatarUrl like:
+      //   https://trello-avatars.s3.amazonaws.com/<hash>
+      // which must be suffixed with `/<size>.png` (otherwise it can 403 / look like an S3 root fetch).
+      const lower = raw.toLowerCase();
+      if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp') || lower.includes('.png?') || lower.includes('.jpg?') || lower.includes('.jpeg?') || lower.includes('.webp?')) {
+        return raw;
+      }
+      const safeSize = Number.isFinite(Number(size)) ? Math.max(10, Math.min(512, Number(size))) : 50;
+      return `${raw.replace(/\/$/, '')}/${safeSize}.png`;
+    };
 
     const toDatetimeLocalValue = (iso) => {
       if (!iso) return '';
@@ -6166,12 +6352,13 @@ class ClaudeOrchestrator {
         return;
       }
 
-      if (!Array.isArray(cards) || cards.length === 0) {
+      const filtered = (Array.isArray(cards) ? cards : []).filter(passesAssigneeFilter);
+      if (filtered.length === 0) {
         cardsEl.innerHTML = `<div class="no-ports">No cards found.</div>`;
         return;
       }
 
-      cardsEl.innerHTML = cards
+      cardsEl.innerHTML = filtered
         .map((c) => {
           const title = (c?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
@@ -6204,37 +6391,100 @@ class ClaudeOrchestrator {
       const availableMembers = allMembers.filter(m => m?.id && !memberById.has(m.id));
 
       const labels = Array.isArray(card?.labels) ? card.labels : [];
-      const labelLabel = labels.length
-        ? labels.map(l => l?.name || l?.color || '').filter(Boolean).join(', ')
-        : 'none';
+      const selectedLabelIds = new Set(labels.map(l => l?.id).filter(Boolean));
+      const boardLabels = Array.isArray(state.boardLabels) ? state.boardLabels : [];
+      const labelsForEditor = boardLabels.length ? boardLabels : labels;
+      const trelloLabelColor = (label) => {
+        const c = String(label?.color || '').toLowerCase();
+        if (!c) return '';
+        const allowed = new Set(['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black']);
+        return allowed.has(c) ? c : '';
+      };
+      const labelsEditorHtml = labelsForEditor.length
+        ? labelsForEditor
+          .map((l) => {
+            const id = l?.id || '';
+            const name = String(l?.name || '').trim();
+            const color = trelloLabelColor(l);
+            const selected = id && selectedLabelIds.has(id);
+            const labelText = name || (color ? color : 'label');
+            const cls = [
+              'tasks-label',
+              'tasks-label-toggle',
+              color ? `tasks-label--${color}` : '',
+              selected ? 'is-selected' : ''
+            ].filter(Boolean).join(' ');
+            return `
+              <button type="button" class="${cls}" data-toggle-label="${escapeHtml(id)}" title="${escapeHtml(labelText)}">
+                ${selected ? '✓ ' : ''}${escapeHtml(labelText)}
+              </button>
+            `;
+          })
+          .join('')
+        : `<div class="tasks-detail-empty">No labels.</div>`;
 
       const customFields = Array.isArray(state.boardCustomFields) ? state.boardCustomFields : [];
-      const customFieldsById = new Map(customFields.map(f => [f?.id, f]).filter(([id]) => !!id));
       const customFieldItems = Array.isArray(card?.customFieldItems) ? card.customFieldItems : [];
-      const renderCustomFieldValue = (item) => {
-        const field = customFieldsById.get(item?.idCustomField);
-        if (!field) return null;
+      const customFieldItemsById = new Map(customFieldItems.map(i => [i?.idCustomField, i]).filter(([id]) => !!id));
+      const escapeAttr = (value) => escapeHtml(value).replace(/\"/g, '&quot;');
+      const renderCustomFieldInput = (field) => {
+        const id = field?.id;
+        if (!id) return '';
         const type = String(field?.type || '').toLowerCase();
+        const item = customFieldItemsById.get(id) || null;
+
         if (type === 'list') {
           const options = Array.isArray(field?.options) ? field.options : [];
-          const opt = options.find(o => o?.id && item?.idValue && o.id === item.idValue);
-          return opt?.value?.text || opt?.value?.name || null;
+          const current = item?.idValue || '';
+          return `
+            <select class="tasks-select tasks-select-inline tasks-cf-input" data-cf-id="${escapeHtml(id)}" data-cf-type="list" data-cf-initial="${escapeAttr(current)}">
+              <option value="">(none)</option>
+              ${options.map(o => `
+                <option value="${escapeHtml(o?.id || '')}" ${o?.id === current ? 'selected' : ''}>${escapeHtml(o?.value?.text || o?.value?.name || o?.id || '')}</option>
+              `).join('')}
+            </select>
+          `;
         }
+
         if (type === 'checkbox') {
-          const checked = item?.value?.checked;
-          if (checked === 'true') return '✅';
-          if (checked === 'false') return '⬜';
-          return null;
+          const checked = String(item?.value?.checked || '').toLowerCase() === 'true';
+          return `
+            <label class="tasks-checkbox">
+              <input type="checkbox" class="tasks-cf-input" data-cf-id="${escapeHtml(id)}" data-cf-type="checkbox" data-cf-initial="${checked ? 'true' : 'false'}" ${checked ? 'checked' : ''} />
+              <span>${checked ? 'checked' : 'unchecked'}</span>
+            </label>
+          `;
         }
+
         if (type === 'date') {
-          const d = item?.value?.date;
-          return d ? new Date(d).toLocaleString() : null;
+          const value = toDatetimeLocalValue(item?.value?.date);
+          return `
+            <input type="datetime-local" class="tasks-input tasks-input-inline tasks-cf-input" value="${escapeAttr(value)}" data-cf-id="${escapeHtml(id)}" data-cf-type="date" data-cf-initial="${escapeAttr(value)}" />
+          `;
         }
+
         if (type === 'number') {
-          return item?.value?.number ?? null;
+          const value = item?.value?.number ?? '';
+          return `
+            <input type="number" step="any" class="tasks-input tasks-input-inline tasks-cf-input" value="${escapeAttr(value)}" data-cf-id="${escapeHtml(id)}" data-cf-type="number" data-cf-initial="${escapeAttr(value)}" />
+          `;
         }
-        return item?.value?.text ?? null;
+
+        const value = item?.value?.text ?? '';
+        return `
+          <input type="text" class="tasks-input tasks-input-inline tasks-cf-input" value="${escapeAttr(value)}" data-cf-id="${escapeHtml(id)}" data-cf-type="text" data-cf-initial="${escapeAttr(value)}" />
+        `;
       };
+      const customFieldsEditorHtml = customFields.length
+        ? customFields
+          .map((field) => `
+            <div class="tasks-kv-row tasks-kv-row-edit">
+              <div class="tasks-kv-key">${escapeHtml(field?.name || field?.id || '')}</div>
+              <div class="tasks-kv-val tasks-kv-val-edit">${renderCustomFieldInput(field)}</div>
+            </div>
+          `)
+          .join('')
+        : `<div class="tasks-detail-empty">None.</div>`;
 
       const listsById = new Map((state.lists || []).map(l => [l.id, l]));
       const currentListName = listsById.get(card?.idList)?.name || '';
@@ -6284,14 +6534,13 @@ class ClaudeOrchestrator {
           <span class="tasks-chips" id="tasks-member-chips">
             ${members.length === 0 ? `<span class="tasks-chip tasks-chip-muted">none</span>` : members.map(m => `
               <span class="tasks-chip" data-member-id="${escapeHtml(m?.id || '')}">
-                ${m?.avatarUrl ? `<img class="tasks-chip-avatar" src="${escapeHtml(m.avatarUrl)}" alt="">` : ''}
+                ${m?.avatarUrl ? `<img class="tasks-chip-avatar" src="${escapeHtml(toTrelloAvatarUrl(m.avatarUrl, 50))}" alt="">` : ''}
                 ${m?.username ? `<a class="tasks-chip-link" href="https://trello.com/${escapeHtml(m.username)}" target="_blank" rel="noreferrer">${escapeHtml(m?.fullName || m?.username || m?.id || '')}</a>` : escapeHtml(m?.fullName || m?.username || m?.id || '')}
                 <button class="tasks-chip-x" type="button" title="Unassign" data-remove-member="${escapeHtml(m?.id || '')}">×</button>
               </span>
             `).join('')}
           </span>
         </div>
-        <div class="tasks-detail-meta">Labels: ${labelLabel}</div>
         <div class="tasks-detail-meta">
           Due:
           <input id="tasks-card-due" class="tasks-input tasks-input-inline" type="datetime-local" value="${escapeHtml(dueValue)}" />
@@ -6313,20 +6562,16 @@ class ClaudeOrchestrator {
         </div>
 
         <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Labels (${selectedLabelIds.size})</div>
+          <div class="tasks-label-editor" id="tasks-label-editor">
+            ${labelsEditorHtml}
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
           <div class="tasks-detail-block-title">Custom Fields</div>
           <div class="tasks-kv">
-            ${customFieldItems.length === 0 ? `<div class="tasks-detail-empty">None.</div>` : customFieldItems.map(item => {
-              const field = customFieldsById.get(item?.idCustomField);
-              if (!field) return '';
-              const value = renderCustomFieldValue(item);
-              if (value === null || value === undefined || value === '') return '';
-              return `
-                <div class="tasks-kv-row">
-                  <div class="tasks-kv-key">${escapeHtml(field.name || '')}</div>
-                  <div class="tasks-kv-val">${escapeHtml(String(value))}</div>
-                </div>
-              `;
-            }).join('')}
+            ${customFieldsEditorHtml}
           </div>
         </div>
 
@@ -6428,6 +6673,17 @@ class ClaudeOrchestrator {
       return data.customFields || [];
     };
 
+    const fetchBoardLabels = async ({ refresh = false } = {}) => {
+      if (!state.boardId) return [];
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/labels`);
+      url.searchParams.set('provider', state.provider);
+      if (refresh) url.searchParams.set('refresh', 'true');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load board labels');
+      return data.labels || [];
+    };
+
     const fetchBoards = async ({ refresh = false } = {}) => {
       const url = new URL(`${serverUrl}/api/tasks/boards`);
       url.searchParams.set('provider', state.provider);
@@ -6525,6 +6781,17 @@ class ClaudeOrchestrator {
       return json.card || null;
     };
 
+    const updateCustomField = async ({ cardId, customFieldId, payload } = {}) => {
+      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/custom-fields/${encodeURIComponent(customFieldId)}?provider=${encodeURIComponent(state.provider)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {})
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to update custom field');
+      return json.card || null;
+    };
+
     const addComment = async ({ cardId, text } = {}) => {
       const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/comments?provider=${encodeURIComponent(state.provider)}`, {
         method: 'POST',
@@ -6587,6 +6854,9 @@ class ClaudeOrchestrator {
 
       const lists = snapshot.lists || [];
       const cardsByList = snapshot.cardsByList || {};
+      const layoutMode = state.boardLayout || 'scroll';
+      const isWrap = layoutMode === 'wrap' || layoutMode === 'wrap-expand';
+      const isWrapExpand = layoutMode === 'wrap-expand';
 
       const board = Array.isArray(state.boards) ? state.boards.find(b => b?.id === state.boardId) : null;
       const boardColor = board?.prefs?.backgroundColor || '';
@@ -6604,8 +6874,29 @@ class ClaudeOrchestrator {
         return allowed.has(c) ? c : '';
       };
 
+      const renderCompactLabels = (labels) => {
+        const arr = Array.isArray(labels) ? labels : [];
+        if (arr.length === 0) return '';
+        const max = 2;
+        const shown = arr.slice(0, max);
+        const more = arr.length - shown.length;
+        return `
+          <div class="task-card-labels">
+            ${shown.map((l) => {
+              const color = trelloLabelColor(l);
+              const name = String(l?.name || '').trim();
+              const text = name || color || '';
+              if (!text) return '';
+              const cls = ['tasks-label', color ? `tasks-label--${color}` : ''].filter(Boolean).join(' ');
+              return `<span class="${cls}" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+            }).join('')}
+            ${more > 0 ? `<span class="tasks-label tasks-label--more" title="${more} more">+${more}</span>` : ''}
+          </div>
+        `;
+      };
+
       const sortCards = (arr) => {
-        const cards = Array.isArray(arr) ? [...arr] : [];
+        const cards = (Array.isArray(arr) ? [...arr] : []).filter(passesAssigneeFilter);
         if (state.sort === 'activity') {
           cards.sort((a, b) => (Date.parse(b?.dateLastActivity || '') || 0) - (Date.parse(a?.dateLastActivity || '') || 0));
           return cards;
@@ -6620,7 +6911,7 @@ class ClaudeOrchestrator {
       };
 
       cardsEl.innerHTML = `
-        <div class="tasks-board" id="tasks-board-view">
+        <div class="tasks-board ${isWrap ? 'tasks-board-wrap tasks-board-grid' : ''} ${isWrapExpand ? 'tasks-board-wrap-expand' : ''}" id="tasks-board-view">
           ${lists.map(list => {
             const raw = Array.isArray(cardsByList[list.id]) ? cardsByList[list.id] : [];
             const cards = sortCards(raw);
@@ -6643,20 +6934,12 @@ class ClaudeOrchestrator {
                     return `
                       <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-origin-list-id="${list.id}">
                         <div class="task-card-top">
-                          <div class="task-card-labels">
-                            ${labels.slice(0, 6).map(l => {
-                              const color = trelloLabelColor(l);
-                              const name = String(l?.name || '').trim();
-                              const titleAttr = escapeHtml(name || color || 'label');
-                              const cls = color ? `tasks-label tasks-label--${color}` : 'tasks-label';
-                              return `<span class="${cls}" title="${titleAttr}">${name ? escapeHtml(name) : ''}</span>`;
-                            }).join('')}
-                          </div>
+                          ${renderCompactLabels(labels)}
                           <div class="task-card-assignees">
                             ${members.map(m => {
                               const url = m?.username ? `https://trello.com/${m.username}` : '';
                               const initial = String(m?.fullName || m?.username || '?').trim().slice(0, 1).toUpperCase();
-                              const avatar = m?.avatarUrl || '';
+                              const avatar = m?.avatarUrl ? toTrelloAvatarUrl(m.avatarUrl, 50) : '';
                               return `
                                 <a class="tasks-avatar" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="${escapeHtml(m?.fullName || m?.username || '')}">
                                   ${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : `<span>${escapeHtml(initial)}</span>`}
@@ -6678,14 +6961,24 @@ class ClaudeOrchestrator {
         </div>
       `;
 
+      // Layout behavior:
+      // - scroll: 1-row lists, horizontal scroll, per-list vertical scroll
+      // - wrap: multi-row lists (no horizontal scroll), per-list vertical scroll
+      // - wrap-expand: multi-row lists, single vertical scroll (lists expand to fit cards)
+      bodyEl?.classList.toggle('tasks-kanban-wrap', !!isWrap);
+      bodyEl?.classList.toggle('tasks-kanban-wrap-expand', !!isWrapExpand);
+
       // Fizzy-like collapsible columns (lightweight):
       // - Persist per-board expanded column on narrow screens.
       // - Allow collapsing/expanding columns by clicking the header.
       const storageKey = `tasks-board-expanded:${state.provider}:${state.boardId}`;
       const collapsedKey = `tasks-board-collapsed:${state.provider}:${state.boardId}`;
+      const boardKey = `${state.provider}:${state.boardId}`;
       const isNarrow = () => window.matchMedia('(max-width: 980px)').matches;
 
       const loadCollapsedSet = () => {
+        const fromServer = this.userSettings?.global?.ui?.tasks?.kanban?.collapsedByBoard?.[boardKey];
+        if (Array.isArray(fromServer)) return new Set(fromServer.filter(Boolean));
         try {
           const raw = localStorage.getItem(collapsedKey);
           const arr = raw ? JSON.parse(raw) : [];
@@ -6699,6 +6992,16 @@ class ClaudeOrchestrator {
       const saveCollapsedSet = (set) => {
         try {
           localStorage.setItem(collapsedKey, JSON.stringify(Array.from(set)));
+        } catch {
+          // ignore
+        }
+
+        // Also persist to server-side user settings so state survives across ports/origins.
+        try {
+          const current = this.userSettings?.global?.ui?.tasks?.kanban?.collapsedByBoard || {};
+          const next = { ...(current || {}) };
+          next[boardKey] = Array.from(set);
+          this.updateGlobalUserSetting('ui.tasks.kanban.collapsedByBoard', next);
         } catch {
           // ignore
         }
@@ -6730,7 +7033,8 @@ class ClaudeOrchestrator {
           return;
         }
 
-        const saved = localStorage.getItem(storageKey);
+        const savedFromServer = this.userSettings?.global?.ui?.tasks?.kanban?.expandedByBoard?.[boardKey];
+        const saved = savedFromServer || localStorage.getItem(storageKey);
         const first = cardsEl.querySelector('.tasks-column')?.dataset?.listId || null;
         const toExpand = saved || first;
         collapseAllExcept(toExpand);
@@ -6752,6 +7056,14 @@ class ClaudeOrchestrator {
             // Narrow: behave like Fizzy (one expanded at a time).
             collapseAllExcept(listId);
             localStorage.setItem(storageKey, listId);
+            try {
+              const current = this.userSettings?.global?.ui?.tasks?.kanban?.expandedByBoard || {};
+              const next = { ...(current || {}) };
+              next[boardKey] = listId;
+              this.updateGlobalUserSetting('ui.tasks.kanban.expandedByBoard', next);
+            } catch {
+              // ignore
+            }
             col.scrollIntoView?.({ behavior: 'smooth', inline: 'center' });
             return;
           }
@@ -6782,6 +7094,42 @@ class ClaudeOrchestrator {
       viewBoardBtn?.classList.toggle('active', isBoard);
     };
 
+    const syncBoardLayoutUI = () => {
+      const layoutEl = modal.querySelector('#tasks-layout');
+      const isBoard = state.view === 'board';
+      if (!layoutEl) return;
+      layoutEl.style.display = isBoard ? '' : 'none';
+      const radio = layoutEl.querySelector(`input[name="tasks-layout"][value="${CSS.escape(state.boardLayout)}"]`);
+      if (radio) radio.checked = true;
+    };
+
+    const renderAssigneeFilter = () => {
+      const details = modal.querySelector('#tasks-assignees-filter');
+      const list = modal.querySelector('#tasks-assignees-list');
+      if (!details || !list) return;
+      const isConfigured = !!state.boardId;
+      details.style.display = isConfigured ? '' : 'none';
+
+      const members = Array.isArray(state.boardMembers) ? state.boardMembers : [];
+      const selected = new Set((Array.isArray(state.assigneeFilterIds) ? state.assigneeFilterIds : []).filter(Boolean));
+
+      list.innerHTML = members.length === 0
+        ? `<div class="tasks-detail-empty">No members.</div>`
+        : members
+          .map((m) => {
+            const id = m?.id || '';
+            const label = (m?.fullName || m?.username || id || '').toString();
+            if (!id) return '';
+            return `
+              <label class="tasks-filter-item">
+                <input type="checkbox" data-assignee-id="${escapeHtml(id)}" ${state.assigneeFilterMode !== 'any' && selected.has(id) ? 'checked' : ''} />
+                <span>${escapeHtml(label)}</span>
+              </label>
+            `;
+          })
+          .join('');
+    };
+
     const refreshAll = async ({ force = false } = {}) => {
       cardsEl.innerHTML = `<div class="loading">Loading…</div>`;
       renderDetail(null);
@@ -6809,17 +7157,43 @@ class ClaudeOrchestrator {
         setSelectOptions(boardEl, boards, { placeholder: 'Select board...', valueKey: 'id', labelKey: 'name' });
         if (state.boardId) boardEl.value = state.boardId;
 
+        // Fetch "me" (best-effort) so we can default the assignee filter.
+        try {
+          state.me = await fetchMe({ refresh: false });
+        } catch (e) {
+          state.me = null;
+        }
+
         if (state.view === 'list') {
-          const [lists, members] = await Promise.all([
+          const [lists, members, labels] = await Promise.all([
             fetchLists({ refresh: force }),
             fetchBoardMembers({ refresh: force }).catch((e) => {
               console.warn('Failed to load board members:', e?.message || e);
               return [];
             })
+            ,
+            fetchBoardLabels({ refresh: force }).catch((e) => {
+              console.warn('Failed to load board labels:', e?.message || e);
+              return [];
+            })
           ]);
           state.lists = lists || [];
           state.boardMembers = members || [];
+          state.boardLabels = labels || [];
           state.boardCustomFields = [];
+          // Restore/default assignee filter for this board.
+          const assignee = readAssigneeFilter();
+          state.assigneeFilterMode = assignee.mode;
+          state.assigneeFilterIds = assignee.ids;
+          if (state.assigneeFilterMode !== 'any' && state.assigneeFilterIds.length === 0) {
+            const meId = resolveMeId();
+            if (meId) {
+              state.assigneeFilterIds = [meId];
+              state.assigneeFilterMode = 'selected';
+              persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
+            }
+          }
+          renderAssigneeFilter();
 
           setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
           // Insert an explicit "All lists" option at the top (better default for users who think in boards).
@@ -6839,7 +7213,7 @@ class ClaudeOrchestrator {
           const cards = await fetchCards({ refresh: force });
           renderCards(cards);
         } else {
-          const [snapshot, members, customFields] = await Promise.all([
+          const [snapshot, members, customFields, labels] = await Promise.all([
             fetchSnapshot({ refresh: force }),
             fetchBoardMembers({ refresh: force }).catch((e) => {
               console.warn('Failed to load board members:', e?.message || e);
@@ -6850,10 +7224,29 @@ class ClaudeOrchestrator {
               console.warn('Failed to load board custom fields:', e?.message || e);
               return [];
             })
+            ,
+            fetchBoardLabels({ refresh: force }).catch((e) => {
+              console.warn('Failed to load board labels:', e?.message || e);
+              return [];
+            })
           ]);
           state.boardMembers = members || [];
           state.lists = snapshot?.lists || [];
           state.boardCustomFields = customFields || [];
+          state.boardLabels = labels || [];
+          const assignee = readAssigneeFilter();
+          state.assigneeFilterMode = assignee.mode;
+          state.assigneeFilterIds = assignee.ids;
+          if (state.assigneeFilterMode !== 'any' && state.assigneeFilterIds.length === 0) {
+            const meId = resolveMeId();
+            if (meId) {
+              state.assigneeFilterIds = [meId];
+              state.assigneeFilterMode = 'selected';
+              persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
+            }
+          }
+          renderAssigneeFilter();
+          lastSnapshot = snapshot;
           renderBoard(snapshot);
         }
       } catch (error) {
@@ -6871,12 +7264,15 @@ class ClaudeOrchestrator {
       if (radio) radio.checked = true;
     }
     if (hideEmptyEl) hideEmptyEl.checked = !!state.hideEmptyColumns;
+    state.boardLayout = readBoardLayout();
     applyView();
+    syncBoardLayoutUI();
 
     viewListBtn?.addEventListener('click', async () => {
       state.view = 'list';
       localStorage.setItem('tasks-view', state.view);
       applyView();
+      syncBoardLayoutUI();
       await refreshAll({ force: false });
     });
 
@@ -6884,7 +7280,81 @@ class ClaudeOrchestrator {
       state.view = 'board';
       localStorage.setItem('tasks-view', state.view);
       applyView();
+      state.boardLayout = readBoardLayout();
+      syncBoardLayoutUI();
       await refreshAll({ force: false });
+    });
+
+    const layoutEl = modal.querySelector('#tasks-layout');
+    if (layoutEl) {
+      layoutEl.addEventListener('change', (e) => {
+        const value = e?.target?.value;
+        if (value !== 'scroll' && value !== 'wrap' && value !== 'wrap-expand') return;
+        state.boardLayout = value;
+        persistBoardLayout(value);
+        syncBoardLayoutUI();
+
+        if (state.view === 'board' && lastSnapshot) {
+          renderBoard(lastSnapshot);
+          return;
+        }
+        refreshAll({ force: false });
+      });
+    }
+
+    const assigneesDetails = modal.querySelector('#tasks-assignees-filter');
+    if (assigneesDetails) {
+      assigneesDetails.addEventListener('toggle', () => {
+        if (!assigneesDetails.open) return;
+        // Keep the list in sync each time it opens.
+        renderAssigneeFilter();
+      });
+    }
+
+    const assigneesMeBtn = modal.querySelector('#tasks-assignees-me');
+    assigneesMeBtn?.addEventListener('click', () => {
+      const meId = resolveMeId();
+      state.assigneeFilterIds = meId ? [meId] : [];
+      state.assigneeFilterMode = 'selected';
+      persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
+      renderAssigneeFilter();
+      if (state.view === 'board' && lastSnapshot) {
+        renderBoard(lastSnapshot);
+        return;
+      }
+      refreshAll({ force: false });
+    });
+
+    const assigneesAnyBtn = modal.querySelector('#tasks-assignees-any');
+    assigneesAnyBtn?.addEventListener('click', () => {
+      state.assigneeFilterIds = [];
+      state.assigneeFilterMode = 'any';
+      persistAssigneeFilter({ mode: 'any', ids: [] });
+      renderAssigneeFilter();
+      if (state.view === 'board' && lastSnapshot) {
+        renderBoard(lastSnapshot);
+        return;
+      }
+      refreshAll({ force: false });
+    });
+
+    const assigneesList = modal.querySelector('#tasks-assignees-list');
+    assigneesList?.addEventListener('change', (e) => {
+      const checkbox = e.target?.closest?.('input[type="checkbox"][data-assignee-id]');
+      if (!checkbox) return;
+      const id = checkbox.getAttribute('data-assignee-id');
+      if (!id) return;
+      const set = new Set((Array.isArray(state.assigneeFilterIds) ? state.assigneeFilterIds : []).filter(Boolean));
+      if (checkbox.checked) set.add(id);
+      else set.delete(id);
+      state.assigneeFilterIds = Array.from(set);
+      state.assigneeFilterMode = 'selected';
+      persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
+      if (state.view === 'board' && lastSnapshot) {
+        renderBoard(lastSnapshot);
+        return;
+      }
+      refreshAll({ force: false });
     });
 
     providerEl.addEventListener('change', async () => {
@@ -6902,6 +7372,8 @@ class ClaudeOrchestrator {
       localStorage.setItem('tasks-board', state.boardId);
       state.listId = '__all__';
       localStorage.setItem('tasks-list', state.listId);
+      state.boardLayout = readBoardLayout();
+      syncBoardLayoutUI();
       await refreshAll({ force: true });
     });
 
@@ -6963,6 +7435,7 @@ class ClaudeOrchestrator {
       try {
         const cardPromise = fetchCardDetail(cardId);
         const needsCustomFields = state.boardId && (!Array.isArray(state.boardCustomFields) || state.boardCustomFields.length === 0);
+        const needsLabels = state.boardId && (!Array.isArray(state.boardLabels) || state.boardLabels.length === 0);
         const customFieldsPromise = needsCustomFields
           ? fetchBoardCustomFields({ refresh: false }).catch((err) => {
             console.warn('Failed to load board custom fields:', err?.message || err);
@@ -6970,8 +7443,16 @@ class ClaudeOrchestrator {
           })
           : Promise.resolve(state.boardCustomFields);
 
-        const [card, customFields] = await Promise.all([cardPromise, customFieldsPromise]);
+        const labelsPromise = needsLabels
+          ? fetchBoardLabels({ refresh: false }).catch((err) => {
+            console.warn('Failed to load board labels:', err?.message || err);
+            return [];
+          })
+          : Promise.resolve(state.boardLabels);
+
+        const [card, customFields, labels] = await Promise.all([cardPromise, customFieldsPromise, labelsPromise]);
         if (needsCustomFields) state.boardCustomFields = customFields || [];
+        if (needsLabels) state.boardLabels = labels || [];
         const setDetail = (c) => {
           renderDetail(c);
 
@@ -7106,6 +7587,90 @@ class ClaudeOrchestrator {
                 btn.disabled = false;
               }
             });
+          });
+
+          detailEl.querySelectorAll('[data-toggle-label]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const labelId = btn.getAttribute('data-toggle-label');
+              if (!state.selectedCardId || !labelId) return;
+              const current = Array.isArray(c?.labels) ? c.labels : [];
+              const ids = current.map(l => l?.id).filter(Boolean);
+              const next = ids.includes(labelId)
+                ? ids.filter(id => id !== labelId)
+                : [...ids, labelId];
+
+              try {
+                btn.disabled = true;
+                const updated = await updateCard({ cardId: state.selectedCardId, fields: { idLabels: next } });
+                if (updated) setDetail(updated);
+                this.showToast('Labels updated', 'success');
+              } catch (err) {
+                console.error('Update labels failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+
+          detailEl.querySelectorAll('.tasks-cf-input').forEach((el) => {
+            const type = el.getAttribute('data-cf-type') || '';
+            const customFieldId = el.getAttribute('data-cf-id') || '';
+            if (!type || !customFieldId) return;
+
+            const currentValueString = () => {
+              if (type === 'checkbox') return el.checked ? 'true' : 'false';
+              return String(el.value ?? '');
+            };
+
+            const buildPayload = () => {
+              if (type === 'list') {
+                return { idValue: String(el.value || '') };
+              }
+              if (type === 'checkbox') {
+                return { value: { checked: el.checked ? 'true' : 'false' } };
+              }
+              if (type === 'date') {
+                const iso = fromDatetimeLocalValue(el.value || '');
+                return { value: { date: iso || '' } };
+              }
+              if (type === 'number') {
+                return { value: { number: String(el.value || '') } };
+              }
+              return { value: { text: String(el.value || '') } };
+            };
+
+            const save = async () => {
+              if (!state.selectedCardId) return;
+              const initial = el.getAttribute('data-cf-initial') ?? '';
+              const currentVal = currentValueString();
+              if (currentVal === initial) return;
+              try {
+                el.disabled = true;
+                const updated = await updateCustomField({ cardId: state.selectedCardId, customFieldId, payload: buildPayload() });
+                el.setAttribute('data-cf-initial', currentVal);
+                if (updated) setDetail(updated);
+                this.showToast('Custom field updated', 'success');
+              } catch (err) {
+                console.error('Custom field update failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                el.disabled = false;
+              }
+            };
+
+            const saveOnBlur = type === 'text' || type === 'number';
+            if (saveOnBlur) {
+              el.addEventListener('blur', save);
+              el.addEventListener('keydown', (evt) => {
+                if (evt.key === 'Enter') {
+                  evt.preventDefault();
+                  save();
+                }
+              });
+            } else {
+              el.addEventListener('change', save);
+            }
           });
 
           const depAddBtn = detailEl.querySelector('#tasks-dep-add-btn');
