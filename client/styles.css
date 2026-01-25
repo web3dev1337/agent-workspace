@@ -6635,11 +6635,19 @@ header h1 {
    ============================================ */
 
 .tasks-modal .tasks-content {
-  max-width: 1200px;
-  width: 96vw;
-  max-height: 92vh;
+  /* Tasks is a primary workflow: prefer a robust, full-viewport panel. */
+  max-width: none;
+  width: 100vw;
+  max-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  border-radius: 0;
+  padding: var(--space-md);
+}
+
+.tasks-modal {
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .tasks-view-toggle {
@@ -6731,7 +6739,7 @@ header h1 {
 }
 
 .tasks-column {
-  --tasks-col-expanded: 320px;
+  --tasks-col-expanded: clamp(240px, 22vw, 360px);
   --tasks-col-collapsed: 56px;
   width: var(--tasks-col-expanded);
   min-width: var(--tasks-col-expanded);
@@ -6752,15 +6760,26 @@ header h1 {
 
 .tasks-column-header {
   padding: var(--space-sm) var(--space-md);
-  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-sm);
-  background: transparent;
+  width: 100%;
+  background: var(--bg-tertiary);
   border: none;
+  border-bottom: 1px solid var(--border-color);
   cursor: pointer;
   text-align: left;
+  color: var(--text-primary);
+}
+
+.tasks-column-header:hover {
+  background: var(--bg-primary);
+}
+
+.tasks-column-header:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 .tasks-column-title {
@@ -6769,6 +6788,7 @@ header h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-primary);
 }
 
 .tasks-column-count {
