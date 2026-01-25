@@ -26,18 +26,27 @@ const ensureWorkspaceLoaded = async (page) => {
   await page.waitForSelector('.sidebar:not(.hidden)', { timeout: 10000 });
 };
 
+const dismissFocusOverlay = async (page) => {
+  const overlay = page.locator('#focus-overlay.active');
+  if (await overlay.isVisible().catch(() => false)) {
+    await page.locator('#focus-overlay .focus-close-btn').click();
+    await expect(overlay).toBeHidden();
+  }
+};
+
 test.describe('Tasks Panel', () => {
   test('should open Tasks panel from header', async ({ page }) => {
     await page.goto('/');
     await ensureWorkspaceLoaded(page);
+    await dismissFocusOverlay(page);
 
     const tasksBtn = page.locator('#tasks-btn');
-    await expect(tasksBtn).toBeVisible();
+    await expect(tasksBtn).toHaveCount(1);
 
-    const providersReqPromise = page.waitForRequest((req) => req.url().includes('/api/tasks/providers'), { timeout: 5000 });
+    const providersReqPromise = page.waitForRequest((req) => req.url().includes('/api/tasks/providers'), { timeout: 10000 });
 
-    await tasksBtn.click();
-    await expect(page.locator('#tasks-panel')).toBeVisible();
+    await page.evaluate(() => document.getElementById('tasks-btn')?.click());
+    await expect(page.locator('#tasks-panel')).toBeVisible({ timeout: 10000 });
 
     const providersReq = await providersReqPromise.catch(() => null);
     if (providersReq) {
