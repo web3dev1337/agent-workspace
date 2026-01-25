@@ -17,9 +17,8 @@ If you ever lose context mid-run, do **not** improvise. Resume from these files:
 - `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md` (tier + queue model)
 - `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md` (current open items: tiers, risk, prompts, review inbox)
 
-Current open PRs (must keep updated in the rolling log):
-- Tasks/Trello parity: PR #180
-- Project risk + conflict detection: PR #181
+Current open PRs (keep updated in the rolling log):
+- None (check with `gh pr list --state open`)
 
 ## 🚨 STOP! DO THIS FIRST BEFORE ANYTHING ELSE! 🚨
 

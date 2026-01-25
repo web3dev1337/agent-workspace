@@ -3,9 +3,15 @@ import ReviewableFileTree from './ReviewableFileTree';
 import SmartDiffView from './SmartDiffView';
 import EnhancedDiffView from './EnhancedDiffView';
 import RichDiffView from './RichDiffView';
+import MarkdownSideBySide from './MarkdownSideBySide';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import { useTheme } from '../context/theme';
 import './SmartDiffViewer.css';
+
+const isMarkdownFile = (path) => {
+  const lower = String(path || '').toLowerCase();
+  return lower.endsWith('.md') || lower.endsWith('.markdown');
+};
 
 const SmartDiffViewer = ({ data }) => {
   const { theme, setTheme } = useTheme();
@@ -19,7 +25,8 @@ const SmartDiffViewer = ({ data }) => {
     richDiff: true,
     semanticView: false,
     autoAdvance: false,
-    scrollWheelAdvance: true
+    scrollWheelAdvance: true,
+    markdownRender: false
   });
 
   const { metadata, diff, type } = data;
@@ -274,7 +281,12 @@ const SmartDiffViewer = ({ data }) => {
                     />
                   ) : (
                     <div style={{ backgroundColor: 'var(--bg-primary)' }}>
-                      {selectedFile.patch ? (
+                      {expandedSections.markdownRender && isMarkdownFile(selectedFile.path || selectedFile.filename) ? (
+                        <MarkdownSideBySide
+                          oldText={selectedFile.oldContent || ''}
+                          newText={selectedFile.newContent || ''}
+                        />
+                      ) : selectedFile.patch ? (
                         <div style={{ padding: '20px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '13px', color: 'var(--text-primary)' }}>
                           {selectedFile.patch.split('\n').map((line, idx) => {
                             let style = { margin: 0, padding: '2px 5px', whiteSpace: 'pre' };
@@ -324,6 +336,17 @@ const SmartDiffViewer = ({ data }) => {
 
       {/* Quick settings panel */}
       <div className="viewer-settings">
+        {selectedFile && isMarkdownFile(selectedFile.path || selectedFile.filename) && (
+          <label>
+            <input
+              data-testid="toggle-markdown-render"
+              type="checkbox"
+              checked={expandedSections.markdownRender}
+              onChange={() => toggleSection('markdownRender')}
+            />
+            Render Markdown
+          </label>
+        )}
         <label>
           <input
             type="checkbox"
