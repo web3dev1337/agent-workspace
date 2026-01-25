@@ -14,7 +14,7 @@ Make the **Tier 1–4 workflow visible and usable** in the day-to-day orchestrat
   3) session record (`session:<sessionId>`)
 
 ## UX
-- Sidebar filter row adds: `All Q1 Q2 Q3 Q4 None`
+- Sidebar filter row adds: `All T1 T2 T3 T4 None`
 - Sidebar worktree rows show `Q{tier}` badge when tier exists
 - Tier filtering affects:
   - sidebar list visibility
