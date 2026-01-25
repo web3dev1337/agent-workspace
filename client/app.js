@@ -1063,7 +1063,29 @@ class ClaudeOrchestrator {
 
 	    // Ensure the view buttons reflect the current view mode (radio behavior).
 	    this.updateViewModeButtons();
+
+	    // Keyboard: Alt+↑ / Alt+↓ to change tier for the last interacted terminal.
+	    this.setupTierHotkeys();
 	  }
+
+  setupTierHotkeys() {
+    if (this._tierHotkeysBound) return;
+    this._tierHotkeysBound = true;
+
+    document.addEventListener('keydown', (e) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+
+      const sessionId = this.focusedTerminalInfo?.sessionId || this.lastInteractedSessionId;
+      if (!sessionId) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const delta = e.key === 'ArrowUp' ? 1 : -1;
+      this.cycleTierForSession(sessionId, delta);
+    });
+  }
 	  
 	  setViewMode(mode) {
 	    const normalized = String(mode || '').toLowerCase();
@@ -2105,13 +2127,29 @@ class ClaudeOrchestrator {
       this.refreshTier1Busy();
       this.buildSidebar();
       this.updateTerminalGrid();
-      this.showToast('Saved', 'success');
+      this.showToast(nextTier ? `Tier set to Q${nextTier}` : 'Tier cleared', 'success');
     } catch (e) {
       this.showToast(String(e?.message || e), 'error');
       // Re-render to ensure the selector reflects stored data.
       this.buildSidebar();
       this.updateTerminalGrid();
     }
+  }
+
+  cycleTierForSession(sessionId, delta) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+    const direction = Number(delta) || 0;
+    if (direction === 0) return;
+
+    const tierSequence = [null, 1, 2, 3, 4];
+    const currentTier = this.getTierForSession(sid);
+    const currentIndex = tierSequence.findIndex((t) => t === (currentTier ?? null));
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (safeIndex + direction + tierSequence.length) % tierSequence.length;
+    const nextTier = tierSequence[nextIndex];
+
+    this.setTierForSession(sid, nextTier ? String(nextTier) : '');
   }
 
   async setWorktreeReadyForReview(worktreePath, ready) {
@@ -2624,6 +2662,9 @@ class ClaudeOrchestrator {
     const wrapper = document.createElement('div');
     wrapper.className = 'terminal-wrapper';
     wrapper.id = `wrapper-${sessionId}`;
+    wrapper.addEventListener('mousedown', () => {
+      this.lastInteractedSessionId = sessionId;
+    });
     
     const isClaudeSession = session.type === 'claude';
     const isServerSession = session.type === 'server';
