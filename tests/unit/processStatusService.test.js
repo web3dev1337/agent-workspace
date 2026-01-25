@@ -1,5 +1,6 @@
 const {
   computeQueueCounts,
+  computeLaunchAllowedByTier,
   computeWipFromSessions,
   computeWipFromWorkspaces
 } = require('../../server/processStatusService');
@@ -49,5 +50,16 @@ describe('ProcessStatusService helpers', () => {
     const wip = computeWipFromWorkspaces({ workspaceManager, lookbackHours: 24 });
     expect(wip).toEqual({ wip: 2, kind: 'workspaces' });
   });
-});
 
+  test('computeLaunchAllowedByTier enforces q caps per tier group', () => {
+    const caps = { wipMax: 3, q12: 3, q3: 2, q4: 1 };
+    const allowed = computeLaunchAllowedByTier({
+      wip: 2,
+      qByTier: { 1: 1, 2: 3, 3: 3, 4: 1, none: 0 },
+      q12: 4,
+      caps
+    });
+
+    expect(allowed).toEqual({ 1: false, 2: false, 3: false, 4: true });
+  });
+});

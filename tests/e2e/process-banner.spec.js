@@ -30,7 +30,8 @@ test.describe('Process banner', () => {
           qTotal: 3,
           qCaps: { q12: 3, q3: 6, q4: 10 },
           level: 'ok',
-          reasons: []
+          reasons: [],
+          launchAllowedByTier: { 1: true, 2: true, 3: true, 4: true }
         })
       });
     });
