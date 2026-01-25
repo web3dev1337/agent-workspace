@@ -671,3 +671,9 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - New worktree sessions created from Quick Work are immediately tagged with that tier for the new `*-claude` session(s) (persisted to task records).
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/quick-work-start-tier.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/215 (merged 2026-01-25)
+
+### Tasks: Wrap+Expand uses horizontal-only expansion (merged)
+- `Wrap+Expand` in Tasks → Board view now expands a list into multiple card-columns (horizontal scroll only; no vertical scrolling inside lists).
+- Handles window resize and collapsed/expanded columns.
+- Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/tasks-kanban-wrap-expand-layout.spec.js`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/217 (merged 2026-01-25)
