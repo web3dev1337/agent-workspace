@@ -124,6 +124,20 @@ const computeLevel = ({ wip, q12, q3, q4, caps }) => {
   return { level, reasons };
 };
 
+const computeLaunchAllowedByTier = ({ wip, qByTier, q12, caps }) => {
+  const wipOk = wip <= (caps?.wipMax ?? DEFAULT_WIP_MAX);
+  const q12Ok = q12 <= (caps?.q12 ?? DEFAULT_Q12_CAP);
+  const q3Ok = Number(qByTier?.[3] ?? 0) <= (caps?.q3 ?? DEFAULT_Q3_CAP);
+  const q4Ok = Number(qByTier?.[4] ?? 0) <= (caps?.q4 ?? DEFAULT_Q4_CAP);
+
+  return {
+    1: wipOk && q12Ok,
+    2: wipOk && q12Ok,
+    3: wipOk && q3Ok,
+    4: wipOk && q4Ok
+  };
+};
+
 class ProcessStatusService {
   constructor({ processTaskService, taskRecordService, sessionManager, workspaceManager } = {}) {
     this.processTaskService = processTaskService;
@@ -179,7 +193,13 @@ class ProcessStatusService {
         qTotal: queue.qTotal,
         qCaps: { q12: caps.q12, q3: caps.q3, q4: caps.q4 },
         level: level.level,
-        reasons: level.reasons
+        reasons: level.reasons,
+        launchAllowedByTier: computeLaunchAllowedByTier({
+          wip: wip.wip,
+          qByTier,
+          q12: queue.q12,
+          caps
+        })
       };
     }, { force });
   }
@@ -189,6 +209,6 @@ module.exports = {
   ProcessStatusService,
   computeQueueCounts,
   computeWipFromSessions,
-  computeWipFromWorkspaces
+  computeWipFromWorkspaces,
+  computeLaunchAllowedByTier
 };
-
