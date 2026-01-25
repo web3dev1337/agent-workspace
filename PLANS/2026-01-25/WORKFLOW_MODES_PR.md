@@ -36,7 +36,7 @@ These are required so the UI becomes a workflow manager, not just a grid of term
 
 ## Review workflow (Queue)
 - Queue adds review controls:
-  - Tier scope: `All | Q1 | Q2 | Q3 | Q4 | None`
+  - Tier scope: `All | T1 | T2 | T3 | T4 | None`
   - Toggles: `Unreviewed`, `Auto Diff`, `Start Review`
 - Review state persists on the task record:
   - `reviewedAt`, `reviewOutcome`

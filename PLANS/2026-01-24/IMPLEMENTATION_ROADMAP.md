@@ -19,8 +19,8 @@ Principle: ship in small PRs; each PR is measurable and reversible.
 - Compute:
   - `WIP`: active projects (configurable lookback window, default 24h)
   - Tiered queue depth (segregated by tier):
-    - `Q1/Q2/Q3/Q4` + `Q12 = Q1+Q2`
-    - `Q_total = Q1+Q2+Q3+Q4` (informational; avoid using this as a single gating signal)
+    - `T1/T2/T3/T4` + `T1+T2` (interactive tiers combined)
+    - `Q_total = T1+T2+T3+T4` (informational; avoid using this as a single gating signal)
   - Four-queues snapshot (for “why am I overloaded?” diagnosis):
     - `B(t)` backlog count (tagged tasks not started)
     - `W(t)` in-flight count (active agent sessions)
@@ -60,9 +60,9 @@ Goal: recommend *safe parallelism* (lower rework/conflicts, lower switching cost
 ### PR 1.2 — Launch gating (soft-block → hard-block)
 - Soft-block: banner + confirmation.
 - Hard-block option in settings:
-  - block Tier 1/2 launches if `Q12 > 3`
-  - block Tier 3 launches if `Q3` exceeds its cap
-  - block Tier 4 launches if `Q4` exceeds its cap
+  - block Tier 1/2 launches if `T1+T2 > 3`
+  - block Tier 3 launches if `T3` exceeds its cap
+  - block Tier 4 launches if `T4` exceeds its cap
 - Gate applies to:
   - “Start Agent”
   - “Add worktree sessions”
