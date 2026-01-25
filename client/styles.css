@@ -6712,6 +6712,43 @@ header h1 {
   accent-color: var(--accent-primary);
 }
 
+.tasks-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+}
+
+.tasks-radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tasks-radio-option input {
+  margin: 0;
+  accent-color: var(--accent-primary);
+}
+
+.tasks-radio-option:has(input:checked) {
+  background: rgba(31, 111, 235, 0.15);
+  color: var(--text-primary);
+}
+
+.tasks-radio-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 .tasks-select {
   background: var(--bg-secondary);
   color: var(--text-primary);

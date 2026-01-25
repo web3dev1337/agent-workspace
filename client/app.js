@@ -6012,18 +6012,18 @@ class ClaudeOrchestrator {
           <select id="tasks-board" class="tasks-select" title="Board"></select>
           <select id="tasks-list" class="tasks-select" title="List"></select>
           <input type="text" id="tasks-search" class="search-input tasks-search" placeholder="Search cards...">
-          <select id="tasks-updated" class="tasks-select" title="Updated window">
-            <option value="any">Any time</option>
-            <option value="1h">Last 1h</option>
-            <option value="24h">Last 24h</option>
-            <option value="7d">Last 7d</option>
-            <option value="30d">Last 30d</option>
-          </select>
-          <select id="tasks-sort" class="tasks-select" title="Sort">
-            <option value="pos">Sort: Trello order</option>
-            <option value="activity">Sort: recent activity</option>
-            <option value="name">Sort: name</option>
-          </select>
+          <div class="tasks-radio" role="radiogroup" aria-label="Updated window" id="tasks-updated">
+            <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="any">Any</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="1h">1h</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="24h">24h</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="7d">7d</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-updated" value="30d">30d</label>
+          </div>
+          <div class="tasks-radio" role="radiogroup" aria-label="Sort order" id="tasks-sort">
+            <label class="tasks-radio-option"><input type="radio" name="tasks-sort" value="pos">Order</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-sort" value="activity">Recent</label>
+            <label class="tasks-radio-option"><input type="radio" name="tasks-sort" value="name">Name</label>
+          </div>
           <label class="tasks-toggle" title="Hide empty columns (board view)">
             <input type="checkbox" id="tasks-hide-empty">
             <span>Hide empty</span>
@@ -6689,8 +6689,14 @@ class ClaudeOrchestrator {
       }
     };
 
-    if (updatedEl) updatedEl.value = state.updatedWindow;
-    if (sortEl) sortEl.value = state.sort;
+    if (updatedEl) {
+      const radio = updatedEl.querySelector(`input[name="tasks-updated"][value="${CSS.escape(state.updatedWindow)}"]`);
+      if (radio) radio.checked = true;
+    }
+    if (sortEl) {
+      const radio = sortEl.querySelector(`input[name="tasks-sort"][value="${CSS.escape(state.sort)}"]`);
+      if (radio) radio.checked = true;
+    }
     if (hideEmptyEl) hideEmptyEl.checked = !!state.hideEmptyColumns;
     applyView();
 
@@ -6742,16 +6748,18 @@ class ClaudeOrchestrator {
     }
 
     if (updatedEl) {
-      updatedEl.addEventListener('change', () => {
-        state.updatedWindow = updatedEl.value || 'any';
+      updatedEl.addEventListener('change', (e) => {
+        const value = e?.target?.value;
+        state.updatedWindow = value || 'any';
         localStorage.setItem('tasks-updated-window', state.updatedWindow);
         refreshAll({ force: false });
       });
     }
 
     if (sortEl) {
-      sortEl.addEventListener('change', () => {
-        state.sort = sortEl.value || 'pos';
+      sortEl.addEventListener('change', (e) => {
+        const value = e?.target?.value;
+        state.sort = value || 'pos';
         localStorage.setItem('tasks-sort', state.sort);
         refreshAll({ force: false });
       });
