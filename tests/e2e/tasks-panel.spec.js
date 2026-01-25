@@ -40,6 +40,10 @@ test.describe('Tasks Panel', () => {
     // Default filter should not hide older cards.
     await expect(page.locator('#tasks-updated')).toHaveValue('any');
 
+    // View toggle exists (List/Board)
+    await expect(page.locator('#tasks-view-list')).toBeVisible();
+    await expect(page.locator('#tasks-view-board')).toBeVisible();
+
     // If Trello isn't configured, show a hint (most CI/test environments).
     const hint = page.locator('#tasks-panel .tasks-config-hint');
     const boardSelect = page.locator('#tasks-board');

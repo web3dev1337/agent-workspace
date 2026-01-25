@@ -6642,6 +6642,17 @@ header h1 {
   flex-direction: column;
 }
 
+.tasks-view-toggle {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.tasks-view-btn.active {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15);
+}
+
 .tasks-toolbar {
   padding: var(--space-sm) var(--space-lg);
   border-bottom: 1px solid var(--border-color);
@@ -6674,6 +6685,10 @@ header h1 {
   grid-template-columns: 420px 1fr;
 }
 
+.tasks-body.tasks-body-board {
+  grid-template-columns: 1fr 420px;
+}
+
 .tasks-cards {
   overflow-y: auto;
   padding: var(--space-md);
@@ -6682,6 +6697,79 @@ header h1 {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+}
+
+.tasks-body.tasks-body-board .tasks-cards {
+  border-right: none;
+  border-left: 1px solid var(--border-color);
+  overflow: hidden;
+  padding: var(--space-sm);
+  background: var(--bg-primary);
+}
+
+.tasks-board {
+  height: 100%;
+  display: flex;
+  gap: var(--space-md);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: var(--space-sm);
+}
+
+.tasks-column {
+  width: 320px;
+  min-width: 320px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+}
+
+.tasks-column.hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15);
+}
+
+.tasks-column-header {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.tasks-column-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-column-count {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.tasks-column-cards {
+  overflow-y: auto;
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.task-card-board {
+  cursor: grab;
+}
+
+.task-card-board.dragging {
+  opacity: 0.6;
+  cursor: grabbing;
 }
 
 .task-card-row {
