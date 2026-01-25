@@ -12,7 +12,7 @@ Scope (this PR):
   - show custom fields (already)
   - **edit card custom fields** (text/number/checkbox/date/list)
 
-Non-goals (later PRs):
+Follow-up items (next PRs):
 - Attachments, cover images, checklists full CRUD (beyond Dependencies convention)
 - List creation/reorder, card creation, full drag reorder within list
 - Multi-board aggregation views
@@ -37,7 +37,7 @@ Card detail panel:
 - Labels editor:
   - show selected labels
   - click to toggle labels
-  - optional search
+  - search
 - Custom fields editor:
   - render inputs by type
   - optimistic save with error toast
