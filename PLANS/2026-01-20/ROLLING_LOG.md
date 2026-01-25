@@ -577,6 +577,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/review-workflow.spec.js`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/191 (merged 2026-01-25)
 
-### Docs: remove “optional” language everywhere (in progress)
+### Docs: remove “optional” language everywhere (PR)
 - Removes “optional/optionally” wording in docs/plans so the backlog reads as mandatory items.
 - Updates older docs where they described steps/variables as optional.
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/192
