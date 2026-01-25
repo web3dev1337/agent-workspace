@@ -193,4 +193,4 @@ Status:
 - Several items depend on “real” filesystem structure under `~/GitHub`. Where automated tests can’t rely on your local tree, we’ll:
   - add lightweight fixture folders under `tests/fixtures/` (if feasible), or
   - make the grouping logic testable as pure functions.
-- “Detecting Z.ai within Claude” is a stretch goal; we’ll treat it as best-effort.
+- “Detecting Z.ai within Claude” is harder than Claude/Codex/OpenCode detection; it remains required but is scheduled after the core agent-type detection work.

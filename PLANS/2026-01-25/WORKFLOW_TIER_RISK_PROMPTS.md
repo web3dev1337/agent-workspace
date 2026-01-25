@@ -80,7 +80,7 @@ Trello comments are not a durable source of truth for large prompts.
 We will support **prompt artifacts**:
 - Local/private (default): `~/.orchestrator/prompts/<taskId>.md`
 - Shared (team): committed prompt file in repo (or a shared “worklog” repo)
-- Encrypted shared (optional): commit encrypted (sops/age/git-crypt)
+- Encrypted shared: commit encrypted (sops/age/git-crypt)
 
 If a Trello card exists:
 - post a short Trello comment pointing to the artifact (PR/commit + path), not the full prompt
@@ -91,7 +91,7 @@ Shipped:
 - Prompt artifacts API (local/private):
   - `GET /api/prompts`, `GET|PUT|DELETE /api/prompts/:id`
   - default storage: `~/.orchestrator/prompts/<id>.md`
-- Optional Trello embed endpoint (pointer/snippet/full/chunks)
+- Trello embed endpoint (pointer/snippet/full/chunks)
 
 Still needed:
 - “promote private → shared/encrypted” workflow + UI
@@ -102,7 +102,7 @@ Still needed:
 
 ### ✅ Shipped (merged to `main`)
 
-Adds project-level base impact risk metadata with optional local overrides, and exposes it via:
+Adds project-level base impact risk metadata with local override support, and exposes it via:
 - `GET /api/worktree-metadata?path=...` (includes `project.baseImpactRisk`)
 - `POST /api/worktree-metadata/batch`
 - `POST /api/worktree-conflicts` (minimal conflict signals)
@@ -130,7 +130,7 @@ Instead we provide a cheap, bounded signal for parallel work in the same project
 
 Endpoint: `POST /api/worktree-conflicts`
 
-### ❌ Missing (future, optional)
+### ❌ Missing (future work)
 
 If we later want ticket↔ticket “conflict probability”, it should be a heuristic layer on top of:
 - file overlap in PR diffs

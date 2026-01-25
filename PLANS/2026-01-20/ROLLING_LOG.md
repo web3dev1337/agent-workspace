@@ -23,7 +23,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### Project risk metadata + conflict detection (merged)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/181
 - Adds:
-  - project/base impact risk (`low|medium|high|critical`) via cascaded `.orchestrator-config.json` + optional `~/.orchestrator/project-metadata.json`
+  - project/base impact risk (`low|medium|high|critical`) via cascaded `.orchestrator-config.json` + local override support via `~/.orchestrator/project-metadata.json`
   - worktree metadata enriched with `project.baseImpactRisk`
   - `POST /api/worktree-conflicts` minimal conflict signals (file overlap / parallel PRs / parallel dirty)
   - Quick Work menu displays risk indicator
@@ -35,7 +35,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 ### Process: task records API (tier/risk/pFail/promptRef) (merged)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/183
 
-### Prompts: prompt artifacts API + optional Trello embed (merged)
+### Prompts: prompt artifacts API + Trello embed (merged)
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/184
 
 ### Queue: Review Inbox (tiers + risk + prompt refs) (merged)
@@ -487,7 +487,7 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 
 ### Diff viewer: review UX (header sizing + scroll navigation) (done)
 - Fixes a flex/CSS issue where the per-file header could take most of the right panel.
-- Adds a single scroll container plus an optional “Wheel advances files” mode so you can scroll through diffs file-by-file without constant clicking.
+- Adds a single scroll container plus a “Wheel advances files” mode so you can scroll through diffs file-by-file without constant clicking.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe`, `npm --prefix diff-viewer/client run build`
 - PR: https://github.com/web3dev1337/claude-orchestrator/pull/152
 

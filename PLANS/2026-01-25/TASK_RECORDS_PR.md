@@ -6,7 +6,7 @@ Goal: add an orchestrator-native store for workflow metadata that **does not req
 
 This enables:
 - tier tagging (T1–T4) for PRs/worktrees/sessions
-- storing `changeRisk`, `baseImpactRisk` (optional), and `pFailFirstPass`
+- storing `changeRisk`, `baseImpactRisk` (when available), and `pFailFirstPass`
 - storing `verifyMinutes` (review cost)
 - storing `promptRef` + `promptVisibility` pointer (private/shared/encrypted)
 
@@ -36,16 +36,15 @@ Keying:
 
 - `tier`: `1..4`
 - `changeRisk`: `low|medium|high|critical`
-- `baseImpactRisk`: `low|medium|high|critical` (optional; project-level risk handled elsewhere)
+- `baseImpactRisk`: `low|medium|high|critical` (when present; project-level risk is handled elsewhere)
 - `pFailFirstPass`: `0..1`
 - `verifyMinutes`: integer minutes
 - `promptRef`: string pointer to prompt artifact
 - `promptVisibility`: `private|shared|encrypted`
-- `title`: optional label
-- `linked`: optional arbitrary JSON for ticket/PR references
-- `notes`: optional freeform notes
+- `title`: label (may be omitted)
+- `linked`: arbitrary JSON for ticket/PR references (may be omitted)
+- `notes`: freeform notes (may be omitted)
 
 ## Tests
 
 - Unit: `tests/unit/taskRecordService.test.js`
-

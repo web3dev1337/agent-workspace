@@ -1,8 +1,8 @@
-# PR Plan: Prompt Artifacts (Private by Default, Optional Trello Embed)
+# PR Plan: Prompt Artifacts (Private by Default, Trello Embed)
 
 Branch: `feat/prompt-artifacts`
 
-Goal: store and reuse **massive prompts** for tiered work (especially Tier 4 greenfield), without requiring a Trello card, while still allowing optional sharing via Trello comments when desired.
+Goal: store and reuse **massive prompts** for tiered work (especially Tier 4 greenfield), without requiring a Trello card, while still supporting Trello comment embedding when a card exists.
 
 ## Decisions
 
@@ -20,11 +20,10 @@ Goal: store and reuse **massive prompts** for tiered work (especially Tier 4 gre
 - `PUT /api/prompts/:id` body `{ text }` (write prompt)
 - `DELETE /api/prompts/:id` (delete)
 
-Optional:
+Also included:
 - `POST /api/prompts/:id/embed` body:
   - `{ provider: "trello", cardId: "...", mode: "chunks", maxCharsPerComment: 8000 }`
 
 ## Notes
 
 - This is “local/private by default”. Sharing beyond Trello embeds (e.g. committed shared repo, encrypted prompts) is a follow-up PR.
-
