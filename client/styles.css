@@ -6650,6 +6650,13 @@ header h1 {
    Tasks Panel Styles
    ============================================ */
 
+.queue-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 0 10px 0;
+}
+
 .tasks-modal .tasks-content {
   /* Tasks is a primary workflow: prefer a robust, full-viewport panel. */
   max-width: none;
