@@ -34,11 +34,26 @@ test.describe('Tasks Panel', () => {
     const tasksBtn = page.locator('#tasks-btn');
     await expect(tasksBtn).toBeVisible();
 
+    const providersReqPromise = page.waitForRequest((req) => req.url().includes('/api/tasks/providers'), { timeout: 5000 });
+
     await tasksBtn.click();
     await expect(page.locator('#tasks-panel')).toBeVisible();
 
+    const providersReq = await providersReqPromise.catch(() => null);
+    if (providersReq) {
+      const origin = new URL(page.url()).origin;
+      expect(providersReq.url().startsWith(`${origin}/api/tasks/providers`)).toBeTruthy();
+    }
+
     // Default filter should not hide older cards.
-    await expect(page.locator('#tasks-updated')).toHaveValue('any');
+    await expect(page.locator('#tasks-updated input[name=\"tasks-updated\"][value=\"any\"]')).toBeChecked();
+
+    // View toggle exists (List/Board)
+    await expect(page.locator('#tasks-view-list')).toBeVisible();
+    await expect(page.locator('#tasks-view-board')).toBeVisible();
+    await expect(page.locator('#tasks-sort')).toBeVisible();
+    await expect(page.locator('#tasks-sort input[name=\"tasks-sort\"][value=\"pos\"]')).toBeChecked();
+    await expect(page.locator('#tasks-hide-empty')).toBeVisible();
 
     // If Trello isn't configured, show a hint (most CI/test environments).
     const hint = page.locator('#tasks-panel .tasks-config-hint');

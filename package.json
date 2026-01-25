@@ -17,6 +17,7 @@
     "test:unit": "jest",
     "test:e2e": "playwright test",
     "test:e2e:safe": "ORCHESTRATOR_TEST_PORT=4001 playwright test",
+    "test:e2e:proxy": "ORCHESTRATOR_TEST_PORT=4001 CLIENT_TEST_PORT=4100 playwright test --config playwright.proxy.config.js",
     "test:e2e:headed": "playwright test --headed",
     "test:coverage": "jest --coverage"
   },

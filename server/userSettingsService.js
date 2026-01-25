@@ -45,6 +45,7 @@ class UserSettingsService {
           // Add other global terminal settings here in the future
         },
         ui: {
+          theme: 'dark',
           diffViewer: {
             theme: 'dark'
           }
@@ -210,6 +211,9 @@ class UserSettingsService {
           ...(merged.global.ui || {}),
           ...(userSettings.global.ui || {})
         };
+        if (typeof userSettings.global.ui.theme === 'string') {
+          merged.global.ui.theme = userSettings.global.ui.theme;
+        }
         if (userSettings.global.ui.diffViewer) {
           merged.global.ui.diffViewer = {
             ...(merged.global.ui.diffViewer || {}),

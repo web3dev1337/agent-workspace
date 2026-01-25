@@ -2189,6 +2189,40 @@ app.get('/api/tasks/boards/:boardId/lists', async (req, res) => {
   }
 });
 
+app.get('/api/tasks/boards/:boardId/members', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.listBoardMembers !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support board members', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const members = await provider.listBoardMembers({ boardId: req.params.boardId, refresh });
+    res.json({ provider: providerId, boardId: req.params.boardId, members });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to list task board members', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.get('/api/tasks/boards/:boardId/custom-fields', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.listBoardCustomFields !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support custom fields', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const customFields = await provider.listBoardCustomFields({ boardId: req.params.boardId, refresh });
+    res.json({ provider: providerId, boardId: req.params.boardId, customFields });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to list task board custom fields', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
 app.get('/api/tasks/boards/:boardId/cards', async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';
@@ -2204,6 +2238,25 @@ app.get('/api/tasks/boards/:boardId/cards', async (req, res) => {
   } catch (error) {
     const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
     logger.error('Failed to list task board cards', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.get('/api/tasks/boards/:boardId/snapshot', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const q = req.query.q || '';
+    const updatedSince = req.query.updatedSince || null;
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.getBoardSnapshot !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support board snapshot', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const snapshot = await provider.getBoardSnapshot({ boardId: req.params.boardId, refresh, q, updatedSince });
+    res.json({ provider: providerId, boardId: req.params.boardId, ...snapshot });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to fetch task board snapshot', { error: error.message, code: error.code, stack: error.stack });
     res.status(status).json({ error: error.message, code: error.code });
   }
 });
@@ -2238,6 +2291,103 @@ app.get('/api/tasks/cards/:cardId', async (req, res) => {
   }
 });
 
+app.get('/api/tasks/cards/:cardId/dependencies', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.getDependencies !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support dependencies', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const dependencies = await provider.getDependencies({ cardId: req.params.cardId, refresh });
+    res.json({ provider: providerId, cardId: req.params.cardId, dependencies });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to get task dependencies', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.post('/api/tasks/cards/:cardId/dependencies', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.addDependency !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support dependencies', code: 'UNSUPPORTED_OPERATION' });
+    }
+
+    const { url, shortLink, name } = req.body || {};
+    await provider.addDependency({ cardId: req.params.cardId, url, shortLink, name });
+    const card = typeof provider.getCard === 'function'
+      ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
+      : null;
+
+    res.json({ provider: providerId, cardId: req.params.cardId, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to add task dependency', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      details: error.body
+    });
+  }
+});
+
+app.delete('/api/tasks/cards/:cardId/dependencies/:itemId', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.removeDependency !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support dependencies', code: 'UNSUPPORTED_OPERATION' });
+    }
+
+    await provider.removeDependency({ cardId: req.params.cardId, itemId: req.params.itemId });
+    const card = typeof provider.getCard === 'function'
+      ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
+      : null;
+
+    res.json({ provider: providerId, cardId: req.params.cardId, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to remove task dependency', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      details: error.body
+    });
+  }
+});
+
+app.put('/api/tasks/cards/:cardId/dependencies/:itemId', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.setDependencyState !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support dependency updates', code: 'UNSUPPORTED_OPERATION' });
+    }
+
+    const state = req.body?.state;
+    await provider.setDependencyState({ cardId: req.params.cardId, itemId: req.params.itemId, state });
+    const card = typeof provider.getCard === 'function'
+      ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
+      : null;
+
+    res.json({ provider: providerId, cardId: req.params.cardId, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to update task dependency', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      details: error.body
+    });
+  }
+});
+
 app.post('/api/tasks/cards/:cardId/comments', express.json(), async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';
@@ -2260,7 +2410,12 @@ app.post('/api/tasks/cards/:cardId/comments', express.json(), async (req, res) =
   } catch (error) {
     const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
     logger.error('Failed to add task comment', { error: error.message, code: error.code, stack: error.stack });
-    res.status(status).json({ error: error.message, code: error.code });
+    res.status(status).json({
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      details: error.body
+    });
   }
 });
 
@@ -2282,7 +2437,12 @@ app.put('/api/tasks/cards/:cardId', express.json(), async (req, res) => {
   } catch (error) {
     const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
     logger.error('Failed to update task card', { error: error.message, code: error.code, stack: error.stack });
-    res.status(status).json({ error: error.message, code: error.code });
+    res.status(status).json({
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      details: error.body
+    });
   }
 });
 
