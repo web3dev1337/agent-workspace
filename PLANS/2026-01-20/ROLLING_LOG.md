@@ -586,3 +586,8 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Adds `/api/process/status` with cached WIP + tiered queue counts.
 - Adds a click-to-open header pill that shows `WIP`, `Q1–Q4`.
 - Tests: `npm run test:unit`
+
+### Process: launch gating on overload (in progress)
+- Adds `launchAllowedByTier` to `/api/process/status`.
+- Before starting any agent, prompts if workload caps are exceeded (Tier 1–2 uses `Q12`, Tier 3 uses `Q3`, Tier 4 uses `Q4`).
+- Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/launch-gating.spec.js`

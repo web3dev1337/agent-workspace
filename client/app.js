@@ -1224,6 +1224,41 @@ class ClaudeOrchestrator {
     refresh();
   }
 
+  async ensureLaunchAllowedForSession(sessionId) {
+    const sessionTier = this.getTierForSession(sessionId);
+    const tier = sessionTier === null ? 2 : sessionTier;
+    if (!(tier >= 1 && tier <= 4)) return true;
+
+    try {
+      const res = await fetch(`${window.location.origin}/api/process/status?mode=mine`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const status = await res.json();
+      this.processStatus = status;
+      const allowedByTier = status?.launchAllowedByTier || {};
+      const isAllowed = allowedByTier[String(tier)] !== false && allowedByTier[tier] !== false;
+      if (isAllowed) return true;
+
+      const q = status?.qByTier || {};
+      const caps = status?.qCaps || {};
+      const reasons = Array.isArray(status?.reasons) ? status.reasons : [];
+      const msg = [
+        `Launch gate: current workload is high.`,
+        ``,
+        `WIP ${status?.wip ?? 0}/${status?.wipMax ?? ''}`,
+        `Q1 ${q[1] ?? 0}  Q2 ${q[2] ?? 0}  Q3 ${q[3] ?? 0}  Q4 ${q[4] ?? 0}`,
+        `Caps: Q12 ${caps.q12 ?? ''}  Q3 ${caps.q3 ?? ''}  Q4 ${caps.q4 ?? ''}`,
+        reasons.length ? `Reasons: ${reasons.join(', ')}` : '',
+        ``,
+        `Start Tier ${tier} anyway?`
+      ].filter(Boolean).join('\n');
+
+      return window.confirm(msg);
+    } catch (error) {
+      console.warn('Failed to check launch gate, allowing start', error);
+      return true;
+    }
+  }
+
   refreshTier1Busy({ suppressRerender } = {}) {
     const prev = this.tier1Busy;
     this.tier1Busy = this.computeTier1Busy();
@@ -4962,9 +4997,15 @@ class ClaudeOrchestrator {
     }
   }
   
-  startClaudeWithOptions(sessionId, mode, skipPermissions) {
+  async startClaudeWithOptions(sessionId, mode, skipPermissions) {
     if (!this.socket || !this.socket.connected) {
       this.showError('Not connected to server');
+      return;
+    }
+
+    const allowed = await this.ensureLaunchAllowedForSession(sessionId);
+    if (!allowed) {
+      this.showToast('Launch blocked by workload gate', 'warning');
       return;
     }
 
@@ -4983,9 +5024,15 @@ class ClaudeOrchestrator {
   /**
    * Start agent with configuration (agent-agnostic)
    */
-  startAgentWithConfig(sessionId, config) {
+  async startAgentWithConfig(sessionId, config) {
     if (!this.socket || !this.socket.connected) {
       this.showError('Not connected to server');
+      return;
+    }
+
+    const allowed = await this.ensureLaunchAllowedForSession(sessionId);
+    if (!allowed) {
+      this.showToast('Launch blocked by workload gate', 'warning');
       return;
     }
 
