@@ -569,4 +569,4 @@ Purpose: keep a terse but complete log of what changed, why, and where to resume
 - Adds Queue navigation buttons (Prev/Next) and orders unblocked items first.
 - Persists selection to `userSettings.global.ui.workflow.mode`.
 - Tests: `npm run test:unit`, `npm run test:e2e:safe -- tests/e2e/workflow-modes.spec.js`
-- PR: (pending) branch `many-changes`
+- PR: https://github.com/web3dev1337/claude-orchestrator/pull/189
