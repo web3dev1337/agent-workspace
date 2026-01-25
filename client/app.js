@@ -1208,7 +1208,7 @@ class ClaudeOrchestrator {
       }
 
       if (!status || typeof status !== 'object') {
-        banner.innerHTML = `<span class="process-chip level-warn">WIP —</span><span class="process-chip">Q1 —</span><span class="process-chip">Q2 —</span><span class="process-chip">Q3 —</span><span class="process-chip">Q4 —</span>`;
+        banner.innerHTML = `<span class="process-chip level-warn">WIP —</span><span class="process-chip">T1 —</span><span class="process-chip">T2 —</span><span class="process-chip">T3 —</span><span class="process-chip">T4 —</span>`;
         return;
       }
 
@@ -1216,10 +1216,10 @@ class ClaudeOrchestrator {
       const q = status.qByTier || {};
       banner.innerHTML = `
         <span class="process-chip level-${level}">WIP ${Number(status.wip ?? 0)}</span>
-        <span class="process-chip">Q1 ${Number(q[1] ?? 0)}</span>
-        <span class="process-chip">Q2 ${Number(q[2] ?? 0)}</span>
-        <span class="process-chip">Q3 ${Number(q[3] ?? 0)}</span>
-        <span class="process-chip">Q4 ${Number(q[4] ?? 0)}</span>
+        <span class="process-chip">T1 ${Number(q[1] ?? 0)}</span>
+        <span class="process-chip">T2 ${Number(q[2] ?? 0)}</span>
+        <span class="process-chip">T3 ${Number(q[3] ?? 0)}</span>
+        <span class="process-chip">T4 ${Number(q[4] ?? 0)}</span>
       `;
     };
 
@@ -1267,8 +1267,8 @@ class ClaudeOrchestrator {
         `Launch gate: current workload is high.`,
         ``,
         `WIP ${status?.wip ?? 0}/${status?.wipMax ?? ''}`,
-        `Q1 ${q[1] ?? 0}  Q2 ${q[2] ?? 0}  Q3 ${q[3] ?? 0}  Q4 ${q[4] ?? 0}`,
-        `Caps: Q12 ${caps.q12 ?? ''}  Q3 ${caps.q3 ?? ''}  Q4 ${caps.q4 ?? ''}`,
+        `T1 ${q[1] ?? 0}  T2 ${q[2] ?? 0}  T3 ${q[3] ?? 0}  T4 ${q[4] ?? 0}`,
+        `Caps: T1+T2 ${caps.q12 ?? ''}  T3 ${caps.q3 ?? ''}  T4 ${caps.q4 ?? ''}`,
         reasons.length ? `Reasons: ${reasons.join(', ')}` : '',
         ``,
         `Start Tier ${tier} anyway?`
@@ -1766,10 +1766,10 @@ class ClaudeOrchestrator {
     return `
       <select class="tier-dropdown" data-session-id="${sessionId}" aria-label="Tier" title="Tier" onchange="window.orchestrator.setTierForSession('${sessionId}', this.value)">
         <option value="" ${tierValue === '' ? 'selected' : ''}>None</option>
-        <option value="1" ${tierValue === '1' ? 'selected' : ''}>Q1</option>
-        <option value="2" ${tierValue === '2' ? 'selected' : ''}>Q2</option>
-        <option value="3" ${tierValue === '3' ? 'selected' : ''}>Q3</option>
-        <option value="4" ${tierValue === '4' ? 'selected' : ''}>Q4</option>
+        <option value="1" ${tierValue === '1' ? 'selected' : ''}>T1</option>
+        <option value="2" ${tierValue === '2' ? 'selected' : ''}>T2</option>
+        <option value="3" ${tierValue === '3' ? 'selected' : ''}>T3</option>
+        <option value="4" ${tierValue === '4' ? 'selected' : ''}>T4</option>
       </select>
     `;
   }
@@ -2206,10 +2206,10 @@ class ClaudeOrchestrator {
 	      </div>
 	      <div class="filter-toggle-row filter-toggle-tier" role="group" aria-label="Tier filter">
 	        <button class="${this.tierFilter === 'all' ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('all')" title="Show all tiers">All</button>
-	        <button class="${this.tierFilter === 1 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('1')" title="Tier 1">Q1</button>
-	        <button class="${this.tierFilter === 2 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('2')" title="Tier 2">Q2</button>
-	        <button class="${this.tierFilter === 3 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('3')" title="Tier 3">Q3</button>
-	        <button class="${this.tierFilter === 4 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('4')" title="Tier 4">Q4</button>
+	        <button class="${this.tierFilter === 1 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('1')" title="Tier 1">T1</button>
+	        <button class="${this.tierFilter === 2 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('2')" title="Tier 2">T2</button>
+	        <button class="${this.tierFilter === 3 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('3')" title="Tier 3">T3</button>
+	        <button class="${this.tierFilter === 4 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('4')" title="Tier 4">T4</button>
 	        <button class="${this.tierFilter === 'none' ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('none')" title="No tier set">None</button>
 	      </div>
 	    `;
@@ -8383,10 +8383,10 @@ class ClaudeOrchestrator {
           </div>
           <div class="tasks-view-toggle" role="group" aria-label="Review tier">
             <button class="btn-secondary tasks-view-btn" id="queue-tier-all" data-tier="all" title="All tiers">All</button>
-            <button class="btn-secondary tasks-view-btn" id="queue-tier-1" data-tier="1" title="Tier 1">Q1</button>
-            <button class="btn-secondary tasks-view-btn" id="queue-tier-2" data-tier="2" title="Tier 2">Q2</button>
-            <button class="btn-secondary tasks-view-btn" id="queue-tier-3" data-tier="3" title="Tier 3">Q3</button>
-            <button class="btn-secondary tasks-view-btn" id="queue-tier-4" data-tier="4" title="Tier 4">Q4</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-1" data-tier="1" title="Tier 1">T1</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-2" data-tier="2" title="Tier 2">T2</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-3" data-tier="3" title="Tier 3">T3</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-4" data-tier="4" title="Tier 4">T4</button>
             <button class="btn-secondary tasks-view-btn" id="queue-tier-none" data-tier="none" title="No tier">None</button>
           </div>
           <div class="tasks-view-toggle" role="group" aria-label="Review filters">
@@ -8567,10 +8567,10 @@ class ClaudeOrchestrator {
       const counts = calcTierCounts(tasks);
       const header = `
         <div class="queue-summary">
-          <span class="pr-badge">Q1 ${counts[1]}</span>
-          <span class="pr-badge">Q2 ${counts[2]}</span>
-          <span class="pr-badge">Q3 ${counts[3]}</span>
-          <span class="pr-badge">Q4 ${counts[4]}</span>
+          <span class="pr-badge">T1 ${counts[1]}</span>
+          <span class="pr-badge">T2 ${counts[2]}</span>
+          <span class="pr-badge">T3 ${counts[3]}</span>
+          <span class="pr-badge">T4 ${counts[4]}</span>
           <span class="pr-badge">No tier ${counts.none}</span>
         </div>
       `;
