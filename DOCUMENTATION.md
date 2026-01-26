@@ -193,6 +193,7 @@ When Claude is waiting for input:
 Commander can drive the process layer via semantic commands (and voice uses the same command registry):
 - Workflow modes: `set-workflow-mode` (`focus|review|background`)
 - Focus behavior: `set-focus-tier2` (`auto|always`)
+- Focus behavior: `Swap T2` button auto-swaps to Tier 2 while Tier 1 is busy (persisted in `ui.workflow.focus.autoSwapToTier2WhenTier1Busy`)
 - Panels: `open-queue`, `open-tasks`, `open-advice`
 
 Voice examples (rule-based, no LLM required):

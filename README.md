@@ -16,6 +16,7 @@ A multi-workspace development environment for AI coding agent sessions (Claude C
 - **Workflow Modes**: Focus (T1–T2) / Review (all; opens Queue) / Background (T3–T4)
 - **Tier Tagging**: Per-agent tier selector (`None/T1–T4`) + tier filters
 - **Review Inbox (“📥 Queue”)**: Unified PR/worktree/session list with Next/Prev navigation
+- **Focus Helpers**: `T2 Auto/Always` + `Swap T2` auto-switch while Tier 1 is busy
 - **Risk Metadata**: Base project risk + per-task change risk + `pFailFirstPass` + `verifyMinutes`
 - **Prompt Artifacts**: Store massive prompts locally (private by default) with optional Trello embed
 - **Dependencies**:
