@@ -3,7 +3,7 @@
 Purpose: if context is lost, this is the **single file** that states what we decided, what is shipped, what is missing, and what to do next.
 
 Date: 2026-01-25
-Last updated: 2026-01-26
+Last updated: 2026-01-27
 
 ---
 
@@ -44,6 +44,11 @@ The implementation plan derived from it is:
 - Tasks: quick launch in “All enabled boards” view (UX): https://github.com/web3dev1337/claude-orchestrator/pull/242
 - Tasks: all-boards card detail launch uses card boardId (UX): https://github.com/web3dev1337/claude-orchestrator/pull/244
 - Tasks: show per-card board color dots (UX): https://github.com/web3dev1337/claude-orchestrator/pull/246
+- Status lights: stabilize worktree/agent busy/waiting detection: https://github.com/web3dev1337/claude-orchestrator/pull/248
+
+## Known UX issues / follow-ups
+
+- Tasks board view: selecting a card should open details without shifting the board vertically (layout glitch reported 2026-01-27).
 
 ---
 
