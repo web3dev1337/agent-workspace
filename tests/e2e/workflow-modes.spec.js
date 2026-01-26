@@ -51,7 +51,13 @@ test.describe('Workflow Modes', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ count: 0, records: [] })
+        body: JSON.stringify({
+          count: 2,
+          records: [
+            { id: 'session:demo-work1-claude', record: { tier: 1 } },
+            { id: 'session:demo-work2-claude', record: { tier: 3 } }
+          ]
+        })
       });
     });
 

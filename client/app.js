@@ -45,6 +45,9 @@ class ClaudeOrchestrator {
     this.dashboard = null;
     this.workspaceSwitcher = null;
     this.isDashboardMode = false;
+    this.autoCreateExtraWorktreesWhenBusy = true;
+    this.autoCreateWorktreeMinNumber = 9;
+    this.autoCreateWorktreeMaxNumber = 25;
 
     // Tab management for multiple workspaces
     this.tabManager = null;
@@ -175,6 +178,7 @@ class ClaudeOrchestrator {
       await this.loadUserSettings();
       this.syncWorkflowModeFromUserSettings();
       this.syncFocusBehaviorFromUserSettings();
+      this.syncWorktreeCreationFromUserSettings();
 
       // Load worktree tags (ready-for-review, etc.)
       await this.loadWorktreeTags();
@@ -422,6 +426,21 @@ class ClaudeOrchestrator {
 
           if (agentSessionId && pending.agentConfig) {
             this.startAgentWithConfig(agentSessionId, pending.agentConfig);
+          }
+
+          if (agentSessionId && pending.ticket && typeof pending.ticket === 'object') {
+            const ticketProvider = String(pending.ticket.provider || '').trim().toLowerCase();
+            const ticketCardId = String(pending.ticket.cardId || '').trim();
+            const ticketCardUrl = String(pending.ticket.cardUrl || '').trim();
+            if (ticketProvider && ticketCardId) {
+              this.upsertTaskRecord(`session:${agentSessionId}`, {
+                ticketProvider,
+                ticketCardId,
+                ticketCardUrl: ticketCardUrl || null
+              }).then((rec) => {
+                if (rec) this.taskRecords.set(`session:${agentSessionId}`, rec);
+              }).catch(() => {});
+            }
           }
 
           if (agentSessionId && pending.autoSendPrompt && String(pending.promptText || '').trim()) {
@@ -1205,6 +1224,100 @@ class ClaudeOrchestrator {
     this.updateWorkflowModeButtons();
   }
 
+  syncWorktreeCreationFromUserSettings() {
+    const cfg = this.userSettings?.global?.ui?.worktrees || {};
+    this.autoCreateExtraWorktreesWhenBusy = cfg.autoCreateExtraWhenBusy !== false;
+    const min = Number(cfg.autoCreateMinNumber);
+    const max = Number(cfg.autoCreateMaxNumber);
+    if (Number.isFinite(min) && min >= 1) this.autoCreateWorktreeMinNumber = Math.round(min);
+    if (Number.isFinite(max) && max >= this.autoCreateWorktreeMinNumber) this.autoCreateWorktreeMaxNumber = Math.round(max);
+  }
+
+  getNextWorktreeIdForRepo(repo, { minNumber } = {}) {
+    const min = Number.isFinite(Number(minNumber)) ? Number(minNumber) : this.autoCreateWorktreeMinNumber;
+    const entries = Array.isArray(repo?.worktreeDirs) ? repo.worktreeDirs : [];
+    let maxExisting = 0;
+    for (const e of entries) {
+      const id = String(e?.id || '');
+      const m = id.match(/^work(\d+)$/i);
+      if (!m) continue;
+      const n = Number(m[1]);
+      if (Number.isFinite(n)) maxExisting = Math.max(maxExisting, n);
+    }
+    const start = Math.max(min, maxExisting + 1);
+    return `work${start}`;
+  }
+
+  async autoCreateExtraWorktreeForRepo(repo, { startTier, worktreeId } = {}) {
+    if (!repo?.path || !repo?.name) return null;
+    if (!this.currentWorkspace?.id) return null;
+
+    const tier = Number(startTier);
+    const startTierSafe = (tier >= 1 && tier <= 4) ? tier : undefined;
+
+    const nextId = String(worktreeId || '').trim() || this.getNextWorktreeIdForRepo(repo);
+    const nextNumber = Number(nextId.replace(/^work/i, ''));
+    if (!Number.isFinite(nextNumber) || nextNumber > this.autoCreateWorktreeMaxNumber) {
+      this.showToast(`Auto-create limit reached (max work${this.autoCreateWorktreeMaxNumber})`, 'warning');
+      return null;
+    }
+
+    // Mixed-repo workspaces can add an arbitrary repo+worktree pair.
+    if (this.currentWorkspace.workspaceType === 'mixed-repo') {
+      // Avoid broadcasting `worktree-sessions-added` to all clients if we can't target this socket.
+      if (!this.socket?.id) return null;
+      const res = await fetch('/api/workspaces/add-mixed-worktree', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: this.currentWorkspace.id,
+          repositoryPath: repo.path,
+          repositoryType: repo.type,
+          repositoryName: repo.name,
+          worktreeId: nextId,
+          socketId: this.socket?.id || null,
+          startTier: startTierSafe
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to auto-create worktree');
+      return { id: nextId, path: `${repo.path}/${nextId}` };
+    }
+
+    // Single-repo workspace: only if the repo matches the current workspace repo.
+    const workspaceRepoPath = String(this.currentWorkspace.repository?.path || '').replace(/\/+$/, '');
+    const repoPath = String(repo.path || '').replace(/\/+$/, '');
+    if (workspaceRepoPath && repoPath && workspaceRepoPath === repoPath) {
+      const res = await fetch('/api/workspaces/create-worktree', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: this.currentWorkspace.id,
+          repositoryPath: repo.path,
+          worktreeNumber: nextNumber
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to auto-create worktree');
+
+      // Ensure we apply the tier when sessions arrive (handled by server emit when we add sessions).
+      setTimeout(() => {
+        this.socket?.emit?.('add-worktree-sessions', {
+          worktreeId: data.worktreeId,
+          worktreePath: data.path,
+          repositoryName: null,
+          repositoryType: this.currentWorkspace.repository?.type,
+          repositoryRoot: repo.path,
+          startTier: startTierSafe
+        });
+      }, 200);
+
+      return { id: data.worktreeId, path: data.path };
+    }
+
+    return null;
+  }
+
   setFocusHideTier2WhenTier1Busy(enabled) {
     const next = !!enabled;
     if (this.focusHideTier2WhenTier1Busy === next) return;
@@ -1295,11 +1408,31 @@ class ClaudeOrchestrator {
 
     const refresh = async () => {
       try {
+        const prev = this.processStatus;
         const res = await fetch(`${window.location.origin}/api/process/status?mode=mine`);
         if (!res.ok) throw new Error(`status ${res.status}`);
         const status = await res.json();
         this.processStatus = status;
         render(status);
+
+        // Notification modes (best-effort; toast-only by default).
+        try {
+          const cfg = this.userSettings?.global?.ui?.workflow?.notifications || {};
+          const mode = String(cfg.mode || 'quiet').toLowerCase();
+          const tier1Interrupts = cfg.tier1Interrupts !== false;
+          if (mode === 'aggressive' && tier1Interrupts) {
+            const prevT1 = Number(prev?.qByTier?.[1] ?? 0);
+            const nextT1 = Number(status?.qByTier?.[1] ?? 0);
+            const now = Date.now();
+            const last = Number(this.lastTier1InterruptToastAt || 0);
+            if (nextT1 > 0 && prevT1 === 0 && (now - last > 90_000)) {
+              this.lastTier1InterruptToastAt = now;
+              this.showToast?.(`Tier 1 queue: ${nextT1}`, 'warning');
+            }
+          }
+        } catch {
+          // ignore
+        }
       } catch (error) {
         console.warn('Failed to refresh process status', error);
         render(null);
@@ -6649,6 +6782,7 @@ class ClaudeOrchestrator {
     // proxies `/api` + `/socket.io` to the backend (using `ORCHESTRATOR_PORT`),
     // so hard-coding `:3000` breaks when running the orchestrator on other ports.
     const serverUrl = window.location.origin;
+    const ALL_BOARDS_ID = '__all_enabled__';
 
     const state = {
       provider: localStorage.getItem('tasks-provider') || 'trello',
@@ -6668,6 +6802,7 @@ class ClaudeOrchestrator {
       boardLabels: [],
 	      boards: [],
 	      boardCustomFields: [],
+	      boardMetaCache: new Map(), // boardId -> { lists, members, labels, customFields }
 	      selectedCardId: null,
 	      showDisabledBoards: localStorage.getItem('tasks-show-disabled-boards') === 'true'
 	    };
@@ -7028,6 +7163,232 @@ class ClaudeOrchestrator {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
 
+    const openPromptEditorForCard = async ({ promptId, provider, cardId } = {}) => {
+      const pid = String(promptId || '').trim();
+      if (!pid) return;
+      const targetProvider = String(provider || 'trello').trim() || 'trello';
+      const targetCardId = String(cardId || '').trim();
+      if (!targetCardId) throw new Error('cardId is required');
+
+      const existing = document.getElementById('prompt-editor');
+      if (existing) existing.remove();
+
+      const editor = document.createElement('div');
+      editor.id = 'prompt-editor';
+      editor.className = 'modal tasks-modal';
+      editor.classList.add(`tasks-theme-${resolvedTasksTheme}`);
+      editor.innerHTML = `
+        <div class="modal-content tasks-content">
+          <div class="modal-header">
+            <h2>📝 Prompt: ${escapeHtml(pid)}</h2>
+            <button class="close-btn tasks-close-btn" aria-label="Close" onclick="this.closest('.modal').remove()">×</button>
+          </div>
+          <div class="tasks-body" style="grid-template-columns: 1fr;">
+            <div class="tasks-detail" style="overflow:auto;">
+              <div class="tasks-inline-row" style="margin-bottom: 10px;">
+                <button class="btn-secondary" id="prompt-load">🔄 Load</button>
+                <button class="btn-secondary" id="prompt-save">💾 Save</button>
+                <span style="flex:1"></span>
+                <label class="tasks-detail-meta" style="display:flex; align-items:center; gap:8px;">
+                  store:
+                  <select id="prompt-store" class="tasks-select tasks-select-inline" style="width: 140px;">
+                    <option value="private" selected>private</option>
+                    <option value="shared">shared</option>
+                    <option value="encrypted">encrypted</option>
+                  </select>
+                </label>
+              </div>
+              <div class="tasks-inline-row" id="prompt-store-extra" style="margin-bottom: 10px; gap: 8px; flex-wrap: wrap;">
+                <input id="prompt-repo-root" class="tasks-input" style="min-width: 340px; flex: 1;" placeholder="Repo root (for shared/encrypted), e.g. /home/ab/GitHub/games/hytopia/zoo-game" />
+                <input id="prompt-rel-path" class="tasks-input" style="min-width: 260px; flex: 1;" placeholder="Repo-relative path (optional; default .orchestrator/prompts/<id>.md)" />
+                <label class="tasks-toggle" id="prompt-comment-pointer-wrap" style="display:none" title="Add a pointer comment back to this card">
+                  <input type="checkbox" id="prompt-comment-pointer" checked />
+                  <span>Comment pointer</span>
+                </label>
+                <button class="btn-secondary" id="prompt-promote" title="Copy private prompt into repo store (shared/encrypted)">⬆ Promote</button>
+                <span class="tasks-detail-meta" id="prompt-sha"></span>
+              </div>
+              <div class="tasks-detail-meta" id="prompt-meta" style="margin-bottom: 8px;"></div>
+              <textarea id="prompt-text" class="tasks-textarea" rows="24" placeholder="Write your prompt…"></textarea>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(editor);
+
+      const metaEl = editor.querySelector('#prompt-meta');
+      const shaEl = editor.querySelector('#prompt-sha');
+      const textEl = editor.querySelector('#prompt-text');
+      const storeEl = editor.querySelector('#prompt-store');
+      const extraEl = editor.querySelector('#prompt-store-extra');
+      const repoRootEl = editor.querySelector('#prompt-repo-root');
+      const relPathEl = editor.querySelector('#prompt-rel-path');
+      const commentWrapEl = editor.querySelector('#prompt-comment-pointer-wrap');
+      const commentEl = editor.querySelector('#prompt-comment-pointer');
+      const loadBtn = editor.querySelector('#prompt-load');
+      const promoteBtn = editor.querySelector('#prompt-promote');
+      const saveBtn = editor.querySelector('#prompt-save');
+
+      let dirty = false;
+      let loaded = { store: 'private', repoRoot: '', relPath: '' };
+
+      const setMeta = (m) => {
+        if (!metaEl) return;
+        metaEl.innerHTML = m ? String(m) : '';
+      };
+
+      const storeNeedsRepo = (store) => store === 'shared' || store === 'encrypted';
+
+      const updateStoreUI = ({ store, repoRoot, relPath } = {}) => {
+        const s = String(store || 'private').trim().toLowerCase();
+        if (storeEl) storeEl.value = ['private', 'shared', 'encrypted'].includes(s) ? s : 'private';
+        if (repoRootEl) repoRootEl.value = String(repoRoot || '').trim();
+        if (relPathEl) relPathEl.value = String(relPath || '').trim();
+        const needs = storeNeedsRepo(storeEl?.value || 'private');
+        if (extraEl) extraEl.style.display = 'flex';
+        if (repoRootEl) repoRootEl.style.display = needs ? '' : 'none';
+        if (relPathEl) relPathEl.style.display = needs ? '' : 'none';
+        if (commentWrapEl) commentWrapEl.style.display = needs ? '' : 'none';
+        if (promoteBtn) promoteBtn.style.display = needs ? '' : 'none';
+      };
+
+      const load = async () => {
+        const store = String(storeEl?.value || 'private').trim().toLowerCase();
+        const repoRoot = String(repoRootEl?.value || '').trim();
+        const relPath = String(relPathEl?.value || '').trim();
+
+        const url = new URL(`${serverUrl}/api/prompts/${encodeURIComponent(pid)}`);
+        if (storeNeedsRepo(store)) {
+          if (!repoRoot) throw new Error('Repo root is required for shared/encrypted prompts');
+          url.searchParams.set('visibility', store);
+          url.searchParams.set('repoRoot', repoRoot);
+          if (relPath) url.searchParams.set('relPath', relPath);
+        }
+
+        const res = await fetch(url.toString());
+        if (res.status === 404) {
+          shaEl.textContent = 'new';
+          textEl.value = '';
+          setMeta(storeNeedsRepo(store) ? `store: <code>${escapeHtml(store)}</code> • (new file)` : 'store: <code>private</code> • (new file)');
+          dirty = false;
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || 'Failed to load prompt');
+        textEl.value = data.text || '';
+        shaEl.textContent = data.sha256 ? `sha256: ${data.sha256.slice(0, 12)}…` : '';
+        const effectiveStore = String(data.visibility || store).trim().toLowerCase();
+        loaded = {
+          store: effectiveStore,
+          repoRoot: String(data.repoRoot || repoRoot || ''),
+          relPath: String(data.relPath || relPath || '')
+        };
+        updateStoreUI(loaded);
+        setMeta(storeNeedsRepo(effectiveStore)
+          ? `store: <code>${escapeHtml(effectiveStore)}</code> • <code>${escapeHtml(loaded.relPath || '')}</code>`
+          : 'store: <code>private</code>');
+        dirty = false;
+      };
+
+      const save = async () => {
+        saveBtn.disabled = true;
+        try {
+          const store = String(storeEl?.value || 'private').trim().toLowerCase();
+          const repoRoot = String(repoRootEl?.value || '').trim();
+          const relPath = String(relPathEl?.value || '').trim();
+
+          const url = new URL(`${serverUrl}/api/prompts/${encodeURIComponent(pid)}`);
+          if (storeNeedsRepo(store)) {
+            if (!repoRoot) throw new Error('Repo root is required for shared/encrypted prompts');
+            url.searchParams.set('visibility', store);
+            url.searchParams.set('repoRoot', repoRoot);
+            if (relPath) url.searchParams.set('relPath', relPath);
+          }
+
+          const res = await fetch(url.toString(), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: textEl.value })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || 'Failed to save prompt');
+          shaEl.textContent = data.sha256 ? `sha256: ${data.sha256.slice(0, 12)}…` : '';
+          loaded = {
+            store: String(data.visibility || store).trim().toLowerCase(),
+            repoRoot: String(data.repoRoot || repoRoot || ''),
+            relPath: String(data.relPath || relPath || '')
+          };
+          updateStoreUI(loaded);
+          setMeta(storeNeedsRepo(loaded.store)
+            ? `store: <code>${escapeHtml(loaded.store)}</code> • <code>${escapeHtml(loaded.relPath || '')}</code>`
+            : 'store: <code>private</code>');
+          dirty = false;
+          this.showToast('Prompt saved', 'success');
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          saveBtn.disabled = false;
+        }
+      };
+
+      const promote = async () => {
+        const store = String(storeEl?.value || '').trim().toLowerCase();
+        if (!storeNeedsRepo(store)) return;
+        const repoRoot = String(repoRootEl?.value || '').trim();
+        const relPath = String(relPathEl?.value || '').trim();
+        if (!repoRoot) throw new Error('Repo root is required for shared/encrypted prompts');
+
+        const pointer = commentEl && commentEl.checked
+          ? { provider: targetProvider, cardId: targetCardId }
+          : undefined;
+
+        const res = await fetch(`${serverUrl}/api/prompts/${encodeURIComponent(pid)}/promote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ visibility: store, repoRoot, relPath: relPath || undefined, commentPointer: pointer })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || 'Failed to promote prompt');
+        if (data?.relPath && relPathEl) relPathEl.value = String(data.relPath);
+        this.showToast(`Prompt promoted (${store})`, 'success');
+        await load();
+      };
+
+      textEl?.addEventListener('input', () => { dirty = true; });
+      loadBtn?.addEventListener('click', async () => {
+        try {
+          loadBtn.disabled = true;
+          await load();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          loadBtn.disabled = false;
+        }
+      });
+      saveBtn.addEventListener('click', save);
+      promoteBtn?.addEventListener('click', async () => {
+        try {
+          promoteBtn.disabled = true;
+          await promote();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          promoteBtn.disabled = false;
+        }
+      });
+
+      storeEl?.addEventListener('change', async () => {
+        if (dirty && !window.confirm('Discard unsaved changes?')) {
+          storeEl.value = loaded.store || 'private';
+          return;
+        }
+        updateStoreUI({ store: storeEl.value, repoRoot: repoRootEl?.value, relPath: relPathEl?.value });
+      });
+
+      updateStoreUI(loaded);
+      await load();
+    };
+
     const toTrelloAvatarUrl = (avatarUrl, size = 50) => {
       const raw = String(avatarUrl || '').trim();
       if (!raw) return '';
@@ -7105,10 +7466,12 @@ class ClaudeOrchestrator {
         .map((c) => {
           const title = (c?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
+          const board = state.boardId === ALL_BOARDS_ID ? String(c?.__boardName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+          const meta = [board, last].filter(Boolean).join(' • ');
           return `
             <div class="task-card-row" data-card-id="${c.id}" data-url="${c.url || ''}">
               <div class="task-card-title">${title}</div>
-              <div class="task-card-meta">${last}</div>
+              <div class="task-card-meta">${meta}</div>
             </div>
           `;
         })
@@ -7260,11 +7623,13 @@ class ClaudeOrchestrator {
       }).filter(d => !!d.id);
 
 	      const dueValue = toDatetimeLocalValue(card?.due);
-	      const mapping = state.boardId ? (getBoardMapping(state.provider, state.boardId) || null) : null;
+	      const effectiveBoardId = state.boardId === ALL_BOARDS_ID ? String(card?.idBoard || '').trim() : state.boardId;
+	      const mapping = effectiveBoardId ? (getBoardMapping(state.provider, effectiveBoardId) || null) : null;
 	      const mappingEnabled = mapping ? (mapping.enabled !== false) : true;
 	      const mappingLocalPath = mapping ? String(mapping.localPath || '') : '';
 	      const mappingTier = Number(mapping?.defaultStartTier);
 	      const defaultLaunchTier = (mappingTier >= 1 && mappingTier <= 4) ? mappingTier : 3;
+	      const defaultPromptId = card?.id ? `trello:${card.id}` : '';
 
 	      detailEl.innerHTML = `
 	        <div class="tasks-detail-header">
@@ -7377,14 +7742,26 @@ class ClaudeOrchestrator {
           </div>
         </div>
 
-        <div class="tasks-detail-block">
-          <div class="tasks-detail-block-title">Description</div>
-          <textarea id="tasks-card-desc" class="tasks-textarea" rows="10" placeholder="(no description)">${desc}</textarea>
-        </div>
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Description</div>
+	          <textarea id="tasks-card-desc" class="tasks-textarea" rows="10" placeholder="(no description)">${desc}</textarea>
+	        </div>
 
-        <div class="tasks-detail-block">
-          <div class="tasks-detail-block-title">Move</div>
-          <div class="tasks-move-row">
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Prompt Artifact</div>
+	          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+	            <input id="tasks-prompt-id" class="tasks-input" style="min-width: 260px; flex: 1;" value="${escapeHtml(defaultPromptId)}" placeholder="Prompt id (e.g. trello:...)" />
+	            <button class="btn-secondary" id="tasks-prompt-save" type="button" title="Save card description as a private prompt artifact">💾 Save from desc</button>
+	            <button class="btn-secondary" id="tasks-prompt-open" type="button" title="Open prompt editor (promote + optional pointer comment)">📝 Open</button>
+	          </div>
+	          <div class="tasks-detail-empty" style="margin-top:8px">
+	            Tip: promote to shared/encrypted in the editor, and optionally “Comment pointer” back to this card.
+	          </div>
+	        </div>
+
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Move</div>
+	          <div class="tasks-move-row">
             <select id="tasks-card-move" class="tasks-select tasks-select-inline">
               ${(state.lists || []).map(l => `
                 <option value="${l.id}" ${l.id === card?.idList ? 'selected' : ''}>${(l?.name || l.id).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</option>
@@ -7434,9 +7811,9 @@ class ClaudeOrchestrator {
       return res.json();
     };
 
-    const fetchBoardMembers = async ({ refresh = false } = {}) => {
-      if (!state.boardId) return [];
-      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/members`);
+    const fetchBoardMembers = async ({ boardId = state.boardId, refresh = false } = {}) => {
+      if (!boardId || boardId === ALL_BOARDS_ID) return [];
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(boardId)}/members`);
       url.searchParams.set('provider', state.provider);
       if (refresh) url.searchParams.set('refresh', 'true');
       const res = await fetch(url.toString());
@@ -7445,9 +7822,9 @@ class ClaudeOrchestrator {
       return data.members || [];
     };
 
-    const fetchBoardCustomFields = async ({ refresh = false } = {}) => {
-      if (!state.boardId) return [];
-      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/custom-fields`);
+    const fetchBoardCustomFields = async ({ boardId = state.boardId, refresh = false } = {}) => {
+      if (!boardId || boardId === ALL_BOARDS_ID) return [];
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(boardId)}/custom-fields`);
       url.searchParams.set('provider', state.provider);
       if (refresh) url.searchParams.set('refresh', 'true');
       const res = await fetch(url.toString());
@@ -7456,9 +7833,9 @@ class ClaudeOrchestrator {
       return data.customFields || [];
     };
 
-    const fetchBoardLabels = async ({ refresh = false } = {}) => {
-      if (!state.boardId) return [];
-      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/labels`);
+    const fetchBoardLabels = async ({ boardId = state.boardId, refresh = false } = {}) => {
+      if (!boardId || boardId === ALL_BOARDS_ID) return [];
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(boardId)}/labels`);
       url.searchParams.set('provider', state.provider);
       if (refresh) url.searchParams.set('refresh', 'true');
       const res = await fetch(url.toString());
@@ -7477,9 +7854,9 @@ class ClaudeOrchestrator {
       return data.boards || [];
     };
 
-    const fetchLists = async ({ refresh = false } = {}) => {
-      if (!state.boardId) return [];
-      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/lists`);
+    const fetchLists = async ({ boardId = state.boardId, refresh = false } = {}) => {
+      if (!boardId || boardId === ALL_BOARDS_ID) return [];
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(boardId)}/lists`);
       url.searchParams.set('provider', state.provider);
       if (refresh) url.searchParams.set('refresh', 'true');
       const res = await fetch(url.toString());
@@ -7488,8 +7865,33 @@ class ClaudeOrchestrator {
       return data.lists || [];
     };
 
+    const loadBoardMeta = async ({ boardId, refresh = false } = {}) => {
+      const bid = String(boardId || '').trim();
+      if (!bid || bid === ALL_BOARDS_ID) {
+        return { lists: [], members: [], labels: [], customFields: [] };
+      }
+
+      const cached = state.boardMetaCache?.get?.(bid);
+      if (cached && !refresh) return cached;
+
+      const [lists, members, labels, customFields] = await Promise.all([
+        fetchLists({ boardId: bid, refresh }).catch(() => []),
+        fetchBoardMembers({ boardId: bid, refresh }).catch(() => []),
+        fetchBoardLabels({ boardId: bid, refresh }).catch(() => []),
+        fetchBoardCustomFields({ boardId: bid, refresh }).catch(() => [])
+      ]);
+
+      const meta = { lists: lists || [], members: members || [], labels: labels || [], customFields: customFields || [] };
+      try {
+        state.boardMetaCache?.set?.(bid, meta);
+      } catch {
+        // ignore
+      }
+      return meta;
+    };
+
     const fetchSnapshot = async ({ refresh = false } = {}) => {
-      if (!state.boardId) return null;
+      if (!state.boardId || state.boardId === ALL_BOARDS_ID) return null;
       const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/snapshot`);
       url.searchParams.set('provider', state.provider);
       if (refresh) url.searchParams.set('refresh', 'true');
@@ -7510,6 +7912,43 @@ class ClaudeOrchestrator {
       const q = state.query;
 
       if (!state.listId) return [];
+
+      if (state.boardId === ALL_BOARDS_ID) {
+        const boards = Array.isArray(state.boards) ? state.boards : [];
+        const enabledBoards = boards.filter((b) => {
+          if (!b?.id) return false;
+          return isBoardEnabled(state.provider, b.id);
+        });
+
+        // Avoid super wide fan-out by default; users should disable noisy boards.
+        const maxBoards = 12;
+        const slice = enabledBoards.slice(0, maxBoards);
+
+        const boardNameById = new Map(slice.map((b) => [b.id, b.name || b.id]));
+
+        const fetchOne = async (boardId) => {
+          const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(boardId)}/cards`);
+          url.searchParams.set('provider', state.provider);
+          if (refresh) url.searchParams.set('refresh', 'true');
+          if (q) url.searchParams.set('q', q);
+          if (updatedSince) url.searchParams.set('updatedSince', updatedSince);
+          const res = await fetch(url.toString());
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || 'Failed to load cards');
+          const cards = Array.isArray(data.cards) ? data.cards : [];
+          return cards.map((c) => ({ ...c, __boardName: boardNameById.get(boardId) || boardId }));
+        };
+
+        const results = await Promise.all(slice.map((b) => fetchOne(b.id).catch(() => [])));
+        const merged = results.flat();
+        // Sort by activity (default cross-board behavior) or name.
+        if (state.sort === 'name') {
+          merged.sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+        } else {
+          merged.sort((a, b) => (Date.parse(b?.dateLastActivity || '') || 0) - (Date.parse(a?.dateLastActivity || '') || 0));
+        }
+        return merged;
+      }
 
       if (state.listId === '__all__') {
         const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(state.boardId)}/cards`);
@@ -7974,16 +8413,23 @@ class ClaudeOrchestrator {
     };
 
     const applyView = () => {
-      const isBoard = state.view === 'board';
-      if (listEl) listEl.style.display = isBoard ? 'none' : '';
+      const isAllBoards = state.boardId === ALL_BOARDS_ID;
+      const isBoard = state.view === 'board' && !isAllBoards;
+      if (isAllBoards && state.view === 'board') {
+        state.view = 'list';
+        try { localStorage.setItem('tasks-view', state.view); } catch {}
+      }
+      if (listEl) listEl.style.display = (isBoard || isAllBoards) ? 'none' : '';
       if (bodyEl) bodyEl.classList.toggle('tasks-body-board', isBoard);
       viewListBtn?.classList.toggle('active', !isBoard);
       viewBoardBtn?.classList.toggle('active', isBoard);
+      if (viewBoardBtn) viewBoardBtn.disabled = isAllBoards;
+      if (boardSettingsBtn) boardSettingsBtn.disabled = isAllBoards;
     };
 
     const syncBoardLayoutUI = () => {
       const layoutEl = modal.querySelector('#tasks-layout');
-      const isBoard = state.view === 'board';
+      const isBoard = state.view === 'board' && state.boardId !== ALL_BOARDS_ID;
       if (!layoutEl) return;
       layoutEl.style.display = isBoard ? '' : 'none';
       const radio = layoutEl.querySelector(`input[name="tasks-layout"][value="${CSS.escape(state.boardLayout)}"]`);
@@ -7994,7 +8440,7 @@ class ClaudeOrchestrator {
       const details = modal.querySelector('#tasks-assignees-filter');
       const list = modal.querySelector('#tasks-assignees-list');
       if (!details || !list) return;
-      const isConfigured = !!state.boardId;
+      const isConfigured = !!state.boardId && state.boardId !== ALL_BOARDS_ID;
       details.style.display = isConfigured ? '' : 'none';
 
       const members = Array.isArray(state.boardMembers) ? state.boardMembers : [];
@@ -8058,7 +8504,12 @@ class ClaudeOrchestrator {
 	          return enabled || includeDisabled;
 	        });
 
-	        setSelectOptions(boardEl, filteredBoards, { placeholder: 'Select board...', valueKey: 'id', labelKey: '__selectLabel' });
+	        const withAllBoards = [
+	          { id: ALL_BOARDS_ID, name: 'All enabled boards', __selectLabel: 'All enabled boards' },
+	          ...filteredBoards
+	        ];
+
+	        setSelectOptions(boardEl, withAllBoards, { placeholder: 'Select board...', valueKey: 'id', labelKey: '__selectLabel' });
 	        if (state.boardId) boardEl.value = state.boardId;
 
         // Fetch "me" (best-effort) so we can default the assignee filter.
@@ -8069,14 +8520,19 @@ class ClaudeOrchestrator {
         }
 
         if (state.view === 'list') {
+          const isAllBoards = state.boardId === ALL_BOARDS_ID;
+          if (isAllBoards) {
+            state.listId = '__all__';
+            try { localStorage.setItem('tasks-list', state.listId); } catch {}
+          }
           const [lists, members, labels] = await Promise.all([
-            fetchLists({ refresh: force }),
-            fetchBoardMembers({ refresh: force }).catch((e) => {
+            isAllBoards ? Promise.resolve([]) : fetchLists({ refresh: force }),
+            isAllBoards ? Promise.resolve([]) : fetchBoardMembers({ refresh: force }).catch((e) => {
               console.warn('Failed to load board members:', e?.message || e);
               return [];
             })
             ,
-            fetchBoardLabels({ refresh: force }).catch((e) => {
+            isAllBoards ? Promise.resolve([]) : fetchBoardLabels({ refresh: force }).catch((e) => {
               console.warn('Failed to load board labels:', e?.message || e);
               return [];
             })
@@ -8085,19 +8541,25 @@ class ClaudeOrchestrator {
           state.boardMembers = members || [];
           state.boardLabels = labels || [];
           state.boardCustomFields = [];
-          // Restore/default assignee filter for this board.
-          const assignee = readAssigneeFilter();
-          state.assigneeFilterMode = assignee.mode;
-          state.assigneeFilterIds = assignee.ids;
-          if (state.assigneeFilterMode !== 'any' && state.assigneeFilterIds.length === 0) {
-            const meId = resolveMeId();
-            if (meId) {
-              state.assigneeFilterIds = [meId];
-              state.assigneeFilterMode = 'selected';
-              persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
+          if (isAllBoards) {
+            state.assigneeFilterMode = 'any';
+            state.assigneeFilterIds = [];
+            renderAssigneeFilter();
+          } else {
+            // Restore/default assignee filter for this board.
+            const assignee = readAssigneeFilter();
+            state.assigneeFilterMode = assignee.mode;
+            state.assigneeFilterIds = assignee.ids;
+            if (state.assigneeFilterMode !== 'any' && state.assigneeFilterIds.length === 0) {
+              const meId = resolveMeId();
+              if (meId) {
+                state.assigneeFilterIds = [meId];
+                state.assigneeFilterMode = 'selected';
+                persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
+              }
             }
+            renderAssigneeFilter();
           }
-          renderAssigneeFilter();
 
           setSelectOptions(listEl, lists, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
           // Insert an explicit "All lists" option at the top (better default for users who think in boards).
@@ -8283,6 +8745,10 @@ class ClaudeOrchestrator {
       localStorage.setItem('tasks-list', state.listId);
       state.boardLayout = readBoardLayout();
       syncBoardLayoutUI();
+      if (state.boardId === ALL_BOARDS_ID) {
+        state.view = 'list';
+        localStorage.setItem('tasks-view', state.view);
+      }
       await refreshAll({ force: true });
     });
 
@@ -8342,9 +8808,27 @@ class ClaudeOrchestrator {
 
       detailEl.innerHTML = `<div class="loading">Loading card…</div>`;
       try {
-        const cardPromise = fetchCardDetail(cardId);
-        const needsCustomFields = state.boardId && (!Array.isArray(state.boardCustomFields) || state.boardCustomFields.length === 0);
-        const needsLabels = state.boardId && (!Array.isArray(state.boardLabels) || state.boardLabels.length === 0);
+        const isAllBoards = state.boardId === ALL_BOARDS_ID;
+
+        let cardPromise = fetchCardDetail(cardId);
+        let needsCustomFields = !!state.boardId && (!Array.isArray(state.boardCustomFields) || state.boardCustomFields.length === 0);
+        let needsLabels = !!state.boardId && (!Array.isArray(state.boardLabels) || state.boardLabels.length === 0);
+
+        if (isAllBoards) {
+          const card = await fetchCardDetail(cardId);
+          cardPromise = Promise.resolve(card);
+          const boardId = String(card?.idBoard || '').trim();
+          if (boardId) {
+            const meta = await loadBoardMeta({ boardId, refresh: false });
+            state.lists = meta.lists || [];
+            state.boardMembers = meta.members || [];
+            state.boardLabels = meta.labels || [];
+            state.boardCustomFields = meta.customFields || [];
+          }
+          needsCustomFields = false;
+          needsLabels = false;
+        }
+
         const customFieldsPromise = needsCustomFields
           ? fetchBoardCustomFields({ refresh: false }).catch((err) => {
             console.warn('Failed to load board custom fields:', err?.message || err);
@@ -8370,9 +8854,11 @@ class ClaudeOrchestrator {
           const commentBtn = detailEl.querySelector('#tasks-card-comment-btn');
 	          const dueSaveBtn = detailEl.querySelector('#tasks-card-due-save');
 	          const dueClearBtn = detailEl.querySelector('#tasks-card-due-clear');
-	          const assignBtn = detailEl.querySelector('#tasks-assign-member-btn');
-	          const launchBtn = detailEl.querySelector('#tasks-launch-btn');
-	          const openBoardSettingsBtn = detailEl.querySelector('#tasks-launch-open-board-settings');
+          const assignBtn = detailEl.querySelector('#tasks-assign-member-btn');
+          const launchBtn = detailEl.querySelector('#tasks-launch-btn');
+          const openBoardSettingsBtn = detailEl.querySelector('#tasks-launch-open-board-settings');
+          const promptSaveBtn = detailEl.querySelector('#tasks-prompt-save');
+          const promptOpenBtn = detailEl.querySelector('#tasks-prompt-open');
 
           saveBtn?.addEventListener('click', async () => {
             const titleEl = detailEl.querySelector('#tasks-card-title');
@@ -8514,6 +9000,42 @@ class ClaudeOrchestrator {
 	              launchBtn.disabled = false;
 	            }
 	          });
+
+          promptSaveBtn?.addEventListener('click', async () => {
+            if (!state.selectedCardId) return;
+            try {
+              const pid = String(detailEl.querySelector('#tasks-prompt-id')?.value || '').trim();
+              if (!pid) throw new Error('Prompt id is required');
+              const desc = String(detailEl.querySelector('#tasks-card-desc')?.value ?? c?.desc ?? '');
+              promptSaveBtn.disabled = true;
+              const res = await fetch(`${serverUrl}/api/prompts/${encodeURIComponent(pid)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: desc })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data?.error || 'Failed to save prompt');
+              this.showToast('Prompt saved', 'success');
+            } catch (err) {
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              promptSaveBtn.disabled = false;
+            }
+          });
+
+          promptOpenBtn?.addEventListener('click', async () => {
+            if (!state.selectedCardId) return;
+            try {
+              const pid = String(detailEl.querySelector('#tasks-prompt-id')?.value || '').trim();
+              if (!pid) throw new Error('Prompt id is required');
+              promptOpenBtn.disabled = true;
+              await openPromptEditorForCard({ promptId: pid, provider: state.provider, cardId: state.selectedCardId });
+            } catch (err) {
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              promptOpenBtn.disabled = false;
+            }
+          });
 
           detailEl.querySelectorAll('[data-remove-member]').forEach((btn) => {
             btn.addEventListener('click', async () => {
@@ -8799,20 +9321,22 @@ class ClaudeOrchestrator {
 
     const serverUrl = window.location.origin;
 
-    const state = {
-      mode: 'mine', // mine | all
-      query: '',
-      tasks: [],
-      selectedId: null,
-      reviewTier: 'all', // all | none | 1..4
-      unreviewedOnly: false,
-      autoOpenDiff: false,
-      autoReviewer: localStorage.getItem('queue-auto-reviewer') === 'true',
-      depGraphDepth: Math.max(1, Math.min(6, Number(localStorage.getItem('queue-dep-graph-depth') || 2) || 2)),
-      reviewActive: false,
-      reviewTimer: { taskId: null, startedAtMs: null },
-      reviewerSpawning: new Set()
-    };
+		    const state = {
+		      mode: 'mine', // mine | all
+		      query: '',
+		      tasks: [],
+		      selectedId: null,
+		      reviewTier: 'all', // all | none | 1..4
+		      unreviewedOnly: false,
+		      autoOpenDiff: false,
+		      autoReviewer: localStorage.getItem('queue-auto-reviewer') === 'true',
+		      depGraphDepth: Math.max(1, Math.min(6, Number(localStorage.getItem('queue-dep-graph-depth') || 2) || 2)),
+		      depGraphView: (['tree', 'graph'].includes(String(localStorage.getItem('queue-dep-graph-view') || 'tree'))) ? String(localStorage.getItem('queue-dep-graph-view') || 'tree') : 'tree',
+		      depGraphShowSatisfied: localStorage.getItem('queue-dep-graph-show-satisfied') !== 'false',
+		      reviewActive: false,
+		      reviewTimer: { taskId: null, startedAtMs: null },
+		      reviewerSpawning: new Set()
+		    };
 
     // Apply any one-shot preset (e.g. workflow review button).
     if (this.queuePanelPreset && typeof this.queuePanelPreset === 'object') {
@@ -9039,7 +9563,24 @@ class ClaudeOrchestrator {
         if (blockedCount > 0) blocked.push(t);
         else unblocked.push(t);
       }
-      return unblocked.concat(blocked);
+
+      if (!state.reviewActive) return unblocked.concat(blocked);
+
+      const me = String(this.userSettings?.global?.ui?.tasks?.me?.trelloUsername || localStorage.getItem('orchestrator-claim-name') || 'me').trim() || 'me';
+      const byClaim = (arr) => {
+        const unclaimed = [];
+        const mine = [];
+        const others = [];
+        for (const x of arr) {
+          const by = String(x?.record?.claimedBy || '').trim();
+          if (!by) unclaimed.push(x);
+          else if (by === me) mine.push(x);
+          else others.push(x);
+        }
+        return unclaimed.concat(mine, others);
+      };
+
+      return byClaim(unblocked).concat(byClaim(blocked));
     };
 
     const getTaskById = (id) => (Array.isArray(state.tasks) ? state.tasks : []).find(x => x.id === id) || null;
@@ -9078,8 +9619,9 @@ class ClaudeOrchestrator {
       const depBlocked = t?.dependencySummary?.blocked ? `blocked:${t.dependencySummary.blocked}` : '';
       const reviewed = t?.record?.reviewedAt ? 'reviewed' : '';
       const outcome = t?.record?.reviewOutcome ? `review:${t.record.reviewOutcome}` : '';
+      const claim = t?.record?.claimedBy ? `claimed:${t.record.claimedBy}` : '';
       const meta = [tier, risk].filter(Boolean).join(' • ');
-      const meta2 = [depTotal, depBlocked, reviewed, outcome].filter(Boolean).join(' • ');
+      const meta2 = [depTotal, depBlocked, claim, reviewed, outcome].filter(Boolean).join(' • ');
       const selected = state.selectedId === t.id;
 
       const tags = [];
@@ -9091,12 +9633,12 @@ class ClaudeOrchestrator {
         .filter(Boolean)
         .join(' • ');
 
-      return `
-          <div class="task-card-row ${selected ? 'selected' : ''}" data-queue-id="${escapeHtml(t.id)}" ${hover ? `title="${hover}"` : ''}>
-            <div class="task-card-title">${title}</div>
-            <div class="task-card-meta">
-              <span class="queue-kind">${escapeHtml(kind)}</span>
-              ${tags.length ? ` ${tags.join(' ')}` : ''}
+	      return `
+	          <div class="task-card-row ${selected ? 'selected' : ''}" data-queue-id="${escapeHtml(t.id)}" draggable="true" ${hover ? `title="${hover}"` : ''}>
+	            <div class="task-card-title">${title}</div>
+	            <div class="task-card-meta">
+	              <span class="queue-kind">${escapeHtml(kind)}</span>
+	              ${tags.length ? ` ${tags.join(' ')}` : ''}
               ${meta ? ` • ${escapeHtml(meta)}` : ''}
               ${meta2 ? ` • ${escapeHtml(meta2)}` : ''}
             </div>
@@ -9135,13 +9677,20 @@ class ClaudeOrchestrator {
       return data.record || null;
     };
 
-    const updateTaskRecordInState = (id, record) => {
-      if (!id) return;
-      const idx = state.tasks.findIndex(x => x.id === id);
-      if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: record || {} };
-      if (record) this.taskRecords.set(id, record);
-      else this.taskRecords.delete(id);
-    };
+	    const updateTaskRecordInState = (id, record) => {
+	      if (!id) return;
+	      const idx = state.tasks.findIndex(x => x.id === id);
+	      if (idx >= 0) {
+	        const existing = state.tasks[idx]?.record && typeof state.tasks[idx].record === 'object' ? state.tasks[idx].record : {};
+	        const merged = record ? { ...existing, ...record } : {};
+	        state.tasks[idx] = { ...state.tasks[idx], record: merged };
+	      }
+	      if (record) {
+	        const existing = this.taskRecords.get(id) || {};
+	        this.taskRecords.set(id, { ...(existing && typeof existing === 'object' ? existing : {}), ...record });
+	      }
+	      else this.taskRecords.delete(id);
+	    };
 
     const stopReviewTimer = async ({ endedAtIso } = {}) => {
       const activeId = state.reviewTimer?.taskId;
@@ -9153,6 +9702,16 @@ class ClaudeOrchestrator {
         const rec = await upsertRecord(activeId, { reviewEndedAt: endIso });
         updateTaskRecordInState(activeId, rec);
         renderList();
+        try {
+          const cfg = this.userSettings?.global?.ui?.workflow?.notifications || {};
+          const mode = String(cfg.mode || 'quiet').toLowerCase();
+          const nudges = cfg.reviewCompleteNudges !== false;
+          if (mode === 'aggressive' && nudges) {
+            this.showToast?.('Review timer stopped', 'success');
+          }
+        } catch {
+          // ignore
+        }
       } catch {
         // best-effort
       }
@@ -9181,127 +9740,587 @@ class ClaudeOrchestrator {
       }
     };
 
-    const openPromptEditor = async (promptId) => {
-      const pid = String(promptId || '').trim();
-      if (!pid) return;
+	    const openPromptEditor = async (promptId, opts = {}) => {
+	      const pid = String(promptId || '').trim();
+	      if (!pid) return;
+	      const task = opts && typeof opts === 'object' ? opts.task : null;
+	      const commentTarget = opts && typeof opts === 'object' ? (opts.commentTarget || null) : null;
+	      const hasCommentTarget = !!(commentTarget && typeof commentTarget === 'object' && String(commentTarget.cardId || '').trim());
+	      const taskId = task?.id ? String(task.id) : null;
+	      const taskRecord = task?.record && typeof task.record === 'object' ? task.record : {};
 
-      const existing = document.getElementById('prompt-editor');
-      if (existing) existing.remove();
+	      const existing = document.getElementById('prompt-editor');
+	      if (existing) existing.remove();
 
-      const editor = document.createElement('div');
+	      const editor = document.createElement('div');
       editor.id = 'prompt-editor';
       editor.className = 'modal tasks-modal';
       editor.classList.add(`tasks-theme-${resolvedTheme}`);
-      editor.innerHTML = `
-        <div class="modal-content tasks-content">
-          <div class="modal-header">
-            <h2>📝 Prompt: ${escapeHtml(pid)}</h2>
-            <button class="close-btn tasks-close-btn" aria-label="Close" onclick="this.closest('.modal').remove()">×</button>
-          </div>
-          <div class="tasks-body" style="grid-template-columns: 1fr;">
-            <div class="tasks-detail" style="overflow:auto;">
-              <div class="tasks-inline-row" style="margin-bottom: 10px;">
-                <button class="btn-secondary" id="prompt-save">💾 Save</button>
-                <span class="tasks-detail-meta" id="prompt-sha" style="margin-left: 10px;"></span>
-              </div>
-              <textarea id="prompt-text" class="tasks-textarea" rows="24" placeholder="Write your prompt…"></textarea>
-            </div>
-          </div>
-        </div>
+	      const initialStore = String(taskRecord.promptVisibility || 'private').trim().toLowerCase();
+	      const initialRepoRoot = String(taskRecord.promptRepoRoot || '').trim();
+	      const initialRelPath = String(taskRecord.promptPath || '').trim();
+
+	      editor.innerHTML = `
+	        <div class="modal-content tasks-content">
+	          <div class="modal-header">
+	            <h2>📝 Prompt: ${escapeHtml(pid)}</h2>
+	            <button class="close-btn tasks-close-btn" aria-label="Close" onclick="this.closest('.modal').remove()">×</button>
+	          </div>
+	          <div class="tasks-body" style="grid-template-columns: 1fr;">
+	            <div class="tasks-detail" style="overflow:auto;">
+	              <div class="tasks-inline-row" style="margin-bottom: 10px;">
+	                <button class="btn-secondary" id="prompt-load">🔄 Load</button>
+	                <button class="btn-secondary" id="prompt-save">💾 Save</button>
+	                <span style="flex:1"></span>
+	                <label class="tasks-detail-meta" style="display:flex; align-items:center; gap:8px;">
+	                  store:
+	                  <select id="prompt-store" class="tasks-select tasks-select-inline" style="width: 140px;">
+	                    <option value="private">private</option>
+	                    <option value="shared">shared</option>
+	                    <option value="encrypted">encrypted</option>
+	                  </select>
+	                </label>
+	              </div>
+	              <div class="tasks-inline-row" id="prompt-store-extra" style="margin-bottom: 10px; gap: 8px; flex-wrap: wrap;">
+	                <input id="prompt-repo-root" class="tasks-input" style="min-width: 340px; flex: 1;" placeholder="Repo root (for shared/encrypted), e.g. /home/ab/GitHub/games/hytopia/zoo-game" />
+	                <input id="prompt-rel-path" class="tasks-input" style="min-width: 260px; flex: 1;" placeholder="Repo-relative path (optional; default .orchestrator/prompts/<id>.md)" />
+	                <label class="tasks-toggle" id="prompt-comment-pointer-wrap" style="display:none" title="Add a pointer comment back to the selected card">
+	                  <input type="checkbox" id="prompt-comment-pointer" checked />
+	                  <span>Comment pointer</span>
+	                </label>
+	                <button class="btn-secondary" id="prompt-promote" title="Copy private prompt into repo store (shared/encrypted)">⬆ Promote</button>
+	                <span class="tasks-detail-meta" id="prompt-sha"></span>
+	              </div>
+	              <div class="tasks-detail-meta" id="prompt-meta" style="margin-bottom: 8px;"></div>
+	              <textarea id="prompt-text" class="tasks-textarea" rows="24" placeholder="Write your prompt…"></textarea>
+	            </div>
+	          </div>
+	        </div>
       `;
       document.body.appendChild(editor);
 
-      const shaEl = editor.querySelector('#prompt-sha');
-      const textEl = editor.querySelector('#prompt-text');
-      const saveBtn = editor.querySelector('#prompt-save');
+	      const metaEl = editor.querySelector('#prompt-meta');
+	      const shaEl = editor.querySelector('#prompt-sha');
+	      const textEl = editor.querySelector('#prompt-text');
+	      const storeEl = editor.querySelector('#prompt-store');
+	      const extraEl = editor.querySelector('#prompt-store-extra');
+	      const repoRootEl = editor.querySelector('#prompt-repo-root');
+	      const relPathEl = editor.querySelector('#prompt-rel-path');
+	      const commentWrapEl = editor.querySelector('#prompt-comment-pointer-wrap');
+	      const commentEl = editor.querySelector('#prompt-comment-pointer');
+	      const loadBtn = editor.querySelector('#prompt-load');
+	      const promoteBtn = editor.querySelector('#prompt-promote');
+	      const saveBtn = editor.querySelector('#prompt-save');
 
-      const load = async () => {
-        const res = await fetch(`${serverUrl}/api/prompts/${encodeURIComponent(pid)}`);
-        if (res.status === 404) {
-          shaEl.textContent = 'new';
-          textEl.value = '';
-          return;
-        }
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || 'Failed to load prompt');
-        textEl.value = data.text || '';
-        shaEl.textContent = data.sha256 ? `sha256: ${data.sha256.slice(0, 12)}…` : '';
-      };
+	      let dirty = false;
+	      let loaded = { store: initialStore, repoRoot: initialRepoRoot, relPath: initialRelPath };
 
-      const save = async () => {
-        saveBtn.disabled = true;
-        try {
-          const res = await fetch(`${serverUrl}/api/prompts/${encodeURIComponent(pid)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: textEl.value })
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data?.error || 'Failed to save prompt');
-          shaEl.textContent = data.sha256 ? `sha256: ${data.sha256.slice(0, 12)}…` : '';
-          this.showToast('Prompt saved', 'success');
-        } catch (e) {
-          this.showToast(String(e?.message || e), 'error');
-        } finally {
-          saveBtn.disabled = false;
-        }
-      };
+	      const setMeta = (m) => {
+	        if (!metaEl) return;
+	        metaEl.innerHTML = m ? String(m) : '';
+	      };
 
-      saveBtn.addEventListener('click', save);
-      await load();
-    };
+	      const storeNeedsRepo = (store) => store === 'shared' || store === 'encrypted';
 
-    const openDependencyGraphModal = async (taskId) => {
-      const id = String(taskId || '').trim();
-      if (!id) return;
+	      const updateStoreUI = ({ store, repoRoot, relPath } = {}) => {
+	        const s = String(store || 'private').trim().toLowerCase();
+	        if (storeEl) storeEl.value = ['private', 'shared', 'encrypted'].includes(s) ? s : 'private';
+	        if (repoRootEl) repoRootEl.value = String(repoRoot || '').trim();
+	        if (relPathEl) relPathEl.value = String(relPath || '').trim();
+	        const needs = storeNeedsRepo(storeEl?.value || 'private');
+	        if (extraEl) extraEl.style.display = 'flex';
+	        if (repoRootEl) repoRootEl.style.display = needs ? '' : 'none';
+	        if (relPathEl) relPathEl.style.display = needs ? '' : 'none';
+	        if (commentWrapEl) commentWrapEl.style.display = (needs && hasCommentTarget) ? '' : 'none';
+	        if (promoteBtn) promoteBtn.style.display = needs ? '' : 'none';
+	      };
 
-      const depth = Math.max(1, Math.min(6, Number(state.depGraphDepth) || 2));
+	      const load = async () => {
+	        const store = String(storeEl?.value || 'private').trim().toLowerCase();
+	        const repoRoot = String(repoRootEl?.value || '').trim();
+	        const relPath = String(relPathEl?.value || '').trim();
+
+	        const url = new URL(`${serverUrl}/api/prompts/${encodeURIComponent(pid)}`);
+	        if (storeNeedsRepo(store)) {
+	          if (!repoRoot) throw new Error('Repo root is required for shared/encrypted prompts');
+	          url.searchParams.set('visibility', store);
+	          url.searchParams.set('repoRoot', repoRoot);
+	          if (relPath) url.searchParams.set('relPath', relPath);
+	        }
+
+	        const res = await fetch(url.toString());
+	        if (res.status === 404) {
+	          shaEl.textContent = 'new';
+	          textEl.value = '';
+	          setMeta(storeNeedsRepo(store) ? `store: <code>${escapeHtml(store)}</code> • (new file)` : 'store: <code>private</code> • (new file)');
+	          dirty = false;
+	          return;
+	        }
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok) throw new Error(data?.error || 'Failed to load prompt');
+	        textEl.value = data.text || '';
+	        shaEl.textContent = data.sha256 ? `sha256: ${data.sha256.slice(0, 12)}…` : '';
+	        const effectiveStore = String(data.visibility || store).trim().toLowerCase();
+	        loaded = {
+	          store: effectiveStore,
+	          repoRoot: String(data.repoRoot || repoRoot || ''),
+	          relPath: String(data.relPath || relPath || '')
+	        };
+	        updateStoreUI(loaded);
+	        setMeta(storeNeedsRepo(effectiveStore)
+	          ? `store: <code>${escapeHtml(effectiveStore)}</code> • <code>${escapeHtml(loaded.relPath || '')}</code>`
+	          : 'store: <code>private</code>');
+	        dirty = false;
+
+	        if (taskId) {
+	          try {
+	            const patch = { promptRef: pid, promptVisibility: loaded.store };
+	            if (storeNeedsRepo(loaded.store)) {
+	              patch.promptRepoRoot = loaded.repoRoot || null;
+	              patch.promptPath = loaded.relPath || null;
+	            } else {
+	              patch.promptRepoRoot = null;
+	              patch.promptPath = null;
+	            }
+	            const rec = await upsertRecord(taskId, patch);
+	            updateTaskRecordInState(taskId, rec);
+	            renderList();
+	            renderDetail(getTaskById(taskId));
+	          } catch {
+	            // ignore
+	          }
+	        }
+	      };
+
+	      const save = async () => {
+	        saveBtn.disabled = true;
+	        try {
+	          const store = String(storeEl?.value || 'private').trim().toLowerCase();
+	          const repoRoot = String(repoRootEl?.value || '').trim();
+	          const relPath = String(relPathEl?.value || '').trim();
+
+	          const url = new URL(`${serverUrl}/api/prompts/${encodeURIComponent(pid)}`);
+	          if (storeNeedsRepo(store)) {
+	            if (!repoRoot) throw new Error('Repo root is required for shared/encrypted prompts');
+	            url.searchParams.set('visibility', store);
+	            url.searchParams.set('repoRoot', repoRoot);
+	            if (relPath) url.searchParams.set('relPath', relPath);
+	          }
+
+	          const res = await fetch(url.toString(), {
+	            method: 'PUT',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ text: textEl.value })
+	          });
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok) throw new Error(data?.error || 'Failed to save prompt');
+	          shaEl.textContent = data.sha256 ? `sha256: ${data.sha256.slice(0, 12)}…` : '';
+	          loaded = {
+	            store: String(data.visibility || store).trim().toLowerCase(),
+	            repoRoot: String(data.repoRoot || repoRoot || ''),
+	            relPath: String(data.relPath || relPath || '')
+	          };
+	          updateStoreUI(loaded);
+	          setMeta(storeNeedsRepo(loaded.store)
+	            ? `store: <code>${escapeHtml(loaded.store)}</code> • <code>${escapeHtml(loaded.relPath || '')}</code>`
+	            : 'store: <code>private</code>');
+	          dirty = false;
+
+	          if (taskId) {
+	            try {
+	              const patch = { promptRef: pid, promptVisibility: loaded.store };
+	              if (storeNeedsRepo(loaded.store)) {
+	                patch.promptRepoRoot = loaded.repoRoot || null;
+	                patch.promptPath = loaded.relPath || null;
+	              } else {
+	                patch.promptRepoRoot = null;
+	                patch.promptPath = null;
+	              }
+	              const rec = await upsertRecord(taskId, patch);
+	              updateTaskRecordInState(taskId, rec);
+	              renderList();
+	              renderDetail(getTaskById(taskId));
+	            } catch {
+	              // ignore
+	            }
+	          }
+
+	          this.showToast('Prompt saved', 'success');
+	        } catch (e) {
+	          this.showToast(String(e?.message || e), 'error');
+	        } finally {
+	          saveBtn.disabled = false;
+	        }
+	      };
+
+	      const promote = async () => {
+	        const store = String(storeEl?.value || '').trim().toLowerCase();
+	        if (!storeNeedsRepo(store)) return;
+	        const repoRoot = String(repoRootEl?.value || '').trim();
+	        const relPath = String(relPathEl?.value || '').trim();
+	        if (!repoRoot) throw new Error('Repo root is required for shared/encrypted prompts');
+
+	        const pointerEnabled = !!(commentEl && commentEl.checked && hasCommentTarget);
+	        const pointer = pointerEnabled
+	          ? { provider: String(commentTarget?.provider || 'trello'), cardId: String(commentTarget?.cardId || '') }
+	          : undefined;
+
+	        const res = await fetch(`${serverUrl}/api/prompts/${encodeURIComponent(pid)}/promote`, {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify({ visibility: store, repoRoot, relPath: relPath || undefined, commentPointer: pointer })
+	        });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok) throw new Error(data?.error || 'Failed to promote prompt');
+	        if (data?.relPath && relPathEl) relPathEl.value = String(data.relPath);
+	        this.showToast(`Prompt promoted (${store})`, 'success');
+	        await load();
+	      };
+
+	      textEl?.addEventListener('input', () => { dirty = true; });
+	      loadBtn?.addEventListener('click', async () => {
+	        try {
+	          loadBtn.disabled = true;
+	          await load();
+	        } catch (e) {
+	          this.showToast(String(e?.message || e), 'error');
+	        } finally {
+	          loadBtn.disabled = false;
+	        }
+	      });
+	      saveBtn.addEventListener('click', save);
+	      promoteBtn?.addEventListener('click', async () => {
+	        try {
+	          promoteBtn.disabled = true;
+	          await promote();
+	        } catch (e) {
+	          this.showToast(String(e?.message || e), 'error');
+	        } finally {
+	          promoteBtn.disabled = false;
+	        }
+	      });
+
+	      storeEl?.addEventListener('change', async () => {
+	        if (dirty && !window.confirm('Discard unsaved changes?')) {
+	          storeEl.value = loaded.store || initialStore || 'private';
+	          return;
+	        }
+	        updateStoreUI({ store: storeEl.value, repoRoot: repoRootEl?.value, relPath: relPathEl?.value });
+	      });
+
+	      updateStoreUI(loaded);
+	      await load();
+	    };
+
+	    const openDependencyGraphModal = async (taskId) => {
+	      const id = String(taskId || '').trim();
+	      if (!id) return;
+
+	      const depth = Math.max(1, Math.min(6, Number(state.depGraphDepth) || 2));
 
       const existing = document.getElementById('queue-dep-graph-modal');
       if (existing) existing.remove();
 
       const overlay = document.createElement('div');
-      overlay.id = 'queue-dep-graph-modal';
-      overlay.className = 'modal tasks-modal';
-      overlay.classList.add(`tasks-theme-${resolvedTheme}`);
-      overlay.innerHTML = `
-        <div class="modal-content tasks-content" style="max-width: 980px; width: 95vw; height: 80vh;">
-          <div class="modal-header">
-            <h2>🧩 Dependency Graph</h2>
-            <button class="close-btn tasks-close-btn" id="queue-dep-graph-close" aria-label="Close" title="Close (Esc)">×</button>
-          </div>
-          <div class="tasks-toolbar">
-            <div class="tasks-detail-meta">root: <code>${escapeHtml(id)}</code> • depth: ${depth}</div>
-            <span style="flex:1"></span>
-            <button class="btn-secondary" id="queue-dep-graph-refresh">🔄 Refresh</button>
-          </div>
-          <div class="tasks-body" style="grid-template-columns: 1fr 1fr;">
-            <div class="tasks-detail" style="padding: 14px;">
-              <div class="tasks-detail-block">
-                <div class="tasks-detail-block-title">Blocked By</div>
-                <div id="queue-dep-graph-up" class="tasks-detail-meta">Loading…</div>
-              </div>
-            </div>
-            <div class="tasks-detail" style="padding: 14px;">
-              <div class="tasks-detail-block">
-                <div class="tasks-detail-block-title">Unblocks</div>
-                <div id="queue-dep-graph-down" class="tasks-detail-meta">Loading…</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(overlay);
+	      overlay.id = 'queue-dep-graph-modal';
+	      overlay.className = 'modal tasks-modal';
+	      overlay.classList.add(`tasks-theme-${resolvedTheme}`);
+	      overlay.innerHTML = `
+	        <div class="modal-content tasks-content" style="max-width: 980px; width: 95vw; height: 80vh;">
+	          <div class="modal-header">
+	            <h2>🧩 Dependency Graph</h2>
+	            <button class="close-btn tasks-close-btn" id="queue-dep-graph-close" aria-label="Close" title="Close (Esc)">×</button>
+	          </div>
+	          <div class="tasks-toolbar">
+	            <div id="queue-dep-graph-meta" class="tasks-detail-meta"></div>
+	            <select id="queue-dep-graph-view" class="tasks-select tasks-select-inline" title="View" style="width: 140px; margin-left: 10px;">
+	              <option value="tree">tree</option>
+	              <option value="graph">graph</option>
+	            </select>
+	            <label class="tasks-checkbox" style="margin-left:10px; gap:8px;">
+	              <input type="checkbox" id="queue-dep-graph-show-satisfied" ${state.depGraphShowSatisfied ? 'checked' : ''} />
+	              <span>Show satisfied</span>
+	            </label>
+	            <select id="queue-dep-graph-pins" class="tasks-select tasks-select-inline" title="Pinned" style="width: 180px; margin-left: 10px;">
+	              <option value="">Pinned…</option>
+	            </select>
+	            <button class="btn-secondary" id="queue-dep-graph-pin" title="Pin/unpin current root">📌 Pin</button>
+	            <span style="flex:1"></span>
+	            <button class="btn-secondary" id="queue-dep-graph-jump" title="Jump to this node (Queue/Trello)">↩ Jump</button>
+	            <button class="btn-secondary" id="queue-dep-graph-refresh">🔄 Refresh</button>
+	          </div>
+	          <div class="tasks-body" style="grid-template-columns: 1fr;">
+	            <div id="queue-dep-graph-tree" style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+	              <div class="tasks-detail" style="padding: 14px;">
+	                <div class="tasks-detail-block">
+	                  <div class="tasks-detail-block-title">Blocked By</div>
+	                  <div id="queue-dep-graph-up" class="tasks-detail-meta">Loading…</div>
+	                </div>
+	              </div>
+	              <div class="tasks-detail" style="padding: 14px;">
+	                <div class="tasks-detail-block">
+	                  <div class="tasks-detail-block-title">Unblocks</div>
+	                  <div id="queue-dep-graph-down" class="tasks-detail-meta">Loading…</div>
+	                </div>
+	              </div>
+	            </div>
+	            <div id="queue-dep-graph-viz" class="tasks-detail" style="padding: 14px; display:none; overflow:auto;">
+	              <div class="tasks-detail-block">
+	                <div class="tasks-detail-block-title">Graph</div>
+	                <div class="tasks-detail-meta" style="margin-bottom: 8px;">Click a node to focus it. Ctrl/Cmd+Click to jump (Queue/Trello).</div>
+	                <div id="queue-dep-graph-viz-scroll" style="overflow:auto; border-radius: 10px;">
+	                  <svg id="queue-dep-graph-svg"></svg>
+	                </div>
+	              </div>
+	            </div>
+	          </div>
+	        </div>
+	      `;
+	      document.body.appendChild(overlay);
 
       const close = () => overlay.remove();
       overlay.querySelector('#queue-dep-graph-close')?.addEventListener('click', close);
       overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.remove(); }, { once: true });
 
-      const renderGraph = (graph) => {
-        const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
-        const edges = Array.isArray(graph?.edges) ? graph.edges : [];
-        const nodeById = new Map(nodes.map((n) => [String(n.id), n]));
+	      let lastGraph = null;
+	      let currentRoot = id;
+
+	      const loadPins = () => {
+	        try {
+	          const raw = localStorage.getItem('queue-dep-graph-pins');
+	          const arr = JSON.parse(raw || '[]');
+	          return Array.isArray(arr) ? arr.map(v => String(v || '').trim()).filter(Boolean).slice(0, 20) : [];
+	        } catch {
+	          return [];
+	        }
+	      };
+	      const savePins = (pins) => {
+	        try {
+	          localStorage.setItem('queue-dep-graph-pins', JSON.stringify((Array.isArray(pins) ? pins : []).slice(0, 20)));
+	        } catch {}
+	      };
+
+	      let pins = loadPins();
+
+	      const renderPins = () => {
+	        const pinsEl = overlay.querySelector('#queue-dep-graph-pins');
+	        if (!pinsEl) return;
+	        pinsEl.innerHTML = `<option value="">Pinned…</option>` + pins.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+	      };
+
+	      const updateToolbarMeta = (graph) => {
+	        const metaEl = overlay.querySelector('#queue-dep-graph-meta');
+	        const cycles = Array.isArray(graph?.cycles) ? graph.cycles : [];
+	        const cycleInfo = cycles.length ? ` • cycles: ${cycles.length}` : '';
+	        if (metaEl) metaEl.innerHTML = `root: <code>${escapeHtml(currentRoot)}</code> • depth: ${depth}${cycleInfo}`;
+
+	        const pinBtn = overlay.querySelector('#queue-dep-graph-pin');
+	        const pinned = pins.includes(currentRoot);
+	        if (pinBtn) pinBtn.textContent = pinned ? '📌 Unpin' : '📌 Pin';
+	      };
+
+	      const jumpTo = (targetId) => {
+	        const tid = String(targetId || '').trim();
+	        if (!tid) return;
+	        const mTrello = tid.match(/^trello:([a-zA-Z0-9]+)$/i);
+	        if (mTrello?.[1]) {
+	          window.open(`https://trello.com/c/${mTrello[1]}`, '_blank', 'noreferrer');
+	          close();
+	          return;
+	        }
+	        if (/^https?:\/\//i.test(tid)) {
+	          window.open(tid, '_blank', 'noreferrer');
+	          close();
+	          return;
+	        }
+	        const t2 = getTaskById(tid);
+	        if (!t2) {
+	          this.showToast(`Not in Queue: ${tid}`, 'info');
+	          return;
+	        }
+	        close();
+	        selectById(tid, { allowAutoOpenDiff: true });
+	      };
+
+	      const setView = (view) => {
+	        const v = (view === 'graph') ? 'graph' : 'tree';
+	        state.depGraphView = v;
+	        localStorage.setItem('queue-dep-graph-view', v);
+	        const viewEl = overlay.querySelector('#queue-dep-graph-view');
+	        if (viewEl) viewEl.value = v;
+	        const treeEl = overlay.querySelector('#queue-dep-graph-tree');
+	        const vizEl = overlay.querySelector('#queue-dep-graph-viz');
+	        if (treeEl) treeEl.style.display = v === 'tree' ? 'grid' : 'none';
+	        if (vizEl) vizEl.style.display = v === 'graph' ? 'block' : 'none';
+	        if (lastGraph) renderGraph(lastGraph);
+	      };
+
+	      const renderSvgGraph = (graph) => {
+	        const svg = overlay.querySelector('#queue-dep-graph-svg');
+	        const container = overlay.querySelector('#queue-dep-graph-viz-scroll');
+	        if (!svg || !container) return;
+
+	        const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+	        const edgesAll = Array.isArray(graph?.edges) ? graph.edges : [];
+	        const edges = state.depGraphShowSatisfied ? edgesAll : edgesAll.filter(e => !e?.satisfied);
+	        const nodeById = new Map(nodes.map((n) => [String(n.id), n]));
+	        const outgoing = new Map(); // from -> [{to,satisfied}]
+	        const incoming = new Map(); // to -> [{from,satisfied}]
+	        for (const e of edges) {
+	          const from = String(e.from || '').trim();
+	          const to = String(e.to || '').trim();
+	          if (!from || !to) continue;
+	          if (!outgoing.has(from)) outgoing.set(from, []);
+	          outgoing.get(from).push({ to, satisfied: !!e.satisfied });
+	          if (!incoming.has(to)) incoming.set(to, []);
+	          incoming.get(to).push({ from, satisfied: !!e.satisfied });
+	        }
+
+	        const bfs = (start, nextFn, max) => {
+	          const dist = new Map();
+	          const q = [{ id: start, d: 0 }];
+	          dist.set(start, 0);
+	          while (q.length) {
+	            const cur = q.shift();
+	            if (cur.d >= max) continue;
+	            const next = nextFn(cur.id) || [];
+	            for (const nid of next) {
+	              const nd = cur.d + 1;
+	              const prev = dist.get(nid);
+	              if (prev === undefined || nd < prev) {
+	                dist.set(nid, nd);
+	                q.push({ id: nid, d: nd });
+	              }
+	            }
+	          }
+	          return dist;
+	        };
+
+	        const upDist = bfs(currentRoot, (nid) => (outgoing.get(nid) || []).map(x => x.to), depth);
+	        const downDist = bfs(currentRoot, (nid) => (incoming.get(nid) || []).map(x => x.from), depth);
+
+	        const colById = new Map();
+	        colById.set(id, 0);
+	        for (const [nid, d] of upDist.entries()) {
+	          if (nid === id) continue;
+	          colById.set(nid, -d);
+	        }
+	        for (const [nid, d] of downDist.entries()) {
+	          if (nid === id) continue;
+	          if (!colById.has(nid)) colById.set(nid, d);
+	        }
+
+	        const cols = Array.from(new Set(Array.from(colById.values()))).sort((a, b) => a - b);
+	        if (!cols.length) cols.push(0);
+	        const minCol = Math.min(...cols);
+	        const nodeW = 230;
+	        const nodeH = 34;
+	        const colGap = 130;
+	        const rowGap = 14;
+	        const padX = 30;
+	        const padY = 26;
+
+	        const colToIds = new Map();
+	        for (const [nid, c] of colById.entries()) {
+	          if (!colToIds.has(c)) colToIds.set(c, []);
+	          colToIds.get(c).push(nid);
+	        }
+	        for (const [c, ids] of colToIds.entries()) {
+	          ids.sort((a, b) => {
+	            const na = nodeById.get(a) || {};
+	            const nb = nodeById.get(b) || {};
+	            const ta = Number.isFinite(na.tier) ? na.tier : 9;
+	            const tb = Number.isFinite(nb.tier) ? nb.tier : 9;
+	            if (ta !== tb) return ta - tb;
+	            return String(na.label || a).localeCompare(String(nb.label || b));
+	          });
+	        }
+
+	        const pos = new Map(); // id -> {x,y}
+	        let maxRows = 0;
+	        for (const c of cols) {
+	          const ids = colToIds.get(c) || [];
+	          maxRows = Math.max(maxRows, ids.length);
+	          const x = padX + (c - minCol) * (nodeW + colGap);
+	          ids.forEach((nid, idx) => {
+	            const y = padY + idx * (nodeH + rowGap);
+	            pos.set(nid, { x, y });
+	          });
+	        }
+
+	        const width = padX * 2 + cols.length * nodeW + (cols.length - 1) * colGap;
+	        const height = padY * 2 + maxRows * nodeH + Math.max(0, maxRows - 1) * rowGap;
+	        svg.setAttribute('width', String(width));
+	        svg.setAttribute('height', String(height));
+	        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+	        svg.innerHTML = '';
+
+	        const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+	        const edgeEls = edges
+	          .map((e) => {
+	            const from = String(e.from || '').trim();
+	            const to = String(e.to || '').trim();
+	            const pf = pos.get(from);
+	            const pt = pos.get(to);
+	            if (!pf || !pt) return '';
+	            const x1 = pf.x + nodeW;
+	            const y1 = pf.y + nodeH / 2;
+	            const x2 = pt.x;
+	            const y2 = pt.y + nodeH / 2;
+	            const midX = (x1 + x2) / 2;
+	            const c1x = midX;
+	            const c1y = y1;
+	            const c2x = midX;
+	            const c2y = y2;
+	            const stroke = e.satisfied ? '#2dbf71' : '#d15757';
+	            return `<path d="M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}" fill="none" stroke="${stroke}" stroke-width="2" opacity="0.85" />`;
+	          })
+	          .join('');
+
+	        const nodeEls = nodes
+	          .filter((n) => pos.has(String(n.id)))
+	          .map((n) => {
+	            const nid = String(n.id);
+	            const p = pos.get(nid);
+	            const label = String(n.label || nid);
+	            const tier = Number.isFinite(n.tier) ? `T${n.tier}` : '';
+	            const done = n.doneAt ? '✅' : '';
+	            const isRoot = nid === currentRoot;
+	            const bg = isRoot ? '#2d6cdf' : (n.doneAt ? '#2b7a4b' : '#2b2b2b');
+	            const text = isRoot ? '#fff' : '#fff';
+	            const display = esc([done, tier, label].filter(Boolean).join(' '));
+	            return `<g data-queue-jump="${esc(nid)}" style="cursor:pointer;">
+	              <rect x="${p.x}" y="${p.y}" rx="8" ry="8" width="${nodeW}" height="${nodeH}" fill="${bg}" opacity="0.95"></rect>
+	              <text x="${p.x + 10}" y="${p.y + 22}" fill="${text}" font-size="12" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${display}</text>
+	            </g>`;
+	          })
+	          .join('');
+
+	        svg.innerHTML = edgeEls + nodeEls;
+
+	        svg.querySelectorAll('[data-queue-jump]').forEach((g) => {
+	          g.addEventListener('click', (e) => {
+	            e.preventDefault();
+	            const targetId = g.getAttribute('data-queue-jump');
+	            if (!targetId) return;
+	            if (e.metaKey || e.ctrlKey) {
+	              jumpTo(targetId);
+	              return;
+	            }
+	            currentRoot = targetId;
+	            fetchGraph().catch((err) => this.showToast(String(err?.message || err), 'error'));
+	          });
+	        });
+	      };
+
+	      const renderGraph = (graph) => {
+	        lastGraph = graph;
+	        const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+	        const edgesAll = Array.isArray(graph?.edges) ? graph.edges : [];
+	        const edges = state.depGraphShowSatisfied ? edgesAll : edgesAll.filter(e => !e?.satisfied);
+	        const nodeById = new Map(nodes.map((n) => [String(n.id), n]));
 
         const upAdj = new Map();   // id -> [{id, satisfied, reason}]
         const downAdj = new Map(); // id -> [{id, satisfied, reason}]
@@ -9340,37 +10359,84 @@ class ClaudeOrchestrator {
           </ul>`;
         };
 
-        const upEl = overlay.querySelector('#queue-dep-graph-up');
-        const downEl = overlay.querySelector('#queue-dep-graph-down');
-        if (upEl) upEl.innerHTML = walk(id, upAdj, depth, new Set()) || 'No dependencies.';
-        if (downEl) downEl.innerHTML = walk(id, downAdj, depth, new Set()) || 'No dependents.';
+	        const upEl = overlay.querySelector('#queue-dep-graph-up');
+	        const downEl = overlay.querySelector('#queue-dep-graph-down');
+	        if (upEl) upEl.innerHTML = walk(currentRoot, upAdj, depth, new Set()) || 'No dependencies.';
+	        if (downEl) downEl.innerHTML = walk(currentRoot, downAdj, depth, new Set()) || 'No dependents.';
 
-        overlay.querySelectorAll('[data-queue-jump]').forEach((a) => {
-          a.addEventListener('click', (e) => {
-            e.preventDefault();
-            const targetId = a.getAttribute('data-queue-jump');
-            if (!targetId) return;
-            close();
-            selectById(targetId, { allowAutoOpenDiff: true });
-          });
-        });
-      };
+	        overlay.querySelectorAll('[data-queue-jump]').forEach((a) => {
+	          a.addEventListener('click', (e) => {
+	            e.preventDefault();
+	            const targetId = a.getAttribute('data-queue-jump');
+	            if (!targetId) return;
+	            if (e.metaKey || e.ctrlKey) {
+	              jumpTo(targetId);
+	              return;
+	            }
+	            currentRoot = targetId;
+	            fetchGraph().catch((err) => this.showToast(String(err?.message || err), 'error'));
+	          });
+	        });
 
-      const fetchGraph = async () => {
-        const url = new URL(`${serverUrl}/api/process/dependency-graph/${encodeURIComponent(id)}`);
-        url.searchParams.set('depth', String(depth));
-        const res = await fetch(url.toString());
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || 'Failed to load graph');
-        renderGraph(data);
-      };
+	        updateToolbarMeta(graph);
 
-      overlay.querySelector('#queue-dep-graph-refresh')?.addEventListener('click', () => {
-        fetchGraph().catch((e) => this.showToast(String(e?.message || e), 'error'));
-      });
+	        if (state.depGraphView === 'graph') {
+	          renderSvgGraph(graph);
+	        }
+	      };
+
+	      const fetchGraph = async () => {
+	        const url = new URL(`${serverUrl}/api/process/dependency-graph/${encodeURIComponent(currentRoot)}`);
+	        url.searchParams.set('depth', String(depth));
+	        const res = await fetch(url.toString());
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok) throw new Error(data?.error || 'Failed to load graph');
+	        renderGraph(data);
+	      };
+
+	      const viewEl = overlay.querySelector('#queue-dep-graph-view');
+	      if (viewEl) {
+	        viewEl.value = state.depGraphView || 'tree';
+	        viewEl.addEventListener('change', () => setView(viewEl.value));
+	      }
+	      setView(state.depGraphView || 'tree');
+
+	      const showSatisfiedEl = overlay.querySelector('#queue-dep-graph-show-satisfied');
+	      if (showSatisfiedEl) {
+	        showSatisfiedEl.checked = !!state.depGraphShowSatisfied;
+	        showSatisfiedEl.addEventListener('change', () => {
+	          state.depGraphShowSatisfied = !!showSatisfiedEl.checked;
+	          localStorage.setItem('queue-dep-graph-show-satisfied', state.depGraphShowSatisfied ? 'true' : 'false');
+	          if (lastGraph) renderGraph(lastGraph);
+	        });
+	      }
+
+	      renderPins();
+	      const pinsEl = overlay.querySelector('#queue-dep-graph-pins');
+	      pinsEl?.addEventListener('change', () => {
+	        const v = String(pinsEl.value || '').trim();
+	        if (!v) return;
+	        currentRoot = v;
+	        pinsEl.value = '';
+	        fetchGraph().catch((err) => this.showToast(String(err?.message || err), 'error'));
+	      });
+
+	      overlay.querySelector('#queue-dep-graph-pin')?.addEventListener('click', () => {
+	        const pinned = pins.includes(currentRoot);
+	        pins = pinned ? pins.filter(p => p !== currentRoot) : [...new Set([currentRoot, ...pins])];
+	        savePins(pins);
+	        renderPins();
+	        updateToolbarMeta(lastGraph);
+	      });
+
+	      overlay.querySelector('#queue-dep-graph-jump')?.addEventListener('click', () => jumpTo(currentRoot));
+
+	      overlay.querySelector('#queue-dep-graph-refresh')?.addEventListener('click', () => {
+	        fetchGraph().catch((e) => this.showToast(String(e?.message || e), 'error'));
+	      });
 
       await fetchGraph().catch((e) => this.showToast(String(e?.message || e), 'error'));
-    };
+	    };
 
     const renderDetail = (t) => {
       if (!t) {
@@ -9392,6 +10458,11 @@ class ClaudeOrchestrator {
       const reviewEndedAt = record.reviewEndedAt || '';
       const promptSentAt = record.promptSentAt || '';
       const promptChars = record.promptChars ?? '';
+      const claimedBy = record.claimedBy || '';
+      const claimedAt = record.claimedAt || '';
+      const ticketProvider = record.ticketProvider || '';
+      const ticketCardId = record.ticketCardId || '';
+      const ticketCardUrl = record.ticketCardUrl || '';
       const notes = record.notes || '';
 
       const url = t.url || '';
@@ -9425,6 +10496,7 @@ class ClaudeOrchestrator {
             ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
             ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
             ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
+            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-recheck" title="Spawn a reviewer agent to recheck after fixes">🔁 Recheck</button>` : ''}
           </div>
         </div>
 
@@ -9501,6 +10573,18 @@ class ClaudeOrchestrator {
 	        </div>
 
 	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Claim</div>
+	          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+	            <span class="tasks-detail-meta" id="queue-claim-meta">
+	              ${claimedBy ? `claimedBy: <code>${escapeHtml(claimedBy)}</code>${claimedAt ? ` • <span>${escapeHtml(claimedAt)}</span>` : ''}` : 'unclaimed'}
+	            </span>
+	            <span style="flex:1"></span>
+	            <button class="btn-secondary" id="queue-claim" ${claimedBy ? 'disabled' : ''} title="Claim this item for review">🔒 Claim</button>
+	            <button class="btn-secondary" id="queue-release" ${claimedBy ? '' : 'disabled'} title="Release claim">🔓 Release</button>
+	          </div>
+	        </div>
+
+	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Prompt Artifact</div>
 	          <div class="tasks-inline-row">
 	            <input id="queue-prompt-ref" class="tasks-input" value="${escapeHtml(promptRef)}" placeholder="e.g. pr:web3dev1337/repo#123" />
@@ -9508,6 +10592,17 @@ class ClaudeOrchestrator {
 	          </div>
 	          <div class="tasks-detail-meta">Saved locally in <code>~/.orchestrator/prompts</code>.</div>
 	        </div>
+
+	        ${(hasPR || ticketCardId || ticketCardUrl) ? `
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Ticket (Trello)</div>
+	          <div class="tasks-inline-row">
+	            <input id="queue-ticket" class="tasks-input" value="${escapeHtml(ticketCardUrl || ticketCardId)}" placeholder="Paste Trello card URL or trello:<shortLink>" />
+	            <button class="btn-secondary" id="queue-ticket-open" ${ticketCardId || ticketCardUrl ? '' : 'disabled'} title="Open card in Trello">↗ Open</button>
+	          </div>
+	          <div class="tasks-detail-meta">PR-merge automation can auto-move/comment when enabled in settings.</div>
+	        </div>
+	        ` : ''}
 
 	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Notes / Fix Request</div>
@@ -9548,26 +10643,33 @@ class ClaudeOrchestrator {
 	          </div>
 	        </div>
 
-	        <div class="tasks-detail-block">
-	          <div class="tasks-detail-block-title">Dependencies</div>
-	          <div class="tasks-inline-row" style="margin-bottom: 10px; gap: 8px;">
-	            <button class="btn-secondary" id="queue-dep-graph" title="View dependency graph">🧩 Graph</button>
-	            <select id="queue-dep-graph-depth" class="tasks-select tasks-select-inline" title="Graph depth" style="width: 140px;">
-	              ${[1,2,3,4,5,6].map((d) => `<option value="${d}" ${Number(state.depGraphDepth) === d ? 'selected' : ''}>depth ${d}</option>`).join('')}
-	            </select>
-	          </div>
-	          <div class="tasks-inline-row" style="margin-bottom: 10px;">
-	            <select id="queue-dep-pick" class="tasks-select" title="Pick from queue" style="flex:1;min-width:0;">
-	              <option value="">Pick from queue…</option>
-	            </select>
-	            <button class="btn-secondary" id="queue-dep-pick-add" title="Add selected dependency">➕ Add</button>
-	          </div>
-	          <div class="tasks-inline-row" style="margin-bottom: 10px;">
-	            <input id="queue-dep-add" class="tasks-input" placeholder="Add dependency id (e.g. pr:owner/repo#123)" />
-	            <button class="btn-secondary" id="queue-dep-add-btn">➕ Add</button>
-	          </div>
-	          <div id="queue-deps" class="tasks-detail-meta">Loading…</div>
-	        </div>
+		        <div class="tasks-detail-block" id="queue-dep-dropzone">
+		          <div class="tasks-detail-block-title">Dependencies</div>
+		          <div class="tasks-inline-row" style="margin-bottom: 10px; gap: 8px;">
+		            <button class="btn-secondary" id="queue-dep-graph" title="View dependency graph">🧩 Graph</button>
+		            <select id="queue-dep-graph-depth" class="tasks-select tasks-select-inline" title="Graph depth" style="width: 140px;">
+		              ${[1,2,3,4,5,6].map((d) => `<option value="${d}" ${Number(state.depGraphDepth) === d ? 'selected' : ''}>depth ${d}</option>`).join('')}
+		            </select>
+		          </div>
+		          ${ticketCardId ? `
+		          <div class="tasks-inline-row" style="margin-bottom: 10px; gap: 8px;">
+		            <button class="btn-secondary" id="queue-dep-import-ticket" title="Import Trello card Dependencies checklist into this task record">⬇ Import ticket deps</button>
+		            <span class="tasks-detail-meta" style="opacity:0.85;">Adds <code>trello:&lt;shortLink&gt;</code> items from the card “Dependencies” checklist.</span>
+		          </div>
+		          ` : ''}
+		          <div class="tasks-inline-row" style="margin-bottom: 10px;">
+		            <select id="queue-dep-pick" class="tasks-select" title="Pick from queue" style="flex:1;min-width:0;">
+		              <option value="">Pick from queue…</option>
+		            </select>
+		            <button class="btn-secondary" id="queue-dep-pick-add" title="Add selected dependency">➕ Add</button>
+		          </div>
+		          <div class="tasks-inline-row" style="margin-bottom: 10px;">
+		            <input id="queue-dep-add" class="tasks-input" list="queue-dep-suggest" placeholder="Add dependency id(s) (comma/newline separated) e.g. pr:owner/repo#123" />
+		            <button class="btn-secondary" id="queue-dep-add-btn">➕ Add</button>
+		          </div>
+		          <datalist id="queue-dep-suggest"></datalist>
+		          <div id="queue-deps" class="tasks-detail-meta">Loading…</div>
+		        </div>
 
 	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Dependents</div>
@@ -9580,6 +10682,11 @@ class ClaudeOrchestrator {
       const pfEl = detailEl.querySelector('#queue-pfail');
       const vEl = detailEl.querySelector('#queue-verify');
       const prEl = detailEl.querySelector('#queue-prompt-ref');
+      const claimMetaEl = detailEl.querySelector('#queue-claim-meta');
+      const claimBtn = detailEl.querySelector('#queue-claim');
+      const releaseBtn = detailEl.querySelector('#queue-release');
+      const ticketEl = detailEl.querySelector('#queue-ticket');
+      const ticketOpenBtn = detailEl.querySelector('#queue-ticket-open');
       const doneEl = detailEl.querySelector('#queue-done');
       const reviewedEl = detailEl.querySelector('#queue-reviewed');
       const outcomeEl = detailEl.querySelector('#queue-review-outcome');
@@ -9587,6 +10694,7 @@ class ClaudeOrchestrator {
       const openDiffBtn = detailEl.querySelector('#queue-open-diff');
       const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
       const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
+      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
       const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
       const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
       const notesEl = detailEl.querySelector('#queue-notes');
@@ -9594,13 +10702,50 @@ class ClaudeOrchestrator {
       const reverseDepsEl = detailEl.querySelector('#queue-reverse-deps');
       const depGraphBtn = detailEl.querySelector('#queue-dep-graph');
       const depGraphDepthEl = detailEl.querySelector('#queue-dep-graph-depth');
-      const depPickEl = detailEl.querySelector('#queue-dep-pick');
-      const depPickAddBtn = detailEl.querySelector('#queue-dep-pick-add');
-      const depAddEl = detailEl.querySelector('#queue-dep-add');
-      const depAddBtn = detailEl.querySelector('#queue-dep-add-btn');
+	      const depPickEl = detailEl.querySelector('#queue-dep-pick');
+	      const depPickAddBtn = detailEl.querySelector('#queue-dep-pick-add');
+		      const depAddEl = detailEl.querySelector('#queue-dep-add');
+		      const depAddBtn = detailEl.querySelector('#queue-dep-add-btn');
+		      const depSuggestEl = detailEl.querySelector('#queue-dep-suggest');
+		      const depImportTicketBtn = detailEl.querySelector('#queue-dep-import-ticket');
+		      const depDropzoneEl = detailEl.querySelector('#queue-dep-dropzone');
 
-      const renderReverseDeps = () => {
-        if (!reverseDepsEl) return;
+	      const parseTrelloTicket = (raw) => {
+        const s = String(raw || '').trim();
+        if (!s) return null;
+        const mUrl = s.match(/https?:\/\/trello\.com\/c\/([a-zA-Z0-9]+)(?:\/|\b)/i);
+        if (mUrl && mUrl[1]) return { provider: 'trello', cardId: String(mUrl[1]), cardUrl: s };
+        const mTag = s.match(/^trello:([a-zA-Z0-9]+)$/i);
+        if (mTag && mTag[1]) return { provider: 'trello', cardId: String(mTag[1]), cardUrl: `https://trello.com/c/${String(mTag[1])}` };
+        // Assume raw is a shortLink-ish token.
+        if (/^[a-zA-Z0-9]{6,}$/.test(s)) return { provider: 'trello', cardId: s, cardUrl: `https://trello.com/c/${s}` };
+        return null;
+      };
+
+      const getClaimName = () => {
+        const fromSettings = String(this.userSettings?.global?.ui?.tasks?.me?.trelloUsername || '').trim();
+        const fromStorage = String(localStorage.getItem('orchestrator-claim-name') || '').trim();
+        return fromSettings || fromStorage || 'me';
+      };
+
+      const applyClaimUI = (rec) => {
+        const by = String(rec?.claimedBy || '').trim();
+        const at = String(rec?.claimedAt || '').trim();
+        if (claimMetaEl) {
+          claimMetaEl.innerHTML = by
+            ? `claimedBy: <code>${escapeHtml(by)}</code>${at ? ` • <span>${escapeHtml(at)}</span>` : ''}`
+            : 'unclaimed';
+        }
+        if (claimBtn) claimBtn.disabled = !!by;
+        if (releaseBtn) releaseBtn.disabled = !by;
+      };
+
+	      applyClaimUI(record);
+
+	      let depSelection = new Set();
+
+	      const renderReverseDeps = () => {
+	        if (!reverseDepsEl) return;
 
         const id = String(t?.id || '').trim();
         if (!id) {
@@ -9645,58 +10790,139 @@ class ClaudeOrchestrator {
         });
       };
 
-      const loadDeps = async () => {
-        if (!depsEl) return;
-        try {
-          const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies`);
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data?.error || 'Failed to load dependencies');
-          const deps = Array.isArray(data.dependencies) ? data.dependencies : [];
-          if (!deps.length) {
-            depsEl.innerHTML = 'No dependencies.';
-            return;
-          }
+	      const loadDeps = async () => {
+	        if (!depsEl) return;
+	        try {
+	          const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies`);
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok) throw new Error(data?.error || 'Failed to load dependencies');
+	          const deps = Array.isArray(data.dependencies) ? data.dependencies : [];
+	          if (!deps.length) {
+	            depsEl.innerHTML = 'No dependencies. <span style="opacity:0.8;">Tip: drag items from Queue into this box.</span>';
+	            return;
+	          }
 
-          depsEl.innerHTML = deps.map((d) => {
-            const status = d.satisfied ? '✅' : '⛔';
-            const reason = escapeHtml(d.reason || '');
-            const id = escapeHtml(d.id || '');
-            return `<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;margin:6px 0;">
-              <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${status} <code>${id}</code> <span style="opacity:0.75">${reason ? `(${reason})` : ''}</span></div>
-              <button class="btn-secondary queue-dep-remove" data-dep="${id}" title="Remove">✕</button>
-            </div>`;
-          }).join('');
+	          const escAttr = (v) => escapeHtml(v).replace(/\"/g, '&quot;');
+	          const anySelected = deps.some((d) => depSelection.has(String(d?.id || '')));
+	          const allSelected = deps.length > 0 && deps.every((d) => depSelection.has(String(d?.id || '')));
 
-          depsEl.querySelectorAll('.queue-dep-remove').forEach((btn) => {
-            btn.addEventListener('click', async (e) => {
-              e.preventDefault();
-              const dep = btn.getAttribute('data-dep');
-              if (!dep) return;
-              const del = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies/${encodeURIComponent(dep)}`, { method: 'DELETE' });
-              const delData = await del.json().catch(() => ({}));
-              if (!del.ok) throw new Error(delData?.error || 'Failed to remove dependency');
-              await fetchTasks();
-              await loadDeps();
-              renderReverseDeps();
-            });
-          });
-        } catch (e) {
-          depsEl.textContent = String(e?.message || e);
-        }
-      };
+	          depsEl.innerHTML = `
+	            <div class="tasks-inline-row" style="margin: 0 0 10px 0; gap:8px; flex-wrap:wrap;">
+	              <button class="btn-secondary" id="queue-dep-remove-selected" ${anySelected ? '' : 'disabled'} title="Remove checked dependencies">🗑 Remove selected</button>
+	              <button class="btn-secondary" id="queue-dep-select-all" title="Toggle selection">${allSelected ? 'Clear selection' : 'Select all'}</button>
+	              <span class="tasks-detail-meta" style="opacity:0.8;">Tip: drag items from Queue into this box.</span>
+	            </div>
+	            ${deps.map((d) => {
+	              const status = d.satisfied ? '✅' : '⛔';
+	              const reason = escapeHtml(d.reason || '');
+	              const idRaw = String(d.id || '');
+	              const id = escapeHtml(idRaw);
+	              const idAttr = escAttr(idRaw);
+	              const checked = depSelection.has(idRaw) ? 'checked' : '';
+	              return `<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;margin:6px 0;">
+	                <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
+	                  <input type="checkbox" class="queue-dep-check" data-dep="${idAttr}" ${checked} />
+	                  <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${status} <code>${id}</code> <span style="opacity:0.75">${reason ? `(${reason})` : ''}</span></div>
+	                </div>
+	                <button class="btn-secondary queue-dep-remove" data-dep="${idAttr}" title="Remove">✕</button>
+	              </div>`;
+	            }).join('')}
+	          `;
+
+	          const removeSelectedBtn = depsEl.querySelector('#queue-dep-remove-selected');
+	          const selectAllBtn = depsEl.querySelector('#queue-dep-select-all');
+	          const updateBulkUI = () => {
+	            const any = deps.some((d) => depSelection.has(String(d?.id || '')));
+	            const all = deps.length > 0 && deps.every((d) => depSelection.has(String(d?.id || '')));
+	            if (removeSelectedBtn) removeSelectedBtn.disabled = !any;
+	            if (selectAllBtn) selectAllBtn.textContent = all ? 'Clear selection' : 'Select all';
+	          };
+
+	          depsEl.querySelectorAll('.queue-dep-check').forEach((cb) => {
+	            cb.addEventListener('change', () => {
+	              const dep = cb.getAttribute('data-dep') || '';
+	              if (!dep) return;
+	              if (cb.checked) depSelection.add(dep);
+	              else depSelection.delete(dep);
+	              updateBulkUI();
+	            });
+	          });
+
+	          selectAllBtn?.addEventListener('click', (e) => {
+	            e.preventDefault();
+	            const all = deps.length > 0 && deps.every((d) => depSelection.has(String(d?.id || '')));
+	            if (all) depSelection = new Set();
+	            else depSelection = new Set(deps.map(d => String(d?.id || '')).filter(Boolean));
+	            loadDeps().catch(() => {});
+	          });
+
+	          removeSelectedBtn?.addEventListener('click', async (e) => {
+	            e.preventDefault();
+	            const selected = deps.filter(d => depSelection.has(String(d?.id || ''))).map(d => String(d?.id || '')).filter(Boolean);
+	            if (!selected.length) return;
+	            removeSelectedBtn.disabled = true;
+	            try {
+	              for (const dep of selected) {
+	                // eslint-disable-next-line no-await-in-loop
+	                const del = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies/${encodeURIComponent(dep)}`, { method: 'DELETE' });
+	                const delData = await del.json().catch(() => ({}));
+	                if (!del.ok) throw new Error(delData?.error || `Failed to remove dependency: ${dep}`);
+	              }
+	              depSelection = new Set();
+	              await fetchTasks();
+	              await loadDeps();
+	              renderReverseDeps();
+	            } catch (err) {
+	              this.showToast(String(err?.message || err), 'error');
+	            } finally {
+	              removeSelectedBtn.disabled = false;
+	            }
+	          });
+
+	          depsEl.querySelectorAll('.queue-dep-remove').forEach((btn) => {
+	            btn.addEventListener('click', async (e) => {
+	              e.preventDefault();
+	              const dep = btn.getAttribute('data-dep');
+	              if (!dep) return;
+	              const del = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies/${encodeURIComponent(dep)}`, { method: 'DELETE' });
+	              const delData = await del.json().catch(() => ({}));
+	              if (!del.ok) throw new Error(delData?.error || 'Failed to remove dependency');
+	              await fetchTasks();
+	              await loadDeps();
+	              renderReverseDeps();
+	            });
+	          });
+	        } catch (e) {
+	          depsEl.textContent = String(e?.message || e);
+	        }
+	      };
 
       const savePatch = async () => {
         try {
+          let ticketPatch = {};
+          if (ticketEl) {
+            const v = String(ticketEl.value || '').trim();
+            if (!v) {
+              ticketPatch = { ticketProvider: null, ticketCardId: null, ticketCardUrl: null, ticketBoardId: null };
+            } else {
+              const parsed = parseTrelloTicket(v);
+              if (!parsed) throw new Error('Invalid ticket format (paste a Trello URL or trello:<shortLink>)');
+              ticketPatch = { ticketProvider: parsed.provider, ticketCardId: parsed.cardId, ticketCardUrl: parsed.cardUrl || null };
+            }
+          }
+
           const patch = {
             tier: tierEl?.value ? Number(tierEl.value) : null,
             changeRisk: riskEl?.value || null,
             pFailFirstPass: pfEl?.value === '' ? null : Number(pfEl.value),
             verifyMinutes: vEl?.value === '' ? null : Number(vEl.value),
-            promptRef: prEl?.value || null
+            promptRef: prEl?.value || null,
+            ...ticketPatch
           };
 	          const rec = await upsertRecord(t.id, patch);
 	          updateTaskRecordInState(t.id, rec);
 	          this.showToast('Saved', 'success');
+	          applyClaimUI(rec);
 	          renderList();
 	          this.buildSidebar();
 	          this.updateTerminalGrid();
@@ -9705,9 +10931,91 @@ class ClaudeOrchestrator {
 	        }
 	      };
 
+	      const normalizeDependencyId = (raw) => {
+	        const s = String(raw || '').trim();
+	        if (!s) return '';
+	        const mUrl = s.match(/https?:\/\/trello\.com\/c\/([a-zA-Z0-9]+)(?:\/|\b)/i);
+	        if (mUrl?.[1]) return `trello:${String(mUrl[1])}`;
+	        const mTag = s.match(/^trello:([a-zA-Z0-9]+)$/i);
+	        if (mTag?.[1]) return `trello:${String(mTag[1])}`;
+	        return s;
+	      };
+
+	      const splitDependencyIds = (raw) => {
+	        const text = String(raw || '');
+	        return text
+	          .split(/[\n,]+/g)
+	          .map(s => normalizeDependencyId(s))
+	          .map(s => String(s || '').trim())
+	          .filter(Boolean);
+	      };
+
+	      const addDependenciesBulk = async (ids) => {
+	        const list = [...new Set((Array.isArray(ids) ? ids : []).map(normalizeDependencyId).filter(Boolean))];
+	        if (!list.length) return;
+	        for (const depId of list) {
+	          const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies`, {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ dependencyId: depId })
+	          });
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok) throw new Error(data?.error || `Failed to add dependency: ${depId}`);
+	        }
+	        await fetchTasks();
+	        await loadDeps();
+	        renderReverseDeps();
+	      };
+
       [tierEl, riskEl, pfEl, vEl, prEl].forEach((el) => {
         el?.addEventListener('change', () => savePatch());
         el?.addEventListener('blur', () => savePatch());
+      });
+
+      if (ticketEl) {
+        ticketEl.addEventListener('change', () => savePatch());
+        ticketEl.addEventListener('blur', () => savePatch());
+      }
+
+      if (ticketOpenBtn && ticketEl) {
+        const openTicket = () => {
+          const parsed = parseTrelloTicket(ticketEl.value);
+          const url2 = parsed?.cardUrl || (String(ticketCardUrl || '').trim() || (ticketCardId ? `https://trello.com/c/${ticketCardId}` : ''));
+          if (url2) window.open(url2, '_blank', 'noreferrer');
+        };
+        ticketOpenBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          openTicket();
+        });
+      }
+
+      claimBtn?.addEventListener('click', async () => {
+        try {
+          claimBtn.disabled = true;
+          const who = getClaimName();
+          const rec = await upsertRecord(t.id, { claimedBy: who, claimedAt: new Date().toISOString() });
+          updateTaskRecordInState(t.id, rec);
+          applyClaimUI(rec);
+          renderList();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          if (claimBtn) claimBtn.disabled = !!(getTaskById(t.id)?.record?.claimedBy);
+        }
+      });
+
+      releaseBtn?.addEventListener('click', async () => {
+        try {
+          releaseBtn.disabled = true;
+          const rec = await upsertRecord(t.id, { claimedBy: null, claimedAt: null });
+          updateTaskRecordInState(t.id, rec);
+          applyClaimUI(rec);
+          renderList();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          if (releaseBtn) releaseBtn.disabled = !getTaskById(t.id)?.record?.claimedBy;
+        }
       });
 
       const saveNotes = async () => {
@@ -9756,73 +11064,110 @@ class ClaudeOrchestrator {
         }
       });
 
-      // Quick dependency pick from current queue
-      if (depPickEl) {
-        const options = (Array.isArray(state.tasks) ? state.tasks : [])
-          .filter((other) => other && other.id && other.id !== t.id)
-          .map((other) => {
-            const id = String(other.id);
-            const title = other.title ? String(other.title) : id;
-            const kind = other.kind ? String(other.kind) : '';
-            const tier = other?.record?.tier ? `T${other.record.tier}` : '';
-            const label = [title, kind ? `(${kind})` : '', tier].filter(Boolean).join(' ');
-            return { id, label };
-          });
+	      // Quick dependency pick from current queue
+	      if (depPickEl) {
+	        const options = (Array.isArray(state.tasks) ? state.tasks : [])
+	          .filter((other) => other && other.id && other.id !== t.id)
+	          .map((other) => {
+	            const id = String(other.id);
+	            const title = other.title ? String(other.title) : id;
+	            const kind = other.kind ? String(other.kind) : '';
+	            const tier = other?.record?.tier ? `T${other.record.tier}` : '';
+	            const label = [title, kind ? `(${kind})` : '', tier].filter(Boolean).join(' ');
+	            return { id, label };
+	          });
 
-        depPickEl.innerHTML = `<option value="">Pick from queue…</option>`
-          + options.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.label)}</option>`).join('');
-      }
+	        depPickEl.innerHTML = `<option value="">Pick from queue…</option>`
+	          + options.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.label)}</option>`).join('');
 
-      depPickAddBtn?.addEventListener('click', async () => {
-        try {
-          const depId = String(depPickEl?.value || '').trim();
-          if (!depId) return;
-          depPickAddBtn.disabled = true;
-          const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ dependencyId: depId })
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data?.error || 'Failed to add dependency');
-          if (depPickEl) depPickEl.value = '';
-          await fetchTasks();
-          await loadDeps();
-          renderReverseDeps();
-        } catch (e) {
-          this.showToast(String(e?.message || e), 'error');
-        } finally {
-          depPickAddBtn.disabled = false;
-        }
-      });
+	        if (depSuggestEl) {
+	          depSuggestEl.innerHTML = options.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.label)}</option>`).join('');
+	        }
+	      }
 
-      depAddBtn?.addEventListener('click', async () => {
-        try {
-          const depId = String(depAddEl?.value || '').trim();
-          if (!depId) return;
-          depAddBtn.disabled = true;
-          const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ dependencyId: depId })
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data?.error || 'Failed to add dependency');
-          depAddEl.value = '';
-          await fetchTasks();
-          await loadDeps();
-          renderReverseDeps();
-        } catch (e) {
-          this.showToast(String(e?.message || e), 'error');
-        } finally {
-          depAddBtn.disabled = false;
-        }
-      });
+	      depPickAddBtn?.addEventListener('click', async () => {
+	        try {
+	          const depId = String(depPickEl?.value || '').trim();
+	          if (!depId) return;
+	          depPickAddBtn.disabled = true;
+	          await addDependenciesBulk([depId]);
+	          if (depPickEl) depPickEl.value = '';
+	        } catch (e) {
+	          this.showToast(String(e?.message || e), 'error');
+	        } finally {
+	          depPickAddBtn.disabled = false;
+	        }
+	      });
 
-      openPromptBtn?.addEventListener('click', async () => {
-        const pid = (prEl?.value || t.id).trim();
-        await openPromptEditor(pid);
-      });
+	      depAddBtn?.addEventListener('click', async () => {
+	        try {
+	          const depIds = splitDependencyIds(depAddEl?.value || '');
+	          if (!depIds.length) return;
+	          depAddBtn.disabled = true;
+	          await addDependenciesBulk(depIds);
+	          depAddEl.value = '';
+	        } catch (e) {
+	          this.showToast(String(e?.message || e), 'error');
+	        } finally {
+	          depAddBtn.disabled = false;
+	        }
+	      });
+
+	      depAddEl?.addEventListener('keydown', (e) => {
+	        if (e.key === 'Enter') {
+	          e.preventDefault();
+	          depAddBtn?.click();
+	        }
+	      });
+
+		      depImportTicketBtn?.addEventListener('click', async () => {
+		        try {
+		          if (!ticketCardId) return;
+		          depImportTicketBtn.disabled = true;
+		          const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(ticketCardId)}/dependencies?provider=trello`);
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok) throw new Error(data?.error || 'Failed to load ticket dependencies');
+	          const items = Array.isArray(data?.dependencies?.items) ? data.dependencies.items : [];
+	          const depIds = items.map((i) => i?.shortLink ? `trello:${String(i.shortLink)}` : String(i?.url || i?.name || '').trim()).filter(Boolean);
+	          if (!depIds.length) {
+	            this.showToast('No ticket dependencies found.', 'info');
+	            return;
+	          }
+	          await addDependenciesBulk(depIds);
+	          this.showToast(`Imported ${depIds.length} dependency(s).`, 'success');
+	        } catch (e) {
+	          this.showToast(String(e?.message || e), 'error');
+		        } finally {
+		          depImportTicketBtn.disabled = false;
+		        }
+		      });
+
+		      // Drag/drop linking: drop queue ids (or Trello URLs) onto Dependencies block.
+		      if (depDropzoneEl) {
+		        depDropzoneEl.addEventListener('dragover', (e) => {
+		          e.preventDefault();
+		          depDropzoneEl.classList.add('tasks-dropzone-hover');
+		        });
+		        depDropzoneEl.addEventListener('dragleave', () => depDropzoneEl.classList.remove('tasks-dropzone-hover'));
+		        depDropzoneEl.addEventListener('drop', async (e) => {
+		          e.preventDefault();
+		          depDropzoneEl.classList.remove('tasks-dropzone-hover');
+		          const raw = String(e.dataTransfer?.getData('text/plain') || '').trim();
+		          const ids = splitDependencyIds(raw);
+		          if (!ids.length) return;
+		          try {
+		            await addDependenciesBulk(ids);
+		            this.showToast(`Added ${ids.length} dependency(s).`, 'success');
+		          } catch (err) {
+		            this.showToast(String(err?.message || err), 'error');
+		          }
+		        });
+		      }
+
+		      openPromptBtn?.addEventListener('click', async () => {
+		        const pid = (prEl?.value || t.id).trim();
+		        await openPromptEditor(pid, { task: t });
+	      });
 
       openDiffBtn?.addEventListener('click', async () => {
         try {
@@ -9871,6 +11216,26 @@ class ClaudeOrchestrator {
         }
       });
 
+      spawnRecheckBtn?.addEventListener('click', async () => {
+        try {
+          spawnRecheckBtn.disabled = true;
+          const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+          if (info) {
+            const rec = await upsertRecord(t.id, {
+              recheckSpawnedAt: new Date().toISOString(),
+              recheckWorktreeId: info.worktreeId || null
+            });
+            updateTaskRecordInState(t.id, rec);
+            renderList();
+            renderDetail(getTaskById(t.id));
+          }
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          spawnRecheckBtn.disabled = false;
+        }
+      });
+
       reviewedEl?.addEventListener('change', async () => {
         try {
           reviewedEl.disabled = true;
@@ -9879,6 +11244,10 @@ class ClaudeOrchestrator {
           }
           const patch = { reviewed: !!reviewedEl.checked };
           if (reviewedEl.checked) patch.reviewEndedAt = new Date().toISOString();
+          if (reviewedEl.checked) {
+            patch.claimedBy = null;
+            patch.claimedAt = null;
+          }
           const rec = await upsertRecord(t.id, patch);
           updateTaskRecordInState(t.id, rec);
           renderList();
@@ -9899,6 +11268,10 @@ class ClaudeOrchestrator {
           }
           const patch = { reviewOutcome: value || null };
           if (value) patch.reviewEndedAt = new Date().toISOString();
+          if (value) {
+            patch.claimedBy = null;
+            patch.claimedAt = null;
+          }
           const rec = await upsertRecord(t.id, patch);
           updateTaskRecordInState(t.id, rec);
           await fetchTasks();
@@ -9990,12 +11363,23 @@ class ClaudeOrchestrator {
       maybeAutoSpawnReviewer(t).catch(() => {});
     };
 
-    listEl.addEventListener('click', (e) => {
-      const row = e.target.closest('.task-card-row[data-queue-id]');
-      if (!row) return;
-      const id = row.getAttribute('data-queue-id');
-      selectById(id, { allowAutoOpenDiff: true });
-    });
+	    listEl.addEventListener('click', (e) => {
+	      const row = e.target.closest('.task-card-row[data-queue-id]');
+	      if (!row) return;
+	      const id = row.getAttribute('data-queue-id');
+	      selectById(id, { allowAutoOpenDiff: true });
+	    });
+
+	    listEl.addEventListener('dragstart', (e) => {
+	      const row = e.target.closest('.task-card-row[data-queue-id]');
+	      if (!row) return;
+	      const id = String(row.getAttribute('data-queue-id') || '').trim();
+	      if (!id) return;
+	      try {
+	        e.dataTransfer?.setData('text/plain', id);
+	        e.dataTransfer.effectAllowed = 'copy';
+	      } catch {}
+	    });
 
     searchEl.addEventListener('input', () => {
       state.query = searchEl.value || '';
@@ -11528,23 +12912,27 @@ class ClaudeOrchestrator {
     `;
   }
 
-  isWorktreeInUse(repoPath, worktreeId, repoNameOverride = null) {
-    // Check if this worktree has ACTIVE SESSIONS, not just workspace config
-    // A worktree is "in use" only if there are actual terminal sessions for it
+	  isWorktreeInUse(repoPath, worktreeId, repoNameOverride = null) {
+	    // Check if this worktree has ACTIVE SESSIONS, not just workspace config
+	    // A worktree is "in use" only if there are actual terminal sessions for it
 
     if (!this.currentWorkspace) return false;
+    const considerOtherWorkspaces = this.userSettings?.global?.ui?.worktrees?.considerOtherWorkspaces !== false;
 
-    // Extract repo name from path for session matching
-    const repoName = (repoNameOverride || repoPath.split('/').pop() || '').toLowerCase();
+	    const normalizePath = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').trim();
+	    const repoPathNorm = normalizePath(repoPath);
+	
+	    // Extract repo name from path for session matching
+	    const repoName = (repoNameOverride || repoPathNorm.split('/').pop() || '').toLowerCase();
 
     // Check if any session is using this worktree.
     // Session IDs follow patterns like: "work1-claude", "work1-server",
     // or for mixed-repo: "repoName-work1-claude", "repoName-work1-server".
     for (const [sessionId, session] of this.sessions) {
-      // Only consider sessions that belong to the current workspace.
-      // Some legacy sessions may not carry `session.workspace`; for mixed-repo
-      // workspaces we can safely filter by configured terminal IDs.
-      if (this.currentWorkspace) {
+      // Default: consider sessions across workspaces too (stronger "in use" heuristic),
+      // because the same worktree should not be shared across active sessions.
+      // If disabled, keep legacy behavior (current workspace only).
+      if (!considerOtherWorkspaces && this.currentWorkspace) {
         if (session.workspace) {
           if (session.workspace !== this.currentWorkspace.id) continue;
         } else if (this.currentWorkspace.workspaceType === 'mixed-repo') {
@@ -11553,25 +12941,35 @@ class ClaudeOrchestrator {
         }
       }
 
-      const sessionWorktreeId = session.worktreeId
-        || sessionId.match(/-(work\d+)-/)?.[1]
-        || sessionId.split('-')[0];
-      const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
+	      const sessionWorktreeId = session.worktreeId
+	        || sessionId.match(/-(work\d+)-/)?.[1]
+	        || sessionId.split('-')[0];
+	      const sessionRepoName = (session.repositoryName || this.extractRepositoryName(sessionId) || '').toLowerCase();
+	      const cwd = normalizePath(session?.config?.cwd || session?.cwd || '');
+	      const derivedRepoRoot = (cwd && sessionWorktreeId && cwd.endsWith(`/${sessionWorktreeId}`))
+	        ? cwd.slice(0, -(`/${sessionWorktreeId}`).length)
+	        : cwd;
+	      const sessionRepoPath = normalizePath(session?.repositoryRoot || derivedRepoRoot || '');
 
-      // For single-repo workspaces (no repo name in session)
-      if (!sessionRepoName && this.currentWorkspace.repository?.path === repoPath) {
-        if (sessionWorktreeId === worktreeId) {
-          return true;
-        }
-      }
+	      // Prefer exact repo path matches when we can infer them (avoids name collisions across repos).
+	      if (repoPathNorm && sessionRepoPath && repoPathNorm === sessionRepoPath) {
+	        if (sessionWorktreeId === worktreeId) return true;
+	      }
 
-      // For mixed-repo workspaces (repo name in session)
-      if (sessionRepoName && repoName && sessionRepoName === repoName) {
-        if (sessionWorktreeId === worktreeId) {
-          return true;
-        }
-      }
-    }
+	      // For single-repo workspaces (no repo name in session)
+	      if (!sessionRepoName && normalizePath(this.currentWorkspace.repository?.path) === repoPathNorm) {
+	        if (sessionWorktreeId === worktreeId) return true;
+	      }
+
+	      // For mixed-repo workspaces (repo name in session). Only use name matching when we
+	      // can't infer a conflicting repo path.
+	      if (sessionRepoName && repoName && sessionRepoName === repoName) {
+	        if (repoPathNorm && sessionRepoPath && repoPathNorm !== sessionRepoPath) {
+	          continue;
+	        }
+	        if (sessionWorktreeId === worktreeId) return true;
+	      }
+	    }
 
     // Also check mixed-repo workspace config for explicitly assigned worktrees
     if (this.currentWorkspace.terminals && Array.isArray(this.currentWorkspace.terminals)) {
@@ -11816,17 +13214,6 @@ class ClaudeOrchestrator {
       : null;
 
     const recommended = requested || this.getRecommendedWorktree(repo);
-    if (!recommended) {
-      this.showToast('All worktrees busy for this repo; open Quick Work to choose one', 'warning');
-      await this.showQuickWorktreeModal();
-      const modal = document.getElementById('quick-worktree-modal');
-      const input = modal?.querySelector('#quick-worktree-search');
-      if (input) {
-        input.value = String(repo?.name || '');
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      return;
-    }
 
     const prNum = t.prNumber ? Number(t.prNumber) : null;
     const prHint = prNum ? `${repoSlug}#${prNum}` : repoSlug;
@@ -11859,17 +13246,41 @@ class ClaudeOrchestrator {
     const startTierSafe = (startTier >= 1 && startTier <= 4) ? startTier : undefined;
     const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
 
-    this.pendingWorktreeLaunches.set(recommended.id, {
-      promptText: prompt,
-      autoSendPrompt: true,
-      agentConfig
-    });
+    if (!recommended && this.autoCreateExtraWorktreesWhenBusy) {
+      const nextId = this.getNextWorktreeIdForRepo(repo);
+      this.pendingWorktreeLaunches.set(nextId, { promptText: prompt, autoSendPrompt: true, agentConfig });
+      try {
+        await this.autoCreateExtraWorktreeForRepo(repo, { startTier: startTierSafe, worktreeId: nextId });
+        this.showToast(`Creating ${repo.name} ${nextId} (work9+)`, 'success');
+        return { worktreeId: nextId, worktreePath: `${repo.path}/${nextId}`, repositoryRoot: repo.path, repositoryName: repo.name };
+      } catch (e) {
+        this.pendingWorktreeLaunches.delete(nextId);
+        this.showToast(String(e?.message || e), 'error');
+      }
+    }
 
-    if (!this.socket || !this.socket.connected) {
-      this.pendingWorktreeLaunches.delete(recommended.id);
-      this.showToast('Socket not connected', 'error');
+    if (!recommended) {
+      this.showToast('All worktrees busy for this repo; open Quick Work to choose one', 'warning');
+      await this.showQuickWorktreeModal();
+      const modal = document.getElementById('quick-worktree-modal');
+      const input = modal?.querySelector('#quick-worktree-search');
+      if (input) {
+        input.value = String(repo?.name || '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
       return;
     }
+
+    this.pendingWorktreeLaunches.set(recommended.id, { promptText: prompt, autoSendPrompt: true, agentConfig });
+
+	    if (!this.socket) {
+	      this.pendingWorktreeLaunches.delete(recommended.id);
+	      this.showToast('Socket not available', 'error');
+	      return;
+	    }
+	    if (!this.socket.connected) {
+	      this.showToast('Socket not connected (queued launch)', 'warning');
+	    }
 
     this.socket.emit('add-worktree-sessions', {
       worktreeId: recommended.id,
@@ -11908,17 +13319,6 @@ class ClaudeOrchestrator {
       ? (Array.isArray(repo.worktrees) ? repo.worktrees.find((w) => String(w?.id || '') === requestedWorktreeId) : null)
       : null;
     const recommended = requested || this.getRecommendedWorktree(repo);
-    if (!recommended) {
-      this.showToast('All worktrees busy for this repo; open Quick Work to choose one', 'warning');
-      await this.showQuickWorktreeModal();
-      const modal = document.getElementById('quick-worktree-modal');
-      const input = modal?.querySelector('#quick-worktree-search');
-      if (input) {
-        input.value = String(repo?.name || '');
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      return null;
-    }
 
     const prNum = t.prNumber ? Number(t.prNumber) : null;
     const prHint = prNum ? `${repoSlug}#${prNum}` : repoSlug;
@@ -11954,17 +13354,41 @@ class ClaudeOrchestrator {
     const startTierSafe = (startTier >= 1 && startTier <= 4) ? startTier : undefined;
     const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
 
-    this.pendingWorktreeLaunches.set(recommended.id, {
-      promptText: prompt,
-      autoSendPrompt: true,
-      agentConfig
-    });
+    if (!recommended && this.autoCreateExtraWorktreesWhenBusy) {
+      const nextId = this.getNextWorktreeIdForRepo(repo);
+      this.pendingWorktreeLaunches.set(nextId, { promptText: prompt, autoSendPrompt: true, agentConfig });
+      try {
+        await this.autoCreateExtraWorktreeForRepo(repo, { startTier: startTierSafe, worktreeId: nextId });
+        this.showToast(`Creating ${repo.name} ${nextId} (work9+)`, 'success');
+        return { worktreeId: nextId, worktreePath: `${repo.path}/${nextId}`, repositoryRoot: repo.path, repositoryName: repo.name };
+      } catch (e) {
+        this.pendingWorktreeLaunches.delete(nextId);
+        this.showToast(String(e?.message || e), 'error');
+      }
+    }
 
-    if (!this.socket || !this.socket.connected) {
-      this.pendingWorktreeLaunches.delete(recommended.id);
-      this.showToast('Socket not connected', 'error');
+    if (!recommended) {
+      this.showToast('All worktrees busy for this repo; open Quick Work to choose one', 'warning');
+      await this.showQuickWorktreeModal();
+      const modal = document.getElementById('quick-worktree-modal');
+      const input = modal?.querySelector('#quick-worktree-search');
+      if (input) {
+        input.value = String(repo?.name || '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
       return null;
     }
+
+    this.pendingWorktreeLaunches.set(recommended.id, { promptText: prompt, autoSendPrompt: true, agentConfig });
+
+	    if (!this.socket) {
+	      this.pendingWorktreeLaunches.delete(recommended.id);
+	      this.showToast('Socket not available', 'error');
+	      return null;
+	    }
+	    if (!this.socket.connected) {
+	      this.showToast('Socket not connected (queued launch)', 'warning');
+	    }
 
     this.socket.emit('add-worktree-sessions', {
       worktreeId: recommended.id,
@@ -12025,7 +13449,47 @@ class ClaudeOrchestrator {
       return;
     }
 
+    const startTier = Number(tier);
+    const startTierSafe = (startTier >= 1 && startTier <= 4) ? startTier : undefined;
+
+    const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
+    const rawPrompt = String(promptText || card?.desc || '');
+    const cardUrl = String(card?.url || '').trim();
+    const cardShortLink = (cardUrl.match(/trello\.com\/c\/([a-zA-Z0-9]+)/)?.[1]) || '';
+    const ticketProvider = String(provider || 'trello').trim().toLowerCase() || 'trello';
+    const ticketCardId = cardShortLink || String(card?.id || '').trim();
+
+    const preface = (cardUrl || ticketCardId) ? [
+      `Task context: this work is for a ticket.`,
+      cardUrl ? `Trello card: ${cardUrl}` : '',
+      ticketCardId ? `Ticket id: trello:${ticketCardId}` : '',
+      ``,
+      `When you create/update a PR, include the Trello card URL in the PR description so automation can move the ticket on merge.`,
+      ``
+    ].filter(Boolean).join('\n') : '';
+
+    const prompt = preface ? `${preface}\n${rawPrompt}` : rawPrompt;
+
     const recommended = this.getRecommendedWorktree(repo);
+
+    if (!recommended && this.autoCreateExtraWorktreesWhenBusy) {
+      const nextId = this.getNextWorktreeIdForRepo(repo);
+      this.pendingWorktreeLaunches.set(nextId, {
+        promptText: prompt,
+        autoSendPrompt: !!autoSendPrompt,
+        agentConfig,
+        ticket: (ticketProvider && ticketCardId) ? { provider: ticketProvider, cardId: ticketCardId, cardUrl } : null
+      });
+      try {
+        await this.autoCreateExtraWorktreeForRepo(repo, { startTier: startTierSafe, worktreeId: nextId });
+        this.showToast(`Creating ${repo.name} ${nextId} (work9+)`, 'success');
+        return;
+      } catch (e) {
+        this.pendingWorktreeLaunches.delete(nextId);
+        this.showToast(String(e?.message || e), 'error');
+      }
+    }
+
     if (!recommended) {
       this.showToast('All worktrees busy for this repo; open Quick Work to choose one', 'warning');
       await this.showQuickWorktreeModal();
@@ -12038,24 +13502,22 @@ class ClaudeOrchestrator {
       return;
     }
 
-    const startTier = Number(tier);
-    const startTierSafe = (startTier >= 1 && startTier <= 4) ? startTier : undefined;
-
-    const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
-    const prompt = String(promptText || card?.desc || '');
-
     // Ensure we register the pending launch before emitting, to avoid races.
     this.pendingWorktreeLaunches.set(recommended.id, {
       promptText: prompt,
       autoSendPrompt: !!autoSendPrompt,
-      agentConfig
+      agentConfig,
+      ticket: (ticketProvider && ticketCardId) ? { provider: ticketProvider, cardId: ticketCardId, cardUrl } : null
     });
 
-    if (!this.socket || !this.socket.connected) {
-      this.pendingWorktreeLaunches.delete(recommended.id);
-      this.showToast('Socket not connected', 'error');
-      return;
-    }
+	    if (!this.socket) {
+	      this.pendingWorktreeLaunches.delete(recommended.id);
+	      this.showToast('Socket not available', 'error');
+	      return;
+	    }
+	    if (!this.socket.connected) {
+	      this.showToast('Socket not connected (queued launch)', 'warning');
+	    }
 
     this.socket.emit('add-worktree-sessions', {
       worktreeId: recommended.id,

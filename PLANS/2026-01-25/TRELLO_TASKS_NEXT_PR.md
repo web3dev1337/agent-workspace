@@ -1,6 +1,6 @@
 # Next PR Plan: Trello Tasks (Metadata + Edits + Dependencies)
 
-Status: **draft / to implement on branch `feat/trello-kanban-board` (PR #179)**.
+Status (2026-01-26): **shipped** (built across PRs #179/#180 and follow-ups; this doc is kept as historical plan + checklist).
 
 This follows the merged Trello Tasks v0 work (PR #178) and expands it toward “Trello parity” while keeping the provider abstraction clean so we can swap/augment providers later (Jira/Linear/Notion/custom).
 
@@ -141,12 +141,12 @@ If time:
 
 ## Checklist
 
-- [ ] Backend: provider capabilities reflect writes
-- [ ] Backend: board members endpoint
-- [ ] Backend: dependency endpoints + provider implementation
-- [ ] UI: dependencies view + add/remove
-- [ ] UI: member assign/unassign
-- [ ] UI: due set/clear
-- [ ] Tests: unit + e2e
-- [ ] Docs updated (`PLANS/*` + rolling log)
-- [ ] PR opened + link added to rolling log
+- [x] Backend: provider capabilities reflect writes
+- [x] Backend: board members endpoint
+- [x] Backend: dependency endpoints + provider implementation
+- [x] UI: dependencies view + add/remove (+ toggle)
+- [x] UI: member assign/unassign
+- [x] UI: due set/clear
+- [x] Tests: unit + e2e
+- [x] Docs updated (`PLANS/*` + rolling log)
+- [x] PR opened + link added to rolling log

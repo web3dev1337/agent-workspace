@@ -44,7 +44,13 @@ test.describe('Process banner', () => {
 
     // Depending on startup state we may be on the dashboard (banner in topbar) or inside a workspace
     // (banner in header). Accept either.
-    await expect(dashboardBanner.or(headerBanner)).toBeVisible({ timeout: 15000 });
+    await expect
+      .poll(
+        async () =>
+          (await dashboardBanner.isVisible().catch(() => false)) || (await headerBanner.isVisible().catch(() => false)),
+        { timeout: 15000 }
+      )
+      .toBe(true);
     const banner = (await dashboardBanner.isVisible().catch(() => false)) ? dashboardBanner : headerBanner;
 
     await expect(banner.locator('.process-chip').first()).toHaveText('WIP 2');

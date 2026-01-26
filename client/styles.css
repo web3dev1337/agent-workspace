@@ -3823,6 +3823,38 @@ header h1 {
   margin-bottom: 1rem;
 }
 
+.dashboard-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.dashboard-summary-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+}
+
+.dashboard-summary-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard-summary-body {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.dashboard-summary-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 0.75rem;
+}
+
 .dashboard-topbar-btn {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -7607,6 +7639,12 @@ header h1 {
 
 .tasks-detail-block {
   margin-top: var(--space-md);
+}
+
+.tasks-detail-block.tasks-dropzone-hover {
+  outline: 2px dashed var(--accent-color);
+  outline-offset: 6px;
+  border-radius: var(--radius-md);
 }
 
 .tasks-detail-block-title {
