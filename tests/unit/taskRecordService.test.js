@@ -32,6 +32,21 @@ describe('TaskRecordService', () => {
     expect(raw.records[id].tier).toBe(3);
   });
 
+  test('upsert supports telemetry timestamps and prompt chars', async () => {
+    const service = new TaskRecordService({ filePath: '/tmp/test-task-records-telemetry.json' });
+    const rec = await service.upsert('task:telemetry', {
+      reviewStartedAt: '2026-01-25T00:00:00Z',
+      reviewEndedAt: '2026-01-25T00:01:00Z',
+      promptSentAt: '2026-01-25T00:00:10Z',
+      promptChars: 123
+    });
+
+    expect(rec.reviewStartedAt).toBe('2026-01-25T00:00:00.000Z');
+    expect(rec.reviewEndedAt).toBe('2026-01-25T00:01:00.000Z');
+    expect(rec.promptSentAt).toBe('2026-01-25T00:00:10.000Z');
+    expect(rec.promptChars).toBe(123);
+  });
+
   test('upsert normalizes dependencies and supports done', async () => {
     const { TaskRecordService } = require('../../server/taskRecordService');
     const os = require('os');

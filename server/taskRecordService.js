@@ -53,6 +53,12 @@ const normalizeReviewOutcome = (v) => {
   return allowed.has(s) ? s : null;
 };
 
+const normalizeDateTime = (v) => {
+  if (v === null || v === '') return null;
+  const dt = new Date(v);
+  return Number.isFinite(dt.getTime()) ? dt.toISOString() : null;
+};
+
 const normalizeDependencies = (deps) => {
   if (deps === null) return [];
   if (!Array.isArray(deps)) return null;
@@ -219,6 +225,33 @@ class TaskRecordService {
           next.reviewOutcome = outcome;
           if (!next.reviewedAt) next.reviewedAt = new Date().toISOString();
         }
+      }
+    }
+
+    if (p.reviewStartedAt !== undefined) {
+      const dt = normalizeDateTime(p.reviewStartedAt);
+      if (dt) next.reviewStartedAt = dt;
+      else clear.add('reviewStartedAt');
+    }
+
+    if (p.reviewEndedAt !== undefined) {
+      const dt = normalizeDateTime(p.reviewEndedAt);
+      if (dt) next.reviewEndedAt = dt;
+      else clear.add('reviewEndedAt');
+    }
+
+    if (p.promptSentAt !== undefined) {
+      const dt = normalizeDateTime(p.promptSentAt);
+      if (dt) next.promptSentAt = dt;
+      else clear.add('promptSentAt');
+    }
+
+    if (p.promptChars !== undefined) {
+      if (p.promptChars === null) {
+        clear.add('promptChars');
+      } else {
+        const n = Number(p.promptChars);
+        if (Number.isFinite(n) && n >= 0) next.promptChars = Math.round(n);
       }
     }
 

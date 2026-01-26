@@ -13,16 +13,17 @@
     "terminal": {},
     "ui": {
       "theme": "dark",
-      "tasks": {
-        "theme": "inherit",
-        "me": {
-          "trelloUsername": ""
-        },
-        "kanban": {
-          "collapsedByBoard": {},
-          "expandedByBoard": {},
-          "layoutByBoard": {}
-        },
+        "tasks": {
+          "theme": "inherit",
+          "me": {
+            "trelloUsername": ""
+          },
+          "boardMappings": {},
+          "kanban": {
+            "collapsedByBoard": {},
+            "expandedByBoard": {},
+            "layoutByBoard": {}
+          },
         "filters": {
           "assigneesByBoard": {}
         }

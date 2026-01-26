@@ -42,13 +42,13 @@ test.describe('Queue Panel', () => {
       if (msg.type() === 'error') pageErrors.push(`console.error: ${msg.text()}`);
     });
 
-    // Mock process tasks list (one PR item)
+    // Mock process tasks list (one PR item + one dependent item)
     await page.route(/.*\/api\/process\/tasks.*/, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          count: 1,
+          count: 2,
           tasks: [
             {
               id: 'pr:web3dev1337/incremental-game#4',
@@ -63,6 +63,16 @@ test.describe('Queue Panel', () => {
               updatedAt: '2026-01-25T00:00:00Z',
               record: { tier: 2, changeRisk: 'low' },
               dependencySummary: { total: 2, blocked: 1 }
+            },
+            {
+              id: 'worktree:/tmp/demo/work2',
+              kind: 'worktree',
+              status: 'ready',
+              title: 'Mock Worktree Task',
+              worktreePath: '/tmp/demo/work2',
+              updatedAt: '2026-01-25T00:00:01Z',
+              record: { tier: 3, dependencies: ['pr:web3dev1337/incremental-game#4'] },
+              dependencySummary: { total: 0, blocked: 0 }
             }
           ]
         })
@@ -174,13 +184,28 @@ test.describe('Queue Panel', () => {
 
     await page.waitForFunction(() => Array.isArray(window.__fetchUrls) && window.__fetchUrls.some(u => u.includes('/api/process/tasks')), { timeout: 10000 });
 
-    await expect(page.locator('#queue-list .task-card-row')).toHaveCount(1);
+    await expect(page.locator('#queue-list .task-card-row')).toHaveCount(2);
     await expect(page.locator('#queue-list .task-card-row .pr-badge', { hasText: 'incremental-game' })).toBeVisible();
     await expect(page.locator('#queue-list .task-card-row .pr-badge', { hasText: 'work2' })).toBeVisible();
     await expect(page.locator('#queue-list .task-card-row .pr-badge', { hasText: 'feature/mock-queue' })).toBeVisible();
     expect(pageErrors).toEqual([]);
-    await page.locator('#queue-list .task-card-row').click();
+    await page.locator('#queue-list .task-card-row[data-queue-id=\"pr:web3dev1337/incremental-game#4\"]').click();
     await expect(page.locator('#queue-tier')).toBeVisible();
+    await expect(page.locator('#queue-reverse-deps')).toContainText('Mock Worktree Task');
+
+    // Start Review should kick off a review timer (PUT includes reviewStartedAt).
+    const startReq = page.waitForRequest((req) => {
+      if (req.method() !== 'PUT') return false;
+      if (!req.url().includes('/api/process/task-records/')) return false;
+      try {
+        const body = req.postDataJSON();
+        return !!body?.reviewStartedAt;
+      } catch {
+        return false;
+      }
+    }, { timeout: 5000 });
+    await page.locator('#queue-start-review').click();
+    await startReq;
 
     // Change tier to 3; should trigger a PUT.
     const reqPromise = page.waitForRequest((req) => req.method() === 'PUT' && req.url().includes('/api/process/task-records/'), { timeout: 5000 });

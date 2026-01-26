@@ -47,6 +47,63 @@ class VoiceCommandService {
           return { worktreeId: `work${num}` };
         }
       },
+      // Workflow modes (focus/review/background)
+      {
+        patterns: [
+          /(?:enter|switch\s+to|go\s+to)\s+(focus|review|background)\s+mode/i,
+          /^(focus|review|background)\s+mode$/i,
+        ],
+        command: 'set-workflow-mode',
+        extractParams: (match) => ({ mode: match[1].toLowerCase() })
+      },
+      // Focus: Tier 2 behavior (auto/always)
+      {
+        patterns: [
+          /(?:tier\s*2|tier\s*two|t2)\s+(auto|always)/i,
+          /show\s+(?:me\s+)?tier\s*(?:2|two)s?/i,
+          /hide\s+tier\s*(?:2|two)s?/i,
+        ],
+        command: 'set-focus-tier2',
+        extractParams: (match) => {
+          const raw = (match[1] || '').toLowerCase();
+          if (raw === 'auto' || raw === 'always') return { behavior: raw };
+          if (/^hide/i.test(match[0])) return { behavior: 'auto' };
+          return { behavior: 'always' };
+        }
+      },
+      // Open Queue
+      {
+        patterns: [
+          /open\s+queue/i,
+          /show\s+queue/i,
+          /go\s+to\s+queue/i,
+          /start\s+review/i,
+        ],
+        command: 'open-queue',
+        extractParams: () => ({})
+      },
+      // Open Tasks (Trello)
+      {
+        patterns: [
+          /open\s+tasks/i,
+          /show\s+tasks/i,
+          /open\s+trello/i,
+          /show\s+trello/i,
+        ],
+        command: 'open-tasks',
+        extractParams: () => ({})
+      },
+      // Open Advisor
+      {
+        patterns: [
+          /open\s+advice/i,
+          /show\s+advice/i,
+          /open\s+advisor/i,
+          /show\s+advisor/i,
+        ],
+        command: 'open-advice',
+        extractParams: () => ({})
+      },
       // Show all worktrees
       {
         patterns: [
@@ -378,7 +435,13 @@ class VoiceCommandService {
       },
     ];
 
-    this.checkLLMAvailability();
+    const skipAutoCheck = process.env.NODE_ENV === 'test'
+      || process.env.JEST_WORKER_ID !== undefined
+      || String(process.env.VOICE_SKIP_LLM_CHECK || '').toLowerCase() === 'true';
+
+    if (!skipAutoCheck) {
+      this.checkLLMAvailability();
+    }
   }
 
   /**
@@ -543,6 +606,11 @@ Command patterns:
 - "show all" or "view all" → show-all-worktrees
 - "switch to X" or "open X workspace" → switch-workspace with name
 - "start claude in X" → start-claude with sessionId
+- "enter focus/review/background mode" → set-workflow-mode with mode
+- "tier 2 auto/always" → set-focus-tier2 with behavior
+- "open queue" → open-queue
+- "open tasks" → open-tasks
+- "open advice" → open-advice
 - "open commander" → open-commander
 - "open settings" → open-settings
 

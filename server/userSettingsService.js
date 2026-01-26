@@ -54,6 +54,10 @@ class UserSettingsService {
               // If unset, the UI will use `/api/tasks/me` from the provider credentials.
               trelloUsername: ''
             },
+            // Keyed by `${provider}:${boardId}` -> mapping/config:
+            // { enabled?: boolean, repoSlug?: string, localPath?: string, defaultStartTier?: 1|2|3|4 }
+            // Local-only by default (stored in user-settings.json).
+            boardMappings: {},
             kanban: {
               // Persist kanban UI state server-side (survives refresh and works across ports/origins).
               // Keyed by `${provider}:${boardId}` -> string[] listIds
@@ -229,18 +233,65 @@ class UserSettingsService {
         Object.assign(merged.global.terminal, userSettings.global.terminal);
       }
       if (userSettings.global.ui) {
+        const ui = userSettings.global.ui || {};
+
+        // Shallow merge at the UI level, but preserve nested defaults with targeted merges.
+        // Important: do NOT let a partial `ui.tasks` object overwrite the default tasks subtree.
+        const uiDefaults = merged.global.ui || {};
+        const tasksDefaults = uiDefaults.tasks || {};
         merged.global.ui = {
-          ...(merged.global.ui || {}),
-          ...(userSettings.global.ui || {})
+          ...uiDefaults,
+          ...ui,
+          tasks: tasksDefaults
         };
-        if (typeof userSettings.global.ui.theme === 'string') {
-          merged.global.ui.theme = userSettings.global.ui.theme;
+
+        if (typeof ui.theme === 'string') {
+          merged.global.ui.theme = ui.theme;
         }
-        if (userSettings.global.ui.diffViewer) {
+
+        if (ui.diffViewer) {
           merged.global.ui.diffViewer = {
             ...(merged.global.ui.diffViewer || {}),
-            ...(userSettings.global.ui.diffViewer || {})
+            ...(ui.diffViewer || {})
           };
+        }
+
+        if (ui.tasks) {
+          const defaultsTasks = tasksDefaults || {};
+          const tasks = ui.tasks || {};
+
+          merged.global.ui.tasks = {
+            ...defaultsTasks,
+            ...tasks
+          };
+
+          if (tasks.me) {
+            merged.global.ui.tasks.me = {
+              ...(defaultsTasks.me || {}),
+              ...(tasks.me || {})
+            };
+          }
+
+          if (tasks.kanban) {
+            merged.global.ui.tasks.kanban = {
+              ...(defaultsTasks.kanban || {}),
+              ...(tasks.kanban || {})
+            };
+          }
+
+          if (tasks.filters) {
+            merged.global.ui.tasks.filters = {
+              ...(defaultsTasks.filters || {}),
+              ...(tasks.filters || {})
+            };
+          }
+
+          if (tasks.boardMappings) {
+            merged.global.ui.tasks.boardMappings = {
+              ...(defaultsTasks.boardMappings || {}),
+              ...(tasks.boardMappings || {})
+            };
+          }
         }
       }
     }
