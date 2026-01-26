@@ -184,8 +184,10 @@ When Claude is waiting for input:
 - ✅ Dependencies:
   - Trello-backed via checklist named `Dependencies`
   - Orchestrator-native via task records (`~/.orchestrator/task-records.json`)
+  - Queue includes a dependency graph modal (bounded depth) + “pick from queue” linking
 - ✅ Prompt artifacts see `~/.orchestrator/prompts/<id>.md`
 - ✅ Tasks: board↔repo mapping + “Launch agent from Trello card” (via Tasks → Board Settings + card detail Launch section)
+ - ✅ Review conveyor: “Reviewer” + “Fixer” actions for PR tasks
 
 ### Commander + Voice (workflow controls)
 Commander can drive the process layer via semantic commands (and voice uses the same command registry):

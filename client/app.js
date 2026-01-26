@@ -8761,8 +8761,11 @@ class ClaudeOrchestrator {
       reviewTier: 'all', // all | none | 1..4
       unreviewedOnly: false,
       autoOpenDiff: false,
+      autoReviewer: localStorage.getItem('queue-auto-reviewer') === 'true',
+      depGraphDepth: Math.max(1, Math.min(6, Number(localStorage.getItem('queue-dep-graph-depth') || 2) || 2)),
       reviewActive: false,
-      reviewTimer: { taskId: null, startedAtMs: null }
+      reviewTimer: { taskId: null, startedAtMs: null },
+      reviewerSpawning: new Set()
     };
 
     // Apply any one-shot preset (e.g. workflow review button).
@@ -8817,6 +8820,7 @@ class ClaudeOrchestrator {
           <div class="tasks-view-toggle" role="group" aria-label="Review filters">
             <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
             <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
             <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
           </div>
           <div class="tasks-view-toggle" role="group" aria-label="Queue navigation">
@@ -8852,6 +8856,7 @@ class ClaudeOrchestrator {
     const tierNoneBtn = modal.querySelector('#queue-tier-none');
     const unreviewedBtn = modal.querySelector('#queue-unreviewed');
     const autoDiffBtn = modal.querySelector('#queue-auto-diff');
+    const autoReviewerBtn = modal.querySelector('#queue-auto-reviewer');
     const startReviewBtn = modal.querySelector('#queue-start-review');
     const prevBtn = modal.querySelector('#queue-prev');
     const nextBtn = modal.querySelector('#queue-next');
@@ -8884,6 +8889,7 @@ class ClaudeOrchestrator {
 
       unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
       autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
+      autoReviewerBtn?.classList.toggle('active', !!state.autoReviewer);
       startReviewBtn?.classList.toggle('active', !!state.reviewActive);
     };
 
@@ -8917,6 +8923,13 @@ class ClaudeOrchestrator {
 
     autoDiffBtn?.addEventListener('click', () => {
       state.autoOpenDiff = !state.autoOpenDiff;
+      syncReviewControlsUI();
+      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+    });
+
+    autoReviewerBtn?.addEventListener('click', () => {
+      state.autoReviewer = !state.autoReviewer;
+      localStorage.setItem('queue-auto-reviewer', state.autoReviewer ? 'true' : 'false');
       syncReviewControlsUI();
       if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     });
@@ -9192,6 +9205,127 @@ class ClaudeOrchestrator {
       await load();
     };
 
+    const openDependencyGraphModal = async (taskId) => {
+      const id = String(taskId || '').trim();
+      if (!id) return;
+
+      const depth = Math.max(1, Math.min(6, Number(state.depGraphDepth) || 2));
+
+      const existing = document.getElementById('queue-dep-graph-modal');
+      if (existing) existing.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'queue-dep-graph-modal';
+      overlay.className = 'modal tasks-modal';
+      overlay.classList.add(`tasks-theme-${resolvedTheme}`);
+      overlay.innerHTML = `
+        <div class="modal-content tasks-content" style="max-width: 980px; width: 95vw; height: 80vh;">
+          <div class="modal-header">
+            <h2>🧩 Dependency Graph</h2>
+            <button class="close-btn tasks-close-btn" id="queue-dep-graph-close" aria-label="Close" title="Close (Esc)">×</button>
+          </div>
+          <div class="tasks-toolbar">
+            <div class="tasks-detail-meta">root: <code>${escapeHtml(id)}</code> • depth: ${depth}</div>
+            <span style="flex:1"></span>
+            <button class="btn-secondary" id="queue-dep-graph-refresh">🔄 Refresh</button>
+          </div>
+          <div class="tasks-body" style="grid-template-columns: 1fr 1fr;">
+            <div class="tasks-detail" style="padding: 14px;">
+              <div class="tasks-detail-block">
+                <div class="tasks-detail-block-title">Blocked By</div>
+                <div id="queue-dep-graph-up" class="tasks-detail-meta">Loading…</div>
+              </div>
+            </div>
+            <div class="tasks-detail" style="padding: 14px;">
+              <div class="tasks-detail-block">
+                <div class="tasks-detail-block-title">Unblocks</div>
+                <div id="queue-dep-graph-down" class="tasks-detail-meta">Loading…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const close = () => overlay.remove();
+      overlay.querySelector('#queue-dep-graph-close')?.addEventListener('click', close);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.remove(); }, { once: true });
+
+      const renderGraph = (graph) => {
+        const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+        const edges = Array.isArray(graph?.edges) ? graph.edges : [];
+        const nodeById = new Map(nodes.map((n) => [String(n.id), n]));
+
+        const upAdj = new Map();   // id -> [{id, satisfied, reason}]
+        const downAdj = new Map(); // id -> [{id, satisfied, reason}]
+        for (const e of edges) {
+          const from = String(e.from || '').trim();
+          const to = String(e.to || '').trim();
+          if (!from || !to) continue;
+          if (!upAdj.has(from)) upAdj.set(from, []);
+          upAdj.get(from).push({ id: to, satisfied: !!e.satisfied, reason: String(e.reason || '') });
+          if (!downAdj.has(to)) downAdj.set(to, []);
+          downAdj.get(to).push({ id: from, satisfied: !!e.satisfied, reason: String(e.reason || '') });
+        }
+
+        const walk = (startId, adj, remaining, visited) => {
+          const id2 = String(startId || '').trim();
+          if (!id2 || remaining <= 0) return '';
+          const children = (adj.get(id2) || []).slice();
+          if (!children.length) return '';
+          const nextVisited = new Set(visited);
+          nextVisited.add(id2);
+          return `<ul style="margin: 8px 0 8px 18px; padding: 0;">
+            ${children.map((c) => {
+              const cid = String(c.id || '').trim();
+              const node = nodeById.get(cid) || { label: cid, id: cid };
+              const label = escapeHtml(node.label || cid);
+              const icon = (adj === upAdj) ? (c.satisfied ? '✅' : '⛔') : (node.doneAt ? '✅' : '⛔');
+              const reason = (adj === upAdj) ? (c.reason ? ` <span style="opacity:0.7">(${escapeHtml(c.reason)})</span>` : '') : '';
+              const childTree = nextVisited.has(cid) ? '' : walk(cid, adj, remaining - 1, nextVisited);
+              return `<li style="list-style:none; margin: 6px 0;">
+                <a href="#" data-queue-jump="${escapeHtml(cid)}" style="color: inherit; text-decoration: none;">
+                  ${icon} <code>${label}</code>${reason}
+                </a>
+                ${childTree}
+              </li>`;
+            }).join('')}
+          </ul>`;
+        };
+
+        const upEl = overlay.querySelector('#queue-dep-graph-up');
+        const downEl = overlay.querySelector('#queue-dep-graph-down');
+        if (upEl) upEl.innerHTML = walk(id, upAdj, depth, new Set()) || 'No dependencies.';
+        if (downEl) downEl.innerHTML = walk(id, downAdj, depth, new Set()) || 'No dependents.';
+
+        overlay.querySelectorAll('[data-queue-jump]').forEach((a) => {
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = a.getAttribute('data-queue-jump');
+            if (!targetId) return;
+            close();
+            selectById(targetId, { allowAutoOpenDiff: true });
+          });
+        });
+      };
+
+      const fetchGraph = async () => {
+        const url = new URL(`${serverUrl}/api/process/dependency-graph/${encodeURIComponent(id)}`);
+        url.searchParams.set('depth', String(depth));
+        const res = await fetch(url.toString());
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || 'Failed to load graph');
+        renderGraph(data);
+      };
+
+      overlay.querySelector('#queue-dep-graph-refresh')?.addEventListener('click', () => {
+        fetchGraph().catch((e) => this.showToast(String(e?.message || e), 'error'));
+      });
+
+      await fetchGraph().catch((e) => this.showToast(String(e?.message || e), 'error'));
+    };
+
     const renderDetail = (t) => {
       if (!t) {
         detailEl.innerHTML = `<div class="tasks-detail-empty">Select an item to edit tier/risk or open it.</div>`;
@@ -9212,6 +9346,7 @@ class ClaudeOrchestrator {
       const reviewEndedAt = record.reviewEndedAt || '';
       const promptSentAt = record.promptSentAt || '';
       const promptChars = record.promptChars ?? '';
+      const notes = record.notes || '';
 
       const url = t.url || '';
       const hasPR = t.kind === 'pr' && url;
@@ -9243,6 +9378,7 @@ class ClaudeOrchestrator {
             ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
             ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
             ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
+            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
           </div>
         </div>
 
@@ -9328,6 +9464,12 @@ class ClaudeOrchestrator {
 	        </div>
 
 	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Notes / Fix Request</div>
+	          <textarea id="queue-notes" class="tasks-textarea" rows="5" placeholder="Reviewer feedback / fix request (used by Fixer automation)…">${escapeHtml(notes)}</textarea>
+	          <div class="tasks-detail-meta">Tip: set Outcome to <code>needs_fix</code> and paste review feedback here, then click <strong>🛠 Fixer</strong>.</div>
+	        </div>
+
+	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Telemetry</div>
 	          <div class="tasks-kv">
 	            <div class="tasks-kv-row">
@@ -9362,6 +9504,18 @@ class ClaudeOrchestrator {
 
 	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Dependencies</div>
+	          <div class="tasks-inline-row" style="margin-bottom: 10px; gap: 8px;">
+	            <button class="btn-secondary" id="queue-dep-graph" title="View dependency graph">🧩 Graph</button>
+	            <select id="queue-dep-graph-depth" class="tasks-select tasks-select-inline" title="Graph depth" style="width: 140px;">
+	              ${[1,2,3,4,5,6].map((d) => `<option value="${d}" ${Number(state.depGraphDepth) === d ? 'selected' : ''}>depth ${d}</option>`).join('')}
+	            </select>
+	          </div>
+	          <div class="tasks-inline-row" style="margin-bottom: 10px;">
+	            <select id="queue-dep-pick" class="tasks-select" title="Pick from queue" style="flex:1;min-width:0;">
+	              <option value="">Pick from queue…</option>
+	            </select>
+	            <button class="btn-secondary" id="queue-dep-pick-add" title="Add selected dependency">➕ Add</button>
+	          </div>
 	          <div class="tasks-inline-row" style="margin-bottom: 10px;">
 	            <input id="queue-dep-add" class="tasks-input" placeholder="Add dependency id (e.g. pr:owner/repo#123)" />
 	            <button class="btn-secondary" id="queue-dep-add-btn">➕ Add</button>
@@ -9386,10 +9540,16 @@ class ClaudeOrchestrator {
       const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
       const openDiffBtn = detailEl.querySelector('#queue-open-diff');
       const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
+      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
       const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
       const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
+      const notesEl = detailEl.querySelector('#queue-notes');
       const depsEl = detailEl.querySelector('#queue-deps');
       const reverseDepsEl = detailEl.querySelector('#queue-reverse-deps');
+      const depGraphBtn = detailEl.querySelector('#queue-dep-graph');
+      const depGraphDepthEl = detailEl.querySelector('#queue-dep-graph-depth');
+      const depPickEl = detailEl.querySelector('#queue-dep-pick');
+      const depPickAddBtn = detailEl.querySelector('#queue-dep-pick-add');
       const depAddEl = detailEl.querySelector('#queue-dep-add');
       const depAddBtn = detailEl.querySelector('#queue-dep-add-btn');
 
@@ -9504,6 +9664,20 @@ class ClaudeOrchestrator {
         el?.addEventListener('blur', () => savePatch());
       });
 
+      const saveNotes = async () => {
+        if (!notesEl) return;
+        try {
+          const rec = await upsertRecord(t.id, { notes: String(notesEl.value || '') });
+          updateTaskRecordInState(t.id, rec);
+          renderList();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        }
+      };
+
+      notesEl?.addEventListener('change', saveNotes);
+      notesEl?.addEventListener('blur', saveNotes);
+
       doneEl?.addEventListener('change', async () => {
         try {
           const rec = await upsertRecord(t.id, { done: !!doneEl.checked });
@@ -9512,6 +9686,67 @@ class ClaudeOrchestrator {
           await loadDeps();
         } catch (e) {
           this.showToast(String(e?.message || e), 'error');
+        }
+      });
+
+      // Dependency graph controls
+      if (depGraphDepthEl) {
+        depGraphDepthEl.value = String(state.depGraphDepth || 2);
+        depGraphDepthEl.addEventListener('change', () => {
+          const next = Math.max(1, Math.min(6, Number(depGraphDepthEl.value) || 2));
+          state.depGraphDepth = next;
+          localStorage.setItem('queue-dep-graph-depth', String(next));
+        });
+      }
+
+      depGraphBtn?.addEventListener('click', async () => {
+        try {
+          depGraphBtn.disabled = true;
+          await openDependencyGraphModal(t.id);
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          depGraphBtn.disabled = false;
+        }
+      });
+
+      // Quick dependency pick from current queue
+      if (depPickEl) {
+        const options = (Array.isArray(state.tasks) ? state.tasks : [])
+          .filter((other) => other && other.id && other.id !== t.id)
+          .map((other) => {
+            const id = String(other.id);
+            const title = other.title ? String(other.title) : id;
+            const kind = other.kind ? String(other.kind) : '';
+            const tier = other?.record?.tier ? `T${other.record.tier}` : '';
+            const label = [title, kind ? `(${kind})` : '', tier].filter(Boolean).join(' ');
+            return { id, label };
+          });
+
+        depPickEl.innerHTML = `<option value="">Pick from queue…</option>`
+          + options.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.label)}</option>`).join('');
+      }
+
+      depPickAddBtn?.addEventListener('click', async () => {
+        try {
+          const depId = String(depPickEl?.value || '').trim();
+          if (!depId) return;
+          depPickAddBtn.disabled = true;
+          const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dependencyId: depId })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || 'Failed to add dependency');
+          if (depPickEl) depPickEl.value = '';
+          await fetchTasks();
+          await loadDeps();
+          renderReverseDeps();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          depPickAddBtn.disabled = false;
         }
       });
 
@@ -9567,6 +9802,26 @@ class ClaudeOrchestrator {
           this.showToast(String(e?.message || e), 'error');
         } finally {
           spawnReviewerBtn.disabled = false;
+        }
+      });
+
+      spawnFixerBtn?.addEventListener('click', async () => {
+        try {
+          spawnFixerBtn.disabled = true;
+          const info = await this.spawnFixAgentForPRTask(t, { tier: 2, agentId: 'claude', mode: 'fresh', yolo: true, notes: String(notesEl?.value || '') });
+          if (info) {
+            const rec = await upsertRecord(t.id, {
+              fixerSpawnedAt: new Date().toISOString(),
+              fixerWorktreeId: info.worktreeId || null
+            });
+            updateTaskRecordInState(t.id, rec);
+            renderList();
+            renderDetail(getTaskById(t.id));
+          }
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          spawnFixerBtn.disabled = false;
         }
       });
 
@@ -9646,6 +9901,37 @@ class ClaudeOrchestrator {
       }
     };
 
+    const maybeAutoSpawnReviewer = async (t) => {
+      if (!state.autoReviewer) return;
+      const task = t || {};
+      if (task.kind !== 'pr') return;
+
+      const tier = Number(task?.record?.tier);
+      if (tier !== 3) return;
+
+      if (task?.record?.reviewedAt) return;
+      if (task?.record?.reviewerSpawnedAt) return;
+
+      if (state.reviewerSpawning?.has?.(task.id)) return;
+      state.reviewerSpawning.add(task.id);
+
+      try {
+        const info = await this.spawnReviewAgentForPRTask(task, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+        if (!info) return;
+        const patch = { reviewerSpawnedAt: new Date().toISOString() };
+        if (info?.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
+        const rec = await upsertRecord(task.id, patch);
+        updateTaskRecordInState(task.id, rec);
+        renderList();
+        renderDetail(getTaskById(task.id));
+      } catch (e) {
+        // best-effort; keep it silent unless it was user-initiated
+        console.warn('Auto reviewer spawn failed:', e);
+      } finally {
+        state.reviewerSpawning.delete(task.id);
+      }
+    };
+
     const selectById = (id, { allowAutoOpenDiff } = {}) => {
       state.selectedId = id;
       state.allowAutoOpenDiff = !!allowAutoOpenDiff;
@@ -9655,6 +9941,7 @@ class ClaudeOrchestrator {
       if (state.reviewActive && t?.id) {
         startReviewTimer(t.id).catch(() => {});
       }
+      maybeAutoSpawnReviewer(t).catch(() => {});
     };
 
     listEl.addEventListener('click', (e) => {
@@ -11458,7 +11745,7 @@ class ClaudeOrchestrator {
     return { agentId: 'claude', mode: m, flags };
   }
 
-  async spawnReviewAgentForPRTask(prTask, { tier = 3, agentId = 'claude', mode = 'fresh', yolo = true } = {}) {
+  async spawnReviewAgentForPRTask(prTask, { tier = 3, agentId = 'claude', mode = 'fresh', yolo = true, worktreeId = null } = {}) {
     const t = prTask || {};
     if (t.kind !== 'pr') return;
 
@@ -11477,7 +11764,12 @@ class ClaudeOrchestrator {
       return;
     }
 
-    const recommended = this.getRecommendedWorktree(repo);
+    const requestedWorktreeId = String(worktreeId || '').trim();
+    const requested = requestedWorktreeId
+      ? (Array.isArray(repo.worktrees) ? repo.worktrees.find((w) => String(w?.id || '') === requestedWorktreeId) : null)
+      : null;
+
+    const recommended = requested || this.getRecommendedWorktree(repo);
     if (!recommended) {
       this.showToast('All worktrees busy for this repo; open Quick Work to choose one', 'warning');
       await this.showQuickWorktreeModal();
@@ -11543,6 +11835,102 @@ class ClaudeOrchestrator {
     });
 
     this.showToast(`Spawned reviewer in ${repo.name} ${recommended.id}`, 'success');
+    return { worktreeId: recommended.id, worktreePath: recommended.path, repositoryRoot: repo.path, repositoryName: repo.name };
+  }
+
+  async spawnFixAgentForPRTask(prTask, { tier = 2, agentId = 'claude', mode = 'fresh', yolo = true, notes = '', worktreeId = null } = {}) {
+    const t = prTask || {};
+    if (t.kind !== 'pr') return null;
+
+    const url = String(t.url || '').trim();
+    const repoSlug = String(t.repository || '').trim();
+    if (!repoSlug) {
+      this.showToast('PR task is missing repository slug', 'error');
+      return null;
+    }
+
+    const repoName = repoSlug.split('/').filter(Boolean).slice(-1)[0] || repoSlug;
+    const repos = await this.getScannedRepos({ force: false });
+    const repo = repos.find((r) => String(r?.name || '').toLowerCase() === String(repoName).toLowerCase());
+    if (!repo) {
+      this.showToast(`Repo not found locally: ${repoName} (scan-repos)`, 'error');
+      return null;
+    }
+
+    const requestedWorktreeId = String(worktreeId || '').trim();
+    const requested = requestedWorktreeId
+      ? (Array.isArray(repo.worktrees) ? repo.worktrees.find((w) => String(w?.id || '') === requestedWorktreeId) : null)
+      : null;
+    const recommended = requested || this.getRecommendedWorktree(repo);
+    if (!recommended) {
+      this.showToast('All worktrees busy for this repo; open Quick Work to choose one', 'warning');
+      await this.showQuickWorktreeModal();
+      const modal = document.getElementById('quick-worktree-modal');
+      const input = modal?.querySelector('#quick-worktree-search');
+      if (input) {
+        input.value = String(repo?.name || '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return null;
+    }
+
+    const prNum = t.prNumber ? Number(t.prNumber) : null;
+    const prHint = prNum ? `${repoSlug}#${prNum}` : repoSlug;
+    const notesText = String(notes || '').trim();
+
+    const prompt = [
+      `You are a fixer agent.`,
+      ``,
+      `Fix PR: ${url || prHint}`,
+      `Repo: ${repoSlug}`,
+      ``,
+      `Instructions:`,
+      `- Checkout the PR branch and implement required fixes`,
+      `- Keep the change scoped to the PR; do not open a new PR unless explicitly necessary`,
+      `- Run relevant tests/lint where possible and report what you ran`,
+      ``,
+      `Reviewer feedback / fix request:`,
+      notesText ? notesText : '(no notes provided; inspect PR diff + conversation context and propose fixes)',
+      ``,
+      `Suggested commands:`,
+      prNum ? `- gh pr checkout ${prNum}` : `- gh pr list --limit 20`,
+      prNum ? `- gh pr diff ${prNum}` : `- gh pr diff <PR_NUMBER>`,
+      `- git status`,
+      `- run relevant tests (repo-specific)`,
+      ``,
+      `Output format:`,
+      `1) What you changed`,
+      `2) Tests run`,
+      `3) Anything still risky/uncertain`
+    ].join('\n');
+
+    const startTier = Number(tier);
+    const startTierSafe = (startTier >= 1 && startTier <= 4) ? startTier : undefined;
+    const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
+
+    this.pendingWorktreeLaunches.set(recommended.id, {
+      promptText: prompt,
+      autoSendPrompt: true,
+      agentConfig
+    });
+
+    if (!this.socket || !this.socket.connected) {
+      this.pendingWorktreeLaunches.delete(recommended.id);
+      this.showToast('Socket not connected', 'error');
+      return null;
+    }
+
+    this.socket.emit('add-worktree-sessions', {
+      worktreeId: recommended.id,
+      worktreePath: recommended.path,
+      repositoryName: repo.name,
+      repositoryType: repo.type,
+      repositoryRoot: repo.path,
+      startTier: startTierSafe
+    });
+
+    this.showToast(`Spawned fixer in ${repo.name} ${recommended.id}`, 'success');
+    return { worktreeId: recommended.id, worktreePath: recommended.path, repositoryRoot: repo.path, repositoryName: repo.name };
   }
 
   async launchAgentFromTaskCard({ provider, boardId, card, tier, agentId, mode, yolo, autoSendPrompt, promptText } = {}) {

@@ -102,7 +102,9 @@ Brain dump asks:
 Current state:
 - Queue already supports dependency editing and resolved dependency display (satisfied/blocked + reason).
 - Queue detail now also shows **Dependents** (“unblocks” list) based on local task records.
-- Still no multi-level tree/graph visualization.
+- ✅ Multi-level dependency viewer now exists:
+  - “🧩 Graph” modal renders upstream (“Blocked By”) and downstream (“Unblocks”) trees up to a selectable depth.
+  - “Pick from queue…” dropdown enables faster linking without typing IDs.
 
 Outcome:
 - Add a dependency viewer:
@@ -270,6 +272,6 @@ We keep automated coverage for core workflow primitives and any new task-layer f
 - [x] Launch agent from Trello card exists
 - [x] Disabled boards list exists
 - [x] Automated tests exist (unit + targeted e2e)
-- [ ] Dependency viewer/graph exists (missing)
+- [x] Dependency viewer/graph exists (Queue tree + modal)
 - [x] Telemetry loop v1 exists (prompt/review timing + summary endpoint)
-- [ ] Second-agent review automation exists (missing; manual trigger recommended first)
+- [x] Second-agent review automation exists (Queue “Auto Reviewer” toggle for Tier 3 PRs)
