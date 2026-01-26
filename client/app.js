@@ -7630,6 +7630,7 @@ class ClaudeOrchestrator {
       }
 
       const isAllBoards = state.boardId === ALL_BOARDS_ID;
+      const boardColorById = new Map((Array.isArray(state.boards) ? state.boards : []).map((b) => [b?.id, b?.prefs?.backgroundColor]).filter(([id]) => !!id));
       const globalDefaults = readLaunchDefaults();
       const quickTier = Number(globalDefaults?.tier || 3);
 
@@ -7641,6 +7642,8 @@ class ClaudeOrchestrator {
           const meta = [board, last].filter(Boolean).join(' • ');
 
           const cardBoardId = isAllBoards ? String(c?.idBoard || '').trim() : String(state.boardId || '').trim();
+          const cardBoardColor = sanitizeCssColor(isAllBoards ? boardColorById.get(cardBoardId) : (boardColorById.get(cardBoardId) || ''));
+          const boardDot = cardBoardColor ? `<span class="tasks-card-board-dot" aria-hidden="true" style="background:${escapeHtml(cardBoardColor)}"></span>` : '';
           const mappingForQuick = cardBoardId ? (getBoardMapping(state.provider, cardBoardId) || null) : null;
           const mappingEnabled = mappingForQuick ? (mappingForQuick.enabled !== false) : true;
           const mappingLocalPath = mappingForQuick ? String(mappingForQuick.localPath || '') : '';
@@ -7669,7 +7672,7 @@ class ClaudeOrchestrator {
           return `
             <div class="task-card-row task-card-list" data-card-id="${c.id}" data-board-id="${escapeHtml(cardBoardId)}" data-url="${c.url || ''}">
               <div class="task-card-list-main">
-                <div class="task-card-title">${title}</div>
+                <div class="task-card-title">${boardDot}${title}</div>
                 <div class="task-card-meta">${meta}</div>
               </div>
               ${quickLaunchHtml ? `<div class="task-card-list-actions">${quickLaunchHtml}</div>` : ''}

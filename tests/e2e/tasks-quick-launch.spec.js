@@ -195,6 +195,8 @@ test.describe('Tasks quick launch', () => {
       };
     });
 
+    await expect(page.locator('.task-card-row[data-card-id="c1"] .tasks-card-board-dot')).toBeVisible({ timeout: 10000 });
+
     await page.locator('.task-card-row[data-card-id="c1"] [data-quick-launch-btn]').click();
     await page.waitForFunction(() => (window.__launchCalls?.length || 0) > 0, null, { timeout: 10000 });
     const calls = await page.evaluate(() => window.__launchCalls || []);
