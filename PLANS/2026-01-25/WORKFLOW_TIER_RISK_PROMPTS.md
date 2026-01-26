@@ -45,10 +45,11 @@ The implementation plan derived from it is:
 - Tasks: all-boards card detail launch uses card boardId (UX): https://github.com/web3dev1337/claude-orchestrator/pull/244
 - Tasks: show per-card board color dots (UX): https://github.com/web3dev1337/claude-orchestrator/pull/246
 - Status lights: stabilize worktree/agent busy/waiting detection: https://github.com/web3dev1337/claude-orchestrator/pull/248
+- Tasks board view: detail overlay on right (prevents kanban reflow): https://github.com/web3dev1337/claude-orchestrator/pull/250
 
 ## Known UX issues / follow-ups
 
-- Tasks board view: selecting a card should open details without shifting the board vertically (layout glitch reported 2026-01-27).
+- (none currently tracked from the 2026-01-27 UX notes)
 
 ---
 
