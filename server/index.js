@@ -560,8 +560,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('list-workspaces', async () => {
+  socket.on('list-workspaces', async ({ refresh = false } = {}) => {
     try {
+      // Reload from disk if refresh requested (picks up new/modified workspaces)
+      if (refresh) {
+        await workspaceManager.reloadWorkspaces();
+      }
       const workspaces = await workspaceManager.listWorkspacesEnriched();
       socket.emit('workspaces-list', workspaces);
     } catch (error) {
