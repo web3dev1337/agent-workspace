@@ -6913,12 +6913,40 @@ class ClaudeOrchestrator {
 	      return mappings && typeof mappings === 'object' ? mappings : {};
 	    };
 
-	    const getBoardMapping = (provider, boardId) => {
-	      const key = `${provider}:${boardId}`;
-	      const all = getBoardMappings();
-	      const m = all?.[key];
-	      return m && typeof m === 'object' ? m : null;
-	    };
+		    const getBoardMapping = (provider, boardId) => {
+		      const key = `${provider}:${boardId}`;
+		      const all = getBoardMappings();
+		      const m = all?.[key];
+		      return m && typeof m === 'object' ? m : null;
+		    };
+
+		    const readLaunchDefaults = ({ mappingTier } = {}) => {
+		      const tierRaw = Number(localStorage.getItem('tasks-launch-tier') || '');
+		      const tier = (tierRaw >= 1 && tierRaw <= 4)
+		        ? tierRaw
+		        : ((Number(mappingTier) >= 1 && Number(mappingTier) <= 4) ? Number(mappingTier) : 3);
+
+		      const agentRaw = String(localStorage.getItem('tasks-launch-agent') || 'claude').trim().toLowerCase();
+		      const agentId = (agentRaw === 'codex' || agentRaw === 'claude') ? agentRaw : 'claude';
+
+		      const modeRaw = String(localStorage.getItem('tasks-launch-mode') || 'fresh').trim().toLowerCase();
+		      const mode = (modeRaw === 'continue' || modeRaw === 'resume' || modeRaw === 'fresh') ? modeRaw : 'fresh';
+
+		      const yolo = localStorage.getItem('tasks-launch-yolo') !== 'false';
+		      const autoSendPrompt = localStorage.getItem('tasks-launch-auto-send') !== 'false';
+
+		      return { tier, agentId, mode, yolo, autoSendPrompt };
+		    };
+
+		    const writeLaunchDefaults = (patch = {}) => {
+		      try {
+		        if (patch.tier !== undefined) localStorage.setItem('tasks-launch-tier', String(patch.tier));
+		        if (patch.agentId !== undefined) localStorage.setItem('tasks-launch-agent', String(patch.agentId));
+		        if (patch.mode !== undefined) localStorage.setItem('tasks-launch-mode', String(patch.mode));
+		        if (patch.yolo !== undefined) localStorage.setItem('tasks-launch-yolo', patch.yolo ? 'true' : 'false');
+		        if (patch.autoSendPrompt !== undefined) localStorage.setItem('tasks-launch-auto-send', patch.autoSendPrompt ? 'true' : 'false');
+		      } catch {}
+		    };
 
 	    const isBoardEnabled = (provider, boardId) => {
 	      const m = getBoardMapping(provider, boardId);
@@ -7592,8 +7620,8 @@ class ClaudeOrchestrator {
           .join('')
         : `<div class="tasks-detail-empty">None.</div>`;
 
-      const listsById = new Map((state.lists || []).map(l => [l.id, l]));
-      const currentListName = listsById.get(card?.idList)?.name || '';
+	      const listsById = new Map((state.lists || []).map(l => [l.id, l]));
+	      const currentListName = listsById.get(card?.idList)?.name || '';
 
       const actions = Array.isArray(card?.actions) ? card.actions : [];
       const comments = actions
@@ -7627,9 +7655,10 @@ class ClaudeOrchestrator {
 	      const mapping = effectiveBoardId ? (getBoardMapping(state.provider, effectiveBoardId) || null) : null;
 	      const mappingEnabled = mapping ? (mapping.enabled !== false) : true;
 	      const mappingLocalPath = mapping ? String(mapping.localPath || '') : '';
-	      const mappingTier = Number(mapping?.defaultStartTier);
-	      const defaultLaunchTier = (mappingTier >= 1 && mappingTier <= 4) ? mappingTier : 3;
-	      const defaultPromptId = card?.id ? `trello:${card.id}` : '';
+		      const mappingTier = Number(mapping?.defaultStartTier);
+		      const launchDefaults = readLaunchDefaults({ mappingTier });
+		      const defaultLaunchTier = Number(launchDefaults?.tier || 3);
+		      const defaultPromptId = card?.id ? `trello:${card.id}` : '';
 
 	      detailEl.innerHTML = `
 	        <div class="tasks-detail-header">
@@ -7661,34 +7690,34 @@ class ClaudeOrchestrator {
 	          <button class="btn-secondary" id="tasks-card-due-clear" title="Clear due date">Clear</button>
 	        </div>
 
-	        <div class="tasks-detail-block">
-	          <div class="tasks-detail-block-title">Launch</div>
-	          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
-	            <select id="tasks-launch-tier" class="tasks-select tasks-select-inline" title="Tier">
-	              <option value="1" ${defaultLaunchTier === 1 ? 'selected' : ''}>T1</option>
-	              <option value="2" ${defaultLaunchTier === 2 ? 'selected' : ''}>T2</option>
-	              <option value="3" ${defaultLaunchTier === 3 ? 'selected' : ''}>T3</option>
-	              <option value="4" ${defaultLaunchTier === 4 ? 'selected' : ''}>T4</option>
-	            </select>
-	            <select id="tasks-launch-agent" class="tasks-select tasks-select-inline" title="Agent">
-	              <option value="claude" selected>Claude</option>
-	              <option value="codex">Codex</option>
-	            </select>
-	            <select id="tasks-launch-mode" class="tasks-select tasks-select-inline" title="Mode">
-	              <option value="fresh" selected>Fresh</option>
-	              <option value="continue">Continue</option>
-	              <option value="resume">Resume</option>
-	            </select>
-	            <label class="tasks-toggle" title="Skip permission prompts (YOLO)">
-	              <input type="checkbox" id="tasks-launch-yolo" checked />
-	              <span>YOLO</span>
-	            </label>
-	            <label class="tasks-toggle" title="Auto-send card description as the first prompt">
-	              <input type="checkbox" id="tasks-launch-auto-send" checked />
-	              <span>Auto-send prompt</span>
-	            </label>
-	            <button class="btn-secondary" id="tasks-launch-btn" type="button">🚀 Launch</button>
-	          </div>
+		        <div class="tasks-detail-block">
+		          <div class="tasks-detail-block-title">Launch</div>
+		          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+		            <select id="tasks-launch-tier" class="tasks-select tasks-select-inline" title="Tier">
+		              <option value="1" ${defaultLaunchTier === 1 ? 'selected' : ''}>T1</option>
+		              <option value="2" ${defaultLaunchTier === 2 ? 'selected' : ''}>T2</option>
+		              <option value="3" ${defaultLaunchTier === 3 ? 'selected' : ''}>T3</option>
+		              <option value="4" ${defaultLaunchTier === 4 ? 'selected' : ''}>T4</option>
+		            </select>
+		            <select id="tasks-launch-agent" class="tasks-select tasks-select-inline" title="Agent">
+		              <option value="claude" ${launchDefaults.agentId === 'claude' ? 'selected' : ''}>Claude</option>
+		              <option value="codex" ${launchDefaults.agentId === 'codex' ? 'selected' : ''}>Codex</option>
+		            </select>
+		            <select id="tasks-launch-mode" class="tasks-select tasks-select-inline" title="Mode">
+		              <option value="fresh" ${launchDefaults.mode === 'fresh' ? 'selected' : ''}>Fresh</option>
+		              <option value="continue" ${launchDefaults.mode === 'continue' ? 'selected' : ''}>Continue</option>
+		              <option value="resume" ${launchDefaults.mode === 'resume' ? 'selected' : ''}>Resume</option>
+		            </select>
+		            <label class="tasks-toggle" title="Skip permission prompts (YOLO)">
+		              <input type="checkbox" id="tasks-launch-yolo" ${launchDefaults.yolo ? 'checked' : ''} />
+		              <span>YOLO</span>
+		            </label>
+		            <label class="tasks-toggle" title="Auto-send card description as the first prompt">
+		              <input type="checkbox" id="tasks-launch-auto-send" ${launchDefaults.autoSendPrompt ? 'checked' : ''} />
+		              <span>Auto-send prompt</span>
+		            </label>
+		            <button class="btn-secondary" id="tasks-launch-btn" type="button">🚀 Launch</button>
+		          </div>
 	          <div class="tasks-detail-empty" style="margin-top:8px">
 	            ${mappingEnabled && mappingLocalPath
 	              ? `Mapped repo: <code>${escapeHtml(mappingLocalPath)}</code>`
@@ -8132,9 +8161,16 @@ class ClaudeOrchestrator {
         return cards;
       };
 
-      cardsEl.innerHTML = `
-        <div class="tasks-board ${isWrap ? 'tasks-board-wrap tasks-board-grid' : ''} ${isWrapExpand ? 'tasks-board-expand tasks-board-grid' : ''}" id="tasks-board-view">
-          ${lists.map(list => {
+	      const mappingForQuick = getBoardMapping(state.provider, state.boardId) || null;
+	      const mappingTier2 = Number(mappingForQuick?.defaultStartTier);
+	      const quickDefaults = readLaunchDefaults({ mappingTier: mappingTier2 });
+	      const mappingEnabled2 = mappingForQuick ? (mappingForQuick.enabled !== false) : true;
+	      const mappingLocalPath2 = mappingForQuick ? String(mappingForQuick.localPath || '') : '';
+	      const canQuickLaunch = !!(mappingEnabled2 && mappingLocalPath2);
+
+	      cardsEl.innerHTML = `
+	        <div class="tasks-board ${isWrap ? 'tasks-board-wrap tasks-board-grid' : ''} ${isWrapExpand ? 'tasks-board-expand tasks-board-grid' : ''}" id="tasks-board-view">
+	          ${lists.map(list => {
             const raw = Array.isArray(cardsByList[list.id]) ? cardsByList[list.id] : [];
             const cards = sortCards(raw);
             if (state.hideEmptyColumns && cards.length === 0) return '';
@@ -8153,29 +8189,49 @@ class ClaudeOrchestrator {
                     const memberIds = Array.isArray(c?.idMembers) ? c.idMembers : [];
                     const members = memberIds.map(id => membersById.get(id)).filter(Boolean).slice(0, 3);
                     const moreMembers = Math.max(0, memberIds.length - members.length);
-                    return `
-                      <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-origin-list-id="${list.id}">
-                        <div class="task-card-top">
-                          ${renderCompactLabels(labels)}
-                          <div class="task-card-assignees">
-                            ${members.map(m => {
-                              const url = m?.username ? `https://trello.com/${m.username}` : '';
-                              const initial = String(m?.fullName || m?.username || '?').trim().slice(0, 1).toUpperCase();
-                              const avatar = m?.avatarUrl ? toTrelloAvatarUrl(m.avatarUrl, 50) : '';
-                              return `
-                                <a class="tasks-avatar" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="${escapeHtml(m?.fullName || m?.username || '')}">
-                                  ${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : `<span>${escapeHtml(initial)}</span>`}
-                                </a>
-                              `;
-                            }).join('')}
-                            ${moreMembers ? `<span class="tasks-avatar tasks-avatar-more" title="${moreMembers} more">+${moreMembers}</span>` : ''}
-                          </div>
-                        </div>
-                        <div class="task-card-title">${title}</div>
-                        <div class="task-card-meta">${due ? `<span class="task-card-due" title="Due">${escapeHtml(due)}</span> • ` : ''}${last}</div>
-                      </div>
-                    `;
-                  }).join('')}
+	                    const quickTier = Number(quickDefaults?.tier || 3);
+	                    const quickLaunchHtml = canQuickLaunch
+	                      ? `
+	                        <div class="task-card-quick-actions" data-quick-launch-wrap>
+	                          <select class="tasks-select tasks-select-mini" data-quick-launch-tier title="Launch tier">
+	                            <option value="1" ${quickTier === 1 ? 'selected' : ''}>T1</option>
+	                            <option value="2" ${quickTier === 2 ? 'selected' : ''}>T2</option>
+	                            <option value="3" ${quickTier === 3 ? 'selected' : ''}>T3</option>
+	                            <option value="4" ${quickTier === 4 ? 'selected' : ''}>T4</option>
+	                          </select>
+	                          <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-btn title="Launch agent">🚀</button>
+	                        </div>
+	                      `
+	                      : `
+	                        <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-setup title="Set Board Settings to enable Launch">⚙</button>
+	                      `;
+
+	                    return `
+	                      <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-origin-list-id="${list.id}">
+	                        <div class="task-card-top">
+	                          ${renderCompactLabels(labels)}
+	                          <div class="task-card-top-right">
+	                            ${quickLaunchHtml}
+	                            <div class="task-card-assignees">
+	                              ${members.map(m => {
+	                                const url = m?.username ? `https://trello.com/${m.username}` : '';
+	                                const initial = String(m?.fullName || m?.username || '?').trim().slice(0, 1).toUpperCase();
+	                                const avatar = m?.avatarUrl ? toTrelloAvatarUrl(m.avatarUrl, 50) : '';
+	                                return `
+	                                  <a class="tasks-avatar" href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="${escapeHtml(m?.fullName || m?.username || '')}">
+	                                    ${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : `<span>${escapeHtml(initial)}</span>`}
+	                                  </a>
+	                                `;
+	                              }).join('')}
+	                              ${moreMembers ? `<span class="tasks-avatar tasks-avatar-more" title="${moreMembers} more">+${moreMembers}</span>` : ''}
+	                            </div>
+	                          </div>
+	                        </div>
+	                        <div class="task-card-title">${title}</div>
+	                        <div class="task-card-meta">${due ? `<span class="task-card-due" title="Due">${escapeHtml(due)}</span> • ` : ''}${last}</div>
+	                      </div>
+	                    `;
+	                  }).join('')}
                 </div>
               </div>
             `;
@@ -8797,11 +8853,62 @@ class ClaudeOrchestrator {
       refreshBtn.addEventListener('click', () => refreshAll({ force: true }));
     }
 
-    cardsEl.addEventListener('click', async (e) => {
-      const row = e.target.closest('.task-card-row');
-      if (!row) return;
-      const cardId = row.dataset.cardId;
-      if (!cardId) return;
+	    cardsEl.addEventListener('click', async (e) => {
+	      const quickSetupBtn = e.target.closest('[data-quick-launch-setup]');
+	      if (quickSetupBtn) {
+	        e.preventDefault();
+	        e.stopPropagation();
+	        renderBoardSettings();
+	        return;
+	      }
+
+	      const quickLaunchBtn = e.target.closest('[data-quick-launch-btn]');
+	      if (quickLaunchBtn) {
+	        e.preventDefault();
+	        e.stopPropagation();
+	        const row = quickLaunchBtn.closest('.task-card-row');
+	        const cardId = row?.dataset?.cardId;
+	        if (!cardId) return;
+
+	        try {
+	          quickLaunchBtn.disabled = true;
+	          const tierEl = row.querySelector('[data-quick-launch-tier]');
+	          const tier = Number(tierEl?.value || 3);
+	          const defaults = readLaunchDefaults();
+	          writeLaunchDefaults({ tier });
+
+	          const card = await fetchCardDetail(cardId);
+	          const promptText = String(card?.desc ?? '');
+
+	          await this.launchAgentFromTaskCard({
+	            provider: state.provider,
+	            boardId: state.boardId,
+	            card,
+	            tier,
+	            agentId: defaults.agentId || 'claude',
+	            mode: defaults.mode || 'fresh',
+	            yolo: defaults.yolo !== false,
+	            autoSendPrompt: defaults.autoSendPrompt !== false,
+	            promptText
+	          });
+	        } catch (err) {
+	          console.error('Quick launch failed:', err);
+	          this.showToast(String(err?.message || err), 'error');
+	        } finally {
+	          quickLaunchBtn.disabled = false;
+	        }
+	        return;
+	      }
+
+	      if (e.target.closest('[data-quick-launch-tier]')) {
+	        e.stopPropagation();
+	        return;
+	      }
+
+	      const row = e.target.closest('.task-card-row');
+	      if (!row) return;
+	      const cardId = row.dataset.cardId;
+	      if (!cardId) return;
 
       cardsEl.querySelectorAll('.task-card-row.active').forEach(el => el.classList.remove('active'));
       row.classList.add('active');
@@ -8846,8 +8953,8 @@ class ClaudeOrchestrator {
         const [card, customFields, labels] = await Promise.all([cardPromise, customFieldsPromise, labelsPromise]);
         if (needsCustomFields) state.boardCustomFields = customFields || [];
         if (needsLabels) state.boardLabels = labels || [];
-        const setDetail = (c) => {
-          renderDetail(c);
+	        const setDetail = (c) => {
+	          renderDetail(c);
 
           const saveBtn = detailEl.querySelector('#tasks-card-save');
           const moveBtn = detailEl.querySelector('#tasks-card-move-btn');
@@ -8858,7 +8965,12 @@ class ClaudeOrchestrator {
           const launchBtn = detailEl.querySelector('#tasks-launch-btn');
           const openBoardSettingsBtn = detailEl.querySelector('#tasks-launch-open-board-settings');
           const promptSaveBtn = detailEl.querySelector('#tasks-prompt-save');
-          const promptOpenBtn = detailEl.querySelector('#tasks-prompt-open');
+	          const promptOpenBtn = detailEl.querySelector('#tasks-prompt-open');
+	          const launchTierEl = detailEl.querySelector('#tasks-launch-tier');
+	          const launchAgentEl = detailEl.querySelector('#tasks-launch-agent');
+	          const launchModeEl = detailEl.querySelector('#tasks-launch-mode');
+	          const launchYoloEl = detailEl.querySelector('#tasks-launch-yolo');
+	          const launchAutoSendEl = detailEl.querySelector('#tasks-launch-auto-send');
 
           saveBtn?.addEventListener('click', async () => {
             const titleEl = detailEl.querySelector('#tasks-card-title');
@@ -8966,26 +9078,41 @@ class ClaudeOrchestrator {
             }
 	          });
 
-	          openBoardSettingsBtn?.addEventListener('click', (e) => {
-	            e.preventDefault();
-	            renderBoardSettings();
-	          });
+		          openBoardSettingsBtn?.addEventListener('click', (e) => {
+		            e.preventDefault();
+		            renderBoardSettings();
+		          });
 
-	          launchBtn?.addEventListener('click', async () => {
-	            if (!state.selectedCardId) return;
-	            try {
-	              launchBtn.disabled = true;
-	              const tier = Number(detailEl.querySelector('#tasks-launch-tier')?.value || 3);
-	              const agentId = String(detailEl.querySelector('#tasks-launch-agent')?.value || 'claude');
-	              const mode = String(detailEl.querySelector('#tasks-launch-mode')?.value || 'fresh');
-	              const yolo = !!detailEl.querySelector('#tasks-launch-yolo')?.checked;
-	              const autoSendPrompt = !!detailEl.querySelector('#tasks-launch-auto-send')?.checked;
-	              const promptText = String(detailEl.querySelector('#tasks-card-desc')?.value ?? c?.desc ?? '');
+		          const persistLaunchUi = () => {
+		            writeLaunchDefaults({
+		              tier: Number(launchTierEl?.value || 3),
+		              agentId: String(launchAgentEl?.value || 'claude'),
+		              mode: String(launchModeEl?.value || 'fresh'),
+		              yolo: !!launchYoloEl?.checked,
+		              autoSendPrompt: !!launchAutoSendEl?.checked
+		            });
+		          };
+		          [launchTierEl, launchAgentEl, launchModeEl, launchYoloEl, launchAutoSendEl].forEach((el) => {
+		            el?.addEventListener?.('change', persistLaunchUi);
+		          });
 
-	              await this.launchAgentFromTaskCard({
-	                provider: state.provider,
-	                boardId: state.boardId,
-	                card: c,
+		          launchBtn?.addEventListener('click', async () => {
+		            if (!state.selectedCardId) return;
+		            try {
+		              launchBtn.disabled = true;
+		              const tier = Number(detailEl.querySelector('#tasks-launch-tier')?.value || 3);
+		              const agentId = String(detailEl.querySelector('#tasks-launch-agent')?.value || 'claude');
+		              const mode = String(detailEl.querySelector('#tasks-launch-mode')?.value || 'fresh');
+		              const yolo = !!detailEl.querySelector('#tasks-launch-yolo')?.checked;
+		              const autoSendPrompt = !!detailEl.querySelector('#tasks-launch-auto-send')?.checked;
+		              const promptText = String(detailEl.querySelector('#tasks-card-desc')?.value ?? c?.desc ?? '');
+
+		              writeLaunchDefaults({ tier, agentId, mode, yolo, autoSendPrompt });
+
+		              await this.launchAgentFromTaskCard({
+		                provider: state.provider,
+		                boardId: state.boardId,
+		                card: c,
 	                tier,
 	                agentId,
 	                mode,
@@ -11368,6 +11495,13 @@ class ClaudeOrchestrator {
 	      if (!row) return;
 	      const id = row.getAttribute('data-queue-id');
 	      selectById(id, { allowAutoOpenDiff: true });
+	    });
+
+	    cardsEl.addEventListener('change', (e) => {
+	      if (e.target?.matches?.('[data-quick-launch-tier]')) {
+	        const tier = Number(e.target.value || 3);
+	        writeLaunchDefaults({ tier });
+	      }
 	    });
 
 	    listEl.addEventListener('dragstart', (e) => {

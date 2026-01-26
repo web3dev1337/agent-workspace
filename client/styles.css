@@ -7135,7 +7135,16 @@ header h1 {
 }
 
 .tasks-body.tasks-body-board {
-  grid-template-columns: 1fr 420px;
+  /* Board view: prioritize card detail space (left), keep kanban as a right sidebar. */
+  grid-template-columns: 1fr 520px;
+}
+
+.tasks-body.tasks-body-board .tasks-detail {
+  grid-column: 1;
+}
+
+.tasks-body.tasks-body-board .tasks-cards {
+  grid-column: 2;
 }
 
 .tasks-body.tasks-body-board.tasks-kanban-wrap .tasks-cards {
@@ -7320,6 +7329,32 @@ header h1 {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 6px;
+}
+
+.task-card-top-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.task-card-quick-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tasks-select.tasks-select-mini {
+  min-width: 64px;
+  padding: 4px 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.tasks-quick-launch-btn {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  line-height: 1;
 }
 
 .task-card-labels {
