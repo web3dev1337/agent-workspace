@@ -41,6 +41,7 @@ The implementation plan derived from it is:
 - Tasks: list view 1-click tier launch (UX): https://github.com/web3dev1337/claude-orchestrator/pull/236
 - Tasks: toolbar default tier is 1-click buttons (UX): https://github.com/web3dev1337/claude-orchestrator/pull/238
 - Tasks: toolbar agent/mode are 1-click buttons (UX): https://github.com/web3dev1337/claude-orchestrator/pull/240
+- Tasks: quick launch in “All enabled boards” view (UX): https://github.com/web3dev1337/claude-orchestrator/pull/242
 
 ---
 
