@@ -31,6 +31,8 @@ The implementation plan derived from it is:
 - Workflow modes + Queue Next/Prev: https://github.com/web3dev1337/claude-orchestrator/pull/189
 - Process status banner (WIP + T1–T4): https://github.com/web3dev1337/claude-orchestrator/pull/193
 - Launch gating (prompt on overload): https://github.com/web3dev1337/claude-orchestrator/pull/194
+- Finish next-phase workflow checklist: https://github.com/web3dev1337/claude-orchestrator/pull/223
+- Docs: commit/push discipline: https://github.com/web3dev1337/claude-orchestrator/pull/224
 
 ---
 
