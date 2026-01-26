@@ -7654,6 +7654,16 @@ header h1 {
   margin-bottom: 4px;
 }
 
+.tasks-card-board-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  margin-right: 8px;
+  transform: translateY(1px);
+}
+
 .task-card-meta {
   font-size: 0.75rem;
   color: var(--text-tertiary);
