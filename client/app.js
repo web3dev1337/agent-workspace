@@ -14,6 +14,7 @@ class ClaudeOrchestrator {
     // 'focus' (Tier 1–2) | 'review' (all) | 'background' (Tier 3–4)
     this.workflowMode = 'review';
     this.focusHideTier2WhenTier1Busy = true;
+    this.focusAutoSwapTier2WhenTier1Busy = false;
     this.tier1Busy = false;
     this.queuePanelPreset = null;
     this.processStatus = null;
@@ -137,6 +138,10 @@ class ClaudeOrchestrator {
 
       document.getElementById('workflow-focus-tier2')?.addEventListener('click', () => {
         this.setFocusHideTier2WhenTier1Busy(!this.focusHideTier2WhenTier1Busy);
+      });
+
+      document.getElementById('workflow-focus-autoswap')?.addEventListener('click', () => {
+        this.setFocusAutoSwapTier2WhenTier1Busy(!this.focusAutoSwapTier2WhenTier1Busy);
       });
 
       // Tasks panel (ticketing providers like Trello)
@@ -1194,6 +1199,8 @@ class ClaudeOrchestrator {
   syncFocusBehaviorFromUserSettings() {
     const v = this.userSettings?.global?.ui?.workflow?.focus?.hideTier2WhenTier1Busy;
     this.focusHideTier2WhenTier1Busy = v !== false;
+    const swap = this.userSettings?.global?.ui?.workflow?.focus?.autoSwapToTier2WhenTier1Busy;
+    this.focusAutoSwapTier2WhenTier1Busy = swap === true;
     this.refreshTier1Busy();
     this.updateWorkflowModeButtons();
   }
@@ -1206,6 +1213,16 @@ class ClaudeOrchestrator {
     this.updateTerminalGrid();
     this.buildSidebar();
     this.updateGlobalUserSetting('ui.workflow.focus.hideTier2WhenTier1Busy', next);
+  }
+
+  setFocusAutoSwapTier2WhenTier1Busy(enabled) {
+    const next = !!enabled;
+    if (this.focusAutoSwapTier2WhenTier1Busy === next) return;
+    this.focusAutoSwapTier2WhenTier1Busy = next;
+    this.updateWorkflowModeButtons();
+    this.updateTerminalGrid();
+    this.buildSidebar();
+    this.updateGlobalUserSetting('ui.workflow.focus.autoSwapToTier2WhenTier1Busy', next);
   }
 
   updateWorkflowModeButtons() {
@@ -1232,6 +1249,18 @@ class ClaudeOrchestrator {
       tier2Btn.title = this.focusHideTier2WhenTier1Busy
         ? (this.tier1Busy ? 'Focus: Tier 2 hidden while Tier 1 is busy' : 'Focus: Tier 2 will show when Tier 1 is idle')
         : 'Focus: Tier 2 always visible';
+    }
+
+    const swapBtn = document.getElementById('workflow-focus-autoswap');
+    if (swapBtn) {
+      const show = this.workflowMode === 'focus';
+      swapBtn.classList.toggle('hidden', !show);
+      swapBtn.classList.toggle('focus-autoswap-on', this.focusAutoSwapTier2WhenTier1Busy);
+      swapBtn.textContent = 'Swap T2';
+      swapBtn.setAttribute('aria-pressed', this.focusAutoSwapTier2WhenTier1Busy ? 'true' : 'false');
+      swapBtn.title = this.focusAutoSwapTier2WhenTier1Busy
+        ? (this.tier1Busy ? 'Focus: showing Tier 2 while Tier 1 is busy' : 'Focus: will show Tier 2 when Tier 1 becomes busy')
+        : 'Focus: do not auto-swap while Tier 1 is busy';
     }
   }
 
@@ -1322,7 +1351,7 @@ class ClaudeOrchestrator {
     this.tier1Busy = this.computeTier1Busy();
     if (prev !== this.tier1Busy) {
       this.updateWorkflowModeButtons();
-      if (!suppressRerender && this.workflowMode === 'focus' && this.focusHideTier2WhenTier1Busy) {
+      if (!suppressRerender && this.workflowMode === 'focus' && (this.focusHideTier2WhenTier1Busy || this.focusAutoSwapTier2WhenTier1Busy)) {
         this.updateTerminalGrid();
         this.buildSidebar();
       }
@@ -1331,7 +1360,6 @@ class ClaudeOrchestrator {
 
   computeTier1Busy() {
     for (const [sessionId, session] of this.sessions) {
-      if (!this.visibleTerminals.has(sessionId)) continue;
       if (!this.matchesViewMode(sessionId)) continue;
       if (!(session?.type === 'claude' || String(sessionId).includes('-claude'))) continue;
 
@@ -1346,11 +1374,29 @@ class ClaudeOrchestrator {
     return false;
   }
 
+  hasAnyTierSession(targetTier) {
+    const target = Number(targetTier);
+    if (!(target >= 1 && target <= 4)) return false;
+    for (const [sessionId] of this.sessions) {
+      if (!this.matchesViewMode(sessionId)) continue;
+      const tier = this.getTierForSession(sessionId);
+      if (tier === target) return true;
+    }
+    return false;
+  }
+
   matchesWorkflowMode(sessionId) {
     if (this.workflowMode === 'review') return true;
     const tier = this.getTierForSession(sessionId);
 
     if (this.workflowMode === 'focus') {
+      if (this.focusAutoSwapTier2WhenTier1Busy && this.tier1Busy) {
+        const hasTier2 = this.hasAnyTierSession(2);
+        if (hasTier2) {
+          return tier === 2;
+        }
+      }
+
       if (tier === 1) return true;
       if (tier !== 2) return false;
       if (!this.focusHideTier2WhenTier1Busy) return true;

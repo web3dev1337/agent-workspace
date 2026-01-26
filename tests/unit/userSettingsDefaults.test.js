@@ -8,6 +8,15 @@ describe('UserSettingsService defaults', () => {
     expect(typeof defaults.global.ui.tasks.boardMappings).toBe('object');
   });
 
+  test('includes ui.workflow focus defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    expect(defaults?.global?.ui?.workflow).toBeTruthy();
+    expect(defaults.global.ui.workflow.mode).toBeTruthy();
+    expect(defaults.global.ui.workflow.focus).toBeTruthy();
+    expect(defaults.global.ui.workflow.focus.hideTier2WhenTier1Busy).toBe(true);
+    expect(defaults.global.ui.workflow.focus.autoSwapToTier2WhenTier1Busy).toBe(false);
+  });
+
   test('mergeSettings deep-merges ui.tasks without dropping defaults', () => {
     const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
     const merged = UserSettingsService.prototype.mergeSettings.call({}, defaults, {

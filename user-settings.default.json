@@ -13,17 +13,24 @@
     "terminal": {},
     "ui": {
       "theme": "dark",
-        "tasks": {
-          "theme": "inherit",
-          "me": {
-            "trelloUsername": ""
-          },
-          "boardMappings": {},
-          "kanban": {
-            "collapsedByBoard": {},
-            "expandedByBoard": {},
-            "layoutByBoard": {}
-          },
+      "workflow": {
+        "mode": "review",
+        "focus": {
+          "hideTier2WhenTier1Busy": true,
+          "autoSwapToTier2WhenTier1Busy": false
+        }
+      },
+      "tasks": {
+        "theme": "inherit",
+        "me": {
+          "trelloUsername": ""
+        },
+        "boardMappings": {},
+        "kanban": {
+          "collapsedByBoard": {},
+          "expandedByBoard": {},
+          "layoutByBoard": {}
+        },
         "filters": {
           "assigneesByBoard": {}
         }

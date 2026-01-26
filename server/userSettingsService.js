@@ -46,6 +46,13 @@ class UserSettingsService {
         },
         ui: {
           theme: 'dark',
+          workflow: {
+            mode: 'review',
+            focus: {
+              hideTier2WhenTier1Busy: true,
+              autoSwapToTier2WhenTier1Busy: false
+            }
+          },
           tasks: {
             // 'inherit' uses the main UI theme; 'light'/'dark' force the Tasks panel theme.
             theme: 'inherit',

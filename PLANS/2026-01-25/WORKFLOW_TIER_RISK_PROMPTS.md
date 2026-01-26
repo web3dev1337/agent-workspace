@@ -118,6 +118,8 @@ Queue includes:
 - Focus includes a Tier-2 gating toggle:
   - `T2 Auto` hides Tier 2 while Tier 1 is busy
   - `T2 Always` always shows Tier 2 in Focus
+- Focus includes an auto-swap toggle:
+  - `Swap T2` shows Tier 2 only while Tier 1 is busy (auto-returns when Tier 1 is idle)
 
 ---
 
