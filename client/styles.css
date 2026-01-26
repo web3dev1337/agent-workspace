@@ -7078,6 +7078,18 @@ header h1 {
   background: transparent;
 }
 
+.tasks-launch-default-agent-group {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.tasks-launch-default-mode-group {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
 .tasks-launch-defaults-label {
   font-weight: 900;
   font-size: 0.85rem;
