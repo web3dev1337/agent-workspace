@@ -186,6 +186,9 @@ test.describe('Tasks quick launch', () => {
     await page.locator('#tasks-board').selectOption({ value: 'b1' });
     await expect(page.locator('#tasks-board-view')).toBeVisible({ timeout: 20000 });
 
+    // Change default tier via toolbar (should update quick launch tier).
+    await page.locator('#tasks-launch-default-tier').selectOption({ value: '4' });
+
     // Capture quick launch calls.
     await page.evaluate(() => {
       window.__launchCalls = [];
@@ -206,6 +209,6 @@ test.describe('Tasks quick launch', () => {
     expect(last.provider).toBe('trello');
     expect(last.boardId).toBe('b1');
     expect(last.card?.id).toBe('c1');
-    expect(last.tier).toBe(2);
+    expect(last.tier).toBe(4);
   });
 });
