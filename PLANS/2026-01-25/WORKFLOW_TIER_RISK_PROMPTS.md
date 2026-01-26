@@ -37,6 +37,7 @@ The implementation plan derived from it is:
 - Tasks: board view full-width until card selected (UX): https://github.com/web3dev1337/claude-orchestrator/pull/228
 - Tasks: show Trello board color in toolbar (UX): https://github.com/web3dev1337/claude-orchestrator/pull/230
 - Tasks: quick launch defaults in toolbar (UX): https://github.com/web3dev1337/claude-orchestrator/pull/232
+- Tasks: 1-click tier launch buttons on board cards (UX): https://github.com/web3dev1337/claude-orchestrator/pull/234
 
 ---
 
