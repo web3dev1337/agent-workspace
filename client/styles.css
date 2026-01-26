@@ -7601,6 +7601,25 @@ header h1 {
   transition: border-color 0.15s, transform 0.15s;
 }
 
+.task-card-list {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.task-card-list-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.task-card-list-actions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .task-card-row:hover {
   border-color: var(--accent-primary);
   transform: translateY(-1px);
