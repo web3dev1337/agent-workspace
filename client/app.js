@@ -7607,16 +7607,49 @@ class ClaudeOrchestrator {
         return;
       }
 
+      const isAllBoards = state.boardId === ALL_BOARDS_ID;
+      const mappingForQuick = !isAllBoards ? (getBoardMapping(state.provider, state.boardId) || null) : null;
+      const mappingTier = Number(mappingForQuick?.defaultStartTier);
+      const quickDefaults = readLaunchDefaults({ mappingTier });
+      const quickTier = Number(quickDefaults?.tier || 3);
+      const mappingEnabled = mappingForQuick ? (mappingForQuick.enabled !== false) : true;
+      const mappingLocalPath = mappingForQuick ? String(mappingForQuick.localPath || '') : '';
+      const canQuickLaunch = !!(!isAllBoards && mappingEnabled && mappingLocalPath);
+
       cardsEl.innerHTML = filtered
         .map((c) => {
           const title = (c?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
           const board = state.boardId === ALL_BOARDS_ID ? String(c?.__boardName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
           const meta = [board, last].filter(Boolean).join(' • ');
+
+          const quickTierButtons = canQuickLaunch
+            ? `
+              <div class="tasks-quick-tier-group" data-quick-tier-group title="Launch with tier">
+                <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 1 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="1" title="Launch as T1">T1</button>
+                <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 2 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="2" title="Launch as T2">T2</button>
+                <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 3 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="3" title="Launch as T3">T3</button>
+                <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 4 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="4" title="Launch as T4">T4</button>
+              </div>
+            `
+            : '';
+
+          const quickLaunchHtml = canQuickLaunch
+            ? `
+              <div class="task-card-quick-actions" data-quick-launch-wrap>
+                ${quickTierButtons}
+                <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-btn title="Launch agent (uses default tier)">🚀</button>
+              </div>
+            `
+            : (!isAllBoards ? `<button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-setup title="Set Board Settings to enable Launch">⚙</button>` : '');
+
           return `
-            <div class="task-card-row" data-card-id="${c.id}" data-url="${c.url || ''}">
-              <div class="task-card-title">${title}</div>
-              <div class="task-card-meta">${meta}</div>
+            <div class="task-card-row task-card-list" data-card-id="${c.id}" data-url="${c.url || ''}">
+              <div class="task-card-list-main">
+                <div class="task-card-title">${title}</div>
+                <div class="task-card-meta">${meta}</div>
+              </div>
+              ${quickLaunchHtml ? `<div class="task-card-list-actions">${quickLaunchHtml}</div>` : ''}
             </div>
           `;
         })
