@@ -244,7 +244,7 @@ test.describe('Tasks quick launch', () => {
     await expect(page.locator('#tasks-board-view')).toBeVisible({ timeout: 20000 });
 
     // Change default tier via toolbar (should update quick launch tier).
-    await page.locator('#tasks-launch-default-tier').selectOption({ value: '4' });
+    await page.locator('#tasks-launch-default-tier-group [data-launch-default-tier-btn="4"]').click();
 
     // Capture quick launch calls.
     await page.evaluate(() => {
