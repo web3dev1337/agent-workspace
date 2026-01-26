@@ -20,11 +20,85 @@ const parsePrTaskId = (id) => {
   return { owner, repo, number: Number(num) };
 };
 
+const parseTrelloTaskId = (id) => {
+  const raw = String(id || '').trim();
+  if (!raw) return null;
+  const tag = raw.match(/^trello:([a-zA-Z0-9]+)$/i);
+  if (tag?.[1]) return { shortLink: tag[1] };
+  const url = raw.match(/trello\.com\/c\/([a-zA-Z0-9]+)(?:\/|\b)/i);
+  if (url?.[1]) return { shortLink: url[1] };
+  return null;
+};
+
+const detectCycles = ({ nodeIds, edges, limit = 5 } = {}) => {
+  const ids = Array.isArray(nodeIds) ? nodeIds.map(String) : [];
+  const edgeList = Array.isArray(edges) ? edges : [];
+  const max = Math.max(0, Math.min(25, Number(limit) || 5));
+  if (!ids.length || !edgeList.length || max === 0) return [];
+
+  const idSet = new Set(ids);
+  const adj = new Map();
+  for (const e of edgeList) {
+    const from = String(e?.from || '').trim();
+    const to = String(e?.to || '').trim();
+    if (!from || !to) continue;
+    if (!idSet.has(from) || !idSet.has(to)) continue;
+    if (!adj.has(from)) adj.set(from, []);
+    adj.get(from).push(to);
+  }
+
+  const visited = new Set();
+  const inStack = new Set();
+  const stack = [];
+  const cycles = [];
+  const seen = new Set();
+
+  const recordCycle = (toId) => {
+    const idx = stack.lastIndexOf(toId);
+    if (idx < 0) return;
+    const cycle = stack.slice(idx).concat([toId]);
+    const key = cycle.join('>');
+    if (seen.has(key)) return;
+    seen.add(key);
+    cycles.push(cycle);
+  };
+
+  const dfs = (id) => {
+    if (cycles.length >= max) return;
+    visited.add(id);
+    inStack.add(id);
+    stack.push(id);
+
+    const next = adj.get(id) || [];
+    for (const to of next) {
+      if (cycles.length >= max) break;
+      if (!visited.has(to)) {
+        dfs(to);
+      } else if (inStack.has(to)) {
+        recordCycle(to);
+      }
+    }
+
+    stack.pop();
+    inStack.delete(id);
+  };
+
+  for (const id of ids) {
+    if (cycles.length >= max) break;
+    if (!visited.has(id)) dfs(id);
+  }
+
+  return cycles;
+};
+
 class TaskDependencyService {
-  constructor({ taskRecordService, pullRequestService } = {}) {
+  constructor({ taskRecordService, pullRequestService, taskTicketingService } = {}) {
     this.taskRecordService = taskRecordService;
     this.pullRequestService = pullRequestService;
+    this.taskTicketingService = taskTicketingService;
     this.prCache = new Map(); // key -> { value, expiresAt }
+    this.trelloCardCache = new Map(); // shortLink -> { value, expiresAt }
+    this.trelloDepsCache = new Map(); // shortLink -> { value, expiresAt }
   }
 
   static getInstance(deps = {}) {
@@ -56,6 +130,42 @@ class TaskDependencyService {
     return value;
   }
 
+  getTrelloProviderSafe() {
+    try {
+      if (!this.taskTicketingService) return null;
+      return this.taskTicketingService.getProvider('trello');
+    } catch {
+      return null;
+    }
+  }
+
+  async getTrelloCardCached(shortLink) {
+    const key = String(shortLink || '').trim();
+    if (!key) return null;
+    const now = Date.now();
+    const cached = this.trelloCardCache.get(key);
+    if (cached && cached.expiresAt > now) return cached.value;
+    const provider = this.getTrelloProviderSafe();
+    if (!provider) return null;
+    const value = await provider.getCard({ cardId: key, refresh: false });
+    this.trelloCardCache.set(key, { value, expiresAt: now + 30_000 });
+    return value;
+  }
+
+  async getTrelloDepsCached(shortLink) {
+    const key = String(shortLink || '').trim();
+    if (!key) return [];
+    const now = Date.now();
+    const cached = this.trelloDepsCache.get(key);
+    if (cached && cached.expiresAt > now) return cached.value;
+    const provider = this.getTrelloProviderSafe();
+    if (!provider) return [];
+    const deps = await provider.getDependencies({ cardId: key, refresh: false });
+    const items = Array.isArray(deps?.items) ? deps.items : [];
+    this.trelloDepsCache.set(key, { value: items, expiresAt: now + 30_000 });
+    return items;
+  }
+
   async resolveDependency(depId) {
     const dep = String(depId || '').trim();
     if (!dep) return null;
@@ -73,6 +183,19 @@ class TaskDependencyService {
       } catch (error) {
         logger.warn('Failed to resolve PR dependency', { dep, error: error.message });
         return { id: dep, satisfied: false, reason: 'pr_lookup_failed' };
+      }
+    }
+
+    const trello = parseTrelloTaskId(dep);
+    if (trello) {
+      try {
+        const card = await this.getTrelloCardCached(trello.shortLink);
+        if (!card) return { id: dep, satisfied: false, reason: 'trello_not_configured' };
+        const closed = !!card?.closed;
+        return { id: dep, satisfied: closed, reason: closed ? 'trello_closed' : 'trello_open' };
+      } catch (error) {
+        logger.warn('Failed to resolve Trello dependency', { dep, error: error.message });
+        return { id: dep, satisfied: false, reason: 'trello_lookup_failed' };
       }
     }
 
@@ -156,7 +279,10 @@ class TaskDependencyService {
       const node = {
         id: tid,
         label: title || tid,
-        kind: tid.startsWith('pr:') ? 'pr' : (tid.startsWith('session:') ? 'session' : (tid.startsWith('worktree:') ? 'worktree' : 'task')),
+        kind: tid.startsWith('pr:') ? 'pr'
+          : (tid.startsWith('session:') ? 'session'
+            : (tid.startsWith('worktree:') ? 'worktree'
+              : (tid.startsWith('trello:') ? 'trello' : 'task'))),
         tier: (tier >= 1 && tier <= 4) ? tier : null,
         doneAt: rec.doneAt || null,
         reviewedAt: rec.reviewedAt || null
@@ -180,6 +306,33 @@ class TaskDependencyService {
         if (prev === undefined || nextDist < prev) {
           visited.set(dep, nextDist);
           queue.push({ id: dep, dist: nextDist });
+        }
+      }
+
+      const trello = parseTrelloTaskId(id);
+      if (trello) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const items = await this.getTrelloDepsCached(trello.shortLink);
+          for (const item of Array.isArray(items) ? items : []) {
+            const short = String(item?.shortLink || '').trim();
+            const url = String(item?.url || '').trim();
+            const toId = short ? `trello:${short}` : (url || String(item?.name || '').trim());
+            if (!toId) continue;
+            ensureNode(toId);
+            const state = String(item?.state || '').toLowerCase();
+            const satisfied = state === 'complete';
+            edges.push({ from: id, to: toId, satisfied, reason: satisfied ? 'trello_dep_complete' : 'trello_dep_incomplete' });
+
+            const nextDist = dist + 1;
+            const prev = visited.get(toId);
+            if (prev === undefined || nextDist < prev) {
+              visited.set(toId, nextDist);
+              queue.push({ id: toId, dist: nextDist });
+            }
+          }
+        } catch {
+          // ignore
         }
       }
 
@@ -208,6 +361,9 @@ class TaskDependencyService {
     }
 
     const edgesResolved = edges.map((e) => {
+      if (typeof e.satisfied === 'boolean') {
+        return { from: e.from, to: e.to, satisfied: !!e.satisfied, reason: e.reason || 'known' };
+      }
       const resolved = resolvedById.get(e.to);
       return {
         from: e.from,
@@ -217,13 +373,49 @@ class TaskDependencyService {
       };
     });
 
+    // Best-effort node enrichment for Trello + PR nodes.
+    const nodeArr = Array.from(nodes.values());
+    const trelloNodes = nodeArr.filter(n => n?.kind === 'trello');
+    if (trelloNodes.length) {
+      await Promise.allSettled(trelloNodes.map(async (n) => {
+        const parsed = parseTrelloTaskId(n?.id);
+        if (!parsed?.shortLink) return;
+        const card = await this.getTrelloCardCached(parsed.shortLink);
+        if (!card) return;
+        const name = String(card?.name || '').trim();
+        if (name) n.label = name;
+        const url = String(card?.url || '').trim();
+        if (url) n.url = url;
+        if (card?.closed) n.doneAt = n.doneAt || 'trello_closed';
+        n.trelloClosed = !!card?.closed;
+      }));
+    }
+
+    const prNodes = nodeArr.filter(n => n?.kind === 'pr');
+    if (prNodes.length) {
+      await Promise.allSettled(prNodes.map(async (n) => {
+        const parsed = parsePrTaskId(n?.id);
+        if (!parsed) return;
+        const prInfo = await this.getPrStateCached(parsed);
+        const title = String(prInfo?.title || '').trim();
+        if (title) n.label = title;
+        const url = String(prInfo?.url || '').trim();
+        if (url) n.url = url;
+        const state = String(prInfo?.state || '').toLowerCase();
+        if (state === 'merged') n.doneAt = n.doneAt || 'pr_merged';
+      }));
+    }
+
+    const cycles = detectCycles({ nodeIds: nodeArr.map(n => n.id), edges: edgesResolved, limit: 5 });
+
     return {
       rootId: root,
       depth: maxDepth,
-      nodes: Array.from(nodes.values()),
-      edges: edgesResolved
+      nodes: nodeArr,
+      edges: edgesResolved,
+      cycles
     };
   }
 }
 
-module.exports = { TaskDependencyService, parsePrTaskId };
+module.exports = { TaskDependencyService, parsePrTaskId, parseTrelloTaskId, detectCycles };

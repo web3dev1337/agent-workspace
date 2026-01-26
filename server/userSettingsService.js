@@ -46,11 +46,22 @@ class UserSettingsService {
         },
         ui: {
           theme: 'dark',
+          worktrees: {
+            autoCreateExtraWhenBusy: true,
+            autoCreateMinNumber: 9,
+            autoCreateMaxNumber: 25,
+            considerOtherWorkspaces: true
+          },
           workflow: {
             mode: 'review',
             focus: {
               hideTier2WhenTier1Busy: true,
               autoSwapToTier2WhenTier1Busy: false
+            },
+            notifications: {
+              mode: 'quiet', // quiet | aggressive
+              tier1Interrupts: true,
+              reviewCompleteNudges: true
             }
           },
           tasks: {
@@ -65,6 +76,17 @@ class UserSettingsService {
             // { enabled?: boolean, repoSlug?: string, localPath?: string, defaultStartTier?: 1|2|3|4 }
             // Local-only by default (stored in user-settings.json).
             boardMappings: {},
+            automations: {
+              trello: {
+                onPrMerged: {
+                  enabled: false,
+                  comment: true,
+                  moveToDoneList: true,
+                  closeIfNoDoneList: false,
+                  pollMs: 60_000
+                }
+              }
+            },
             kanban: {
               // Persist kanban UI state server-side (survives refresh and works across ports/origins).
               // Keyed by `${provider}:${boardId}` -> string[] listIds
@@ -263,6 +285,23 @@ class UserSettingsService {
           };
         }
 
+        if (ui.workflow) {
+          const defaultsWorkflow = (uiDefaults.workflow || {});
+          const wf = ui.workflow || {};
+          merged.global.ui.workflow = {
+            ...defaultsWorkflow,
+            ...wf,
+            focus: {
+              ...(defaultsWorkflow.focus || {}),
+              ...(wf.focus || {})
+            },
+            notifications: {
+              ...(defaultsWorkflow.notifications || {}),
+              ...(wf.notifications || {})
+            }
+          };
+        }
+
         if (ui.tasks) {
           const defaultsTasks = tasksDefaults || {};
           const tasks = ui.tasks || {};
@@ -290,6 +329,23 @@ class UserSettingsService {
             merged.global.ui.tasks.filters = {
               ...(defaultsTasks.filters || {}),
               ...(tasks.filters || {})
+            };
+          }
+
+          if (tasks.automations) {
+            const defaultsAutomations = defaultsTasks.automations || {};
+            const next = tasks.automations || {};
+            merged.global.ui.tasks.automations = {
+              ...defaultsAutomations,
+              ...next,
+              trello: {
+                ...(defaultsAutomations.trello || {}),
+                ...(next.trello || {}),
+                onPrMerged: {
+                  ...((defaultsAutomations.trello || {}).onPrMerged || {}),
+                  ...(((next.trello || {}).onPrMerged) || {})
+                }
+              }
             };
           }
 

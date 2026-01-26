@@ -60,9 +60,10 @@ const { ProcessStatusService } = require('./processStatusService');
 const { ProcessTelemetryService } = require('./processTelemetryService');
 const { ProcessAdvisorService } = require('./processAdvisorService');
 const { TaskRecordService } = require('./taskRecordService');
-const { PromptArtifactService } = require('./promptArtifactService');
+const { PromptArtifactService, safeId, sha256, formatPointerComment } = require('./promptArtifactService');
 const { TaskDependencyService } = require('./taskDependencyService');
 const { TaskTicketingService } = require('./taskTicketingService');
+const { PrMergeAutomationService } = require('./prMergeAutomationService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
@@ -177,10 +178,10 @@ const processTaskService = ProcessTaskService.getInstance({ sessionManager, work
 const taskRecordService = TaskRecordService.getInstance();
 const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager });
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
-const processAdvisorService = ProcessAdvisorService.getInstance({ processStatusService, processTelemetryService, processTaskService, taskRecordService });
 const promptArtifactService = PromptArtifactService.getInstance();
-const taskDependencyService = TaskDependencyService.getInstance({ taskRecordService, pullRequestService });
 const taskTicketingService = TaskTicketingService.getInstance();
+const taskDependencyService = TaskDependencyService.getInstance({ taskRecordService, pullRequestService, taskTicketingService });
+const processAdvisorService = ProcessAdvisorService.getInstance({ processStatusService, processTelemetryService, processTaskService, taskRecordService, taskDependencyService });
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -1122,7 +1123,7 @@ app.post('/api/workspaces/create-worktree', async (req, res) => {
 
 app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
   try {
-    const { workspaceId, repositoryPath, repositoryType, repositoryName, worktreeId, socketId } = req.body;
+    const { workspaceId, repositoryPath, repositoryType, repositoryName, worktreeId, socketId, startTier } = req.body;
     logger.info('Adding mixed worktree to workspace', {
       workspaceId,
       repositoryName,
@@ -1212,9 +1213,19 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
     if (isActiveWorkspace) {
       // Prefer targeting the requesting socket (avoid disrupting other connected clients / dashboards)
       if (socketId && io.sockets.sockets.get(socketId)) {
-        io.to(socketId).emit('worktree-sessions-added', { worktreeId, sessions: newSessions });
+        const tier = Number(startTier);
+        io.to(socketId).emit('worktree-sessions-added', {
+          worktreeId,
+          sessions: newSessions,
+          startTier: (tier >= 1 && tier <= 4) ? tier : undefined
+        });
       } else {
-        io.emit('worktree-sessions-added', { worktreeId, sessions: newSessions });
+        const tier = Number(startTier);
+        io.emit('worktree-sessions-added', {
+          worktreeId,
+          sessions: newSessions,
+          startTier: (tier >= 1 && tier <= 4) ? tier : undefined
+        });
       }
     }
 
@@ -1222,7 +1233,13 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
       totalNewSessions: Object.keys(newSessions).length
     });
 
-    res.json({ success: true, terminalIds: newTerminals.map(t => t.id), sessions: newSessions });
+    const tier = Number(startTier);
+    res.json({
+      success: true,
+      terminalIds: newTerminals.map(t => t.id),
+      sessions: newSessions,
+      startTier: (tier >= 1 && tier <= 4) ? tier : undefined
+    });
   } catch (error) {
     logger.error('Failed to add mixed worktree', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message, stack: error.stack });
@@ -1378,6 +1395,38 @@ app.post('/api/claude-notification', express.json(), (req, res) => {
 // Service instances
 const userSettingsService = UserSettingsService.getInstance();
 const gitUpdateService = GitUpdateService.getInstance();
+const prMergeAutomationService = PrMergeAutomationService.getInstance({
+  taskRecordService,
+  pullRequestService,
+  taskTicketingService,
+  userSettingsService
+});
+
+// Start background automations (best-effort; gated by user settings)
+prMergeAutomationService.start();
+
+app.get('/api/process/automations', (req, res) => {
+  try {
+    res.json({
+      prMerge: prMergeAutomationService.getConfig(),
+      lastRunAt: prMergeAutomationService.lastRunAt || null
+    });
+  } catch (error) {
+    logger.error('Failed to get automations status', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get automations status' });
+  }
+});
+
+app.post('/api/process/automations/pr-merge/run', express.json(), async (req, res) => {
+  try {
+    const limit = Number(req.body?.limit || 60);
+    const result = await prMergeAutomationService.runOnce({ limit });
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to run PR merge automations', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to run PR merge automations' });
+  }
+});
 
 // Get all user settings
 app.get('/api/user-settings', (req, res) => {
@@ -2338,7 +2387,14 @@ app.get('/api/process/advice', async (req, res) => {
 app.get('/api/process/task-records', (req, res) => {
   try {
     const records = taskRecordService.list();
-    res.json({ count: records.length, records });
+    const wrapped = (Array.isArray(records) ? records : []).map((r) => {
+      const id = r?.id;
+      if (!id) return null;
+      const { id: _, ...rest } = r || {};
+      return { id, record: rest };
+    }).filter(Boolean);
+
+    res.json({ count: wrapped.length, records: wrapped });
   } catch (error) {
     logger.error('Failed to list task records', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to list task records' });
@@ -2453,9 +2509,29 @@ app.get('/api/prompts', async (req, res) => {
 app.get('/api/prompts/:id', async (req, res) => {
   try {
     const id = req.params.id;
+    const visibility = String(req.query.visibility || 'private').trim().toLowerCase();
+
+    if (visibility === 'shared' || visibility === 'encrypted') {
+      const repoRoot = String(req.query.repoRoot || '').trim();
+      if (!repoRoot) return res.status(400).json({ error: 'repoRoot is required for shared/encrypted prompts' });
+      const defaults = promptArtifactService.defaultRepoPromptPaths(id);
+      const relPath = String(req.query.relPath || defaults[visibility] || '').trim();
+      if (!relPath) return res.status(400).json({ error: 'relPath is required for shared/encrypted prompts' });
+      const passphrase = process.env.ORCHESTRATOR_PROMPT_ENCRYPTION_KEY || process.env.ORCHESTRATOR_PROMPT_PASSPHRASE || '';
+      if (visibility === 'encrypted' && !passphrase) {
+        return res.status(400).json({
+          error: 'Encrypted prompts require ORCHESTRATOR_PROMPT_ENCRYPTION_KEY (or ORCHESTRATOR_PROMPT_PASSPHRASE) to be set'
+        });
+      }
+      const prompt = await promptArtifactService.readFromRepo({ repoRoot, relPath, visibility, passphrase });
+      if (!prompt) return res.status(404).json({ error: 'Not found' });
+      res.json({ id: safeId(id), ...prompt, visibility, repoRoot, relPath });
+      return;
+    }
+
     const prompt = await promptArtifactService.read(id);
     if (!prompt) return res.status(404).json({ error: 'Not found' });
-    res.json(prompt);
+    res.json({ ...prompt, visibility: 'private' });
   } catch (error) {
     logger.error('Failed to read prompt', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to read prompt' });
@@ -2469,8 +2545,27 @@ app.put('/api/prompts/:id', express.json({ limit: '25mb' }), async (req, res) =>
     if (typeof text !== 'string') {
       return res.status(400).json({ error: 'Body must be JSON with { "text": "..." }' });
     }
+
+    const visibility = String(req.query.visibility || 'private').trim().toLowerCase();
+    if (visibility === 'shared' || visibility === 'encrypted') {
+      const repoRoot = String(req.query.repoRoot || '').trim();
+      if (!repoRoot) return res.status(400).json({ error: 'repoRoot is required for shared/encrypted prompts' });
+      const defaults = promptArtifactService.defaultRepoPromptPaths(id);
+      const relPath = String(req.query.relPath || defaults[visibility] || '').trim();
+      if (!relPath) return res.status(400).json({ error: 'relPath is required for shared/encrypted prompts' });
+      const passphrase = process.env.ORCHESTRATOR_PROMPT_ENCRYPTION_KEY || process.env.ORCHESTRATOR_PROMPT_PASSPHRASE || '';
+      if (visibility === 'encrypted' && !passphrase) {
+        return res.status(400).json({
+          error: 'Encrypted prompts require ORCHESTRATOR_PROMPT_ENCRYPTION_KEY (or ORCHESTRATOR_PROMPT_PASSPHRASE) to be set'
+        });
+      }
+      await promptArtifactService.writeToRepo({ repoRoot, relPath, visibility, text, passphrase });
+      res.json({ id: safeId(id), sha256: sha256(text), visibility, repoRoot, relPath });
+      return;
+    }
+
     const result = await promptArtifactService.write(id, text);
-    res.json(result);
+    res.json({ ...result, visibility: 'private' });
   } catch (error) {
     logger.error('Failed to write prompt', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to write prompt' });
@@ -2485,6 +2580,56 @@ app.delete('/api/prompts/:id', async (req, res) => {
   } catch (error) {
     logger.error('Failed to delete prompt', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to delete prompt' });
+  }
+});
+
+// Promote a private prompt artifact into a repo (shared or encrypted).
+app.post('/api/prompts/:id/promote', express.json({ limit: '2mb' }), async (req, res) => {
+  try {
+    const id = req.params.id;
+    const visibility = String(req.body?.visibility || '').trim().toLowerCase();
+    if (visibility !== 'shared' && visibility !== 'encrypted') {
+      return res.status(400).json({ error: 'visibility must be "shared" or "encrypted"' });
+    }
+    const repoRoot = String(req.body?.repoRoot || '').trim();
+    if (!repoRoot) return res.status(400).json({ error: 'repoRoot is required' });
+
+    const defaults = promptArtifactService.defaultRepoPromptPaths(id);
+    const relPath = String(req.body?.relPath || defaults[visibility] || '').trim();
+    if (!relPath) return res.status(400).json({ error: 'relPath is required' });
+
+    const passphrase = process.env.ORCHESTRATOR_PROMPT_ENCRYPTION_KEY || process.env.ORCHESTRATOR_PROMPT_PASSPHRASE || '';
+    if (visibility === 'encrypted' && !passphrase) {
+      return res.status(400).json({
+        error: 'Encrypted prompts require ORCHESTRATOR_PROMPT_ENCRYPTION_KEY (or ORCHESTRATOR_PROMPT_PASSPHRASE) to be set'
+      });
+    }
+
+    const result = await promptArtifactService.promoteToRepo({ id, repoRoot, relPath, visibility, passphrase });
+    if (!result) return res.status(404).json({ error: 'Prompt not found' });
+
+    let pointerCommented = false;
+    const commentPointer = req.body?.commentPointer && typeof req.body.commentPointer === 'object' ? req.body.commentPointer : null;
+    if (commentPointer) {
+      const providerId = String(commentPointer.provider || 'trello').trim();
+      const cardId = String(commentPointer.cardId || '').trim();
+      if (!cardId) return res.status(400).json({ error: 'commentPointer.cardId is required when commentPointer is provided' });
+
+      const provider = taskTicketingService.getProvider(providerId);
+      if (typeof provider?.addComment !== 'function') {
+        return res.status(400).json({ error: 'Provider does not support comments', code: 'UNSUPPORTED_OPERATION' });
+      }
+
+      const repoLabel = String(commentPointer.repoLabel || '').trim() || path.basename(repoRoot || '');
+      const text = formatPointerComment({ id, sha256: result.sha256, visibility, repoLabel, relPath });
+      await provider.addComment({ cardId, text });
+      pointerCommented = true;
+    }
+
+    res.json({ ...result, visibility, repoRoot, relPath, pointerCommented });
+  } catch (error) {
+    logger.error('Failed to promote prompt', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to promote prompt' });
   }
 });
 

@@ -38,6 +38,7 @@ We support dependencies in two places:
 ### ✅ Prompt artifacts (massive prompts; private-by-default)
 
 - Local prompt artifacts exist and are addressable via API.
+- Shared/encrypted prompt artifacts are supported as repo-backed files (promotion supported).
 - There is an optional “embed into Trello comment” endpoint (chunking supported).
 
 ### ✅ Risk (base project risk vs change risk vs pFail)
@@ -52,6 +53,14 @@ We support dependencies in two places:
   - edit tier/risk/pFail/verify/promptRef
   - see dependency summary (`deps:X blocked:Y`)
   - open diff viewer
+
+### ✅ Dashboard v2 (process summary)
+
+- Dashboard now includes a lightweight “Process” summary:
+  - status (`GET /api/process/status`)
+  - telemetry (`GET /api/process/telemetry`)
+  - advice (`GET /api/process/advice`)
+- Shortcuts: open Queue and open Advice.
 
 ---
 
@@ -105,6 +114,8 @@ Current state:
 - ✅ Multi-level dependency viewer now exists:
   - “🧩 Graph” modal renders upstream (“Blocked By”) and downstream (“Unblocks”) trees up to a selectable depth.
   - “Pick from queue…” dropdown enables faster linking without typing IDs.
+  - Unified graph supports Trello nodes (`trello:<shortLink>`), filtering (hide satisfied), pinning, and cycle indicators (best-effort).
+  - Queue deps editor supports bulk add (comma/newline) + import of ticket “Dependencies” checklist into task-record deps.
 
 Outcome:
 - Add a dependency viewer:
@@ -122,9 +133,11 @@ Current state:
   - Auto prompt send timestamps for sessions
   - Review timers stored per task record + visible in Queue
   - API summary endpoint: `GET /api/process/telemetry`
-- ✅ Advisor v1 now exists:
+- ✅ Advisor v2 now exists:
   - API: `GET /api/process/advice`
   - UI: Commander panel “Advice”
+  - Includes metrics (review outcomes, stuck timers, dependency-blocked Tier 1/2 PR signals)
+  - Dashboard surfaces advice + metrics in the Process summary
 
 Outcome:
 - Implement telemetry in small steps and expose it to Commander/voice endpoints as “advice”.
@@ -267,7 +280,7 @@ We keep automated coverage for core workflow primitives and any new task-layer f
 - [x] Tier system exists (T1–T4 tagging + UI + workflow modes)
 - [x] Dependencies exist (Trello checklist + orchestrator-native deps)
 - [x] Risk metadata exists (base + change + pFail + verify minutes)
-- [x] Prompt artifacts exist (local/private; Trello embed available)
+- [x] Prompt artifacts exist (private/shared/encrypted + Trello embed)
 - [x] Board ↔ repo/path mapping exists
 - [x] Launch agent from Trello card exists
 - [x] Disabled boards list exists

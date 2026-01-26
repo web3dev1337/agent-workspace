@@ -3,6 +3,7 @@
 Purpose: if context is lost, this is the **single file** that states what we decided, what is shipped, what is missing, and what to do next.
 
 Date: 2026-01-25
+Last updated: 2026-01-26
 
 ---
 
@@ -118,6 +119,20 @@ Queue includes:
 - Focus includes a Tier-2 gating toggle:
   - `T2 Auto` hides Tier 2 while Tier 1 is busy
   - `T2 Always` always shows Tier 2 in Focus
+
+---
+
+## Worktrees (capacity helpers)
+
+### ✅ Shipped: auto-create `work9+` when busy
+
+If all existing worktrees are busy and the UI cannot find a recommended worktree, the UI can auto-create a new worktree (bounded) and then proceed with the normal “add-worktree-sessions” flow.
+
+Settings (local, `user-settings.json`):
+- `global.ui.worktrees.autoCreateExtraWhenBusy` (default `true`)
+- `global.ui.worktrees.autoCreateMinNumber` (default `9`)
+- `global.ui.worktrees.autoCreateMaxNumber` (default `25`)
+- `global.ui.worktrees.considerOtherWorkspaces` (default `true`, uses stronger “in use” heuristic across workspaces)
 - Focus includes an auto-swap toggle:
   - `Swap T2` shows Tier 2 only while Tier 1 is busy (auto-returns when Tier 1 is idle)
 
@@ -143,10 +158,13 @@ Shipped:
 - Prompt artifacts API (local/private):
   - `GET /api/prompts`, `GET|PUT|DELETE /api/prompts/:id`
   - default storage: `~/.orchestrator/prompts/<id>.md`
+- Shared/encrypted prompt storage (repo-backed):
+  - `GET|PUT /api/prompts/:id?visibility=shared|encrypted&repoRoot=/abs/repo&relPath=path/to/prompt.md`
+  - Encrypted operations require `ORCHESTRATOR_PROMPT_ENCRYPTION_KEY` (preferred) or `ORCHESTRATOR_PROMPT_PASSPHRASE`
+- Promotion endpoint (private → shared/encrypted):
+  - `POST /api/prompts/:id/promote` body `{ visibility: "shared"|"encrypted", repoRoot, relPath? }`
+- Queue UI supports store selection (`private|shared|encrypted`) + promote flow.
 - Trello embed endpoint (pointer/snippet/full/chunks)
-
-Still needed:
-- “promote private → shared/encrypted” workflow + UI
 
 ---
 
@@ -200,7 +218,7 @@ If we later want ticket↔ticket “conflict probability”, it should be a heur
 3) **Automation rules**
    - e.g. hide Tier 3/4 while Tier 1 busy; simple launch gating
 
-## Added follow-ups from the brain dump (not shipped yet)
+## Added follow-ups from the brain dump (shipped)
 
 These were explicitly requested in the 2026-01-25 brain dump.
 
@@ -260,14 +278,47 @@ These were explicitly requested in the 2026-01-25 brain dump.
   - Queue detail includes:
     - Notes / fix request field (`record.notes`)
     - “🛠 Fixer” action that spawns a fixer agent for the PR and auto-sends a fix prompt (stores `fixerSpawnedAt` / `fixerWorktreeId`)
+    - “🔒 Claim” / “🔓 Release” to lock an item while reviewing (stores `claimedBy` / `claimedAt`)
+    - “🔁 Recheck” action to spawn a reviewer after fixes (stores `recheckSpawnedAt` / `recheckWorktreeId`)
   - Optional automation:
     - “Auto Reviewer” toggle spawns a reviewer agent automatically for unreviewed Tier 3 PRs (stores `reviewerSpawnedAt` / `reviewerWorktreeId`)
 
-### ❌ Still missing (future work)
+10) **Trello PR-merge automation (v1)**
+  - When enabled, the server can auto-comment (and optionally move/close) a Trello card when a linked PR is merged.
+  - Link methods:
+    - Set `ticketCardId`/`ticketCardUrl` on the PR task record (Queue → “Ticket (Trello)” field), or
+    - Include a Trello card URL (or `trello:<shortLink>`) in the PR description so the server can infer it.
+  - Settings (local, `user-settings.json`):
+    - `global.ui.tasks.automations.trello.onPrMerged.enabled` (default `false`)
 
-1) **Dependency viewer UX (v2+)**
-  - Multi-level tree/graph visualization (beyond the v1 Dependents list).
-  - Faster linking UX (e.g. drag/drop or pick-from-queue).
+11) **Notification modes (v1)**
+  - Settings (local, `user-settings.json`):
+    - `global.ui.workflow.notifications.mode` (`quiet` | `aggressive`)
+    - `global.ui.workflow.notifications.tier1Interrupts` (toast when Tier 1 queue appears)
+    - `global.ui.workflow.notifications.reviewCompleteNudges` (toast when stopping review timer)
+
+12) **Dependency graph (v3)**
+  - Unifies orchestrator-native dependencies + Trello dependencies in one bounded graph.
+  - Graph modal now supports:
+    - Trello nodes (opens in Trello via Ctrl/Cmd+Click)
+    - Focus/drilldown by clicking nodes (re-roots the graph)
+    - Pinning + pinned-node selector
+    - Filtering (hide satisfied edges)
+    - Cycle detection indicator (best-effort)
+  - Queue dependencies editor improvements:
+    - bulk add (comma/newline)
+    - quick-search via datalist suggestions
+    - import ticket “Dependencies” checklist into task record deps
+
+13) **Advisor (v2) + coach dashboard (v2)**
+  - Advice endpoint now includes metrics + richer recommendations using:
+    - telemetry trends + review outcomes (needs_fix rate, stuck timers)
+    - dependency blocked signals (Tier 1/2 blockers)
+  - Dashboard “Process” section surfaces metrics + top advice items.
+
+### Optional future work (nice-to-have)
+
+None currently tracked from the 2026-01-25 brain dump.
 
 ---
 
@@ -277,11 +328,12 @@ These were explicitly requested in the 2026-01-25 brain dump.
 - [x] Tier-aware visibility rules exist (focus + review modes)
 - [x] changeRisk + pFailFirstPass + verifyMinutes stored per task
 - [x] Review Inbox exists and drives diff viewer
-- [x] Prompt artifacts exist (private; shared/encrypted WIP)
+- [x] Prompt artifacts exist (private/shared/encrypted + promotion)
 - [x] Dependency model extends beyond Trello when no card exists
 - [x] Board ↔ repo/path mapping exists (Tasks → Board Settings)
 - [x] Hidden/disabled boards supported
 - [x] Launch agent from Trello card supported
+- [x] Auto-create `work9+` when all worktrees are busy (bounded; configurable via `global.ui.worktrees`)
 - [x] Automated tests exist (unit + E2E safe port)
 
 Test commands:

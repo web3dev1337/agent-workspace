@@ -3,6 +3,7 @@
 This is the “one page” model behind tiers, workflow modes, dependencies, and prompt artifacts.
 
 Date: 2026-01-25
+Last updated: 2026-01-26
 
 ---
 
@@ -34,7 +35,9 @@ Date: 2026-01-25
 
 - Workspaces: `~/.orchestrator/workspaces/*.json`
 - Task records: `~/.orchestrator/task-records.json`
-- Prompt artifacts: `~/.orchestrator/prompts/<id>.md`
+- Prompt artifacts:
+  - private: `~/.orchestrator/prompts/<id>.md`
+  - shared/encrypted: committed repo file (path chosen per artifact)
 - Project base risk (shared): `.orchestrator-config.json` (cascades up folders)
 - Project base risk (local override): `~/.orchestrator/project-metadata.json`
 - Trello credentials: env (`TRELLO_API_KEY`, `TRELLO_TOKEN`) or `~/.trello-credentials`
@@ -96,3 +99,49 @@ flowchart LR
 - Tier is stored in the task record: `TaskRecord.tier` (1–4 or unset).
 - Tier is a workflow concept; it can exist without a Trello card.
 
+---
+
+## TaskRecord schema (v2 snapshot)
+
+Task records are stored in `~/.orchestrator/task-records.json` keyed by task id.
+
+Core scheduling/risk:
+- `title?: string`
+- `tier?: 1|2|3|4`
+- `changeRisk?: "low"|"medium"|"high"|"critical"`
+- `pFailFirstPass?: number` (0..1)
+- `verifyMinutes?: number`
+
+Review workflow:
+- `reviewedAt?: string` (ISO)
+- `reviewOutcome?: "approved"|"needs_fix"|string`
+- `notes?: string` (review feedback / fix request)
+- `claimedBy?: string`
+- `claimedAt?: string` (ISO)
+- `recheckSpawnedAt?: string` (ISO)
+- `recheckWorktreeId?: string`
+
+Telemetry:
+- `reviewStartedAt?: string` (ISO)
+- `reviewEndedAt?: string` (ISO)
+- `promptSentAt?: string` (ISO)
+- `promptChars?: number`
+
+Dependencies:
+- `dependencies?: string[]` (ids like `pr:o/r#1`, `session:123`, `worktree:/abs/path`, `trello:AbC123`, or a Trello URL)
+
+Prompt artifacts:
+- `promptRef?: string` (id/path ref for prompt editor; typically PR id)
+- `promptRepoRoot?: string`
+- `promptRelPath?: string`
+
+Ticket linking (Trello today):
+- `ticketProvider?: "trello"|string`
+- `ticketCardId?: string` (Trello shortLink)
+- `ticketCardUrl?: string`
+
+Automations (timestamps):
+- `reviewerSpawnedAt?: string` (ISO)
+- `reviewerWorktreeId?: string`
+- `fixerSpawnedAt?: string` (ISO)
+- `fixerWorktreeId?: string`

@@ -13,11 +13,22 @@
     "terminal": {},
     "ui": {
       "theme": "dark",
+      "worktrees": {
+        "autoCreateExtraWhenBusy": true,
+        "autoCreateMinNumber": 9,
+        "autoCreateMaxNumber": 25,
+        "considerOtherWorkspaces": true
+      },
       "workflow": {
         "mode": "review",
         "focus": {
           "hideTier2WhenTier1Busy": true,
           "autoSwapToTier2WhenTier1Busy": false
+        },
+        "notifications": {
+          "mode": "quiet",
+          "tier1Interrupts": true,
+          "reviewCompleteNudges": true
         }
       },
       "tasks": {
@@ -26,6 +37,17 @@
           "trelloUsername": ""
         },
         "boardMappings": {},
+        "automations": {
+          "trello": {
+            "onPrMerged": {
+              "enabled": false,
+              "comment": true,
+              "moveToDoneList": true,
+              "closeIfNoDoneList": false,
+              "pollMs": 60000
+            }
+          }
+        },
         "kanban": {
           "collapsedByBoard": {},
           "expandedByBoard": {},
