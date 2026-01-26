@@ -7062,6 +7062,19 @@ header h1 {
   flex-wrap: wrap;
 }
 
+.tasks-board-accent {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--tasks-board-accent);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.12);
+}
+
+.tasks-board-accent.is-hidden {
+  display: none;
+}
+
 .tasks-toggle {
   display: inline-flex;
   align-items: center;
