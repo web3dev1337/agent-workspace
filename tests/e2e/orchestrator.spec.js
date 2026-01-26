@@ -4,11 +4,6 @@
 
 const { test, expect } = require('@playwright/test');
 
-// Keep API calls aligned with Playwright's webServer/baseURL which may use a
-// dedicated test port to avoid colliding with the user's main instance.
-const SERVER_PORT = process.env.ORCHESTRATOR_TEST_PORT || process.env.ORCHESTRATOR_PORT || 4000;
-const SERVER_URL = `http://localhost:${SERVER_PORT}`;
-
 const ensureWorkspaceLoaded = async (page) => {
   const sidebar = page.locator('.sidebar');
   if (await sidebar.isVisible().catch(() => false)) {
@@ -175,7 +170,7 @@ test.describe('Sidebar Controls', () => {
 
 test.describe('API Health', () => {
   test('should respond to workspaces API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/workspaces`);
+    const response = await request.get('/api/workspaces');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -183,7 +178,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to commander status API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/commander/status`);
+    const response = await request.get('/api/commander/status');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -191,7 +186,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to quick-links API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/quick-links`);
+    const response = await request.get('/api/quick-links');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -201,7 +196,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to greenfield templates API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/greenfield/templates`);
+    const response = await request.get('/api/greenfield/templates');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -209,7 +204,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to ports API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/ports`);
+    const response = await request.get('/api/ports');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -218,7 +213,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to voice commands API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/voice/commands`);
+    const response = await request.get('/api/voice/commands');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -226,7 +221,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to conversations recent API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/conversations/recent?limit=10`);
+    const response = await request.get('/api/conversations/recent?limit=10');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -234,7 +229,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to conversations search API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/conversations/search?q=test`);
+    const response = await request.get('/api/conversations/search?q=test');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -243,7 +238,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to conversations stats API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/conversations/stats`);
+    const response = await request.get('/api/conversations/stats');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -251,7 +246,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to conversations projects API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/conversations/projects`);
+    const response = await request.get('/api/conversations/projects');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -259,7 +254,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to greenfield categories API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/greenfield/categories`);
+    const response = await request.get('/api/greenfield/categories');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -267,7 +262,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to worktree metadata API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/worktree-metadata?path=${encodeURIComponent(process.cwd())}`);
+    const response = await request.get(`/api/worktree-metadata?path=${encodeURIComponent(process.cwd())}`);
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -276,7 +271,7 @@ test.describe('API Health', () => {
   });
 
   test('should respond to worktree tags API', async ({ request }) => {
-    const response = await request.get(`${SERVER_URL}/api/worktree-tags`);
+    const response = await request.get('/api/worktree-tags');
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -374,7 +369,7 @@ test.describe('Conversation Browser', () => {
 test.describe('Conversation API Performance', () => {
   test('recent API should respond within 500ms', async ({ request }) => {
     const start = Date.now();
-    const response = await request.get(`${SERVER_URL}/api/conversations/recent?limit=100`);
+    const response = await request.get('/api/conversations/recent?limit=100');
     const duration = Date.now() - start;
 
     expect(response.ok()).toBeTruthy();
@@ -383,7 +378,7 @@ test.describe('Conversation API Performance', () => {
 
   test('search API should respond within 1000ms', async ({ request }) => {
     const start = Date.now();
-    const response = await request.get(`${SERVER_URL}/api/conversations/search?q=test&limit=100`);
+    const response = await request.get('/api/conversations/search?q=test&limit=100');
     const duration = Date.now() - start;
 
     expect(response.ok()).toBeTruthy();
@@ -392,7 +387,7 @@ test.describe('Conversation API Performance', () => {
 
   test('stats API should respond within 200ms', async ({ request }) => {
     const start = Date.now();
-    const response = await request.get(`${SERVER_URL}/api/conversations/stats`);
+    const response = await request.get('/api/conversations/stats');
     const duration = Date.now() - start;
 
     expect(response.ok()).toBeTruthy();
@@ -401,7 +396,7 @@ test.describe('Conversation API Performance', () => {
 
   test('should handle large limit parameter', async ({ request }) => {
     const start = Date.now();
-    const response = await request.get(`${SERVER_URL}/api/conversations/recent?limit=5000`);
+    const response = await request.get('/api/conversations/recent?limit=5000');
     const duration = Date.now() - start;
 
     expect(response.ok()).toBeTruthy();
@@ -412,7 +407,7 @@ test.describe('Conversation API Performance', () => {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    const response = await request.get(`${SERVER_URL}/api/conversations/search?startDate=${weekAgo}&limit=50`);
+    const response = await request.get(`/api/conversations/search?startDate=${weekAgo}&limit=50`);
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();

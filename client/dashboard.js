@@ -86,30 +86,55 @@ class Dashboard {
 
     // Load ports for dashboard
     this.loadDashboardPorts();
+
+    // Load process status/telemetry/advice summaries
+    this.loadDashboardProcessSummary();
   }
 
   generateDashboardHTML() {
-    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws));
-    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws));
-    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
+	    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws));
+	    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws));
+	    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
 
-    return `
-      <div class="dashboard-topbar">
-        ${canReturnToWorkspaces ? `
-          <button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to Workspaces</button>
-        ` : `<div></div>`}
-        <div id="dashboard-process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div>
-      </div>
-      <div class="dashboard-header">
-        <h1>🎯 Agent Orchestrator Dashboard</h1>
-        <p>Select a workspace to begin development</p>
-      </div>
+		    return `
+		      <div class="dashboard-topbar">
+		        ${canReturnToWorkspaces ? `
+		          <button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to Workspaces</button>
+		        ` : `<div></div>`}
+            <div id="dashboard-process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div>
+		      </div>
+		      <div class="dashboard-header">
+		        <h1>🎯 Agent Orchestrator Dashboard</h1>
+		        <p>Select a workspace to begin development</p>
+		      </div>
 
-      ${activeWorkspaces.length > 0 ? `
-        <div class="dashboard-section">
-          <h2>Active Workspaces</h2>
-          <div class="workspace-grid">
-            ${activeWorkspaces.map(ws => this.generateWorkspaceCard(ws, true)).join('')}
+          <div class="dashboard-section">
+            <h2>📊 Process</h2>
+            <div class="dashboard-summary-grid">
+              <div class="dashboard-summary-card">
+                <div class="dashboard-summary-title">Status</div>
+                <div id="dashboard-status-summary" class="dashboard-summary-body">Loading…</div>
+              </div>
+              <div class="dashboard-summary-card">
+                <div class="dashboard-summary-title">Telemetry</div>
+                <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
+              </div>
+              <div class="dashboard-summary-card">
+                <div class="dashboard-summary-title">Advice</div>
+                <div id="dashboard-advice-summary" class="dashboard-summary-body">Loading…</div>
+                <div class="dashboard-summary-actions">
+                  <button class="dashboard-topbar-btn" id="dashboard-open-queue" title="Open Queue">📥 Queue</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-advice" title="Open Commander Advice">🧠 Advice</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+	      ${activeWorkspaces.length > 0 ? `
+	        <div class="dashboard-section">
+	          <h2>Active Workspaces</h2>
+	          <div class="workspace-grid">
+	            ${activeWorkspaces.map(ws => this.generateWorkspaceCard(ws, true)).join('')}
           </div>
         </div>
       ` : ''}
@@ -138,6 +163,99 @@ class Dashboard {
         </div>
       </div>
     `;
+	  }
+
+  async loadDashboardProcessSummary() {
+    const statusEl = document.getElementById('dashboard-status-summary');
+    const telemetryEl = document.getElementById('dashboard-telemetry-summary');
+    const adviceEl = document.getElementById('dashboard-advice-summary');
+
+    document.getElementById('dashboard-open-queue')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.orchestrator?.showQueuePanel?.().catch?.(() => {});
+    });
+    document.getElementById('dashboard-open-advice')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      try {
+        this.orchestrator?.handleCommanderAction?.('open-advice', {});
+      } catch {}
+    });
+
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    try {
+      const [statusRes, telemetryRes, adviceRes] = await Promise.all([
+        fetch('/api/process/status?mode=mine').catch(() => null),
+        fetch('/api/process/telemetry').catch(() => null),
+        fetch('/api/process/advice?mode=mine').catch(() => null)
+      ]);
+
+      if (statusEl) {
+        const data = statusRes ? await statusRes.json().catch(() => ({})) : {};
+        if (statusRes && statusRes.ok) {
+          const q = data?.qByTier || {};
+          statusEl.innerHTML = `
+            <div>WIP <strong>${Number(data?.wip ?? 0)}</strong> (${escapeHtml(data?.wipKind || 'workspaces')})</div>
+            <div>T1 ${Number(q[1] ?? 0)} • T2 ${Number(q[2] ?? 0)} • T3 ${Number(q[3] ?? 0)} • T4 ${Number(q[4] ?? 0)}</div>
+            <div>Level <strong>${escapeHtml(data?.level || 'ok')}</strong></div>
+          `;
+        } else {
+          statusEl.textContent = 'Failed to load.';
+        }
+      }
+
+      if (telemetryEl) {
+        const data = telemetryRes ? await telemetryRes.json().catch(() => ({})) : {};
+        if (telemetryRes && telemetryRes.ok) {
+          const avgReview = data?.avgReviewSeconds ? `${Math.round(Number(data.avgReviewSeconds))}s` : '—';
+          const avgChars = Number.isFinite(Number(data?.avgPromptChars)) ? Math.round(Number(data.avgPromptChars)) : null;
+          telemetryEl.innerHTML = `
+            <div>Lookback <strong>${Number(data?.lookbackHours ?? 24)}h</strong></div>
+            <div>Avg review <strong>${escapeHtml(avgReview)}</strong></div>
+            <div>Avg prompt chars <strong>${avgChars === null ? '—' : avgChars}</strong></div>
+          `;
+        } else {
+          telemetryEl.textContent = 'Failed to load.';
+        }
+      }
+
+      if (adviceEl) {
+        const data = adviceRes ? await adviceRes.json().catch(() => ({})) : {};
+        if (adviceRes && adviceRes.ok) {
+          const items = Array.isArray(data?.advice) ? data.advice : [];
+          const m = data?.metrics || {};
+          const reviewsCompleted = Number(m?.reviewsCompleted ?? 0);
+          const needsFix = Number(m?.reviewsNeedsFix ?? 0);
+          const blockedPrs = Number(m?.prsBlockedByDeps ?? 0);
+          const needsFixRate = Number.isFinite(Number(m?.needsFixRate)) ? Number(m.needsFixRate) : null;
+          const metricsHtml = `
+            <div style="display:grid; gap:4px; margin-bottom:8px; opacity:0.92;">
+              <div>Blocked PRs <strong>${blockedPrs}</strong></div>
+              <div>Reviews <strong>${reviewsCompleted}</strong> • needs_fix <strong>${needsFix}</strong>${needsFixRate === null ? '' : ` • rate <strong>${Math.round(needsFixRate * 100)}%</strong>`}</div>
+            </div>
+          `;
+          if (!items.length) {
+            adviceEl.innerHTML = metricsHtml + '<div style="opacity:0.8;">No advice right now.</div>';
+          } else {
+            adviceEl.innerHTML = `
+              ${metricsHtml}
+              <ul style="margin:0;padding-left:18px;">
+                ${items.slice(0, 3).map((a) => `<li><strong>${escapeHtml(a.title || '')}</strong> — ${escapeHtml(a.message || '')}</li>`).join('')}
+              </ul>
+            `;
+          }
+        } else {
+          adviceEl.textContent = 'Failed to load.';
+        }
+      }
+    } catch (error) {
+      if (statusEl) statusEl.textContent = 'Failed to load.';
+      if (telemetryEl) telemetryEl.textContent = 'Failed to load.';
+      if (adviceEl) adviceEl.textContent = 'Failed to load.';
+    }
   }
 
   generateWorkspaceCard(workspace, isActive) {

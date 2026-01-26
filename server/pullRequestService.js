@@ -36,7 +36,7 @@ class PullRequestService {
       '--repo',
       `${o}/${r}`,
       '--json',
-      'number,title,state,url,isDraft,createdAt,updatedAt,author'
+      'number,title,state,url,isDraft,createdAt,updatedAt,author,body,mergedAt,closedAt'
     ];
 
     const { stdout } = await new Promise((resolve, reject) => {

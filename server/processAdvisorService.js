@@ -8,11 +8,12 @@ const normalizeTier = (value) => {
 };
 
 class ProcessAdvisorService {
-  constructor({ processStatusService, processTelemetryService, processTaskService, taskRecordService } = {}) {
+  constructor({ processStatusService, processTelemetryService, processTaskService, taskRecordService, taskDependencyService } = {}) {
     this.processStatusService = processStatusService;
     this.processTelemetryService = processTelemetryService;
     this.processTaskService = processTaskService;
     this.taskRecordService = taskRecordService;
+    this.taskDependencyService = taskDependencyService;
     this.cache = new TTLCache({ defaultTtlMs: 25_000, maxEntries: 50 });
   }
 
@@ -29,6 +30,14 @@ class ProcessAdvisorService {
 
     return this.cache.getOrCompute(cacheKey, async () => {
       const advice = [];
+      const metrics = {};
+      const parseIso = (v) => {
+        const ms = Date.parse(String(v || ''));
+        return Number.isFinite(ms) ? ms : 0;
+      };
+      const nowMs = Date.now();
+      const lookbackMs = Math.max(1, hours) * 60 * 60 * 1000;
+      const startMs = nowMs - lookbackMs;
 
       const [status, telemetry, tasks] = await Promise.all([
         this.processStatusService?.getStatus?.({ mode, lookbackHours: hours, force }) || null,
@@ -36,10 +45,19 @@ class ProcessAdvisorService {
         this.processTaskService?.listTasks?.({ prs: { mode, state: 'open', sort: 'updated', limit: 50 } }) || []
       ]);
 
+      const records = typeof this.taskRecordService?.list === 'function'
+        ? (this.taskRecordService.list() || [])
+        : [];
+
       const qByTier = status?.qByTier || {};
       const qCaps = status?.qCaps || {};
       const wip = Number(status?.wip || 0);
       const wipMax = Number(status?.wipMax || 0);
+
+      metrics.lookbackHours = hours;
+      metrics.wip = wip;
+      metrics.wipMax = wipMax || null;
+      metrics.qByTier = qByTier;
 
       if (wipMax && wip > wipMax) {
         advice.push({
@@ -85,6 +103,47 @@ class ProcessAdvisorService {
         });
       }
 
+      // Review outcome + trends (best-effort from task records).
+      const recentReviews = records.filter((r) => {
+        const ended = parseIso(r?.reviewEndedAt);
+        return ended && ended >= startMs;
+      });
+      const recentReviewTotal = recentReviews.length;
+      const recentNeedsFix = recentReviews.filter(r => String(r?.reviewOutcome || '').toLowerCase() === 'needs_fix').length;
+      const recentApproved = recentReviews.filter(r => String(r?.reviewOutcome || '').toLowerCase() === 'approved').length;
+      metrics.reviewsCompleted = recentReviewTotal;
+      metrics.reviewsNeedsFix = recentNeedsFix;
+      metrics.reviewsApproved = recentApproved;
+      metrics.needsFixRate = recentReviewTotal ? (recentNeedsFix / recentReviewTotal) : 0;
+
+      if (recentReviewTotal >= 5 && metrics.needsFixRate >= 0.5) {
+        advice.push({
+          level: 'warn',
+          code: 'needs_fix_rate_high',
+          title: 'High “needs_fix” rate',
+          message: `In the last ${hours}h, ${recentNeedsFix}/${recentReviewTotal} reviews ended as “needs_fix”. Consider smaller PRs, more verification time, or raising Tier on risky items.`,
+          actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+        });
+      }
+
+      const stuckReviews = records
+        .filter((r) => {
+          const started = parseIso(r?.reviewStartedAt);
+          const ended = parseIso(r?.reviewEndedAt);
+          return started && !ended && started >= startMs && (nowMs - started) > 20 * 60 * 1000;
+        })
+        .slice(0, 10);
+      metrics.stuckReviews = stuckReviews.length;
+      if (stuckReviews.length) {
+        advice.push({
+          level: 'info',
+          code: 'review_stuck',
+          title: 'Reviews left running',
+          message: `${stuckReviews.length} review timer(s) have been running for >20 minutes. Stop timers or mark outcomes to keep telemetry accurate.`,
+          actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+        });
+      }
+
       // Suggest reviewer for unreviewed Tier 3 PRs.
       const unreviewedTier3Prs = (Array.isArray(tasks) ? tasks : []).filter((t) => {
         if (t?.kind !== 'pr') return false;
@@ -104,10 +163,64 @@ class ProcessAdvisorService {
         });
       }
 
+      // Dependency graph signals (best-effort; bounded to small set).
+      if (this.taskDependencyService && typeof this.taskDependencyService.getDependencySummary === 'function') {
+        const candidates = (Array.isArray(tasks) ? tasks : [])
+          .filter((t) => t?.kind === 'pr' && t?.id)
+          .slice(0, 20);
+
+        const summaries = await Promise.allSettled(candidates.map(async (t) => {
+          const record = this.taskRecordService?.get?.(t.id) || t.record || {};
+          const tier = normalizeTier(record?.tier);
+          const summary = await this.taskDependencyService.getDependencySummary(t.id);
+          return { id: t.id, tier, blocked: Number(summary?.blocked || 0), total: Number(summary?.total || 0) };
+        }));
+
+        const items = summaries
+          .filter((r) => r.status === 'fulfilled')
+          .map((r) => r.value)
+          .filter(Boolean);
+
+        const blocked = items.filter(i => i.blocked > 0);
+        metrics.prsBlockedByDeps = blocked.length;
+        metrics.prsWithDeps = items.filter(i => i.total > 0).length;
+
+        const tier12Blocked = blocked.filter(i => i.tier === 1 || i.tier === 2);
+        if (tier12Blocked.length) {
+          advice.push({
+            level: 'warn',
+            code: 'tier12_blocked',
+            title: 'Tier 1/2 tasks blocked by dependencies',
+            message: `${tier12Blocked.length} Tier 1/2 PR(s) are blocked by dependencies. Consider clearing blockers or re-tiering to unblock execution.`,
+            actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+          });
+        }
+      }
+
+      // Fixer/recheck loop signals (best-effort from records).
+      const openNeedsFix = records.filter((r) => {
+        if (r?.doneAt) return false;
+        const outcome = String(r?.reviewOutcome || '').toLowerCase();
+        if (outcome !== 'needs_fix') return false;
+        const ended = parseIso(r?.reviewEndedAt);
+        return ended && ended >= startMs;
+      }).slice(0, 25);
+      metrics.openNeedsFix = openNeedsFix.length;
+      if (openNeedsFix.length >= 3) {
+        advice.push({
+          level: 'info',
+          code: 'needs_fix_backlog',
+          title: 'Fix backlog',
+          message: `${openNeedsFix.length} items are marked “needs_fix” in the last ${hours}h. Consider spawning fixers or consolidating feedback into actionable notes.`,
+          actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+        });
+      }
+
       return {
         generatedAt: new Date().toISOString(),
         mode,
         lookbackHours: hours,
+        metrics,
         advice
       };
     }, { force });
@@ -115,4 +228,3 @@ class ProcessAdvisorService {
 }
 
 module.exports = { ProcessAdvisorService };
-

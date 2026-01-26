@@ -15,6 +15,27 @@ describe('UserSettingsService defaults', () => {
     expect(defaults.global.ui.workflow.focus).toBeTruthy();
     expect(defaults.global.ui.workflow.focus.hideTier2WhenTier1Busy).toBe(true);
     expect(defaults.global.ui.workflow.focus.autoSwapToTier2WhenTier1Busy).toBe(false);
+    expect(defaults.global.ui.workflow.notifications).toBeTruthy();
+    expect(defaults.global.ui.workflow.notifications.mode).toBeTruthy();
+  });
+
+  test('includes ui.worktrees auto-create defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    expect(defaults?.global?.ui?.worktrees).toBeTruthy();
+    expect(typeof defaults.global.ui.worktrees.autoCreateExtraWhenBusy).toBe('boolean');
+    expect(typeof defaults.global.ui.worktrees.autoCreateMinNumber).toBe('number');
+    expect(typeof defaults.global.ui.worktrees.autoCreateMaxNumber).toBe('number');
+    expect(typeof defaults.global.ui.worktrees.considerOtherWorkspaces).toBe('boolean');
+  });
+
+  test('includes ui.tasks.automations.trello.onPrMerged defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    const cfg = defaults?.global?.ui?.tasks?.automations?.trello?.onPrMerged;
+    expect(cfg).toBeTruthy();
+    expect(typeof cfg.enabled).toBe('boolean');
+    expect(typeof cfg.comment).toBe('boolean');
+    expect(typeof cfg.moveToDoneList).toBe('boolean');
+    expect(typeof cfg.pollMs).toBe('number');
   });
 
   test('mergeSettings deep-merges ui.tasks without dropping defaults', () => {
@@ -22,9 +43,17 @@ describe('UserSettingsService defaults', () => {
     const merged = UserSettingsService.prototype.mergeSettings.call({}, defaults, {
       global: {
         ui: {
+          workflow: {
+            mode: 'focus'
+          },
           tasks: {
             boardMappings: {
               'trello:b1': { enabled: true, localPath: 'games/hytopia/mock-repo', defaultStartTier: 3 }
+            },
+            automations: {
+              trello: {
+                onPrMerged: { enabled: true }
+              }
             }
           }
         }
@@ -38,5 +67,11 @@ describe('UserSettingsService defaults', () => {
     expect(merged.global.ui.tasks.kanban.layoutByBoard).toBeTruthy();
     expect(merged.global.ui.tasks.filters).toBeTruthy();
     expect(merged.global.ui.tasks.filters.assigneesByBoard).toBeTruthy();
+    // Keeps nested automation defaults while allowing partial override.
+    expect(merged.global.ui.tasks.automations.trello.onPrMerged.enabled).toBe(true);
+    expect(typeof merged.global.ui.tasks.automations.trello.onPrMerged.pollMs).toBe('number');
+    // Does not drop workflow defaults when only mode is provided.
+    expect(merged.global.ui.workflow.focus).toBeTruthy();
+    expect(merged.global.ui.workflow.notifications).toBeTruthy();
   });
 });

@@ -29,13 +29,13 @@ Run on dev worktree only (do not touch the prod `/master` worktree):
 - `npm run test:e2e:safe -- tests/e2e/queue-panel.spec.js`
 
 ## Checklist
-- [ ] Queue button visible in header
-- [ ] Queue panel opens/closes cleanly (Esc + X)
-- [ ] List renders + tier counts update when search filters change
-- [ ] Selecting an item shows detail editor
-- [ ] Edits persist via `PUT /api/process/task-records/:id`
-- [ ] Prompt editor loads/saves via `/api/prompts/:id`
-- [ ] “Diff” opens Advanced Diff Viewer for PR items
+- [x] Queue button visible in header
+- [x] Queue panel opens/closes cleanly (Esc + X)
+- [x] List renders + tier counts update when search filters change
+- [x] Selecting an item shows detail editor
+- [x] Edits persist via `PUT /api/process/task-records/:id`
+- [x] Prompt editor loads/saves via `/api/prompts/:id`
+- [x] “Diff” opens Advanced Diff Viewer for PR items
 
 ## Resume notes
 If context is lost:

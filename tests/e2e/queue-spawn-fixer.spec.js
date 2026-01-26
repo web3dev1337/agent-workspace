@@ -26,6 +26,14 @@ const ensureWorkspaceLoaded = async (page) => {
   await page.waitForSelector('.sidebar:not(.hidden)', { timeout: 10000 });
 };
 
+const dismissFocusOverlay = async (page) => {
+  const overlay = page.locator('#focus-overlay.active');
+  if (await overlay.isVisible().catch(() => false)) {
+    await page.locator('#focus-overlay .focus-close-btn').click();
+    await expect(overlay).toBeHidden();
+  }
+};
+
 test.describe('Queue fixer spawn', () => {
   test('fixer button emits add-worktree-sessions for PR task', async ({ page }) => {
     await page.route(/.*\/api\/process\/tasks.*/, async (route) => {
@@ -92,13 +100,33 @@ test.describe('Queue fixer spawn', () => {
 
     await page.goto('/');
     await ensureWorkspaceLoaded(page);
+    await dismissFocusOverlay(page);
+
+    // Make the environment deterministic: use a minimal mixed-repo workspace and
+    // clear any sessions loaded from disk so worktree selection is stable.
+    await page.evaluate(() => {
+      if (window.orchestrator) {
+        window.orchestrator.sessions = new Map();
+        window.orchestrator.currentWorkspace = {
+          id: 'test-workspace',
+          name: 'Test Workspace',
+          workspaceType: 'mixed-repo',
+          terminals: [],
+          repository: null
+        };
+      }
+    });
 
     await page.evaluate(async () => {
       await window.orchestrator.showQueuePanel();
       window.__capturedEmits = [];
       const sock = window.orchestrator?.socket;
       if (sock) {
-        sock.emit = (event, payload) => window.__capturedEmits.push({ event, payload });
+        const original = sock.emit?.bind(sock);
+        sock.emit = (event, payload) => {
+          window.__capturedEmits.push({ event, payload });
+          return original ? original(event, payload) : undefined;
+        };
       }
     });
 
@@ -119,4 +147,3 @@ test.describe('Queue fixer spawn', () => {
     expect(last.startTier).toBe(2);
   });
 });
-
