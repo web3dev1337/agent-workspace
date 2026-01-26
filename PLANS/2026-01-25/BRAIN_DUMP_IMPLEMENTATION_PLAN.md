@@ -89,6 +89,8 @@ Brain dump asks:
 Current state (implemented):
 - Tasks card detail includes a “Launch Agent” block:
   - tier selector + agent selector (Claude/Codex) + mode + YOLO + auto-send prompt
+- Board (kanban) cards include a mini tier selector + 🚀 quick launch (1–2 clicks).
+- Launch settings persist (tier/agent/mode/YOLO/auto-send) across refreshes.
 - Launch flow:
   - card → board mapping → `/api/workspaces/scan-repos` → recommended worktree
   - emits `add-worktree-sessions` with `startTier`
