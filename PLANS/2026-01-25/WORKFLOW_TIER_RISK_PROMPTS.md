@@ -35,6 +35,7 @@ The implementation plan derived from it is:
 - Docs: commit/push discipline: https://github.com/web3dev1337/claude-orchestrator/pull/224
 - Tasks: 1-click launch from kanban cards (UX): https://github.com/web3dev1337/claude-orchestrator/pull/226
 - Tasks: board view full-width until card selected (UX): https://github.com/web3dev1337/claude-orchestrator/pull/228
+- Tasks: show Trello board color in toolbar (UX): https://github.com/web3dev1337/claude-orchestrator/pull/230
 
 ---
 
