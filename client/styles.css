@@ -7062,6 +7062,31 @@ header h1 {
   flex-wrap: wrap;
 }
 
+.tasks-launch-defaults {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+}
+
+.tasks-launch-defaults-label {
+  font-weight: 900;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.tasks-toggle.tasks-toggle-mini {
+  font-size: 0.75rem;
+  gap: 6px;
+}
+
+.tasks-toggle.tasks-toggle-mini span {
+  opacity: 0.9;
+}
+
 .tasks-board-accent {
   width: 12px;
   height: 12px;
