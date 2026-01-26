@@ -19,13 +19,14 @@ Agent Orchestrator is a web-based multi-terminal management system for running m
 > Note: the repository is still named `claude-orchestrator` for historical reasons. The UI/product name is **Agent Orchestrator**.
 
 ### Key Features
-- **16 Terminal Dashboard**: 8 Claude + 8 server terminals
+- **Multi-Workspace Tabs**: browser-like tabs for switching between multiple workspaces
+- **Terminal Dashboard**: dynamic terminal grid per workspace (1–16 pairs)
 - **Real-time Status Tracking**: Visual indicators for idle/busy/waiting states
 - **Smart Notifications**: Browser alerts when Claude needs input
-- **Git Integration**: Shows current branch for each worktree
-- **Local Network Access**: Secure access from any device on your LAN
-- **Token Usage Tracking**: Monitor context window usage
-- **Session Management**: Restart, monitor, and control sessions
+- **Git Integration**: branch/status/PR metadata and worktree operations
+- **Tasks (Trello)**: browse boards/cards and perform common write actions (comments/move/assign/due/dependencies)
+- **Process Layer**: Queue + tier tags + risk metadata + prompt artifacts + dependencies
+- **Diff Viewer**: advanced PR/code review with Markdown rendering support
 
 ## Architecture
 
@@ -39,6 +40,9 @@ Agent Orchestrator is a web-based multi-terminal management system for running m
   - `GitHelper`: Handles git operations and branch detection
   - `NotificationService`: Manages alerts and notifications
   - `TokenCounter`: Tracks context usage (Phase 2)
+  - `TaskTicketingService`: Trello task provider abstraction (`/api/tasks/*`)
+  - `TaskRecordService`: tier/risk/prompt metadata (`/api/process/task-records/*`)
+  - `TaskDependencyService`: dependency resolution (`/api/process/*/dependencies`)
 
 ### Frontend (Vanilla JS)
 - **Xterm.js**: Terminal rendering and interaction
@@ -54,7 +58,7 @@ Agent Orchestrator is a web-based multi-terminal management system for running m
 - Node.js 16+ 
 - Git
 - Claude CLI installed and configured
-- 8 git worktrees set up (HyFire2-work1 through HyFire2-work8)
+- (Recommended) git worktrees set up per repo (`work1`…`workN`) for fast parallel agent work
 
 ### Quick Install
 ```bash
@@ -100,17 +104,21 @@ MAX_CONTEXT_TOKENS=200000
 
 ### Starting the Server
 ```bash
-# Development mode (with auto-reload)
-npm run dev
+# Development (web-only)
+npm run dev:web
+
+# Development (web-only, safe ports; avoids colliding with a running prod instance)
+npm run dev:web:safe
 
 # Production mode
 npm start
 ```
 
 ### Accessing the Dashboard
-- **Local**: http://localhost:3000
-- **LAN**: http://<your-ip>:3000
-- **With Auth**: http://localhost:3000?token=your-secret-token
+- Dashboard URLs depend on your ports.
+- Safe default for dev work is typically:
+  - server: `ORCHESTRATOR_PORT=4001`
+  - client: `CLIENT_PORT=4100`
 
 ### Dashboard Interface
 
@@ -168,6 +176,30 @@ When Claude is waiting for input:
 - [ ] Automated git operations
 - [ ] Result comparison
 - [ ] AI agent communication
+
+### Process Layer (Tiers + Queue + Risk + Prompts + Dependencies) ✅/🚧
+- ✅ Workflow modes: Focus (T1–T2) / Review (all; opens Queue) / Background (T3–T4)
+- ✅ Queue (“📥 Queue”) for unified PR/worktree/session review
+- ✅ Tier tagging per task and per agent tile
+- ✅ Dependencies:
+  - Trello-backed via checklist named `Dependencies`
+  - Orchestrator-native via task records (`~/.orchestrator/task-records.json`)
+  - Queue includes a dependency graph modal (bounded depth) + “pick from queue” linking
+- ✅ Prompt artifacts see `~/.orchestrator/prompts/<id>.md`
+- ✅ Tasks: board↔repo mapping + “Launch agent from Trello card” (via Tasks → Board Settings + card detail Launch section)
+ - ✅ Review conveyor: “Reviewer” + “Fixer” actions for PR tasks
+
+### Commander + Voice (workflow controls)
+Commander can drive the process layer via semantic commands (and voice uses the same command registry):
+- Workflow modes: `set-workflow-mode` (`focus|review|background`)
+- Focus behavior: `set-focus-tier2` (`auto|always`)
+- Focus behavior: `Swap T2` button auto-swaps to Tier 2 while Tier 1 is busy (persisted in `ui.workflow.focus.autoSwapToTier2WhenTier1Busy`)
+- Panels: `open-queue`, `open-tasks`, `open-advice`
+
+Voice examples (rule-based, no LLM required):
+- “enter focus mode”
+- “tier two always”
+- “open queue”
 
 ## Security
 
@@ -293,6 +325,11 @@ claude-orchestrator/
 ├── sessions/          # Session data (gitignored)
 └── config/           # Configuration files
 ```
+
+For process-layer status and resume docs, see:
+- `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md`
+- `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md`
+- `PLANS/2026-01-25/DATA_MODEL.md`
 
 ### Adding New Features
 

@@ -14,6 +14,7 @@ class ClaudeOrchestrator {
     // 'focus' (Tier 1–2) | 'review' (all) | 'background' (Tier 3–4)
     this.workflowMode = 'review';
     this.focusHideTier2WhenTier1Busy = true;
+    this.focusAutoSwapTier2WhenTier1Busy = false;
     this.tier1Busy = false;
     this.queuePanelPreset = null;
     this.processStatus = null;
@@ -56,6 +57,11 @@ class ClaudeOrchestrator {
     this.worktreeConfigs = new Map(); // Worktree-specific configs (sessionId → config)
     this.worktreeTags = new Map(); // Worktree path → tags (e.g., readyForReview)
     this.taskRecords = new Map(); // taskId → record (tier/risk/pFail/promptRef)
+
+    // Launch helpers (ticket/card → worktree → agent → auto-prompt)
+    this.pendingAutoPrompts = new Map(); // sessionId -> { text, createdAt, sentAt }
+    this.pendingWorktreeLaunches = new Map(); // worktreeId -> { promptText, autoSendPrompt, agentConfig }
+    this.scannedReposCache = { value: null, fetchedAt: 0 };
 
     // Button registry - all available buttons with their implementations
     this.buttonRegistry = this.initButtonRegistry();
@@ -132,6 +138,10 @@ class ClaudeOrchestrator {
 
       document.getElementById('workflow-focus-tier2')?.addEventListener('click', () => {
         this.setFocusHideTier2WhenTier1Busy(!this.focusHideTier2WhenTier1Busy);
+      });
+
+      document.getElementById('workflow-focus-autoswap')?.addEventListener('click', () => {
+        this.setFocusAutoSwapTier2WhenTier1Busy(!this.focusAutoSwapTier2WhenTier1Busy);
       });
 
       // Tasks panel (ticketing providers like Trello)
@@ -290,6 +300,7 @@ class ClaudeOrchestrator {
       
       this.socket.on('status-update', ({ sessionId, status }) => {
         this.updateSessionStatus(sessionId, status);
+        this.maybeAutoSendPrompt(sessionId, status);
       });
       
       this.socket.on('branch-update', ({ sessionId, branch, remoteUrl, defaultBranch, existingPR }) => {
@@ -398,6 +409,29 @@ class ClaudeOrchestrator {
         setTimeout(() => {
           this.checkAndApplyAutoStart();
         }, 2000);
+
+        // If this worktree was launched from a task card, start agent + auto-send prompt (best-effort).
+        const pending = this.pendingWorktreeLaunches.get(worktreeId);
+        if (pending) {
+          this.pendingWorktreeLaunches.delete(worktreeId);
+          const sessionIds = Object.keys(sessions || {});
+          const agentSessionId =
+            sessionIds.find(id => id.endsWith('-claude'))
+            || sessionIds.find(id => !id.endsWith('-server'))
+            || null;
+
+          if (agentSessionId && pending.agentConfig) {
+            this.startAgentWithConfig(agentSessionId, pending.agentConfig);
+          }
+
+          if (agentSessionId && pending.autoSendPrompt && String(pending.promptText || '').trim()) {
+            this.pendingAutoPrompts.set(agentSessionId, {
+              text: String(pending.promptText || ''),
+              createdAt: Date.now(),
+              sentAt: null
+            });
+          }
+        }
       });
 
       this.socket.on('claude-started', ({ sessionId }) => {
@@ -1165,6 +1199,8 @@ class ClaudeOrchestrator {
   syncFocusBehaviorFromUserSettings() {
     const v = this.userSettings?.global?.ui?.workflow?.focus?.hideTier2WhenTier1Busy;
     this.focusHideTier2WhenTier1Busy = v !== false;
+    const swap = this.userSettings?.global?.ui?.workflow?.focus?.autoSwapToTier2WhenTier1Busy;
+    this.focusAutoSwapTier2WhenTier1Busy = swap === true;
     this.refreshTier1Busy();
     this.updateWorkflowModeButtons();
   }
@@ -1177,6 +1213,16 @@ class ClaudeOrchestrator {
     this.updateTerminalGrid();
     this.buildSidebar();
     this.updateGlobalUserSetting('ui.workflow.focus.hideTier2WhenTier1Busy', next);
+  }
+
+  setFocusAutoSwapTier2WhenTier1Busy(enabled) {
+    const next = !!enabled;
+    if (this.focusAutoSwapTier2WhenTier1Busy === next) return;
+    this.focusAutoSwapTier2WhenTier1Busy = next;
+    this.updateWorkflowModeButtons();
+    this.updateTerminalGrid();
+    this.buildSidebar();
+    this.updateGlobalUserSetting('ui.workflow.focus.autoSwapToTier2WhenTier1Busy', next);
   }
 
   updateWorkflowModeButtons() {
@@ -1203,6 +1249,18 @@ class ClaudeOrchestrator {
       tier2Btn.title = this.focusHideTier2WhenTier1Busy
         ? (this.tier1Busy ? 'Focus: Tier 2 hidden while Tier 1 is busy' : 'Focus: Tier 2 will show when Tier 1 is idle')
         : 'Focus: Tier 2 always visible';
+    }
+
+    const swapBtn = document.getElementById('workflow-focus-autoswap');
+    if (swapBtn) {
+      const show = this.workflowMode === 'focus';
+      swapBtn.classList.toggle('hidden', !show);
+      swapBtn.classList.toggle('focus-autoswap-on', this.focusAutoSwapTier2WhenTier1Busy);
+      swapBtn.textContent = 'Swap T2';
+      swapBtn.setAttribute('aria-pressed', this.focusAutoSwapTier2WhenTier1Busy ? 'true' : 'false');
+      swapBtn.title = this.focusAutoSwapTier2WhenTier1Busy
+        ? (this.tier1Busy ? 'Focus: showing Tier 2 while Tier 1 is busy' : 'Focus: will show Tier 2 when Tier 1 becomes busy')
+        : 'Focus: do not auto-swap while Tier 1 is busy';
     }
   }
 
@@ -1293,7 +1351,7 @@ class ClaudeOrchestrator {
     this.tier1Busy = this.computeTier1Busy();
     if (prev !== this.tier1Busy) {
       this.updateWorkflowModeButtons();
-      if (!suppressRerender && this.workflowMode === 'focus' && this.focusHideTier2WhenTier1Busy) {
+      if (!suppressRerender && this.workflowMode === 'focus' && (this.focusHideTier2WhenTier1Busy || this.focusAutoSwapTier2WhenTier1Busy)) {
         this.updateTerminalGrid();
         this.buildSidebar();
       }
@@ -1302,7 +1360,6 @@ class ClaudeOrchestrator {
 
   computeTier1Busy() {
     for (const [sessionId, session] of this.sessions) {
-      if (!this.visibleTerminals.has(sessionId)) continue;
       if (!this.matchesViewMode(sessionId)) continue;
       if (!(session?.type === 'claude' || String(sessionId).includes('-claude'))) continue;
 
@@ -1317,11 +1374,29 @@ class ClaudeOrchestrator {
     return false;
   }
 
+  hasAnyTierSession(targetTier) {
+    const target = Number(targetTier);
+    if (!(target >= 1 && target <= 4)) return false;
+    for (const [sessionId] of this.sessions) {
+      if (!this.matchesViewMode(sessionId)) continue;
+      const tier = this.getTierForSession(sessionId);
+      if (tier === target) return true;
+    }
+    return false;
+  }
+
   matchesWorkflowMode(sessionId) {
     if (this.workflowMode === 'review') return true;
     const tier = this.getTierForSession(sessionId);
 
     if (this.workflowMode === 'focus') {
+      if (this.focusAutoSwapTier2WhenTier1Busy && this.tier1Busy) {
+        const hasTier2 = this.hasAnyTierSession(2);
+        if (hasTier2) {
+          return tier === 2;
+        }
+      }
+
       if (tier === 1) return true;
       if (tier !== 2) return false;
       if (!this.focusHideTier2WhenTier1Busy) return true;
@@ -1994,7 +2069,7 @@ class ClaudeOrchestrator {
 	      if (!tierMatches) continue;
 	      if (tierSessionId && !this.matchesWorkflowMode(tierSessionId)) continue;
 
-	      const tierBadge = tier ? `<span class="worktree-tier-badge tier-${tier}" title="Tier ${tier}">Q${tier}</span>` : '';
+	      const tierBadge = tier ? `<span class="worktree-tier-badge tier-${tier}" title="Tier ${tier}">T${tier}</span>` : '';
 
 	      item.innerHTML = `
 	        <div class="worktree-header">
@@ -3338,6 +3413,34 @@ class ClaudeOrchestrator {
       case 'open-settings':
         document.getElementById('settings-panel')?.classList.remove('hidden');
         break;
+
+      case 'open-queue':
+        this.showQueuePanel?.().catch?.((err) => console.error('Failed to open queue:', err));
+        break;
+
+      case 'open-tasks':
+        this.showTasksPanel?.().catch?.((err) => console.error('Failed to open tasks:', err));
+        break;
+
+      case 'open-advice':
+        if (this.commanderPanel) {
+          this.commanderPanel.show();
+          this.commanderPanel.showAdvice?.().catch?.((err) => console.error('Failed to open advice:', err));
+        }
+        break;
+
+      case 'set-workflow-mode': {
+        const mode = String(params?.mode || '').toLowerCase();
+        if (mode) this.setWorkflowMode(mode);
+        break;
+      }
+
+      case 'set-focus-tier2': {
+        const behavior = String(params?.behavior || '').toLowerCase();
+        if (behavior === 'auto') this.setFocusHideTier2WhenTier1Busy(true);
+        else if (behavior === 'always') this.setFocusHideTier2WhenTier1Busy(false);
+        break;
+      }
 
       case 'highlight-worktree': {
         const item = document.querySelector(`[data-worktree-id="${params.worktreeId}"]`);
@@ -5230,6 +5333,27 @@ class ClaudeOrchestrator {
       }
     }, 300)); // 300ms debounce
   }
+
+  /**
+   * If the user manually types into a Claude terminal, treat that as "I'm handling startup myself".
+   * This prevents the Fresh/Continue/Resume overlay from popping up while the user runs `claude ...` manually.
+   */
+  onManualTerminalInput(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid || !sid.includes('-claude')) return;
+
+    const session = this.sessions?.get?.(sid);
+    const startupUI = document.getElementById(`startup-ui-${sid}`);
+    const isVisible = startupUI && startupUI.style.display === 'block';
+
+    // Only suppress if the terminal is idle (shell) or the startup UI is currently visible.
+    // Avoid suppressing during normal Claude "waiting for input" interactions.
+    const isShellIdle = session?.status === 'idle';
+    if (!isShellIdle && !isVisible) return;
+
+    if (startupUI) startupUI.style.display = 'none';
+    this.dismissedStartupUI.set(sid, true);
+  }
   
   quickStartClaude(sessionId, mode) {
     // Check if YOLO mode is enabled
@@ -6259,7 +6383,7 @@ class ClaudeOrchestrator {
     // - Client dev-server UI: `/api/*` is proxied to the backend (see `client/dev-server.js`).
     const serverUrl = window.location.origin;
 
-    const state = {
+	    const state = {
       mode: localStorage.getItem('prs-panel-mode') || 'mine', // mine | involved | all
       prsState: localStorage.getItem('prs-panel-state') || 'open', // all | open | merged | closed
       sort: localStorage.getItem('prs-panel-sort') || 'updated', // updated | created
@@ -6542,10 +6666,11 @@ class ClaudeOrchestrator {
       lists: [],
       boardMembers: [],
       boardLabels: [],
-      boards: [],
-      boardCustomFields: [],
-      selectedCardId: null
-    };
+	      boards: [],
+	      boardCustomFields: [],
+	      selectedCardId: null,
+	      showDisabledBoards: localStorage.getItem('tasks-show-disabled-boards') === 'true'
+	    };
 
     const modal = document.createElement('div');
     modal.id = 'tasks-panel';
@@ -6562,10 +6687,11 @@ class ClaudeOrchestrator {
           <button class="close-btn tasks-close-btn" id="tasks-close-btn" aria-label="Close Tasks" title="Close (Esc)">×</button>
         </div>
 
-        <div class="tasks-toolbar">
-          <select id="tasks-provider" class="tasks-select" title="Provider"></select>
-          <select id="tasks-board" class="tasks-select" title="Board"></select>
-          <select id="tasks-list" class="tasks-select" title="List"></select>
+	        <div class="tasks-toolbar">
+	          <select id="tasks-provider" class="tasks-select" title="Provider"></select>
+	          <select id="tasks-board" class="tasks-select" title="Board"></select>
+	          <button class="btn-secondary" id="tasks-board-settings" title="Board mapping / settings">⚙</button>
+	          <select id="tasks-list" class="tasks-select" title="List"></select>
           <input type="text" id="tasks-search" class="search-input tasks-search" placeholder="Search cards...">
           <div class="tasks-radio" role="radiogroup" aria-label="Kanban layout" id="tasks-layout" style="display:none">
             <label class="tasks-radio-option"><input type="radio" name="tasks-layout" value="scroll">Scroll</label>
@@ -6629,9 +6755,10 @@ class ClaudeOrchestrator {
     };
     document.addEventListener('keydown', this.tasksPanelKeydownHandler);
 
-    const providerEl = modal.querySelector('#tasks-provider');
-    const boardEl = modal.querySelector('#tasks-board');
-    const listEl = modal.querySelector('#tasks-list');
+	    const providerEl = modal.querySelector('#tasks-provider');
+	    const boardEl = modal.querySelector('#tasks-board');
+	    const boardSettingsBtn = modal.querySelector('#tasks-board-settings');
+	    const listEl = modal.querySelector('#tasks-list');
     const searchEl = modal.querySelector('#tasks-search');
     const updatedEl = modal.querySelector('#tasks-updated');
     const sortEl = modal.querySelector('#tasks-sort');
@@ -6642,11 +6769,134 @@ class ClaudeOrchestrator {
     const bodyEl = modal.querySelector('.tasks-body');
     const cardsEl = modal.querySelector('#tasks-cards');
     const detailEl = modal.querySelector('#tasks-detail');
-    let lastSnapshot = null;
+	    let lastSnapshot = null;
 
-    const boardKey = () => `${state.provider}:${state.boardId}`;
-    const readAssigneeFilter = () => {
-      const key = boardKey();
+	    const boardKey = () => `${state.provider}:${state.boardId}`;
+
+	    const getBoardMappings = () => {
+	      const mappings = this.userSettings?.global?.ui?.tasks?.boardMappings;
+	      return mappings && typeof mappings === 'object' ? mappings : {};
+	    };
+
+	    const getBoardMapping = (provider, boardId) => {
+	      const key = `${provider}:${boardId}`;
+	      const all = getBoardMappings();
+	      const m = all?.[key];
+	      return m && typeof m === 'object' ? m : null;
+	    };
+
+	    const isBoardEnabled = (provider, boardId) => {
+	      const m = getBoardMapping(provider, boardId);
+	      if (!m) return true;
+	      return m.enabled !== false;
+	    };
+
+	    const updateBoardMapping = async (provider, boardId, patch) => {
+	      const key = `${provider}:${boardId}`;
+	      const current = getBoardMappings();
+	      const next = { ...(current || {}) };
+	      const prev = next[key] && typeof next[key] === 'object' ? next[key] : {};
+	      next[key] = { ...prev, ...(patch || {}) };
+	      await this.updateGlobalUserSetting('ui.tasks.boardMappings', next);
+	    };
+
+	    const renderBoardSettings = () => {
+	      if (!state.boardId) {
+	        detailEl.innerHTML = `<div class="tasks-detail-empty">Select a board to edit mapping.</div>`;
+	        return;
+	      }
+
+	      const mapping = getBoardMapping(state.provider, state.boardId) || {};
+	      const enabled = mapping.enabled !== false;
+	      const repoSlug = String(mapping.repoSlug || '');
+	      const localPath = String(mapping.localPath || '');
+	      const defaultTier = Number(mapping.defaultStartTier);
+	      const boardName = (state.boards.find(b => b.id === state.boardId)?.name) || state.boardId;
+
+	      detailEl.innerHTML = `
+	        <div class="tasks-detail-header">
+	          <div class="tasks-detail-title">Board Settings</div>
+	          <div class="tasks-detail-actions">
+	            <button class="btn-secondary" id="tasks-board-settings-close" type="button">Back</button>
+	          </div>
+	        </div>
+	        <div class="tasks-detail-meta">${this.escapeHtml(boardName)}</div>
+
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Visibility</div>
+	          <label class="tasks-toggle">
+	            <input type="checkbox" id="tasks-board-enabled" ${enabled ? 'checked' : ''} />
+	            <span>Enabled (show in board list)</span>
+	          </label>
+	          <label class="tasks-toggle" title="Show disabled boards in the selector">
+	            <input type="checkbox" id="tasks-show-disabled" ${state.showDisabledBoards ? 'checked' : ''} />
+	            <span>Show disabled boards</span>
+	          </label>
+	        </div>
+
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Repo mapping</div>
+	          <div class="tasks-inline-row">
+	            <input id="tasks-board-local-path" class="tasks-input" placeholder="Local repo path or GitHub-relative path (e.g. games/hytopia/zoo)" value="${this.escapeHtml(localPath)}" />
+	          </div>
+	          <div class="tasks-inline-row" style="margin-top:8px">
+	            <input id="tasks-board-repo-slug" class="tasks-input" placeholder="GitHub repo slug (optional, e.g. owner/repo)" value="${this.escapeHtml(repoSlug)}" />
+	          </div>
+	          <div class="tasks-inline-row" style="margin-top:8px">
+	            <select id="tasks-board-default-tier" class="tasks-select tasks-select-inline" title="Default tier when launching from this board">
+	              <option value="">(default tier: none)</option>
+	              <option value="1" ${defaultTier === 1 ? 'selected' : ''}>T1</option>
+	              <option value="2" ${defaultTier === 2 ? 'selected' : ''}>T2</option>
+	              <option value="3" ${defaultTier === 3 ? 'selected' : ''}>T3</option>
+	              <option value="4" ${defaultTier === 4 ? 'selected' : ''}>T4</option>
+	            </select>
+	            <button class="btn-secondary" id="tasks-board-save" type="button">💾 Save</button>
+	          </div>
+	          <div class="tasks-detail-empty" style="margin-top:8px">
+	            This mapping enables “Launch” in card detail (card → repo → worktree → agent).
+	          </div>
+	        </div>
+	      `;
+
+	      detailEl.querySelector('#tasks-board-settings-close')?.addEventListener('click', () => {
+	        renderDetail(null);
+	      });
+
+	      const showDisabledEl = detailEl.querySelector('#tasks-show-disabled');
+	      showDisabledEl?.addEventListener('change', async () => {
+	        state.showDisabledBoards = !!showDisabledEl.checked;
+	        localStorage.setItem('tasks-show-disabled-boards', state.showDisabledBoards ? 'true' : 'false');
+	        await refreshAll({ force: false });
+	      });
+
+	      const saveBtn = detailEl.querySelector('#tasks-board-save');
+	      saveBtn?.addEventListener('click', async () => {
+	        try {
+	          saveBtn.disabled = true;
+	          const enabledNext = !!detailEl.querySelector('#tasks-board-enabled')?.checked;
+	          const localPathNext = String(detailEl.querySelector('#tasks-board-local-path')?.value || '').trim();
+	          const repoSlugNext = String(detailEl.querySelector('#tasks-board-repo-slug')?.value || '').trim();
+	          const tierRaw = String(detailEl.querySelector('#tasks-board-default-tier')?.value || '').trim();
+	          const tierNum = Number(tierRaw);
+	          await updateBoardMapping(state.provider, state.boardId, {
+	            enabled: enabledNext,
+	            localPath: localPathNext || null,
+	            repoSlug: repoSlugNext || null,
+	            defaultStartTier: (tierNum >= 1 && tierNum <= 4) ? tierNum : null
+	          });
+	          this.showToast('Board settings saved', 'success');
+	          await refreshAll({ force: false });
+	        } catch (err) {
+	          console.error('Board settings save failed:', err);
+	          this.showToast(String(err?.message || err), 'error');
+	        } finally {
+	          if (saveBtn) saveBtn.disabled = false;
+	        }
+	      });
+	    };
+
+	    const readAssigneeFilter = () => {
+	      const key = boardKey();
       const fromServer = this.userSettings?.global?.ui?.tasks?.filters?.assigneesByBoard?.[key];
       if (fromServer && typeof fromServer === 'object' && !Array.isArray(fromServer)) {
         const mode = fromServer.mode;
@@ -7009,12 +7259,17 @@ class ClaudeOrchestrator {
         };
       }).filter(d => !!d.id);
 
-      const dueValue = toDatetimeLocalValue(card?.due);
+	      const dueValue = toDatetimeLocalValue(card?.due);
+	      const mapping = state.boardId ? (getBoardMapping(state.provider, state.boardId) || null) : null;
+	      const mappingEnabled = mapping ? (mapping.enabled !== false) : true;
+	      const mappingLocalPath = mapping ? String(mapping.localPath || '') : '';
+	      const mappingTier = Number(mapping?.defaultStartTier);
+	      const defaultLaunchTier = (mappingTier >= 1 && mappingTier <= 4) ? mappingTier : 3;
 
-      detailEl.innerHTML = `
-        <div class="tasks-detail-header">
-          <div class="tasks-detail-title">
-            <input id="tasks-card-title" class="tasks-input" value="${title.replace(/\"/g, '&quot;')}" />
+	      detailEl.innerHTML = `
+	        <div class="tasks-detail-header">
+	          <div class="tasks-detail-title">
+	            <input id="tasks-card-title" class="tasks-input" value="${title.replace(/\"/g, '&quot;')}" />
           </div>
           <div class="tasks-detail-actions">
             ${url ? `<a class="btn-secondary tasks-open" href="${url}" target="_blank" rel="noreferrer">↗ Open in Trello</a>` : ''}
@@ -7034,17 +7289,52 @@ class ClaudeOrchestrator {
             `).join('')}
           </span>
         </div>
-        <div class="tasks-detail-meta">
-          Due:
-          <input id="tasks-card-due" class="tasks-input tasks-input-inline" type="datetime-local" value="${escapeHtml(dueValue)}" />
-          <button class="btn-secondary" id="tasks-card-due-save" title="Set due date">Set</button>
-          <button class="btn-secondary" id="tasks-card-due-clear" title="Clear due date">Clear</button>
-        </div>
+	        <div class="tasks-detail-meta">
+	          Due:
+	          <input id="tasks-card-due" class="tasks-input tasks-input-inline" type="datetime-local" value="${escapeHtml(dueValue)}" />
+	          <button class="btn-secondary" id="tasks-card-due-save" title="Set due date">Set</button>
+	          <button class="btn-secondary" id="tasks-card-due-clear" title="Clear due date">Clear</button>
+	        </div>
 
-        <div class="tasks-detail-block">
-          <div class="tasks-detail-block-title">Assign Member</div>
-          <div class="tasks-inline-row">
-            <select id="tasks-assign-member" class="tasks-select tasks-select-inline">
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Launch</div>
+	          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+	            <select id="tasks-launch-tier" class="tasks-select tasks-select-inline" title="Tier">
+	              <option value="1" ${defaultLaunchTier === 1 ? 'selected' : ''}>T1</option>
+	              <option value="2" ${defaultLaunchTier === 2 ? 'selected' : ''}>T2</option>
+	              <option value="3" ${defaultLaunchTier === 3 ? 'selected' : ''}>T3</option>
+	              <option value="4" ${defaultLaunchTier === 4 ? 'selected' : ''}>T4</option>
+	            </select>
+	            <select id="tasks-launch-agent" class="tasks-select tasks-select-inline" title="Agent">
+	              <option value="claude" selected>Claude</option>
+	              <option value="codex">Codex</option>
+	            </select>
+	            <select id="tasks-launch-mode" class="tasks-select tasks-select-inline" title="Mode">
+	              <option value="fresh" selected>Fresh</option>
+	              <option value="continue">Continue</option>
+	              <option value="resume">Resume</option>
+	            </select>
+	            <label class="tasks-toggle" title="Skip permission prompts (YOLO)">
+	              <input type="checkbox" id="tasks-launch-yolo" checked />
+	              <span>YOLO</span>
+	            </label>
+	            <label class="tasks-toggle" title="Auto-send card description as the first prompt">
+	              <input type="checkbox" id="tasks-launch-auto-send" checked />
+	              <span>Auto-send prompt</span>
+	            </label>
+	            <button class="btn-secondary" id="tasks-launch-btn" type="button">🚀 Launch</button>
+	          </div>
+	          <div class="tasks-detail-empty" style="margin-top:8px">
+	            ${mappingEnabled && mappingLocalPath
+	              ? `Mapped repo: <code>${escapeHtml(mappingLocalPath)}</code>`
+	              : `No board mapping set. <button class="btn-secondary" id="tasks-launch-open-board-settings" type="button">Open Board Settings</button>`}
+	          </div>
+	        </div>
+
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Assign Member</div>
+	          <div class="tasks-inline-row">
+	            <select id="tasks-assign-member" class="tasks-select tasks-select-inline">
               <option value="">Select member…</option>
               ${availableMembers.map(m => `
                 <option value="${escapeHtml(m?.id || '')}">${escapeHtml(m?.fullName || m?.username || m?.id || '')}</option>
@@ -7749,10 +8039,27 @@ class ClaudeOrchestrator {
           return;
         }
 
-        const boards = await fetchBoards({ refresh: force });
-        state.boards = boards || [];
-        setSelectOptions(boardEl, boards, { placeholder: 'Select board...', valueKey: 'id', labelKey: 'name' });
-        if (state.boardId) boardEl.value = state.boardId;
+	        const boards = await fetchBoards({ refresh: force });
+	        state.boards = boards || [];
+
+	        const boardsWithLabels = (state.boards || []).map((b) => {
+	          const enabled = isBoardEnabled(state.provider, b?.id);
+	          const m = getBoardMapping(state.provider, b?.id);
+	          const hasMap = !!(m && (m.localPath || m.repoSlug));
+	          const suffix = enabled ? (hasMap ? ' (mapped)' : '') : ' (disabled)';
+	          return { ...b, __selectLabel: `${b?.name || b?.id || ''}${suffix}` };
+	        });
+
+	        const includeDisabled = !!state.showDisabledBoards;
+	        const filteredBoards = boardsWithLabels.filter((b) => {
+	          if (!b?.id) return false;
+	          if (b.id === state.boardId) return true;
+	          const enabled = isBoardEnabled(state.provider, b.id);
+	          return enabled || includeDisabled;
+	        });
+
+	        setSelectOptions(boardEl, filteredBoards, { placeholder: 'Select board...', valueKey: 'id', labelKey: '__selectLabel' });
+	        if (state.boardId) boardEl.value = state.boardId;
 
         // Fetch "me" (best-effort) so we can default the assignee filter.
         try {
@@ -7954,17 +8261,22 @@ class ClaudeOrchestrator {
       refreshAll({ force: false });
     });
 
-    providerEl.addEventListener('change', async () => {
-      state.provider = providerEl.value || 'trello';
-      localStorage.setItem('tasks-provider', state.provider);
-      state.boardId = '';
-      state.listId = '';
-      localStorage.removeItem('tasks-board');
-      localStorage.removeItem('tasks-list');
-      await refreshAll({ force: true });
-    });
+	    providerEl.addEventListener('change', async () => {
+	      state.provider = providerEl.value || 'trello';
+	      localStorage.setItem('tasks-provider', state.provider);
+	      state.boardId = '';
+	      state.listId = '';
+	      localStorage.removeItem('tasks-board');
+	      localStorage.removeItem('tasks-list');
+	      await refreshAll({ force: true });
+	    });
 
-    boardEl.addEventListener('change', async () => {
+	    boardSettingsBtn?.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      renderBoardSettings();
+	    });
+
+	    boardEl.addEventListener('change', async () => {
       state.boardId = boardEl.value || '';
       localStorage.setItem('tasks-board', state.boardId);
       state.listId = '__all__';
@@ -8056,9 +8368,11 @@ class ClaudeOrchestrator {
           const saveBtn = detailEl.querySelector('#tasks-card-save');
           const moveBtn = detailEl.querySelector('#tasks-card-move-btn');
           const commentBtn = detailEl.querySelector('#tasks-card-comment-btn');
-          const dueSaveBtn = detailEl.querySelector('#tasks-card-due-save');
-          const dueClearBtn = detailEl.querySelector('#tasks-card-due-clear');
-          const assignBtn = detailEl.querySelector('#tasks-assign-member-btn');
+	          const dueSaveBtn = detailEl.querySelector('#tasks-card-due-save');
+	          const dueClearBtn = detailEl.querySelector('#tasks-card-due-clear');
+	          const assignBtn = detailEl.querySelector('#tasks-assign-member-btn');
+	          const launchBtn = detailEl.querySelector('#tasks-launch-btn');
+	          const openBoardSettingsBtn = detailEl.querySelector('#tasks-launch-open-board-settings');
 
           saveBtn?.addEventListener('click', async () => {
             const titleEl = detailEl.querySelector('#tasks-card-title');
@@ -8147,7 +8461,7 @@ class ClaudeOrchestrator {
             }
           });
 
-          assignBtn?.addEventListener('click', async () => {
+	          assignBtn?.addEventListener('click', async () => {
             const select = detailEl.querySelector('#tasks-assign-member');
             const memberId = select?.value;
             if (!state.selectedCardId || !memberId) return;
@@ -8164,7 +8478,42 @@ class ClaudeOrchestrator {
             } finally {
               assignBtn.disabled = false;
             }
-          });
+	          });
+
+	          openBoardSettingsBtn?.addEventListener('click', (e) => {
+	            e.preventDefault();
+	            renderBoardSettings();
+	          });
+
+	          launchBtn?.addEventListener('click', async () => {
+	            if (!state.selectedCardId) return;
+	            try {
+	              launchBtn.disabled = true;
+	              const tier = Number(detailEl.querySelector('#tasks-launch-tier')?.value || 3);
+	              const agentId = String(detailEl.querySelector('#tasks-launch-agent')?.value || 'claude');
+	              const mode = String(detailEl.querySelector('#tasks-launch-mode')?.value || 'fresh');
+	              const yolo = !!detailEl.querySelector('#tasks-launch-yolo')?.checked;
+	              const autoSendPrompt = !!detailEl.querySelector('#tasks-launch-auto-send')?.checked;
+	              const promptText = String(detailEl.querySelector('#tasks-card-desc')?.value ?? c?.desc ?? '');
+
+	              await this.launchAgentFromTaskCard({
+	                provider: state.provider,
+	                boardId: state.boardId,
+	                card: c,
+	                tier,
+	                agentId,
+	                mode,
+	                yolo,
+	                autoSendPrompt,
+	                promptText
+	              });
+	            } catch (err) {
+	              console.error('Launch from card failed:', err);
+	              this.showToast(String(err?.message || err), 'error');
+	            } finally {
+	              launchBtn.disabled = false;
+	            }
+	          });
 
           detailEl.querySelectorAll('[data-remove-member]').forEach((btn) => {
             btn.addEventListener('click', async () => {
@@ -8458,7 +8807,11 @@ class ClaudeOrchestrator {
       reviewTier: 'all', // all | none | 1..4
       unreviewedOnly: false,
       autoOpenDiff: false,
-      reviewActive: false
+      autoReviewer: localStorage.getItem('queue-auto-reviewer') === 'true',
+      depGraphDepth: Math.max(1, Math.min(6, Number(localStorage.getItem('queue-dep-graph-depth') || 2) || 2)),
+      reviewActive: false,
+      reviewTimer: { taskId: null, startedAtMs: null },
+      reviewerSpawning: new Set()
     };
 
     // Apply any one-shot preset (e.g. workflow review button).
@@ -8513,6 +8866,7 @@ class ClaudeOrchestrator {
           <div class="tasks-view-toggle" role="group" aria-label="Review filters">
             <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
             <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
             <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
           </div>
           <div class="tasks-view-toggle" role="group" aria-label="Queue navigation">
@@ -8548,6 +8902,7 @@ class ClaudeOrchestrator {
     const tierNoneBtn = modal.querySelector('#queue-tier-none');
     const unreviewedBtn = modal.querySelector('#queue-unreviewed');
     const autoDiffBtn = modal.querySelector('#queue-auto-diff');
+    const autoReviewerBtn = modal.querySelector('#queue-auto-reviewer');
     const startReviewBtn = modal.querySelector('#queue-start-review');
     const prevBtn = modal.querySelector('#queue-prev');
     const nextBtn = modal.querySelector('#queue-next');
@@ -8580,6 +8935,7 @@ class ClaudeOrchestrator {
 
       unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
       autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
+      autoReviewerBtn?.classList.toggle('active', !!state.autoReviewer);
       startReviewBtn?.classList.toggle('active', !!state.reviewActive);
     };
 
@@ -8617,7 +8973,14 @@ class ClaudeOrchestrator {
       if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     });
 
-    startReviewBtn?.addEventListener('click', () => {
+    autoReviewerBtn?.addEventListener('click', () => {
+      state.autoReviewer = !state.autoReviewer;
+      localStorage.setItem('queue-auto-reviewer', state.autoReviewer ? 'true' : 'false');
+      syncReviewControlsUI();
+      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+    });
+
+    startReviewBtn?.addEventListener('click', async () => {
       state.reviewActive = true;
       syncReviewControlsUI();
       const ordered = getOrderedTasks(getFilteredTasks());
@@ -8772,6 +9135,52 @@ class ClaudeOrchestrator {
       return data.record || null;
     };
 
+    const updateTaskRecordInState = (id, record) => {
+      if (!id) return;
+      const idx = state.tasks.findIndex(x => x.id === id);
+      if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: record || {} };
+      if (record) this.taskRecords.set(id, record);
+      else this.taskRecords.delete(id);
+    };
+
+    const stopReviewTimer = async ({ endedAtIso } = {}) => {
+      const activeId = state.reviewTimer?.taskId;
+      if (!activeId) return;
+      const endIso = endedAtIso || new Date().toISOString();
+      state.reviewTimer.taskId = null;
+      state.reviewTimer.startedAtMs = null;
+      try {
+        const rec = await upsertRecord(activeId, { reviewEndedAt: endIso });
+        updateTaskRecordInState(activeId, rec);
+        renderList();
+      } catch {
+        // best-effort
+      }
+    };
+
+    const startReviewTimer = async (taskId) => {
+      const id = String(taskId || '').trim();
+      if (!state.reviewActive || !id) return;
+      if (state.reviewTimer?.taskId === id) return;
+
+      // End previous timer (best-effort) when switching items.
+      await stopReviewTimer();
+
+      const nowMs = Date.now();
+      state.reviewTimer.taskId = id;
+      state.reviewTimer.startedAtMs = nowMs;
+      try {
+        const rec = await upsertRecord(id, {
+          reviewStartedAt: new Date(nowMs).toISOString(),
+          reviewEndedAt: null
+        });
+        updateTaskRecordInState(id, rec);
+        renderList();
+      } catch {
+        // best-effort
+      }
+    };
+
     const openPromptEditor = async (promptId) => {
       const pid = String(promptId || '').trim();
       if (!pid) return;
@@ -8842,6 +9251,127 @@ class ClaudeOrchestrator {
       await load();
     };
 
+    const openDependencyGraphModal = async (taskId) => {
+      const id = String(taskId || '').trim();
+      if (!id) return;
+
+      const depth = Math.max(1, Math.min(6, Number(state.depGraphDepth) || 2));
+
+      const existing = document.getElementById('queue-dep-graph-modal');
+      if (existing) existing.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'queue-dep-graph-modal';
+      overlay.className = 'modal tasks-modal';
+      overlay.classList.add(`tasks-theme-${resolvedTheme}`);
+      overlay.innerHTML = `
+        <div class="modal-content tasks-content" style="max-width: 980px; width: 95vw; height: 80vh;">
+          <div class="modal-header">
+            <h2>🧩 Dependency Graph</h2>
+            <button class="close-btn tasks-close-btn" id="queue-dep-graph-close" aria-label="Close" title="Close (Esc)">×</button>
+          </div>
+          <div class="tasks-toolbar">
+            <div class="tasks-detail-meta">root: <code>${escapeHtml(id)}</code> • depth: ${depth}</div>
+            <span style="flex:1"></span>
+            <button class="btn-secondary" id="queue-dep-graph-refresh">🔄 Refresh</button>
+          </div>
+          <div class="tasks-body" style="grid-template-columns: 1fr 1fr;">
+            <div class="tasks-detail" style="padding: 14px;">
+              <div class="tasks-detail-block">
+                <div class="tasks-detail-block-title">Blocked By</div>
+                <div id="queue-dep-graph-up" class="tasks-detail-meta">Loading…</div>
+              </div>
+            </div>
+            <div class="tasks-detail" style="padding: 14px;">
+              <div class="tasks-detail-block">
+                <div class="tasks-detail-block-title">Unblocks</div>
+                <div id="queue-dep-graph-down" class="tasks-detail-meta">Loading…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const close = () => overlay.remove();
+      overlay.querySelector('#queue-dep-graph-close')?.addEventListener('click', close);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.remove(); }, { once: true });
+
+      const renderGraph = (graph) => {
+        const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+        const edges = Array.isArray(graph?.edges) ? graph.edges : [];
+        const nodeById = new Map(nodes.map((n) => [String(n.id), n]));
+
+        const upAdj = new Map();   // id -> [{id, satisfied, reason}]
+        const downAdj = new Map(); // id -> [{id, satisfied, reason}]
+        for (const e of edges) {
+          const from = String(e.from || '').trim();
+          const to = String(e.to || '').trim();
+          if (!from || !to) continue;
+          if (!upAdj.has(from)) upAdj.set(from, []);
+          upAdj.get(from).push({ id: to, satisfied: !!e.satisfied, reason: String(e.reason || '') });
+          if (!downAdj.has(to)) downAdj.set(to, []);
+          downAdj.get(to).push({ id: from, satisfied: !!e.satisfied, reason: String(e.reason || '') });
+        }
+
+        const walk = (startId, adj, remaining, visited) => {
+          const id2 = String(startId || '').trim();
+          if (!id2 || remaining <= 0) return '';
+          const children = (adj.get(id2) || []).slice();
+          if (!children.length) return '';
+          const nextVisited = new Set(visited);
+          nextVisited.add(id2);
+          return `<ul style="margin: 8px 0 8px 18px; padding: 0;">
+            ${children.map((c) => {
+              const cid = String(c.id || '').trim();
+              const node = nodeById.get(cid) || { label: cid, id: cid };
+              const label = escapeHtml(node.label || cid);
+              const icon = (adj === upAdj) ? (c.satisfied ? '✅' : '⛔') : (node.doneAt ? '✅' : '⛔');
+              const reason = (adj === upAdj) ? (c.reason ? ` <span style="opacity:0.7">(${escapeHtml(c.reason)})</span>` : '') : '';
+              const childTree = nextVisited.has(cid) ? '' : walk(cid, adj, remaining - 1, nextVisited);
+              return `<li style="list-style:none; margin: 6px 0;">
+                <a href="#" data-queue-jump="${escapeHtml(cid)}" style="color: inherit; text-decoration: none;">
+                  ${icon} <code>${label}</code>${reason}
+                </a>
+                ${childTree}
+              </li>`;
+            }).join('')}
+          </ul>`;
+        };
+
+        const upEl = overlay.querySelector('#queue-dep-graph-up');
+        const downEl = overlay.querySelector('#queue-dep-graph-down');
+        if (upEl) upEl.innerHTML = walk(id, upAdj, depth, new Set()) || 'No dependencies.';
+        if (downEl) downEl.innerHTML = walk(id, downAdj, depth, new Set()) || 'No dependents.';
+
+        overlay.querySelectorAll('[data-queue-jump]').forEach((a) => {
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = a.getAttribute('data-queue-jump');
+            if (!targetId) return;
+            close();
+            selectById(targetId, { allowAutoOpenDiff: true });
+          });
+        });
+      };
+
+      const fetchGraph = async () => {
+        const url = new URL(`${serverUrl}/api/process/dependency-graph/${encodeURIComponent(id)}`);
+        url.searchParams.set('depth', String(depth));
+        const res = await fetch(url.toString());
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || 'Failed to load graph');
+        renderGraph(data);
+      };
+
+      overlay.querySelector('#queue-dep-graph-refresh')?.addEventListener('click', () => {
+        fetchGraph().catch((e) => this.showToast(String(e?.message || e), 'error'));
+      });
+
+      await fetchGraph().catch((e) => this.showToast(String(e?.message || e), 'error'));
+    };
+
     const renderDetail = (t) => {
       if (!t) {
         detailEl.innerHTML = `<div class="tasks-detail-empty">Select an item to edit tier/risk or open it.</div>`;
@@ -8858,9 +9388,31 @@ class ClaudeOrchestrator {
       const doneAt = record.doneAt || '';
       const reviewedAt = record.reviewedAt || '';
       const reviewOutcome = record.reviewOutcome || '';
+      const reviewStartedAt = record.reviewStartedAt || '';
+      const reviewEndedAt = record.reviewEndedAt || '';
+      const promptSentAt = record.promptSentAt || '';
+      const promptChars = record.promptChars ?? '';
+      const notes = record.notes || '';
 
       const url = t.url || '';
       const hasPR = t.kind === 'pr' && url;
+
+      const parseIso = (v) => {
+        const ms = Date.parse(String(v || ''));
+        return Number.isFinite(ms) ? ms : 0;
+      };
+      const formatDuration = (ms) => {
+        const s = Math.max(0, Math.round(ms / 1000));
+        const m = Math.floor(s / 60);
+        const rem = s % 60;
+        return m > 0 ? `${m}m ${rem}s` : `${rem}s`;
+      };
+      const nowMs = Date.now();
+      const startedMs = parseIso(reviewStartedAt);
+      const endedMs = parseIso(reviewEndedAt);
+      const isTimerActive = state.reviewTimer?.taskId === t.id;
+      const effectiveEndMs = isTimerActive ? nowMs : endedMs;
+      const durationLabel = startedMs ? formatDuration((effectiveEndMs || nowMs) - startedMs) : '';
 
       detailEl.innerHTML = `
         <div class="tasks-detail-header">
@@ -8871,6 +9423,8 @@ class ClaudeOrchestrator {
           <div class="tasks-detail-actions">
             ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
             ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
+            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
+            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
           </div>
         </div>
 
@@ -8956,12 +9510,68 @@ class ClaudeOrchestrator {
 	        </div>
 
 	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Notes / Fix Request</div>
+	          <textarea id="queue-notes" class="tasks-textarea" rows="5" placeholder="Reviewer feedback / fix request (used by Fixer automation)…">${escapeHtml(notes)}</textarea>
+	          <div class="tasks-detail-meta">Tip: set Outcome to <code>needs_fix</code> and paste review feedback here, then click <strong>🛠 Fixer</strong>.</div>
+	        </div>
+
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Telemetry</div>
+	          <div class="tasks-kv">
+	            <div class="tasks-kv-row">
+	              <div class="tasks-kv-key">Review timer</div>
+	              <div class="tasks-kv-val">
+	                <span class="tasks-detail-meta">${durationLabel ? escapeHtml(durationLabel) : '—'}</span>
+	              </div>
+	            </div>
+	            <div class="tasks-kv-row">
+	              <div class="tasks-kv-key">Review started</div>
+	              <div class="tasks-kv-val"><span class="tasks-detail-meta">${reviewStartedAt ? escapeHtml(reviewStartedAt) : '—'}</span></div>
+	            </div>
+	            <div class="tasks-kv-row">
+	              <div class="tasks-kv-key">Review ended</div>
+	              <div class="tasks-kv-val"><span class="tasks-detail-meta">${reviewEndedAt ? escapeHtml(reviewEndedAt) : (isTimerActive ? 'running…' : '—')}</span></div>
+	            </div>
+	            <div class="tasks-kv-row">
+	              <div class="tasks-kv-key">Prompt sent</div>
+	              <div class="tasks-kv-val"><span class="tasks-detail-meta">${promptSentAt ? escapeHtml(promptSentAt) : '—'}</span></div>
+	            </div>
+	            <div class="tasks-kv-row">
+	              <div class="tasks-kv-key">Prompt chars</div>
+	              <div class="tasks-kv-val"><span class="tasks-detail-meta">${promptChars !== '' ? escapeHtml(promptChars) : '—'}</span></div>
+	            </div>
+	          </div>
+	          <div class="tasks-inline-row" style="margin-top: 10px;">
+	            <button class="btn-secondary" id="queue-review-timer-start" ${state.reviewActive ? '' : 'disabled'}>⏱ Start</button>
+	            <button class="btn-secondary" id="queue-review-timer-stop" ${state.reviewTimer?.taskId === t.id ? '' : 'disabled'}>⏹ Stop</button>
+	            ${state.reviewActive ? '' : `<span class="tasks-detail-meta">Enable “Start Review” to auto-time items.</span>`}
+	          </div>
+	        </div>
+
+	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Dependencies</div>
+	          <div class="tasks-inline-row" style="margin-bottom: 10px; gap: 8px;">
+	            <button class="btn-secondary" id="queue-dep-graph" title="View dependency graph">🧩 Graph</button>
+	            <select id="queue-dep-graph-depth" class="tasks-select tasks-select-inline" title="Graph depth" style="width: 140px;">
+	              ${[1,2,3,4,5,6].map((d) => `<option value="${d}" ${Number(state.depGraphDepth) === d ? 'selected' : ''}>depth ${d}</option>`).join('')}
+	            </select>
+	          </div>
+	          <div class="tasks-inline-row" style="margin-bottom: 10px;">
+	            <select id="queue-dep-pick" class="tasks-select" title="Pick from queue" style="flex:1;min-width:0;">
+	              <option value="">Pick from queue…</option>
+	            </select>
+	            <button class="btn-secondary" id="queue-dep-pick-add" title="Add selected dependency">➕ Add</button>
+	          </div>
 	          <div class="tasks-inline-row" style="margin-bottom: 10px;">
 	            <input id="queue-dep-add" class="tasks-input" placeholder="Add dependency id (e.g. pr:owner/repo#123)" />
 	            <button class="btn-secondary" id="queue-dep-add-btn">➕ Add</button>
 	          </div>
 	          <div id="queue-deps" class="tasks-detail-meta">Loading…</div>
+	        </div>
+
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Dependents</div>
+	          <div id="queue-reverse-deps" class="tasks-detail-meta">Loading…</div>
 	        </div>
 	      `;
 
@@ -8975,9 +9585,65 @@ class ClaudeOrchestrator {
       const outcomeEl = detailEl.querySelector('#queue-review-outcome');
       const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
       const openDiffBtn = detailEl.querySelector('#queue-open-diff');
+      const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
+      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
+      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
+      const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
+      const notesEl = detailEl.querySelector('#queue-notes');
       const depsEl = detailEl.querySelector('#queue-deps');
+      const reverseDepsEl = detailEl.querySelector('#queue-reverse-deps');
+      const depGraphBtn = detailEl.querySelector('#queue-dep-graph');
+      const depGraphDepthEl = detailEl.querySelector('#queue-dep-graph-depth');
+      const depPickEl = detailEl.querySelector('#queue-dep-pick');
+      const depPickAddBtn = detailEl.querySelector('#queue-dep-pick-add');
       const depAddEl = detailEl.querySelector('#queue-dep-add');
       const depAddBtn = detailEl.querySelector('#queue-dep-add-btn');
+
+      const renderReverseDeps = () => {
+        if (!reverseDepsEl) return;
+
+        const id = String(t?.id || '').trim();
+        if (!id) {
+          reverseDepsEl.textContent = 'No dependents.';
+          return;
+        }
+
+        const dependents = (Array.isArray(state.tasks) ? state.tasks : []).filter((other) => {
+          if (!other || other.id === id) return false;
+          const deps = other?.record?.dependencies;
+          if (!Array.isArray(deps) || deps.length === 0) return false;
+          return deps.some((d) => String(d || '').trim() === id);
+        });
+
+        if (!dependents.length) {
+          reverseDepsEl.textContent = 'No dependents.';
+          return;
+        }
+
+        reverseDepsEl.innerHTML = dependents.map((dep) => {
+          const title = escapeHtml(dep.title || dep.id || '');
+          const kind = escapeHtml(dep.kind || '');
+          const tier = dep?.record?.tier ? `T${dep.record.tier}` : '';
+          const meta = [kind, tier].filter(Boolean).join(' • ');
+          return `
+            <div class="task-card-row" data-queue-jump="${escapeHtml(dep.id)}" style="margin:6px 0;cursor:pointer;">
+              <div class="task-card-title">${title}</div>
+              ${meta ? `<div class="task-card-meta" style="opacity:0.8;">${meta}</div>` : ''}
+            </div>
+          `;
+        }).join('');
+
+        reverseDepsEl.querySelectorAll('[data-queue-jump]').forEach((row) => {
+          row.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = row.getAttribute('data-queue-jump');
+            if (!targetId) return;
+            state.selectedId = targetId;
+            renderList();
+            renderDetail(getTaskById(targetId));
+          });
+        });
+      };
 
       const loadDeps = async () => {
         if (!depsEl) return;
@@ -9011,6 +9677,7 @@ class ClaudeOrchestrator {
               if (!del.ok) throw new Error(delData?.error || 'Failed to remove dependency');
               await fetchTasks();
               await loadDeps();
+              renderReverseDeps();
             });
           });
         } catch (e) {
@@ -9028,10 +9695,7 @@ class ClaudeOrchestrator {
             promptRef: prEl?.value || null
           };
 	          const rec = await upsertRecord(t.id, patch);
-	          // Update local state
-	          const idx = state.tasks.findIndex(x => x.id === t.id);
-	          if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: rec };
-	          if (rec) this.taskRecords.set(t.id, rec);
+	          updateTaskRecordInState(t.id, rec);
 	          this.showToast('Saved', 'success');
 	          renderList();
 	          this.buildSidebar();
@@ -9046,16 +9710,89 @@ class ClaudeOrchestrator {
         el?.addEventListener('blur', () => savePatch());
       });
 
+      const saveNotes = async () => {
+        if (!notesEl) return;
+        try {
+          const rec = await upsertRecord(t.id, { notes: String(notesEl.value || '') });
+          updateTaskRecordInState(t.id, rec);
+          renderList();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        }
+      };
+
+      notesEl?.addEventListener('change', saveNotes);
+      notesEl?.addEventListener('blur', saveNotes);
+
       doneEl?.addEventListener('change', async () => {
         try {
           const rec = await upsertRecord(t.id, { done: !!doneEl.checked });
-          const idx = state.tasks.findIndex(x => x.id === t.id);
-          if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: rec };
-          if (rec) this.taskRecords.set(t.id, rec);
+          updateTaskRecordInState(t.id, rec);
           await fetchTasks();
           await loadDeps();
         } catch (e) {
           this.showToast(String(e?.message || e), 'error');
+        }
+      });
+
+      // Dependency graph controls
+      if (depGraphDepthEl) {
+        depGraphDepthEl.value = String(state.depGraphDepth || 2);
+        depGraphDepthEl.addEventListener('change', () => {
+          const next = Math.max(1, Math.min(6, Number(depGraphDepthEl.value) || 2));
+          state.depGraphDepth = next;
+          localStorage.setItem('queue-dep-graph-depth', String(next));
+        });
+      }
+
+      depGraphBtn?.addEventListener('click', async () => {
+        try {
+          depGraphBtn.disabled = true;
+          await openDependencyGraphModal(t.id);
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          depGraphBtn.disabled = false;
+        }
+      });
+
+      // Quick dependency pick from current queue
+      if (depPickEl) {
+        const options = (Array.isArray(state.tasks) ? state.tasks : [])
+          .filter((other) => other && other.id && other.id !== t.id)
+          .map((other) => {
+            const id = String(other.id);
+            const title = other.title ? String(other.title) : id;
+            const kind = other.kind ? String(other.kind) : '';
+            const tier = other?.record?.tier ? `T${other.record.tier}` : '';
+            const label = [title, kind ? `(${kind})` : '', tier].filter(Boolean).join(' ');
+            return { id, label };
+          });
+
+        depPickEl.innerHTML = `<option value="">Pick from queue…</option>`
+          + options.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.label)}</option>`).join('');
+      }
+
+      depPickAddBtn?.addEventListener('click', async () => {
+        try {
+          const depId = String(depPickEl?.value || '').trim();
+          if (!depId) return;
+          depPickAddBtn.disabled = true;
+          const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dependencyId: depId })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || 'Failed to add dependency');
+          if (depPickEl) depPickEl.value = '';
+          await fetchTasks();
+          await loadDeps();
+          renderReverseDeps();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          depPickAddBtn.disabled = false;
         }
       });
 
@@ -9074,6 +9811,7 @@ class ClaudeOrchestrator {
           depAddEl.value = '';
           await fetchTasks();
           await loadDeps();
+          renderReverseDeps();
         } catch (e) {
           this.showToast(String(e?.message || e), 'error');
         } finally {
@@ -9102,14 +9840,49 @@ class ClaudeOrchestrator {
         }
       });
 
+      spawnReviewerBtn?.addEventListener('click', async () => {
+        try {
+          spawnReviewerBtn.disabled = true;
+          await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          spawnReviewerBtn.disabled = false;
+        }
+      });
+
+      spawnFixerBtn?.addEventListener('click', async () => {
+        try {
+          spawnFixerBtn.disabled = true;
+          const info = await this.spawnFixAgentForPRTask(t, { tier: 2, agentId: 'claude', mode: 'fresh', yolo: true, notes: String(notesEl?.value || '') });
+          if (info) {
+            const rec = await upsertRecord(t.id, {
+              fixerSpawnedAt: new Date().toISOString(),
+              fixerWorktreeId: info.worktreeId || null
+            });
+            updateTaskRecordInState(t.id, rec);
+            renderList();
+            renderDetail(getTaskById(t.id));
+          }
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          spawnFixerBtn.disabled = false;
+        }
+      });
+
       reviewedEl?.addEventListener('change', async () => {
         try {
           reviewedEl.disabled = true;
-          const rec = await upsertRecord(t.id, { reviewed: !!reviewedEl.checked });
-          const idx = state.tasks.findIndex(x => x.id === t.id);
-          if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: rec };
-          if (rec) this.taskRecords.set(t.id, rec);
+          if (reviewedEl.checked && state.reviewTimer?.taskId === t.id) {
+            await stopReviewTimer();
+          }
+          const patch = { reviewed: !!reviewedEl.checked };
+          if (reviewedEl.checked) patch.reviewEndedAt = new Date().toISOString();
+          const rec = await upsertRecord(t.id, patch);
+          updateTaskRecordInState(t.id, rec);
           renderList();
+          renderDetail(getTaskById(t.id));
         } catch (e) {
           this.showToast(String(e?.message || e), 'error');
         } finally {
@@ -9121,11 +9894,15 @@ class ClaudeOrchestrator {
         try {
           outcomeEl.disabled = true;
           const value = String(outcomeEl.value || '').trim();
-          const rec = await upsertRecord(t.id, { reviewOutcome: value || null });
-          const idx = state.tasks.findIndex(x => x.id === t.id);
-          if (idx >= 0) state.tasks[idx] = { ...state.tasks[idx], record: rec };
-          if (rec) this.taskRecords.set(t.id, rec);
+          if (value && state.reviewTimer?.taskId === t.id) {
+            await stopReviewTimer();
+          }
+          const patch = { reviewOutcome: value || null };
+          if (value) patch.reviewEndedAt = new Date().toISOString();
+          const rec = await upsertRecord(t.id, patch);
+          updateTaskRecordInState(t.id, rec);
           await fetchTasks();
+          renderDetail(getTaskById(t.id));
         } catch (e) {
           this.showToast(String(e?.message || e), 'error');
         } finally {
@@ -9133,6 +9910,33 @@ class ClaudeOrchestrator {
         }
       });
 
+      timerStartBtn?.addEventListener('click', async () => {
+        try {
+          timerStartBtn.disabled = true;
+          await startReviewTimer(t.id);
+          renderDetail(getTaskById(t.id));
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          timerStartBtn.disabled = false;
+        }
+      });
+
+      timerStopBtn?.addEventListener('click', async () => {
+        try {
+          timerStopBtn.disabled = true;
+          if (state.reviewTimer?.taskId === t.id) {
+            await stopReviewTimer();
+          }
+          renderDetail(getTaskById(t.id));
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          timerStopBtn.disabled = false;
+        }
+      });
+
+      renderReverseDeps();
       loadDeps().catch(() => {});
 
       if (state.autoOpenDiff && t.kind === 'pr') {
@@ -9143,12 +9947,47 @@ class ClaudeOrchestrator {
       }
     };
 
+    const maybeAutoSpawnReviewer = async (t) => {
+      if (!state.autoReviewer) return;
+      const task = t || {};
+      if (task.kind !== 'pr') return;
+
+      const tier = Number(task?.record?.tier);
+      if (tier !== 3) return;
+
+      if (task?.record?.reviewedAt) return;
+      if (task?.record?.reviewerSpawnedAt) return;
+
+      if (state.reviewerSpawning?.has?.(task.id)) return;
+      state.reviewerSpawning.add(task.id);
+
+      try {
+        const info = await this.spawnReviewAgentForPRTask(task, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+        if (!info) return;
+        const patch = { reviewerSpawnedAt: new Date().toISOString() };
+        if (info?.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
+        const rec = await upsertRecord(task.id, patch);
+        updateTaskRecordInState(task.id, rec);
+        renderList();
+        renderDetail(getTaskById(task.id));
+      } catch (e) {
+        // best-effort; keep it silent unless it was user-initiated
+        console.warn('Auto reviewer spawn failed:', e);
+      } finally {
+        state.reviewerSpawning.delete(task.id);
+      }
+    };
+
     const selectById = (id, { allowAutoOpenDiff } = {}) => {
       state.selectedId = id;
       state.allowAutoOpenDiff = !!allowAutoOpenDiff;
       const t = getTaskById(id);
       renderList();
       renderDetail(t);
+      if (state.reviewActive && t?.id) {
+        startReviewTimer(t.id).catch(() => {});
+      }
+      maybeAutoSpawnReviewer(t).catch(() => {});
     };
 
     listEl.addEventListener('click', (e) => {
@@ -9204,6 +10043,7 @@ class ClaudeOrchestrator {
     };
     const close = () => {
       document.removeEventListener('keydown', onKey);
+      stopReviewTimer().catch(() => {});
       modal.remove();
     };
 
@@ -10697,13 +11537,20 @@ class ClaudeOrchestrator {
     // Extract repo name from path for session matching
     const repoName = (repoNameOverride || repoPath.split('/').pop() || '').toLowerCase();
 
-    // Check if any session is using this worktree
+    // Check if any session is using this worktree.
     // Session IDs follow patterns like: "work1-claude", "work1-server",
-    // or for mixed-repo: "repoName-work1-claude", "repoName-work1-server"
+    // or for mixed-repo: "repoName-work1-claude", "repoName-work1-server".
     for (const [sessionId, session] of this.sessions) {
-      // Only consider sessions that belong to the current workspace
-      if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) {
-        continue;
+      // Only consider sessions that belong to the current workspace.
+      // Some legacy sessions may not carry `session.workspace`; for mixed-repo
+      // workspaces we can safely filter by configured terminal IDs.
+      if (this.currentWorkspace) {
+        if (session.workspace) {
+          if (session.workspace !== this.currentWorkspace.id) continue;
+        } else if (this.currentWorkspace.workspaceType === 'mixed-repo') {
+          const terminals = Array.isArray(this.currentWorkspace.terminals) ? this.currentWorkspace.terminals : [];
+          if (!terminals.some(t => t && t.id === sessionId)) continue;
+        }
       }
 
       const sessionWorktreeId = session.worktreeId
@@ -10807,8 +11654,13 @@ class ClaudeOrchestrator {
         const targetRepoName = (repoName || '').toLowerCase();
 
         for (const [sessionId, session] of this.sessions) {
-          if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) {
-            continue;
+          if (this.currentWorkspace) {
+            if (session.workspace) {
+              if (session.workspace !== this.currentWorkspace.id) continue;
+            } else if (this.currentWorkspace.workspaceType === 'mixed-repo') {
+              const terminals = Array.isArray(this.currentWorkspace.terminals) ? this.currentWorkspace.terminals : [];
+              if (!terminals.some(t => t && t.id === sessionId)) continue;
+            }
           }
 
           const sessionWorktreeId = session.worktreeId
@@ -10868,6 +11720,353 @@ class ClaudeOrchestrator {
       console.error('Error adding worktree:', error);
       this.showTemporaryMessage('Error: ' + error.message, 'error');
     }
+  }
+
+  maybeAutoSendPrompt(sessionId, status) {
+    const pending = this.pendingAutoPrompts.get(sessionId);
+    if (!pending || pending.sentAt) return;
+    const normalized = String(status || '').toLowerCase();
+    if (normalized !== 'waiting') return;
+    if (!this.socket || !this.socket.connected) return;
+
+    const text = String(pending.text || '').trim();
+    if (!text) {
+      this.pendingAutoPrompts.delete(sessionId);
+      return;
+    }
+
+    const payload = text.endsWith('\n') ? text : `${text}\n`;
+    this.socket.emit('terminal-input', { sessionId, data: payload });
+    pending.sentAt = Date.now();
+    this.pendingAutoPrompts.set(sessionId, pending);
+
+    // Best-effort telemetry: record when we auto-sent a prompt (session task record).
+    this.upsertTaskRecord(`session:${sessionId}`, {
+      promptSentAt: new Date(pending.sentAt).toISOString(),
+      promptChars: payload.length
+    }).then((rec) => {
+      if (rec) this.taskRecords.set(`session:${sessionId}`, rec);
+    }).catch(() => {});
+
+    // Best-effort cleanup to avoid unbounded growth if something goes weird.
+    setTimeout(() => {
+      const cur = this.pendingAutoPrompts.get(sessionId);
+      if (cur && cur.sentAt === pending.sentAt) this.pendingAutoPrompts.delete(sessionId);
+    }, 60_000);
+  }
+
+  getTaskBoardMapping(provider, boardId) {
+    const key = `${provider}:${boardId}`;
+    const mappings = this.userSettings?.global?.ui?.tasks?.boardMappings;
+    if (!mappings || typeof mappings !== 'object') return null;
+    const m = mappings[key];
+    return m && typeof m === 'object' ? m : null;
+  }
+
+  async getScannedRepos({ force = false } = {}) {
+    const now = Date.now();
+    const ttlMs = 20_000;
+    if (!force && this.scannedReposCache?.value && (now - (this.scannedReposCache.fetchedAt || 0) < ttlMs)) {
+      return this.scannedReposCache.value;
+    }
+
+    const res = await fetch('/api/workspaces/scan-repos');
+    if (!res.ok) throw new Error('Failed to scan repos');
+    const repos = await res.json();
+    const arr = Array.isArray(repos) ? repos : [];
+    this.scannedReposCache = { value: arr, fetchedAt: now };
+    return arr;
+  }
+
+  buildAgentConfigForLaunch({ agentId, mode, yolo } = {}) {
+    const id = String(agentId || 'claude').toLowerCase();
+    if (id === 'codex') {
+      // v1: minimal. If you want more advanced flags, use the Agent modal.
+      return { agentId: 'codex', mode: 'search', flags: [] };
+    }
+
+    const m = ['fresh', 'continue', 'resume'].includes(String(mode)) ? String(mode) : 'fresh';
+    const flags = [];
+    if (yolo) flags.push('skipPermissions');
+    return { agentId: 'claude', mode: m, flags };
+  }
+
+  async spawnReviewAgentForPRTask(prTask, { tier = 3, agentId = 'claude', mode = 'fresh', yolo = true, worktreeId = null } = {}) {
+    const t = prTask || {};
+    if (t.kind !== 'pr') return;
+
+    const url = String(t.url || '').trim();
+    const repoSlug = String(t.repository || '').trim();
+    if (!repoSlug) {
+      this.showToast('PR task is missing repository slug', 'error');
+      return;
+    }
+
+    const repoName = repoSlug.split('/').filter(Boolean).slice(-1)[0] || repoSlug;
+    const repos = await this.getScannedRepos({ force: false });
+    const repo = repos.find((r) => String(r?.name || '').toLowerCase() === String(repoName).toLowerCase());
+    if (!repo) {
+      this.showToast(`Repo not found locally: ${repoName} (scan-repos)`, 'error');
+      return;
+    }
+
+    const requestedWorktreeId = String(worktreeId || '').trim();
+    const requested = requestedWorktreeId
+      ? (Array.isArray(repo.worktrees) ? repo.worktrees.find((w) => String(w?.id || '') === requestedWorktreeId) : null)
+      : null;
+
+    const recommended = requested || this.getRecommendedWorktree(repo);
+    if (!recommended) {
+      this.showToast('All worktrees busy for this repo; open Quick Work to choose one', 'warning');
+      await this.showQuickWorktreeModal();
+      const modal = document.getElementById('quick-worktree-modal');
+      const input = modal?.querySelector('#quick-worktree-search');
+      if (input) {
+        input.value = String(repo?.name || '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return;
+    }
+
+    const prNum = t.prNumber ? Number(t.prNumber) : null;
+    const prHint = prNum ? `${repoSlug}#${prNum}` : repoSlug;
+    const prompt = [
+      `You are a reviewer agent.`,
+      ``,
+      `Review PR: ${url || prHint}`,
+      `Repo: ${repoSlug}`,
+      ``,
+      `Goals:`,
+      `- Validate correctness and spot likely bugs/regressions`,
+      `- Identify risky areas (auth, migrations, concurrency, perf, security)`,
+      `- Suggest concrete fixes and tests to run`,
+      ``,
+      `Suggested commands:`,
+      prNum ? `- gh pr checkout ${prNum}` : `- gh pr list --limit 20`,
+      prNum ? `- gh pr diff ${prNum}` : `- gh pr diff <PR_NUMBER>`,
+      `- git status`,
+      `- run relevant tests (repo-specific)`,
+      ``,
+      `Output format:`,
+      `1) Summary (3-8 bullets)`,
+      `2) Risks (with severity)`,
+      `3) Required fixes (if any)`,
+      `4) Suggested follow-ups/tests`,
+      `5) Verdict: approve | needs_fix`
+    ].join('\n');
+
+    const startTier = Number(tier);
+    const startTierSafe = (startTier >= 1 && startTier <= 4) ? startTier : undefined;
+    const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
+
+    this.pendingWorktreeLaunches.set(recommended.id, {
+      promptText: prompt,
+      autoSendPrompt: true,
+      agentConfig
+    });
+
+    if (!this.socket || !this.socket.connected) {
+      this.pendingWorktreeLaunches.delete(recommended.id);
+      this.showToast('Socket not connected', 'error');
+      return;
+    }
+
+    this.socket.emit('add-worktree-sessions', {
+      worktreeId: recommended.id,
+      worktreePath: recommended.path,
+      repositoryName: repo.name,
+      repositoryType: repo.type,
+      repositoryRoot: repo.path,
+      startTier: startTierSafe
+    });
+
+    this.showToast(`Spawned reviewer in ${repo.name} ${recommended.id}`, 'success');
+    return { worktreeId: recommended.id, worktreePath: recommended.path, repositoryRoot: repo.path, repositoryName: repo.name };
+  }
+
+  async spawnFixAgentForPRTask(prTask, { tier = 2, agentId = 'claude', mode = 'fresh', yolo = true, notes = '', worktreeId = null } = {}) {
+    const t = prTask || {};
+    if (t.kind !== 'pr') return null;
+
+    const url = String(t.url || '').trim();
+    const repoSlug = String(t.repository || '').trim();
+    if (!repoSlug) {
+      this.showToast('PR task is missing repository slug', 'error');
+      return null;
+    }
+
+    const repoName = repoSlug.split('/').filter(Boolean).slice(-1)[0] || repoSlug;
+    const repos = await this.getScannedRepos({ force: false });
+    const repo = repos.find((r) => String(r?.name || '').toLowerCase() === String(repoName).toLowerCase());
+    if (!repo) {
+      this.showToast(`Repo not found locally: ${repoName} (scan-repos)`, 'error');
+      return null;
+    }
+
+    const requestedWorktreeId = String(worktreeId || '').trim();
+    const requested = requestedWorktreeId
+      ? (Array.isArray(repo.worktrees) ? repo.worktrees.find((w) => String(w?.id || '') === requestedWorktreeId) : null)
+      : null;
+    const recommended = requested || this.getRecommendedWorktree(repo);
+    if (!recommended) {
+      this.showToast('All worktrees busy for this repo; open Quick Work to choose one', 'warning');
+      await this.showQuickWorktreeModal();
+      const modal = document.getElementById('quick-worktree-modal');
+      const input = modal?.querySelector('#quick-worktree-search');
+      if (input) {
+        input.value = String(repo?.name || '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return null;
+    }
+
+    const prNum = t.prNumber ? Number(t.prNumber) : null;
+    const prHint = prNum ? `${repoSlug}#${prNum}` : repoSlug;
+    const notesText = String(notes || '').trim();
+
+    const prompt = [
+      `You are a fixer agent.`,
+      ``,
+      `Fix PR: ${url || prHint}`,
+      `Repo: ${repoSlug}`,
+      ``,
+      `Instructions:`,
+      `- Checkout the PR branch and implement required fixes`,
+      `- Keep the change scoped to the PR; do not open a new PR unless explicitly necessary`,
+      `- Run relevant tests/lint where possible and report what you ran`,
+      ``,
+      `Reviewer feedback / fix request:`,
+      notesText ? notesText : '(no notes provided; inspect PR diff + conversation context and propose fixes)',
+      ``,
+      `Suggested commands:`,
+      prNum ? `- gh pr checkout ${prNum}` : `- gh pr list --limit 20`,
+      prNum ? `- gh pr diff ${prNum}` : `- gh pr diff <PR_NUMBER>`,
+      `- git status`,
+      `- run relevant tests (repo-specific)`,
+      ``,
+      `Output format:`,
+      `1) What you changed`,
+      `2) Tests run`,
+      `3) Anything still risky/uncertain`
+    ].join('\n');
+
+    const startTier = Number(tier);
+    const startTierSafe = (startTier >= 1 && startTier <= 4) ? startTier : undefined;
+    const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
+
+    this.pendingWorktreeLaunches.set(recommended.id, {
+      promptText: prompt,
+      autoSendPrompt: true,
+      agentConfig
+    });
+
+    if (!this.socket || !this.socket.connected) {
+      this.pendingWorktreeLaunches.delete(recommended.id);
+      this.showToast('Socket not connected', 'error');
+      return null;
+    }
+
+    this.socket.emit('add-worktree-sessions', {
+      worktreeId: recommended.id,
+      worktreePath: recommended.path,
+      repositoryName: repo.name,
+      repositoryType: repo.type,
+      repositoryRoot: repo.path,
+      startTier: startTierSafe
+    });
+
+    this.showToast(`Spawned fixer in ${repo.name} ${recommended.id}`, 'success');
+    return { worktreeId: recommended.id, worktreePath: recommended.path, repositoryRoot: repo.path, repositoryName: repo.name };
+  }
+
+  async launchAgentFromTaskCard({ provider, boardId, card, tier, agentId, mode, yolo, autoSendPrompt, promptText } = {}) {
+    const mapping = this.getTaskBoardMapping(provider, boardId);
+    const mappingEnabled = mapping ? (mapping.enabled !== false) : true;
+    if (!mappingEnabled) {
+      this.showToast('Board is disabled; enable it in Board Settings first', 'warning');
+      return;
+    }
+
+    const localPathRaw = String(mapping?.localPath || '').trim();
+    const repoSlugRaw = String(mapping?.repoSlug || '').trim();
+
+    if (!localPathRaw && !repoSlugRaw) {
+      this.showToast('No board mapping set (Board Settings → Repo mapping)', 'warning');
+      return;
+    }
+
+    const normalize = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').trim();
+    const normalizeRel = (p) => normalize(p).replace(/^(\.\/)+/, '');
+
+    const mapped = normalize(localPathRaw);
+    let mappedAbs = mapped.startsWith('/') ? mapped : '';
+    let mappedRel = mappedAbs ? '' : normalizeRel(mapped);
+
+    // Accept "~/GitHub/..." or ".../GitHub/..." as a relativePath hint.
+    if (!mappedAbs) {
+      const idx = mapped.toLowerCase().indexOf('/github/');
+      if (idx >= 0) mappedRel = normalizeRel(mapped.slice(idx + '/github/'.length));
+    } else {
+      const idx = mappedAbs.toLowerCase().indexOf('/github/');
+      if (idx >= 0 && !mappedRel) mappedRel = normalizeRel(mappedAbs.slice(idx + '/github/'.length));
+    }
+
+    const repos = await this.getScannedRepos({ force: false });
+    const repo = repos.find((r) => {
+      const path = normalize(r?.path);
+      const rel = normalizeRel(r?.relativePath);
+      if (mappedAbs && path && path === mappedAbs) return true;
+      if (mappedRel && rel && rel === mappedRel) return true;
+      return false;
+    }) || (repoSlugRaw ? repos.find((r) => String(r?.name || '').toLowerCase() === repoSlugRaw.split('/').slice(-1)[0].toLowerCase()) : null);
+
+    if (!repo) {
+      this.showToast('Mapped repo not found by scanner (/api/workspaces/scan-repos)', 'error');
+      return;
+    }
+
+    const recommended = this.getRecommendedWorktree(repo);
+    if (!recommended) {
+      this.showToast('All worktrees busy for this repo; open Quick Work to choose one', 'warning');
+      await this.showQuickWorktreeModal();
+      const modal = document.getElementById('quick-worktree-modal');
+      const input = modal?.querySelector('#quick-worktree-search');
+      if (input) {
+        input.value = String(repo?.name || '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return;
+    }
+
+    const startTier = Number(tier);
+    const startTierSafe = (startTier >= 1 && startTier <= 4) ? startTier : undefined;
+
+    const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
+    const prompt = String(promptText || card?.desc || '');
+
+    // Ensure we register the pending launch before emitting, to avoid races.
+    this.pendingWorktreeLaunches.set(recommended.id, {
+      promptText: prompt,
+      autoSendPrompt: !!autoSendPrompt,
+      agentConfig
+    });
+
+    if (!this.socket || !this.socket.connected) {
+      this.pendingWorktreeLaunches.delete(recommended.id);
+      this.showToast('Socket not connected', 'error');
+      return;
+    }
+
+    this.socket.emit('add-worktree-sessions', {
+      worktreeId: recommended.id,
+      worktreePath: recommended.path,
+      repositoryName: repo.name,
+      repositoryType: repo.type,
+      repositoryRoot: repo.path,
+      startTier: startTierSafe
+    });
+
+    this.showToast(`Launching ${repo.name} ${recommended.id}`, 'success');
   }
 
   async createWorktree(worktreeNumber) {

@@ -4,6 +4,12 @@
 **Date**: 2025-09-27
 **Status**: Phase 1 Complete ✅ (Backend infrastructure done)
 
+> NOTE (2026-01-25): This file is historical for the original multi-workspace rollout.
+> Current “what shipped / what’s next” status lives in:
+> - `PLANS/2026-01-20/ROLLING_LOG.md`
+> - `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md`
+> - `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md`
+
 ---
 
 ## ✅ COMPLETED (Phase 1)

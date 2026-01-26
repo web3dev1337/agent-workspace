@@ -6,6 +6,15 @@ Date: 2026-01-25
 
 ---
 
+## Brain dump (2026-01-25)
+
+The full transcript is preserved in:
+- `PLANS/2026-01-25/BRAIN_DUMP_2026-01-25.md`
+
+The implementation plan derived from it is:
+- `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md`
+- `PLANS/2026-01-25/DATA_MODEL.md`
+
 ## PR Index (for resume)
 
 - Trello Tasks (kanban + writes): https://github.com/web3dev1337/claude-orchestrator/pull/179
@@ -109,6 +118,8 @@ Queue includes:
 - Focus includes a Tier-2 gating toggle:
   - `T2 Auto` hides Tier 2 while Tier 1 is busy
   - `T2 Always` always shows Tier 2 in Focus
+- Focus includes an auto-swap toggle:
+  - `Swap T2` shows Tier 2 only while Tier 1 is busy (auto-returns when Tier 1 is idle)
 
 ---
 
@@ -189,6 +200,75 @@ If we later want ticket↔ticket “conflict probability”, it should be a heur
 3) **Automation rules**
    - e.g. hide Tier 3/4 while Tier 1 busy; simple launch gating
 
+## Added follow-ups from the brain dump (not shipped yet)
+
+These were explicitly requested in the 2026-01-25 brain dump.
+
+### ✅ Shipped in this branch (work/continue-2026-01-25e)
+
+1) **Board ↔ repo/path mapping**
+   - Stored in user settings: `global.ui.tasks.boardMappings` (key: `${provider}:${boardId}`)
+   - UI: Tasks toolbar → ⚙ “Board Settings”
+   - Fields: `enabled`, `localPath`/`relativePath`, `repoSlug`, `defaultStartTier`
+   - Settings merge is safe for partial `ui.tasks` updates (doesn’t drop `kanban`/`filters` defaults)
+
+2) **Hidden/disabled boards**
+   - Board mapping supports `enabled=false`
+   - Disabled boards are hidden from the board selector by default
+   - UI: Board Settings → “Show disabled boards”
+
+3) **Launch agent from Trello card**
+   - Tasks card detail includes a “Launch Agent” block (tier + agent + mode + YOLO + auto-send prompt)
+   - Uses board mapping + repo scanner + recommended worktree selection
+   - Emits `add-worktree-sessions` with `startTier`, then auto-starts agent and can auto-send prompt when session becomes `waiting`
+
+4) **Dependency viewer UX (v1)**
+  - Queue detail shows:
+    - Dependencies (resolved list: satisfied/blocked + reason)
+    - Dependents (“unblocks” list from local task records)
+  - Queue detail also includes:
+    - “Pick from queue…” for fast dependency linking
+    - “🧩 Graph” modal (bounded depth) for upstream/downstream trees
+
+5) **Second-agent review lane (manual, v1)**
+  - Queue detail for PR items includes a “Reviewer” action to spawn a reviewer agent in a clean/available worktree.
+  - Intended for Tier 3 PRs to reduce first-pass failure rate before merge.
+
+6) **Telemetry (v1)**
+   - Task records now store:
+     - `reviewStartedAt` / `reviewEndedAt`
+     - `promptSentAt` / `promptChars` (best-effort)
+   - Queue detail shows telemetry and supports a manual review timer (Start/Stop) and auto-timing when “Start Review” is enabled.
+   - API summary: `GET /api/process/telemetry`
+
+7) **Advisor (v1)**
+  - API: `GET /api/process/advice` returns actionable recommendations (uses status + telemetry + task records).
+  - UI: Commander panel → “Advice” button shows the advisor overlay.
+
+8) **Commander + voice workflow controls (v1)**
+  - Commander-executable commands:
+    - `set-workflow-mode` (`focus|review|background`)
+    - `set-focus-tier2` (`auto|always`)
+    - `open-queue`, `open-tasks`, `open-advice`
+  - Voice rules now recognize phrases like:
+    - “enter focus mode”, “review mode”, “background mode”
+    - “tier 2 auto / tier two always”, “show tier twos”
+    - “open queue”, “open tasks”, “open advice”
+  - UX fix: typing manually in a `*-claude` terminal suppresses the Fresh/Continue/Resume startup overlay (prevents it popping up when you run `claude ...` by hand).
+
+9) **Review conveyor belt (expanded, v1)**
+  - Queue detail includes:
+    - Notes / fix request field (`record.notes`)
+    - “🛠 Fixer” action that spawns a fixer agent for the PR and auto-sends a fix prompt (stores `fixerSpawnedAt` / `fixerWorktreeId`)
+  - Optional automation:
+    - “Auto Reviewer” toggle spawns a reviewer agent automatically for unreviewed Tier 3 PRs (stores `reviewerSpawnedAt` / `reviewerWorktreeId`)
+
+### ❌ Still missing (future work)
+
+1) **Dependency viewer UX (v2+)**
+  - Multi-level tree/graph visualization (beyond the v1 Dependents list).
+  - Faster linking UX (e.g. drag/drop or pick-from-queue).
+
 ---
 
 ## Checklist (to keep us honest)
@@ -199,3 +279,11 @@ If we later want ticket↔ticket “conflict probability”, it should be a heur
 - [x] Review Inbox exists and drives diff viewer
 - [x] Prompt artifacts exist (private; shared/encrypted WIP)
 - [x] Dependency model extends beyond Trello when no card exists
+- [x] Board ↔ repo/path mapping exists (Tasks → Board Settings)
+- [x] Hidden/disabled boards supported
+- [x] Launch agent from Trello card supported
+- [x] Automated tests exist (unit + E2E safe port)
+
+Test commands:
+- `npm run test:unit`
+- `npm run test:e2e:safe`

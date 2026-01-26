@@ -57,6 +57,8 @@ const { DiffViewerService } = require('./diffViewerService');
 const { PullRequestService } = require('./pullRequestService');
 const { ProcessTaskService } = require('./processTaskService');
 const { ProcessStatusService } = require('./processStatusService');
+const { ProcessTelemetryService } = require('./processTelemetryService');
+const { ProcessAdvisorService } = require('./processAdvisorService');
 const { TaskRecordService } = require('./taskRecordService');
 const { PromptArtifactService } = require('./promptArtifactService');
 const { TaskDependencyService } = require('./taskDependencyService');
@@ -174,6 +176,8 @@ const pullRequestService = PullRequestService.getInstance();
 const processTaskService = ProcessTaskService.getInstance({ sessionManager, worktreeTagService, pullRequestService });
 const taskRecordService = TaskRecordService.getInstance();
 const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager });
+const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
+const processAdvisorService = ProcessAdvisorService.getInstance({ processStatusService, processTelemetryService, processTaskService, taskRecordService });
 const promptArtifactService = PromptArtifactService.getInstance();
 const taskDependencyService = TaskDependencyService.getInstance({ taskRecordService, pullRequestService });
 const taskTicketingService = TaskTicketingService.getInstance();
@@ -2302,6 +2306,31 @@ app.get('/api/process/status', async (req, res) => {
   }
 });
 
+app.get('/api/process/telemetry', async (req, res) => {
+  try {
+    const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
+    const force = String(req.query.force || '').toLowerCase() === 'true';
+    const summary = await processTelemetryService.getSummary({ lookbackHours, force });
+    res.json(summary);
+  } catch (error) {
+    logger.error('Failed to fetch process telemetry', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to fetch process telemetry' });
+  }
+});
+
+app.get('/api/process/advice', async (req, res) => {
+  try {
+    const mode = req.query.mode || 'mine';
+    const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
+    const force = String(req.query.force || '').toLowerCase() === 'true';
+    const data = await processAdvisorService.getAdvice({ mode, lookbackHours, force });
+    res.json(data);
+  } catch (error) {
+    logger.error('Failed to fetch process advice', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to fetch process advice' });
+  }
+});
+
 // ============================================
 // Task records API (tier/risk/prompt metadata)
 // ============================================
@@ -2387,6 +2416,22 @@ app.delete('/api/process/task-records/:id/dependencies/:depId', async (req, res)
   } catch (error) {
     logger.error('Failed to remove task dependency', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to remove task dependency' });
+  }
+});
+
+// ============================================
+// Dependency graph (bounded; for Queue viewer)
+// ============================================
+
+app.get('/api/process/dependency-graph/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const depth = req.query.depth ? Number(req.query.depth) : undefined;
+    const graph = await taskDependencyService.buildGraph({ rootId: id, depth });
+    res.json(graph);
+  } catch (error) {
+    logger.error('Failed to build dependency graph', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to build dependency graph' });
   }
 });
 
