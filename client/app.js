@@ -7101,18 +7101,19 @@ class ClaudeOrchestrator {
 	      await this.updateGlobalUserSetting('ui.tasks.boardMappings', next);
 	    };
 
-	    const renderBoardSettings = () => {
-	      if (!state.boardId) {
+	    const renderBoardSettings = ({ boardId } = {}) => {
+	      const effectiveBoardId = String(boardId || state.boardId || '').trim();
+	      if (!effectiveBoardId || effectiveBoardId === ALL_BOARDS_ID) {
 	        detailEl.innerHTML = `<div class="tasks-detail-empty">Select a board to edit mapping.</div>`;
 	        return;
 	      }
 
-	      const mapping = getBoardMapping(state.provider, state.boardId) || {};
+	      const mapping = getBoardMapping(state.provider, effectiveBoardId) || {};
 	      const enabled = mapping.enabled !== false;
 	      const repoSlug = String(mapping.repoSlug || '');
 	      const localPath = String(mapping.localPath || '');
 	      const defaultTier = Number(mapping.defaultStartTier);
-	      const boardName = (state.boards.find(b => b.id === state.boardId)?.name) || state.boardId;
+	      const boardName = (state.boards.find(b => b.id === effectiveBoardId)?.name) || effectiveBoardId;
 
 	      detailEl.innerHTML = `
 	        <div class="tasks-detail-header">
@@ -7179,7 +7180,7 @@ class ClaudeOrchestrator {
 	          const repoSlugNext = String(detailEl.querySelector('#tasks-board-repo-slug')?.value || '').trim();
 	          const tierRaw = String(detailEl.querySelector('#tasks-board-default-tier')?.value || '').trim();
 	          const tierNum = Number(tierRaw);
-	          await updateBoardMapping(state.provider, state.boardId, {
+	          await updateBoardMapping(state.provider, effectiveBoardId, {
 	            enabled: enabledNext,
 	            localPath: localPathNext || null,
 	            repoSlug: repoSlugNext || null,
@@ -7629,13 +7630,8 @@ class ClaudeOrchestrator {
       }
 
       const isAllBoards = state.boardId === ALL_BOARDS_ID;
-      const mappingForQuick = !isAllBoards ? (getBoardMapping(state.provider, state.boardId) || null) : null;
-      const mappingTier = Number(mappingForQuick?.defaultStartTier);
-      const quickDefaults = readLaunchDefaults({ mappingTier });
-      const quickTier = Number(quickDefaults?.tier || 3);
-      const mappingEnabled = mappingForQuick ? (mappingForQuick.enabled !== false) : true;
-      const mappingLocalPath = mappingForQuick ? String(mappingForQuick.localPath || '') : '';
-      const canQuickLaunch = !!(!isAllBoards && mappingEnabled && mappingLocalPath);
+      const globalDefaults = readLaunchDefaults();
+      const quickTier = Number(globalDefaults?.tier || 3);
 
       cardsEl.innerHTML = filtered
         .map((c) => {
@@ -7643,6 +7639,12 @@ class ClaudeOrchestrator {
           const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
           const board = state.boardId === ALL_BOARDS_ID ? String(c?.__boardName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
           const meta = [board, last].filter(Boolean).join(' • ');
+
+          const cardBoardId = isAllBoards ? String(c?.idBoard || '').trim() : String(state.boardId || '').trim();
+          const mappingForQuick = cardBoardId ? (getBoardMapping(state.provider, cardBoardId) || null) : null;
+          const mappingEnabled = mappingForQuick ? (mappingForQuick.enabled !== false) : true;
+          const mappingLocalPath = mappingForQuick ? String(mappingForQuick.localPath || '') : '';
+          const canQuickLaunch = !!(mappingEnabled && mappingLocalPath && cardBoardId && cardBoardId !== ALL_BOARDS_ID);
 
           const quickTierButtons = canQuickLaunch
             ? `
@@ -7662,10 +7664,10 @@ class ClaudeOrchestrator {
                 <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-btn title="Launch agent (uses default tier)">🚀</button>
               </div>
             `
-            : (!isAllBoards ? `<button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-setup title="Set Board Settings to enable Launch">⚙</button>` : '');
+            : (cardBoardId ? `<button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-setup title="Set Board Settings to enable Launch">⚙</button>` : '');
 
           return `
-            <div class="task-card-row task-card-list" data-card-id="${c.id}" data-url="${c.url || ''}">
+            <div class="task-card-row task-card-list" data-card-id="${c.id}" data-board-id="${escapeHtml(cardBoardId)}" data-url="${c.url || ''}">
               <div class="task-card-list-main">
                 <div class="task-card-title">${title}</div>
                 <div class="task-card-meta">${meta}</div>
@@ -8380,7 +8382,7 @@ class ClaudeOrchestrator {
 	                      `;
 
 	                    return `
-	                      <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-origin-list-id="${list.id}">
+	                      <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-board-id="${escapeHtml(state.boardId)}" data-origin-list-id="${list.id}">
 	                        <div class="task-card-top">
 	                          ${renderCompactLabels(labels)}
 	                          <div class="task-card-top-right">
@@ -9082,11 +9084,19 @@ class ClaudeOrchestrator {
     }
 
 	    cardsEl.addEventListener('click', async (e) => {
+        const resolveRowBoardId = (row) => {
+          if (!row) return String(state.boardId || '').trim();
+          if (state.boardId === ALL_BOARDS_ID) return String(row.dataset?.boardId || '').trim();
+          return String(state.boardId || '').trim();
+        };
+
 	      const quickSetupBtn = e.target.closest('[data-quick-launch-setup]');
 	      if (quickSetupBtn) {
 	        e.preventDefault();
 	        e.stopPropagation();
-	        renderBoardSettings();
+          const row = quickSetupBtn.closest('.task-card-row');
+          const boardId = resolveRowBoardId(row);
+	        renderBoardSettings({ boardId });
 	        return;
 	      }
 
@@ -9097,6 +9107,8 @@ class ClaudeOrchestrator {
           const row = quickTierBtn.closest('.task-card-row');
           const cardId = row?.dataset?.cardId;
           if (!cardId) return;
+          const boardId = resolveRowBoardId(row);
+          if (!boardId) return;
 
           const tier = Number(quickTierBtn.getAttribute('data-quick-launch-tier-btn') || 3);
           if (!(tier >= 1 && tier <= 4)) return;
@@ -9115,14 +9127,14 @@ class ClaudeOrchestrator {
 
             const defaults = readLaunchDefaults();
             writeLaunchDefaults({ tier });
-            syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
+            syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(boardId) });
 
             const card = await fetchCardDetail(cardId);
             const promptText = String(card?.desc ?? '');
 
             await this.launchAgentFromTaskCard({
               provider: state.provider,
-              boardId: state.boardId,
+              boardId,
               card,
               tier,
               agentId: defaults.agentId || 'claude',
@@ -9147,6 +9159,8 @@ class ClaudeOrchestrator {
 	        const row = quickLaunchBtn.closest('.task-card-row');
 	        const cardId = row?.dataset?.cardId;
 	        if (!cardId) return;
+          const boardId = resolveRowBoardId(row);
+          if (!boardId) return;
 
 	        try {
 	          quickLaunchBtn.disabled = true;
@@ -9154,14 +9168,14 @@ class ClaudeOrchestrator {
 	          const tier = Number(defaultsNow?.tier || 3);
 	          const defaults = readLaunchDefaults();
 	          writeLaunchDefaults({ tier });
-            syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
+            syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(boardId) });
 
 	          const card = await fetchCardDetail(cardId);
 	          const promptText = String(card?.desc ?? '');
 
 	          await this.launchAgentFromTaskCard({
 	            provider: state.provider,
-	            boardId: state.boardId,
+	            boardId,
 	            card,
 	            tier,
 	            agentId: defaults.agentId || 'claude',
