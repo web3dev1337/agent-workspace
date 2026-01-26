@@ -38,13 +38,21 @@ describe('TaskRecordService', () => {
       reviewStartedAt: '2026-01-25T00:00:00Z',
       reviewEndedAt: '2026-01-25T00:01:00Z',
       promptSentAt: '2026-01-25T00:00:10Z',
-      promptChars: 123
+      promptChars: 123,
+      reviewerSpawnedAt: '2026-01-25T00:00:11Z',
+      reviewerWorktreeId: 'work9',
+      fixerSpawnedAt: '2026-01-25T00:00:12Z',
+      fixerWorktreeId: 'work10'
     });
 
     expect(rec.reviewStartedAt).toBe('2026-01-25T00:00:00.000Z');
     expect(rec.reviewEndedAt).toBe('2026-01-25T00:01:00.000Z');
     expect(rec.promptSentAt).toBe('2026-01-25T00:00:10.000Z');
     expect(rec.promptChars).toBe(123);
+    expect(rec.reviewerSpawnedAt).toBe('2026-01-25T00:00:11.000Z');
+    expect(rec.reviewerWorktreeId).toBe('work9');
+    expect(rec.fixerSpawnedAt).toBe('2026-01-25T00:00:12.000Z');
+    expect(rec.fixerWorktreeId).toBe('work10');
   });
 
   test('upsert normalizes dependencies and supports done', async () => {

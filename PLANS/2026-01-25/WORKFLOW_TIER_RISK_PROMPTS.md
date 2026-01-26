@@ -221,13 +221,16 @@ These were explicitly requested in the 2026-01-25 brain dump.
    - Emits `add-worktree-sessions` with `startTier`, then auto-starts agent and can auto-send prompt when session becomes `waiting`
 
 4) **Dependency viewer UX (v1)**
-   - Queue detail shows:
-     - Dependencies (resolved list: satisfied/blocked + reason)
-     - Dependents (“unblocks” list from local task records)
+  - Queue detail shows:
+    - Dependencies (resolved list: satisfied/blocked + reason)
+    - Dependents (“unblocks” list from local task records)
+  - Queue detail also includes:
+    - “Pick from queue…” for fast dependency linking
+    - “🧩 Graph” modal (bounded depth) for upstream/downstream trees
 
 5) **Second-agent review lane (manual, v1)**
-   - Queue detail for PR items includes a “Reviewer” action to spawn a reviewer agent in a clean/available worktree.
-   - Intended for Tier 3 PRs to reduce first-pass failure rate before merge.
+  - Queue detail for PR items includes a “Reviewer” action to spawn a reviewer agent in a clean/available worktree.
+  - Intended for Tier 3 PRs to reduce first-pass failure rate before merge.
 
 6) **Telemetry (v1)**
    - Task records now store:
@@ -250,6 +253,13 @@ These were explicitly requested in the 2026-01-25 brain dump.
     - “tier 2 auto / tier two always”, “show tier twos”
     - “open queue”, “open tasks”, “open advice”
   - UX fix: typing manually in a `*-claude` terminal suppresses the Fresh/Continue/Resume startup overlay (prevents it popping up when you run `claude ...` by hand).
+
+9) **Review conveyor belt (expanded, v1)**
+  - Queue detail includes:
+    - Notes / fix request field (`record.notes`)
+    - “🛠 Fixer” action that spawns a fixer agent for the PR and auto-sends a fix prompt (stores `fixerSpawnedAt` / `fixerWorktreeId`)
+  - Optional automation:
+    - “Auto Reviewer” toggle spawns a reviewer agent automatically for unreviewed Tier 3 PRs (stores `reviewerSpawnedAt` / `reviewerWorktreeId`)
 
 ### ❌ Still missing (future work)
 

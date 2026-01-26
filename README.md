@@ -21,6 +21,9 @@ A multi-workspace development environment for AI coding agent sessions (Claude C
 - **Dependencies**:
   - Trello-backed: checklist convention named `Dependencies`
   - Orchestrator-native: stored in local task records for non-Trello tasks
+- **Review Automation (v1)**:
+  - Queue: “Auto Reviewer” for Tier 3 PRs + manual “Reviewer” and “Fixer” actions
+  - Dependency graph modal + “pick from queue” dependency linking
 
 ### 🛠️ **Mixed-Repository Workspaces**
 - **Revolutionary Feature**: Combine terminals from multiple repositories in one workspace

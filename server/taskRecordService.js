@@ -255,6 +255,34 @@ class TaskRecordService {
       }
     }
 
+    if (p.reviewerSpawnedAt !== undefined) {
+      const dt = normalizeDateTime(p.reviewerSpawnedAt);
+      if (dt) next.reviewerSpawnedAt = dt;
+      else clear.add('reviewerSpawnedAt');
+    }
+
+    if (p.reviewerWorktreeId !== undefined) {
+      if (p.reviewerWorktreeId === null || p.reviewerWorktreeId === '') {
+        clear.add('reviewerWorktreeId');
+      } else {
+        next.reviewerWorktreeId = String(p.reviewerWorktreeId || '').trim();
+      }
+    }
+
+    if (p.fixerSpawnedAt !== undefined) {
+      const dt = normalizeDateTime(p.fixerSpawnedAt);
+      if (dt) next.fixerSpawnedAt = dt;
+      else clear.add('fixerSpawnedAt');
+    }
+
+    if (p.fixerWorktreeId !== undefined) {
+      if (p.fixerWorktreeId === null || p.fixerWorktreeId === '') {
+        clear.add('fixerWorktreeId');
+      } else {
+        next.fixerWorktreeId = String(p.fixerWorktreeId || '').trim();
+      }
+    }
+
     if (p.linked) {
       next.linked = p.linked;
     }

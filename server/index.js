@@ -2420,6 +2420,22 @@ app.delete('/api/process/task-records/:id/dependencies/:depId', async (req, res)
 });
 
 // ============================================
+// Dependency graph (bounded; for Queue viewer)
+// ============================================
+
+app.get('/api/process/dependency-graph/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const depth = req.query.depth ? Number(req.query.depth) : undefined;
+    const graph = await taskDependencyService.buildGraph({ rootId: id, depth });
+    res.json(graph);
+  } catch (error) {
+    logger.error('Failed to build dependency graph', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to build dependency graph' });
+  }
+});
+
+// ============================================
 // Prompt artifacts API (large prompts; local/private by default)
 // ============================================
 
