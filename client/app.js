@@ -9371,12 +9371,20 @@ class ClaudeOrchestrator {
             }
 	          });
 
+		          const resolveEffectiveBoardId = () => {
+		            const raw = state.boardId === ALL_BOARDS_ID ? String(c?.idBoard || '').trim() : String(state.boardId || '').trim();
+		            return raw && raw !== ALL_BOARDS_ID ? raw : '';
+		          };
+
 		          openBoardSettingsBtn?.addEventListener('click', (e) => {
 		            e.preventDefault();
-		            renderBoardSettings();
+		            const boardId = resolveEffectiveBoardId();
+		            if (!boardId) return;
+		            renderBoardSettings({ boardId });
 		          });
 
 		          const persistLaunchUi = () => {
+		            const boardId = resolveEffectiveBoardId();
 		            writeLaunchDefaults({
 		              tier: Number(launchTierEl?.value || 3),
 		              agentId: String(launchAgentEl?.value || 'claude'),
@@ -9384,7 +9392,7 @@ class ClaudeOrchestrator {
 		              yolo: !!launchYoloEl?.checked,
 		              autoSendPrompt: !!launchAutoSendEl?.checked
 		            });
-                syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
+                syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(boardId) });
 		          };
 		          [launchTierEl, launchAgentEl, launchModeEl, launchYoloEl, launchAutoSendEl].forEach((el) => {
 		            el?.addEventListener?.('change', persistLaunchUi);
@@ -9394,6 +9402,8 @@ class ClaudeOrchestrator {
 		            if (!state.selectedCardId) return;
 		            try {
 		              launchBtn.disabled = true;
+		              const boardId = resolveEffectiveBoardId();
+		              if (!boardId) throw new Error('No board selected for this card');
 		              const tier = Number(detailEl.querySelector('#tasks-launch-tier')?.value || 3);
 		              const agentId = String(detailEl.querySelector('#tasks-launch-agent')?.value || 'claude');
 		              const mode = String(detailEl.querySelector('#tasks-launch-mode')?.value || 'fresh');
@@ -9405,7 +9415,7 @@ class ClaudeOrchestrator {
 
 		              await this.launchAgentFromTaskCard({
 		                provider: state.provider,
-		                boardId: state.boardId,
+		                boardId,
 		                card: c,
 	                tier,
 	                agentId,
