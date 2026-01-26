@@ -6828,6 +6828,32 @@ class ClaudeOrchestrator {
 	          <select id="tasks-board" class="tasks-select" title="Board"></select>
 	          <button class="btn-secondary" id="tasks-board-settings" title="Board mapping / settings">⚙</button>
 	          <select id="tasks-list" class="tasks-select" title="List"></select>
+            <div class="tasks-launch-defaults" id="tasks-launch-defaults" title="Defaults used by 🚀 quick launch">
+              <span class="tasks-launch-defaults-label">🚀</span>
+              <select id="tasks-launch-default-tier" class="tasks-select tasks-select-mini" title="Default tier">
+                <option value="1">T1</option>
+                <option value="2">T2</option>
+                <option value="3">T3</option>
+                <option value="4">T4</option>
+              </select>
+              <select id="tasks-launch-default-agent" class="tasks-select tasks-select-mini" title="Default agent">
+                <option value="claude">Claude</option>
+                <option value="codex">Codex</option>
+              </select>
+              <select id="tasks-launch-default-mode" class="tasks-select tasks-select-mini" title="Default mode">
+                <option value="fresh">Fresh</option>
+                <option value="continue">Continue</option>
+                <option value="resume">Resume</option>
+              </select>
+              <label class="tasks-toggle tasks-toggle-mini" title="Skip permission prompts (YOLO)">
+                <input type="checkbox" id="tasks-launch-default-yolo" />
+                <span>YOLO</span>
+              </label>
+              <label class="tasks-toggle tasks-toggle-mini" title="Auto-send card description as the first prompt">
+                <input type="checkbox" id="tasks-launch-default-auto-send" />
+                <span>Auto</span>
+              </label>
+            </div>
           <input type="text" id="tasks-search" class="search-input tasks-search" placeholder="Search cards...">
           <div class="tasks-radio" role="radiogroup" aria-label="Kanban layout" id="tasks-layout" style="display:none">
             <label class="tasks-radio-option"><input type="radio" name="tasks-layout" value="scroll">Scroll</label>
@@ -6907,6 +6933,12 @@ class ClaudeOrchestrator {
     const cardsEl = modal.querySelector('#tasks-cards');
     const detailEl = modal.querySelector('#tasks-detail');
     const boardAccentEl = modal.querySelector('#tasks-board-accent');
+    const launchDefaultsWrapEl = modal.querySelector('#tasks-launch-defaults');
+    const launchDefaultTierEl = modal.querySelector('#tasks-launch-default-tier');
+    const launchDefaultAgentEl = modal.querySelector('#tasks-launch-default-agent');
+    const launchDefaultModeEl = modal.querySelector('#tasks-launch-default-mode');
+    const launchDefaultYoloEl = modal.querySelector('#tasks-launch-default-yolo');
+    const launchDefaultAutoSendEl = modal.querySelector('#tasks-launch-default-auto-send');
 	    let lastSnapshot = null;
 
 	    const boardKey = () => `${state.provider}:${state.boardId}`;
@@ -6938,6 +6970,55 @@ class ClaudeOrchestrator {
         const board = Array.isArray(state.boards) ? state.boards.find((b) => b?.id === state.boardId) : null;
         const color = board?.prefs?.backgroundColor || '';
         setBoardAccent(color);
+      };
+
+      const getMappingTierForBoard = (boardId) => {
+        const bid = String(boardId || '').trim();
+        if (!bid || bid === ALL_BOARDS_ID) return undefined;
+        const mapping = getBoardMapping(state.provider, bid) || null;
+        const t = Number(mapping?.defaultStartTier);
+        return Number.isFinite(t) && t >= 1 && t <= 4 ? t : undefined;
+      };
+
+      const syncLaunchDefaultsUi = ({ mappingTier } = {}) => {
+        const tierHint = Number.isFinite(Number(mappingTier)) ? Number(mappingTier) : undefined;
+        const defaults = readLaunchDefaults({ mappingTier: tierHint });
+        if (launchDefaultTierEl) launchDefaultTierEl.value = String(defaults.tier || 3);
+        if (launchDefaultAgentEl) launchDefaultAgentEl.value = String(defaults.agentId || 'claude');
+        if (launchDefaultModeEl) launchDefaultModeEl.value = String(defaults.mode || 'fresh');
+        if (launchDefaultYoloEl) launchDefaultYoloEl.checked = defaults.yolo !== false;
+        if (launchDefaultAutoSendEl) launchDefaultAutoSendEl.checked = defaults.autoSendPrompt !== false;
+
+        // Keep the card detail launch controls in sync (if a card is currently selected).
+        const detailTierEl = detailEl?.querySelector?.('#tasks-launch-tier');
+        const detailAgentEl = detailEl?.querySelector?.('#tasks-launch-agent');
+        const detailModeEl = detailEl?.querySelector?.('#tasks-launch-mode');
+        const detailYoloEl = detailEl?.querySelector?.('#tasks-launch-yolo');
+        const detailAutoEl = detailEl?.querySelector?.('#tasks-launch-auto-send');
+        if (detailTierEl) detailTierEl.value = String(defaults.tier || 3);
+        if (detailAgentEl) detailAgentEl.value = String(defaults.agentId || 'claude');
+        if (detailModeEl) detailModeEl.value = String(defaults.mode || 'fresh');
+        if (detailYoloEl) detailYoloEl.checked = defaults.yolo !== false;
+        if (detailAutoEl) detailAutoEl.checked = defaults.autoSendPrompt !== false;
+      };
+
+      const persistLaunchDefaultsFromToolbar = () => {
+        if (!launchDefaultsWrapEl) return;
+        const tier = Number(launchDefaultTierEl?.value || 3);
+        const agentId = String(launchDefaultAgentEl?.value || 'claude');
+        const mode = String(launchDefaultModeEl?.value || 'fresh');
+        const yolo = !!launchDefaultYoloEl?.checked;
+        const autoSendPrompt = !!launchDefaultAutoSendEl?.checked;
+        writeLaunchDefaults({ tier, agentId, mode, yolo, autoSendPrompt });
+
+        // Apply to any visible quick-launch tier selectors so changing defaults takes effect immediately.
+        try {
+          cardsEl?.querySelectorAll?.('[data-quick-launch-tier]')?.forEach?.((el) => {
+            if (el && 'value' in el) el.value = String(tier);
+          });
+        } catch {
+          // ignore
+        }
       };
 
 	    const getBoardMappings = () => {
@@ -8600,6 +8681,7 @@ class ClaudeOrchestrator {
 	        setSelectOptions(boardEl, withAllBoards, { placeholder: 'Select board...', valueKey: 'id', labelKey: '__selectLabel' });
 	        if (state.boardId) boardEl.value = state.boardId;
           syncBoardAccent();
+          syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
 
         // Fetch "me" (best-effort) so we can default the assignee filter.
         try {
@@ -8722,6 +8804,14 @@ class ClaudeOrchestrator {
     state.boardLayout = readBoardLayout();
     applyView();
     syncBoardLayoutUI();
+    syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
+
+    [launchDefaultTierEl, launchDefaultAgentEl, launchDefaultModeEl, launchDefaultYoloEl, launchDefaultAutoSendEl].forEach((el) => {
+      el?.addEventListener?.('change', () => {
+        persistLaunchDefaultsFromToolbar();
+        syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
+      });
+    });
 
     viewListBtn?.addEventListener('click', async () => {
       state.view = 'list';
@@ -8835,6 +8925,7 @@ class ClaudeOrchestrator {
       state.boardLayout = readBoardLayout();
       syncBoardLayoutUI();
       syncBoardAccent();
+      syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
       if (state.boardId === ALL_BOARDS_ID) {
         state.view = 'list';
         localStorage.setItem('tasks-view', state.view);
@@ -8910,6 +9001,7 @@ class ClaudeOrchestrator {
 	          const tier = Number(tierEl?.value || 3);
 	          const defaults = readLaunchDefaults();
 	          writeLaunchDefaults({ tier });
+            syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
 
 	          const card = await fetchCardDetail(cardId);
 	          const promptText = String(card?.desc ?? '');
@@ -9125,6 +9217,7 @@ class ClaudeOrchestrator {
 		              yolo: !!launchYoloEl?.checked,
 		              autoSendPrompt: !!launchAutoSendEl?.checked
 		            });
+                syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
 		          };
 		          [launchTierEl, launchAgentEl, launchModeEl, launchYoloEl, launchAutoSendEl].forEach((el) => {
 		            el?.addEventListener?.('change', persistLaunchUi);
@@ -11535,6 +11628,7 @@ class ClaudeOrchestrator {
 	      if (e.target?.matches?.('[data-quick-launch-tier]')) {
 	        const tier = Number(e.target.value || 3);
 	        writeLaunchDefaults({ tier });
+          syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
 	      }
 	    });
 
