@@ -7397,6 +7397,30 @@ header h1 {
   gap: 6px;
 }
 
+.tasks-quick-tier-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+}
+
+.tasks-quick-tier-btn {
+  padding: 3px 7px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  border-radius: 999px;
+}
+
+.tasks-quick-tier-btn.is-selected {
+  border-color: var(--accent-primary);
+  background: rgba(31, 111, 235, 0.18);
+  color: var(--text-primary);
+}
+
 .tasks-select.tasks-select-mini {
   min-width: 64px;
   padding: 4px 6px;

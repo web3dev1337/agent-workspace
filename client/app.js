@@ -7011,10 +7011,14 @@ class ClaudeOrchestrator {
         const autoSendPrompt = !!launchDefaultAutoSendEl?.checked;
         writeLaunchDefaults({ tier, agentId, mode, yolo, autoSendPrompt });
 
-        // Apply to any visible quick-launch tier selectors so changing defaults takes effect immediately.
+        // Apply to any visible quick-launch tier buttons so changing defaults takes effect immediately.
         try {
-          cardsEl?.querySelectorAll?.('[data-quick-launch-tier]')?.forEach?.((el) => {
-            if (el && 'value' in el) el.value = String(tier);
+          cardsEl?.querySelectorAll?.('[data-quick-tier-group]')?.forEach?.((group) => {
+            if (!group) return;
+            group.querySelectorAll?.('[data-quick-launch-tier-btn]')?.forEach?.((btn) => {
+              const t = Number(btn?.getAttribute?.('data-quick-launch-tier-btn') || '');
+              btn?.classList?.toggle?.('is-selected', t === tier);
+            });
           });
         } catch {
           // ignore
@@ -8302,16 +8306,19 @@ class ClaudeOrchestrator {
                     const members = memberIds.map(id => membersById.get(id)).filter(Boolean).slice(0, 3);
                     const moreMembers = Math.max(0, memberIds.length - members.length);
 	                    const quickTier = Number(quickDefaults?.tier || 3);
+                      const quickTierButtons = `
+                        <div class="tasks-quick-tier-group" data-quick-tier-group>
+                          <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 1 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="1" title="Launch as T1">T1</button>
+                          <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 2 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="2" title="Launch as T2">T2</button>
+                          <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 3 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="3" title="Launch as T3">T3</button>
+                          <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 4 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="4" title="Launch as T4">T4</button>
+                        </div>
+                      `;
 	                    const quickLaunchHtml = canQuickLaunch
 	                      ? `
 	                        <div class="task-card-quick-actions" data-quick-launch-wrap>
-	                          <select class="tasks-select tasks-select-mini" data-quick-launch-tier title="Launch tier">
-	                            <option value="1" ${quickTier === 1 ? 'selected' : ''}>T1</option>
-	                            <option value="2" ${quickTier === 2 ? 'selected' : ''}>T2</option>
-	                            <option value="3" ${quickTier === 3 ? 'selected' : ''}>T3</option>
-	                            <option value="4" ${quickTier === 4 ? 'selected' : ''}>T4</option>
-	                          </select>
-	                          <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-btn title="Launch agent">🚀</button>
+                            ${quickTierButtons}
+	                          <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-btn title="Launch agent (uses default tier)">🚀</button>
 	                        </div>
 	                      `
 	                      : `
@@ -8987,6 +8994,56 @@ class ClaudeOrchestrator {
 	        return;
 	      }
 
+        const quickTierBtn = e.target.closest('[data-quick-launch-tier-btn]');
+        if (quickTierBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          const row = quickTierBtn.closest('.task-card-row');
+          const cardId = row?.dataset?.cardId;
+          if (!cardId) return;
+
+          const tier = Number(quickTierBtn.getAttribute('data-quick-launch-tier-btn') || 3);
+          if (!(tier >= 1 && tier <= 4)) return;
+
+          try {
+            quickTierBtn.disabled = true;
+            // Visually select the tier for this card.
+            try {
+              row?.querySelectorAll?.('[data-quick-launch-tier-btn]')?.forEach?.((btn) => {
+                const t = Number(btn?.getAttribute?.('data-quick-launch-tier-btn') || '');
+                btn?.classList?.toggle?.('is-selected', t === tier);
+              });
+            } catch {
+              // ignore
+            }
+
+            const defaults = readLaunchDefaults();
+            writeLaunchDefaults({ tier });
+            syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
+
+            const card = await fetchCardDetail(cardId);
+            const promptText = String(card?.desc ?? '');
+
+            await this.launchAgentFromTaskCard({
+              provider: state.provider,
+              boardId: state.boardId,
+              card,
+              tier,
+              agentId: defaults.agentId || 'claude',
+              mode: defaults.mode || 'fresh',
+              yolo: defaults.yolo !== false,
+              autoSendPrompt: defaults.autoSendPrompt !== false,
+              promptText
+            });
+          } catch (err) {
+            console.error('Quick tier launch failed:', err);
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            quickTierBtn.disabled = false;
+          }
+          return;
+        }
+
 	      const quickLaunchBtn = e.target.closest('[data-quick-launch-btn]');
 	      if (quickLaunchBtn) {
 	        e.preventDefault();
@@ -8997,8 +9054,8 @@ class ClaudeOrchestrator {
 
 	        try {
 	          quickLaunchBtn.disabled = true;
-	          const tierEl = row.querySelector('[data-quick-launch-tier]');
-	          const tier = Number(tierEl?.value || 3);
+            const defaultsNow = readLaunchDefaults();
+	          const tier = Number(defaultsNow?.tier || 3);
 	          const defaults = readLaunchDefaults();
 	          writeLaunchDefaults({ tier });
             syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
@@ -9026,10 +9083,10 @@ class ClaudeOrchestrator {
 	        return;
 	      }
 
-	      if (e.target.closest('[data-quick-launch-tier]')) {
-	        e.stopPropagation();
-	        return;
-	      }
+        if (e.target.closest('[data-quick-launch-tier-btn]')) {
+          e.stopPropagation();
+          return;
+        }
 
 	      const row = e.target.closest('.task-card-row');
 	      if (!row) return;
@@ -11622,14 +11679,6 @@ class ClaudeOrchestrator {
 	      if (!row) return;
 	      const id = row.getAttribute('data-queue-id');
 	      selectById(id, { allowAutoOpenDiff: true });
-	    });
-
-	    cardsEl.addEventListener('change', (e) => {
-	      if (e.target?.matches?.('[data-quick-launch-tier]')) {
-	        const tier = Number(e.target.value || 3);
-	        writeLaunchDefaults({ tier });
-          syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
-	      }
 	    });
 
 	    listEl.addEventListener('dragstart', (e) => {
