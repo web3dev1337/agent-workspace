@@ -5,6 +5,7 @@ Source transcript: `PLANS/2026-01-25/BRAIN_DUMP_2026-01-25.md`.
 This file converts the brain dump into **decisions, current status, data model, and shippable PR-sized steps**.
 
 Date: 2026-01-25
+Last updated: 2026-01-26
 
 ---
 
@@ -241,13 +242,13 @@ Implemented:
 - Tests:
   - E2E: `tests/e2e/tasks-launch-from-card.spec.js`
 
-### PR E — Dependency viewer (v1)
+### PR E — Dependency viewer (v1) ✅ Done (shipped in PR #223)
 
 - In Queue: show a dependency detail pane:
   - resolved list (satisfied/blocked + reason)
   - “reverse deps” (tasks that depend on this one) when available
 
-### PR F — Telemetry v1 (prompt/review timers)
+### PR F — Telemetry v1 (prompt/review timers) ✅ Done (shipped in PR #223)
 
 - Track:
   - prompt start/end timestamps per task/session
@@ -256,7 +257,7 @@ Implemented:
 - Expose in `/api/process/task-records/:id`.
   - Also exposed as a lightweight summary: `GET /api/process/telemetry`
 
-### PR G — Second-agent review lane (manual trigger)
+### PR G — Second-agent review lane (manual trigger) ✅ Done (shipped in PR #223)
 
 - Add “Spawn Reviewer” button for Tier 3 tasks:
   - starts a new session in a clean worktree (or same repo)
@@ -272,6 +273,14 @@ We keep automated coverage for core workflow primitives and any new task-layer f
 - E2E tests (safe port): `npm run test:e2e:safe`
   - Targeted: `npm run test:e2e:safe -- tests/e2e/tasks-board-mapping.spec.js`
   - Targeted: `npm run test:e2e:safe -- tests/e2e/tasks-launch-from-card.spec.js`
+
+## 3.2) Working agreement (commit/push discipline)
+
+To avoid losing work and to make “wipe memory” safe:
+- Commit early and often (small, logical commits).
+- Push to `origin/*` as you go (don’t keep a large unpushed diff).
+- Keep PRs reasonably small; merge in increments.
+- Run `npm run test:unit` regularly; run `npm run test:e2e:safe` before merging.
 
 ---
 
