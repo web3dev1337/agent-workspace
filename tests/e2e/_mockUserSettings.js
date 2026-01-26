@@ -6,6 +6,7 @@ const mockUserSettings = async (page, { initial } = {}) => {
         theme: 'dark',
         tasks: {
           theme: 'inherit',
+          boardMappings: {},
           kanban: { collapsedByBoard: {}, expandedByBoard: {}, layoutByBoard: {} },
           filters: { assigneesByBoard: {} },
           me: { trelloUsername: '' }
@@ -29,4 +30,3 @@ const mockUserSettings = async (page, { initial } = {}) => {
 };
 
 module.exports = { mockUserSettings };
-

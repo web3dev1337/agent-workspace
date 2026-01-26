@@ -71,6 +71,9 @@ class CommanderPanel {
         <button id="commander-sessions" class="commander-btn" title="View sessions">
           Sessions
         </button>
+        <button id="commander-advice" class="commander-btn" title="Show workflow advice">
+          Advice
+        </button>
       </div>
       <div class="commander-terminal" id="commander-terminal">
         <div class="commander-placeholder">
@@ -80,6 +83,22 @@ class CommanderPanel {
       </div>
     `;
     document.body.appendChild(panel);
+
+    // Advice overlay (rendered on demand)
+    const advice = document.createElement('div');
+    advice.id = 'commander-advice-panel';
+    advice.className = 'commander-advice hidden';
+    advice.innerHTML = `
+      <div class="commander-advice-header">
+        <div class="commander-advice-title">Advisor</div>
+        <div class="commander-advice-controls">
+          <button id="commander-advice-refresh" class="commander-btn" title="Refresh advice">🔄</button>
+          <button id="commander-advice-close" class="commander-window-btn close" title="Close">✕</button>
+        </div>
+      </div>
+      <div id="commander-advice-body" class="commander-advice-body">Loading…</div>
+    `;
+    document.body.appendChild(advice);
   }
 
   /**
@@ -222,6 +241,9 @@ class CommanderPanel {
 
     // Sessions button
     document.getElementById('commander-sessions')?.addEventListener('click', () => this.showSessions());
+    document.getElementById('commander-advice')?.addEventListener('click', () => this.toggleAdvice());
+    document.getElementById('commander-advice-close')?.addEventListener('click', () => this.hideAdvice());
+    document.getElementById('commander-advice-refresh')?.addEventListener('click', () => this.fetchAdvice({ force: true }));
 
     // ESC to close
     document.addEventListener('keydown', (e) => {
@@ -235,6 +257,87 @@ class CommanderPanel {
 
     // Setup dragging
     this.setupDragging();
+  }
+
+  toggleAdvice() {
+    const panel = document.getElementById('commander-advice-panel');
+    if (!panel) return;
+    if (panel.classList.contains('hidden')) this.showAdvice();
+    else this.hideAdvice();
+  }
+
+  async showAdvice() {
+    const panel = document.getElementById('commander-advice-panel');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    await this.fetchAdvice({ force: false });
+  }
+
+  hideAdvice() {
+    const panel = document.getElementById('commander-advice-panel');
+    if (!panel) return;
+    panel.classList.add('hidden');
+  }
+
+  async fetchAdvice({ force = false } = {}) {
+    const body = document.getElementById('commander-advice-body');
+    if (!body) return;
+    body.textContent = 'Loading…';
+    try {
+      const url = new URL(`${this.serverUrl}/api/process/advice`);
+      url.searchParams.set('mode', 'mine');
+      if (force) url.searchParams.set('force', 'true');
+      const res = await fetch(url.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to load advice');
+
+      const items = Array.isArray(data.advice) ? data.advice : [];
+      if (!items.length) {
+        body.innerHTML = '<div class="commander-advice-empty">No advice right now.</div>';
+        return;
+      }
+
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      body.innerHTML = items.map((a) => {
+        const level = String(a.level || 'info');
+        const title = escapeHtml(a.title || '');
+        const message = escapeHtml(a.message || '');
+        return `
+          <div class="commander-advice-item ${level}">
+            <div class="commander-advice-item-title">${title}</div>
+            <div class="commander-advice-item-msg">${message}</div>
+            ${(Array.isArray(a.actions) && a.actions.length) ? `
+              <div class="commander-advice-actions">
+                ${a.actions.map((act, idx) => {
+                  const label = escapeHtml(act.label || 'Action');
+                  const action = escapeHtml(act.action || '');
+                  return `<button class="commander-btn commander-advice-action" data-action="${action}" data-idx="${idx}">${label}</button>`;
+                }).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+
+      body.querySelectorAll('.commander-advice-action').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const action = btn.getAttribute('data-action');
+          if (!action) return;
+          // Minimal wiring: map advisor actions to existing orchestrator commands.
+          if (action === 'open-queue') {
+            this.orchestrator?.showQueuePanel?.();
+            return;
+          }
+        });
+      });
+    } catch (e) {
+      body.textContent = String(e?.message || e);
+    }
   }
 
   /**
