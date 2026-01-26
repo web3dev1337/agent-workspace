@@ -6824,6 +6824,7 @@ class ClaudeOrchestrator {
 
 	        <div class="tasks-toolbar">
 	          <select id="tasks-provider" class="tasks-select" title="Provider"></select>
+            <span class="tasks-board-accent" id="tasks-board-accent" aria-hidden="true" title="Board color"></span>
 	          <select id="tasks-board" class="tasks-select" title="Board"></select>
 	          <button class="btn-secondary" id="tasks-board-settings" title="Board mapping / settings">⚙</button>
 	          <select id="tasks-list" class="tasks-select" title="List"></select>
@@ -6901,12 +6902,43 @@ class ClaudeOrchestrator {
     const refreshBtn = modal.querySelector('#tasks-refresh');
     const viewListBtn = modal.querySelector('#tasks-view-list');
     const viewBoardBtn = modal.querySelector('#tasks-view-board');
+    const contentEl = modal.querySelector('.tasks-content');
     const bodyEl = modal.querySelector('.tasks-body');
     const cardsEl = modal.querySelector('#tasks-cards');
     const detailEl = modal.querySelector('#tasks-detail');
+    const boardAccentEl = modal.querySelector('#tasks-board-accent');
 	    let lastSnapshot = null;
 
 	    const boardKey = () => `${state.provider}:${state.boardId}`;
+
+      const sanitizeCssColor = (value) => {
+        const v = String(value || '').trim();
+        if (!v) return '';
+        if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return v;
+        if (/^(rgb|rgba|hsl|hsla)\\([0-9., %]+\\)$/.test(v)) return v;
+        if (/^[a-zA-Z]+$/.test(v)) return v;
+        return '';
+      };
+
+      const setBoardAccent = (value) => {
+        const color = sanitizeCssColor(value);
+        const show = !!color && state.boardId && state.boardId !== ALL_BOARDS_ID;
+        if (contentEl) {
+          if (show) contentEl.style.setProperty('--tasks-board-accent', color);
+          else contentEl.style.removeProperty('--tasks-board-accent');
+        }
+        if (boardAccentEl) {
+          boardAccentEl.classList.toggle('is-hidden', !show);
+          if (show) boardAccentEl.style.backgroundColor = color;
+          else boardAccentEl.style.backgroundColor = '';
+        }
+      };
+
+      const syncBoardAccent = () => {
+        const board = Array.isArray(state.boards) ? state.boards.find((b) => b?.id === state.boardId) : null;
+        const color = board?.prefs?.backgroundColor || '';
+        setBoardAccent(color);
+      };
 
 	    const getBoardMappings = () => {
 	      const mappings = this.userSettings?.global?.ui?.tasks?.boardMappings;
@@ -8114,11 +8146,7 @@ class ClaudeOrchestrator {
 
       const board = Array.isArray(state.boards) ? state.boards.find(b => b?.id === state.boardId) : null;
       const boardColor = board?.prefs?.backgroundColor || '';
-      if (boardColor) {
-        cardsEl.style.setProperty('--tasks-board-accent', String(boardColor));
-      } else {
-        cardsEl.style.removeProperty('--tasks-board-accent');
-      }
+      setBoardAccent(boardColor);
 
       const membersById = new Map((state.boardMembers || []).map(m => [m?.id, m]).filter(([id]) => !!id));
       const trelloLabelColor = (label) => {
@@ -8571,6 +8599,7 @@ class ClaudeOrchestrator {
 
 	        setSelectOptions(boardEl, withAllBoards, { placeholder: 'Select board...', valueKey: 'id', labelKey: '__selectLabel' });
 	        if (state.boardId) boardEl.value = state.boardId;
+          syncBoardAccent();
 
         // Fetch "me" (best-effort) so we can default the assignee filter.
         try {
@@ -8805,6 +8834,7 @@ class ClaudeOrchestrator {
       localStorage.setItem('tasks-list', state.listId);
       state.boardLayout = readBoardLayout();
       syncBoardLayoutUI();
+      syncBoardAccent();
       if (state.boardId === ALL_BOARDS_ID) {
         state.view = 'list';
         localStorage.setItem('tasks-view', state.view);
