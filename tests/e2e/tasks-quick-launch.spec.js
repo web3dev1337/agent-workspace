@@ -147,6 +147,61 @@ const mockTasksApi = async (page) => {
 };
 
 test.describe('Tasks quick launch', () => {
+  test('all boards view launches using per-card board mapping', async ({ page }) => {
+    await mockUserSettings(page, {
+      initial: {
+        version: 'test',
+        global: {
+          ui: {
+            theme: 'dark',
+            tasks: {
+              theme: 'inherit',
+              me: { trelloUsername: '' },
+              filters: { assigneesByBoard: {} },
+              kanban: { collapsedByBoard: {}, expandedByBoard: {}, layoutByBoard: {} },
+              boardMappings: {
+                'trello:b1': { enabled: true, localPath: 'games/hytopia/mock-repo', defaultStartTier: 2 }
+              }
+            }
+          }
+        },
+        perTerminal: {}
+      }
+    });
+
+    await mockTasksApi(page);
+
+    await page.goto('/');
+    await ensureWorkspaceLoaded(page);
+    await dismissFocusOverlay(page);
+
+    await page.evaluate(() => {
+      localStorage.setItem('tasks-view', 'list');
+      localStorage.setItem('tasks-board', '__all_enabled__');
+      localStorage.setItem('tasks-launch-tier', '2');
+    });
+
+    await page.evaluate(() => document.getElementById('tasks-btn')?.click());
+    await expect(page.locator('#tasks-panel')).toBeVisible({ timeout: 10000 });
+    await page.locator('#tasks-board').selectOption({ value: '__all_enabled__' });
+    await expect(page.locator('.task-card-row[data-card-id="c1"]')).toBeVisible({ timeout: 20000 });
+
+    await page.evaluate(() => {
+      window.__launchCalls = [];
+      const o = window.orchestrator;
+      o.launchAgentFromTaskCard = async (args) => {
+        window.__launchCalls.push(args);
+        return null;
+      };
+    });
+
+    await page.locator('.task-card-row[data-card-id="c1"] [data-quick-launch-btn]').click();
+    await page.waitForFunction(() => (window.__launchCalls?.length || 0) > 0, null, { timeout: 10000 });
+    const calls = await page.evaluate(() => window.__launchCalls || []);
+    const last = calls[calls.length - 1];
+    expect(last.boardId).toBe('b1');
+  });
+
   test('list view tier buttons launch with selected tier', async ({ page }) => {
     await mockUserSettings(page, {
       initial: {
