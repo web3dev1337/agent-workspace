@@ -287,6 +287,7 @@ class TerminalManager {
     
     // Handle input
     terminal.onData((data) => {
+      this.orchestrator?.onManualTerminalInput?.(sessionId);
       this.orchestrator.sendTerminalInput(sessionId, data);
     });
     
@@ -423,6 +424,7 @@ class TerminalManager {
         
         // Perform the paste
         navigator.clipboard.readText().then(text => {
+          this.orchestrator?.onManualTerminalInput?.(sessionId);
           this.orchestrator.sendTerminalInput(sessionId, text);
         }).catch(err => {
           console.error('Failed to read clipboard:', err);
@@ -459,6 +461,7 @@ class TerminalManager {
         this.lastWordDeleteTimes.set(sessionId, now);
         
         // Send Ctrl+W sequence to delete word backwards
+        this.orchestrator?.onManualTerminalInput?.(sessionId);
         this.orchestrator.sendTerminalInput(sessionId, '\x17');
         return false;
       }

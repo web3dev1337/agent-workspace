@@ -221,6 +221,82 @@ class CommandRegistry {
       }
     });
 
+    // ============ PROCESS / WORKFLOW COMMANDS ============
+
+    this.register('open-queue', {
+      category: 'process',
+      description: 'Open the Queue (review inbox) panel',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-queue' });
+        return { message: 'Opening Queue' };
+      }
+    });
+
+    this.register('open-tasks', {
+      category: 'process',
+      description: 'Open the Tasks panel (Trello provider UI)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-tasks' });
+        return { message: 'Opening Tasks' };
+      }
+    });
+
+    this.register('open-advice', {
+      category: 'process',
+      description: 'Open the Advisor overlay (Commander → Advice)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-advice' });
+        return { message: 'Opening Advisor' };
+      }
+    });
+
+    this.register('set-workflow-mode', {
+      category: 'process',
+      description: 'Set workflow mode: focus | review | background',
+      params: [
+        { name: 'mode', required: true, description: 'One of: focus, review, background' }
+      ],
+      examples: [
+        { params: { mode: 'focus' }, description: 'Enter focus mode' },
+        { params: { mode: 'review' }, description: 'Enter review mode (Queue)' },
+        { params: { mode: 'background' }, description: 'Enter background mode' }
+      ],
+      handler: (params, { io }) => {
+        const mode = String(params.mode || '').trim().toLowerCase();
+        if (!['focus', 'review', 'background'].includes(mode)) {
+          throw new Error(`Invalid mode: ${params.mode}`);
+        }
+        io.emit('commander-action', { action: 'set-workflow-mode', mode });
+        return { message: `Workflow mode: ${mode}` };
+      }
+    });
+
+    this.register('set-focus-tier2', {
+      category: 'process',
+      description: 'Set Focus Tier-2 behavior: auto | always',
+      params: [
+        { name: 'behavior', required: true, description: 'One of: auto, always' }
+      ],
+      examples: [
+        { params: { behavior: 'auto' }, description: 'Auto-hide Tier 2 while Tier 1 is busy' },
+        { params: { behavior: 'always' }, description: 'Always show Tier 2 in Focus' }
+      ],
+      handler: (params, { io }) => {
+        const behavior = String(params.behavior || '').trim().toLowerCase();
+        if (!['auto', 'always'].includes(behavior)) {
+          throw new Error(`Invalid behavior: ${params.behavior}`);
+        }
+        io.emit('commander-action', { action: 'set-focus-tier2', behavior });
+        return { message: `Focus Tier2: ${behavior}` };
+      }
+    });
+
     this.register('highlight-worktree', {
       category: 'ui',
       description: 'Scroll to and highlight a worktree in the sidebar',

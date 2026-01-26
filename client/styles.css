@@ -421,6 +421,10 @@ header h1 {
   display: none;
 }
 
+#workflow-focus-autoswap.hidden {
+  display: none;
+}
+
 .header-btn.focus-tier2-on {
   background: var(--accent-primary);
   color: #ffffff;
@@ -428,6 +432,17 @@ header h1 {
 }
 
 .header-btn.focus-tier2-on:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.header-btn.focus-autoswap-on {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
+}
+
+.header-btn.focus-autoswap-on:hover {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
 }
@@ -5674,6 +5689,91 @@ header h1 {
   background: #0d1117;
   overflow: hidden;
   position: relative;
+}
+
+.commander-advice {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(60vh, 520px);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  z-index: 1002;
+  display: flex;
+  flex-direction: column;
+}
+
+.commander-advice.hidden {
+  display: none;
+}
+
+.commander-advice-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+
+.commander-advice-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.commander-advice-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.commander-advice-body {
+  padding: 12px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.commander-advice-empty {
+  color: var(--text-secondary);
+}
+
+.commander-advice-item {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  background: var(--bg-tertiary);
+}
+
+.commander-advice-item.warn {
+  border-color: rgba(210, 153, 34, 0.6);
+}
+
+.commander-advice-item.blocked {
+  border-color: rgba(248, 81, 73, 0.6);
+}
+
+.commander-advice-item-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.commander-advice-item-msg {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.commander-advice-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .commander-placeholder {

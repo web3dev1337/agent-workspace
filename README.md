@@ -12,6 +12,20 @@ A multi-workspace development environment for AI coding agent sessions (Claude C
 - **Dynamic Configuration**: 1-16 terminal pairs per workspace
 - **Project Type Awareness**: Auto-detects Hytopia, MonoGame, website, writing projects
 
+### 🧠 **Process Layer (Tiers + Queue + Risk + Prompts + Dependencies)**
+- **Workflow Modes**: Focus (T1–T2) / Review (all; opens Queue) / Background (T3–T4)
+- **Tier Tagging**: Per-agent tier selector (`None/T1–T4`) + tier filters
+- **Review Inbox (“📥 Queue”)**: Unified PR/worktree/session list with Next/Prev navigation
+- **Focus Helpers**: `T2 Auto/Always` + `Swap T2` auto-switch while Tier 1 is busy
+- **Risk Metadata**: Base project risk + per-task change risk + `pFailFirstPass` + `verifyMinutes`
+- **Prompt Artifacts**: Store massive prompts locally (private by default) with optional Trello embed
+- **Dependencies**:
+  - Trello-backed: checklist convention named `Dependencies`
+  - Orchestrator-native: stored in local task records for non-Trello tasks
+- **Review Automation (v1)**:
+  - Queue: “Auto Reviewer” for Tier 3 PRs + manual “Reviewer” and “Fixer” actions
+  - Dependency graph modal + “pick from queue” dependency linking
+
 ### 🛠️ **Mixed-Repository Workspaces**
 - **Revolutionary Feature**: Combine terminals from multiple repositories in one workspace
 - **Example**: 2 HyFire + 4 Epic Survivors + 1 Website terminals together
@@ -61,6 +75,15 @@ orchestrator
 # Or manual startup
 npm run dev:all
 ```
+
+### Process docs (resume-safe)
+- `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md` (what’s shipped vs missing)
+- `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md` (brain dump → PR-sized plan)
+- `PLANS/2026-01-25/DATA_MODEL.md` (where the data lives)
+
+### Tier persistence (refresh-safe)
+Tier tagging (T1–T4) persists across page refreshes and server restarts because it is stored in task records:
+- `~/.orchestrator/task-records.json` (`session:<id>`, `pr:owner/repo#123`, `worktree:/path`)
 
 ### Create Your First Custom Workspace
 1. **Access Dashboard**: http://localhost:4000 (dev) or http://localhost:2080 (prod)

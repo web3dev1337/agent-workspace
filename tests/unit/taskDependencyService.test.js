@@ -40,5 +40,33 @@ describe('TaskDependencyService', () => {
     expect(deps[0].satisfied).toEqual(true);
     expect(deps[0].reason).toEqual('pr_merged');
   });
-});
 
+  test('buildGraph returns bounded nodes/edges with satisfaction', async () => {
+    const records = [
+      { id: 'task:A', dependencies: ['task:B', 'pr:o/r#1'] },
+      { id: 'task:B', doneAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'task:C', dependencies: ['task:A'] }
+    ];
+
+    const taskRecordService = {
+      get: (id) => records.find(r => r.id === id) || null,
+      list: () => records
+    };
+
+    const pullRequestService = {
+      getPullRequest: jest.fn().mockResolvedValue({ state: 'MERGED' })
+    };
+
+    const svc = new TaskDependencyService({ taskRecordService, pullRequestService });
+    const graph = await svc.buildGraph({ rootId: 'task:A', depth: 2 });
+
+    const nodeIds = graph.nodes.map(n => n.id).sort();
+    expect(nodeIds).toEqual(['pr:o/r#1', 'task:A', 'task:B', 'task:C'].sort());
+
+    const edgeKey = (e) => `${e.from}->${e.to}:${e.satisfied ? '1' : '0'}`;
+    const edges = graph.edges.map(edgeKey);
+    expect(edges).toContain('task:A->task:B:1');
+    expect(edges).toContain('task:A->pr:o/r#1:1');
+    expect(edges).toContain('task:C->task:A:0');
+  });
+});

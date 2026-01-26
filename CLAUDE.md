@@ -16,9 +16,23 @@ If you ever lose context mid-run, do **not** improvise. Resume from these files:
 - `PLANS/2026-01-20/ROLLING_LOG.md` (what shipped; PR links; where to resume)
 - `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md` (tier + queue model)
 - `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md` (current open items: tiers, risk, prompts, review inbox)
+- `PLANS/2026-01-25/BRAIN_DUMP_2026-01-25.md` (full workflow brain dump transcript)
+- `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md` (what’s missing + next PRs)
+- `PLANS/2026-01-25/DATA_MODEL.md` (where tiers/deps/prompts live)
 
 Current open PRs (keep updated in the rolling log):
 - None (check with `gh pr list --state open`)
+
+## Process workflow controls (Commander + voice)
+
+Commander/voice can drive the tiered workflow via semantic commands:
+- `set-workflow-mode` (`focus|review|background`)
+- `set-focus-tier2` (`auto|always`)
+- `open-queue`, `open-tasks`, `open-advice`
+
+Tier tagging persistence:
+- stored in `~/.orchestrator/task-records.json` via `session:<id>` task records
+- loaded on page refresh via `GET /api/process/task-records`
 
 ## 🚨 STOP! DO THIS FIRST BEFORE ANYTHING ELSE! 🚨
 
