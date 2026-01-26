@@ -7508,11 +7508,14 @@ class ClaudeOrchestrator {
 
     const renderDetail = (card) => {
       if (!card) {
+        state.selectedCardId = null;
+        bodyEl?.classList.toggle('tasks-has-detail', false);
         detailEl.innerHTML = `<div class="tasks-detail-empty">Select a card to see details.</div>`;
         return;
       }
 
       state.selectedCardId = card.id || null;
+      bodyEl?.classList.toggle('tasks-has-detail', !!state.selectedCardId);
 
       const title = escapeHtml(card?.name || '');
       const desc = escapeHtml(card?.desc || '');
@@ -8477,6 +8480,7 @@ class ClaudeOrchestrator {
       }
       if (listEl) listEl.style.display = (isBoard || isAllBoards) ? 'none' : '';
       if (bodyEl) bodyEl.classList.toggle('tasks-body-board', isBoard);
+      if (bodyEl) bodyEl.classList.toggle('tasks-has-detail', isBoard && !!state.selectedCardId);
       viewListBtn?.classList.toggle('active', !isBoard);
       viewBoardBtn?.classList.toggle('active', isBoard);
       if (viewBoardBtn) viewBoardBtn.disabled = isAllBoards;
