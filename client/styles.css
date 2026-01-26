@@ -7072,6 +7072,12 @@ header h1 {
   background: var(--bg-secondary);
 }
 
+.tasks-launch-default-tier-group {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
 .tasks-launch-defaults-label {
   font-weight: 900;
   font-size: 0.85rem;

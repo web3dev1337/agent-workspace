@@ -6830,12 +6830,12 @@ class ClaudeOrchestrator {
 	          <select id="tasks-list" class="tasks-select" title="List"></select>
             <div class="tasks-launch-defaults" id="tasks-launch-defaults" title="Defaults used by 🚀 quick launch">
               <span class="tasks-launch-defaults-label">🚀</span>
-              <select id="tasks-launch-default-tier" class="tasks-select tasks-select-mini" title="Default tier">
-                <option value="1">T1</option>
-                <option value="2">T2</option>
-                <option value="3">T3</option>
-                <option value="4">T4</option>
-              </select>
+              <div class="tasks-quick-tier-group tasks-launch-default-tier-group" id="tasks-launch-default-tier-group" title="Default tier">
+                <button class="btn-secondary tasks-quick-tier-btn" type="button" data-launch-default-tier-btn="1">T1</button>
+                <button class="btn-secondary tasks-quick-tier-btn" type="button" data-launch-default-tier-btn="2">T2</button>
+                <button class="btn-secondary tasks-quick-tier-btn" type="button" data-launch-default-tier-btn="3">T3</button>
+                <button class="btn-secondary tasks-quick-tier-btn" type="button" data-launch-default-tier-btn="4">T4</button>
+              </div>
               <select id="tasks-launch-default-agent" class="tasks-select tasks-select-mini" title="Default agent">
                 <option value="claude">Claude</option>
                 <option value="codex">Codex</option>
@@ -6934,7 +6934,7 @@ class ClaudeOrchestrator {
     const detailEl = modal.querySelector('#tasks-detail');
     const boardAccentEl = modal.querySelector('#tasks-board-accent');
     const launchDefaultsWrapEl = modal.querySelector('#tasks-launch-defaults');
-    const launchDefaultTierEl = modal.querySelector('#tasks-launch-default-tier');
+    const launchDefaultTierGroupEl = modal.querySelector('#tasks-launch-default-tier-group');
     const launchDefaultAgentEl = modal.querySelector('#tasks-launch-default-agent');
     const launchDefaultModeEl = modal.querySelector('#tasks-launch-default-mode');
     const launchDefaultYoloEl = modal.querySelector('#tasks-launch-default-yolo');
@@ -6983,7 +6983,13 @@ class ClaudeOrchestrator {
       const syncLaunchDefaultsUi = ({ mappingTier } = {}) => {
         const tierHint = Number.isFinite(Number(mappingTier)) ? Number(mappingTier) : undefined;
         const defaults = readLaunchDefaults({ mappingTier: tierHint });
-        if (launchDefaultTierEl) launchDefaultTierEl.value = String(defaults.tier || 3);
+        if (launchDefaultTierGroupEl) {
+          const tier = Number(defaults.tier || 3);
+          launchDefaultTierGroupEl.querySelectorAll?.('[data-launch-default-tier-btn]')?.forEach?.((btn) => {
+            const t = Number(btn?.getAttribute?.('data-launch-default-tier-btn') || '');
+            btn?.classList?.toggle?.('is-selected', t === tier);
+          });
+        }
         if (launchDefaultAgentEl) launchDefaultAgentEl.value = String(defaults.agentId || 'claude');
         if (launchDefaultModeEl) launchDefaultModeEl.value = String(defaults.mode || 'fresh');
         if (launchDefaultYoloEl) launchDefaultYoloEl.checked = defaults.yolo !== false;
@@ -7004,7 +7010,8 @@ class ClaudeOrchestrator {
 
       const persistLaunchDefaultsFromToolbar = () => {
         if (!launchDefaultsWrapEl) return;
-        const tier = Number(launchDefaultTierEl?.value || 3);
+        const selectedTierBtn = launchDefaultTierGroupEl?.querySelector?.('[data-launch-default-tier-btn].is-selected');
+        const tier = Number(selectedTierBtn?.getAttribute?.('data-launch-default-tier-btn') || 3);
         const agentId = String(launchDefaultAgentEl?.value || 'claude');
         const mode = String(launchDefaultModeEl?.value || 'fresh');
         const yolo = !!launchDefaultYoloEl?.checked;
@@ -8846,7 +8853,21 @@ class ClaudeOrchestrator {
     syncBoardLayoutUI();
     syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
 
-    [launchDefaultTierEl, launchDefaultAgentEl, launchDefaultModeEl, launchDefaultYoloEl, launchDefaultAutoSendEl].forEach((el) => {
+    launchDefaultTierGroupEl?.addEventListener?.('click', (e) => {
+      const btn = e.target?.closest?.('[data-launch-default-tier-btn]');
+      if (!btn) return;
+      e.preventDefault();
+      const tier = Number(btn.getAttribute('data-launch-default-tier-btn') || 3);
+      if (!(tier >= 1 && tier <= 4)) return;
+      launchDefaultTierGroupEl.querySelectorAll?.('[data-launch-default-tier-btn]')?.forEach?.((b) => {
+        const t = Number(b?.getAttribute?.('data-launch-default-tier-btn') || '');
+        b?.classList?.toggle?.('is-selected', t === tier);
+      });
+      persistLaunchDefaultsFromToolbar();
+      syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
+    });
+
+    [launchDefaultAgentEl, launchDefaultModeEl, launchDefaultYoloEl, launchDefaultAutoSendEl].forEach((el) => {
       el?.addEventListener?.('change', () => {
         persistLaunchDefaultsFromToolbar();
         syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
