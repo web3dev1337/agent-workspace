@@ -36,5 +36,25 @@ describe('ProcessAdvisorService', () => {
     expect(codes).toContain('review_slow');
     expect(codes).toContain('tier3_unreviewed_prs');
   });
-});
 
+  test('includes dependency-blocked signal for tier 1/2 PRs', async () => {
+    const processStatusService = { getStatus: async () => ({ qByTier: {}, qCaps: {}, wip: 0, wipMax: 0 }) };
+    const processTelemetryService = { getSummary: async () => ({ avgReviewSeconds: 0 }) };
+    const processTaskService = {
+      listTasks: async () => ([
+        { id: 'pr:x/y#1', kind: 'pr', repository: 'x/y' }
+      ])
+    };
+    const taskRecordService = {
+      get: () => ({ tier: 1 })
+    };
+    const taskDependencyService = {
+      getDependencySummary: async () => ({ total: 2, blocked: 1 })
+    };
+
+    const svc = new ProcessAdvisorService({ processStatusService, processTelemetryService, processTaskService, taskRecordService, taskDependencyService });
+    const result = await svc.getAdvice({ mode: 'mine', lookbackHours: 24, force: true });
+    const codes = (result.advice || []).map(a => a.code);
+    expect(codes).toContain('tier12_blocked');
+  });
+});

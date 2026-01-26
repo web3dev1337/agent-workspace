@@ -175,9 +175,15 @@ class ProcessStatusService {
       const sessionWip = computeWipFromSessions({ sessionManager: this.sessionManager, lookbackHours });
       const wip = sessionWip || computeWipFromWorkspaces({ workspaceManager: this.workspaceManager, lookbackHours });
 
-      const tasks = this.processTaskService?.listTasks
-        ? await this.processTaskService.listTasks({ prs: { mode, state: 'open', sort: 'updated', limit: 50 } })
-        : [];
+      let tasks = [];
+      if (this.processTaskService?.listTasks) {
+        try {
+          tasks = await this.processTaskService.listTasks({ prs: { mode, state: 'open', sort: 'updated', limit: 50 } });
+        } catch (error) {
+          logger.warn('Failed to list process tasks for status; continuing with empty queue', { error: error.message });
+          tasks = [];
+        }
+      }
 
       const queue = computeQueueCounts({ tasks, taskRecordService: this.taskRecordService });
       const qByTier = queue.counts;

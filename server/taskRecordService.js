@@ -59,6 +59,19 @@ const normalizeDateTime = (v) => {
   return Number.isFinite(dt.getTime()) ? dt.toISOString() : null;
 };
 
+const normalizeTicketProvider = (v) => {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return null;
+  const allowed = new Set(['trello']);
+  return allowed.has(s) ? s : null;
+};
+
+const normalizeClaimedBy = (v) => {
+  const s = String(v || '').trim();
+  if (!s) return null;
+  return s.slice(0, 120);
+};
+
 const normalizeDependencies = (deps) => {
   if (deps === null) return [];
   if (!Array.isArray(deps)) return null;
@@ -174,6 +187,14 @@ class TaskRecordService {
         if (v !== null) next.promptVisibility = v;
       }
     }
+    if (p.promptRepoRoot !== undefined) {
+      if (p.promptRepoRoot === null || p.promptRepoRoot === '') clear.add('promptRepoRoot');
+      else next.promptRepoRoot = String(p.promptRepoRoot || '').trim().slice(0, 600);
+    }
+    if (p.promptPath !== undefined) {
+      if (p.promptPath === null || p.promptPath === '') clear.add('promptPath');
+      else next.promptPath = String(p.promptPath || '').trim().slice(0, 600);
+    }
 
     if (p.dependencies !== undefined) {
       if (p.dependencies === null) {
@@ -281,6 +302,99 @@ class TaskRecordService {
       } else {
         next.fixerWorktreeId = String(p.fixerWorktreeId || '').trim();
       }
+    }
+
+    if (p.recheckSpawnedAt !== undefined) {
+      const dt = normalizeDateTime(p.recheckSpawnedAt);
+      if (dt) next.recheckSpawnedAt = dt;
+      else clear.add('recheckSpawnedAt');
+    }
+
+    if (p.recheckWorktreeId !== undefined) {
+      if (p.recheckWorktreeId === null || p.recheckWorktreeId === '') {
+        clear.add('recheckWorktreeId');
+      } else {
+        next.recheckWorktreeId = String(p.recheckWorktreeId || '').trim();
+      }
+    }
+
+    // Optional external ticket/task link (v1: Trello)
+    if (p.ticketProvider !== undefined) {
+      if (p.ticketProvider === null || p.ticketProvider === '') {
+        clear.add('ticketProvider');
+      } else {
+        const provider = normalizeTicketProvider(p.ticketProvider);
+        if (provider !== null) next.ticketProvider = provider;
+      }
+    }
+    if (p.ticketCardId !== undefined) {
+      if (p.ticketCardId === null || p.ticketCardId === '') {
+        clear.add('ticketCardId');
+      } else {
+        next.ticketCardId = String(p.ticketCardId || '').trim().slice(0, 120);
+      }
+    }
+    if (p.ticketBoardId !== undefined) {
+      if (p.ticketBoardId === null || p.ticketBoardId === '') {
+        clear.add('ticketBoardId');
+      } else {
+        next.ticketBoardId = String(p.ticketBoardId || '').trim().slice(0, 120);
+      }
+    }
+    if (p.ticketCardUrl !== undefined) {
+      if (p.ticketCardUrl === null || p.ticketCardUrl === '') {
+        clear.add('ticketCardUrl');
+      } else {
+        next.ticketCardUrl = String(p.ticketCardUrl || '').trim().slice(0, 600);
+      }
+    }
+
+    // Automation bookkeeping (best-effort; used to avoid repeating automations)
+    if (p.prMergedAt !== undefined) {
+      const dt = normalizeDateTime(p.prMergedAt);
+      if (dt) next.prMergedAt = dt;
+      else clear.add('prMergedAt');
+    }
+    if (p.ticketMovedAt !== undefined) {
+      const dt = normalizeDateTime(p.ticketMovedAt);
+      if (dt) next.ticketMovedAt = dt;
+      else clear.add('ticketMovedAt');
+    }
+    if (p.ticketMoveTargetListId !== undefined) {
+      if (p.ticketMoveTargetListId === null || p.ticketMoveTargetListId === '') {
+        clear.add('ticketMoveTargetListId');
+      } else {
+        next.ticketMoveTargetListId = String(p.ticketMoveTargetListId || '').trim().slice(0, 120);
+      }
+    }
+    if (p.ticketClosedAt !== undefined) {
+      const dt = normalizeDateTime(p.ticketClosedAt);
+      if (dt) next.ticketClosedAt = dt;
+      else clear.add('ticketClosedAt');
+    }
+
+    // Simple queue locking / claiming (review conveyor v2)
+    if (p.claimed !== undefined) {
+      const claimed = !!p.claimed;
+      if (claimed) {
+        if (!next.claimedAt) next.claimedAt = new Date().toISOString();
+      } else {
+        clear.add('claimedAt');
+        clear.add('claimedBy');
+      }
+    }
+    if (p.claimedBy !== undefined) {
+      if (p.claimedBy === null || p.claimedBy === '') {
+        clear.add('claimedBy');
+      } else {
+        const who = normalizeClaimedBy(p.claimedBy);
+        if (who !== null) next.claimedBy = who;
+      }
+    }
+    if (p.claimedAt !== undefined) {
+      const dt = normalizeDateTime(p.claimedAt);
+      if (dt) next.claimedAt = dt;
+      else clear.add('claimedAt');
     }
 
     if (p.linked) {

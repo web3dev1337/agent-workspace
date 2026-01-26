@@ -42,7 +42,9 @@ describe('TaskRecordService', () => {
       reviewerSpawnedAt: '2026-01-25T00:00:11Z',
       reviewerWorktreeId: 'work9',
       fixerSpawnedAt: '2026-01-25T00:00:12Z',
-      fixerWorktreeId: 'work10'
+      fixerWorktreeId: 'work10',
+      recheckSpawnedAt: '2026-01-25T00:00:13Z',
+      recheckWorktreeId: 'work11'
     });
 
     expect(rec.reviewStartedAt).toBe('2026-01-25T00:00:00.000Z');
@@ -53,6 +55,29 @@ describe('TaskRecordService', () => {
     expect(rec.reviewerWorktreeId).toBe('work9');
     expect(rec.fixerSpawnedAt).toBe('2026-01-25T00:00:12.000Z');
     expect(rec.fixerWorktreeId).toBe('work10');
+    expect(rec.recheckSpawnedAt).toBe('2026-01-25T00:00:13.000Z');
+    expect(rec.recheckWorktreeId).toBe('work11');
+  });
+
+  test('upsert supports prompt repo location fields', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
+    const filePath = path.join(tmp, 'task-records.json');
+    const svc = new TaskRecordService({ filePath });
+
+    const rec = await svc.upsert('task:prompt', {
+      promptRef: 'task:prompt',
+      promptVisibility: 'shared',
+      promptRepoRoot: '/home/<user>/GitHub/games/hytopia/mock-repo',
+      promptPath: '.orchestrator/prompts/task-prompt.md'
+    });
+
+    expect(rec.promptVisibility).toBe('shared');
+    expect(rec.promptRepoRoot).toBe('/home/<user>/GitHub/games/hytopia/mock-repo');
+    expect(rec.promptPath).toBe('.orchestrator/prompts/task-prompt.md');
+
+    const rec2 = await svc.upsert('task:prompt', { promptRepoRoot: null, promptPath: null });
+    expect(rec2.promptRepoRoot).toBeUndefined();
+    expect(rec2.promptPath).toBeUndefined();
   });
 
   test('upsert normalizes dependencies and supports done', async () => {
@@ -84,5 +109,56 @@ describe('TaskRecordService', () => {
 
     const rec2 = await svc.upsert('task:2', { reviewed: false });
     expect(rec2.reviewedAt).toBeUndefined();
+  });
+
+  test('upsert supports ticket fields and automation timestamps', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
+    const filePath = path.join(tmp, 'task-records.json');
+    const svc = new TaskRecordService({ filePath });
+
+    const rec = await svc.upsert('pr:me/repo#99', {
+      ticketProvider: 'TRELLO',
+      ticketCardId: 'abc123',
+      ticketBoardId: 'board1',
+      ticketCardUrl: 'https://trello.com/c/abc123/99-something',
+      prMergedAt: '2026-01-26T00:00:00Z',
+      ticketMovedAt: '2026-01-26T00:00:10Z',
+      ticketMoveTargetListId: 'list1'
+    });
+
+    expect(rec.ticketProvider).toBe('trello');
+    expect(rec.ticketCardId).toBe('abc123');
+    expect(rec.ticketBoardId).toBe('board1');
+    expect(rec.ticketCardUrl).toBe('https://trello.com/c/abc123/99-something');
+    expect(rec.prMergedAt).toBe('2026-01-26T00:00:00.000Z');
+    expect(rec.ticketMovedAt).toBe('2026-01-26T00:00:10.000Z');
+    expect(rec.ticketMoveTargetListId).toBe('list1');
+
+    const rec2 = await svc.upsert('pr:me/repo#99', {
+      ticketProvider: null,
+      ticketCardId: '',
+      ticketCardUrl: null,
+      ticketMovedAt: null,
+      ticketMoveTargetListId: null
+    });
+    expect(rec2.ticketProvider).toBeUndefined();
+    expect(rec2.ticketCardId).toBeUndefined();
+    expect(rec2.ticketCardUrl).toBeUndefined();
+    expect(rec2.ticketMovedAt).toBeUndefined();
+    expect(rec2.ticketMoveTargetListId).toBeUndefined();
+  });
+
+  test('upsert supports claim fields', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
+    const filePath = path.join(tmp, 'task-records.json');
+    const svc = new TaskRecordService({ filePath });
+
+    const rec = await svc.upsert('task:claim', { claimedBy: 'me', claimed: true });
+    expect(rec.claimedBy).toBe('me');
+    expect(typeof rec.claimedAt).toBe('string');
+
+    const rec2 = await svc.upsert('task:claim', { claimed: false });
+    expect(rec2.claimedBy).toBeUndefined();
+    expect(rec2.claimedAt).toBeUndefined();
   });
 });
