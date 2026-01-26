@@ -156,7 +156,39 @@ class WorkspaceSwitcher {
       menu.classList.remove('hidden');
       btn.classList.add('open');
       this.isOpen = true;
+
+      // Refresh workspace list from disk when dropdown opens
+      this.refreshWorkspaces();
     }
+  }
+
+  refreshWorkspaces() {
+    // Request fresh workspace list from server (reloads from disk)
+    this.orchestrator.socket.emit('list-workspaces', { refresh: true });
+
+    // Update dropdown when response arrives
+    this.orchestrator.socket.once('workspaces-list', (workspaces) => {
+      console.log('Workspace switcher: refreshed workspaces', workspaces.length);
+      this.orchestrator.availableWorkspaces = workspaces;
+      // Re-render dropdown items if still open
+      if (this.isOpen) {
+        const itemsContainer = document.querySelector('.workspace-dropdown-items');
+        if (itemsContainer) {
+          // Regenerate items (keep dashboard option)
+          const dashboardOption = `
+            <button class="workspace-option dashboard-option" data-action="dashboard">
+              <span class="workspace-option-icon">🏠</span>
+              <span class="workspace-option-info">
+                <span class="workspace-option-name">Dashboard</span>
+                <span class="workspace-option-type">All workspaces</span>
+              </span>
+            </button>
+            <div class="workspace-dropdown-divider"></div>
+          `;
+          itemsContainer.innerHTML = dashboardOption + workspaces.map(ws => this.generateWorkspaceOption(ws)).join('');
+        }
+      }
+    });
   }
 
   closeDropdown() {

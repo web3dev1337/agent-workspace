@@ -545,6 +545,17 @@ class WorkspaceManager {
     return this.activeWorkspace;
   }
 
+  /**
+   * Reload workspaces from disk (picks up new/modified workspace files)
+   */
+  async reloadWorkspaces() {
+    logger.info('Reloading workspaces from disk');
+    this.workspaces.clear();
+    await this.loadWorkspaces();
+    logger.info(`Reloaded ${this.workspaces.size} workspaces from disk`);
+    return this.workspaces.size;
+  }
+
   listWorkspaces(requestingUser = null) {
     let workspaces = Array.from(this.workspaces.values());
 

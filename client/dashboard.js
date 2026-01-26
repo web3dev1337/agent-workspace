@@ -29,13 +29,15 @@ class Dashboard {
       }).catch(() => {});
     }
 
-    // Request workspaces from server
-    this.orchestrator.socket.emit('list-workspaces');
+    // Request workspaces from server (with refresh to reload from disk)
+    this.orchestrator.socket.emit('list-workspaces', { refresh: true });
 
     // Wait for workspace data
     this.orchestrator.socket.once('workspaces-list', (workspaces) => {
       console.log('Received workspaces:', workspaces);
       this.workspaces = workspaces;
+      // Also update orchestrator's cached list
+      this.orchestrator.availableWorkspaces = workspaces;
       this.render();
       this.isVisible = true;
     });
