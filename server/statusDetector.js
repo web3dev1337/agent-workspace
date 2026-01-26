@@ -13,17 +13,10 @@ const logger = winston.createLogger({
 });
 
 // Configuration constants
-const STATUS_DETECTION_WINDOW_MS = 2000; // 2 seconds for detection debouncing
+const ASSUME_BUSY_SINCE_OUTPUT_MS = 15000; // keep "busy" for silence up to this long (reduces flicker)
 
 class StatusDetector {
   constructor() {
-    // RELIABLE waiting indicators - these must be exact matches or end-of-line
-    // Claude shows these when truly waiting for user input
-    this.waitingPatterns = [
-      /\? for shortcuts$/m,           // Claude ready prompt (must be at line end)
-      /^> $/m,                         // Input prompt (Claude waiting for input)
-    ];
-
     // RELIABLE completion indicators - Claude shows these when done
     // The Cost line is the most reliable indicator Claude is done
     this.completionPatterns = [
@@ -53,60 +46,86 @@ class StatusDetector {
       /\.\.\.$/m,                      // Ends with ellipsis (still going)
     ];
 
-    // Track recent detections to avoid flip-flopping
-    this.recentDetections = new Map();
-    this.detectionWindow = STATUS_DETECTION_WINDOW_MS;
-    this.lastBufferLength = 0;
-    this.lastOutputTime = Date.now();
+    // Per-session state (StatusDetector is shared across sessions).
+    this.sessionState = new Map(); // sessionId -> { lastBufferLength, lastOutputTime }
   }
   
-  detectStatus(buffer) {
+  getState(sessionId) {
+    if (!this.sessionState.has(sessionId)) {
+      this.sessionState.set(sessionId, {
+        lastBufferLength: 0,
+        lastOutputTime: Date.now()
+      });
+    }
+    return this.sessionState.get(sessionId);
+  }
+
+  getLastNonEmptyLine(lines) {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const raw = String(lines[i] || '').replace(/\r/g, '');
+      if (raw.trim() !== '') return raw;
+    }
+    return '';
+  }
+
+  getLastNonEmptyLines(lines, count) {
+    const out = [];
+    for (let i = lines.length - 1; i >= 0 && out.length < count; i--) {
+      const raw = String(lines[i] || '').replace(/\r/g, '');
+      if (raw.trim() !== '') out.push(raw);
+    }
+    return out;
+  }
+
+  detectStatus(sessionId, buffer) {
+    const state = this.getState(sessionId);
     // Track output timing for activity detection
     const now = Date.now();
-    if (buffer.length > this.lastBufferLength) {
-      this.lastOutputTime = now;
-      this.lastBufferLength = buffer.length;
+    if (buffer.length > state.lastBufferLength) {
+      state.lastOutputTime = now;
+      state.lastBufferLength = buffer.length;
+    } else if (buffer.length < state.lastBufferLength) {
+      // Buffer was truncated; keep output time, but update length to avoid negative diffs.
+      state.lastBufferLength = buffer.length;
     }
-    const timeSinceOutput = now - this.lastOutputTime;
+    const timeSinceOutput = now - state.lastOutputTime;
 
     // Get recent output for analysis
     const recentOutput = buffer.slice(-2000);
     const lines = recentOutput.split('\n');
     const lastFewLines = lines.slice(-10).join('\n');
-    const lastLine = lines[lines.length - 1] || '';
-    const trimmedLastLine = lastLine.trim();
+    const lastNonEmptyLine = this.getLastNonEmptyLine(lines);
+    const trimmedLastNonEmptyLine = lastNonEmptyLine.trim();
+    const lastNonEmptyLines = this.getLastNonEmptyLines(lines, 6);
 
-    // 1. HIGHEST PRIORITY: Check for RELIABLE waiting indicators
-    // These patterns mean Claude is definitely waiting for input
-    for (const pattern of this.waitingPatterns) {
-      if (pattern.test(lastFewLines)) {
-        logger.debug('Waiting pattern matched', { pattern: pattern.toString() });
-        return this.updateStatus('waiting', buffer);
-      }
+    // 1. HIGHEST PRIORITY: RELIABLE waiting prompt (must be the last non-empty line)
+    // Avoid matching older prompt lines still visible in the last few lines.
+    if (trimmedLastNonEmptyLine === '? for shortcuts' || trimmedLastNonEmptyLine === '>') {
+      return 'waiting';
     }
 
-    // 2. Check for Claude startup/welcome screen
-    if (buffer.includes('Welcome to Claude Code!') && buffer.includes('? for shortcuts')) {
+    // 2. Claude startup/welcome screen
+    if (buffer.includes('Welcome to Claude Code!') && trimmedLastNonEmptyLine === '? for shortcuts') {
       logger.debug('Claude startup screen detected');
-      return this.updateStatus('waiting', buffer);
+      return 'waiting';
     }
 
-    // 3. Check for RELIABLE completion indicators (Cost line = Claude is done)
+    // 3. RELIABLE completion indicators near the end (Cost line => Claude done)
     for (const pattern of this.completionPatterns) {
-      if (pattern.test(lastFewLines)) {
+      if (lastNonEmptyLines.some(l => pattern.test(l))) {
         logger.debug('Completion pattern matched - Claude done', { pattern: pattern.toString() });
-        return this.updateStatus('waiting', buffer);
+        return 'waiting';
       }
     }
 
-    // 4. Check if Claude is actively using tools (definitely busy)
+    // 4. Active tool usage (definitely busy)
     for (const pattern of this.toolPatterns) {
       if (pattern.test(lastFewLines)) {
         // But only if we haven't also seen completion
         const hasCompletion = this.completionPatterns.some(p => p.test(lastFewLines));
         if (!hasCompletion) {
           logger.debug('Tool activity detected - busy', { pattern: pattern.toString() });
-          return this.updateStatus('busy', buffer);
+          return 'busy';
         }
       }
     }
@@ -115,44 +134,21 @@ class StatusDetector {
     for (const pattern of this.typingPatterns) {
       if (pattern.test(lastFewLines)) {
         logger.debug('Typing pattern detected - busy');
-        return this.updateStatus('busy', buffer);
+        return 'busy';
       }
     }
 
-    // 6. Activity-based detection
-    // If there's been recent output (within 1 second), Claude is probably still working
-    if (timeSinceOutput < 1000 && buffer.length > 100) {
-      return this.updateStatus('busy', buffer);
+    // 6. Check if last line looks like a shell/input prompt (not Claude waiting prompt)
+    if (this.looksLikePrompt(trimmedLastNonEmptyLine)) {
+      return 'idle';
     }
 
-    // 7. If no output for a while (>3 seconds) and no clear busy indicator, assume idle/waiting
-    if (timeSinceOutput > 3000) {
-      // Check if buffer ends with something that looks like Claude finished
-      const hasQuestion = trimmedLastLine.endsWith('?');
-      const hasPeriod = trimmedLastLine.endsWith('.');
-      const isEmpty = trimmedLastLine === '';
-
-      if (hasQuestion || isEmpty) {
-        logger.debug('Quiet period with question/empty - waiting');
-        return this.updateStatus('waiting', buffer);
-      }
-      if (hasPeriod) {
-        logger.debug('Quiet period with complete sentence - idle');
-        return this.updateStatus('idle', buffer);
-      }
+    // 7. Default: assume busy for a while after the last output (Claude can think silently)
+    if (timeSinceOutput < ASSUME_BUSY_SINCE_OUTPUT_MS && buffer.length > 100) {
+      return 'busy';
     }
 
-    // 8. Check if last line looks like a shell/input prompt
-    if (this.looksLikePrompt(trimmedLastLine)) {
-      return this.updateStatus('idle', buffer);
-    }
-
-    // 9. Default: if there's content and recent activity, busy; otherwise idle
-    if (timeSinceOutput < 5000) {
-      return this.updateStatus('busy', buffer);
-    }
-
-    return this.updateStatus('idle', buffer);
+    return 'idle';
   }
   
   looksLikePrompt(line) {
@@ -169,61 +165,14 @@ class StatusDetector {
 
     return promptPatterns.some(pattern => pattern.test(line));
   }
-  
-  updateStatus(status, buffer) {
-    // Implement debouncing to avoid rapid status changes
-    const now = Date.now();
-    const bufferHash = this.hashBuffer(buffer);
-    
-    const recent = this.recentDetections.get(bufferHash);
-    if (recent && (now - recent.timestamp) < this.detectionWindow) {
-      // Within detection window, check if status is stable
-      if (recent.status !== status) {
-        // Status is changing rapidly, keep previous
-        return recent.status;
-      }
-    }
-    
-    // Update recent detection
-    this.recentDetections.set(bufferHash, {
-      status,
-      timestamp: now
-    });
-    
-    // Clean old detections
-    this.cleanOldDetections();
-    
-    return status;
-  }
-  
-  hashBuffer(buffer) {
-    // Simple hash of last 200 chars for detection tracking
-    const content = buffer.slice(-200);
-    let hash = 0;
-    for (let i = 0; i < content.length; i++) {
-      const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return hash;
-  }
-  
-  cleanOldDetections() {
-    const now = Date.now();
-    const cutoff = now - (this.detectionWindow * 5);
-    
-    for (const [hash, detection] of this.recentDetections) {
-      if (detection.timestamp < cutoff) {
-        this.recentDetections.delete(hash);
-      }
-    }
-  }
-  
+
   // Reset state (useful when session changes)
-  reset() {
-    this.lastBufferLength = 0;
-    this.lastOutputTime = Date.now();
-    this.recentDetections.clear();
+  reset(sessionId) {
+    if (sessionId) {
+      this.sessionState.delete(sessionId);
+      return;
+    }
+    this.sessionState.clear();
   }
 }
 
