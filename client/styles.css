@@ -7135,20 +7135,36 @@ header h1 {
 }
 
 .tasks-body.tasks-body-board {
-  /* Board view: prioritize card detail space (left), keep kanban as a right sidebar. */
-  grid-template-columns: 1fr 520px;
+  /* Board view: show full-width kanban until a card is selected. */
+  grid-template-columns: 1fr;
 }
 
 .tasks-body.tasks-body-board .tasks-detail {
-  grid-column: 1;
+  display: none;
 }
 
 .tasks-body.tasks-body-board .tasks-cards {
-  grid-column: 2;
+  grid-column: 1;
+  border-left: none;
 }
 
 .tasks-body.tasks-body-board.tasks-kanban-wrap .tasks-cards {
   overflow: auto;
+}
+
+.tasks-body.tasks-body-board.tasks-has-detail {
+  /* When a card is selected, show details on the left and keep kanban wide. */
+  grid-template-columns: 520px 1fr;
+}
+
+.tasks-body.tasks-body-board.tasks-has-detail .tasks-detail {
+  display: block;
+  grid-column: 1;
+}
+
+.tasks-body.tasks-body-board.tasks-has-detail .tasks-cards {
+  grid-column: 2;
+  border-left: 1px solid var(--border-color);
 }
 
 .tasks-cards {
@@ -7163,7 +7179,6 @@ header h1 {
 
 .tasks-body.tasks-body-board .tasks-cards {
   border-right: none;
-  border-left: 1px solid var(--border-color);
   overflow: hidden;
   padding: var(--space-sm);
   background: var(--bg-primary);
