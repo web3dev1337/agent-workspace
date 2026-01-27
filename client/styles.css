@@ -7198,6 +7198,8 @@ header h1 {
   border-radius: 0;
   padding: var(--space-md);
   --tasks-board-accent: var(--accent-primary);
+  direction: ltr;
+  text-align: left;
 }
 
 .tasks-modal {
@@ -7773,6 +7775,7 @@ header h1 {
   height: 100%;
   display: flex;
   gap: var(--space-md);
+  justify-content: flex-start;
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: var(--space-sm);
