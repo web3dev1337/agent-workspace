@@ -26,7 +26,7 @@ Known issues / follow-ups:
 - [ ] Intermittent: card detail layout may still reflow or appear on the wrong side; capture view (List/Board/Combined) + screenshot when it happens.
 - [x] Add “Start server” control to the Agent terminal header (one click; mirrors Server window controls). (PR #277)
 - [x] Tasks panel: add a quick “Open Trello board” link/button for the currently selected board. (PR #279)
-- [ ] Add-worktree modal: support “Add & close” and “Add another” (keep adding without modal churn), and refresh availability immediately.
+- [x] Add-worktree modal: support “Add & close” and “Add another” (keep adding without modal churn), and refresh availability immediately. (PR #285)
 - [x] Removing a worktree from a workspace should remove both terminals immediately (no F5 needed). (PR #281)
 - [x] Tasks panel: default assignee filter to “All” (not “me”). (PR #283)
 - [ ] Tasks panel: add an obvious “New task” button.
