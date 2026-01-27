@@ -57,4 +57,34 @@ describe('ProcessAdvisorService', () => {
     const codes = (result.advice || []).map(a => a.code);
     expect(codes).toContain('tier12_blocked');
   });
+
+  test('does not throw when upstream services fail', async () => {
+    const processStatusService = {
+      getStatus: async () => {
+        throw new Error('status unavailable');
+      }
+    };
+    const processTelemetryService = {
+      getSummary: async () => {
+        throw new Error('telemetry unavailable');
+      }
+    };
+    const processTaskService = {
+      listTasks: async () => {
+        throw new Error('tasks unavailable');
+      }
+    };
+    const taskRecordService = {
+      list: () => ([
+        { id: 'pr:x/y#1', reviewEndedAt: '2026-01-27T00:00:00Z', reviewOutcome: 'approved' }
+      ])
+    };
+
+    const svc = new ProcessAdvisorService({ processStatusService, processTelemetryService, processTaskService, taskRecordService });
+    const result = await svc.getAdvice({ mode: 'mine', lookbackHours: 24, force: true });
+    expect(result).toHaveProperty('advice');
+    expect(Array.isArray(result.advice)).toBe(true);
+    expect(result).toHaveProperty('metrics');
+    expect(result.metrics).toHaveProperty('lookbackHours');
+  });
 });
