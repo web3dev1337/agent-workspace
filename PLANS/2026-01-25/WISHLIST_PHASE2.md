@@ -30,6 +30,7 @@ Process discipline:
   - [x] Added verifyMinutes + changeRisk/tier mismatch signals. (PR #335)
 - [ ] Add “project readiness” checklists (playtest / launch / domain / hosting / security) as templates and/or heuristics.
 - [ ] Commander/voice hooks to consume advice: “what should I do next?”, “show blockers”, “start next review”.
+  - [x] Voice: “what should I do next?” opens Advice. (PR #339)
 
 ## Dependency graph v2 (UX)
 
