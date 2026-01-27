@@ -29,6 +29,37 @@ class NotificationManager {
     // Setup notification list click handlers
     this.setupListHandlers();
   }
+
+  getWorkflowNotificationMode() {
+    const cfg = this.orchestrator?.userSettings?.global?.ui?.workflow?.notifications || {};
+    const raw = String(cfg.mode || 'quiet').trim().toLowerCase();
+    if (raw === 'aggressive' || raw === 'normal' || raw === 'quiet') return raw;
+    return 'quiet';
+  }
+
+  shouldShowBrowserNotification(type) {
+    if (!this.orchestrator?.settings?.notifications) return false;
+    if (!('Notification' in window)) return false;
+    if (this.permission !== 'granted') return false;
+
+    const mode = this.getWorkflowNotificationMode();
+    if (mode === 'quiet') return false;
+    if (mode === 'aggressive') return true;
+
+    // normal: only critical-ish events
+    const t = String(type || '').toLowerCase();
+    return t === 'error' || t === 'waiting' || t === 'session_exit';
+  }
+
+  shouldPlaySound(type) {
+    if (!this.orchestrator?.settings?.sounds) return false;
+    const mode = this.getWorkflowNotificationMode();
+    if (mode === 'quiet') return false;
+    if (mode === 'aggressive') return true;
+
+    const t = String(type || '').toLowerCase();
+    return t === 'error' || t === 'waiting';
+  }
   
   createSound(dataUri) {
     const audio = new Audio(dataUri);
@@ -60,12 +91,12 @@ class NotificationManager {
     this.addNotification(data);
     
     // Show browser notification if enabled
-    if (this.orchestrator.settings.notifications && this.permission === 'granted') {
+    if (this.shouldShowBrowserNotification(data?.type)) {
       this.showBrowserNotification(data);
     }
     
     // Play sound if enabled
-    if (this.orchestrator.settings.sounds) {
+    if (this.shouldPlaySound(data?.type)) {
       this.playSound(data.type);
     }
   }
@@ -196,6 +227,18 @@ class NotificationManager {
       const typeClass = notification.type || 'info';
       const readClass = notification.read ? '' : 'unread';
       
+      const meta = notification.metadata && typeof notification.metadata === 'object' ? notification.metadata : {};
+      const canOpenQueue = !!String(meta.taskId || '').trim();
+      const canOpenDiff = !!String(meta.prUrl || '').trim();
+      const actionsHtml = (canOpenQueue || canOpenDiff)
+        ? `
+          <div class="notification-actions">
+            ${canOpenQueue ? `<button class="button-secondary notification-action" type="button" data-action="open-queue">Queue</button>` : ''}
+            ${canOpenDiff ? `<button class="button-secondary notification-action" type="button" data-action="open-diff">Diff</button>` : ''}
+          </div>
+        `
+        : '';
+
       return `
         <div class="notification-item ${readClass}" data-id="${notification.id}">
           <div class="notification-header">
@@ -205,6 +248,7 @@ class NotificationManager {
           <div class="notification-message">${this.escapeHtml(notification.message)}</div>
           ${notification.metadata?.worktreeId ? 
             `<div class="notification-meta">Worktree: ${notification.metadata.worktreeId}</div>` : ''}
+          ${actionsHtml}
         </div>
       `;
     }).join('');
@@ -222,14 +266,39 @@ class NotificationManager {
       const notification = this.notifications.find(n => n.id === id);
       
       if (notification) {
+        const action = e.target?.closest?.('[data-action]')?.dataset?.action || '';
+        const meta = notification.metadata && typeof notification.metadata === 'object' ? notification.metadata : {};
+
         // Mark as read
         if (!notification.read) {
           notification.read = true;
           this.updateUnreadCount();
           this.renderNotifications();
         }
-        
-        // Focus relevant terminal if available
+
+        if (action === 'open-diff') {
+          const prUrl = String(meta.prUrl || '').trim();
+          if (prUrl && typeof this.orchestrator?.launchDiffViewer === 'function') {
+            this.orchestrator.launchDiffViewer(prUrl);
+          }
+          return;
+        }
+
+        if (action === 'open-queue') {
+          const taskId = String(meta.taskId || '').trim();
+          if (taskId && typeof this.orchestrator?.showQueuePanel === 'function') {
+            this.orchestrator.showQueuePanel({ selectedId: taskId });
+          }
+          return;
+        }
+
+        // Default click: prefer task -> queue, else session -> terminal
+        const taskId = String(meta.taskId || '').trim();
+        if (taskId && typeof this.orchestrator?.showQueuePanel === 'function') {
+          this.orchestrator.showQueuePanel({ selectedId: taskId });
+          return;
+        }
+
         if (notification.sessionId) {
           const terminalElement = document.getElementById(`terminal-${notification.sessionId}`);
           if (terminalElement) {
