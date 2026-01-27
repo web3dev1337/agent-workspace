@@ -99,6 +99,7 @@ class ProcessAdvisorService {
           message: `Tier 1/2 queue is ${q12} (cap ${q12Cap}). Consider reviewing, marking done, or re-tiering tasks.`,
           actions: [
             { type: 'ui', action: 'open-prs', label: 'Open PRs' },
+            { type: 'ui', action: 'queue-conveyor-t2', label: 'Conveyor T2' },
             { type: 'ui', action: 'open-queue', label: 'Open Queue' }
           ]
         });

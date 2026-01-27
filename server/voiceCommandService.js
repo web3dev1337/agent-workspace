@@ -105,6 +105,17 @@ class VoiceCommandService {
         command: 'queue-triage',
         extractParams: () => ({})
       },
+      // Open Queue (Conveyor T2)
+      {
+        patterns: [
+          /conveyor\s+t2/i,
+          /conveyor\s+tier\s*2/i,
+          /start\s+conveyor/i,
+          /review\s+conveyor/i,
+        ],
+        command: 'queue-conveyor-t2',
+        extractParams: () => ({})
+      },
       // Open Queue
       {
         patterns: [
