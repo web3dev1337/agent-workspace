@@ -50,6 +50,36 @@ const pickDoneListId = (lists) => {
   );
 };
 
+const parseLabelNames = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map(v => String(v || '').trim()).filter(Boolean);
+  const s = String(value || '');
+  return s
+    .split(/[,\n]/g)
+    .map((part) => String(part || '').trim())
+    .filter(Boolean);
+};
+
+const extractCardLabelIds = (card) => {
+  if (!card || typeof card !== 'object') return [];
+  const ids = new Set();
+  const fromIds = card?.idLabels;
+  if (Array.isArray(fromIds)) {
+    fromIds.forEach((id) => {
+      const v = String(id || '').trim();
+      if (v) ids.add(v);
+    });
+  }
+  const fromLabels = card?.labels;
+  if (Array.isArray(fromLabels)) {
+    fromLabels.forEach((l) => {
+      const v = String(l?.id || '').trim();
+      if (v) ids.add(v);
+    });
+  }
+  return Array.from(ids);
+};
+
 class PrMergeAutomationService {
   constructor({ taskRecordService, pullRequestService, taskTicketingService, userSettingsService } = {}) {
     this.taskRecordService = taskRecordService;
@@ -228,6 +258,33 @@ class PrMergeAutomationService {
       }
     }
 
+    // Optional label application (per-board conventions).
+    if (boardId) {
+      try {
+        const key = `${providerId}:${boardId}`;
+        const configured = this.userSettingsService?.settings?.global?.ui?.tasks?.boardConventions?.[key] || null;
+        const wantedNames = parseLabelNames(configured?.mergedLabelNames);
+        if (wantedNames.length) {
+          const labels = await provider.listBoardLabels({ boardId, refresh: true });
+          const byName = new Map((Array.isArray(labels) ? labels : [])
+            .map((l) => [String(l?.name || '').trim().toLowerCase(), String(l?.id || '').trim()])
+            .filter(([name, id]) => !!name && !!id));
+
+          const toAdd = Array.from(new Set(wantedNames
+            .map((name) => byName.get(String(name || '').trim().toLowerCase()) || '')
+            .filter(Boolean)));
+
+          if (toAdd.length) {
+            const existingIds = extractCardLabelIds(card);
+            const next = Array.from(new Set([...(existingIds || []), ...toAdd]));
+            await provider.updateCard({ cardId: cardRef, fields: { idLabels: next } });
+          }
+        }
+      } catch (e) {
+        logger.debug('Failed to apply merge labels', { id, cardRef, boardId, error: e?.message || String(e) });
+      }
+    }
+
     await this.taskRecordService.upsert(id, {
       ticketProvider: providerId,
       ticketCardId: cardRef,
@@ -360,6 +417,33 @@ class PrMergeAutomationService {
 	      }
 	    }
 
+    // Optional label application (per-board conventions).
+    if (boardId) {
+      try {
+        const key = `${providerId}:${boardId}`;
+        const configured = this.userSettingsService?.settings?.global?.ui?.tasks?.boardConventions?.[key] || null;
+        const wantedNames = parseLabelNames(configured?.mergedLabelNames);
+        if (wantedNames.length) {
+          const labels = await provider.listBoardLabels({ boardId, refresh: true });
+          const byName = new Map((Array.isArray(labels) ? labels : [])
+            .map((l) => [String(l?.name || '').trim().toLowerCase(), String(l?.id || '').trim()])
+            .filter(([name, id]) => !!name && !!id));
+
+          const toAdd = Array.from(new Set(wantedNames
+            .map((name) => byName.get(String(name || '').trim().toLowerCase()) || '')
+            .filter(Boolean)));
+
+          if (toAdd.length) {
+            const existingIds = extractCardLabelIds(card);
+            const next = Array.from(new Set([...(existingIds || []), ...toAdd]));
+            await provider.updateCard({ cardId: cardRef, fields: { idLabels: next } });
+          }
+        }
+      } catch (e) {
+        logger.debug('Failed to apply merge labels', { id, cardRef, boardId, error: e?.message || String(e) });
+      }
+    }
+
     await this.taskRecordService.upsert(id, {
       ticketProvider: providerId,
       ticketCardId: cardRef,
@@ -418,4 +502,4 @@ class PrMergeAutomationService {
   }
 }
 
-module.exports = { PrMergeAutomationService, extractTrelloShortLinks, pickDoneListId };
+module.exports = { PrMergeAutomationService, extractTrelloShortLinks, pickDoneListId, parseLabelNames, extractCardLabelIds };

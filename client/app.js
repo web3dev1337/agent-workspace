@@ -8566,6 +8566,7 @@ class ClaudeOrchestrator {
 			      const safeChecklistName = String(conv?.dependencyChecklistName || '').trim() || 'Dependencies';
 			      const doneListId = String(conv?.doneListId || '').trim();
             const mergedCommentTemplate = String(conv?.mergedCommentTemplate || '').trim();
+            const mergedLabelNames = String(conv?.mergedLabelNames || '').trim();
 			      const tierFromLabels = conv?.tierFromLabels === true;
 			      const needsFixLabelName = String(conv?.needsFixLabelName || '').trim();
 			      const tierByLabelColor = conv?.tierByLabelColor && typeof conv.tierByLabelColor === 'object' && !Array.isArray(conv.tierByLabelColor)
@@ -8624,6 +8625,16 @@ class ClaudeOrchestrator {
 		          </div>
 		          <div class="tasks-detail-meta" style="margin-top:8px">
 		            Optional per-board override. Placeholders: <code>{prUrl}</code>, <code>{mergedAt}</code>, <code>{reviewOutcome}</code>, <code>{verifyMinutes}</code>, <code>{notes}</code>, <code>{promptRef}</code>, <code>{ticketCardUrl}</code>.
+		          </div>
+		        </div>
+
+		        <div class="tasks-detail-block">
+		          <div class="tasks-detail-block-title">PR-merge labels</div>
+		          <div class="tasks-inline-row">
+		            <input id="tasks-conv-merged-label-names" class="tasks-input" value="${this.escapeHtml(mergedLabelNames)}" placeholder="Comma-separated Trello label names (optional), e.g. Merged, Shipped" />
+		          </div>
+		          <div class="tasks-detail-meta" style="margin-top:8px">
+		            Optional per-board labels to apply when the PR merges. Names are matched case-insensitively to existing board labels.
 		          </div>
 		        </div>
 
@@ -8717,6 +8728,7 @@ class ClaudeOrchestrator {
 
 			          const doneListIdNext = String(doneSelect?.value || '').trim() || null;
                 const mergedCommentTemplateNext = String(detailEl.querySelector('#tasks-conv-merged-comment-template')?.value || '').trim() || null;
+                const mergedLabelNamesNext = String(detailEl.querySelector('#tasks-conv-merged-label-names')?.value || '').trim() || null;
 			          const depsNameNext = String(detailEl.querySelector('#tasks-conv-deps-name')?.value || '').trim() || null;
 			          const tierFromLabelsNext = !!detailEl.querySelector('#tasks-conv-tier-from-labels')?.checked;
 			          const needsFixLabelNameNext = String(detailEl.querySelector('#tasks-conv-needs-fix-label')?.value || '').trim() || null;
@@ -8732,6 +8744,7 @@ class ClaudeOrchestrator {
 			          await updateBoardConventions(state.provider, effectiveBoardId, {
 			            doneListId: doneListIdNext,
                   mergedCommentTemplate: mergedCommentTemplateNext,
+                  mergedLabelNames: mergedLabelNamesNext,
 			            dependencyChecklistName: depsNameNext,
 			            tierFromLabels: tierFromLabelsNext,
 			            tierByLabelColor: nextMap,
