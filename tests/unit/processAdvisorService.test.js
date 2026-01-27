@@ -36,6 +36,14 @@ describe('ProcessAdvisorService', () => {
     expect(codes).toContain('review_slow');
     expect(codes).toContain('tier3_unreviewed_prs');
 
+    const wipAdvice = (result.advice || []).find(a => a.code === 'wip_over_cap');
+    const wipActions = Array.isArray(wipAdvice?.actions) ? wipAdvice.actions : [];
+    expect(wipActions.some(a => a?.action === 'open-prs')).toBe(true);
+
+    const qAdvice = (result.advice || []).find(a => a.code === 'tier12_over_cap');
+    const qActions = Array.isArray(qAdvice?.actions) ? qAdvice.actions : [];
+    expect(qActions.some(a => a?.action === 'open-prs')).toBe(true);
+
     const tier3Advice = (result.advice || []).find(a => a.code === 'tier3_unreviewed_prs');
     const actions = Array.isArray(tier3Advice?.actions) ? tier3Advice.actions : [];
     expect(actions.some(a => a?.action === 'queue-next')).toBe(true);
