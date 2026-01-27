@@ -7449,11 +7449,13 @@ header h1 {
   min-height: 0;
   display: grid;
   grid-template-columns: 420px 1fr;
+  grid-template-areas: "cards detail";
 }
 
 .tasks-body.tasks-body-board {
   /* Board view: show full-width kanban until a card is selected. */
   grid-template-columns: 1fr;
+  grid-template-areas: "cards";
   position: relative;
   overflow: hidden;
 }
@@ -7495,6 +7497,7 @@ header h1 {
 }
 
 .tasks-cards {
+  grid-area: cards;
   overflow-y: auto;
   padding: var(--space-md);
   border-right: 1px solid var(--border-color);
@@ -7941,6 +7944,7 @@ header h1 {
 }
 
 .tasks-detail {
+  grid-area: detail;
   overflow-y: auto;
   padding: var(--space-lg);
   background: var(--bg-primary);
