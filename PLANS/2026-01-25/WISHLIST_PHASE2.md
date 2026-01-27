@@ -44,7 +44,7 @@ Process discipline:
 - [ ] Add more signals: commits, PR reviews, PR merges, tasks created/completed, and per-project throughput.
 - [ ] Exports + sharing:
   - [x] JSON export (PR #308)
-  - [ ] “Share snapshot” links (optional)
+  - [x] “Share snapshot” links (PR #311)
 - [ ] Long-running “health” dashboards per project (risk rollups + backlog + lead time).
 
 ## Automation v2 (integrations)
