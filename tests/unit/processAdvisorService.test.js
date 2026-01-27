@@ -70,6 +70,27 @@ describe('ProcessAdvisorService', () => {
     expect(actions.some(a => a?.action === 'queue-triage')).toBe(true);
   });
 
+  test('adds backlog-growth warning when created >> done', async () => {
+    const processStatusService = { getStatus: async () => ({ qByTier: {}, qCaps: {}, wip: 0, wipMax: 0 }) };
+    const processTelemetryService = { getSummary: async () => ({ avgReviewSeconds: 0, createdCount: 12, doneCount: 3 }) };
+    const processTaskService = { listTasks: async () => ([]) };
+    const taskRecordService = { list: () => ([]) };
+
+    const svc = new ProcessAdvisorService({ processStatusService, processTelemetryService, processTaskService, taskRecordService });
+    const result = await svc.getAdvice({ mode: 'mine', lookbackHours: 24, force: true });
+
+    const codes = (result.advice || []).map(a => a.code);
+    expect(codes).toContain('throughput_negative');
+
+    expect(result.metrics.createdCount).toBe(12);
+    expect(result.metrics.doneCount).toBe(3);
+    expect(result.metrics.netCreatedMinusDone).toBe(9);
+
+    const advice = (result.advice || []).find(a => a.code === 'throughput_negative');
+    const actions = Array.isArray(advice?.actions) ? advice.actions : [];
+    expect(actions.some(a => a?.action === 'queue-triage')).toBe(true);
+  });
+
   test('includes dependency-blocked signal for tier 1/2 PRs', async () => {
     const processStatusService = { getStatus: async () => ({ qByTier: {}, qCaps: {}, wip: 0, wipMax: 0 }) };
     const processTelemetryService = { getSummary: async () => ({ avgReviewSeconds: 0 }) };
