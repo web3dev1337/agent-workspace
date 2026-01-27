@@ -1,6 +1,6 @@
 # Remaining Work (Next Phase)
 
-Last updated: 2026-01-27
+Last updated: 2026-01-28
 
 This is the “what’s left” list after the core 2026-01-25 brain dump work shipped (tiers/risk/prompt artifacts + Queue + telemetry/advice + tasks→launch + dependency graph + commander/voice).
 
@@ -22,8 +22,8 @@ Quality fixes shipped:
 - ✅ Kanban view opens left-aligned by default (no “single column stuck on the right” feel). (PR #290)
 
 Known issues / follow-ups:
-- [x] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active. (Mitigated further in PR #296; remaining edge cases may exist)
-- [x] Intermittent: card detail layout may still reflow or appear on the wrong side. (Hardened in PR #298; if it still happens, capture view (List/Board/Combined) + screenshot.)
+- [x] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active. (Mitigated in PR #315; further stabilized in PR #328; remaining edge cases may exist)
+- [x] Intermittent: card detail layout may still reflow or appear on the wrong side. (Hardened in PR #298; direction enforced in PR #327. If it still happens, capture view (List/Board/Combined) + screenshot.)
 - [x] Add “Start server” control to the Agent terminal header (one click; mirrors Server window controls). (PR #277)
 - [x] Tasks panel: add a quick “Open Trello board” link/button for the currently selected board. (PR #279)
 - [x] Add-worktree modal: support “Add & close” and “Add another” (keep adding without modal churn), and refresh availability immediately. (PR #285)
@@ -48,6 +48,7 @@ Known issues / follow-ups:
 ### Integrations / automation
 
 - [x] Trello “board conventions” wizard (Done list naming, label/color mapping, dependency checklist policy). (PR #273)
+- [x] Trello PR-merge conventions: optional comment template, label(s), and checklist item (PR #326, #333, #336)
 
 ---
 
