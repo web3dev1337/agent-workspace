@@ -9728,14 +9728,98 @@ class ClaudeOrchestrator {
       if (e.target === modal) modal.remove();
     });
 
-    // Allow closing the full-screen Tasks panel quickly.
-    // (Clicking outside doesn't work when the panel is full-viewport.)
-    const onTasksKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        modal.remove();
-      }
-    };
+	    // Allow closing the full-screen Tasks panel quickly.
+	    // (Clicking outside doesn't work when the panel is full-viewport.)
+	    const onTasksKeyDown = (e) => {
+	      const tag = String(e?.target?.tagName || '').toLowerCase();
+	      const isTypingTarget = tag === 'input' || tag === 'textarea' || tag === 'select' || e?.target?.isContentEditable;
+
+	      const getActiveRow = () => {
+	        // Works for list + board views (both use .task-card-row).
+	        const active = cardsEl?.querySelector?.('.task-card-row.active');
+	        if (active) return active;
+	        // Fallback: first visible card.
+	        return cardsEl?.querySelector?.('.task-card-row');
+	      };
+
+	      const resolveRowBoardId = (row) => {
+	        if (!row) return String(state.boardId || '').trim();
+	        if (state.boardId === ALL_BOARDS_ID) return String(row.dataset?.boardId || '').trim();
+	        return String(state.boardId || '').trim();
+	      };
+
+	      const canQuickLaunchFromBoard = (boardId) => {
+	        const bid = String(boardId || '').trim();
+	        if (!bid || bid === ALL_BOARDS_ID) return false;
+	        const mapping = getBoardMapping(state.provider, bid) || null;
+	        const enabled = mapping ? (mapping.enabled !== false) : true;
+	        const localPath = mapping ? String(mapping.localPath || '') : '';
+	        return !!(enabled && localPath);
+	      };
+
+	      const quickLaunchWithTier = async (tier) => {
+	        if (isTypingTarget) return;
+	        if (!(tier >= 1 && tier <= 4)) return;
+	        const row = getActiveRow();
+	        const cardId = String(row?.dataset?.cardId || '').trim();
+	        if (!cardId) return;
+	        const boardId = resolveRowBoardId(row);
+	        if (!canQuickLaunchFromBoard(boardId)) {
+	          this.showToast('Set Board Settings to enable Launch', 'error');
+	          return;
+	        }
+
+	        try {
+	          const defaults = readLaunchDefaults();
+	          writeLaunchDefaults({ tier });
+	          syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(boardId) });
+	          const card = await fetchCardDetail(cardId);
+	          const promptText = String(card?.desc ?? '');
+	          await this.launchAgentFromTaskCard({
+	            provider: state.provider,
+	            boardId,
+	            card,
+	            tier,
+	            agentId: defaults.agentId || 'claude',
+	            mode: defaults.mode || 'fresh',
+	            yolo: defaults.yolo !== false,
+	            autoSendPrompt: defaults.autoSendPrompt !== false,
+	            promptText
+	          });
+	        } catch (err) {
+	          console.error('Keyboard quick launch failed:', err);
+	          this.showToast(String(err?.message || err), 'error');
+	        }
+	      };
+
+	      if (!isTypingTarget) {
+	        if (e.key === '1') {
+	          e.preventDefault();
+	          quickLaunchWithTier(1);
+	          return;
+	        }
+	        if (e.key === '2') {
+	          e.preventDefault();
+	          quickLaunchWithTier(2);
+	          return;
+	        }
+	        if (e.key === '3') {
+	          e.preventDefault();
+	          quickLaunchWithTier(3);
+	          return;
+	        }
+	        if (e.key === '4') {
+	          e.preventDefault();
+	          quickLaunchWithTier(4);
+	          return;
+	        }
+	      }
+
+	      if (e.key === 'Escape') {
+	        e.preventDefault();
+	        modal.remove();
+	      }
+	    };
     document.addEventListener('keydown', onTasksKeyDown);
 
     const originalRemove = modal.remove.bind(modal);
