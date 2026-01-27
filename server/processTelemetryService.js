@@ -237,6 +237,40 @@ class ProcessTelemetryService {
 
     return lines.join('\n') + '\n';
   }
+
+  exportJson({ lookbackHours = DEFAULT_LOOKBACK_HOURS } = {}) {
+    const hours = Number(lookbackHours) || DEFAULT_LOOKBACK_HOURS;
+    const cutoffMs = Date.now() - hours * 60 * 60 * 1000;
+    const rows = this.taskRecordService?.list?.() || [];
+
+    const out = [];
+    for (const r of rows) {
+      const updatedAtMs = parseIso(r?.updatedAt);
+      if (updatedAtMs && updatedAtMs < cutoffMs) continue;
+      const hasTelemetry = !!(r?.reviewStartedAt || r?.reviewEndedAt || r?.promptSentAt || r?.promptChars);
+      if (!hasTelemetry) continue;
+
+      out.push({
+        id: r?.id || '',
+        updatedAt: r?.updatedAt || '',
+        reviewStartedAt: r?.reviewStartedAt || '',
+        reviewEndedAt: r?.reviewEndedAt || r?.reviewedAt || '',
+        promptSentAt: r?.promptSentAt || '',
+        promptChars: r?.promptChars ?? '',
+        tier: r?.tier ?? '',
+        ticketProvider: r?.ticketProvider ?? '',
+        ticketCardId: r?.ticketCardId ?? ''
+      });
+    }
+
+    out.sort((a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0));
+
+    return {
+      lookbackHours: hours,
+      exportedAt: new Date().toISOString(),
+      records: out
+    };
+  }
 }
 
 module.exports = { ProcessTelemetryService };
