@@ -3833,6 +3833,19 @@ class ClaudeOrchestrator {
         this.showPRsPanel?.();
         break;
 
+      case 'open-telemetry':
+        try {
+          this.showDashboard?.();
+          setTimeout(() => {
+            try {
+              this.dashboard?.showTelemetryOverlay?.();
+            } catch {}
+          }, 50);
+        } catch (e) {
+          console.error('Failed to open telemetry overlay:', e);
+        }
+        break;
+
       case 'open-queue':
         this.showQueuePanel?.().catch?.((err) => console.error('Failed to open queue:', err));
         break;
