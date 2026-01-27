@@ -3844,6 +3844,15 @@ class ClaudeOrchestrator {
           .catch?.((err) => console.error('Failed to open queue blockers:', err));
         break;
 
+      case 'queue-triage':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => {
+            const btn = document.getElementById('queue-triage');
+            if (btn && !btn.classList.contains('active')) btn.click();
+          }, 50))
+          .catch?.((err) => console.error('Failed to open queue triage:', err));
+        break;
+
       case 'open-tasks':
         this.showTasksPanel?.().catch?.((err) => console.error('Failed to open tasks:', err));
         break;

@@ -94,6 +94,17 @@ class VoiceCommandService {
         command: 'queue-blockers',
         extractParams: () => ({})
       },
+      // Open Queue (triage)
+      {
+        patterns: [
+          /triage\s+queue/i,
+          /open\s+triage/i,
+          /enable\s+triage/i,
+          /triage\s+mode/i,
+        ],
+        command: 'queue-triage',
+        extractParams: () => ({})
+      },
       // Open Queue
       {
         patterns: [
