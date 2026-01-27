@@ -7064,11 +7064,11 @@ class ClaudeOrchestrator {
     const ALL_BOARDS_ID = '__all_enabled__';
     const COMBINED_VIEW_ID = '__combined__';
 
-    const state = {
-      provider: localStorage.getItem('tasks-provider') || 'trello',
-      view: localStorage.getItem('tasks-view') || 'list', // list | board
-      boardId: localStorage.getItem('tasks-board') || '',
-      listId: localStorage.getItem('tasks-list') || '',
+	    const state = {
+	      provider: localStorage.getItem('tasks-provider') || 'trello',
+	      view: localStorage.getItem('tasks-view') || 'list', // list | board
+	      boardId: localStorage.getItem('tasks-board') || '',
+	      listId: localStorage.getItem('tasks-list') || '',
       query: '',
       updatedWindow: localStorage.getItem('tasks-updated-window') || 'any', // any | 1h | 24h | 7d | 30d
       sort: localStorage.getItem('tasks-sort') || 'pos', // pos | activity | name
@@ -7082,10 +7082,11 @@ class ClaudeOrchestrator {
       boardLabels: [],
       boards: [],
       boardCustomFields: [],
-      boardMetaCache: new Map(), // boardId -> { lists, members, labels, customFields }
-      selectedCardId: null,
-      showDisabledBoards: localStorage.getItem('tasks-show-disabled-boards') === 'true'
-    };
+	      boardMetaCache: new Map(), // boardId -> { lists, members, labels, customFields }
+	      selectedCardId: null,
+	      restoreDetailCardId: null,
+	      showDisabledBoards: localStorage.getItem('tasks-show-disabled-boards') === 'true'
+	    };
 
     // Keep Kanban views left-aligned on open/board switch (avoid “single column stuck on the right”).
     let boardScrollResetNextRender = true;
@@ -8333,19 +8334,44 @@ class ClaudeOrchestrator {
         });
       };
 
-		    const renderBoardSettings = ({ boardId } = {}) => {
-		      const effectiveBoardId = String(boardId || state.boardId || '').trim();
-		      if (!effectiveBoardId || effectiveBoardId === ALL_BOARDS_ID) {
-		        detailEl.innerHTML = `<div class="tasks-detail-empty">Select a board to edit mapping.</div>`;
-		        return;
-		      }
+			    const ensureBoardDetailVisible = (sentinelId) => {
+			      const current = String(state.selectedCardId || '').trim();
+			      if (current && !current.startsWith('__')) state.restoreDetailCardId = current;
+			      state.selectedCardId = sentinelId;
+			      if (state.view === 'board') bodyEl?.classList?.toggle?.('tasks-has-detail', true);
+			    };
 
-	      const mapping = getBoardMapping(state.provider, effectiveBoardId) || {};
-	      const enabled = mapping.enabled !== false;
-	      const repoSlug = String(mapping.repoSlug || '');
-	      const localPath = String(mapping.localPath || '');
-	      const defaultTier = Number(mapping.defaultStartTier);
-	      const boardName = (state.boards.find(b => b.id === effectiveBoardId)?.name) || effectiveBoardId;
+			    const restoreBoardDetailOrClear = async () => {
+			      const restoreId = String(state.restoreDetailCardId || '').trim();
+			      state.restoreDetailCardId = null;
+			      if (!restoreId) {
+			        renderDetail(null);
+			        return;
+			      }
+			      try {
+			        const card = await fetchCardDetail(restoreId);
+			        renderDetail(card);
+			      } catch (err) {
+			        console.warn('Failed to restore previous card detail:', err);
+			        renderDetail(null);
+			      }
+			    };
+
+			    const renderBoardSettings = ({ boardId } = {}) => {
+			      const effectiveBoardId = String(boardId || state.boardId || '').trim();
+			      if (!effectiveBoardId || effectiveBoardId === ALL_BOARDS_ID) {
+			        detailEl.innerHTML = `<div class="tasks-detail-empty">Select a board to edit mapping.</div>`;
+			        return;
+			      }
+
+			      ensureBoardDetailVisible('__board_settings__');
+
+		      const mapping = getBoardMapping(state.provider, effectiveBoardId) || {};
+		      const enabled = mapping.enabled !== false;
+		      const repoSlug = String(mapping.repoSlug || '');
+		      const localPath = String(mapping.localPath || '');
+		      const defaultTier = Number(mapping.defaultStartTier);
+		      const boardName = ((Array.isArray(state.boards) ? state.boards : []).find(b => b.id === effectiveBoardId)?.name) || effectiveBoardId;
 
 		      detailEl.innerHTML = `
 		        <div class="tasks-detail-header">
@@ -8400,9 +8426,9 @@ class ClaudeOrchestrator {
 		        </div>
 		      `;
 
-	      detailEl.querySelector('#tasks-board-settings-close')?.addEventListener('click', () => {
-	        renderDetail(null);
-	      });
+		      detailEl.querySelector('#tasks-board-settings-close')?.addEventListener('click', () => {
+		        restoreBoardDetailOrClear().catch(() => renderDetail(null));
+		      });
 
 	      const showDisabledEl = detailEl.querySelector('#tasks-show-disabled');
 	      showDisabledEl?.addEventListener('change', async () => {
@@ -8441,15 +8467,17 @@ class ClaudeOrchestrator {
 		      });
 		    };
 
-		    const renderBoardConventions = async ({ boardId } = {}) => {
-		      const effectiveBoardId = String(boardId || state.boardId || '').trim();
-		      if (!effectiveBoardId || effectiveBoardId === ALL_BOARDS_ID || effectiveBoardId === COMBINED_VIEW_ID) {
-		        detailEl.innerHTML = `<div class="tasks-detail-empty">Select a board to edit conventions.</div>`;
-		        return;
-		      }
+			    const renderBoardConventions = async ({ boardId } = {}) => {
+			      const effectiveBoardId = String(boardId || state.boardId || '').trim();
+			      if (!effectiveBoardId || effectiveBoardId === ALL_BOARDS_ID || effectiveBoardId === COMBINED_VIEW_ID) {
+			        detailEl.innerHTML = `<div class="tasks-detail-empty">Select a board to edit conventions.</div>`;
+			        return;
+			      }
 
-		      const boardName = (state.boards.find(b => b.id === effectiveBoardId)?.name) || effectiveBoardId;
-		      const conv = getBoardConventions(state.provider, effectiveBoardId) || {};
+			      ensureBoardDetailVisible('__board_conventions__');
+
+			      const boardName = ((Array.isArray(state.boards) ? state.boards : []).find(b => b.id === effectiveBoardId)?.name) || effectiveBoardId;
+			      const conv = getBoardConventions(state.provider, effectiveBoardId) || {};
 
 		      const safeChecklistName = String(conv?.dependencyChecklistName || '').trim() || 'Dependencies';
 		      const doneListId = String(conv?.doneListId || '').trim();
