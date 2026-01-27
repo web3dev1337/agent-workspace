@@ -7165,6 +7165,152 @@ class ClaudeOrchestrator {
         overlay.querySelector('#tasks-hotkeys-close')?.addEventListener('click', closeHotkeysOverlay);
       };
 
+      const closeLaunchPopover = () => {
+        const existing = modal.querySelector('#tasks-launch-popover-overlay');
+        if (existing) existing.remove();
+      };
+
+      const openLaunchPopover = ({ anchorEl, cardId, boardId } = {}) => {
+        closeLaunchPopover();
+        const cid = String(cardId || '').trim();
+        const bid = String(boardId || '').trim();
+        if (!cid) return;
+
+        const mappingTier = getMappingTierForBoard(bid);
+        const defaults = readLaunchDefaults({ mappingTier });
+        const canLaunch = canLaunchFromBoard(state.provider, bid);
+
+        const overlay = document.createElement('div');
+        overlay.id = 'tasks-launch-popover-overlay';
+        overlay.className = 'tasks-launch-popover-overlay';
+        overlay.innerHTML = `
+          <div class="tasks-launch-popover" id="tasks-launch-popover" role="dialog" aria-label="Launch options">
+            <div class="tasks-launch-popover-header">
+              <div class="tasks-launch-popover-title">⚡ Launch options</div>
+              <button class="btn-secondary" id="tasks-launch-popover-close" type="button" title="Close (Esc)">×</button>
+            </div>
+            <div class="tasks-launch-popover-meta">${this.escapeHtml(cid)}</div>
+
+            ${canLaunch ? '' : `<div class="tasks-launch-popover-warn">Set Board Settings to enable Launch for this board.</div>`}
+
+            <div class="tasks-launch-popover-grid">
+              <label class="tasks-launch-popover-field">
+                <span>Tier</span>
+                <select id="tasks-launch-popover-tier" class="tasks-select tasks-select-inline">
+                  <option value="1" ${defaults.tier === 1 ? 'selected' : ''}>T1</option>
+                  <option value="2" ${defaults.tier === 2 ? 'selected' : ''}>T2</option>
+                  <option value="3" ${defaults.tier === 3 ? 'selected' : ''}>T3</option>
+                  <option value="4" ${defaults.tier === 4 ? 'selected' : ''}>T4</option>
+                </select>
+              </label>
+              <label class="tasks-launch-popover-field">
+                <span>Agent</span>
+                <select id="tasks-launch-popover-agent" class="tasks-select tasks-select-inline">
+                  <option value="claude" ${defaults.agentId === 'claude' ? 'selected' : ''}>Claude</option>
+                  <option value="codex" ${defaults.agentId === 'codex' ? 'selected' : ''}>Codex</option>
+                </select>
+              </label>
+              <label class="tasks-launch-popover-field">
+                <span>Mode</span>
+                <select id="tasks-launch-popover-mode" class="tasks-select tasks-select-inline">
+                  <option value="fresh" ${defaults.mode === 'fresh' ? 'selected' : ''}>Fresh</option>
+                  <option value="continue" ${defaults.mode === 'continue' ? 'selected' : ''}>Continue</option>
+                  <option value="resume" ${defaults.mode === 'resume' ? 'selected' : ''}>Resume</option>
+                </select>
+              </label>
+              <label class="tasks-toggle tasks-toggle-mini" title="Skip permission prompts (YOLO)">
+                <input type="checkbox" id="tasks-launch-popover-yolo" ${defaults.yolo !== false ? 'checked' : ''} />
+                <span>YOLO</span>
+              </label>
+              <label class="tasks-toggle tasks-toggle-mini" title="Auto-send card description as the first prompt">
+                <input type="checkbox" id="tasks-launch-popover-auto" ${defaults.autoSendPrompt !== false ? 'checked' : ''} />
+                <span>Auto</span>
+              </label>
+            </div>
+
+            <div class="tasks-launch-popover-actions">
+              <button class="btn-primary" id="tasks-launch-popover-launch" type="button">🚀 Launch</button>
+              <button class="btn-secondary" id="tasks-launch-popover-board-settings" type="button" ${bid ? '' : 'disabled'}>⚙ Board Settings</button>
+            </div>
+          </div>
+        `;
+
+        modal.querySelector('.tasks-content')?.appendChild(overlay);
+
+        const popover = overlay.querySelector('#tasks-launch-popover');
+        const closeBtn = overlay.querySelector('#tasks-launch-popover-close');
+        closeBtn?.addEventListener('click', closeLaunchPopover);
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) closeLaunchPopover();
+        });
+
+        const settingsBtn = overlay.querySelector('#tasks-launch-popover-board-settings');
+        settingsBtn?.addEventListener('click', () => {
+          closeLaunchPopover();
+          if (bid) renderBoardSettings({ boardId: bid });
+        });
+
+        const position = () => {
+          if (!popover || !anchorEl || typeof anchorEl.getBoundingClientRect !== 'function') return;
+          const rect = anchorEl.getBoundingClientRect();
+          const width = popover.offsetWidth || 360;
+          const height = popover.offsetHeight || 220;
+          const margin = 10;
+          const maxLeft = window.innerWidth - width - margin;
+          const maxTop = window.innerHeight - height - margin;
+          const left = Math.max(margin, Math.min(maxLeft, rect.left + rect.width - width));
+          const top = Math.max(margin, Math.min(maxTop, rect.bottom + 8));
+          popover.style.left = `${Math.round(left)}px`;
+          popover.style.top = `${Math.round(top)}px`;
+        };
+
+        // Initial position after DOM paint.
+        window.requestAnimationFrame(position);
+        window.requestAnimationFrame(position);
+
+        const launchBtn = overlay.querySelector('#tasks-launch-popover-launch');
+        launchBtn?.addEventListener('click', async () => {
+          const tier = Number(overlay.querySelector('#tasks-launch-popover-tier')?.value || 3);
+          const agentId = String(overlay.querySelector('#tasks-launch-popover-agent')?.value || 'claude').trim().toLowerCase();
+          const mode = String(overlay.querySelector('#tasks-launch-popover-mode')?.value || 'fresh').trim().toLowerCase();
+          const yolo = !!overlay.querySelector('#tasks-launch-popover-yolo')?.checked;
+          const autoSendPrompt = !!overlay.querySelector('#tasks-launch-popover-auto')?.checked;
+
+          if (!(tier >= 1 && tier <= 4)) return;
+          if (agentId !== 'claude' && agentId !== 'codex') return;
+          if (mode !== 'fresh' && mode !== 'continue' && mode !== 'resume') return;
+          if (!bid) return;
+
+          if (!canLaunchFromBoard(state.provider, bid)) {
+            this.showToast('Set Board Settings to enable Launch', 'error');
+            return;
+          }
+
+          try {
+            launchBtn.disabled = true;
+            const card = await fetchCardDetail(cid);
+            const promptText = String(card?.desc ?? '');
+            await this.launchAgentFromTaskCard({
+              provider: state.provider,
+              boardId: bid,
+              card,
+              tier,
+              agentId,
+              mode,
+              yolo,
+              autoSendPrompt,
+              promptText
+            });
+            closeLaunchPopover();
+          } catch (err) {
+            console.error('Launch options failed:', err);
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            launchBtn.disabled = false;
+          }
+        });
+      };
+
       const getMappingTierForBoard = (boardId) => {
         const bid = String(boardId || '').trim();
         if (!bid || bid === ALL_BOARDS_ID || bid === COMBINED_VIEW_ID) return undefined;
@@ -7284,6 +7430,15 @@ class ClaudeOrchestrator {
 	      if (!m) return true;
 	      return m.enabled !== false;
 	    };
+
+      const canLaunchFromBoard = (provider, boardId) => {
+        const bid = String(boardId || '').trim();
+        if (!bid || bid === ALL_BOARDS_ID || bid === COMBINED_VIEW_ID) return false;
+        const mapping = getBoardMapping(provider, bid) || null;
+        const enabled = mapping ? (mapping.enabled !== false) : true;
+        const localPath = mapping ? String(mapping.localPath || '') : '';
+        return !!(enabled && localPath);
+      };
 
 	    const updateBoardMapping = async (provider, boardId, patch) => {
 	      const key = `${provider}:${boardId}`;
@@ -8073,6 +8228,7 @@ class ClaudeOrchestrator {
               <div class="task-card-quick-actions" data-quick-launch-wrap>
                 ${quickTierButtons}
                 <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-btn title="Launch agent (uses default tier)">🚀</button>
+                <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-options-btn title="Launch options">⚡</button>
               </div>
             `
             : (cardBoardId ? `<button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-setup title="Set Board Settings to enable Launch">⚙</button>` : '');
@@ -8657,6 +8813,7 @@ class ClaudeOrchestrator {
                             <div class="task-card-quick-actions" data-quick-launch-wrap>
                               ${quickTierButtons}
                               <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-btn title="Launch agent (uses default tier)">🚀</button>
+                              <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-options-btn title="Launch options">⚡</button>
                             </div>
                           `
                           : (cardBoardId ? `<button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-setup title="Set Board Settings to enable Launch">⚙</button>` : '');
@@ -9014,6 +9171,7 @@ class ClaudeOrchestrator {
 	                        <div class="task-card-quick-actions" data-quick-launch-wrap>
                             ${quickTierButtons}
 	                          <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-btn title="Launch agent (uses default tier)">🚀</button>
+                            <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-options-btn title="Launch options">⚡</button>
 	                        </div>
 	                      `
 	                      : `
@@ -9835,6 +9993,19 @@ class ClaudeOrchestrator {
 	        return;
 	      }
 
+        const quickOptionsBtn = e.target.closest('[data-quick-launch-options-btn]');
+        if (quickOptionsBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          const row = quickOptionsBtn.closest('.task-card-row');
+          const cardId = String(row?.dataset?.cardId || '').trim();
+          if (!cardId) return;
+          const boardId = resolveRowBoardId(row);
+          if (!boardId) return;
+          openLaunchPopover({ anchorEl: quickOptionsBtn, cardId, boardId });
+          return;
+        }
+
         const quickTierBtn = e.target.closest('[data-quick-launch-tier-btn]');
         if (quickTierBtn) {
           e.preventDefault();
@@ -10612,6 +10783,11 @@ class ClaudeOrchestrator {
 
 		      if (e.key === 'Escape') {
 		        e.preventDefault();
+            const hasPopover = !!modal.querySelector('#tasks-launch-popover-overlay');
+            if (hasPopover) {
+              closeLaunchPopover();
+              return;
+            }
 		        const hasHotkeys = !!modal.querySelector('#tasks-hotkeys-overlay');
 		        if (hasHotkeys) {
 		          closeHotkeysOverlay();
