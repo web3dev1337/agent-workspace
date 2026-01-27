@@ -256,6 +256,17 @@ class CommandRegistry {
       }
     });
 
+    this.register('queue-triage', {
+      category: 'process',
+      description: 'Open Queue in triage mode (ordering + snooze)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-triage' });
+        return { message: 'Queue: triage' };
+      }
+    });
+
     this.register('open-tasks', {
       category: 'process',
       description: 'Open the Tasks panel (Trello provider UI)',
