@@ -12147,6 +12147,7 @@ class ClaudeOrchestrator {
 			      autoOpenDiff: false,
             triageMode: localStorage.getItem('queue-triage') === 'true',
             snoozes: {}, // taskId -> untilMs
+            snoozeCounts: {}, // taskId -> count
 				      autoAdvance: localStorage.getItem('queue-auto-advance') === 'true',
 				      autoReviewer: localStorage.getItem('queue-auto-reviewer') === 'true',
 				      autoFixer: localStorage.getItem('queue-auto-fixer') === 'true',
@@ -12180,6 +12181,25 @@ class ClaudeOrchestrator {
       }
     };
 
+    const loadSnoozeCounts = () => {
+      try {
+        const raw = localStorage.getItem('queue-snooze-counts');
+        const parsed = raw ? JSON.parse(raw) : {};
+        return (parsed && typeof parsed === 'object') ? parsed : {};
+      } catch {
+        return {};
+      }
+    };
+
+    const saveSnoozeCounts = (next) => {
+      state.snoozeCounts = (next && typeof next === 'object') ? next : {};
+      try {
+        localStorage.setItem('queue-snooze-counts', JSON.stringify(state.snoozeCounts));
+      } catch {
+        // ignore
+      }
+    };
+
     const getSnoozeUntilMs = (taskId) => {
       const id = String(taskId || '').trim();
       if (!id) return 0;
@@ -12188,6 +12208,7 @@ class ClaudeOrchestrator {
     };
 
     saveSnoozes(loadSnoozes());
+    saveSnoozeCounts(loadSnoozeCounts());
 
     // Apply any one-shot preset (e.g. workflow review button).
     if (this.queuePanelPreset && typeof this.queuePanelPreset === 'object') {
@@ -13580,6 +13601,25 @@ class ClaudeOrchestrator {
       const snoozedUntilMs = getSnoozeUntilMs(t.id);
       const isSnoozed = !!(snoozedUntilMs && nowMs < snoozedUntilMs);
       const snoozeUntilLabel = isSnoozed ? new Date(snoozedUntilMs).toLocaleString() : '';
+      const snoozeCount = Number(state.snoozeCounts?.[String(t.id || '').trim()] || 0) || 0;
+      const computeBackoffMs = (attempt) => {
+        const a = Math.max(1, Number(attempt) || 1);
+        // Tiered retries (safe backoff): 15m → 1h → 4h → 24h (cap)
+        if (a <= 1) return 15 * 60 * 1000;
+        if (a === 2) return 60 * 60 * 1000;
+        if (a === 3) return 4 * 60 * 60 * 1000;
+        return 24 * 60 * 60 * 1000;
+      };
+      const formatBackoff = (ms) => {
+        const m = Math.round(ms / 60000);
+        if (m < 60) return `${m}m`;
+        const h = Math.round(m / 60);
+        if (h < 24) return `${h}h`;
+        const d = Math.round(h / 24);
+        return `${d}d`;
+      };
+      const nextAutoSnoozeMs = computeBackoffMs(snoozeCount + 1);
+      const nextAutoSnoozeLabel = formatBackoff(nextAutoSnoozeMs);
 
       detailEl.innerHTML = `
         <div class="tasks-detail-header">
@@ -13600,10 +13640,11 @@ class ClaudeOrchestrator {
         <div class="tasks-detail-block">
           <div class="tasks-detail-block-title">Triage (safe backoff)</div>
           <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+            <button class="btn-secondary" id="queue-snooze-auto" type="button" title="Escalates duration each time you auto-snooze this task">😴 Snooze ${escapeHtml(nextAutoSnoozeLabel)}</button>
             <button class="btn-secondary" id="queue-snooze-15m" type="button">😴 Snooze 15m</button>
             <button class="btn-secondary" id="queue-snooze-1h" type="button">😴 Snooze 1h</button>
             <button class="btn-secondary" id="queue-unsnooze" type="button" ${isSnoozed ? '' : 'disabled'}>🔔 Unsnooze</button>
-            <span class="tasks-detail-meta" style="opacity:0.9;">${isSnoozed ? `snoozed until <strong>${escapeHtml(snoozeUntilLabel)}</strong>` : 'not snoozed'}</span>
+            <span class="tasks-detail-meta" style="opacity:0.9;">${isSnoozed ? `snoozed until <strong>${escapeHtml(snoozeUntilLabel)}</strong>` : 'not snoozed'} • attempts: ${escapeHtml(String(snoozeCount))}</span>
           </div>
         </div>
         ` : ''}
@@ -13806,6 +13847,7 @@ class ClaudeOrchestrator {
       const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
       const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
       const notesEl = detailEl.querySelector('#queue-notes');
+      const snoozeAutoBtn = detailEl.querySelector('#queue-snooze-auto');
       const snooze15Btn = detailEl.querySelector('#queue-snooze-15m');
       const snooze1hBtn = detailEl.querySelector('#queue-snooze-1h');
       const unsnoozeBtn = detailEl.querySelector('#queue-unsnooze');
@@ -13853,13 +13895,20 @@ class ClaudeOrchestrator {
 
 	      applyClaimUI(record);
 
-        const applySnooze = (msFromNow) => {
+      const applySnooze = (msFromNow, { incrementCount = false } = {}) => {
           const id = String(t?.id || '').trim();
           if (!id) return;
           const until = Date.now() + Math.max(1, Number(msFromNow) || 0);
           const next = { ...(state.snoozes || {}) };
           next[id] = until;
           saveSnoozes(next);
+
+          if (incrementCount) {
+            const counts = { ...(state.snoozeCounts || {}) };
+            counts[id] = Number(counts?.[id] || 0) + 1;
+            saveSnoozeCounts(counts);
+          }
+
           renderList();
           if (state.selectedId === id) {
             // If the current item was snoozed, move to next visible item (best-effort).
@@ -13870,7 +13919,7 @@ class ClaudeOrchestrator {
           }
         };
 
-        const clearSnooze = () => {
+      const clearSnooze = () => {
           const id = String(t?.id || '').trim();
           if (!id) return;
           const next = { ...(state.snoozes || {}) };
@@ -13880,6 +13929,16 @@ class ClaudeOrchestrator {
           if (state.selectedId) renderDetail(getTaskById(state.selectedId));
         };
 
+        snoozeAutoBtn?.addEventListener('click', () => {
+          const id = String(t?.id || '').trim();
+          if (!id) return;
+          const prev = Number(state.snoozeCounts?.[id] || 0) || 0;
+          let ms = 15 * 60 * 1000;
+          if (prev >= 1) ms = 60 * 60 * 1000;
+          if (prev >= 2) ms = 4 * 60 * 60 * 1000;
+          if (prev >= 3) ms = 24 * 60 * 60 * 1000;
+          applySnooze(ms, { incrementCount: true });
+        });
         snooze15Btn?.addEventListener('click', () => applySnooze(15 * 60 * 1000));
         snooze1hBtn?.addEventListener('click', () => applySnooze(60 * 60 * 1000));
         unsnoozeBtn?.addEventListener('click', () => clearSnooze());
