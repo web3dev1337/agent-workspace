@@ -55,6 +55,7 @@ Process discipline:
   - [x] Throughput + outcomes from task records: doneCount series, avgVerifyMinutes, outcomeCounts, richer exports. (PR #317)
   - [x] Dashboard UI shows done/outcomes/verify + throughput chart. (PR #318)
   - [x] PR merges + Trello automation events: prMergedAt, ticketMovedAt, ticketClosedAt (summary + series + exports). (PR #334)
+  - [x] Tasks created: task record `createdAt` + telemetry `createdCount` (summary + series + exports). (PR #352)
 - [x] Exports + sharing:
   - [x] JSON export (PR #308)
   - [x] “Share snapshot” links (PR #311)
@@ -79,6 +80,7 @@ Process discipline:
 - [x] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active. (PR #315)
   - Still occasionally reported; if seen again, capture a short screen recording + logs for a targeted follow-up.
   - Added a small UI-side “delay idle” stabilizer to reduce rapid busy→idle flicker. (PR #328)
+  - Added UI-side “delay waiting” stabilizer to reduce rapid busy→waiting flicker. (PR #353)
 - [x] Tasks panel: card detail pane sometimes opens on the wrong side and/or causes vertical reflow of the board area. (PR #327)
 - [x] Tasks launch UX: from a card, launch `T1/T2/T3/T4` agent in 1–2 clicks (dropdown + hotkey-friendly). (PR #321)
 - [x] Tasks panel: Trello board “mapping/settings” control should always open (if it appears enabled); if no-op, surface an error/toast. (PR #314)
