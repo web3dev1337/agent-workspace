@@ -59,6 +59,7 @@ const { PullRequestService } = require('./pullRequestService');
 const { ProcessTaskService } = require('./processTaskService');
 const { ProcessStatusService } = require('./processStatusService');
 const { ProcessTelemetryService } = require('./processTelemetryService');
+const { ProcessProjectDashboardService } = require('./processProjectDashboardService');
 const { ProcessAdvisorService } = require('./processAdvisorService');
 const { TaskRecordService } = require('./taskRecordService');
 const { PromptArtifactService, safeId, sha256, formatPointerComment } = require('./promptArtifactService');
@@ -191,6 +192,7 @@ const processTaskService = ProcessTaskService.getInstance({ sessionManager, work
 const taskRecordService = TaskRecordService.getInstance();
 const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager });
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
+const processProjectDashboardService = ProcessProjectDashboardService.getInstance({ pullRequestService, taskRecordService });
 const promptArtifactService = PromptArtifactService.getInstance();
 const taskTicketingService = TaskTicketingService.getInstance();
 const taskDependencyService = TaskDependencyService.getInstance({ taskRecordService, pullRequestService, taskTicketingService });
@@ -2454,6 +2456,20 @@ app.get('/api/process/telemetry', async (req, res) => {
   } catch (error) {
     logger.error('Failed to fetch process telemetry', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch process telemetry' });
+  }
+});
+
+app.get('/api/process/projects', async (req, res) => {
+  try {
+    const mode = req.query.mode || 'mine';
+    const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const force = String(req.query.force || '').toLowerCase() === 'true';
+    const data = await processProjectDashboardService.getSummary({ mode, lookbackHours, limit, force });
+    res.json(data);
+  } catch (error) {
+    logger.error('Failed to fetch process projects dashboard', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to fetch process projects dashboard' });
   }
 });
 
