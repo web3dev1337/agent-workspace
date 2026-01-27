@@ -59,7 +59,7 @@ Process discipline:
   - [x] Optional auto-comment templates (links to prompt artifacts, review outcomes, verification notes). (PR #326)
 - [ ] Worktree fleet automation:
   - [ ] “Create N worktrees” presets per project (small/medium/large).
-  - [ ] Smarter “free worktree” scoring and cleanup hints.
+  - [x] Smarter “free worktree” scoring and cleanup hints. (PR #TBD)
 
 ---
 
