@@ -164,7 +164,13 @@ class PrMergeAutomationService {
     if (cfg.moveToDoneList && boardId) {
       try {
         const lists = await provider.listLists({ boardId, refresh: true });
-        targetListId = pickDoneListId(lists);
+        const key = `${providerId}:${boardId}`;
+        const configured = this.userSettingsService?.settings?.global?.ui?.tasks?.boardConventions?.[key] || null;
+        const configuredDoneListId = String(configured?.doneListId || '').trim();
+        const listIds = new Set((Array.isArray(lists) ? lists : []).map(l => l?.id).filter(Boolean));
+        targetListId = (configuredDoneListId && listIds.has(configuredDoneListId))
+          ? configuredDoneListId
+          : pickDoneListId(lists);
       } catch (e) {
         logger.debug('Failed to list board lists', { boardId, error: e?.message || String(e) });
       }
@@ -277,7 +283,13 @@ class PrMergeAutomationService {
     if (this.getConfig().moveToDoneList && boardId) {
       try {
         const lists = await provider.listLists({ boardId, refresh: true });
-        targetListId = pickDoneListId(lists);
+        const key = `${providerId}:${boardId}`;
+        const configured = this.userSettingsService?.settings?.global?.ui?.tasks?.boardConventions?.[key] || null;
+        const configuredDoneListId = String(configured?.doneListId || '').trim();
+        const listIds = new Set((Array.isArray(lists) ? lists : []).map(l => l?.id).filter(Boolean));
+        targetListId = (configuredDoneListId && listIds.has(configuredDoneListId))
+          ? configuredDoneListId
+          : pickDoneListId(lists);
       } catch (e) {
         logger.debug('Failed to list board lists', { boardId, error: e?.message || String(e) });
       }

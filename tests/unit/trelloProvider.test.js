@@ -73,6 +73,26 @@ describe('TrelloTaskProvider', () => {
     expect(deps.items[1].state).toBe('complete');
   });
 
+  test('parseTrelloDependenciesFromCard supports custom checklist name', () => {
+    const card = {
+      checklists: [
+        {
+          id: 'cl-custom',
+          name: 'Blockers',
+          checkItems: [{ id: 'i1', name: 'https://trello.com/c/AbCdEf12/some-card', state: 'incomplete' }]
+        }
+      ]
+    };
+
+    const depsDefault = parseTrelloDependenciesFromCard(card);
+    expect(depsDefault.checklistId).toBeNull();
+    expect(depsDefault.items).toEqual([]);
+
+    const depsCustom = parseTrelloDependenciesFromCard(card, { checklistName: 'Blockers' });
+    expect(depsCustom.checklistId).toBe('cl-custom');
+    expect(depsCustom.items.map(i => i.id)).toEqual(['i1']);
+  });
+
   test('listBoardLabels hits board labels endpoint with fields + limit', async () => {
     const provider = new TrelloTaskProvider({ cache: null, logger: { warn: jest.fn() } });
     provider.getCredentials = () => ({ apiKey: 'k', token: 't', source: 'test' });

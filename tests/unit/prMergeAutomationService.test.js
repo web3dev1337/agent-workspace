@@ -59,6 +59,11 @@ describe('PrMergeAutomationService webhook flow', () => {
         global: {
           ui: {
             tasks: {
+              boardConventions: {
+                'trello:board1': {
+                  doneListId: 'l1'
+                }
+              },
               automations: {
                 trello: {
                   onPrMerged: {
@@ -91,7 +96,7 @@ describe('PrMergeAutomationService webhook flow', () => {
 
     expect(result.skipped).toBeFalsy();
     expect(result.cardRef).toBe('AbC123');
-    expect(calls.some((c) => c.type === 'updateCard' && c.fields?.idList === 'l2')).toBe(true);
+    expect(calls.some((c) => c.type === 'updateCard' && c.fields?.idList === 'l1')).toBe(true);
     expect(calls.some((c) => c.type === 'addComment' && String(c.text || '').includes('Merged'))).toBe(true);
 
     const rec = records.get('pr:acme/demo#123');
