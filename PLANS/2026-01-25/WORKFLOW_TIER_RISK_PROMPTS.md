@@ -52,6 +52,7 @@ The implementation plan derived from it is:
 - Tasks: keyboard navigation + open/launch shortcuts: https://github.com/web3dev1337/claude-orchestrator/pull/258
 - Tasks: hotkeys for launch defaults: https://github.com/web3dev1337/claude-orchestrator/pull/260
 - Tasks: hotkeys help overlay: https://github.com/web3dev1337/claude-orchestrator/pull/262
+- Tasks: searchable board picker + left-align kanban: https://github.com/web3dev1337/claude-orchestrator/pull/264
 
 ## Known UX issues / follow-ups
 
