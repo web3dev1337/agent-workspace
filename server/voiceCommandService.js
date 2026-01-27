@@ -217,6 +217,18 @@ class VoiceCommandService {
         command: 'open-dashboard',
         extractParams: () => ({})
       },
+      // Open PRs panel
+      {
+        patterns: [
+          /open\s+prs/i,
+          /show\s+prs/i,
+          /open\s+pull\s+requests/i,
+          /show\s+pull\s+requests/i,
+          /open\s+pr\s+panel/i,
+        ],
+        command: 'open-prs',
+        extractParams: () => ({})
+      },
       // Highlight worktree
       {
         patterns: [
