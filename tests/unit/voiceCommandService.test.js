@@ -31,6 +31,9 @@ describe('VoiceCommandService (rule parsing)', () => {
     const triage = voiceCommandService.parseWithRules('triage queue');
     expect(triage.command).toBe('queue-triage');
 
+    const conveyor = voiceCommandService.parseWithRules('conveyor t2');
+    expect(conveyor.command).toBe('queue-conveyor-t2');
+
     const next = voiceCommandService.parseWithRules('start next review');
     expect(next.command).toBe('queue-next');
 

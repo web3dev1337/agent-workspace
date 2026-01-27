@@ -3861,6 +3861,12 @@ class ClaudeOrchestrator {
           .catch?.((err) => console.error('Failed to open queue triage:', err));
         break;
 
+      case 'queue-conveyor-t2':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => document.getElementById('queue-conveyor-t2')?.click?.(), 50))
+          .catch?.((err) => console.error('Failed to open queue conveyor t2:', err));
+        break;
+
       case 'open-tasks':
         this.showTasksPanel?.().catch?.((err) => console.error('Failed to open tasks:', err));
         break;

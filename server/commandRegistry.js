@@ -289,6 +289,17 @@ class CommandRegistry {
       }
     });
 
+    this.register('queue-conveyor-t2', {
+      category: 'process',
+      description: 'Open Queue and start Conveyor T2 (one-at-a-time Tier 2 reviews)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-conveyor-t2' });
+        return { message: 'Queue: conveyor t2' };
+      }
+    });
+
     this.register('open-tasks', {
       category: 'process',
       description: 'Open the Tasks panel (Trello provider UI)',
