@@ -61,6 +61,7 @@ const { ProcessStatusService } = require('./processStatusService');
 const { ProcessTelemetryService } = require('./processTelemetryService');
 const { ProcessProjectDashboardService } = require('./processProjectDashboardService');
 const { ProcessAdvisorService } = require('./processAdvisorService');
+const { TelemetrySnapshotService } = require('./telemetrySnapshotService');
 const { TaskRecordService } = require('./taskRecordService');
 const { PromptArtifactService, safeId, sha256, formatPointerComment } = require('./promptArtifactService');
 const { TaskDependencyService } = require('./taskDependencyService');
@@ -192,6 +193,7 @@ const processTaskService = ProcessTaskService.getInstance({ sessionManager, work
 const taskRecordService = TaskRecordService.getInstance();
 const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager });
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
+const telemetrySnapshotService = TelemetrySnapshotService.getInstance();
 const processProjectDashboardService = ProcessProjectDashboardService.getInstance({ pullRequestService, taskRecordService });
 const promptArtifactService = PromptArtifactService.getInstance();
 const taskTicketingService = TaskTicketingService.getInstance();
@@ -2475,6 +2477,56 @@ app.get('/api/process/telemetry/details', async (req, res) => {
   } catch (error) {
     logger.error('Failed to fetch process telemetry details', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch process telemetry details' });
+  }
+});
+
+app.get('/api/process/telemetry/snapshots', async (req, res) => {
+  try {
+    const limit = req.query.limit ? Number(req.query.limit) : 50;
+    const items = telemetrySnapshotService.list({ limit });
+    res.json({ count: items.length, snapshots: items });
+  } catch (error) {
+    logger.error('Failed to list telemetry snapshots', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to list telemetry snapshots' });
+  }
+});
+
+app.post('/api/process/telemetry/snapshots', express.json({ limit: '2mb' }), async (req, res) => {
+  try {
+    const lookbackHours = req.body?.lookbackHours ? Number(req.body.lookbackHours) : undefined;
+    const bucketMinutes = req.body?.bucketMinutes ? Number(req.body.bucketMinutes) : undefined;
+
+    const details = await processTelemetryService.getDetails({ lookbackHours, bucketMinutes, force: true });
+    const created = await telemetrySnapshotService.create({
+      kind: 'telemetry_details',
+      params: { lookbackHours: details.lookbackHours, bucketMinutes: details.bucketMinutes },
+      data: details
+    });
+
+    res.json({
+      ...created,
+      url: `/api/process/telemetry/snapshots/${created.id}`
+    });
+  } catch (error) {
+    logger.error('Failed to create telemetry snapshot', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to create telemetry snapshot' });
+  }
+});
+
+app.get('/api/process/telemetry/snapshots/:id', async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    const download = String(req.query.download || '').toLowerCase() === 'true';
+    const payload = await telemetrySnapshotService.get(id);
+    if (download) {
+      res.setHeader('Content-Disposition', `attachment; filename="telemetry-snapshot-${id}.json"`);
+    }
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.send(JSON.stringify(payload, null, 2) + '\n');
+  } catch (error) {
+    logger.error('Failed to fetch telemetry snapshot', { error: error.message, stack: error.stack });
+    const isNotFound = String(error?.code || '') === 'ENOENT';
+    res.status(isNotFound ? 404 : 500).json({ error: isNotFound ? 'Snapshot not found' : 'Failed to fetch telemetry snapshot' });
   }
 });
 
