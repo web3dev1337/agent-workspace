@@ -100,6 +100,10 @@ class VoiceCommandService {
           /show\s+advice/i,
           /open\s+advisor/i,
           /show\s+advisor/i,
+          /what\s+should\s+i\s+do\s+next/i,
+          /what\s+do\s+i\s+do\s+next/i,
+          /what\s+should\s+i\s+work\s+on\s+next/i,
+          /what\s+do\s+we\s+do\s+next/i,
         ],
         command: 'open-advice',
         extractParams: () => ({})
