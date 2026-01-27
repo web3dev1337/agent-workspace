@@ -3173,11 +3173,6 @@ class ClaudeOrchestrator {
   
   updateSessionStatus(sessionId, status) {
     const statusElement = document.getElementById(`status-${sessionId}`);
-    if (statusElement) {
-      statusElement.className = `status-indicator ${status}`;
-      statusElement.title = status;
-    }
-
     // Update session data
     const session = this.sessions.get(sessionId);
     const previousStatus = session ? session.status : null;
@@ -3214,6 +3209,34 @@ class ClaudeOrchestrator {
       }
 
       // Don't mark fresh "waiting" sessions as active - they're just showing welcome screen
+    }
+
+    // UI stabilizer: avoid rapid busy→idle flicker in status indicators.
+    // (Session state updates remain immediate; only the visual dot is delayed.)
+    if (statusElement) {
+      if (!this.sessionStatusUiTimers) this.sessionStatusUiTimers = new Map();
+      const existing = this.sessionStatusUiTimers.get(sessionId);
+      if (existing) clearTimeout(existing);
+
+      const apply = (next) => {
+        statusElement.className = `status-indicator ${next}`;
+        statusElement.title = next;
+      };
+
+      const shouldDelayIdle = next =>
+        next === 'idle' && (previousStatus === 'busy' || previousStatus === 'waiting');
+
+      if (shouldDelayIdle(status)) {
+        const timer = setTimeout(() => {
+          this.sessionStatusUiTimers.delete(sessionId);
+          const current = this.sessions.get(sessionId);
+          if (current && current.status !== 'idle') return;
+          apply('idle');
+        }, 1500);
+        this.sessionStatusUiTimers.set(sessionId, timer);
+      } else {
+        apply(status);
+      }
     }
     
     // Update quick actions for Claude sessions
@@ -3266,7 +3289,34 @@ class ClaudeOrchestrator {
 
     const dot = worktreeItem.querySelector('.worktree-status-dot');
     if (dot) {
-      dot.className = `status-dot worktree-status-dot ${status}`;
+      if (!this.sidebarStatusUi) this.sidebarStatusUi = new Map();
+      if (!this.sidebarStatusUiTimers) this.sidebarStatusUiTimers = new Map();
+
+      const prev = this.sidebarStatusUi.get(key) || 'idle';
+      if (prev === status) return;
+
+      const existing = this.sidebarStatusUiTimers.get(key);
+      if (existing) clearTimeout(existing);
+
+      const apply = (next) => {
+        dot.className = `status-dot worktree-status-dot ${next}`;
+        this.sidebarStatusUi.set(key, next);
+      };
+
+      const shouldDelayIdle = (next) =>
+        next === 'idle' && (prev === 'busy' || prev === 'waiting');
+
+      if (shouldDelayIdle(status)) {
+        const timer = setTimeout(() => {
+          this.sidebarStatusUiTimers.delete(key);
+          const current = this.sessions.get(sessionId);
+          if (current && current.status !== 'idle') return;
+          apply('idle');
+        }, 1500);
+        this.sidebarStatusUiTimers.set(key, timer);
+      } else {
+        apply(status);
+      }
     }
   }
   
