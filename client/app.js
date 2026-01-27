@@ -3829,6 +3829,10 @@ class ClaudeOrchestrator {
         this.showDashboard?.();
         break;
 
+      case 'open-prs':
+        this.showPRsPanel?.();
+        break;
+
       case 'open-queue':
         this.showQueuePanel?.().catch?.((err) => console.error('Failed to open queue:', err));
         break;
