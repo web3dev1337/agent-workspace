@@ -30,6 +30,8 @@ describe('VoiceCommandService (rule parsing)', () => {
 
     const advice = voiceCommandService.parseWithRules('open advisor');
     expect(advice.command).toBe('open-advice');
+
+    const adviceNext = voiceCommandService.parseWithRules('what should i do next');
+    expect(adviceNext.command).toBe('open-advice');
   });
 });
-
