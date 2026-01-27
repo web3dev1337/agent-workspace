@@ -11898,19 +11898,20 @@ class ClaudeOrchestrator {
     const serverUrl = window.location.origin;
     const initialSelectedId = String(opts?.selectedId || '').trim() || null;
 
-			    const state = {
-			      mode: 'mine', // mine | all
-			      query: '',
-			      tasks: [],
-			      selectedId: initialSelectedId,
-			      reviewTier: 'all', // all | none | 1..4
-			      unreviewedOnly: false,
-			      autoOpenDiff: false,
-			      autoReviewer: localStorage.getItem('queue-auto-reviewer') === 'true',
-			      autoFixer: localStorage.getItem('queue-auto-fixer') === 'true',
-			      autoRecheck: localStorage.getItem('queue-auto-recheck') === 'true',
-			      depGraphDepth: Math.max(1, Math.min(6, Number(localStorage.getItem('queue-dep-graph-depth') || 2) || 2)),
-			      depGraphView: (['tree', 'graph'].includes(String(localStorage.getItem('queue-dep-graph-view') || 'tree'))) ? String(localStorage.getItem('queue-dep-graph-view') || 'tree') : 'tree',
+				    const state = {
+				      mode: 'mine', // mine | all
+				      query: '',
+				      tasks: [],
+				      selectedId: initialSelectedId,
+				      reviewTier: 'all', // all | none | 1..4
+				      unreviewedOnly: false,
+				      autoOpenDiff: false,
+				      autoAdvance: localStorage.getItem('queue-auto-advance') === 'true',
+				      autoReviewer: localStorage.getItem('queue-auto-reviewer') === 'true',
+				      autoFixer: localStorage.getItem('queue-auto-fixer') === 'true',
+				      autoRecheck: localStorage.getItem('queue-auto-recheck') === 'true',
+				      depGraphDepth: Math.max(1, Math.min(6, Number(localStorage.getItem('queue-dep-graph-depth') || 2) || 2)),
+				      depGraphView: (['tree', 'graph'].includes(String(localStorage.getItem('queue-dep-graph-view') || 'tree'))) ? String(localStorage.getItem('queue-dep-graph-view') || 'tree') : 'tree',
 			      depGraphShowSatisfied: localStorage.getItem('queue-dep-graph-show-satisfied') !== 'false',
 			      reviewActive: false,
 			      reviewTimer: { taskId: null, startedAtMs: null },
@@ -11968,14 +11969,16 @@ class ClaudeOrchestrator {
             <button class="btn-secondary tasks-view-btn" id="queue-tier-4" data-tier="4" title="Tier 4">T4</button>
             <button class="btn-secondary tasks-view-btn" id="queue-tier-none" data-tier="none" title="No tier">None</button>
           </div>
-	          <div class="tasks-view-toggle" role="group" aria-label="Review filters">
-	            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
-	            <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
-	            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
-	            <button class="btn-secondary tasks-view-btn" id="queue-auto-fixer" title="Toggle: auto-spawn a fixer when Outcome=needs_fix and Notes is set">Auto Fixer</button>
-	            <button class="btn-secondary tasks-view-btn" id="queue-auto-recheck" title="Toggle: auto-spawn a recheck reviewer after fixes land on the PR">Auto Recheck</button>
-	            <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
-	          </div>
+		          <div class="tasks-view-toggle" role="group" aria-label="Review filters">
+		            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
+		            <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
+		            <button class="btn-secondary tasks-view-btn" id="queue-auto-next" title="Toggle: auto-advance when you complete a review">Auto Next</button>
+		            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
+		            <button class="btn-secondary tasks-view-btn" id="queue-auto-fixer" title="Toggle: auto-spawn a fixer when Outcome=needs_fix and Notes is set">Auto Fixer</button>
+		            <button class="btn-secondary tasks-view-btn" id="queue-auto-recheck" title="Toggle: auto-spawn a recheck reviewer after fixes land on the PR">Auto Recheck</button>
+		            <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t2" title="Conveyor: Tier 2 + unreviewed + auto-next (one-at-a-time)">Conveyor T2</button>
+		            <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
+		          </div>
           <div class="tasks-view-toggle" role="group" aria-label="Queue navigation">
             <button class="btn-secondary tasks-view-btn" id="queue-prev" title="Previous item (unblocked first)">Prev</button>
             <button class="btn-secondary tasks-view-btn" id="queue-next" title="Next item (unblocked first)">Next</button>
@@ -12007,15 +12010,17 @@ class ClaudeOrchestrator {
     const tier3Btn = modal.querySelector('#queue-tier-3');
     const tier4Btn = modal.querySelector('#queue-tier-4');
     const tierNoneBtn = modal.querySelector('#queue-tier-none');
-	    const unreviewedBtn = modal.querySelector('#queue-unreviewed');
-	    const autoDiffBtn = modal.querySelector('#queue-auto-diff');
-	    const autoReviewerBtn = modal.querySelector('#queue-auto-reviewer');
-	    const autoFixerBtn = modal.querySelector('#queue-auto-fixer');
-	    const autoRecheckBtn = modal.querySelector('#queue-auto-recheck');
-	    const startReviewBtn = modal.querySelector('#queue-start-review');
-	    const prevBtn = modal.querySelector('#queue-prev');
-	    const nextBtn = modal.querySelector('#queue-next');
-	    const closeBtn = modal.querySelector('#queue-close-btn');
+		    const unreviewedBtn = modal.querySelector('#queue-unreviewed');
+		    const autoDiffBtn = modal.querySelector('#queue-auto-diff');
+		    const autoNextBtn = modal.querySelector('#queue-auto-next');
+		    const autoReviewerBtn = modal.querySelector('#queue-auto-reviewer');
+		    const autoFixerBtn = modal.querySelector('#queue-auto-fixer');
+		    const autoRecheckBtn = modal.querySelector('#queue-auto-recheck');
+		    const conveyorT2Btn = modal.querySelector('#queue-conveyor-t2');
+		    const startReviewBtn = modal.querySelector('#queue-start-review');
+		    const prevBtn = modal.querySelector('#queue-prev');
+		    const nextBtn = modal.querySelector('#queue-next');
+		    const closeBtn = modal.querySelector('#queue-close-btn');
 
     const setMode = (mode) => {
       state.mode = mode === 'all' ? 'all' : 'mine';
@@ -12033,22 +12038,24 @@ class ClaudeOrchestrator {
       return 'all';
     };
 
-    const syncReviewControlsUI = () => {
-      const tier = normalizeReviewTier(state.reviewTier);
-      tierAllBtn?.classList.toggle('active', tier === 'all');
-      tierNoneBtn?.classList.toggle('active', tier === 'none');
-      tier1Btn?.classList.toggle('active', tier === 1);
-      tier2Btn?.classList.toggle('active', tier === 2);
-      tier3Btn?.classList.toggle('active', tier === 3);
-      tier4Btn?.classList.toggle('active', tier === 4);
+		    const syncReviewControlsUI = () => {
+		      const tier = normalizeReviewTier(state.reviewTier);
+		      tierAllBtn?.classList.toggle('active', tier === 'all');
+		      tierNoneBtn?.classList.toggle('active', tier === 'none');
+		      tier1Btn?.classList.toggle('active', tier === 1);
+		      tier2Btn?.classList.toggle('active', tier === 2);
+		      tier3Btn?.classList.toggle('active', tier === 3);
+		      tier4Btn?.classList.toggle('active', tier === 4);
 
-	      unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
-	      autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
-	      autoReviewerBtn?.classList.toggle('active', !!state.autoReviewer);
-	      autoFixerBtn?.classList.toggle('active', !!state.autoFixer);
-	      autoRecheckBtn?.classList.toggle('active', !!state.autoRecheck);
-	      startReviewBtn?.classList.toggle('active', !!state.reviewActive);
-	    };
+		      unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
+		      autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
+		      autoNextBtn?.classList.toggle('active', !!state.autoAdvance);
+		      autoReviewerBtn?.classList.toggle('active', !!state.autoReviewer);
+		      autoFixerBtn?.classList.toggle('active', !!state.autoFixer);
+		      autoRecheckBtn?.classList.toggle('active', !!state.autoRecheck);
+		      startReviewBtn?.classList.toggle('active', !!state.reviewActive);
+		      if (startReviewBtn) startReviewBtn.textContent = state.reviewActive ? 'Stop Review' : 'Start Review';
+		    };
 
     const setReviewTier = (tier) => {
       state.reviewTier = normalizeReviewTier(tier);
@@ -12078,17 +12085,23 @@ class ClaudeOrchestrator {
       if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     });
 
-    autoDiffBtn?.addEventListener('click', () => {
-      state.autoOpenDiff = !state.autoOpenDiff;
-      syncReviewControlsUI();
-      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
-    });
-
-	    autoReviewerBtn?.addEventListener('click', () => {
-	      state.autoReviewer = !state.autoReviewer;
-	      localStorage.setItem('queue-auto-reviewer', state.autoReviewer ? 'true' : 'false');
+	    autoDiffBtn?.addEventListener('click', () => {
+	      state.autoOpenDiff = !state.autoOpenDiff;
 	      syncReviewControlsUI();
 	      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+	    });
+
+	    autoNextBtn?.addEventListener('click', () => {
+	      state.autoAdvance = !state.autoAdvance;
+	      localStorage.setItem('queue-auto-advance', state.autoAdvance ? 'true' : 'false');
+	      syncReviewControlsUI();
+	    });
+
+		    autoReviewerBtn?.addEventListener('click', () => {
+		      state.autoReviewer = !state.autoReviewer;
+		      localStorage.setItem('queue-auto-reviewer', state.autoReviewer ? 'true' : 'false');
+		      syncReviewControlsUI();
+		      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
 	    });
 
 	    autoFixerBtn?.addEventListener('click', () => {
@@ -12098,23 +12111,63 @@ class ClaudeOrchestrator {
 	      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
 	    });
 
-	    autoRecheckBtn?.addEventListener('click', () => {
-	      state.autoRecheck = !state.autoRecheck;
-	      localStorage.setItem('queue-auto-recheck', state.autoRecheck ? 'true' : 'false');
+		    autoRecheckBtn?.addEventListener('click', () => {
+		      state.autoRecheck = !state.autoRecheck;
+		      localStorage.setItem('queue-auto-recheck', state.autoRecheck ? 'true' : 'false');
+		      syncReviewControlsUI();
+		      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+		    });
+
+	    startReviewBtn?.addEventListener('click', async () => {
+	      if (state.reviewActive) {
+	        state.reviewActive = false;
+	        syncReviewControlsUI();
+	        await stopReviewTimer({ reason: 'stop', nudge: false }).catch(() => {});
+	        return;
+	      }
+
+	      state.reviewActive = true;
 	      syncReviewControlsUI();
-	      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+	      const ordered = getOrderedTasks(getFilteredTasks());
+	      if (!ordered.length) {
+	        this.showToast('No items to review', 'info');
+	        return;
+	      }
+	      selectById(ordered[0].id, { allowAutoOpenDiff: true });
 	    });
 
-    startReviewBtn?.addEventListener('click', async () => {
-      state.reviewActive = true;
-      syncReviewControlsUI();
-      const ordered = getOrderedTasks(getFilteredTasks());
-      if (!ordered.length) {
-        this.showToast('No items to review', 'info');
-        return;
-      }
-      selectById(ordered[0].id, { allowAutoOpenDiff: true });
-    });
+	    conveyorT2Btn?.addEventListener('click', () => {
+	      state.reviewActive = true;
+	      state.reviewTier = 2;
+	      state.unreviewedOnly = true;
+	      state.autoOpenDiff = true;
+	      state.autoAdvance = true;
+	      localStorage.setItem('queue-auto-advance', 'true');
+	      syncReviewControlsUI();
+	      renderList();
+
+	      const ordered = getOrderedTasks(getFilteredTasks());
+	      if (!ordered.length) {
+	        this.showToast('No Tier 2 items to review', 'info');
+	        return;
+	      }
+	      selectById(ordered[0].id, { allowAutoOpenDiff: true });
+	    });
+
+	    const maybeAutoAdvanceAfterReview = (currentTaskId) => {
+	      if (!state.reviewActive || !state.autoAdvance) return;
+	      const ordered = getOrderedTasks(getFilteredTasks());
+	      if (!ordered.length) {
+	        state.reviewActive = false;
+	        syncReviewControlsUI();
+	        this.notifyWorkflow?.({ type: 'completed', message: 'Review queue complete' });
+	        stopReviewTimer({ reason: 'queue_complete', nudge: false }).catch(() => {});
+	        return;
+	      }
+	      const currentIndex = currentTaskId ? ordered.findIndex(t => t.id === currentTaskId) : -1;
+	      const nextIndex = currentIndex >= 0 ? ((currentIndex + 1) % ordered.length) : 0;
+	      selectById(ordered[nextIndex].id, { allowAutoOpenDiff: true });
+	    };
 
     const calcTierCounts = (tasks) => {
       const counts = { 1: 0, 2: 0, 3: 0, 4: 0, none: 0 };
@@ -13894,16 +13947,19 @@ class ClaudeOrchestrator {
           }
           const rec = await upsertRecord(t.id, patch);
           updateTaskRecordInState(t.id, rec);
-          renderList();
-          renderDetail(getTaskById(t.id));
-          if (reviewedEl.checked && !nudged) {
-            maybeNudgeReviewComplete(t.id, { reason: 'reviewed' });
-          }
-        } catch (e) {
-          this.showToast(String(e?.message || e), 'error');
-        } finally {
-          reviewedEl.disabled = false;
-        }
+	          renderList();
+	          renderDetail(getTaskById(t.id));
+	          if (reviewedEl.checked && !nudged) {
+	            maybeNudgeReviewComplete(t.id, { reason: 'reviewed' });
+	          }
+	          if (reviewedEl.checked) {
+	            maybeAutoAdvanceAfterReview(t.id);
+	          }
+	        } catch (e) {
+	          this.showToast(String(e?.message || e), 'error');
+	        } finally {
+	          reviewedEl.disabled = false;
+	        }
       });
 
       outcomeEl?.addEventListener('change', async () => {
@@ -13923,16 +13979,19 @@ class ClaudeOrchestrator {
           }
           const rec = await upsertRecord(t.id, patch);
           updateTaskRecordInState(t.id, rec);
-          await fetchTasks();
-          renderDetail(getTaskById(t.id));
-          if (value && !nudged) {
-            maybeNudgeReviewComplete(t.id, { reason: 'outcome' });
-          }
-        } catch (e) {
-          this.showToast(String(e?.message || e), 'error');
-        } finally {
-          outcomeEl.disabled = false;
-        }
+	          await fetchTasks();
+	          renderDetail(getTaskById(t.id));
+	          if (value && !nudged) {
+	            maybeNudgeReviewComplete(t.id, { reason: 'outcome' });
+	          }
+	          if (value) {
+	            maybeAutoAdvanceAfterReview(t.id);
+	          }
+	        } catch (e) {
+	          this.showToast(String(e?.message || e), 'error');
+	        } finally {
+	          outcomeEl.disabled = false;
+	        }
       });
 
       timerStartBtn?.addEventListener('click', async () => {
