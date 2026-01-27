@@ -29,7 +29,7 @@ Known issues / follow-ups:
 - [x] Add-worktree modal: support “Add & close” and “Add another” (keep adding without modal churn), and refresh availability immediately. (PR #285)
 - [x] Removing a worktree from a workspace should remove both terminals immediately (no F5 needed). (PR #281)
 - [x] Tasks panel: default assignee filter to “All” (not “me”). (PR #283)
-- [ ] Tasks panel: add an obvious “New task” button.
+- [x] Tasks panel: add an obvious “New task” button. (PR #287)
 - [ ] Worktree “quick add” should re-evaluate after a new worktree is created (avoid suggesting the just-created worktree as “free”).
 - [ ] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start (“quick work in background”).
 - [ ] Trello boards: confirm board background / color theming remains consistent per-board (if applicable).
