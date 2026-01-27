@@ -67,6 +67,8 @@ class ClaudeOrchestrator {
     // Optimistic “in-use” tracking: while a worktree is starting (sessions not yet added), treat it as in-use
     // so Quick Work / Add Worktree won’t recommend it again.
     this.pendingWorktreeReservations = new Map(); // `${repoPathNorm}::${worktreeId}` -> expiresAtMs
+    // Worktree launches that should not auto-start or auto-show terminals when sessions arrive.
+    this.pendingBackgroundWorktrees = new Set(); // worktreeId
     this.scannedReposCache = { value: null, fetchedAt: 0 };
     this.worktreeModalKeepOpen = this.loadWorktreeModalKeepOpenPreference();
 
@@ -468,6 +470,9 @@ class ClaudeOrchestrator {
       this.socket.on('worktree-sessions-added', ({ worktreeId, sessions, startTier }) => {
         console.log('New worktree sessions added:', worktreeId, sessions);
 
+        const isBackground = this.pendingBackgroundWorktrees?.has?.(worktreeId);
+        if (isBackground) this.pendingBackgroundWorktrees.delete(worktreeId);
+
         // Add the new sessions to our sessions map (don't clear existing!)
         for (const [sessionId, sessionState] of Object.entries(sessions)) {
           this.sessions.set(sessionId, {
@@ -483,11 +488,13 @@ class ClaudeOrchestrator {
             this.githubLinks.set(sessionId, links);
           }
 
-          // Mark new sessions as active so they show in the grid
-          this.sessionActivity.set(sessionId, 'active');
+          if (!isBackground) {
+            // Mark new sessions as active so they show in the grid
+            this.sessionActivity.set(sessionId, 'active');
 
-          // Add to visible terminals set
-          this.visibleTerminals.add(sessionId);
+            // Add to visible terminals set
+            this.visibleTerminals.add(sessionId);
+          }
 
           // Register with current tab if tab manager is enabled
           if (this.tabManager && this.currentTabId) {
@@ -527,13 +534,19 @@ class ClaudeOrchestrator {
         }
 
         // Show success message
-        this.showTemporaryMessage(`Worktree ${worktreeId} terminals ready!`, 'success');
+        const readyMsg = isBackground
+          ? `Worktree ${worktreeId} terminals ready (background)`
+          : `Worktree ${worktreeId} terminals ready!`;
+        this.showTemporaryMessage(readyMsg, 'success');
         this.refreshWorktreeAddModals();
 
-        // Auto-start Claude after a delay to let terminals initialize
-        setTimeout(() => {
-          this.checkAndApplyAutoStart();
-        }, 2000);
+        // Auto-start Claude after a delay to let terminals initialize.
+        // Background launches intentionally skip this.
+        if (!isBackground) {
+          setTimeout(() => {
+            this.checkAndApplyAutoStart();
+          }, 2000);
+        }
 
         // If this worktree was launched from a task card, start agent + auto-send prompt (best-effort).
         const pending = this.pendingWorktreeLaunches.get(worktreeId);
@@ -14219,6 +14232,9 @@ class ClaudeOrchestrator {
     this.quickWorktreeSortMode = localStorage.getItem('quick-worktree-sort') || 'edited';
     this.quickWorktreeRecencyFilter = localStorage.getItem('quick-worktree-recency') || 'all';
     this.quickWorktreeFavoritesOnly = localStorage.getItem('quick-worktree-favorites-only') === 'true';
+    this.quickWorktreeCreateBackground = localStorage.getItem('quick-worktree-create-background') === 'true';
+    const createCountRaw = Number(localStorage.getItem('quick-worktree-create-count') || '1');
+    this.quickWorktreeCreateCount = Number.isFinite(createCountRaw) && createCountRaw >= 1 ? Math.min(8, Math.round(createCountRaw)) : 1;
     this.quickWorktreeStartTier = localStorage.getItem('quick-worktree-start-tier') || '';
     if (!['', '1', '2', '3', '4'].includes(this.quickWorktreeStartTier)) {
       this.quickWorktreeStartTier = '';
@@ -14330,6 +14346,14 @@ class ClaudeOrchestrator {
                   Favorites only
                 </label>
               </div>
+              <div class="quick-control-group">
+                <span class="quick-control-label">Create</span>
+                <input type="number" id="quick-worktree-create-count" class="quick-number-input" min="1" max="8" value="${this.quickWorktreeCreateCount}" title="How many new worktrees to create (work9+)" />
+                <label class="quick-checkbox" title="Create terminals but keep them hidden (skip auto-start)">
+                  <input type="checkbox" id="quick-worktree-create-background" ${this.quickWorktreeCreateBackground ? 'checked' : ''}>
+                  Background
+                </label>
+              </div>
             </div>
             <div id="quick-repo-list" class="quick-repo-list">
               <div class="loading">Loading repos...</div>
@@ -14382,6 +14406,18 @@ class ClaudeOrchestrator {
     modal.addEventListener('change', (e) => {
       if (e.target && e.target.id === 'worktree-modal-keep-open') {
         this.setWorktreeModalKeepOpenPreference(!!e.target.checked);
+        return;
+      }
+      if (e.target && e.target.id === 'quick-worktree-create-background') {
+        this.quickWorktreeCreateBackground = !!e.target.checked;
+        localStorage.setItem('quick-worktree-create-background', this.quickWorktreeCreateBackground ? 'true' : 'false');
+        return;
+      }
+      if (e.target && e.target.id === 'quick-worktree-create-count') {
+        const raw = Number(e.target.value || '');
+        this.quickWorktreeCreateCount = Number.isFinite(raw) && raw >= 1 ? Math.min(8, Math.round(raw)) : 1;
+        try { e.target.value = String(this.quickWorktreeCreateCount); } catch {}
+        localStorage.setItem('quick-worktree-create-count', String(this.quickWorktreeCreateCount));
         return;
       }
       const sortInput = e.target.closest('input[name="quick-sort"]');
@@ -14605,6 +14641,33 @@ class ClaudeOrchestrator {
           this.toggleQuickWorktreeFavorite(repoPath);
           this.renderQuickWorktreeRepoList();
         }
+        return;
+      }
+
+      const createBtn = event.target.closest('.quick-create-btn');
+      if (createBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const repoPath = createBtn.dataset.repoPath;
+        const repoType = createBtn.dataset.repoType;
+        const repoName = createBtn.dataset.repoName;
+        const count = Number(this.quickWorktreeCreateCount || 1);
+        const background = !!this.quickWorktreeCreateBackground;
+        const startTier = Number(this.quickWorktreeStartTier);
+
+        (async () => {
+          try {
+            createBtn.disabled = true;
+            createBtn.classList.add('is-starting');
+            await this.quickCreateExtraWorktreesForRepo({ repoPath, repoType, repoName, count, background, startTier });
+          } catch (err) {
+            console.error('Quick create worktrees failed:', err);
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            createBtn.disabled = false;
+            createBtn.classList.remove('is-starting');
+          }
+        })();
         return;
       }
 
@@ -15004,6 +15067,9 @@ class ClaudeOrchestrator {
     const displayPathLabel = displayPath.startsWith('/') ? displayPath : `~/${displayPath}`;
     const isFavorite = (this.quickWorktreeFavorites || new Set()).has(repo.path);
     const favoriteLabel = isFavorite ? '★' : '☆';
+    const nextId = this.getNextWorktreeIdForRepo(repo);
+    const nextNumber = Number(String(nextId || '').replace(/^work/i, ''));
+    const canCreate = !!(this.currentWorkspace?.id && Number.isFinite(nextNumber) && nextNumber <= this.autoCreateWorktreeMaxNumber);
 
     return `
       <div class="quick-repo-row"
@@ -15023,6 +15089,14 @@ class ClaudeOrchestrator {
             ${favoriteLabel}
           </button>
           ${recommended ? `<span class="quick-worktree-pill">${recommended.id}</span>` : ''}
+          <button class="btn-secondary quick-create-btn"
+                  data-repo-path="${repo.path}"
+                  data-repo-type="${repo.type}"
+                  data-repo-name="${repo.name}"
+                  title="${canCreate ? `Create ${this.quickWorktreeCreateCount || 1} new worktree(s) starting at ${nextId}` : 'Cannot create more worktrees for this repo'}"
+                  ${canCreate ? '' : 'disabled'}>
+            ➕ ${this.escapeHtml(nextId)}
+          </button>
           <div class="quick-start-group">
             <button class="btn-primary quick-start-btn"
                     data-repo-path="${repo.path}"
@@ -15623,6 +15697,77 @@ class ClaudeOrchestrator {
 
     if (!keepOpen) {
       document.getElementById('quick-worktree-modal')?.remove();
+    }
+  }
+
+  async quickCreateExtraWorktreesForRepo({ repoPath, repoType, repoName, count, background, startTier } = {}) {
+    const path = String(repoPath || '').trim();
+    if (!path) throw new Error('Missing repoPath');
+    if (!this.currentWorkspace?.id) throw new Error('No workspace selected');
+
+    const desired = Number(count);
+    const n = Number.isFinite(desired) && desired >= 1 ? Math.min(8, Math.round(desired)) : 1;
+
+    const repos = Array.isArray(this.quickWorktreeReposRaw) ? this.quickWorktreeReposRaw : [];
+    const repo = repos.find(r => String(r?.path || '').trim() === path) || {
+      path,
+      type: repoType,
+      name: repoName || path.split('/').filter(Boolean).slice(-1)[0] || 'repo',
+      worktreeDirs: []
+    };
+
+    const tier = Number(startTier);
+    const startTierSafe = (tier >= 1 && tier <= 4) ? tier : undefined;
+
+    const baseId = this.getNextWorktreeIdForRepo(repo);
+    const baseNumber = Number(String(baseId || '').replace(/^work/i, ''));
+    if (!Number.isFinite(baseNumber) || baseNumber < 1) {
+      throw new Error(`Failed to compute next worktree id for ${repo.name || path}`);
+    }
+
+    const createdIds = [];
+    for (let i = 0; i < n; i += 1) {
+      const nextNumber = baseNumber + i;
+      if (nextNumber > this.autoCreateWorktreeMaxNumber) {
+        this.showToast(`Auto-create limit reached (max work${this.autoCreateWorktreeMaxNumber})`, 'warning');
+        break;
+      }
+
+      const worktreeId = `work${nextNumber}`;
+      this.reserveWorktree(repo.path, worktreeId);
+      if (background) this.pendingBackgroundWorktrees.add(worktreeId);
+
+      let created = null;
+      try {
+        created = await this.autoCreateExtraWorktreeForRepo(repo, { startTier: startTierSafe, worktreeId });
+      } catch (err) {
+        this.pendingBackgroundWorktrees.delete(worktreeId);
+        this.clearWorktreeReservation(repo.path, worktreeId);
+        throw err;
+      }
+
+      if (!created) {
+        this.pendingBackgroundWorktrees.delete(worktreeId);
+        this.clearWorktreeReservation(repo.path, worktreeId);
+        throw new Error(`Failed to create ${repo.name} ${worktreeId}`);
+      }
+
+      createdIds.push(worktreeId);
+    }
+
+    if (!createdIds.length) {
+      this.showToast('No worktrees created', 'warning');
+      return;
+    }
+
+    const suffix = background ? ' (background)' : '';
+    this.showToast(`Creating ${repo.name}: ${createdIds.join(', ')}${suffix}`, 'success');
+
+    // Refresh the repo list so the new worktrees show up immediately.
+    try {
+      await this.loadQuickWorktreeRepos();
+    } catch {
+      // ignore
     }
   }
 

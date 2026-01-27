@@ -1363,6 +1363,26 @@ header h1 {
   accent-color: var(--accent-primary);
 }
 
+.quick-number-input {
+  width: 72px;
+  min-width: 72px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.quick-create-btn {
+  min-height: 34px;
+}
+
+.quick-create-btn.is-starting {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
 .quick-tab-panel {
   display: none;
 }
