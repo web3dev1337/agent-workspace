@@ -243,6 +243,17 @@ class CommandRegistry {
       }
     });
 
+    this.register('open-telemetry', {
+      category: 'process',
+      description: 'Open Telemetry details (Dashboard overlay)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-telemetry' });
+        return { message: 'Opening Telemetry details' };
+      }
+    });
+
     // ============ PROCESS / WORKFLOW COMMANDS ============
 
     this.register('open-queue', {
