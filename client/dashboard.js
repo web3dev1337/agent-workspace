@@ -120,6 +120,13 @@ class Dashboard {
                 <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
               </div>
               <div class="dashboard-summary-card">
+                <div class="dashboard-summary-title">Projects</div>
+                <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
+                <div class="dashboard-summary-actions">
+                  <button class="dashboard-topbar-btn" id="dashboard-open-prs" title="Open Pull Requests">🔀 PRs</button>
+                </div>
+              </div>
+              <div class="dashboard-summary-card">
                 <div class="dashboard-summary-title">Advice</div>
                 <div id="dashboard-advice-summary" class="dashboard-summary-body">Loading…</div>
                 <div class="dashboard-summary-actions">
@@ -168,11 +175,18 @@ class Dashboard {
   async loadDashboardProcessSummary() {
     const statusEl = document.getElementById('dashboard-status-summary');
     const telemetryEl = document.getElementById('dashboard-telemetry-summary');
+    const projectsEl = document.getElementById('dashboard-projects-summary');
     const adviceEl = document.getElementById('dashboard-advice-summary');
 
     document.getElementById('dashboard-open-queue')?.addEventListener('click', (e) => {
       e.preventDefault();
       this.orchestrator?.showQueuePanel?.().catch?.(() => {});
+    });
+    document.getElementById('dashboard-open-prs')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      try {
+        this.orchestrator?.showPRsPanel?.();
+      } catch {}
     });
     document.getElementById('dashboard-open-advice')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -187,9 +201,10 @@ class Dashboard {
       .replace(/>/g, '&gt;');
 
     try {
-      const [statusRes, telemetryRes, adviceRes] = await Promise.all([
+      const [statusRes, telemetryRes, projectsRes, adviceRes] = await Promise.all([
         fetch('/api/process/status?mode=mine').catch(() => null),
         fetch('/api/process/telemetry').catch(() => null),
+        fetch('/api/process/projects?mode=mine').catch(() => null),
         fetch('/api/process/advice?mode=mine').catch(() => null)
       ]);
 
@@ -219,6 +234,69 @@ class Dashboard {
           `;
         } else {
           telemetryEl.textContent = 'Failed to load.';
+        }
+      }
+
+      if (projectsEl) {
+        const data = projectsRes ? await projectsRes.json().catch(() => ({})) : {};
+        if (projectsRes && projectsRes.ok) {
+          const totals = data?.totals || {};
+          const repos = Array.isArray(data?.repos) ? data.repos : [];
+          const top = repos.slice(0, 6);
+
+          const pickWorstRisk = (counts) => {
+            const c = counts && typeof counts === 'object' ? counts : {};
+            if (Number(c.critical || 0) > 0) return 'critical';
+            if (Number(c.high || 0) > 0) return 'high';
+            if (Number(c.medium || 0) > 0) return 'medium';
+            if (Number(c.low || 0) > 0) return 'low';
+            return '';
+          };
+
+          const riskChip = (risk) => {
+            const r = String(risk || '').trim().toLowerCase();
+            if (!r) return '';
+            const cls = (r === 'critical' || r === 'high') ? 'level-warn' : '';
+            return `<span class="process-chip ${cls}">${escapeHtml(r)}</span>`;
+          };
+
+          projectsEl.innerHTML = `
+            <div>Repos <strong>${Number(totals?.repos ?? top.length ?? 0)}</strong> • Open PRs <strong>${Number(totals?.prsOpen ?? 0)}</strong></div>
+            <div>Unreviewed <strong>${Number(totals?.prsUnreviewed ?? 0)}</strong> • Needs fix <strong>${Number(totals?.prsNeedsFix ?? 0)}</strong></div>
+            <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+              ${top.length ? top.map((r) => {
+                const repo = String(r?.repo || '').trim();
+                const open = Number(r?.prsOpen ?? 0);
+                const unrev = Number(r?.prsUnreviewed ?? 0);
+                const avgReview = r?.telemetry?.avgReviewSeconds ? `${Math.round(Number(r.telemetry.avgReviewSeconds))}s` : '—';
+                const worstRisk = pickWorstRisk(r?.riskCounts);
+                return `
+                  <button class="btn-secondary" type="button" data-open-repo="${escapeHtml(repo)}" title="Open PRs filtered to ${escapeHtml(repo)}" style="width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                    <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(repo)} (${open} open, ${unrev} unrev)</span>
+                    <span style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                      ${worstRisk ? riskChip(worstRisk) : ''}
+                      <span style="opacity:0.8;">${escapeHtml(avgReview)}</span>
+                    </span>
+                  </button>
+                `;
+              }).join('') : `<div style="opacity:0.8;">No PRs found.</div>`}
+            </div>
+          `;
+
+          projectsEl.querySelectorAll('[data-open-repo]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const repo = btn.getAttribute('data-open-repo') || '';
+              if (!repo) return;
+              try {
+                localStorage.setItem('prs-panel-repo', repo);
+              } catch {}
+              try {
+                this.orchestrator?.showPRsPanel?.();
+              } catch {}
+            });
+          });
+        } else {
+          projectsEl.textContent = 'Failed to load.';
         }
       }
 
@@ -254,6 +332,7 @@ class Dashboard {
     } catch (error) {
       if (statusEl) statusEl.textContent = 'Failed to load.';
       if (telemetryEl) telemetryEl.textContent = 'Failed to load.';
+      if (projectsEl) projectsEl.textContent = 'Failed to load.';
       if (adviceEl) adviceEl.textContent = 'Failed to load.';
     }
   }
