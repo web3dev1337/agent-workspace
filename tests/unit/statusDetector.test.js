@@ -41,6 +41,15 @@ describe('StatusDetector', () => {
       expect(status).toBe('waiting');
     });
 
+    it('should not treat older Cost lines as completion when output continues', () => {
+      const state = detector.getState(sessionId);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const buffer = 'Cost: $0.05\nContinuing work...\nMore output';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).not.toBe('waiting');
+    });
+
     it('should detect busy status when tool is active', () => {
       const buffer = '\\u25cf Read(src/index.js)\nReading file...';
       const state = detector.getState(sessionId);

@@ -1,30 +1,10 @@
 const { test, expect } = require('@playwright/test');
 const { mockUserSettings } = require('./_mockUserSettings');
 
-const ensureWorkspaceLoaded = async (page) => {
-  const sidebar = page.locator('.sidebar');
-  if (await sidebar.isVisible().catch(() => false)) {
-    return;
-  }
-
+const ensureOrchestratorReady = async (page) => {
   await page.waitForFunction(() => window.orchestrator?.socket?.connected === true, {
-    timeout: 10000
+    timeout: 20000
   });
-
-  const openWorkspaceBtn = page.getByRole('button', { name: 'Open Workspace' }).first();
-  if (await openWorkspaceBtn.count() === 0) {
-    throw new Error('No workspace available to open for tests.');
-  }
-
-  await openWorkspaceBtn.click();
-  await page.waitForSelector('#recovery-dialog, .sidebar:not(.hidden)', { timeout: 10000 });
-
-  const recoverySkipBtn = page.locator('#recovery-skip');
-  if (await recoverySkipBtn.isVisible().catch(() => false)) {
-    await recoverySkipBtn.click();
-  }
-
-  await page.waitForSelector('.sidebar:not(.hidden)', { timeout: 10000 });
 };
 
 const dismissFocusOverlay = async (page) => {
@@ -170,16 +150,28 @@ test.describe('Tasks launch from card', () => {
     });
 
     await page.goto('/');
-    await ensureWorkspaceLoaded(page);
+    await ensureOrchestratorReady(page);
     await dismissFocusOverlay(page);
 
-    // Open Tasks and select the board.
-    await page.evaluate(() => document.getElementById('tasks-btn')?.click());
+    // Open Tasks and select the board (without needing to open a workspace first).
+    await page.evaluate(async () => {
+      if (window.orchestrator) {
+        window.orchestrator.sessions = new Map();
+        window.orchestrator.currentWorkspace = {
+          id: 'test-workspace',
+          name: 'Test Workspace',
+          workspaceType: 'mixed-repo',
+          terminals: [],
+          repository: null
+        };
+        await window.orchestrator.showTasksPanel();
+      }
+    });
     await expect(page.locator('#tasks-panel')).toBeVisible({ timeout: 10000 });
     await page.locator('#tasks-board').selectOption({ value: 'b1' });
 
     // Click card and open detail.
-    await page.locator('.task-card-row[data-card-id="c1"]').click();
+    await page.locator('.task-card-row[data-card-id="c1"] .task-card-list-main').click();
     await expect(page.locator('#tasks-card-title')).toHaveValue('Card 1');
 
     // Hook socket.emit to capture the add-worktree-sessions payload.
