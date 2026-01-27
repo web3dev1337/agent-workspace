@@ -8604,8 +8604,17 @@ class ClaudeOrchestrator {
         }))
         .sort((a, b) => (Date.parse(b.date || '') || 0) - (Date.parse(a.date || '') || 0));
 
+      const dueValue = toDatetimeLocalValue(card?.due);
+      const effectiveBoardId =
+        (state.boardId === ALL_BOARDS_ID || state.boardId === COMBINED_VIEW_ID)
+          ? String(card?.idBoard || '').trim()
+          : String(state.boardId || '').trim();
+
+      const dependencyChecklistName = getDependencyChecklistNameForBoard(state.provider, effectiveBoardId);
+      const dependencyChecklistKey = String(dependencyChecklistName || '').trim().toLowerCase() || 'dependencies';
+
       const checklists = Array.isArray(card?.checklists) ? card.checklists : [];
-      const depChecklist = checklists.find(cl => String(cl?.name || '').trim().toLowerCase() === 'dependencies');
+      const depChecklist = checklists.find(cl => String(cl?.name || '').trim().toLowerCase() === dependencyChecklistKey);
       const depItemsRaw = Array.isArray(depChecklist?.checkItems) ? depChecklist.checkItems : [];
       const dependencies = depItemsRaw.map(i => {
         const name = String(i?.name || '').trim();
@@ -8620,14 +8629,13 @@ class ClaudeOrchestrator {
         };
       }).filter(d => !!d.id);
 
-	      const dueValue = toDatetimeLocalValue(card?.due);
-	      const effectiveBoardId = state.boardId === ALL_BOARDS_ID ? String(card?.idBoard || '').trim() : state.boardId;
 	      const mapping = effectiveBoardId ? (getBoardMapping(state.provider, effectiveBoardId) || null) : null;
 	      const mappingEnabled = mapping ? (mapping.enabled !== false) : true;
 	      const mappingLocalPath = mapping ? String(mapping.localPath || '') : '';
 		      const mappingTier = Number(mapping?.defaultStartTier);
 		      const launchDefaults = readLaunchDefaults({ mappingTier });
-		      const defaultLaunchTier = Number(launchDefaults?.tier || 3);
+		      const tierHint = getTierHintFromLabels(state.provider, effectiveBoardId, labels);
+		      const defaultLaunchTier = (tierHint >= 1 && tierHint <= 4) ? tierHint : Number(launchDefaults?.tier || 3);
 		      const defaultPromptId = card?.id ? `trello:${card.id}` : '';
 
 	      detailEl.innerHTML = `
@@ -9286,8 +9294,11 @@ class ClaudeOrchestrator {
 	      return json.card || null;
 	    };
 
-    const setDependencyState = async ({ cardId, itemId, state: nextState } = {}) => {
-      const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/dependencies/${encodeURIComponent(itemId)}?provider=${encodeURIComponent(state.provider)}`, {
+    const setDependencyState = async ({ cardId, itemId, state: nextState, checklistName } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/dependencies/${encodeURIComponent(itemId)}`);
+      url.searchParams.set('provider', state.provider);
+      if (checklistName) url.searchParams.set('checklistName', String(checklistName));
+      const res = await fetch(url.toString(), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ state: nextState })
@@ -10322,12 +10333,14 @@ class ClaudeOrchestrator {
 	        try {
 	          quickLaunchBtn.disabled = true;
             const defaultsNow = readLaunchDefaults();
-	          const tier = Number(defaultsNow?.tier || 3);
+	          const fallbackTier = Number(defaultsNow?.tier || 3);
 	          const defaults = readLaunchDefaults();
-	          writeLaunchDefaults({ tier });
             syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(boardId) });
 
 	          const card = await fetchCardDetail(cardId);
+            const effectiveBoardId = String(card?.idBoard || boardId || '').trim();
+            const tierHint = getTierHintFromLabels(state.provider, effectiveBoardId, card?.labels);
+            const tier = (tierHint >= 1 && tierHint <= 4) ? tierHint : fallbackTier;
 	          const promptText = String(card?.desc ?? '');
 
 	          await this.launchAgentFromTaskCard({
@@ -10534,8 +10547,14 @@ class ClaudeOrchestrator {
 	          });
 
 		          const resolveEffectiveBoardId = () => {
-		            const raw = state.boardId === ALL_BOARDS_ID ? String(c?.idBoard || '').trim() : String(state.boardId || '').trim();
+		            const isAll = state.boardId === ALL_BOARDS_ID || state.boardId === COMBINED_VIEW_ID;
+		            const raw = isAll ? String(c?.idBoard || '').trim() : String(state.boardId || '').trim();
 		            return raw && raw !== ALL_BOARDS_ID ? raw : '';
+		          };
+
+		          const resolveDependencyChecklistName = () => {
+		            const boardId = resolveEffectiveBoardId();
+		            return getDependencyChecklistNameForBoard(state.provider, boardId);
 		          };
 
 		          openBoardSettingsBtn?.addEventListener('click', (e) => {
@@ -10741,7 +10760,8 @@ class ClaudeOrchestrator {
             if (!state.selectedCardId) return;
             try {
               depAddBtn.disabled = true;
-              const updated = await addDependency({ cardId: state.selectedCardId, value });
+              const checklistName = resolveDependencyChecklistName();
+              const updated = await addDependency({ cardId: state.selectedCardId, value, checklistName });
               if (input) input.value = '';
               if (updated) setDetail(updated);
               this.showToast('Dependency added', 'success');
@@ -10759,7 +10779,8 @@ class ClaudeOrchestrator {
               if (!state.selectedCardId || !itemId) return;
               try {
                 btn.disabled = true;
-                const updated = await removeDependency({ cardId: state.selectedCardId, itemId });
+                const checklistName = resolveDependencyChecklistName();
+                const updated = await removeDependency({ cardId: state.selectedCardId, itemId, checklistName });
                 if (updated) setDetail(updated);
                 this.showToast('Dependency removed', 'success');
               } catch (err) {
@@ -10778,7 +10799,8 @@ class ClaudeOrchestrator {
               const desired = checkbox.checked ? 'complete' : 'incomplete';
               try {
                 checkbox.disabled = true;
-                const updated = await setDependencyState({ cardId: state.selectedCardId, itemId, state: desired });
+                const checklistName = resolveDependencyChecklistName();
+                const updated = await setDependencyState({ cardId: state.selectedCardId, itemId, state: desired, checklistName });
                 if (updated) setDetail(updated);
                 this.showToast('Dependency updated', 'success');
               } catch (err) {
@@ -12987,7 +13009,26 @@ class ClaudeOrchestrator {
 		        try {
 		          if (!ticketCardId) return;
 		          depImportTicketBtn.disabled = true;
-		          const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(ticketCardId)}/dependencies?provider=trello`);
+              let ticketBoardId = '';
+              try {
+                const cardRes = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(ticketCardId)}?provider=trello`);
+                const cardData = await cardRes.json().catch(() => ({}));
+                if (cardRes.ok) {
+                  ticketBoardId = String(cardData?.card?.idBoard || '').trim();
+                }
+              } catch {
+                // ignore
+              }
+
+              const conventionsAll = this.userSettings?.global?.ui?.tasks?.boardConventions;
+              const conventions = conventionsAll && typeof conventionsAll === 'object' && !Array.isArray(conventionsAll) ? conventionsAll : {};
+              const key = ticketBoardId ? `trello:${ticketBoardId}` : '';
+              const checklistName = key ? String(conventions?.[key]?.dependencyChecklistName || '').trim() : '';
+
+              const depsUrl = new URL(`${serverUrl}/api/tasks/cards/${encodeURIComponent(ticketCardId)}/dependencies`);
+              depsUrl.searchParams.set('provider', 'trello');
+              if (checklistName) depsUrl.searchParams.set('checklistName', checklistName);
+		          const res = await fetch(depsUrl.toString());
 	          const data = await res.json().catch(() => ({}));
 	          if (!res.ok) throw new Error(data?.error || 'Failed to load ticket dependencies');
 	          const items = Array.isArray(data?.dependencies?.items) ? data.dependencies.items : [];

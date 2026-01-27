@@ -351,28 +351,29 @@ class TrelloTaskProvider {
     return true;
   }
 
-  async getDependencies({ cardId, refresh = false } = {}) {
+  async getDependencies({ cardId, refresh = false, checklistName = null } = {}) {
     const card = await this.getCard({ cardId, refresh });
-    return parseTrelloDependenciesFromCard(card);
+    return parseTrelloDependenciesFromCard(card, { checklistName });
   }
 
-  async addDependency({ cardId, name, url, shortLink } = {}) {
+  async addDependency({ cardId, name, url, shortLink, checklistName = null } = {}) {
     if (!cardId) throw new Error('cardId is required');
 
     const normalized = normalizeDependencyInput({ name, url, shortLink });
     if (!normalized) throw new Error('Dependency url/shortLink is required');
 
     const card = await this.getCard({ cardId, refresh: true });
-    const existing = parseTrelloDependenciesFromCard(card);
+    const existing = parseTrelloDependenciesFromCard(card, { checklistName });
 
     let checklistId = existing.checklistId;
     if (!checklistId) {
+      const resolvedChecklistName = String(checklistName || '').trim() || 'Dependencies';
       // Create the checklist on the card.
-      const createUrl = this._buildUrl(`/cards/${encodeURIComponent(cardId)}/checklists`, { name: 'Dependencies' });
+      const createUrl = this._buildUrl(`/cards/${encodeURIComponent(cardId)}/checklists`, { name: resolvedChecklistName });
       const created = await requestJson(createUrl, { method: 'POST' });
       checklistId = created?.id;
     }
-    if (!checklistId) throw new Error('Failed to create/find Dependencies checklist');
+    if (!checklistId) throw new Error('Failed to create/find dependency checklist');
 
     // Add a new check item to the checklist.
     const itemName = normalized.url || normalized.name;
@@ -388,12 +389,12 @@ class TrelloTaskProvider {
     return true;
   }
 
-  async removeDependency({ cardId, itemId } = {}) {
+  async removeDependency({ cardId, itemId, checklistName = null } = {}) {
     if (!cardId) throw new Error('cardId is required');
     if (!itemId) throw new Error('itemId is required');
 
     const card = await this.getCard({ cardId, refresh: true });
-    const deps = parseTrelloDependenciesFromCard(card);
+    const deps = parseTrelloDependenciesFromCard(card, { checklistName });
     const checklistId = deps.checklistId;
     const item = deps.items.find(i => i.id === itemId);
     if (!checklistId || !item) throw new Error('Dependency item not found');
@@ -482,9 +483,10 @@ function normalizeDependencyInput({ name, url, shortLink } = {}) {
   return null;
 }
 
-function parseTrelloDependenciesFromCard(card) {
+function parseTrelloDependenciesFromCard(card, { checklistName = null } = {}) {
   const checklists = Array.isArray(card?.checklists) ? card.checklists : [];
-  const deps = checklists.find(c => String(c?.name || '').trim().toLowerCase() === 'dependencies');
+  const desired = String(checklistName || '').trim().toLowerCase() || 'dependencies';
+  const deps = checklists.find(c => String(c?.name || '').trim().toLowerCase() === desired);
   const checklistId = deps?.id || null;
 
   const items = Array.isArray(deps?.checkItems) ? deps.checkItems : [];

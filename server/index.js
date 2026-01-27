@@ -2967,11 +2967,12 @@ app.get('/api/tasks/cards/:cardId/dependencies', async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';
     const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    const checklistName = String(req.query.checklistName || '').trim() || null;
     const provider = taskTicketingService.getProvider(providerId);
     if (typeof provider.getDependencies !== 'function') {
       return res.status(400).json({ error: 'Provider does not support dependencies', code: 'UNSUPPORTED_OPERATION' });
     }
-    const dependencies = await provider.getDependencies({ cardId: req.params.cardId, refresh });
+    const dependencies = await provider.getDependencies({ cardId: req.params.cardId, refresh, checklistName });
     res.json({ provider: providerId, cardId: req.params.cardId, dependencies });
   } catch (error) {
     const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
@@ -2983,13 +2984,14 @@ app.get('/api/tasks/cards/:cardId/dependencies', async (req, res) => {
 app.post('/api/tasks/cards/:cardId/dependencies', express.json(), async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';
+    const checklistName = String(req.query.checklistName || '').trim() || null;
     const provider = taskTicketingService.getProvider(providerId);
     if (typeof provider.addDependency !== 'function') {
       return res.status(400).json({ error: 'Provider does not support dependencies', code: 'UNSUPPORTED_OPERATION' });
     }
 
     const { url, shortLink, name } = req.body || {};
-    await provider.addDependency({ cardId: req.params.cardId, url, shortLink, name });
+    await provider.addDependency({ cardId: req.params.cardId, url, shortLink, name, checklistName });
     const card = typeof provider.getCard === 'function'
       ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
       : null;
@@ -3010,12 +3012,13 @@ app.post('/api/tasks/cards/:cardId/dependencies', express.json(), async (req, re
 app.delete('/api/tasks/cards/:cardId/dependencies/:itemId', async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';
+    const checklistName = String(req.query.checklistName || '').trim() || null;
     const provider = taskTicketingService.getProvider(providerId);
     if (typeof provider.removeDependency !== 'function') {
       return res.status(400).json({ error: 'Provider does not support dependencies', code: 'UNSUPPORTED_OPERATION' });
     }
 
-    await provider.removeDependency({ cardId: req.params.cardId, itemId: req.params.itemId });
+    await provider.removeDependency({ cardId: req.params.cardId, itemId: req.params.itemId, checklistName });
     const card = typeof provider.getCard === 'function'
       ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
       : null;
