@@ -63,7 +63,7 @@ Process discipline:
 - [ ] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active.
 - [ ] Tasks panel: card detail pane sometimes opens on the wrong side and/or causes vertical reflow of the board area.
 - [ ] Tasks launch UX: from a card, launch `T1/T2/T3/T4` agent in 1–2 clicks (dropdown + hotkey-friendly).
-- [ ] Tasks panel: Trello board “mapping/settings” control should always open (if it appears enabled); if no-op, surface an error/toast.
+- [x] Tasks panel: Trello board “mapping/settings” control should always open (if it appears enabled); if no-op, surface an error/toast. (PR #314)
 - [ ] Tasks panel: Trello board colors/background per-board (verify consistency).
 - [ ] Agent terminal header: “Start server” control should be present and functional (no hunting in other panels).
 - [ ] Tasks panel: “Open Trello board” quick link should exist and point at the selected board.
