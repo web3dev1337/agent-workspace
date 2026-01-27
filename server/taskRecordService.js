@@ -413,9 +413,12 @@ class TaskRecordService {
     if (!id) throw new Error('id is required');
     if (!this.data.records) this.data.records = {};
 
+    const existed = !!this.data.records[id];
     const existing = this.data.records[id] || {};
     const { next, clear } = this.normalizePatch(patch);
-    const merged = { ...existing, ...next, updatedAt: new Date().toISOString() };
+    const nowIso = new Date().toISOString();
+    const merged = { ...existing, ...next, updatedAt: nowIso };
+    if (!existed && !merged.createdAt) merged.createdAt = nowIso;
     for (const k of clear) {
       delete merged[k];
     }
