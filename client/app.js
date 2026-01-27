@@ -8567,6 +8567,8 @@ class ClaudeOrchestrator {
 			      const doneListId = String(conv?.doneListId || '').trim();
             const mergedCommentTemplate = String(conv?.mergedCommentTemplate || '').trim();
             const mergedLabelNames = String(conv?.mergedLabelNames || '').trim();
+            const mergedChecklistName = String(conv?.mergedChecklistName || '').trim();
+            const mergedChecklistItemTemplate = String(conv?.mergedChecklistItemTemplate || '').trim();
 			      const tierFromLabels = conv?.tierFromLabels === true;
 			      const needsFixLabelName = String(conv?.needsFixLabelName || '').trim();
 			      const tierByLabelColor = conv?.tierByLabelColor && typeof conv.tierByLabelColor === 'object' && !Array.isArray(conv.tierByLabelColor)
@@ -8635,6 +8637,19 @@ class ClaudeOrchestrator {
 		          </div>
 		          <div class="tasks-detail-meta" style="margin-top:8px">
 		            Optional per-board labels to apply when the PR merges. Names are matched case-insensitively to existing board labels.
+		          </div>
+		        </div>
+
+		        <div class="tasks-detail-block">
+		          <div class="tasks-detail-block-title">PR-merge checklist item</div>
+		          <div class="tasks-inline-row">
+		            <input id="tasks-conv-merged-checklist-name" class="tasks-input" value="${this.escapeHtml(mergedChecklistName)}" placeholder="Checklist name (optional), e.g. Ship Log" />
+		          </div>
+		          <div class="tasks-inline-row" style="margin-top:8px;">
+		            <input id="tasks-conv-merged-checklist-item-template" class="tasks-input" value="${this.escapeHtml(mergedChecklistItemTemplate)}" placeholder="Item text template (optional), e.g. Merged: {prUrl}" />
+		          </div>
+		          <div class="tasks-detail-meta" style="margin-top:8px">
+		            If set, Orchestrator adds a checklist item on merge. Supports the same placeholders as the merge comment template.
 		          </div>
 		        </div>
 
@@ -8729,6 +8744,8 @@ class ClaudeOrchestrator {
 			          const doneListIdNext = String(doneSelect?.value || '').trim() || null;
                 const mergedCommentTemplateNext = String(detailEl.querySelector('#tasks-conv-merged-comment-template')?.value || '').trim() || null;
                 const mergedLabelNamesNext = String(detailEl.querySelector('#tasks-conv-merged-label-names')?.value || '').trim() || null;
+                const mergedChecklistNameNext = String(detailEl.querySelector('#tasks-conv-merged-checklist-name')?.value || '').trim() || null;
+                const mergedChecklistItemTemplateNext = String(detailEl.querySelector('#tasks-conv-merged-checklist-item-template')?.value || '').trim() || null;
 			          const depsNameNext = String(detailEl.querySelector('#tasks-conv-deps-name')?.value || '').trim() || null;
 			          const tierFromLabelsNext = !!detailEl.querySelector('#tasks-conv-tier-from-labels')?.checked;
 			          const needsFixLabelNameNext = String(detailEl.querySelector('#tasks-conv-needs-fix-label')?.value || '').trim() || null;
@@ -8745,6 +8762,8 @@ class ClaudeOrchestrator {
 			            doneListId: doneListIdNext,
                   mergedCommentTemplate: mergedCommentTemplateNext,
                   mergedLabelNames: mergedLabelNamesNext,
+                  mergedChecklistName: mergedChecklistNameNext,
+                  mergedChecklistItemTemplate: mergedChecklistItemTemplateNext,
 			            dependencyChecklistName: depsNameNext,
 			            tierFromLabels: tierFromLabelsNext,
 			            tierByLabelColor: nextMap,
