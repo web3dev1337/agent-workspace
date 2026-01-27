@@ -15,7 +15,7 @@ Source context:
 
 ### Tasks (ticket UX)
 
-- [ ] Faster per-card “launch preset” UI (optional): quick pick tier/agent/mode without relying on global defaults/hotkeys.
+All requested “click click click” Task launch UX is now shipped.
 
 ### Dashboard (project visibility)
 
