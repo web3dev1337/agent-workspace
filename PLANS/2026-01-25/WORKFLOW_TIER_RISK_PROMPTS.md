@@ -56,10 +56,11 @@ The implementation plan derived from it is:
 - Tasks: combined view across boards: https://github.com/web3dev1337/claude-orchestrator/pull/266
 - Tasks: per-card launch options popover: https://github.com/web3dev1337/claude-orchestrator/pull/268
 - Automations: GitHub webhook for PR-merge Trello automation: https://github.com/web3dev1337/claude-orchestrator/pull/270
+- Queue: auto fixer/recheck + tasks layout + status stability: https://github.com/web3dev1337/claude-orchestrator/pull/272
 
 ## Known UX issues / follow-ups
 
-- Status lights: if agent/worktree indicators still flicker (green/orange/grey), tune `STATUS_MIN_HOLD_MS` and/or waiting/busy heuristics.
+- Status lights: if agent/worktree indicators still flicker (green/orange/grey), tune busy-hold thresholds and/or waiting/busy heuristics (`server/statusDetector.js`).
 - Tasks board view: columns should be left-aligned (avoid “wasted space” / centered columns). If you still see right/center alignment, capture a screenshot + viewport width.
 - Tasks detail layout: card detail should render on the right (board view uses a right overlay; list view uses a right column). If details appear on the left or reflow the board, report board layout + view.
 
