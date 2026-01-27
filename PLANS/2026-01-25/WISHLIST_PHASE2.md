@@ -47,7 +47,7 @@ Process discipline:
 - [ ] Add more signals: commits, PR reviews, PR merges, tasks created/completed, and per-project throughput.
   - [x] Throughput + outcomes from task records: doneCount series, avgVerifyMinutes, outcomeCounts, richer exports. (PR #317)
   - [x] Dashboard UI shows done/outcomes/verify + throughput chart. (PR #318)
-  - [x] PR merges + Trello automation events: prMergedAt, ticketMovedAt, ticketClosedAt (summary + series + exports). (PR #TBD)
+  - [x] PR merges + Trello automation events: prMergedAt, ticketMovedAt, ticketClosedAt (summary + series + exports). (PR #334)
 - [x] Exports + sharing:
   - [x] JSON export (PR #308)
   - [x] “Share snapshot” links (PR #311)
