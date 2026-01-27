@@ -92,12 +92,12 @@ class Dashboard {
   }
 
   generateDashboardHTML() {
-	    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws));
-	    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws));
-	    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
+		    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws));
+		    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws));
+		    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
 
-		    return `
-		      <div class="dashboard-topbar">
+			    return `
+			      <div class="dashboard-topbar">
 		        ${canReturnToWorkspaces ? `
 		          <button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to Workspaces</button>
 		        ` : `<div></div>`}
@@ -110,19 +110,23 @@ class Dashboard {
 
           <div class="dashboard-section">
             <h2>📊 Process</h2>
-            <div class="dashboard-summary-grid">
-              <div class="dashboard-summary-card">
-                <div class="dashboard-summary-title">Status</div>
-                <div id="dashboard-status-summary" class="dashboard-summary-body">Loading…</div>
-              </div>
-              <div class="dashboard-summary-card">
-                <div class="dashboard-summary-title">Telemetry</div>
-                <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
-              </div>
-              <div class="dashboard-summary-card">
-                <div class="dashboard-summary-title">Projects</div>
-                <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
-                <div class="dashboard-summary-actions">
+	            <div class="dashboard-summary-grid">
+	              <div class="dashboard-summary-card">
+	                <div class="dashboard-summary-title">Status</div>
+	                <div id="dashboard-status-summary" class="dashboard-summary-body">Loading…</div>
+	              </div>
+	              <div class="dashboard-summary-card">
+	                <div class="dashboard-summary-title">Telemetry</div>
+	                <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
+	                <div class="dashboard-summary-actions">
+	                  <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
+	                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
+	                </div>
+	              </div>
+	              <div class="dashboard-summary-card">
+	                <div class="dashboard-summary-title">Projects</div>
+	                <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
+	                <div class="dashboard-summary-actions">
                   <button class="dashboard-topbar-btn" id="dashboard-open-prs" title="Open Pull Requests">🔀 PRs</button>
                 </div>
               </div>
@@ -172,16 +176,25 @@ class Dashboard {
     `;
 	  }
 
-  async loadDashboardProcessSummary() {
-    const statusEl = document.getElementById('dashboard-status-summary');
-    const telemetryEl = document.getElementById('dashboard-telemetry-summary');
-    const projectsEl = document.getElementById('dashboard-projects-summary');
-    const adviceEl = document.getElementById('dashboard-advice-summary');
+	  async loadDashboardProcessSummary() {
+	    const statusEl = document.getElementById('dashboard-status-summary');
+	    const telemetryEl = document.getElementById('dashboard-telemetry-summary');
+	    const projectsEl = document.getElementById('dashboard-projects-summary');
+	    const adviceEl = document.getElementById('dashboard-advice-summary');
 
-    document.getElementById('dashboard-open-queue')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      this.orchestrator?.showQueuePanel?.().catch?.(() => {});
-    });
+	    document.getElementById('dashboard-open-telemetry-details')?.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      this.showTelemetryOverlay();
+	    });
+	    document.getElementById('dashboard-export-telemetry')?.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      const hours = Number(this._telemetrySummary?.lookbackHours ?? 24);
+	      this.downloadTelemetryCsv(hours);
+	    });
+	    document.getElementById('dashboard-open-queue')?.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      this.orchestrator?.showQueuePanel?.().catch?.(() => {});
+	    });
     document.getElementById('dashboard-open-prs')?.addEventListener('click', (e) => {
       e.preventDefault();
       try {
@@ -222,20 +235,21 @@ class Dashboard {
         }
       }
 
-      if (telemetryEl) {
-        const data = telemetryRes ? await telemetryRes.json().catch(() => ({})) : {};
-        if (telemetryRes && telemetryRes.ok) {
-          const avgReview = data?.avgReviewSeconds ? `${Math.round(Number(data.avgReviewSeconds))}s` : '—';
-          const avgChars = Number.isFinite(Number(data?.avgPromptChars)) ? Math.round(Number(data.avgPromptChars)) : null;
-          telemetryEl.innerHTML = `
-            <div>Lookback <strong>${Number(data?.lookbackHours ?? 24)}h</strong></div>
-            <div>Avg review <strong>${escapeHtml(avgReview)}</strong></div>
-            <div>Avg prompt chars <strong>${avgChars === null ? '—' : avgChars}</strong></div>
-          `;
-        } else {
-          telemetryEl.textContent = 'Failed to load.';
-        }
-      }
+	      if (telemetryEl) {
+	        const data = telemetryRes ? await telemetryRes.json().catch(() => ({})) : {};
+	        if (telemetryRes && telemetryRes.ok) {
+	          this._telemetrySummary = data;
+	          const avgReview = data?.avgReviewSeconds ? `${Math.round(Number(data.avgReviewSeconds))}s` : '—';
+	          const avgChars = Number.isFinite(Number(data?.avgPromptChars)) ? Math.round(Number(data.avgPromptChars)) : null;
+	          telemetryEl.innerHTML = `
+	            <div>Lookback <strong>${Number(data?.lookbackHours ?? 24)}h</strong></div>
+	            <div>Avg review <strong>${escapeHtml(avgReview)}</strong></div>
+	            <div>Avg prompt chars <strong>${avgChars === null ? '—' : avgChars}</strong></div>
+	          `;
+	        } else {
+	          telemetryEl.textContent = 'Failed to load.';
+	        }
+	      }
 
       if (projectsEl) {
         const data = projectsRes ? await projectsRes.json().catch(() => ({})) : {};
@@ -329,13 +343,245 @@ class Dashboard {
           adviceEl.textContent = 'Failed to load.';
         }
       }
-    } catch (error) {
-      if (statusEl) statusEl.textContent = 'Failed to load.';
-      if (telemetryEl) telemetryEl.textContent = 'Failed to load.';
-      if (projectsEl) projectsEl.textContent = 'Failed to load.';
-      if (adviceEl) adviceEl.textContent = 'Failed to load.';
-    }
-  }
+	    } catch (error) {
+	      if (statusEl) statusEl.textContent = 'Failed to load.';
+	      if (telemetryEl) telemetryEl.textContent = 'Failed to load.';
+	      if (projectsEl) projectsEl.textContent = 'Failed to load.';
+	      if (adviceEl) adviceEl.textContent = 'Failed to load.';
+	    }
+	  }
+
+	  downloadTelemetryCsv(lookbackHours) {
+	    const hours = Number(lookbackHours);
+	    const safe = Number.isFinite(hours) && hours > 0 ? hours : 24;
+	    const url = `/api/process/telemetry/export?format=csv&lookbackHours=${encodeURIComponent(String(safe))}`;
+	    try {
+	      const a = document.createElement('a');
+	      a.href = url;
+	      a.target = '_blank';
+	      a.rel = 'noopener';
+	      a.click();
+	    } catch {
+	      window.open(url, '_blank', 'noopener');
+	    }
+	  }
+
+	  showTelemetryOverlay() {
+	    const existing = document.getElementById('dashboard-telemetry-overlay');
+	    if (existing) {
+	      existing.classList.remove('hidden');
+	      return;
+	    }
+
+	    const overlay = document.createElement('div');
+	    overlay.id = 'dashboard-telemetry-overlay';
+	    overlay.className = 'dashboard-telemetry-overlay';
+	    overlay.innerHTML = `
+	      <div class="dashboard-telemetry-panel" role="dialog" aria-label="Telemetry details">
+	        <div class="dashboard-telemetry-header">
+	          <div class="dashboard-telemetry-title">Telemetry — Trends & Export</div>
+	          <button class="dashboard-topbar-btn" id="dashboard-telemetry-close" title="Close (Esc)">✕</button>
+	        </div>
+	        <div class="dashboard-telemetry-controls">
+	          <label class="dashboard-telemetry-field">
+	            <span>Lookback</span>
+	            <select id="dashboard-telemetry-lookback">
+	              <option value="24">24h</option>
+	              <option value="72">72h</option>
+	              <option value="168">7d</option>
+	              <option value="336">14d</option>
+	            </select>
+	          </label>
+	          <label class="dashboard-telemetry-field">
+	            <span>Bucket</span>
+	            <select id="dashboard-telemetry-bucket">
+	              <option value="15">15m</option>
+	              <option value="30">30m</option>
+	              <option value="60" selected>1h</option>
+	              <option value="120">2h</option>
+	              <option value="240">4h</option>
+	            </select>
+	          </label>
+	          <div class="dashboard-telemetry-actions">
+	            <button class="btn-secondary" type="button" id="dashboard-telemetry-refresh">Refresh</button>
+	            <button class="btn-secondary" type="button" id="dashboard-telemetry-download">Download CSV</button>
+	          </div>
+	        </div>
+	        <div id="dashboard-telemetry-body" class="dashboard-telemetry-body">Loading…</div>
+	      </div>
+	    `;
+
+	    document.body.appendChild(overlay);
+
+	    const close = () => this.hideTelemetryOverlay();
+	    overlay.addEventListener('click', (e) => {
+	      if (e.target === overlay) close();
+	    });
+	    overlay.querySelector('#dashboard-telemetry-close')?.addEventListener('click', close);
+
+	    const lookbackEl = overlay.querySelector('#dashboard-telemetry-lookback');
+	    const bucketEl = overlay.querySelector('#dashboard-telemetry-bucket');
+	    const initialHours = Number(this._telemetrySummary?.lookbackHours ?? 24);
+	    const maybeOption = overlay.querySelector(`#dashboard-telemetry-lookback option[value="${initialHours}"]`);
+	    if (maybeOption) lookbackEl.value = String(initialHours);
+
+	    overlay.querySelector('#dashboard-telemetry-download')?.addEventListener('click', () => {
+	      const hours = Number(lookbackEl?.value ?? 24);
+	      this.downloadTelemetryCsv(hours);
+	    });
+	    overlay.querySelector('#dashboard-telemetry-refresh')?.addEventListener('click', () => {
+	      this.loadTelemetryDetails({ lookbackHours: Number(lookbackEl?.value ?? 24), bucketMinutes: Number(bucketEl?.value ?? 60) });
+	    });
+
+	    const onKey = (e) => {
+	      if (e.key !== 'Escape') return;
+	      const el = document.getElementById('dashboard-telemetry-overlay');
+	      if (!el || el.classList.contains('hidden')) return;
+	      close();
+	    };
+	    overlay._escHandler = onKey;
+	    document.addEventListener('keydown', onKey);
+
+	    this.loadTelemetryDetails({ lookbackHours: Number(lookbackEl?.value ?? 24), bucketMinutes: Number(bucketEl?.value ?? 60) });
+	  }
+
+	  hideTelemetryOverlay() {
+	    const overlay = document.getElementById('dashboard-telemetry-overlay');
+	    if (!overlay) return;
+	    overlay.classList.add('hidden');
+	    const handler = overlay._escHandler;
+	    if (handler) {
+	      document.removeEventListener('keydown', handler);
+	      overlay._escHandler = null;
+	    }
+	    overlay.remove();
+	  }
+
+	  async loadTelemetryDetails({ lookbackHours = 24, bucketMinutes = 60 } = {}) {
+	    const overlay = document.getElementById('dashboard-telemetry-overlay');
+	    const body = document.getElementById('dashboard-telemetry-body');
+	    if (!overlay || !body) return;
+	    body.textContent = 'Loading…';
+
+	    const hours = Number(lookbackHours);
+	    const bucket = Number(bucketMinutes);
+	    const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 24;
+	    const safeBucket = Number.isFinite(bucket) && bucket > 0 ? bucket : 60;
+	    const url = `/api/process/telemetry/details?lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}`;
+
+	    try {
+	      const res = await fetch(url).catch(() => null);
+	      const data = res ? await res.json().catch(() => ({})) : {};
+	      if (!res || !res.ok) {
+	        body.textContent = 'Failed to load.';
+	        return;
+	      }
+	      body.innerHTML = this.renderTelemetryDetails(data);
+	    } catch {
+	      body.textContent = 'Failed to load.';
+	    }
+	  }
+
+	  renderTelemetryDetails(data) {
+	    const escapeHtml = (value) => String(value ?? '')
+	      .replace(/&/g, '&amp;')
+	      .replace(/</g, '&lt;')
+	      .replace(/>/g, '&gt;');
+
+	    const series = Array.isArray(data?.series) ? data.series : [];
+	    const bucketMinutes = Number(data?.bucketMinutes ?? 60);
+	    const reviewedCount = Number(data?.reviewedCount ?? 0);
+	    const promptSentCount = Number(data?.promptSentCount ?? 0);
+	    const avgReviewSeconds = Number.isFinite(Number(data?.avgReviewSeconds)) ? Number(data.avgReviewSeconds) : null;
+	    const avgPromptChars = Number.isFinite(Number(data?.avgPromptChars)) ? Number(data.avgPromptChars) : null;
+
+	    const formatSeconds = (n) => {
+	      const v = Number(n);
+	      if (!Number.isFinite(v)) return '—';
+	      if (v < 60) return `${Math.round(v)}s`;
+	      const m = v / 60;
+	      if (m < 60) return `${Math.round(m)}m`;
+	      const h = m / 60;
+	      return `${h.toFixed(1)}h`;
+	    };
+
+	    const sparkline = (points, key, { width = 460, height = 64 } = {}) => {
+	      const vals = points.map((p) => Number(p?.[key])).filter((v) => Number.isFinite(v));
+	      if (vals.length < 2) {
+	        return `<div class="telemetry-empty">Not enough data.</div>`;
+	      }
+	      const min = Math.min(...vals);
+	      const max = Math.max(...vals);
+	      const range = max - min || 1;
+	      const pad = 6;
+	      const plotW = width - pad * 2;
+	      const plotH = height - pad * 2;
+	      const coords = points.map((p, idx) => {
+	        const v = Number(p?.[key]);
+	        if (!Number.isFinite(v)) return null;
+	        const x = pad + (idx / (points.length - 1)) * plotW;
+	        const y = pad + (1 - (v - min) / range) * plotH;
+	        return `${x.toFixed(2)},${y.toFixed(2)}`;
+	      }).filter(Boolean);
+	      if (coords.length < 2) return `<div class="telemetry-empty">Not enough data.</div>`;
+	      return `
+	        <svg class="telemetry-sparkline" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Trend">
+	          <polyline fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${coords.join(' ')}"></polyline>
+	        </svg>
+	      `;
+	    };
+
+	    const histogram = (hist, { formatLabel = null } = {}) => {
+	      const bins = Array.isArray(hist?.bins) ? hist.bins : [];
+	      const maxCount = Number(hist?.maxCount ?? 0) || 0;
+	      if (!bins.length || maxCount <= 0) return `<div class="telemetry-empty">No samples.</div>`;
+	      const labelFor = (b) => {
+	        const mid = (Number(b?.min) + Number(b?.max)) / 2;
+	        if (typeof formatLabel === 'function') return formatLabel(mid);
+	        return String(Math.round(mid));
+	      };
+	      return `
+	        <div class="telemetry-bar-chart" role="img" aria-label="Histogram">
+	          ${bins.map((b) => {
+	            const c = Number(b?.count ?? 0) || 0;
+	            const h = Math.round((c / maxCount) * 100);
+	            return `<div class="telemetry-bar" title="${escapeHtml(labelFor(b))}: ${c}" style="height:${h}%;"></div>`;
+	          }).join('')}
+	        </div>
+	      `;
+	    };
+
+	    const reviewHist = data?.histograms?.reviewSeconds;
+	    const promptHist = data?.histograms?.promptChars;
+
+	    return `
+	      <div class="dashboard-telemetry-meta">
+	        <div>Bucket <strong>${escapeHtml(bucketMinutes)}m</strong></div>
+	        <div>Reviews <strong>${reviewedCount}</strong> • prompts <strong>${promptSentCount}</strong></div>
+	        <div>Avg review <strong>${escapeHtml(formatSeconds(avgReviewSeconds))}</strong> • avg prompt <strong>${avgPromptChars === null ? '—' : escapeHtml(Math.round(avgPromptChars))}</strong></div>
+	      </div>
+	      <div class="telemetry-chart-grid">
+	        <div class="telemetry-chart-card">
+	          <div class="telemetry-chart-title">Avg review time</div>
+	          ${sparkline(series, 'avgReviewSeconds', { width: 520, height: 72 })}
+	        </div>
+	        <div class="telemetry-chart-card">
+	          <div class="telemetry-chart-title">Avg prompt chars</div>
+	          ${sparkline(series, 'avgPromptChars', { width: 520, height: 72 })}
+	        </div>
+	      </div>
+	      <div class="telemetry-chart-grid">
+	        <div class="telemetry-chart-card">
+	          <div class="telemetry-chart-title">Review time distribution</div>
+	          ${histogram(reviewHist, { formatLabel: (v) => formatSeconds(v) })}
+	        </div>
+	        <div class="telemetry-chart-card">
+	          <div class="telemetry-chart-title">Prompt size distribution</div>
+	          ${histogram(promptHist, { formatLabel: (v) => `${Math.round(Number(v) || 0)}` })}
+	        </div>
+	      </div>
+	    `;
+	  }
 
   generateWorkspaceCard(workspace, isActive) {
     const lastUsed = this.getLastUsed(workspace);
