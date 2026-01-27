@@ -1374,6 +1374,28 @@ header h1 {
   font-size: 0.78rem;
 }
 
+.quick-create-presets {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.quick-create-preset-btn {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.quick-create-preset-btn.is-selected {
+  border-color: var(--accent-primary);
+  background: rgba(31, 111, 235, 0.15);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.12);
+}
+
 .quick-create-btn {
   min-height: 34px;
 }
