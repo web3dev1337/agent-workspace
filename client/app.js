@@ -3211,7 +3211,7 @@ class ClaudeOrchestrator {
       // Don't mark fresh "waiting" sessions as active - they're just showing welcome screen
     }
 
-    // UI stabilizer: avoid rapid busy→idle flicker in status indicators.
+    // UI stabilizer: avoid rapid busy→waiting/idle flicker in status indicators.
     // (Session state updates remain immediate; only the visual dot is delayed.)
     if (statusElement) {
       if (!this.sessionStatusUiTimers) this.sessionStatusUiTimers = new Map();
@@ -3223,10 +3223,21 @@ class ClaudeOrchestrator {
         statusElement.title = next;
       };
 
-      const shouldDelayIdle = next =>
+      const shouldDelayIdle = (next) =>
         next === 'idle' && (previousStatus === 'busy' || previousStatus === 'waiting');
 
-      if (shouldDelayIdle(status)) {
+      const shouldDelayWaiting = (next) =>
+        next === 'waiting' && previousStatus === 'busy';
+
+      if (shouldDelayWaiting(status)) {
+        const timer = setTimeout(() => {
+          this.sessionStatusUiTimers.delete(sessionId);
+          const current = this.sessions.get(sessionId);
+          if (current && current.status !== 'waiting') return;
+          apply('waiting');
+        }, 800);
+        this.sessionStatusUiTimers.set(sessionId, timer);
+      } else if (shouldDelayIdle(status)) {
         const timer = setTimeout(() => {
           this.sessionStatusUiTimers.delete(sessionId);
           const current = this.sessions.get(sessionId);
@@ -3306,7 +3317,18 @@ class ClaudeOrchestrator {
       const shouldDelayIdle = (next) =>
         next === 'idle' && (prev === 'busy' || prev === 'waiting');
 
-      if (shouldDelayIdle(status)) {
+      const shouldDelayWaiting = (next) =>
+        next === 'waiting' && prev === 'busy';
+
+      if (shouldDelayWaiting(status)) {
+        const timer = setTimeout(() => {
+          this.sidebarStatusUiTimers.delete(key);
+          const current = this.sessions.get(sessionId);
+          if (current && current.status !== 'waiting') return;
+          apply('waiting');
+        }, 800);
+        this.sidebarStatusUiTimers.set(key, timer);
+      } else if (shouldDelayIdle(status)) {
         const timer = setTimeout(() => {
           this.sidebarStatusUiTimers.delete(key);
           const current = this.sessions.get(sessionId);
