@@ -96,3 +96,4 @@ Process discipline:
 - [x] Tasks board “wrap/expand” layout: ensure column auto-layout minimizes columns (consider collapsed/hidden lists and fill vertically before adding columns). (PR #294)
 - [x] Dashboard “Advice” tile shows “Failed to load” (investigate `/api/process/advice` errors on fresh startups). (PR #323)
   - Dashboard now shows HTTP error details and supports one-click retry. (PR #337)
+- [x] Worktree list + terminal headers: branch labels should be compact (hide common prefixes), remove forced “@”, and be color-coded by type (feature/fix/etc.), with toggles in Settings. (PR #357)
