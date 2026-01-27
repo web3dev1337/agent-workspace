@@ -43,6 +43,7 @@ describe('ProcessAdvisorService', () => {
     const qAdvice = (result.advice || []).find(a => a.code === 'tier12_over_cap');
     const qActions = Array.isArray(qAdvice?.actions) ? qAdvice.actions : [];
     expect(qActions.some(a => a?.action === 'open-prs')).toBe(true);
+    expect(qActions.some(a => a?.action === 'queue-conveyor-t2')).toBe(true);
 
     const tier3Advice = (result.advice || []).find(a => a.code === 'tier3_unreviewed_prs');
     const actions = Array.isArray(tier3Advice?.actions) ? tier3Advice.actions : [];
