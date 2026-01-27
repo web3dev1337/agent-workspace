@@ -37,7 +37,7 @@ Process discipline:
 
 ## Tasks v2 (multi-board)
 
-- [ ] Multi-board “combined view” improvements:
+- [x] Multi-board “combined view” improvements:
   - [x] List view (not just board/columns), so you can scan lots of cards quickly across multiple selected columns. (PR #304)
   - [x] Better context in rows (board + list labels). (PR #304)
   - [x] Optional “pinned columns” presets and quick switching. (PR #306)
@@ -47,7 +47,7 @@ Process discipline:
 - [ ] Add more signals: commits, PR reviews, PR merges, tasks created/completed, and per-project throughput.
   - [x] Throughput + outcomes from task records: doneCount series, avgVerifyMinutes, outcomeCounts, richer exports. (PR #317)
   - [x] Dashboard UI shows done/outcomes/verify + throughput chart. (PR #318)
-- [ ] Exports + sharing:
+- [x] Exports + sharing:
   - [x] JSON export (PR #308)
   - [x] “Share snapshot” links (PR #311)
 - [ ] Long-running “health” dashboards per project (risk rollups + backlog + lead time).
@@ -58,7 +58,7 @@ Process discipline:
   - [ ] Per-board conventions beyond “Done list”: labels, checklists, and “needs_fix” feedback loops.
     - [x] Queue outcome → Trello feedback loop: apply configured `needsFixLabelName` (and optional comment from Notes). (PR #316)
   - [x] Optional auto-comment templates (links to prompt artifacts, review outcomes, verification notes). (PR #326)
-- [ ] Worktree fleet automation:
+- [x] Worktree fleet automation:
   - [x] “Create N worktrees” presets per project (small/medium/large). (PR #330)
   - [x] Smarter “free worktree” scoring and cleanup hints. (PR #329)
 
