@@ -35,6 +35,7 @@ Process discipline:
   - [x] Voice: “start next review” opens Queue and advances to Next. (PR #341)
   - [x] Voice: “triage queue” opens Queue in triage mode. (PR #345)
   - [x] Advice UI: “Show blockers” and “Start next review” actions. (PR #342, #343)
+  - [x] Commander/voice: open PRs panel. (PR #347)
 
 ## Dependency graph v2 (UX)
 
