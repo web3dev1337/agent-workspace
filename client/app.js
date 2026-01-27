@@ -9358,6 +9358,23 @@ class ClaudeOrchestrator {
 
 		        <div class="tasks-detail-block">
 		          <div class="tasks-detail-block-title">Launch</div>
+              <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+                <div class="tasks-quick-tier-group" data-detail-launch-tier-group title="Tier (Alt+1..4)">
+                  <button class="btn-secondary tasks-quick-tier-btn" type="button" data-detail-launch-tier-btn="1" title="Tier 1 (Alt+1)">T1</button>
+                  <button class="btn-secondary tasks-quick-tier-btn" type="button" data-detail-launch-tier-btn="2" title="Tier 2 (Alt+2)">T2</button>
+                  <button class="btn-secondary tasks-quick-tier-btn" type="button" data-detail-launch-tier-btn="3" title="Tier 3 (Alt+3)">T3</button>
+                  <button class="btn-secondary tasks-quick-tier-btn" type="button" data-detail-launch-tier-btn="4" title="Tier 4 (Alt+4)">T4</button>
+                </div>
+                <div class="tasks-quick-tier-group" data-detail-launch-agent-group title="Agent">
+                  <button class="btn-secondary tasks-quick-tier-btn" type="button" data-detail-launch-agent-btn="claude" title="Claude">Claude</button>
+                  <button class="btn-secondary tasks-quick-tier-btn" type="button" data-detail-launch-agent-btn="codex" title="Codex">Codex</button>
+                </div>
+                <div class="tasks-quick-tier-group" data-detail-launch-mode-group title="Mode">
+                  <button class="btn-secondary tasks-quick-tier-btn" type="button" data-detail-launch-mode-btn="fresh" title="Fresh">Fresh</button>
+                  <button class="btn-secondary tasks-quick-tier-btn" type="button" data-detail-launch-mode-btn="continue" title="Continue">Cont</button>
+                  <button class="btn-secondary tasks-quick-tier-btn" type="button" data-detail-launch-mode-btn="resume" title="Resume">Res</button>
+                </div>
+              </div>
 		          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
 		            <select id="tasks-launch-tier" class="tasks-select tasks-select-inline" title="Tier">
 		              <option value="1" ${defaultLaunchTier === 1 ? 'selected' : ''}>T1</option>
@@ -11328,6 +11345,30 @@ class ClaudeOrchestrator {
 		            renderBoardSettings({ boardId });
 		          });
 
+              const syncDetailLaunchQuickButtons = () => {
+                const tier = String(launchTierEl?.value || '').trim();
+                const agentId = String(launchAgentEl?.value || '').trim().toLowerCase();
+                const mode = String(launchModeEl?.value || '').trim().toLowerCase();
+
+                const tierGroup = detailEl.querySelector('[data-detail-launch-tier-group]');
+                tierGroup?.querySelectorAll?.('[data-detail-launch-tier-btn]')?.forEach?.((b) => {
+                  const v = String(b?.getAttribute?.('data-detail-launch-tier-btn') || '').trim();
+                  b?.classList?.toggle?.('is-selected', !!v && v === tier);
+                });
+
+                const agentGroup = detailEl.querySelector('[data-detail-launch-agent-group]');
+                agentGroup?.querySelectorAll?.('[data-detail-launch-agent-btn]')?.forEach?.((b) => {
+                  const v = String(b?.getAttribute?.('data-detail-launch-agent-btn') || '').trim().toLowerCase();
+                  b?.classList?.toggle?.('is-selected', !!v && v === agentId);
+                });
+
+                const modeGroup = detailEl.querySelector('[data-detail-launch-mode-group]');
+                modeGroup?.querySelectorAll?.('[data-detail-launch-mode-btn]')?.forEach?.((b) => {
+                  const v = String(b?.getAttribute?.('data-detail-launch-mode-btn') || '').trim().toLowerCase();
+                  b?.classList?.toggle?.('is-selected', !!v && v === mode);
+                });
+              };
+
 		          const persistLaunchUi = () => {
 		            const boardId = resolveEffectiveBoardId();
 		            writeLaunchDefaults({
@@ -11340,8 +11381,67 @@ class ClaudeOrchestrator {
                 syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(boardId) });
 		          };
 		          [launchTierEl, launchAgentEl, launchModeEl, launchYoloEl, launchAutoSendEl].forEach((el) => {
-		            el?.addEventListener?.('change', persistLaunchUi);
+		            el?.addEventListener?.('change', () => {
+                  persistLaunchUi();
+                  syncDetailLaunchQuickButtons();
+                });
 		          });
+
+              const detailLaunchTierGroup = detailEl.querySelector('[data-detail-launch-tier-group]');
+              detailLaunchTierGroup?.addEventListener?.('click', (e) => {
+                const btn = e.target?.closest?.('[data-detail-launch-tier-btn]');
+                if (!btn) return;
+                e.preventDefault();
+                const tier = String(btn.getAttribute('data-detail-launch-tier-btn') || '').trim();
+                if (!tier) return;
+                if (launchTierEl) launchTierEl.value = tier;
+                persistLaunchUi();
+                syncDetailLaunchQuickButtons();
+              });
+
+              const detailLaunchAgentGroup = detailEl.querySelector('[data-detail-launch-agent-group]');
+              detailLaunchAgentGroup?.addEventListener?.('click', (e) => {
+                const btn = e.target?.closest?.('[data-detail-launch-agent-btn]');
+                if (!btn) return;
+                e.preventDefault();
+                const agentId = String(btn.getAttribute('data-detail-launch-agent-btn') || '').trim().toLowerCase();
+                if (agentId !== 'claude' && agentId !== 'codex') return;
+                if (launchAgentEl) launchAgentEl.value = agentId;
+                persistLaunchUi();
+                syncDetailLaunchQuickButtons();
+              });
+
+              const detailLaunchModeGroup = detailEl.querySelector('[data-detail-launch-mode-group]');
+              detailLaunchModeGroup?.addEventListener?.('click', (e) => {
+                const btn = e.target?.closest?.('[data-detail-launch-mode-btn]');
+                if (!btn) return;
+                e.preventDefault();
+                const mode = String(btn.getAttribute('data-detail-launch-mode-btn') || '').trim().toLowerCase();
+                if (mode !== 'fresh' && mode !== 'continue' && mode !== 'resume') return;
+                if (launchModeEl) launchModeEl.value = mode;
+                persistLaunchUi();
+                syncDetailLaunchQuickButtons();
+              });
+
+              // Alt+1..4 sets tier quickly when viewing card detail (avoid typing conflicts).
+              if (this.tasksDetailLaunchKeyHandler) {
+                try { detailEl.removeEventListener('keydown', this.tasksDetailLaunchKeyHandler); } catch {}
+              }
+              this.tasksDetailLaunchKeyHandler = (e) => {
+                if (!e || !e.altKey) return;
+                const target = e.target;
+                const tag = String(target?.tagName || '').toUpperCase();
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
+                const n = Number(e.key);
+                if (!(n >= 1 && n <= 4)) return;
+                e.preventDefault();
+                if (launchTierEl) launchTierEl.value = String(n);
+                persistLaunchUi();
+                syncDetailLaunchQuickButtons();
+              };
+              detailEl.addEventListener('keydown', this.tasksDetailLaunchKeyHandler);
+
+              syncDetailLaunchQuickButtons();
 
 		          launchBtn?.addEventListener('click', async () => {
 		            if (!state.selectedCardId) return;
