@@ -7247,8 +7247,38 @@ class ClaudeOrchestrator {
         if (!v) return '';
         if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return v;
         if (/^(rgb|rgba|hsl|hsla)\\([0-9., %]+\\)$/.test(v)) return v;
-        if (/^[a-zA-Z]+$/.test(v)) return v;
+        // Avoid accepting arbitrary words as CSS colors (e.g., Trello uses "sky").
+        const keyword = v.toLowerCase();
+        const allowed = new Set(['red', 'green', 'blue', 'orange', 'yellow', 'purple', 'pink', 'lime', 'black', 'white', 'gray', 'grey', 'cyan', 'teal', 'magenta']);
+        if (allowed.has(keyword)) return keyword;
         return '';
+      };
+
+      const resolveBoardAccentColor = (board) => {
+        if (!board || typeof board !== 'object') return '';
+        const prefs = board?.prefs || {};
+        const direct = sanitizeCssColor(prefs?.backgroundColor || prefs?.backgroundTopColor || prefs?.backgroundBottomColor || '');
+        if (direct) return direct;
+
+        const background = String(prefs?.background || '').trim().toLowerCase();
+        if (!background) return '';
+
+        // Best-effort mapping for Trello color backgrounds.
+        const map = {
+          blue: '#0079bf',
+          orange: '#d29034',
+          green: '#519839',
+          red: '#b04632',
+          purple: '#89609e',
+          pink: '#cd5a91',
+          lime: '#4bbf6b',
+          sky: '#00aecc',
+          grey: '#838c91',
+          gray: '#838c91',
+          black: '#4d4d4d',
+          yellow: '#d9b51c'
+        };
+        return sanitizeCssColor(map[background] || '');
       };
 
       const setBoardAccent = (value) => {
@@ -7267,7 +7297,7 @@ class ClaudeOrchestrator {
 
 	      const syncBoardAccent = () => {
 	        const board = Array.isArray(state.boards) ? state.boards.find((b) => b?.id === state.boardId) : null;
-	        const color = board?.prefs?.backgroundColor || '';
+	        const color = resolveBoardAccentColor(board);
 	        setBoardAccent(color);
 	      };
 
@@ -7275,8 +7305,7 @@ class ClaudeOrchestrator {
         const bid = String(boardId || '').trim();
         if (!bid || bid === ALL_BOARDS_ID || bid === COMBINED_VIEW_ID) return '';
         const board = Array.isArray(state.boards) ? state.boards.find((b) => b?.id === bid) : null;
-        const color = board?.prefs?.backgroundColor || '';
-        return sanitizeCssColor(color);
+        return resolveBoardAccentColor(board);
       };
 
       const isBoardMenuOpen = () => !!boardMenuEl && !boardMenuEl.classList.contains('hidden');
@@ -8861,7 +8890,7 @@ class ClaudeOrchestrator {
       }
 
       const isAllBoards = state.boardId === ALL_BOARDS_ID;
-      const boardColorById = new Map((Array.isArray(state.boards) ? state.boards : []).map((b) => [b?.id, b?.prefs?.backgroundColor]).filter(([id]) => !!id));
+      const boardColorById = new Map((Array.isArray(state.boards) ? state.boards : []).map((b) => [b?.id, resolveBoardAccentColor(b)]).filter(([id]) => !!id));
       const globalDefaults = readLaunchDefaults();
       const globalTier = Number(globalDefaults?.tier || 3);
 
@@ -9391,7 +9420,7 @@ class ClaudeOrchestrator {
 
         const board = boardsById.get(boardId);
         const boardName = String(board?.name || boardId);
-        const boardColor = sanitizeCssColor(board?.prefs?.backgroundColor || '');
+        const boardColor = resolveBoardAccentColor(board);
         const meta = metaByBoard.get(boardId) || { lists: [] };
         const list = (meta?.lists || []).find((l) => l?.id === listId);
         const listName = String(list?.name || listId);
@@ -9789,8 +9818,7 @@ class ClaudeOrchestrator {
       const isWrapExpand = layoutMode === 'wrap-expand';
 
       const board = Array.isArray(state.boards) ? state.boards.find(b => b?.id === state.boardId) : null;
-      const boardColor = board?.prefs?.backgroundColor || '';
-      setBoardAccent(boardColor);
+      setBoardAccent(resolveBoardAccentColor(board));
 
       const membersById = new Map((state.boardMembers || []).map(m => [m?.id, m]).filter(([id]) => !!id));
       const trelloLabelColor = (label) => {
