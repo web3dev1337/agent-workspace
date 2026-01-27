@@ -64,6 +64,9 @@ class ClaudeOrchestrator {
     // Launch helpers (ticket/card → worktree → agent → auto-prompt)
     this.pendingAutoPrompts = new Map(); // sessionId -> { text, createdAt, sentAt }
     this.pendingWorktreeLaunches = new Map(); // worktreeId -> { promptText, autoSendPrompt, agentConfig }
+    // Optimistic “in-use” tracking: while a worktree is starting (sessions not yet added), treat it as in-use
+    // so Quick Work / Add Worktree won’t recommend it again.
+    this.pendingWorktreeReservations = new Map(); // `${repoPathNorm}::${worktreeId}` -> expiresAtMs
     this.scannedReposCache = { value: null, fetchedAt: 0 };
     this.worktreeModalKeepOpen = this.loadWorktreeModalKeepOpenPreference();
 
@@ -112,6 +115,57 @@ class ClaudeOrchestrator {
       } catch {
         // ignore
       }
+    }
+  }
+
+  normalizeWorktreePath(p) {
+    return String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').trim();
+  }
+
+  reserveWorktree(repoPath, worktreeId, { ttlMs } = {}) {
+    const repo = this.normalizeWorktreePath(repoPath);
+    const id = String(worktreeId || '').trim();
+    if (!repo || !id) return;
+    const ttl = Number.isFinite(Number(ttlMs)) ? Number(ttlMs) : 45_000;
+    const expiresAt = Date.now() + Math.max(5_000, ttl);
+    this.pendingWorktreeReservations.set(`${repo}::${id}`, expiresAt);
+  }
+
+  clearWorktreeReservation(repoPath, worktreeId) {
+    const repo = this.normalizeWorktreePath(repoPath);
+    const id = String(worktreeId || '').trim();
+    if (!repo || !id) return;
+    this.pendingWorktreeReservations.delete(`${repo}::${id}`);
+  }
+
+  clearWorktreeReservationByWorktreeId(worktreeId) {
+    const id = String(worktreeId || '').trim();
+    if (!id || !this.pendingWorktreeReservations?.size) return;
+    for (const key of this.pendingWorktreeReservations.keys()) {
+      if (key.endsWith(`::${id}`)) this.pendingWorktreeReservations.delete(key);
+    }
+  }
+
+  isWorktreeReserved(repoPath, worktreeId) {
+    const repo = this.normalizeWorktreePath(repoPath);
+    const id = String(worktreeId || '').trim();
+    if (!repo || !id) return false;
+    const key = `${repo}::${id}`;
+    const expiresAt = this.pendingWorktreeReservations.get(key);
+    if (!expiresAt) return false;
+    const now = Date.now();
+    if (expiresAt <= now) {
+      this.pendingWorktreeReservations.delete(key);
+      return false;
+    }
+    return true;
+  }
+
+  cleanupExpiredWorktreeReservations() {
+    if (!this.pendingWorktreeReservations?.size) return;
+    const now = Date.now();
+    for (const [key, expiresAt] of this.pendingWorktreeReservations.entries()) {
+      if (!expiresAt || expiresAt <= now) this.pendingWorktreeReservations.delete(key);
     }
   }
   
@@ -455,6 +509,21 @@ class ClaudeOrchestrator {
         if (tier >= 1 && tier <= 4) {
           const sessionIds = Object.keys(sessions || {});
           this.applyStartTierToNewSessions(sessionIds, tier);
+        }
+
+        // Clear optimistic “starting” reservation now that the sessions exist.
+        try {
+          const sessionStates = Object.values(sessions || {});
+          const sample = sessionStates && sessionStates.length ? sessionStates[0] : null;
+          const repoRoot = this.normalizeWorktreePath(sample?.repositoryRoot || '');
+          if (repoRoot) {
+            this.clearWorktreeReservation(repoRoot, worktreeId);
+          } else {
+            // Fallback: clear any reservation for this worktree id.
+            this.clearWorktreeReservationByWorktreeId(worktreeId);
+          }
+        } catch {
+          // ignore
         }
 
         // Show success message
@@ -15420,6 +15489,10 @@ class ClaudeOrchestrator {
 
 	    const normalizePath = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').trim();
 	    const repoPathNorm = normalizePath(repoPath);
+
+    // While worktree sessions are spinning up, we reserve the worktree so it isn't recommended again.
+    this.cleanupExpiredWorktreeReservations();
+    if (this.isWorktreeReserved(repoPathNorm, worktreeId)) return true;
 	
 	    // Extract repo name from path for session matching
 	    const repoName = (repoNameOverride || repoPathNorm.split('/').pop() || '').toLowerCase();
@@ -15524,6 +15597,7 @@ class ClaudeOrchestrator {
       return;
     }
 
+    this.reserveWorktree(repositoryRoot || repoPath, worktreeId);
     this.showTemporaryMessage(`Starting ${repoName} ${worktreeId}...`, 'success');
     const startTier = Number(this.quickWorktreeStartTier);
     this.socket.emit('add-worktree-sessions', {
@@ -15588,6 +15662,9 @@ class ClaudeOrchestrator {
         }
       }
 
+      // Optimistically reserve so Quick Work doesn't recommend it again while sessions are being created.
+      this.reserveWorktree(repoPath, worktreeId);
+
       const response = await fetch('/api/workspaces/add-mixed-worktree', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -15611,10 +15688,12 @@ class ClaudeOrchestrator {
         // Server will emit 'worktree-sessions-added' which is handled by our socket listener
       } else {
         const error = await response.text();
+        this.clearWorktreeReservation(repoPath, worktreeId);
         this.showTemporaryMessage('Failed to add worktree: ' + error, 'error');
       }
     } catch (error) {
       console.error('Error adding worktree:', error);
+      this.clearWorktreeReservation(repoPath, worktreeId);
       this.showTemporaryMessage('Error: ' + error.message, 'error');
     }
   }
@@ -15754,6 +15833,7 @@ class ClaudeOrchestrator {
         return { worktreeId: nextId, worktreePath: `${repo.path}/${nextId}`, repositoryRoot: repo.path, repositoryName: repo.name };
       } catch (e) {
         this.pendingWorktreeLaunches.delete(nextId);
+        this.clearWorktreeReservation(repo.path, nextId);
         this.showToast(String(e?.message || e), 'error');
       }
     }
@@ -15774,6 +15854,7 @@ class ClaudeOrchestrator {
 
 	    if (!this.socket) {
 	      this.pendingWorktreeLaunches.delete(recommended.id);
+        this.clearWorktreeReservation(repo.path, recommended.id);
 	      this.showToast('Socket not available', 'error');
 	      return;
 	    }
@@ -15973,6 +16054,7 @@ class ClaudeOrchestrator {
 
     if (!recommended && this.autoCreateExtraWorktreesWhenBusy) {
       const nextId = this.getNextWorktreeIdForRepo(repo);
+      this.reserveWorktree(repo.path, nextId);
       this.pendingWorktreeLaunches.set(nextId, {
         promptText: prompt,
         autoSendPrompt: !!autoSendPrompt,
@@ -16002,6 +16084,7 @@ class ClaudeOrchestrator {
     }
 
     // Ensure we register the pending launch before emitting, to avoid races.
+    this.reserveWorktree(repo.path, recommended.id);
     this.pendingWorktreeLaunches.set(recommended.id, {
       promptText: prompt,
       autoSendPrompt: !!autoSendPrompt,
