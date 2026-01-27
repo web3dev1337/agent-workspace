@@ -67,13 +67,13 @@ Process discipline:
 - [ ] Tasks panel: card detail pane sometimes opens on the wrong side and/or causes vertical reflow of the board area.
 - [ ] Tasks launch UX: from a card, launch `T1/T2/T3/T4` agent in 1–2 clicks (dropdown + hotkey-friendly).
 - [x] Tasks panel: Trello board “mapping/settings” control should always open (if it appears enabled); if no-op, surface an error/toast. (PR #314)
-- [ ] Tasks panel: Trello board colors/background per-board (verify consistency).
-- [ ] Agent terminal header: “Start server” control should be present and functional (no hunting in other panels).
-- [ ] Tasks panel: “Open Trello board” quick link should exist and point at the selected board.
-- [ ] Add-worktree modal: support “Add & close” and “Add another” (keep adding without modal churn), and refresh availability immediately.
-- [ ] Removing a worktree from a workspace should remove both terminals immediately (no F5 needed).
-- [ ] Tasks panel: default assignee filter should be “All/Any”, not implicitly “me”.
-- [ ] Tasks panel: “New task” button should be obvious and always visible when a board is selected.
-- [ ] Worktree “quick add” should re-evaluate after creating a new worktree (avoid suggesting the just-created worktree as “free”).
-- [ ] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start.
-- [ ] Tasks board “wrap/expand” layout: ensure column auto-layout minimizes columns (consider collapsed/hidden lists and fill vertically before adding columns).
+- [x] Tasks panel: Trello board colors/background per-board (verify consistency). (PR #300)
+- [x] Agent terminal header: “Start server” control should be present and functional (no hunting in other panels). (PR #277)
+- [x] Tasks panel: “Open Trello board” quick link should exist and point at the selected board. (PR #279)
+- [x] Add-worktree modal: support “Add & close” and “Add another” (keep adding without modal churn), and refresh availability immediately. (PR #285)
+- [x] Removing a worktree from a workspace should remove both terminals immediately (no F5 needed). (PR #281)
+- [x] Tasks panel: default assignee filter should be “All/Any”, not implicitly “me”. (PR #283)
+- [x] Tasks panel: “New task” button should be obvious and always visible when a board is selected. (PR #287)
+- [x] Worktree “quick add” should re-evaluate after creating a new worktree (avoid suggesting the just-created worktree as “free”). (PR #289)
+- [x] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start. (PR #292)
+- [x] Tasks board “wrap/expand” layout: ensure column auto-layout minimizes columns (consider collapsed/hidden lists and fill vertically before adding columns). (PR #294)
