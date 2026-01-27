@@ -56,6 +56,9 @@ describe('ProcessAdvisorService', () => {
     const result = await svc.getAdvice({ mode: 'mine', lookbackHours: 24, force: true });
     const codes = (result.advice || []).map(a => a.code);
     expect(codes).toContain('tier12_blocked');
+    const blockedAdvice = (result.advice || []).find(a => a.code === 'tier12_blocked');
+    const actions = Array.isArray(blockedAdvice?.actions) ? blockedAdvice.actions : [];
+    expect(actions.some(a => a?.action === 'queue-blockers')).toBe(true);
   });
 
   test('adds verify + risk signals', async () => {
