@@ -7,7 +7,7 @@ This is the “bigger than PR-sized” wishlist after the 2026-01-25 brain dump 
 Source context:
 - `PLANS/2026-01-25/BRAIN_DUMP_2026-01-25.md`
 - `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md`
-- `PLANS/2026-01-25/REMAINING_NEXT_PHASE.md` (now 100% complete)
+- `PLANS/2026-01-25/REMAINING_NEXT_PHASE.md` (what shipped + what’s left)
 
 Process discipline:
 - Small PRs; run tests; commit + push + merge continuously.
@@ -17,8 +17,8 @@ Process discipline:
 
 ## Workflow v2 (Focus / Review / Background)
 
-- [ ] “Conveyor” mode for Review: one-at-a-time Tier 2 queue + explicit “Next” affordances (minimize decision fatigue).
-- [ ] Stronger “Review complete” feedback loop: per-task nudges, sound/desktop options, and auto-open next item when configured.
+- [x] “Conveyor” mode for Review: one-at-a-time Tier 2 queue + explicit “Next” affordances (minimize decision fatigue). (PR #313)
+- [x] Stronger “Review complete” feedback loop: per-task nudges, sound/desktop options, and auto-open next item when configured. (PR #313)
 - [ ] “Background” mode improvements: triage queue + auto-scheduling rules (e.g., tiered retries, safe backoff).
 
 ## Advisor / Coach v2 (recommendations)
@@ -55,3 +55,22 @@ Process discipline:
 - [ ] Worktree fleet automation:
   - [ ] “Create N worktrees” presets per project (small/medium/large).
   - [ ] Smarter “free worktree” scoring and cleanup hints.
+
+---
+
+## Live UX reports / regression watchlist (verify on latest `main`)
+
+- [ ] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active.
+- [ ] Tasks panel: card detail pane sometimes opens on the wrong side and/or causes vertical reflow of the board area.
+- [ ] Tasks launch UX: from a card, launch `T1/T2/T3/T4` agent in 1–2 clicks (dropdown + hotkey-friendly).
+- [ ] Tasks panel: Trello board “mapping/settings” control should always open (if it appears enabled); if no-op, surface an error/toast.
+- [ ] Tasks panel: Trello board colors/background per-board (verify consistency).
+- [ ] Agent terminal header: “Start server” control should be present and functional (no hunting in other panels).
+- [ ] Tasks panel: “Open Trello board” quick link should exist and point at the selected board.
+- [ ] Add-worktree modal: support “Add & close” and “Add another” (keep adding without modal churn), and refresh availability immediately.
+- [ ] Removing a worktree from a workspace should remove both terminals immediately (no F5 needed).
+- [ ] Tasks panel: default assignee filter should be “All/Any”, not implicitly “me”.
+- [ ] Tasks panel: “New task” button should be obvious and always visible when a board is selected.
+- [ ] Worktree “quick add” should re-evaluate after creating a new worktree (avoid suggesting the just-created worktree as “free”).
+- [ ] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start.
+- [ ] Tasks board “wrap/expand” layout: ensure column auto-layout minimizes columns (consider collapsed/hidden lists and fill vertically before adding columns).
