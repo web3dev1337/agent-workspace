@@ -15439,15 +15439,31 @@ class ClaudeOrchestrator {
         return;
       }
 
-      this.quickStartWorktree({
-        repoPath,
-        repoType,
-        repoName,
-        worktreeId,
-        worktreePath,
-        repositoryRoot,
-        keepOpen
-      });
+      (async () => {
+        const prevText = btn.textContent;
+        try {
+          btn.disabled = true;
+          btn.classList.add('is-starting');
+          btn.textContent = 'Starting…';
+          await this.quickStartWorktree({
+            repoPath,
+            repoType,
+            repoName,
+            worktreeId,
+            worktreePath,
+            repositoryRoot,
+            keepOpen,
+            explicitSelection: false
+          });
+        } catch (err) {
+          console.error('Quick start worktree failed:', err);
+          this.showToast(String(err?.message || err), 'error');
+        } finally {
+          btn.disabled = false;
+          btn.classList.remove('is-starting');
+          btn.textContent = prevText;
+        }
+      })();
     };
   }
 
@@ -15595,8 +15611,9 @@ class ClaudeOrchestrator {
           worktreeId,
           worktreePath,
           repositoryRoot: item.dataset.repoRoot || repoPath,
-          keepOpen
-        });
+          keepOpen,
+          explicitSelection: true
+        }).catch(() => {});
       }
 
       this.closeQuickWorktreeMenu();
@@ -15635,19 +15652,7 @@ class ClaudeOrchestrator {
     const paths = Array.from(new Set(items.map(btn => btn.dataset.worktreePath).filter(Boolean)));
     if (!paths.length) return;
 
-    // In dev, the client dev server proxies `/api` to the backend (ORCHESTRATOR_PORT),
-    // so always using the current origin keeps this working across ports.
-    const serverUrl = window.location.origin;
-
-    const response = await fetch(`${serverUrl}/api/worktree-metadata/batch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paths })
-    });
-
-    if (!response.ok) return;
-
-    const data = await response.json();
+    const data = await this.fetchWorktreeMetadataBatch(paths);
     items.forEach(btn => {
       const meta = data[btn.dataset.worktreePath];
       if (!meta) return;
@@ -15655,6 +15660,9 @@ class ClaudeOrchestrator {
       const branch = meta.git?.branch || 'unknown';
       const pr = meta.pr || {};
       const risk = String(meta.project?.baseImpactRisk || '').toLowerCase();
+      const dirty = meta.git?.hasUncommittedChanges ? Number(meta.git?.total || 0) : 0;
+      const ahead = Number(meta.git?.ahead || 0);
+      const behind = Number(meta.git?.behind || 0);
 
       let prLabel = '';
       let prClass = '';
@@ -15676,6 +15684,13 @@ class ClaudeOrchestrator {
 
       const id = btn.dataset.worktreeId || '';
       let suffix = prLabel ? ` • ${prLabel}` : '';
+      if (dirty > 0) suffix += ` • dirty:${dirty}`;
+      if (behind > 0 || ahead > 0) {
+        const parts = [];
+        if (behind > 0) parts.push(`⇣${behind}`);
+        if (ahead > 0) parts.push(`⇡${ahead}`);
+        suffix += ` • ${parts.join(' ')}`;
+      }
       if (risk) {
         suffix += ` • risk: ${risk}`;
         btn.classList.remove('risk-low', 'risk-medium', 'risk-high', 'risk-critical');
@@ -16421,18 +16436,182 @@ class ClaudeOrchestrator {
     }
   }
 
-  quickStartWorktree({ repoPath, repoType, repoName, worktreeId, worktreePath, repositoryRoot, keepOpen = false }) {
+  getQuickWorktreeCandidatesForRepo(repo) {
+    const r = repo && typeof repo === 'object' ? repo : {};
+    const repoPath = String(r.path || '').trim();
+    const repoName = String(r.name || '').trim();
+    const entries = Array.isArray(r.worktreeDirs) ? r.worktreeDirs : [];
+
+    if (!entries.length) {
+      if (!repoPath) return [];
+      return [{
+        id: 'root',
+        path: repoPath,
+        number: 0,
+        effectiveLastUsedMs: Number(r.lastModifiedMs || 0)
+      }].filter((c) => !this.isWorktreeInUse(repoPath, c.id, repoName));
+    }
+
+    return entries
+      .filter((e) => e && e.id && !this.isWorktreeInUse(repoPath, e.id, repoName))
+      .map((e) => {
+        const id = String(e.id || '').trim();
+        const lastActivity = this.getWorktreeLastActivity(r, id);
+        const entryMtime = typeof e.lastModifiedMs === 'number' ? e.lastModifiedMs : 0;
+        const effectiveLastUsedMs = Math.max(entryMtime, lastActivity || 0);
+        const number = Number(e.number || parseInt(id.replace(/^work/i, ''), 10) || 0);
+        return {
+          id,
+          path: String(e.path || `${repoPath}/${id}`),
+          number,
+          effectiveLastUsedMs
+        };
+      })
+      .sort((a, b) => (a.number || 0) - (b.number || 0));
+  }
+
+  async fetchWorktreeMetadataBatch(paths) {
+    const raw = Array.isArray(paths) ? paths.map((p) => String(p || '').trim()).filter(Boolean) : [];
+    const unique = Array.from(new Set(raw));
+    if (!unique.length) return {};
+
+    const serverUrl = window.location.origin;
+    const response = await fetch(`${serverUrl}/api/worktree-metadata/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths: unique })
+    });
+    if (!response.ok) return {};
+    const data = await response.json();
+    return data && typeof data === 'object' ? data : {};
+  }
+
+  scoreQuickWorktreeCandidate(candidate, meta) {
+    const c = candidate && typeof candidate === 'object' ? candidate : {};
+    const m = meta && typeof meta === 'object' ? meta : {};
+    const git = m.git || {};
+    const pr = m.pr || {};
+
+    const now = Date.now();
+    const usedMs = Number(c.effectiveLastUsedMs || 0);
+    const ageDays = usedMs ? Math.max(0, (now - usedMs) / (24 * 60 * 60 * 1000)) : 0;
+
+    let score = 0;
+    // Prefer reusing older worktrees (minimize churn) but cap the effect.
+    score += Math.min(90, ageDays);
+
+    // Avoid reusing in-progress PR worktrees.
+    if (pr && pr.hasPR) {
+      const state = String(pr.state || '').toLowerCase();
+      if (state === 'open') score -= 1200;
+      else if (state === 'merged') score -= 250;
+      else if (state === 'closed') score -= 150;
+      else score -= 300;
+    }
+
+    // Prefer clean worktrees.
+    if (git && git.hasUncommittedChanges) {
+      const total = Number(git.total || 0);
+      score -= 200 + Math.min(400, total * 12);
+    } else {
+      score += 20;
+    }
+
+    // Prefer up-to-date worktrees.
+    const behind = Number(git.behind || 0);
+    if (behind > 0) score -= Math.min(240, behind * 30);
+
+    // Avoid starting directly on main/master if there are multiple candidates.
+    const branch = String(git.branch || '').toLowerCase();
+    if (branch === 'main' || branch === 'master') score -= 600;
+
+    return score;
+  }
+
+  async pickBestFreeWorktreeForRepo(repo, { fallbackId = '', fallbackPath = '' } = {}) {
+    const r = repo && typeof repo === 'object' ? repo : null;
+    if (!r || !r.path) return null;
+
+    if (!this.quickWorktreeBestPickCache) this.quickWorktreeBestPickCache = new Map();
+    const cacheKey = String(r.path || '').trim();
+    const cached = this.quickWorktreeBestPickCache.get(cacheKey);
+    const ttlMs = 15_000;
+
+    if (cached && (Date.now() - (cached.at || 0) < ttlMs)) {
+      const cachedId = String(cached?.value?.id || '').trim();
+      if (cachedId && !this.isWorktreeInUse(r.path, cachedId, r.name)) return cached.value;
+    }
+
+    const candidates = this.getQuickWorktreeCandidatesForRepo(r);
+    if (!candidates.length) return null;
+    if (candidates.length === 1) {
+      const only = candidates[0];
+      this.quickWorktreeBestPickCache.set(cacheKey, { value: only, at: Date.now() });
+      return only;
+    }
+
+    const metaByPath = await this.fetchWorktreeMetadataBatch(candidates.map((c) => c.path)).catch(() => ({}));
+
+    let best = null;
+    let bestScore = -Infinity;
+    for (const c of candidates) {
+      const meta = metaByPath?.[c.path] || null;
+      const score = this.scoreQuickWorktreeCandidate(c, meta);
+      if (score > bestScore) {
+        bestScore = score;
+        best = c;
+        continue;
+      }
+
+      if (score === bestScore && best) {
+        const a = Number(c.effectiveLastUsedMs || 0);
+        const b = Number(best.effectiveLastUsedMs || 0);
+        if (a && b && a < b) best = c;
+        else if (a === b && Number(c.number || 0) < Number(best.number || 0)) best = c;
+      }
+    }
+
+    if (!best && fallbackId && fallbackPath) {
+      best = { id: fallbackId, path: fallbackPath, number: 0, effectiveLastUsedMs: 0 };
+    }
+
+    if (best) this.quickWorktreeBestPickCache.set(cacheKey, { value: best, at: Date.now() });
+    return best;
+  }
+
+  async quickStartWorktree({ repoPath, repoType, repoName, worktreeId, worktreePath, repositoryRoot, keepOpen = false, explicitSelection = false }) {
     if (!this.socket) {
       this.showTemporaryMessage('Socket not connected', 'error');
       return;
     }
 
-    this.reserveWorktree(repositoryRoot || repoPath, worktreeId);
-    this.showTemporaryMessage(`Starting ${repoName} ${worktreeId}...`, 'success');
+    let resolvedWorktreeId = String(worktreeId || '').trim();
+    let resolvedWorktreePath = String(worktreePath || '').trim();
+
+    if (!explicitSelection) {
+      const repos = Array.isArray(this.quickWorktreeReposRaw) ? this.quickWorktreeReposRaw : [];
+      const repo = repos.find((r) => String(r?.path || '').trim() === String(repoPath || '').trim()) || null;
+      const best = await this.pickBestFreeWorktreeForRepo(repo, {
+        fallbackId: resolvedWorktreeId,
+        fallbackPath: resolvedWorktreePath
+      }).catch(() => null);
+      if (best?.id && best?.path) {
+        resolvedWorktreeId = String(best.id || '').trim();
+        resolvedWorktreePath = String(best.path || '').trim();
+      }
+    }
+
+    if (!resolvedWorktreeId || !resolvedWorktreePath) {
+      this.showTemporaryMessage('No available worktrees for this repo', 'error');
+      return;
+    }
+
+    this.reserveWorktree(repositoryRoot || repoPath, resolvedWorktreeId);
+    this.showTemporaryMessage(`Starting ${repoName} ${resolvedWorktreeId}...`, 'success');
     const startTier = Number(this.quickWorktreeStartTier);
     this.socket.emit('add-worktree-sessions', {
-      worktreeId,
-      worktreePath,
+      worktreeId: resolvedWorktreeId,
+      worktreePath: resolvedWorktreePath,
       repositoryName: repoName,
       repositoryType: repoType,
       repositoryRoot: repositoryRoot || repoPath,
