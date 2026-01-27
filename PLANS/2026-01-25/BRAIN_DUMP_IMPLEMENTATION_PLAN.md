@@ -5,7 +5,10 @@ Source transcript: `PLANS/2026-01-25/BRAIN_DUMP_2026-01-25.md`.
 This file converts the brain dump into **decisions, current status, data model, and shippable PR-sized steps**.
 
 Date: 2026-01-25
-Last updated: 2026-01-26
+Last updated: 2026-01-27
+
+Process discipline (for this plan):
+- Make small PR-sized changes, run tests, then commit + push + merge (do not leave unpushed local work).
 
 ---
 

@@ -59,7 +59,7 @@ class SessionManager extends EventEmitter {
     this.branchRefreshInterval = null;
     this.maxProcessesPerSession = parseInt(process.env.MAX_PROCESSES_PER_SESSION || this.config.sessions.maxProcessesPerSession.toString());
     this.maxBufferSize = parseInt(process.env.MAX_BUFFER_SIZE || this.config.sessions.maxBufferSize.toString());
-    this.statusMinHoldMs = parseInt(process.env.STATUS_MIN_HOLD_MS || '300');
+    this.statusMinHoldMs = parseInt(process.env.STATUS_MIN_HOLD_MS || '1500');
     this.branchRefreshMs = parseInt(process.env.BRANCH_REFRESH_MS || '60000');
     this.conversationSnapshotTtlMs = parseInt(process.env.CONVERSATION_SNAPSHOT_TTL_MS || '5000');
     this.conversationSnapshotCache = { timestamp: 0, files: null };
