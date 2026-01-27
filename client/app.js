@@ -9734,6 +9734,10 @@ class ClaudeOrchestrator {
 	      const tag = String(e?.target?.tagName || '').toLowerCase();
 	      const isTypingTarget = tag === 'input' || tag === 'textarea' || tag === 'select' || e?.target?.isContentEditable;
 
+	      const applyDefaultsUi = (boardId) => {
+	        syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(boardId) });
+	      };
+
 	      const getRows = () => Array.from(cardsEl?.querySelectorAll?.('.task-card-row') || []);
 
 	      const getActiveRow = () => {
@@ -9785,7 +9789,7 @@ class ClaudeOrchestrator {
 	        try {
 	          const defaults = readLaunchDefaults();
 	          writeLaunchDefaults({ tier });
-	          syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(boardId) });
+	          applyDefaultsUi(boardId);
 	          const card = await fetchCardDetail(cardId);
 	          const promptText = String(card?.desc ?? '');
 	          await this.launchAgentFromTaskCard({
@@ -9806,6 +9810,25 @@ class ClaudeOrchestrator {
 	      };
 
 	      if (!isTypingTarget) {
+	        if (e.key === '/' && searchEl) {
+	          e.preventDefault();
+	          try {
+	            searchEl.focus();
+	            searchEl.select?.();
+	          } catch {
+	            // ignore
+	          }
+	          return;
+	        }
+	        if (e.key === 'b' || e.key === 'B') {
+	          e.preventDefault();
+	          try {
+	            boardBtnEl?.click?.();
+	          } catch {
+	            // ignore
+	          }
+	          return;
+	        }
 	        if (e.key === 'ArrowDown') {
 	          e.preventDefault();
 	          const rows = getRows();
@@ -9855,6 +9878,50 @@ class ClaudeOrchestrator {
 	          } catch {
 	            // ignore
 	          }
+	          return;
+	        }
+	        if (e.key === 'c' || e.key === 'C') {
+	          e.preventDefault();
+	          writeLaunchDefaults({ agentId: 'claude' });
+	          applyDefaultsUi(state.boardId);
+	          return;
+	        }
+	        if (e.key === 'x' || e.key === 'X') {
+	          e.preventDefault();
+	          writeLaunchDefaults({ agentId: 'codex' });
+	          applyDefaultsUi(state.boardId);
+	          return;
+	        }
+	        if (e.key === 'f' || e.key === 'F') {
+	          e.preventDefault();
+	          writeLaunchDefaults({ mode: 'fresh' });
+	          applyDefaultsUi(state.boardId);
+	          return;
+	        }
+	        if (e.key === 'n' || e.key === 'N') {
+	          e.preventDefault();
+	          writeLaunchDefaults({ mode: 'continue' });
+	          applyDefaultsUi(state.boardId);
+	          return;
+	        }
+	        if (e.key === 'r' || e.key === 'R') {
+	          e.preventDefault();
+	          writeLaunchDefaults({ mode: 'resume' });
+	          applyDefaultsUi(state.boardId);
+	          return;
+	        }
+	        if (e.key === 'y' || e.key === 'Y') {
+	          e.preventDefault();
+	          const d = readLaunchDefaults();
+	          writeLaunchDefaults({ yolo: !(d.yolo !== false) });
+	          applyDefaultsUi(state.boardId);
+	          return;
+	        }
+	        if (e.key === 'p' || e.key === 'P') {
+	          e.preventDefault();
+	          const d = readLaunchDefaults();
+	          writeLaunchDefaults({ autoSendPrompt: !(d.autoSendPrompt !== false) });
+	          applyDefaultsUi(state.boardId);
 	          return;
 	        }
 	        if (e.key === 'l' || e.key === 'L') {
