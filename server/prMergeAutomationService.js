@@ -69,15 +69,28 @@ class PrMergeAutomationService {
 
   getConfig() {
     const cfg = this.userSettingsService?.settings?.global?.ui?.tasks?.automations?.trello?.onPrMerged || {};
+    const template = String(cfg.commentTemplate || '').trim();
     return {
       enabled: !!cfg.enabled,
       pollEnabled: cfg.pollEnabled !== false,
       webhookEnabled: !!cfg.webhookEnabled,
       comment: cfg.comment !== false,
+      commentTemplate: template || 'Merged ✅\nPR: {prUrl}',
       moveToDoneList: cfg.moveToDoneList !== false,
       closeIfNoDoneList: !!cfg.closeIfNoDoneList,
       pollMs: Math.max(10_000, Math.min(10 * 60_000, Number(cfg.pollMs) || 60_000))
     };
+  }
+
+  renderCommentTemplate(template, vars = {}) {
+    const tpl = String(template || '').trim();
+    if (!tpl) return '';
+    const map = (vars && typeof vars === 'object') ? vars : {};
+    return tpl.replace(/\{([a-zA-Z0-9_]+)\}/g, (_m, key) => {
+      const v = map[key];
+      if (v === undefined || v === null) return '';
+      return String(v);
+    }).trim();
   }
 
   listCandidatePrRecords({ limit = 60 } = {}) {
@@ -196,7 +209,19 @@ class PrMergeAutomationService {
 
     if (cfg.comment) {
       try {
-        const text = `Merged ✅\nPR: ${prUrl}`;
+        const key = boardId ? `${providerId}:${boardId}` : '';
+        const configured = key ? (this.userSettingsService?.settings?.global?.ui?.tasks?.boardConventions?.[key] || null) : null;
+        const boardTemplate = String(configured?.mergedCommentTemplate || '').trim();
+        const template = boardTemplate || cfg.commentTemplate;
+        const text = this.renderCommentTemplate(template, {
+          prUrl,
+          mergedAt: mergedIso,
+          ticketCardUrl: cardUrl || (card?.url ? String(card.url) : ''),
+          reviewOutcome: String(existing?.reviewOutcome || ''),
+          verifyMinutes: existing?.verifyMinutes ?? '',
+          notes: String(existing?.notes || ''),
+          promptRef: String(existing?.promptRef || '')
+        }) || `Merged ✅\nPR: ${prUrl}`;
         await provider.addComment({ cardId: cardRef, text });
       } catch (e) {
         logger.debug('Failed to comment on card', { id, cardRef, error: e?.message || String(e) });
@@ -313,15 +338,27 @@ class PrMergeAutomationService {
       }
     }
 
-    if (this.getConfig().comment) {
-      try {
-        const prUrl = String(prInfo?.url || '').trim() || `${pr.owner}/${pr.repo}#${pr.number}`;
-        const text = `Merged ✅\nPR: ${prUrl}`;
-        await provider.addComment({ cardId: cardRef, text });
-      } catch (e) {
-        logger.debug('Failed to comment on card', { id, cardRef, error: e?.message || String(e) });
-      }
-    }
+	    if (this.getConfig().comment) {
+	      try {
+	        const prUrl = String(prInfo?.url || '').trim() || `${pr.owner}/${pr.repo}#${pr.number}`;
+	        const key = boardId ? `${providerId}:${boardId}` : '';
+	        const configured = key ? (this.userSettingsService?.settings?.global?.ui?.tasks?.boardConventions?.[key] || null) : null;
+	        const boardTemplate = String(configured?.mergedCommentTemplate || '').trim();
+	        const template = boardTemplate || this.getConfig().commentTemplate;
+	        const text = this.renderCommentTemplate(template, {
+	          prUrl,
+	          mergedAt: mergedIso,
+	          ticketCardUrl: cardUrl || (card?.url ? String(card.url) : ''),
+	          reviewOutcome: String(record?.reviewOutcome || ''),
+	          verifyMinutes: record?.verifyMinutes ?? '',
+	          notes: String(record?.notes || ''),
+	          promptRef: String(record?.promptRef || '')
+	        }) || `Merged ✅\nPR: ${prUrl}`;
+	        await provider.addComment({ cardId: cardRef, text });
+	      } catch (e) {
+	        logger.debug('Failed to comment on card', { id, cardRef, error: e?.message || String(e) });
+	      }
+	    }
 
     await this.taskRecordService.upsert(id, {
       ticketProvider: providerId,

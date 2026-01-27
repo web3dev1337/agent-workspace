@@ -77,13 +77,14 @@ class UserSettingsService {
             // Local-only by default (stored in user-settings.json).
             boardMappings: {},
             // Keyed by `${provider}:${boardId}` -> conventions/config:
-            // {
-            //   doneListId?: string,
-            //   dependencyChecklistName?: string,
-            //   tierFromLabels?: boolean,
-            //   tierByLabelColor?: { [color: string]: 1|2|3|4 },
-            //   needsFixLabelName?: string
-            // }
+	            // {
+	            //   doneListId?: string,
+	            //   mergedCommentTemplate?: string,
+	            //   dependencyChecklistName?: string,
+	            //   tierFromLabels?: boolean,
+	            //   tierByLabelColor?: { [color: string]: 1|2|3|4 },
+	            //   needsFixLabelName?: string
+	            // }
             boardConventions: {},
             combined: {
               // Optional cross-board “combined view” column selections.
@@ -95,19 +96,21 @@ class UserSettingsService {
               // Which preset is currently active (purely for UI convenience).
               activePresetId: ''
             },
-            automations: {
-              trello: {
-                onPrMerged: {
-                  enabled: false,
-                  pollEnabled: true,
-                  webhookEnabled: false,
-                  comment: true,
-                  moveToDoneList: true,
-                  closeIfNoDoneList: false,
-                  pollMs: 60_000
-                }
-              }
-            },
+	            automations: {
+	              trello: {
+	                onPrMerged: {
+	                  enabled: false,
+	                  pollEnabled: true,
+	                  webhookEnabled: false,
+	                  comment: true,
+	                  // Supports placeholders like {prUrl}, {mergedAt}, {reviewOutcome}, {verifyMinutes}, {notes}, {promptRef}.
+	                  commentTemplate: 'Merged ✅\nPR: {prUrl}',
+	                  moveToDoneList: true,
+	                  closeIfNoDoneList: false,
+	                  pollMs: 60_000
+	                }
+	              }
+	            },
             kanban: {
               // Persist kanban UI state server-side (survives refresh and works across ports/origins).
               // Keyed by `${provider}:${boardId}` -> string[] listIds
