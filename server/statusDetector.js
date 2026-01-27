@@ -13,7 +13,9 @@ const logger = winston.createLogger({
 });
 
 // Configuration constants
-const ASSUME_BUSY_SINCE_OUTPUT_MS = 45000; // keep "busy" for silence up to this long (reduces flicker)
+// Keep "busy" for longer silence windows (Claude can think silently for minutes).
+// This primarily reduces green/orange/grey flicker during long tool runs.
+const ASSUME_BUSY_SINCE_OUTPUT_MS = 180000; // 3 minutes
 
 class StatusDetector {
   constructor() {
@@ -122,12 +124,10 @@ class StatusDetector {
     // 4. Active tool usage (definitely busy)
     for (const pattern of this.toolPatterns) {
       if (pattern.test(lastFewLines)) {
-        // But only if we haven't also seen completion
-        const hasCompletion = this.completionPatterns.some(p => p.test(lastFewLines));
-        if (!hasCompletion) {
-          logger.debug('Tool activity detected - busy', { pattern: pattern.toString() });
-          return 'busy';
-        }
+        // Completion is only considered reliable when it is the last non-empty line (handled above).
+        // Do not suppress tool activity because an older "Cost:" line is still visible in scrollback.
+        logger.debug('Tool activity detected - busy', { pattern: pattern.toString() });
+        return 'busy';
       }
     }
 

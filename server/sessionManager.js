@@ -60,6 +60,8 @@ class SessionManager extends EventEmitter {
     this.maxProcessesPerSession = parseInt(process.env.MAX_PROCESSES_PER_SESSION || this.config.sessions.maxProcessesPerSession.toString());
     this.maxBufferSize = parseInt(process.env.MAX_BUFFER_SIZE || this.config.sessions.maxBufferSize.toString());
     this.statusMinHoldMs = parseInt(process.env.STATUS_MIN_HOLD_MS || '1500');
+    // Extra hysteresis for transitioning to idle (prevents flicker when output pauses briefly).
+    this.statusIdleHoldMs = parseInt(process.env.STATUS_IDLE_HOLD_MS || '6000');
     this.branchRefreshMs = parseInt(process.env.BRANCH_REFRESH_MS || '60000');
     this.conversationSnapshotTtlMs = parseInt(process.env.CONVERSATION_SNAPSHOT_TTL_MS || '5000');
     this.conversationSnapshotCache = { timestamp: 0, files: null };
@@ -680,6 +682,14 @@ class SessionManager extends EventEmitter {
           const newStatus = this.statusDetector.detectStatus(sessionId, session.buffer);
           if (newStatus !== session.status) {
             this.maybeApplyStatusUpdate(sessionId, session, newStatus);
+          } else if (session.pendingStatus && session.pendingStatus !== newStatus) {
+            // Detector re-affirmed the current status; cancel any stale pending transition.
+            if (session.pendingStatusTimer) {
+              clearTimeout(session.pendingStatusTimer);
+              session.pendingStatusTimer = null;
+            }
+            session.pendingStatus = null;
+            session.pendingStatusDueAt = null;
           }
         }
         
@@ -1726,16 +1736,30 @@ class SessionManager extends EventEmitter {
     const now = Date.now();
     const lastChange = session.statusChangedAt || 0;
     const elapsed = now - lastChange;
+    const effectiveHoldMs = (newStatus === 'idle')
+      ? Math.max(this.statusMinHoldMs, this.statusIdleHoldMs)
+      : this.statusMinHoldMs;
 
-    if (elapsed < this.statusMinHoldMs) {
+    if (elapsed < effectiveHoldMs) {
+      const dueAt = lastChange + effectiveHoldMs;
       session.pendingStatus = newStatus;
+      session.pendingStatusDueAt = dueAt;
+      const delay = Math.max(0, dueAt - now);
+      if (session.pendingStatusTimer) {
+        // If the desired due time changed (e.g., longer idle hysteresis), reschedule.
+        const existingDue = Number(session.pendingStatusDueAt || 0);
+        if (existingDue !== dueAt) {
+          clearTimeout(session.pendingStatusTimer);
+          session.pendingStatusTimer = null;
+        }
+      }
       if (!session.pendingStatusTimer) {
-        const delay = this.statusMinHoldMs - elapsed;
         session.pendingStatusTimer = setTimeout(() => {
           const currentSession = this.sessions.get(sessionId);
           if (!currentSession) return;
           const pending = currentSession.pendingStatus;
           currentSession.pendingStatus = null;
+          currentSession.pendingStatusDueAt = null;
           currentSession.pendingStatusTimer = null;
           if (pending && pending !== currentSession.status) {
             this.applyStatusUpdate(sessionId, currentSession, pending);
@@ -1749,6 +1773,14 @@ class SessionManager extends EventEmitter {
   }
 
   applyStatusUpdate(sessionId, session, newStatus) {
+    // Clear any pending transition; this update is authoritative.
+    if (session.pendingStatusTimer) {
+      clearTimeout(session.pendingStatusTimer);
+      session.pendingStatusTimer = null;
+    }
+    session.pendingStatus = null;
+    session.pendingStatusDueAt = null;
+
     const oldStatus = session.status;
     session.status = newStatus;
     session.statusChangedAt = Date.now();
