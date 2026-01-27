@@ -2161,6 +2161,33 @@ class ClaudeOrchestrator {
     return html;
   }
 
+  getLinkedServerSessionIdForClaude(claudeSessionId) {
+    const sid = String(claudeSessionId || '').trim();
+    if (!sid.endsWith('-claude')) return null;
+    const serverSessionId = sid.replace(/-claude$/, '-server');
+    if (!this.sessions || !this.sessions.has(serverSessionId)) return null;
+    return serverSessionId;
+  }
+
+  getLinkedClaudeSessionIdForServer(serverSessionId) {
+    const sid = String(serverSessionId || '').trim();
+    if (!sid.endsWith('-server')) return null;
+    const claudeSessionId = sid.replace(/-server$/, '-claude');
+    if (!this.sessions || !this.sessions.has(claudeSessionId)) return null;
+    return claudeSessionId;
+  }
+
+  getServerQuickControlsHTMLForClaude(claudeSessionId) {
+    const serverSessionId = this.getLinkedServerSessionIdForClaude(claudeSessionId);
+    if (!serverSessionId) return '';
+
+    const isRunning = this.serverStatuses.get(serverSessionId) === 'running';
+    if (isRunning) {
+      return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}')" title="Stop Server">⏹S</button>`;
+    }
+    return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}', 'development')" title="Start Server (dev)">▶S</button>`;
+  }
+
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
     if (!worktreeList) return;
@@ -3401,6 +3428,7 @@ class ClaudeOrchestrator {
     if (sessionId.includes('-claude')) {
       controlsDiv.innerHTML = `
         ${this.getTierDropdownHTML(sessionId)}
+        ${this.getServerQuickControlsHTMLForClaude(sessionId)}
         ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
         ${this.getGitHubButtons(sessionId)}
       `;
@@ -3427,6 +3455,8 @@ class ClaudeOrchestrator {
       }
       
       this.updateServerControls(sessionId);
+      const linkedClaude = this.getLinkedClaudeSessionIdForServer(sessionId);
+      if (linkedClaude) this.updateTerminalControls(linkedClaude);
     }
     
     // Check if server stopped
@@ -3440,6 +3470,8 @@ class ClaudeOrchestrator {
       }
       
       this.updateServerControls(sessionId);
+      const linkedClaude = this.getLinkedClaudeSessionIdForServer(sessionId);
+      if (linkedClaude) this.updateTerminalControls(linkedClaude);
     }
   }
   
@@ -7306,7 +7338,12 @@ class ClaudeOrchestrator {
             </div>
             <div class="tasks-launch-popover-meta">${this.escapeHtml(cid)}</div>
 
-            ${canLaunch ? '' : `<div class="tasks-launch-popover-warn">Set Board Settings to enable Launch for this board.</div>`}
+            ${canLaunch ? '' : `
+              <div class="tasks-launch-popover-warn">
+                Set Board Settings to enable Launch for this board.
+                <button class="btn-secondary" id="tasks-launch-popover-warn-open-settings" type="button">Open</button>
+              </div>
+            `}
 
             <div class="tasks-launch-popover-grid">
               <label class="tasks-launch-popover-field">
@@ -7361,6 +7398,12 @@ class ClaudeOrchestrator {
 
         const settingsBtn = overlay.querySelector('#tasks-launch-popover-board-settings');
         settingsBtn?.addEventListener('click', () => {
+          closeLaunchPopover();
+          if (bid) renderBoardSettings({ boardId: bid });
+        });
+
+        const warnOpenBtn = overlay.querySelector('#tasks-launch-popover-warn-open-settings');
+        warnOpenBtn?.addEventListener('click', () => {
           closeLaunchPopover();
           if (bid) renderBoardSettings({ boardId: bid });
         });
