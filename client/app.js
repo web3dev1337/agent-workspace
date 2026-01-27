@@ -8479,12 +8479,13 @@ class ClaudeOrchestrator {
 			      const boardName = ((Array.isArray(state.boards) ? state.boards : []).find(b => b.id === effectiveBoardId)?.name) || effectiveBoardId;
 			      const conv = getBoardConventions(state.provider, effectiveBoardId) || {};
 
-		      const safeChecklistName = String(conv?.dependencyChecklistName || '').trim() || 'Dependencies';
-		      const doneListId = String(conv?.doneListId || '').trim();
-		      const tierFromLabels = conv?.tierFromLabels === true;
-		      const tierByLabelColor = conv?.tierByLabelColor && typeof conv.tierByLabelColor === 'object' && !Array.isArray(conv.tierByLabelColor)
-		        ? conv.tierByLabelColor
-		        : {};
+			      const safeChecklistName = String(conv?.dependencyChecklistName || '').trim() || 'Dependencies';
+			      const doneListId = String(conv?.doneListId || '').trim();
+			      const tierFromLabels = conv?.tierFromLabels === true;
+			      const needsFixLabelName = String(conv?.needsFixLabelName || '').trim();
+			      const tierByLabelColor = conv?.tierByLabelColor && typeof conv.tierByLabelColor === 'object' && !Array.isArray(conv.tierByLabelColor)
+			        ? conv.tierByLabelColor
+			        : {};
 
 		      const colors = ['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black'];
 		      const renderTierOptions = (selected) => `
@@ -8541,12 +8542,12 @@ class ClaudeOrchestrator {
 		          </div>
 		        </div>
 
-		        <div class="tasks-detail-block">
-		          <div class="tasks-detail-block-title">Tier from label color</div>
-		          <label class="tasks-toggle" title="When enabled, Launch defaults can be suggested from Trello label colors">
-		            <input type="checkbox" id="tasks-conv-tier-from-labels" ${tierFromLabels ? 'checked' : ''} />
-		            <span>Use tier mapping from labels</span>
-		          </label>
+			        <div class="tasks-detail-block">
+			          <div class="tasks-detail-block-title">Tier from label color</div>
+			          <label class="tasks-toggle" title="When enabled, Launch defaults can be suggested from Trello label colors">
+			            <input type="checkbox" id="tasks-conv-tier-from-labels" ${tierFromLabels ? 'checked' : ''} />
+			            <span>Use tier mapping from labels</span>
+			          </label>
 		          <div class="tasks-kv" style="margin-top:10px">
 		            ${colors.map((c) => {
 		              const v = Number(tierByLabelColor?.[c]);
@@ -8563,14 +8564,24 @@ class ClaudeOrchestrator {
 		              `;
 		            }).join('')}
 		          </div>
-		        </div>
+			        </div>
 
-		        <div class="tasks-detail-block">
-		          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
-		            <button class="btn-secondary" id="tasks-conv-save" type="button">💾 Save conventions</button>
-		          </div>
-		        </div>
-		      `;
+			        <div class="tasks-detail-block">
+			          <div class="tasks-detail-block-title">Feedback loops</div>
+			          <div class="tasks-inline-row">
+			            <input id="tasks-conv-needs-fix-label" class="tasks-input" value="${this.escapeHtml(needsFixLabelName)}" placeholder="Needs-fix label name (optional), e.g. needs_fix" />
+			          </div>
+			          <div class="tasks-detail-meta" style="margin-top:8px">
+			            When Queue outcome is <code>needs_fix</code>, Orchestrator can auto-apply this label to the linked Trello card.
+			          </div>
+			        </div>
+
+			        <div class="tasks-detail-block">
+			          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+			            <button class="btn-secondary" id="tasks-conv-save" type="button">💾 Save conventions</button>
+			          </div>
+			        </div>
+			      `;
 
 		      detailEl.querySelector('#tasks-board-conventions-back')?.addEventListener('click', () => {
 		        renderBoardSettings({ boardId: effectiveBoardId });
@@ -8605,28 +8616,30 @@ class ClaudeOrchestrator {
 		        if (!suggested) this.showToast('No Done list suggestion found', 'info');
 		      });
 
-		      saveBtn?.addEventListener('click', async () => {
-		        try {
-		          if (saveBtn) saveBtn.disabled = true;
+			      saveBtn?.addEventListener('click', async () => {
+			        try {
+			          if (saveBtn) saveBtn.disabled = true;
 
-		          const doneListIdNext = String(doneSelect?.value || '').trim() || null;
-		          const depsNameNext = String(detailEl.querySelector('#tasks-conv-deps-name')?.value || '').trim() || null;
-		          const tierFromLabelsNext = !!detailEl.querySelector('#tasks-conv-tier-from-labels')?.checked;
+			          const doneListIdNext = String(doneSelect?.value || '').trim() || null;
+			          const depsNameNext = String(detailEl.querySelector('#tasks-conv-deps-name')?.value || '').trim() || null;
+			          const tierFromLabelsNext = !!detailEl.querySelector('#tasks-conv-tier-from-labels')?.checked;
+			          const needsFixLabelNameNext = String(detailEl.querySelector('#tasks-conv-needs-fix-label')?.value || '').trim() || null;
 
-		          const nextMap = {};
-		          detailEl.querySelectorAll('[data-tier-color]').forEach((sel) => {
-		            const color = String(sel.getAttribute('data-tier-color') || '').trim().toLowerCase();
-		            const v = Number(sel.value);
+			          const nextMap = {};
+			          detailEl.querySelectorAll('[data-tier-color]').forEach((sel) => {
+			            const color = String(sel.getAttribute('data-tier-color') || '').trim().toLowerCase();
+			            const v = Number(sel.value);
 		            if (!color) return;
 		            if (v >= 1 && v <= 4) nextMap[color] = v;
 		          });
 
-		          await updateBoardConventions(state.provider, effectiveBoardId, {
-		            doneListId: doneListIdNext,
-		            dependencyChecklistName: depsNameNext,
-		            tierFromLabels: tierFromLabelsNext,
-		            tierByLabelColor: nextMap
-		          });
+			          await updateBoardConventions(state.provider, effectiveBoardId, {
+			            doneListId: doneListIdNext,
+			            dependencyChecklistName: depsNameNext,
+			            tierFromLabels: tierFromLabelsNext,
+			            tierByLabelColor: nextMap,
+			            needsFixLabelName: needsFixLabelNameNext
+			          });
 
 		          this.showToast('Conventions saved', 'success');
 		        } catch (err) {
@@ -12265,11 +12278,91 @@ class ClaudeOrchestrator {
       return byClaim(unblocked).concat(byClaim(blocked));
     };
 
-    const getTaskById = (id) => (Array.isArray(state.tasks) ? state.tasks : []).find(x => x.id === id) || null;
+	    const getTaskById = (id) => (Array.isArray(state.tasks) ? state.tasks : []).find(x => x.id === id) || null;
 
-    const renderList = () => {
-      const tasks = getFilteredTasks();
-      const ordered = getOrderedTasks(tasks);
+	    const maybeApplyTrelloNeedsFixLabel = async ({ taskId, outcome, notes = '' } = {}) => {
+	      const id = String(taskId || '').trim();
+	      const o = String(outcome || '').trim().toLowerCase();
+	      if (!id || o !== 'needs_fix') return false;
+
+	      const task = getTaskById(id);
+	      const record = task?.record && typeof task.record === 'object' ? task.record : {};
+	      const providerId = String(record?.ticketProvider || 'trello').trim().toLowerCase();
+	      if (providerId !== 'trello') return false;
+
+	      const cardRef = String(record?.ticketCardId || '').trim();
+	      if (!cardRef) return false;
+
+	      try {
+	        const cardUrl = new URL(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardRef)}`);
+	        cardUrl.searchParams.set('provider', providerId);
+	        cardUrl.searchParams.set('refresh', 'true');
+	        const cardRes = await fetch(cardUrl.toString());
+	        const cardData = await cardRes.json().catch(() => ({}));
+	        if (!cardRes.ok) throw new Error(cardData?.error || 'Failed to load ticket card');
+	        const card = cardData?.card || null;
+
+	        const boardId = String(card?.idBoard || record?.ticketBoardId || '').trim();
+	        if (!boardId) return false;
+
+	        const conventionsAll = this.userSettings?.global?.ui?.tasks?.boardConventions;
+	        const conventions = conventionsAll && typeof conventionsAll === 'object' && !Array.isArray(conventionsAll) ? conventionsAll : {};
+	        const key = `${providerId}:${boardId}`;
+	        const conv = conventions[key] && typeof conventions[key] === 'object' && !Array.isArray(conventions[key]) ? conventions[key] : {};
+	        const labelName = String(conv?.needsFixLabelName || '').trim();
+	        if (!labelName) return false;
+
+	        const labelsUrl = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(boardId)}/labels`);
+	        labelsUrl.searchParams.set('provider', providerId);
+	        const labelsRes = await fetch(labelsUrl.toString());
+	        const labelsData = await labelsRes.json().catch(() => ({}));
+	        if (!labelsRes.ok) throw new Error(labelsData?.error || 'Failed to load board labels');
+	        const labels = Array.isArray(labelsData?.labels) ? labelsData.labels : [];
+
+	        const norm = (s) => String(s || '').trim().toLowerCase();
+	        const target = labels.find((l) => norm(l?.name) === norm(labelName)) || null;
+	        const targetId = String(target?.id || '').trim();
+	        if (!targetId) {
+	          this.showToast(`needs_fix label not found on board: ${labelName}`, 'warning');
+	          return false;
+	        }
+
+	        const existing = Array.isArray(card?.idLabels)
+	          ? card.idLabels
+	          : (Array.isArray(card?.labels) ? card.labels.map((l) => l?.id) : []);
+	        const set = new Set((Array.isArray(existing) ? existing : []).filter(Boolean));
+	        set.add(targetId);
+
+	        const patch = { idLabels: Array.from(set) };
+	        const putRes = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardRef)}?provider=${encodeURIComponent(providerId)}`, {
+	          method: 'PUT',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify(patch)
+	        });
+	        const putData = await putRes.json().catch(() => ({}));
+	        if (!putRes.ok) throw new Error(putData?.error || 'Failed to apply needs_fix label');
+
+	        const noteText = String(notes || '').trim();
+	        if (noteText) {
+	          const comment = `Orchestrator review outcome: needs_fix\n\n${noteText}`;
+	          await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardRef)}/comments?provider=${encodeURIComponent(providerId)}`, {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ text: comment })
+	          }).catch(() => {});
+	        }
+
+	        return true;
+	      } catch (err) {
+	        console.warn('Failed to apply Trello needs_fix automation:', err);
+	        this.showToast(String(err?.message || err), 'error');
+	        return false;
+	      }
+	    };
+
+	    const renderList = () => {
+	      const tasks = getFilteredTasks();
+	      const ordered = getOrderedTasks(tasks);
 
       const counts = calcTierCounts(tasks);
       const header = `
@@ -13990,10 +14083,10 @@ class ClaudeOrchestrator {
 	        }
       });
 
-      outcomeEl?.addEventListener('change', async () => {
-        try {
-          outcomeEl.disabled = true;
-          const value = String(outcomeEl.value || '').trim();
+	      outcomeEl?.addEventListener('change', async () => {
+	        try {
+	          outcomeEl.disabled = true;
+	          const value = String(outcomeEl.value || '').trim();
           let nudged = false;
           if (value && state.reviewTimer?.taskId === t.id) {
             await stopReviewTimer({ reason: 'outcome', nudge: true });
@@ -14005,8 +14098,11 @@ class ClaudeOrchestrator {
             patch.claimedBy = null;
             patch.claimedAt = null;
           }
-          const rec = await upsertRecord(t.id, patch);
-          updateTaskRecordInState(t.id, rec);
+	          const rec = await upsertRecord(t.id, patch);
+	          updateTaskRecordInState(t.id, rec);
+	          if (value === 'needs_fix') {
+	            await maybeApplyTrelloNeedsFixLabel({ taskId: t.id, outcome: value, notes: String(notesEl?.value || '') });
+	          }
 	          await fetchTasks();
 	          renderDetail(getTaskById(t.id));
 	          if (value && !nudged) {

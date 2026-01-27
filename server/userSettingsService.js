@@ -77,7 +77,13 @@ class UserSettingsService {
             // Local-only by default (stored in user-settings.json).
             boardMappings: {},
             // Keyed by `${provider}:${boardId}` -> conventions/config:
-            // { doneListId?: string, dependencyChecklistName?: string, tierFromLabels?: boolean, tierByLabelColor?: { [color: string]: 1|2|3|4 } }
+            // {
+            //   doneListId?: string,
+            //   dependencyChecklistName?: string,
+            //   tierFromLabels?: boolean,
+            //   tierByLabelColor?: { [color: string]: 1|2|3|4 },
+            //   needsFixLabelName?: string
+            // }
             boardConventions: {},
             combined: {
               // Optional cross-board “combined view” column selections.
