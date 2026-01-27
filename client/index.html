@@ -193,6 +193,33 @@
                 </label>
             </div>
 
+            <div class="setting-section">
+                <h4>Workflow Notifications</h4>
+                <div class="setting-group">
+                    <label>
+                        <strong>Mode:</strong>
+                        <select id="workflow-notify-mode">
+                            <option value="quiet">Quiet</option>
+                            <option value="normal">Normal</option>
+                            <option value="aggressive">Aggressive</option>
+                        </select>
+                    </label>
+                    <p class="setting-description">Quiet: log only. Normal: toast for key events. Aggressive: toasts + optional browser/sound alerts.</p>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="workflow-notify-tier1-interrupts" />
+                        Tier 1 interrupts
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="workflow-notify-review-nudges" />
+                        Review complete nudges
+                    </label>
+                </div>
+            </div>
+
             <div class="setting-group">
                 <label>
                     Tasks Theme:
@@ -346,6 +373,21 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Notifications Panel -->
+    <div id="notifications-panel" class="notifications-panel hidden">
+        <div class="panel-header">
+            <h3>Notifications</h3>
+            <div class="panel-actions">
+                <button id="notifications-mark-read" class="icon-button" title="Mark all as read">✓</button>
+                <button id="notifications-clear" class="icon-button" title="Clear all">🗑</button>
+                <button id="close-notifications" class="icon-button" title="Close">✕</button>
+            </div>
+        </div>
+        <div class="notifications-content">
+            <div id="notification-list" class="notification-list"></div>
         </div>
     </div>
     
