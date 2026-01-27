@@ -58,7 +58,7 @@ Process discipline:
     - [x] Queue outcome → Trello feedback loop: apply configured `needsFixLabelName` (and optional comment from Notes). (PR #316)
   - [x] Optional auto-comment templates (links to prompt artifacts, review outcomes, verification notes). (PR #326)
 - [ ] Worktree fleet automation:
-  - [ ] “Create N worktrees” presets per project (small/medium/large).
+  - [x] “Create N worktrees” presets per project (small/medium/large). (PR #330)
   - [x] Smarter “free worktree” scoring and cleanup hints. (PR #329)
 
 ---
