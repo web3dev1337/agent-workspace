@@ -259,7 +259,10 @@ class ProcessAdvisorService {
             code: 'tier12_blocked',
             title: 'Tier 1/2 tasks blocked by dependencies',
             message: `${tier12Blocked.length} Tier 1/2 PR(s) are blocked by dependencies. Consider clearing blockers or re-tiering to unblock execution.`,
-            actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+            actions: [
+              { type: 'ui', action: 'queue-blockers', label: 'Show blockers' },
+              { type: 'ui', action: 'open-queue', label: 'Open Queue' }
+            ]
           });
         }
       }
