@@ -38,9 +38,12 @@ class ProcessTelemetryService {
       let recordsConsidered = 0;
       let reviewedCount = 0;
       let promptSentCount = 0;
+      let doneCount = 0;
 
       const reviewSeconds = [];
       const promptChars = [];
+      const verifyMinutes = [];
+      const outcomeCounts = { approved: 0, needs_fix: 0, commented: 0, skipped: 0, other: 0 };
 
       for (const r of rows) {
         const id = r?.id;
@@ -67,6 +70,19 @@ class ProcessTelemetryService {
           const pc = clampNonNegative(r?.promptChars);
           if (pc !== null) promptChars.push(pc);
         }
+
+        const doneAtMs = parseIso(r?.doneAt);
+        if (doneAtMs) doneCount += 1;
+
+        const vm = clampNonNegative(r?.verifyMinutes);
+        if (vm !== null) verifyMinutes.push(vm);
+
+        const outcome = String(r?.reviewOutcome || '').trim().toLowerCase();
+        if (outcome === 'approved') outcomeCounts.approved += 1;
+        else if (outcome === 'needs_fix') outcomeCounts.needs_fix += 1;
+        else if (outcome === 'commented') outcomeCounts.commented += 1;
+        else if (outcome === 'skipped') outcomeCounts.skipped += 1;
+        else if (outcome) outcomeCounts.other += 1;
       }
 
       const avg = (arr) => {
@@ -79,11 +95,15 @@ class ProcessTelemetryService {
         recordsConsidered,
         reviewedCount,
         promptSentCount,
+        doneCount,
         avgReviewSeconds: avg(reviewSeconds),
         avgPromptChars: avg(promptChars),
+        avgVerifyMinutes: avg(verifyMinutes),
+        outcomeCounts,
         samples: {
           reviewSeconds: reviewSeconds.length,
-          promptChars: promptChars.length
+          promptChars: promptChars.length,
+          verifyMinutes: verifyMinutes.length
         }
       };
     }, { force });
@@ -103,16 +123,23 @@ class ProcessTelemetryService {
       const bucketMs = safeBucket * 60 * 1000;
       const bucketKeyFor = (t) => Math.floor(t / bucketMs) * bucketMs;
 
-      const buckets = new Map(); // bucketStartMs -> { reviewSeconds:[], promptChars:[] }
+      const buckets = new Map(); // bucketStartMs -> { reviewSeconds:[], promptChars:[], doneCount:number }
       const allReviewSeconds = [];
       const allPromptChars = [];
 
       const addToBucket = (key, kind, value) => {
         if (!Number.isFinite(key)) return;
-        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [] });
+        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], doneCount: 0 });
         const b = buckets.get(key);
         if (kind === 'reviewSeconds') b.reviewSeconds.push(value);
         if (kind === 'promptChars') b.promptChars.push(value);
+      };
+
+      const bumpDoneBucket = (key) => {
+        if (!Number.isFinite(key)) return;
+        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], doneCount: 0 });
+        const b = buckets.get(key);
+        b.doneCount += 1;
       };
 
       for (const r of rows) {
@@ -136,6 +163,11 @@ class ProcessTelemetryService {
             allPromptChars.push(pc);
             addToBucket(bucketKeyFor(ps), 'promptChars', pc);
           }
+        }
+
+        const doneAtMs = parseIso(r?.doneAt);
+        if (doneAtMs) {
+          bumpDoneBucket(bucketKeyFor(doneAtMs));
         }
       }
 
@@ -176,7 +208,8 @@ class ProcessTelemetryService {
           reviewSamples: b.reviewSeconds.length,
           avgReviewSeconds: avg(b.reviewSeconds),
           promptSamples: b.promptChars.length,
-          avgPromptChars: avg(b.promptChars)
+          avgPromptChars: avg(b.promptChars),
+          doneCount: b.doneCount
         }));
 
       return {
@@ -205,8 +238,11 @@ class ProcessTelemetryService {
     const header = [
       'id',
       'updatedAt',
+      'doneAt',
       'reviewStartedAt',
       'reviewEndedAt',
+      'reviewOutcome',
+      'verifyMinutes',
       'promptSentAt',
       'promptChars',
       'tier',
@@ -218,14 +254,17 @@ class ProcessTelemetryService {
     for (const r of rows) {
       const updatedAtMs = parseIso(r?.updatedAt);
       if (updatedAtMs && updatedAtMs < cutoffMs) continue;
-      const hasTelemetry = !!(r?.reviewStartedAt || r?.reviewEndedAt || r?.promptSentAt || r?.promptChars);
+      const hasTelemetry = !!(r?.reviewStartedAt || r?.reviewEndedAt || r?.promptSentAt || r?.promptChars || r?.doneAt || r?.reviewOutcome || r?.verifyMinutes);
       if (!hasTelemetry) continue;
 
       const line = [
         escape(r?.id || ''),
         escape(r?.updatedAt || ''),
+        escape(r?.doneAt || ''),
         escape(r?.reviewStartedAt || ''),
         escape(r?.reviewEndedAt || r?.reviewedAt || ''),
+        escape(r?.reviewOutcome || ''),
+        escape(r?.verifyMinutes ?? ''),
         escape(r?.promptSentAt || ''),
         escape(r?.promptChars ?? ''),
         escape(r?.tier ?? ''),
@@ -247,14 +286,17 @@ class ProcessTelemetryService {
     for (const r of rows) {
       const updatedAtMs = parseIso(r?.updatedAt);
       if (updatedAtMs && updatedAtMs < cutoffMs) continue;
-      const hasTelemetry = !!(r?.reviewStartedAt || r?.reviewEndedAt || r?.promptSentAt || r?.promptChars);
+      const hasTelemetry = !!(r?.reviewStartedAt || r?.reviewEndedAt || r?.promptSentAt || r?.promptChars || r?.doneAt || r?.reviewOutcome || r?.verifyMinutes);
       if (!hasTelemetry) continue;
 
       out.push({
         id: r?.id || '',
         updatedAt: r?.updatedAt || '',
+        doneAt: r?.doneAt || '',
         reviewStartedAt: r?.reviewStartedAt || '',
         reviewEndedAt: r?.reviewEndedAt || r?.reviewedAt || '',
+        reviewOutcome: r?.reviewOutcome || '',
+        verifyMinutes: r?.verifyMinutes ?? '',
         promptSentAt: r?.promptSentAt || '',
         promptChars: r?.promptChars ?? '',
         tier: r?.tier ?? '',
