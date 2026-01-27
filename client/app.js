@@ -9964,15 +9964,17 @@ class ClaudeOrchestrator {
 
           const styles = window.getComputedStyle(cardsContainer);
           const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
+          const columnGap = Number.parseFloat(styles.columnGap || styles.gap || '0') || 0;
+          const padLeft = Number.parseFloat(styles.paddingLeft || '0') || 0;
+          const padRight = Number.parseFloat(styles.paddingRight || '0') || 0;
           const sample = cards.slice(0, Math.min(6, cardCount));
           const heights = sample.map(el => el.getBoundingClientRect().height).filter(Boolean);
           const avg = heights.length ? (heights.reduce((a, b) => a + b, 0) / heights.length) : 80;
           const denom = Math.max(1, avg + rowGap);
           let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
-          // Prefer widening into multiple columns instead of long vertical stacks.
-          // 12 keeps columns readable while still avoiding vertical scrolling.
-          const maxRowsPerColumn = 12;
-          rowsFit = Math.min(rowsFit, maxRowsPerColumn);
+          // In wrap+expand mode, prefer minimizing the number of columns by filling vertically first
+          // (as long as we still avoid vertical scrolling).
+          rowsFit = Math.min(rowsFit, cardCount);
 
           const apply = (rows) => {
             const r = Math.max(1, Number(rows) || 1);
@@ -9984,7 +9986,10 @@ class ClaudeOrchestrator {
               col.style.width = '';
               col.style.minWidth = '';
             } else {
-              const target = Math.max(baseWidth, baseWidth * cols);
+              // Match CSS `minmax(180px, 1fr)` for card columns; expand only as much as needed.
+              const minCardWidth = 180;
+              const cardsWidth = (cols * minCardWidth) + Math.max(0, cols - 1) * columnGap;
+              const target = Math.max(baseWidth, cardsWidth + padLeft + padRight);
               col.style.width = `${Math.round(target)}px`;
               col.style.minWidth = `${Math.round(target)}px`;
             }
@@ -9993,7 +9998,7 @@ class ClaudeOrchestrator {
           apply(rowsFit);
 
           // If we still overflow vertically, reduce rows (creating more columns) until we fit.
-          for (let attempt = 0; attempt < 6; attempt++) {
+          for (let attempt = 0; attempt < 24; attempt++) {
             // Force reflow and then check overflow.
             void cardsContainer.offsetHeight;
             if (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1) break;
