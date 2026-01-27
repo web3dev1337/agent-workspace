@@ -37,6 +37,9 @@
           "trelloUsername": ""
         },
         "boardMappings": {},
+        "combined": {
+          "selections": []
+        },
         "automations": {
           "trello": {
             "onPrMerged": {

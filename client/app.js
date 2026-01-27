@@ -6783,6 +6783,7 @@ class ClaudeOrchestrator {
     // so hard-coding `:3000` breaks when running the orchestrator on other ports.
     const serverUrl = window.location.origin;
     const ALL_BOARDS_ID = '__all_enabled__';
+    const COMBINED_VIEW_ID = '__combined__';
 
     const state = {
       provider: localStorage.getItem('tasks-provider') || 'trello',
@@ -6831,6 +6832,7 @@ class ClaudeOrchestrator {
 	              <div class="tasks-board-menu hidden" id="tasks-board-menu" role="menu" aria-label="Boards"></div>
 	            </div>
 		          <button class="btn-secondary" id="tasks-board-settings" title="Board mapping / settings">⚙</button>
+              <button class="btn-secondary" id="tasks-combined-settings" title="Combined view settings">🧲</button>
               <button class="btn-secondary" id="tasks-hotkeys" title="Hotkeys (?)">⌨</button>
 		          <select id="tasks-list" class="tasks-select" title="List"></select>
             <div class="tasks-launch-defaults" id="tasks-launch-defaults" title="Defaults used by 🚀 quick launch">
@@ -6927,6 +6929,7 @@ class ClaudeOrchestrator {
 	    const boardBtnEl = modal.querySelector('#tasks-board-btn');
 	    const boardMenuEl = modal.querySelector('#tasks-board-menu');
 		    const boardSettingsBtn = modal.querySelector('#tasks-board-settings');
+      const combinedSettingsBtn = modal.querySelector('#tasks-combined-settings');
       const hotkeysBtn = modal.querySelector('#tasks-hotkeys');
 		    const listEl = modal.querySelector('#tasks-list');
     const searchEl = modal.querySelector('#tasks-search');
@@ -6962,7 +6965,7 @@ class ClaudeOrchestrator {
 
       const setBoardAccent = (value) => {
         const color = sanitizeCssColor(value);
-        const show = !!color && state.boardId && state.boardId !== ALL_BOARDS_ID;
+	      const show = !!color && state.boardId && state.boardId !== ALL_BOARDS_ID && state.boardId !== COMBINED_VIEW_ID;
         if (contentEl) {
           if (show) contentEl.style.setProperty('--tasks-board-accent', color);
           else contentEl.style.removeProperty('--tasks-board-accent');
@@ -6982,7 +6985,7 @@ class ClaudeOrchestrator {
 
       const getBoardColorById = (boardId) => {
         const bid = String(boardId || '').trim();
-        if (!bid || bid === ALL_BOARDS_ID) return '';
+        if (!bid || bid === ALL_BOARDS_ID || bid === COMBINED_VIEW_ID) return '';
         const board = Array.isArray(state.boards) ? state.boards.find((b) => b?.id === bid) : null;
         const color = board?.prefs?.backgroundColor || '';
         return sanitizeCssColor(color);
@@ -7164,7 +7167,7 @@ class ClaudeOrchestrator {
 
       const getMappingTierForBoard = (boardId) => {
         const bid = String(boardId || '').trim();
-        if (!bid || bid === ALL_BOARDS_ID) return undefined;
+        if (!bid || bid === ALL_BOARDS_ID || bid === COMBINED_VIEW_ID) return undefined;
         const mapping = getBoardMapping(state.provider, bid) || null;
         const t = Number(mapping?.defaultStartTier);
         return Number.isFinite(t) && t >= 1 && t <= 4 ? t : undefined;
@@ -7290,6 +7293,221 @@ class ClaudeOrchestrator {
 	      next[key] = { ...prev, ...(patch || {}) };
 	      await this.updateGlobalUserSetting('ui.tasks.boardMappings', next);
 	    };
+
+      const getCombinedSelections = () => {
+        const raw = this.userSettings?.global?.ui?.tasks?.combined?.selections;
+        const arr = Array.isArray(raw) ? raw : [];
+        const clean = arr
+          .map((s) => ({
+            boardId: String(s?.boardId || '').trim(),
+            listId: String(s?.listId || '').trim()
+          }))
+          .filter((s) => !!s.boardId && !!s.listId);
+
+        // De-dupe while preserving order.
+        const seen = new Set();
+        const out = [];
+        for (const item of clean) {
+          const key = `${item.boardId}:${item.listId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push(item);
+        }
+        return out;
+      };
+
+      const updateCombinedSelections = async (selections) => {
+        const current = this.userSettings?.global?.ui?.tasks?.combined || {};
+        const next = { ...(current || {}), selections: Array.isArray(selections) ? selections : [] };
+        await this.updateGlobalUserSetting('ui.tasks.combined', next);
+      };
+
+      const renderCombinedSettings = async () => {
+        const selections = getCombinedSelections();
+
+        const boardOptions = (Array.isArray(state.boards) ? state.boards : [])
+          .filter((b) => !!b?.id)
+          .map((b) => ({ id: b.id, name: b.name || b.id }));
+
+        const resolveBoardName = (boardId) => {
+          const b = (Array.isArray(state.boards) ? state.boards : []).find((x) => x?.id === boardId);
+          return b?.name || boardId;
+        };
+
+        const resolveListName = async ({ boardId, listId } = {}) => {
+          const meta = await loadBoardMeta({ boardId, refresh: false }).catch(() => ({ lists: [] }));
+          const list = (meta?.lists || []).find((l) => l?.id === listId);
+          return list?.name || listId;
+        };
+
+        const labels = [];
+        for (const sel of selections) {
+          // eslint-disable-next-line no-await-in-loop
+          const listName = await resolveListName(sel);
+          labels.push(`${resolveBoardName(sel.boardId)} • ${listName}`);
+        }
+
+        detailEl.innerHTML = `
+          <div class="tasks-detail-header">
+            <div class="tasks-detail-title">Combined View</div>
+            <div class="tasks-detail-actions">
+              <button class="btn-secondary" id="tasks-combined-close" type="button">Back</button>
+            </div>
+          </div>
+          <div class="tasks-detail-meta">Pick specific lists/columns across boards and show them together.</div>
+
+          <div class="tasks-detail-block">
+            <div class="tasks-detail-block-title">Selected columns (${selections.length})</div>
+            <div class="tasks-combined-list" id="tasks-combined-list">
+              ${
+                selections.length
+                  ? selections
+                      .map((s, idx) => `
+                        <div class="tasks-combined-item" data-combined-index="${idx}">
+                          <div class="tasks-combined-label">${this.escapeHtml(labels[idx] || `${s.boardId} • ${s.listId}`)}</div>
+                          <div class="tasks-combined-actions">
+                            <button class="btn-secondary" type="button" data-combined-up title="Move up">↑</button>
+                            <button class="btn-secondary" type="button" data-combined-down title="Move down">↓</button>
+                            <button class="btn-secondary" type="button" data-combined-remove title="Remove">✕</button>
+                          </div>
+                        </div>
+                      `)
+                      .join('')
+                  : `<div class="tasks-detail-empty">No columns selected yet.</div>`
+              }
+            </div>
+          </div>
+
+          <div class="tasks-detail-block">
+            <div class="tasks-detail-block-title">Add a column</div>
+            <div class="tasks-inline-row">
+              <select id="tasks-combined-add-board" class="tasks-select tasks-select-inline" title="Board"></select>
+              <select id="tasks-combined-add-list" class="tasks-select tasks-select-inline" title="List"></select>
+              <button class="btn-secondary" id="tasks-combined-add" type="button">Add</button>
+            </div>
+            <div class="tasks-inline-row" style="margin-top:8px">
+              <button class="btn-secondary" id="tasks-combined-add-current" type="button" title="Add the currently-selected board/list">Add current</button>
+              <button class="btn-secondary" id="tasks-combined-open" type="button" title="Switch to Combined view">Open Combined</button>
+            </div>
+          </div>
+        `;
+
+        detailEl.querySelector('#tasks-combined-close')?.addEventListener('click', () => {
+          renderDetail(null);
+          refreshAll({ force: false });
+        });
+
+        const listWrap = detailEl.querySelector('#tasks-combined-list');
+        listWrap?.addEventListener('click', async (e) => {
+          const row = e.target?.closest?.('[data-combined-index]');
+          if (!row) return;
+          const idx = Number(row.getAttribute('data-combined-index') || '');
+          if (!Number.isFinite(idx)) return;
+
+          if (e.target?.closest?.('[data-combined-remove]')) {
+            const next = selections.filter((_, i) => i !== idx);
+            await updateCombinedSelections(next);
+            renderCombinedSettings();
+            return;
+          }
+          if (e.target?.closest?.('[data-combined-up]')) {
+            if (idx <= 0) return;
+            const next = [...selections];
+            const tmp = next[idx - 1];
+            next[idx - 1] = next[idx];
+            next[idx] = tmp;
+            await updateCombinedSelections(next);
+            renderCombinedSettings();
+            return;
+          }
+          if (e.target?.closest?.('[data-combined-down]')) {
+            if (idx >= selections.length - 1) return;
+            const next = [...selections];
+            const tmp = next[idx + 1];
+            next[idx + 1] = next[idx];
+            next[idx] = tmp;
+            await updateCombinedSelections(next);
+            renderCombinedSettings();
+          }
+        });
+
+        const addBoardEl = detailEl.querySelector('#tasks-combined-add-board');
+        const addListEl = detailEl.querySelector('#tasks-combined-add-list');
+        const addBtn = detailEl.querySelector('#tasks-combined-add');
+        const addCurrentBtn = detailEl.querySelector('#tasks-combined-add-current');
+        const openBtn = detailEl.querySelector('#tasks-combined-open');
+
+        const setOptions = (select, options, placeholder = 'Select...') => {
+          if (!select) return;
+          select.innerHTML = '';
+          const ph = document.createElement('option');
+          ph.value = '';
+          ph.textContent = placeholder;
+          select.appendChild(ph);
+          for (const o of options) {
+            const opt = document.createElement('option');
+            opt.value = o.id;
+            opt.textContent = o.name;
+            select.appendChild(opt);
+          }
+        };
+
+        setOptions(addBoardEl, boardOptions, 'Board');
+
+        const loadListsForBoard = async (boardId) => {
+          if (!addListEl) return;
+          const meta = await loadBoardMeta({ boardId, refresh: false }).catch(() => ({ lists: [] }));
+          const lists = (meta?.lists || []).filter((l) => !!l?.id).map((l) => ({ id: l.id, name: l.name || l.id }));
+          setOptions(addListEl, lists, 'List');
+        };
+
+        const defaultBoardId = (() => {
+          const bid = String(state.boardId || '').trim();
+          if (bid && bid !== ALL_BOARDS_ID && bid !== COMBINED_VIEW_ID) return bid;
+          return boardOptions[0]?.id || '';
+        })();
+
+        if (addBoardEl) addBoardEl.value = defaultBoardId;
+        if (defaultBoardId) await loadListsForBoard(defaultBoardId);
+
+        addBoardEl?.addEventListener('change', async () => {
+          const boardId = String(addBoardEl.value || '').trim();
+          await loadListsForBoard(boardId);
+        });
+
+        addBtn?.addEventListener('click', async () => {
+          const boardId = String(addBoardEl?.value || '').trim();
+          const listId = String(addListEl?.value || '').trim();
+          if (!boardId || !listId) return;
+          const next = [...selections, { boardId, listId }];
+          await updateCombinedSelections(next);
+          await refreshAll({ force: false });
+          renderCombinedSettings();
+        });
+
+        addCurrentBtn?.addEventListener('click', async () => {
+          const boardId = String(state.boardId || '').trim();
+          const listId = String(state.listId || '').trim();
+          if (!boardId || boardId === ALL_BOARDS_ID || boardId === COMBINED_VIEW_ID) return;
+          if (!listId || listId === '__all__') return;
+          const next = [...selections, { boardId, listId }];
+          await updateCombinedSelections(next);
+          await refreshAll({ force: false });
+          renderCombinedSettings();
+        });
+
+        openBtn?.addEventListener('click', async () => {
+          state.boardId = COMBINED_VIEW_ID;
+          localStorage.setItem('tasks-board', state.boardId);
+          state.view = 'board';
+          localStorage.setItem('tasks-view', state.view);
+          applyView();
+          syncBoardLayoutUI();
+          syncBoardAccent();
+          renderBoardPicker();
+          await refreshAll({ force: true });
+        });
+      };
 
 	    const renderBoardSettings = ({ boardId } = {}) => {
 	      const effectiveBoardId = String(boardId || state.boardId || '').trim();
@@ -8303,6 +8521,234 @@ class ClaudeOrchestrator {
       return data;
     };
 
+    const fetchCombinedSnapshot = async ({ refresh = false } = {}) => {
+      const selections = getCombinedSelections();
+      const maxCols = 16;
+      const slice = selections.slice(0, maxCols);
+      if (slice.length === 0) return { columns: [] };
+
+      const boardsById = new Map((Array.isArray(state.boards) ? state.boards : []).map((b) => [b?.id, b]));
+      const updatedSince = computeUpdatedSince();
+      const q = state.query;
+
+      const boardIds = Array.from(new Set(slice.map((s) => s.boardId).filter(Boolean)));
+      const metaPairs = await Promise.all(
+        boardIds.map(async (boardId) => {
+          const meta = await loadBoardMeta({ boardId, refresh: false }).catch(() => ({ lists: [] }));
+          return [boardId, meta];
+        })
+      );
+      const metaByBoard = new Map(metaPairs);
+
+      const fetchOne = async (sel) => {
+        const boardId = String(sel?.boardId || '').trim();
+        const listId = String(sel?.listId || '').trim();
+        if (!boardId || !listId) return null;
+
+        const url = new URL(`${serverUrl}/api/tasks/lists/${encodeURIComponent(listId)}/cards`);
+        url.searchParams.set('provider', state.provider);
+        if (refresh) url.searchParams.set('refresh', 'true');
+        if (q) url.searchParams.set('q', q);
+        if (updatedSince) url.searchParams.set('updatedSince', updatedSince);
+
+        const res = await fetch(url.toString());
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || 'Failed to load list cards');
+
+        const board = boardsById.get(boardId);
+        const boardName = String(board?.name || boardId);
+        const boardColor = sanitizeCssColor(board?.prefs?.backgroundColor || '');
+        const meta = metaByBoard.get(boardId) || { lists: [] };
+        const list = (meta?.lists || []).find((l) => l?.id === listId);
+        const listName = String(list?.name || listId);
+
+        const cards = Array.isArray(data.cards) ? data.cards : [];
+        const normalized = cards.map((c) => ({
+          ...c,
+          idBoard: c?.idBoard || boardId,
+          idList: c?.idList || listId,
+          __boardName: boardName,
+          __listName: listName
+        }));
+
+        return { boardId, boardName, boardColor, listId, listName, cards: normalized };
+      };
+
+      const results = await Promise.all(slice.map((s) => fetchOne(s).catch(() => null)));
+      return { columns: results.filter(Boolean) };
+    };
+
+    const renderCombinedBoard = (snapshot) => {
+      const cols = Array.isArray(snapshot?.columns) ? snapshot.columns : [];
+      if (cols.length === 0) {
+        cardsEl.innerHTML = `
+          <div class="tasks-config-hint">
+            <div class="tasks-config-title">Combined view has no columns yet</div>
+            <div class="tasks-config-text">Click 🧲 to pick lists/columns from any boards.</div>
+          </div>
+        `;
+        return;
+      }
+
+      const updatedSince = computeUpdatedSince();
+      const layoutMode = state.boardLayout || 'scroll';
+      const isWrap = layoutMode === 'wrap';
+      const isWrapExpand = layoutMode === 'wrap-expand';
+
+      const sortCards = (arr) => {
+        const cards = (Array.isArray(arr) ? [...arr] : []).filter(passesAssigneeFilter);
+        if (state.sort === 'activity') {
+          cards.sort((a, b) => (Date.parse(b?.dateLastActivity || '') || 0) - (Date.parse(a?.dateLastActivity || '') || 0));
+          return cards;
+        }
+        if (state.sort === 'name') {
+          cards.sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+          return cards;
+        }
+        cards.sort((a, b) => (a?.pos ?? 0) - (b?.pos ?? 0));
+        return cards;
+      };
+
+      const globalDefaults = readLaunchDefaults();
+      const quickTier = Number(globalDefaults?.tier || 3);
+
+      cardsEl.innerHTML = `
+        <div class="tasks-board ${isWrap ? 'tasks-board-wrap tasks-board-grid' : ''} ${isWrapExpand ? 'tasks-board-expand tasks-board-grid' : ''}" id="tasks-board-view">
+          ${cols
+            .map((col) => {
+              const raw = Array.isArray(col?.cards) ? col.cards : [];
+              const cards = sortCards(raw);
+              if (state.hideEmptyColumns && cards.length === 0) return '';
+
+              const boardDot = col.boardColor
+                ? `<span class="tasks-board-menu-dot" style="background-color:${escapeHtml(col.boardColor)}" aria-hidden="true"></span>`
+                : `<span class="tasks-board-menu-dot is-hidden" aria-hidden="true"></span>`;
+
+              return `
+                <div class="tasks-column is-expanded" data-list-id="${escapeHtml(`${col.boardId}:${col.listId}`)}">
+                  <button class="tasks-column-header" type="button" aria-expanded="true">
+                    <div class="tasks-column-title">${boardDot}${escapeHtml(col.boardName)} • ${escapeHtml(col.listName)}</div>
+                    <div class="tasks-column-count" data-count>${cards.length}</div>
+                  </button>
+                  <div class="tasks-column-cards">
+                    ${cards
+                      .map((c) => {
+                        const title = escapeHtml(String(c?.name || '').trim() || c?.id || '');
+                        const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
+                        const cardBoardId = String(c?.idBoard || col.boardId || '').trim();
+                        const mappingForQuick = cardBoardId ? (getBoardMapping(state.provider, cardBoardId) || null) : null;
+                        const mappingEnabled = mappingForQuick ? (mappingForQuick.enabled !== false) : true;
+                        const mappingLocalPath = mappingForQuick ? String(mappingForQuick.localPath || '') : '';
+                        const canQuickLaunch = !!(mappingEnabled && mappingLocalPath && cardBoardId && cardBoardId !== ALL_BOARDS_ID);
+
+                        const quickTierButtons = canQuickLaunch
+                          ? `
+                            <div class="tasks-quick-tier-group" data-quick-tier-group>
+                              <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 1 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="1" title="Launch as T1">T1</button>
+                              <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 2 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="2" title="Launch as T2">T2</button>
+                              <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 3 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="3" title="Launch as T3">T3</button>
+                              <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 4 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="4" title="Launch as T4">T4</button>
+                            </div>
+                          `
+                          : '';
+
+                        const quickLaunchHtml = canQuickLaunch
+                          ? `
+                            <div class="task-card-quick-actions" data-quick-launch-wrap>
+                              ${quickTierButtons}
+                              <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-btn title="Launch agent (uses default tier)">🚀</button>
+                            </div>
+                          `
+                          : (cardBoardId ? `<button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-setup title="Set Board Settings to enable Launch">⚙</button>` : '');
+
+                        const meta = [
+                          updatedSince ? '' : (c?.__boardName ? String(c.__boardName) : ''),
+                          last
+                        ].filter(Boolean).join(' • ');
+
+                        return `
+                          <div class="task-card-row task-card-board" data-card-id="${escapeHtml(c.id)}" data-board-id="${escapeHtml(cardBoardId)}" data-url="${escapeHtml(c?.url || '')}">
+                            <div class="task-card-top">
+                              <div class="task-card-meta">${escapeHtml(meta)}</div>
+                              <div class="task-card-top-right">${quickLaunchHtml}</div>
+                            </div>
+                            <div class="task-card-title">${title}</div>
+                          </div>
+                        `;
+                      })
+                      .join('')}
+                  </div>
+                </div>
+              `;
+            })
+            .join('')}
+        </div>
+      `;
+
+      if (!isWrapExpand) return;
+      const boardEl = cardsEl.querySelector('#tasks-board-view');
+      if (!boardEl) return;
+
+      const columns = Array.from(boardEl.querySelectorAll('.tasks-column'));
+      const computeForColumn = (col) => {
+        if (!col) return;
+        const cardsContainer = col.querySelector('.tasks-column-cards');
+        const header = col.querySelector('.tasks-column-header');
+        if (!cardsContainer || !header) return;
+
+        col.style.width = '';
+        col.style.minWidth = '';
+        const baseWidth = col.getBoundingClientRect().width;
+
+        const cards = Array.from(cardsContainer.querySelectorAll('.task-card-board'));
+        const cardCount = cards.length;
+        if (cardCount === 0) {
+          col.style.setProperty('--tasks-card-columns', '1');
+          col.style.setProperty('--tasks-card-rows', '1');
+          return;
+        }
+
+        const containerHeight = cardsContainer.clientHeight;
+        if (!containerHeight || containerHeight < 40) return;
+
+        const styles = window.getComputedStyle(cardsContainer);
+        const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
+        const sample = cards.slice(0, Math.min(6, cardCount));
+        const heights = sample.map(el => el.getBoundingClientRect().height).filter(Boolean);
+        const avg = heights.length ? (heights.reduce((a, b) => a + b, 0) / heights.length) : 80;
+        const denom = Math.max(1, avg + rowGap);
+        let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
+        rowsFit = Math.min(rowsFit, 12);
+
+        const apply = (rows) => {
+          const r = Math.max(1, Number(rows) || 1);
+          const cols = Math.max(1, Math.ceil(cardCount / r));
+          col.style.setProperty('--tasks-card-rows', String(r));
+          col.style.setProperty('--tasks-card-columns', String(cols));
+          if (cols <= 1) {
+            col.style.width = '';
+            col.style.minWidth = '';
+          } else {
+            const target = Math.max(baseWidth, baseWidth * cols);
+            col.style.width = `${Math.round(target)}px`;
+            col.style.minWidth = `${Math.round(target)}px`;
+          }
+        };
+
+        apply(rowsFit);
+        for (let attempt = 0; attempt < 6; attempt++) {
+          void cardsContainer.offsetHeight;
+          if (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1) break;
+          rowsFit = Math.max(1, rowsFit - 1);
+          apply(rowsFit);
+        }
+      };
+
+      window.requestAnimationFrame(() => {
+        columns.forEach(computeForColumn);
+      });
+    };
+
     const fetchCards = async ({ refresh = false } = {}) => {
       if (!state.boardId) return [];
 
@@ -8838,7 +9284,12 @@ class ClaudeOrchestrator {
 
     const applyView = () => {
       const isAllBoards = state.boardId === ALL_BOARDS_ID;
+      const isCombined = state.boardId === COMBINED_VIEW_ID;
       const isBoard = state.view === 'board' && !isAllBoards;
+      if (isCombined && state.view !== 'board') {
+        state.view = 'board';
+        try { localStorage.setItem('tasks-view', state.view); } catch {}
+      }
       if (isAllBoards && state.view === 'board') {
         state.view = 'list';
         try { localStorage.setItem('tasks-view', state.view); } catch {}
@@ -8849,7 +9300,7 @@ class ClaudeOrchestrator {
       viewListBtn?.classList.toggle('active', !isBoard);
       viewBoardBtn?.classList.toggle('active', isBoard);
       if (viewBoardBtn) viewBoardBtn.disabled = isAllBoards;
-      if (boardSettingsBtn) boardSettingsBtn.disabled = isAllBoards;
+      if (boardSettingsBtn) boardSettingsBtn.disabled = isAllBoards || isCombined;
     };
 
     const syncBoardLayoutUI = () => {
@@ -8865,7 +9316,7 @@ class ClaudeOrchestrator {
       const details = modal.querySelector('#tasks-assignees-filter');
       const list = modal.querySelector('#tasks-assignees-list');
       if (!details || !list) return;
-      const isConfigured = !!state.boardId && state.boardId !== ALL_BOARDS_ID;
+      const isConfigured = !!state.boardId && state.boardId !== ALL_BOARDS_ID && state.boardId !== COMBINED_VIEW_ID;
       details.style.display = isConfigured ? '' : 'none';
 
       const members = Array.isArray(state.boardMembers) ? state.boardMembers : [];
@@ -8930,6 +9381,7 @@ class ClaudeOrchestrator {
 	        });
 
 	        const withAllBoards = [
+	          { id: COMBINED_VIEW_ID, name: 'Combined view', __selectLabel: 'Combined view' },
 	          { id: ALL_BOARDS_ID, name: 'All enabled boards', __selectLabel: 'All enabled boards' },
 	          ...filteredBoards
 	        ];
@@ -8945,6 +9397,14 @@ class ClaudeOrchestrator {
           state.me = await fetchMe({ refresh: false });
         } catch (e) {
           state.me = null;
+        }
+
+        // Combined view is board-only.
+        if (state.boardId === COMBINED_VIEW_ID && state.view !== 'board') {
+          state.view = 'board';
+          try { localStorage.setItem('tasks-view', state.view); } catch {}
+          applyView();
+          syncBoardLayoutUI();
         }
 
         if (state.view === 'list') {
@@ -9007,6 +9467,22 @@ class ClaudeOrchestrator {
           const cards = await fetchCards({ refresh: force });
           renderCards(cards);
         } else {
+          const isCombined = state.boardId === COMBINED_VIEW_ID;
+          if (isCombined) {
+            state.boardMembers = [];
+            state.lists = [];
+            state.boardCustomFields = [];
+            state.boardLabels = [];
+            state.assigneeFilterMode = 'any';
+            state.assigneeFilterIds = [];
+            renderAssigneeFilter();
+
+            const snapshot = await fetchCombinedSnapshot({ refresh: force });
+            lastSnapshot = snapshot;
+            renderCombinedBoard(snapshot);
+            return;
+          }
+
           const [snapshot, members, customFields, labels] = await Promise.all([
             fetchSnapshot({ refresh: force }),
             fetchBoardMembers({ refresh: force }).catch((e) => {
@@ -9113,6 +9589,10 @@ class ClaudeOrchestrator {
     });
 
     viewListBtn?.addEventListener('click', async () => {
+      if (state.boardId === COMBINED_VIEW_ID) {
+        this.showToast('Combined view is board-only', 'error');
+        return;
+      }
       state.view = 'list';
       localStorage.setItem('tasks-view', state.view);
       applyView();
@@ -9216,6 +9696,14 @@ class ClaudeOrchestrator {
 		      renderBoardSettings();
 		    });
 
+        combinedSettingsBtn?.addEventListener('click', (e) => {
+          e.preventDefault();
+          renderCombinedSettings().catch((err) => {
+            console.error('Failed to open combined settings:', err);
+            this.showToast(String(err?.message || err), 'error');
+          });
+        });
+
       hotkeysBtn?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -9262,8 +9750,15 @@ class ClaudeOrchestrator {
 	    boardEl.addEventListener('change', async () => {
 	      state.boardId = boardEl.value || '';
 	      localStorage.setItem('tasks-board', state.boardId);
-      state.listId = '__all__';
-      localStorage.setItem('tasks-list', state.listId);
+      if (state.boardId === COMBINED_VIEW_ID) {
+        state.listId = '';
+        try { localStorage.removeItem('tasks-list'); } catch {}
+        state.view = 'board';
+        try { localStorage.setItem('tasks-view', state.view); } catch {}
+      } else {
+        state.listId = '__all__';
+        localStorage.setItem('tasks-list', state.listId);
+      }
       state.boardLayout = readBoardLayout();
       syncBoardLayoutUI();
 	      syncBoardAccent();
@@ -9273,6 +9768,8 @@ class ClaudeOrchestrator {
 	        state.view = 'list';
 	        localStorage.setItem('tasks-view', state.view);
 	      }
+        applyView();
+        syncBoardLayoutUI();
 	      await refreshAll({ force: true });
 	    });
 
@@ -9324,7 +9821,7 @@ class ClaudeOrchestrator {
 	    cardsEl.addEventListener('click', async (e) => {
         const resolveRowBoardId = (row) => {
           if (!row) return String(state.boardId || '').trim();
-          if (state.boardId === ALL_BOARDS_ID) return String(row.dataset?.boardId || '').trim();
+          if (state.boardId === ALL_BOARDS_ID || state.boardId === COMBINED_VIEW_ID) return String(row.dataset?.boardId || '').trim();
           return String(state.boardId || '').trim();
         };
 
@@ -9446,7 +9943,7 @@ class ClaudeOrchestrator {
 
       detailEl.innerHTML = `<div class="loading">Loading card…</div>`;
       try {
-        const isAllBoards = state.boardId === ALL_BOARDS_ID;
+        const isAllBoards = state.boardId === ALL_BOARDS_ID || state.boardId === COMBINED_VIEW_ID;
 
         let cardPromise = fetchCardDetail(cardId);
         let needsCustomFields = !!state.boardId && (!Array.isArray(state.boardCustomFields) || state.boardCustomFields.length === 0);
@@ -9912,7 +10409,7 @@ class ClaudeOrchestrator {
 
 	      const resolveRowBoardId = (row) => {
 	        if (!row) return String(state.boardId || '').trim();
-	        if (state.boardId === ALL_BOARDS_ID) return String(row.dataset?.boardId || '').trim();
+	        if (state.boardId === ALL_BOARDS_ID || state.boardId === COMBINED_VIEW_ID) return String(row.dataset?.boardId || '').trim();
 	        return String(state.boardId || '').trim();
 	      };
 
