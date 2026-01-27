@@ -6977,6 +6977,7 @@ class ClaudeOrchestrator {
 		              <div class="tasks-board-menu hidden" id="tasks-board-menu" role="menu" aria-label="Boards"></div>
 		            </div>
 			          <button class="btn-secondary" id="tasks-board-settings" title="Board mapping / settings">⚙</button>
+			          <button class="btn-secondary" id="tasks-board-open-link" title="Open board in browser">🔗</button>
 	              <button class="btn-secondary" id="tasks-board-conventions" title="Board conventions wizard (Done list, label tiers, dependencies)">📏</button>
 	              <button class="btn-secondary" id="tasks-combined-settings" title="Combined view settings">🧲</button>
 	              <button class="btn-secondary" id="tasks-hotkeys" title="Hotkeys (?)">⌨</button>
@@ -7075,6 +7076,7 @@ class ClaudeOrchestrator {
 	    const boardBtnEl = modal.querySelector('#tasks-board-btn');
 	    const boardMenuEl = modal.querySelector('#tasks-board-menu');
 			    const boardSettingsBtn = modal.querySelector('#tasks-board-settings');
+			    const boardOpenLinkBtn = modal.querySelector('#tasks-board-open-link');
 			    const boardConventionsBtn = modal.querySelector('#tasks-board-conventions');
 	      const combinedSettingsBtn = modal.querySelector('#tasks-combined-settings');
 	      const hotkeysBtn = modal.querySelector('#tasks-hotkeys');
@@ -9873,6 +9875,28 @@ class ClaudeOrchestrator {
       viewBoardBtn?.classList.toggle('active', isBoard);
       if (viewBoardBtn) viewBoardBtn.disabled = isAllBoards;
       if (boardSettingsBtn) boardSettingsBtn.disabled = isAllBoards || isCombined;
+      if (boardOpenLinkBtn) boardOpenLinkBtn.disabled = !state.boardId || isAllBoards || isCombined;
+    };
+
+    const openSelectedBoardInBrowser = () => {
+      const bid = String(state.boardId || '').trim();
+      if (!bid || bid === ALL_BOARDS_ID || bid === COMBINED_VIEW_ID) {
+        this.showToast('Select a single board first', 'warning');
+        return;
+      }
+      const board = (Array.isArray(state.boards) ? state.boards : []).find((b) => String(b?.id || '').trim() === bid) || null;
+      const url = String(board?.url || board?.link || '').trim();
+      if (!url) {
+        this.showToast('Board URL unavailable for this provider', 'warning');
+        return;
+      }
+      try {
+        new URL(url);
+      } catch {
+        this.showToast('Invalid board URL', 'error');
+        return;
+      }
+      window.open(url, '_blank');
     };
 
     const syncBoardLayoutUI = () => {
@@ -10266,6 +10290,11 @@ class ClaudeOrchestrator {
 			    boardSettingsBtn?.addEventListener('click', (e) => {
 			      e.preventDefault();
 			      renderBoardSettings();
+			    });
+
+			    boardOpenLinkBtn?.addEventListener('click', (e) => {
+			      e.preventDefault();
+			      openSelectedBoardInBrowser();
 			    });
 
 			    boardConventionsBtn?.addEventListener('click', (e) => {
