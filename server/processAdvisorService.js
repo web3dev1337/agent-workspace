@@ -76,6 +76,12 @@ class ProcessAdvisorService {
       metrics.wipMax = wipMax || null;
       metrics.qByTier = qByTier;
 
+      const createdCount = Number(telemetry?.createdCount || 0);
+      const doneCount = Number(telemetry?.doneCount || 0);
+      metrics.createdCount = createdCount;
+      metrics.doneCount = doneCount;
+      metrics.netCreatedMinusDone = createdCount - doneCount;
+
       if (wipMax && wip > wipMax) {
         advice.push({
           level: 'warn',
@@ -100,6 +106,21 @@ class ProcessAdvisorService {
           actions: [
             { type: 'ui', action: 'open-prs', label: 'Open PRs' },
             { type: 'ui', action: 'queue-conveyor-t2', label: 'Conveyor T2' },
+            { type: 'ui', action: 'open-queue', label: 'Open Queue' }
+          ]
+        });
+      }
+
+      const netBacklogGrowth = createdCount - doneCount;
+      if (createdCount >= 5 && netBacklogGrowth >= 3) {
+        advice.push({
+          level: 'warn',
+          code: 'throughput_negative',
+          title: 'Backlog growing',
+          message: `In the last ${hours}h, created ${createdCount} tasks but completed ${doneCount}. Consider triaging before starting new work.`,
+          actions: [
+            { type: 'ui', action: 'queue-triage', label: 'Open triage' },
+            { type: 'ui', action: 'open-prs', label: 'Open PRs' },
             { type: 'ui', action: 'open-queue', label: 'Open Queue' }
           ]
         });
