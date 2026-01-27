@@ -22,7 +22,7 @@ Quality fixes shipped:
 - ✅ Kanban view opens left-aligned by default (no “single column stuck on the right” feel). (PR #290)
 
 Known issues / follow-ups:
-- [ ] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active. (Partially mitigated in PR #276)
+- [x] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active. (Mitigated further in PR #296; remaining edge cases may exist)
 - [ ] Intermittent: card detail layout may still reflow or appear on the wrong side; capture view (List/Board/Combined) + screenshot when it happens.
 - [x] Add “Start server” control to the Agent terminal header (one click; mirrors Server window controls). (PR #277)
 - [x] Tasks panel: add a quick “Open Trello board” link/button for the currently selected board. (PR #279)
