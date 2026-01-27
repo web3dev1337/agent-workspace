@@ -3829,6 +3829,21 @@ class ClaudeOrchestrator {
         this.showQueuePanel?.().catch?.((err) => console.error('Failed to open queue:', err));
         break;
 
+      case 'queue-next':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => document.getElementById('queue-next')?.click?.(), 50))
+          .catch?.((err) => console.error('Failed to open queue next:', err));
+        break;
+
+      case 'queue-blockers':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => {
+            const btn = document.getElementById('queue-blocked');
+            if (btn && !btn.classList.contains('active')) btn.click();
+          }, 50))
+          .catch?.((err) => console.error('Failed to open queue blockers:', err));
+        break;
+
       case 'open-tasks':
         this.showTasksPanel?.().catch?.((err) => console.error('Failed to open tasks:', err));
         break;
@@ -12176,6 +12191,7 @@ class ClaudeOrchestrator {
 			      reviewTier: 'all', // all | none | 1..4
             tierSet: null, // null | number[] (multi-tier presets like [3,4])
 			      unreviewedOnly: false,
+            blockedOnly: localStorage.getItem('queue-blocked-only') === 'true',
 			      autoOpenDiff: false,
             triageMode: localStorage.getItem('queue-triage') === 'true',
             snoozes: {}, // taskId -> untilMs
@@ -12300,6 +12316,7 @@ class ClaudeOrchestrator {
 		          <div class="tasks-view-toggle" role="group" aria-label="Review filters">
 		            <button class="btn-secondary tasks-view-btn" id="queue-triage" title="Triage ordering + snooze (safe backoff)">Triage</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
+		            <button class="btn-secondary tasks-view-btn" id="queue-blocked" title="Toggle: show blocked only (dependency-blocked items)">Blocked</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-auto-next" title="Toggle: auto-advance when you complete a review">Auto Next</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
@@ -12341,6 +12358,7 @@ class ClaudeOrchestrator {
     const tierBgBtn = modal.querySelector('#queue-tier-bg');
 	    const tierNoneBtn = modal.querySelector('#queue-tier-none');
 		    const unreviewedBtn = modal.querySelector('#queue-unreviewed');
+        const blockedBtn = modal.querySelector('#queue-blocked');
         const triageBtn = modal.querySelector('#queue-triage');
 		    const autoDiffBtn = modal.querySelector('#queue-auto-diff');
 		    const autoNextBtn = modal.querySelector('#queue-auto-next');
@@ -12382,6 +12400,7 @@ class ClaudeOrchestrator {
 
           triageBtn?.classList.toggle('active', !!state.triageMode);
 		      unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
+          blockedBtn?.classList.toggle('active', !!state.blockedOnly);
 		      autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
 		      autoNextBtn?.classList.toggle('active', !!state.autoAdvance);
 		      autoReviewerBtn?.classList.toggle('active', !!state.autoReviewer);
@@ -12434,6 +12453,12 @@ class ClaudeOrchestrator {
       syncReviewControlsUI();
       renderList();
       if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+    });
+
+    blockedBtn?.addEventListener('click', () => {
+      state.blockedOnly = !state.blockedOnly;
+      try { localStorage.setItem('queue-blocked-only', state.blockedOnly ? 'true' : 'false'); } catch {}
+      applyFiltersAndMaybeClampSelection();
     });
 
 	    autoDiffBtn?.addEventListener('click', () => {
@@ -12546,6 +12571,10 @@ class ClaudeOrchestrator {
         }
         if (state.unreviewedOnly) {
           if (t?.record?.reviewedAt) return false;
+        }
+        if (state.blockedOnly) {
+          const blockedCount = Number(t?.dependencySummary?.blocked || 0);
+          if (!(blockedCount > 0)) return false;
         }
         if (state.triageMode) {
           const until = getSnoozeUntilMs(t?.id);

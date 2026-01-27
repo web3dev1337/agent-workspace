@@ -234,6 +234,28 @@ class CommandRegistry {
       }
     });
 
+    this.register('queue-next', {
+      category: 'process',
+      description: 'Open Queue and jump to the next review item',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-next' });
+        return { message: 'Queue: next item' };
+      }
+    });
+
+    this.register('queue-blockers', {
+      category: 'process',
+      description: 'Open Queue filtered to dependency-blocked items',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-blockers' });
+        return { message: 'Queue: blockers' };
+      }
+    });
+
     this.register('open-tasks', {
       category: 'process',
       description: 'Open the Tasks panel (Trello provider UI)',
