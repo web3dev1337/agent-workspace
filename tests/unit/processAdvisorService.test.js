@@ -35,6 +35,10 @@ describe('ProcessAdvisorService', () => {
     expect(codes).toContain('untagged_tasks');
     expect(codes).toContain('review_slow');
     expect(codes).toContain('tier3_unreviewed_prs');
+
+    const tier3Advice = (result.advice || []).find(a => a.code === 'tier3_unreviewed_prs');
+    const actions = Array.isArray(tier3Advice?.actions) ? tier3Advice.actions : [];
+    expect(actions.some(a => a?.action === 'queue-next')).toBe(true);
   });
 
   test('includes dependency-blocked signal for tier 1/2 PRs', async () => {
