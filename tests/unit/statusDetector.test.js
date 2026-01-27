@@ -79,7 +79,7 @@ describe('StatusDetector', () => {
       const state = detector.getState(sessionId);
       state.lastOutputTime = Date.now();
       state.lastBufferLength = 0;
-      const buffer = 'Welcome to Claude Code!\nHere is an example:\n$ echo hello\nMore output';
+      const buffer = `Welcome to Claude Code!\n${'Example output '.repeat(20)}\n$`;
       const status = detector.detectStatus(sessionId, buffer);
       expect(status).toBe('busy');
     });
