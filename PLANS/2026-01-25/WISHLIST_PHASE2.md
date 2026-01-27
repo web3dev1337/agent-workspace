@@ -51,6 +51,7 @@ Process discipline:
 
 - [ ] Trello automation expansions on PR merge:
   - [ ] Per-board conventions beyond “Done list”: labels, checklists, and “needs_fix” feedback loops.
+    - [x] Queue outcome → Trello feedback loop: apply configured `needsFixLabelName` (and optional comment from Notes). (PR #316)
   - [ ] Optional auto-comment templates (links to prompt artifacts, review outcomes, verification notes).
 - [ ] Worktree fleet automation:
   - [ ] “Create N worktrees” presets per project (small/medium/large).
