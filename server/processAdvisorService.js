@@ -7,6 +7,19 @@ const normalizeTier = (value) => {
   return tier >= 1 && tier <= 4 ? tier : null;
 };
 
+const clampNonNegative = (n) => {
+  const x = Number(n);
+  if (!Number.isFinite(x) || x < 0) return null;
+  return x;
+};
+
+const normalizeRisk = (value) => {
+  const v = String(value || '').trim().toLowerCase();
+  if (!v) return '';
+  if (v === 'low' || v === 'medium' || v === 'high' || v === 'critical') return v;
+  return '';
+};
+
 class ProcessAdvisorService {
   constructor({ processStatusService, processTelemetryService, processTaskService, taskRecordService, taskDependencyService } = {}) {
     this.processStatusService = processStatusService;
@@ -107,6 +120,18 @@ class ProcessAdvisorService {
         });
       }
 
+      const avgVerifyMinutes = Number(telemetry?.avgVerifyMinutes || 0);
+      metrics.avgVerifyMinutes = avgVerifyMinutes || null;
+      if (avgVerifyMinutes && avgVerifyMinutes >= 20) {
+        advice.push({
+          level: 'info',
+          code: 'verify_slow',
+          title: 'Verification time is high',
+          message: `Average verify time is ~${Math.round(avgVerifyMinutes)} minutes. Consider adding checklists, reducing scope, or increasing tier/risk on items that need heavy verification.`,
+          actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+        });
+      }
+
       // Review outcome + trends (best-effort from task records).
       const recentReviews = records.filter((r) => {
         const ended = parseIso(r?.reviewEndedAt);
@@ -126,6 +151,44 @@ class ProcessAdvisorService {
           code: 'needs_fix_rate_high',
           title: 'High “needs_fix” rate',
           message: `In the last ${hours}h, ${recentNeedsFix}/${recentReviewTotal} reviews ended as “needs_fix”. Consider smaller PRs, more verification time, or raising Tier on risky items.`,
+          actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+        });
+      }
+
+      const missingVerify = recentReviews.filter((r) => {
+        const outcome = String(r?.reviewOutcome || '').trim();
+        if (!outcome) return false;
+        const v = clampNonNegative(r?.verifyMinutes);
+        return v === null;
+      });
+      metrics.reviewsMissingVerify = missingVerify.length;
+      if (missingVerify.length >= 3) {
+        advice.push({
+          level: 'info',
+          code: 'verify_missing',
+          title: 'Verify minutes missing on reviews',
+          message: `${missingVerify.length} reviews in the last ${hours}h are missing verifyMinutes. Filling this in helps telemetry + planning accuracy.`,
+          actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+        });
+      }
+
+      // Risk/tier mismatch signals (best-effort from open PR task records).
+      const riskyLowTier = (Array.isArray(tasks) ? tasks : []).filter((t) => {
+        if (!t || t.kind !== 'pr' || !t.id) return false;
+        const record = this.taskRecordService?.get?.(t.id) || t.record || {};
+        const tier = normalizeTier(record?.tier);
+        if (!(tier === 1 || tier === 2)) return false;
+        const risk = normalizeRisk(record?.changeRisk);
+        return risk === 'high' || risk === 'critical';
+      });
+
+      metrics.riskyTier12 = riskyLowTier.length;
+      if (riskyLowTier.length) {
+        advice.push({
+          level: 'warn',
+          code: 'risky_tier12',
+          title: 'High-risk items marked as Tier 1/2',
+          message: `${riskyLowTier.length} open PR(s) are Tier 1/2 with changeRisk high/critical. Consider re-tiering or tightening scope before review.`,
           actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
         });
       }
