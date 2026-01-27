@@ -121,6 +121,7 @@ class Dashboard {
 	                <div class="dashboard-summary-actions">
 	                  <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
 	                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
+	                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
 	                </div>
 	              </div>
 	              <div class="dashboard-summary-card">
@@ -186,11 +187,16 @@ class Dashboard {
 	      e.preventDefault();
 	      this.showTelemetryOverlay();
 	    });
-	    document.getElementById('dashboard-export-telemetry')?.addEventListener('click', (e) => {
-	      e.preventDefault();
-	      const hours = Number(this._telemetrySummary?.lookbackHours ?? 24);
-	      this.downloadTelemetryCsv(hours);
-	    });
+		    document.getElementById('dashboard-export-telemetry')?.addEventListener('click', (e) => {
+		      e.preventDefault();
+		      const hours = Number(this._telemetrySummary?.lookbackHours ?? 24);
+		      this.downloadTelemetryCsv(hours);
+		    });
+		    document.getElementById('dashboard-export-telemetry-json')?.addEventListener('click', (e) => {
+		      e.preventDefault();
+		      const hours = Number(this._telemetrySummary?.lookbackHours ?? 24);
+		      this.downloadTelemetryJson(hours);
+		    });
 	    document.getElementById('dashboard-open-queue')?.addEventListener('click', (e) => {
 	      e.preventDefault();
 	      this.orchestrator?.showQueuePanel?.().catch?.(() => {});
@@ -366,6 +372,21 @@ class Dashboard {
 	    }
 	  }
 
+	  downloadTelemetryJson(lookbackHours) {
+	    const hours = Number(lookbackHours);
+	    const safe = Number.isFinite(hours) && hours > 0 ? hours : 24;
+	    const url = `/api/process/telemetry/export?format=json&lookbackHours=${encodeURIComponent(String(safe))}`;
+	    try {
+	      const a = document.createElement('a');
+	      a.href = url;
+	      a.target = '_blank';
+	      a.rel = 'noopener';
+	      a.click();
+	    } catch {
+	      window.open(url, '_blank', 'noopener');
+	    }
+	  }
+
 	  showTelemetryOverlay() {
 	    const existing = document.getElementById('dashboard-telemetry-overlay');
 	    if (existing) {
@@ -405,6 +426,7 @@ class Dashboard {
 	          <div class="dashboard-telemetry-actions">
 	            <button class="btn-secondary" type="button" id="dashboard-telemetry-refresh">Refresh</button>
 	            <button class="btn-secondary" type="button" id="dashboard-telemetry-download">Download CSV</button>
+	            <button class="btn-secondary" type="button" id="dashboard-telemetry-download-json">Download JSON</button>
 	          </div>
 	        </div>
 	        <div id="dashboard-telemetry-body" class="dashboard-telemetry-body">Loading…</div>
@@ -428,6 +450,10 @@ class Dashboard {
 	    overlay.querySelector('#dashboard-telemetry-download')?.addEventListener('click', () => {
 	      const hours = Number(lookbackEl?.value ?? 24);
 	      this.downloadTelemetryCsv(hours);
+	    });
+	    overlay.querySelector('#dashboard-telemetry-download-json')?.addEventListener('click', () => {
+	      const hours = Number(lookbackEl?.value ?? 24);
+	      this.downloadTelemetryJson(hours);
 	    });
 	    overlay.querySelector('#dashboard-telemetry-refresh')?.addEventListener('click', () => {
 	      this.loadTelemetryDetails({ lookbackHours: Number(lookbackEl?.value ?? 24), bucketMinutes: Number(bucketEl?.value ?? 60) });
