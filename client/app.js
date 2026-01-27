@@ -241,6 +241,10 @@ class ClaudeOrchestrator {
         this.showQueuePanel();
       });
 
+      document.getElementById('workflow-all')?.addEventListener('click', () => {
+        this.setWorkflowMode('all');
+      });
+
       document.getElementById('workflow-focus-tier2')?.addEventListener('click', () => {
         this.setFocusHideTier2WhenTier1Busy(!this.focusHideTier2WhenTier1Busy);
       });
@@ -1404,7 +1408,7 @@ class ClaudeOrchestrator {
 
   setWorkflowMode(mode) {
     const normalized = String(mode || '').trim().toLowerCase();
-    if (!['focus', 'review', 'background'].includes(normalized)) return;
+    if (!['focus', 'review', 'background', 'all'].includes(normalized)) return;
     if (this.workflowMode === normalized) return;
 
     this.workflowMode = normalized;
@@ -1420,7 +1424,7 @@ class ClaudeOrchestrator {
   syncWorkflowModeFromUserSettings() {
     const mode = this.userSettings?.global?.ui?.workflow?.mode;
     const normalized = String(mode || '').trim().toLowerCase();
-    this.workflowMode = ['focus', 'review', 'background'].includes(normalized) ? normalized : 'review';
+    this.workflowMode = ['focus', 'review', 'background', 'all'].includes(normalized) ? normalized : 'review';
     this.updateWorkflowModeButtons();
   }
 
@@ -1551,15 +1555,18 @@ class ClaudeOrchestrator {
     const focusBtn = document.getElementById('workflow-focus');
     const reviewBtn = document.getElementById('workflow-review');
     const backgroundBtn = document.getElementById('workflow-background');
+    const allBtn = document.getElementById('workflow-all');
     if (!focusBtn || !reviewBtn || !backgroundBtn) return;
 
     focusBtn.classList.toggle('active', this.workflowMode === 'focus');
     reviewBtn.classList.toggle('active', this.workflowMode === 'review');
     backgroundBtn.classList.toggle('active', this.workflowMode === 'background');
+    allBtn?.classList.toggle('active', this.workflowMode === 'all');
 
     focusBtn.setAttribute('aria-pressed', this.workflowMode === 'focus' ? 'true' : 'false');
     reviewBtn.setAttribute('aria-pressed', this.workflowMode === 'review' ? 'true' : 'false');
     backgroundBtn.setAttribute('aria-pressed', this.workflowMode === 'background' ? 'true' : 'false');
+    allBtn?.setAttribute('aria-pressed', this.workflowMode === 'all' ? 'true' : 'false');
 
     const tier2Btn = document.getElementById('workflow-focus-tier2');
     if (tier2Btn) {
@@ -1730,6 +1737,12 @@ class ClaudeOrchestrator {
   }
 
   matchesWorkflowMode(sessionId) {
+    // If the user explicitly picks a tier (T1/T2/T3/T4/None), let that selection
+    // override workflow mode filtering so they can jump between tiers without
+    // swapping Focus/Background.
+    if (this.tierFilter !== 'all') return true;
+
+    if (this.workflowMode === 'all') return true;
     if (this.workflowMode === 'review') return true;
     const tier = this.getTierForSession(sessionId);
 
@@ -1809,7 +1822,7 @@ class ClaudeOrchestrator {
     // but they should become visible when the user explicitly switches to Background mode.
     const backgroundLaunch = !!session?.backgroundLaunch;
     const visibleByWorktreeToggle = this.visibleTerminals.has(sessionId)
-      || (this.workflowMode === 'background' && backgroundLaunch);
+      || ((this.workflowMode === 'background' || this.workflowMode === 'all') && backgroundLaunch);
 
 	    return visibleByWorktreeToggle
         && this.matchesViewMode(sessionId)
