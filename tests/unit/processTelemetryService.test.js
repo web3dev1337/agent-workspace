@@ -155,4 +155,60 @@ describe('ProcessTelemetryService', () => {
       Date.now = realNow;
     }
   });
+
+  test('exports telemetry as json', async () => {
+    const realNow = Date.now;
+    const now = 1_700_000_000_000;
+    Date.now = () => now;
+    const iso = (ms) => new Date(ms).toISOString();
+
+    const taskRecordService = {
+      list: () => ([
+        {
+          id: 'a',
+          updatedAt: iso(now),
+          reviewStartedAt: iso(now - 10_000),
+          reviewEndedAt: iso(now),
+          promptSentAt: iso(now - 5_000),
+          promptChars: 100,
+          tier: 2,
+          ticketProvider: 'trello',
+          ticketCardId: 'card-1'
+        },
+        {
+          id: 'b',
+          updatedAt: iso(now),
+          // telemetry exists via reviewedAt
+          reviewStartedAt: iso(now - 20_000),
+          reviewedAt: iso(now),
+          tier: 1
+        },
+        {
+          id: 'c',
+          updatedAt: iso(now),
+          // No telemetry -> should be excluded
+          tier: 3
+        }
+      ])
+    };
+
+    try {
+      const svc = new ProcessTelemetryService({ taskRecordService });
+      const out = await svc.exportJson({ lookbackHours: 24 });
+      expect(out).toEqual(expect.objectContaining({
+        lookbackHours: 24,
+        exportedAt: expect.any(String),
+        records: expect.any(Array)
+      }));
+      expect(out.records.length).toBe(2);
+      expect(out.records[0]).toEqual(expect.objectContaining({
+        id: expect.any(String),
+        updatedAt: expect.any(String),
+        reviewStartedAt: expect.any(String),
+        reviewEndedAt: expect.any(String)
+      }));
+    } finally {
+      Date.now = realNow;
+    }
+  });
 });
