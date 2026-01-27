@@ -23,6 +23,7 @@ Quality fixes shipped:
 
 Known issues / follow-ups:
 - [x] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active. (Mitigated in PR #315; further stabilized in PR #328; remaining edge cases may exist)
+- [x] Status indicator UI: delay busy→waiting transitions to reduce flicker (PR #353)
 - [x] Intermittent: card detail layout may still reflow or appear on the wrong side. (Hardened in PR #298; direction enforced in PR #327. If it still happens, capture view (List/Board/Combined) + screenshot.)
 - [x] Add “Start server” control to the Agent terminal header (one click; mirrors Server window controls). (PR #277)
 - [x] Tasks panel: add a quick “Open Trello board” link/button for the currently selected board. (PR #279)
@@ -39,6 +40,7 @@ Known issues / follow-ups:
 
 - [x] Project-level dashboard: per-project status, open PRs, review backlog, telemetry trends, and risk rollups. (PR #275)
 - [x] Long-term telemetry charts (trendlines, histograms) + export. (PR #302)
+- [x] Telemetry: task `createdAt` + summary `createdCount` signal. (PR #352)
 
 ### Review workflow (automation)
 
