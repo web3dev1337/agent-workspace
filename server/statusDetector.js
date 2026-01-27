@@ -13,7 +13,7 @@ const logger = winston.createLogger({
 });
 
 // Configuration constants
-const ASSUME_BUSY_SINCE_OUTPUT_MS = 15000; // keep "busy" for silence up to this long (reduces flicker)
+const ASSUME_BUSY_SINCE_OUTPUT_MS = 45000; // keep "busy" for silence up to this long (reduces flicker)
 
 class StatusDetector {
   constructor() {
@@ -110,9 +110,10 @@ class StatusDetector {
       return 'waiting';
     }
 
-    // 3. RELIABLE completion indicators near the end (Cost line => Claude done)
+    // 3. RELIABLE completion indicators at the end (Cost line => Claude done)
+    // Avoid matching older "Cost" lines still visible in the scrollback while Claude continues output.
     for (const pattern of this.completionPatterns) {
-      if (lastNonEmptyLines.some(l => pattern.test(l))) {
+      if (pattern.test(trimmedLastNonEmptyLine)) {
         logger.debug('Completion pattern matched - Claude done', { pattern: pattern.toString() });
         return 'waiting';
       }
