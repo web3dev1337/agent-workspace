@@ -22,7 +22,7 @@ Process discipline:
 - [ ] “Background” mode improvements: triage queue + auto-scheduling rules (e.g., tiered retries, safe backoff).
   - [x] Background-launched worktrees become visible when switching to Background mode (without auto-showing them in Review/Focus). (PR #320)
   - [x] Background triage Queue preset (T3+T4) + snooze (“safe backoff”). (PR #324)
-  - [x] Triage: tiered auto-snooze backoff (15m → 1h → 4h → 24h). (PR #TBD)
+  - [x] Triage: tiered auto-snooze backoff (15m → 1h → 4h → 24h). (PR #331)
 
 ## Advisor / Coach v2 (recommendations)
 
