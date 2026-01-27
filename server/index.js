@@ -2465,6 +2465,39 @@ app.get('/api/process/telemetry', async (req, res) => {
   }
 });
 
+app.get('/api/process/telemetry/details', async (req, res) => {
+  try {
+    const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
+    const bucketMinutes = req.query.bucketMinutes ? Number(req.query.bucketMinutes) : undefined;
+    const force = String(req.query.force || '').toLowerCase() === 'true';
+    const data = await processTelemetryService.getDetails({ lookbackHours, bucketMinutes, force });
+    res.json(data);
+  } catch (error) {
+    logger.error('Failed to fetch process telemetry details', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to fetch process telemetry details' });
+  }
+});
+
+app.get('/api/process/telemetry/export', async (req, res) => {
+  try {
+    const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
+    const format = String(req.query.format || 'csv').trim().toLowerCase();
+    if (format !== 'csv') {
+      res.status(400).json({ error: 'Unsupported export format' });
+      return;
+    }
+
+    const csv = await processTelemetryService.exportCsv({ lookbackHours });
+    const hoursLabel = Number.isFinite(Number(lookbackHours)) ? Number(lookbackHours) : 24;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="telemetry-${hoursLabel}h.csv"`);
+    res.send(csv);
+  } catch (error) {
+    logger.error('Failed to export process telemetry', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to export process telemetry' });
+  }
+});
+
 app.get('/api/process/projects', async (req, res) => {
   try {
     const mode = req.query.mode || 'mine';
