@@ -232,6 +232,17 @@ class CommandRegistry {
       }
     });
 
+    this.register('open-prs', {
+      category: 'ui',
+      description: 'Open the PRs panel',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-prs' });
+        return { message: 'Opening PRs' };
+      }
+    });
+
     // ============ PROCESS / WORKFLOW COMMANDS ============
 
     this.register('open-queue', {
