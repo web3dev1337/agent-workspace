@@ -6822,12 +6822,16 @@ class ClaudeOrchestrator {
           <button class="close-btn tasks-close-btn" id="tasks-close-btn" aria-label="Close Tasks" title="Close (Esc)">×</button>
         </div>
 
-	        <div class="tasks-toolbar">
-	          <select id="tasks-provider" class="tasks-select" title="Provider"></select>
-            <span class="tasks-board-accent" id="tasks-board-accent" aria-hidden="true" title="Board color"></span>
-	          <select id="tasks-board" class="tasks-select" title="Board"></select>
-	          <button class="btn-secondary" id="tasks-board-settings" title="Board mapping / settings">⚙</button>
-	          <select id="tasks-list" class="tasks-select" title="List"></select>
+		        <div class="tasks-toolbar">
+		          <select id="tasks-provider" class="tasks-select" title="Provider"></select>
+	            <div class="tasks-board-picker" id="tasks-board-picker">
+	              <span class="tasks-board-accent" id="tasks-board-accent" aria-hidden="true" title="Board color"></span>
+	              <button class="btn-secondary tasks-board-btn" id="tasks-board-btn" type="button" title="Board">Board</button>
+	              <select id="tasks-board" class="tasks-select tasks-select-hidden" title="Board"></select>
+	              <div class="tasks-board-menu hidden" id="tasks-board-menu" role="menu" aria-label="Boards"></div>
+	            </div>
+		          <button class="btn-secondary" id="tasks-board-settings" title="Board mapping / settings">⚙</button>
+		          <select id="tasks-list" class="tasks-select" title="List"></select>
             <div class="tasks-launch-defaults" id="tasks-launch-defaults" title="Defaults used by 🚀 quick launch">
               <span class="tasks-launch-defaults-label">🚀</span>
               <div class="tasks-quick-tier-group tasks-launch-default-tier-group" id="tasks-launch-default-tier-group" title="Default tier">
@@ -6917,10 +6921,12 @@ class ClaudeOrchestrator {
     };
     document.addEventListener('keydown', this.tasksPanelKeydownHandler);
 
-	    const providerEl = modal.querySelector('#tasks-provider');
-	    const boardEl = modal.querySelector('#tasks-board');
-	    const boardSettingsBtn = modal.querySelector('#tasks-board-settings');
-	    const listEl = modal.querySelector('#tasks-list');
+		    const providerEl = modal.querySelector('#tasks-provider');
+		    const boardEl = modal.querySelector('#tasks-board');
+	    const boardBtnEl = modal.querySelector('#tasks-board-btn');
+	    const boardMenuEl = modal.querySelector('#tasks-board-menu');
+		    const boardSettingsBtn = modal.querySelector('#tasks-board-settings');
+		    const listEl = modal.querySelector('#tasks-list');
     const searchEl = modal.querySelector('#tasks-search');
     const updatedEl = modal.querySelector('#tasks-updated');
     const sortEl = modal.querySelector('#tasks-sort');
@@ -6966,10 +6972,59 @@ class ClaudeOrchestrator {
         }
       };
 
-      const syncBoardAccent = () => {
-        const board = Array.isArray(state.boards) ? state.boards.find((b) => b?.id === state.boardId) : null;
+	      const syncBoardAccent = () => {
+	        const board = Array.isArray(state.boards) ? state.boards.find((b) => b?.id === state.boardId) : null;
+	        const color = board?.prefs?.backgroundColor || '';
+	        setBoardAccent(color);
+	      };
+
+      const getBoardColorById = (boardId) => {
+        const bid = String(boardId || '').trim();
+        if (!bid || bid === ALL_BOARDS_ID) return '';
+        const board = Array.isArray(state.boards) ? state.boards.find((b) => b?.id === bid) : null;
         const color = board?.prefs?.backgroundColor || '';
-        setBoardAccent(color);
+        return sanitizeCssColor(color);
+      };
+
+      const isBoardMenuOpen = () => !!boardMenuEl && !boardMenuEl.classList.contains('hidden');
+
+      const closeBoardMenu = () => {
+        if (!boardMenuEl) return;
+        boardMenuEl.classList.add('hidden');
+        boardBtnEl?.setAttribute?.('aria-expanded', 'false');
+      };
+
+      const renderBoardPicker = () => {
+        if (!boardBtnEl || !boardMenuEl || !boardEl) return;
+
+        const selected = String(boardEl.value || '').trim();
+        const options = Array.from(boardEl.querySelectorAll('option')).map((opt) => ({
+          value: String(opt.value || ''),
+          label: String(opt.textContent || '').trim(),
+          disabled: !!opt.disabled
+        }));
+
+        const selectedOpt = options.find((o) => o.value === selected);
+        boardBtnEl.textContent = selectedOpt?.label || 'Board';
+        boardBtnEl.setAttribute('aria-haspopup', 'menu');
+        boardBtnEl.setAttribute('aria-expanded', isBoardMenuOpen() ? 'true' : 'false');
+
+        const items = options.filter((o) => o.value);
+        boardMenuEl.innerHTML = items
+          .map((o) => {
+            const isSelected = o.value === selected;
+            const color = getBoardColorById(o.value);
+            const dot = color
+              ? `<span class="tasks-board-menu-dot" style="background-color:${this.escapeHtml(color)}" aria-hidden="true"></span>`
+              : `<span class="tasks-board-menu-dot is-hidden" aria-hidden="true"></span>`;
+            return `
+              <button type="button" class="tasks-board-menu-item ${isSelected ? 'is-selected' : ''}" role="menuitemradio" aria-checked="${isSelected ? 'true' : 'false'}" data-board-menu-value="${this.escapeHtml(o.value)}">
+                ${dot}
+                <span class="tasks-board-menu-label">${this.escapeHtml(o.label || o.value)}</span>
+              </button>
+            `;
+          })
+          .join('');
       };
 
       const getMappingTierForBoard = (boardId) => {
@@ -8744,10 +8799,11 @@ class ClaudeOrchestrator {
 	          ...filteredBoards
 	        ];
 
-	        setSelectOptions(boardEl, withAllBoards, { placeholder: 'Select board...', valueKey: 'id', labelKey: '__selectLabel' });
-	        if (state.boardId) boardEl.value = state.boardId;
-          syncBoardAccent();
-          syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
+		        setSelectOptions(boardEl, withAllBoards, { placeholder: 'Select board...', valueKey: 'id', labelKey: '__selectLabel' });
+		        if (state.boardId) boardEl.value = state.boardId;
+	          syncBoardAccent();
+	          renderBoardPicker();
+	          syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
 
         // Fetch "me" (best-effort) so we can default the assignee filter.
         try {
@@ -9025,21 +9081,49 @@ class ClaudeOrchestrator {
 	      renderBoardSettings();
 	    });
 
+      boardBtnEl?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        renderBoardPicker();
+        if (isBoardMenuOpen()) closeBoardMenu();
+        else boardMenuEl?.classList?.remove?.('hidden');
+      });
+
+      boardMenuEl?.addEventListener('click', (e) => {
+        const btn = e.target?.closest?.('[data-board-menu-value]');
+        if (!btn || !boardEl) return;
+        const value = String(btn.getAttribute('data-board-menu-value') || '').trim();
+        if (!value) return;
+        if (boardEl.value !== value) {
+          boardEl.value = value;
+          boardEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        closeBoardMenu();
+      });
+
+      modal.addEventListener('click', (e) => {
+        if (!isBoardMenuOpen()) return;
+        const picker = modal.querySelector('#tasks-board-picker');
+        if (picker && picker.contains(e.target)) return;
+        closeBoardMenu();
+      });
+
 	    boardEl.addEventListener('change', async () => {
-      state.boardId = boardEl.value || '';
-      localStorage.setItem('tasks-board', state.boardId);
+	      state.boardId = boardEl.value || '';
+	      localStorage.setItem('tasks-board', state.boardId);
       state.listId = '__all__';
       localStorage.setItem('tasks-list', state.listId);
       state.boardLayout = readBoardLayout();
       syncBoardLayoutUI();
-      syncBoardAccent();
-      syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
-      if (state.boardId === ALL_BOARDS_ID) {
-        state.view = 'list';
-        localStorage.setItem('tasks-view', state.view);
-      }
-      await refreshAll({ force: true });
-    });
+	      syncBoardAccent();
+        renderBoardPicker();
+	      syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
+	      if (state.boardId === ALL_BOARDS_ID) {
+	        state.view = 'list';
+	        localStorage.setItem('tasks-view', state.view);
+	      }
+	      await refreshAll({ force: true });
+	    });
 
     listEl.addEventListener('change', async () => {
       state.listId = listEl.value || '';
