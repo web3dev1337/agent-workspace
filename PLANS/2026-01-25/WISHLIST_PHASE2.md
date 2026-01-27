@@ -37,7 +37,7 @@ Process discipline:
 - [ ] Multi-board “combined view” improvements:
   - [x] List view (not just board/columns), so you can scan lots of cards quickly across multiple selected columns. (PR #304)
   - [x] Better context in rows (board + list labels). (PR #304)
-  - [ ] Optional “pinned columns” presets and quick switching.
+  - [x] Optional “pinned columns” presets and quick switching. (PR #306)
 
 ## Telemetry v2 (trends, exports, more signals)
 
