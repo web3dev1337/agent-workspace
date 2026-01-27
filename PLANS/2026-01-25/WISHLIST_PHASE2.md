@@ -43,7 +43,7 @@ Process discipline:
 
 - [ ] Add more signals: commits, PR reviews, PR merges, tasks created/completed, and per-project throughput.
   - [x] Throughput + outcomes from task records: doneCount series, avgVerifyMinutes, outcomeCounts, richer exports. (PR #317)
-  - [ ] Dashboard UI shows done/outcomes/verify + throughput chart.
+  - [x] Dashboard UI shows done/outcomes/verify + throughput chart. (PR #318)
 - [ ] Exports + sharing:
   - [x] JSON export (PR #308)
   - [x] “Share snapshot” links (PR #311)
