@@ -42,6 +42,7 @@ Process discipline:
 ## Telemetry v2 (trends, exports, more signals)
 
 - [ ] Add more signals: commits, PR reviews, PR merges, tasks created/completed, and per-project throughput.
+  - [x] Throughput + outcomes from task records: doneCount series, avgVerifyMinutes, outcomeCounts, richer exports. (PR #317)
 - [ ] Exports + sharing:
   - [x] JSON export (PR #308)
   - [x] “Share snapshot” links (PR #311)

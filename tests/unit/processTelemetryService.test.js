@@ -10,20 +10,26 @@ describe('ProcessTelemetryService', () => {
         {
           id: 'a',
           updatedAt: iso(now),
+          doneAt: iso(now),
           reviewStartedAt: iso(now - 10_000),
           reviewEndedAt: iso(now),
           promptSentAt: iso(now - 5_000),
           promptChars: 100,
-          reviewedAt: iso(now)
+          reviewedAt: iso(now),
+          verifyMinutes: 5,
+          reviewOutcome: 'approved'
         },
         {
           id: 'b',
           updatedAt: iso(now),
+          doneAt: iso(now),
           reviewStartedAt: iso(now - 20_000),
           reviewEndedAt: iso(now),
           promptSentAt: iso(now - 4_000),
           promptChars: 300,
-          reviewedAt: iso(now)
+          reviewedAt: iso(now),
+          verifyMinutes: 15,
+          reviewOutcome: 'needs_fix'
         },
         {
           id: 'c',
@@ -39,11 +45,15 @@ describe('ProcessTelemetryService', () => {
     expect(summary.recordsConsidered).toBe(3);
     expect(summary.reviewedCount).toBe(2);
     expect(summary.promptSentCount).toBe(2);
+    expect(summary.doneCount).toBe(2);
     expect(summary.samples.reviewSeconds).toBe(2);
     expect(summary.samples.promptChars).toBe(2);
+    expect(summary.samples.verifyMinutes).toBe(2);
     expect(summary.avgPromptChars).toBe(200);
     // Reviews: 10s and 20s -> avg 15s
     expect(Math.round(summary.avgReviewSeconds)).toBe(15);
+    expect(summary.avgVerifyMinutes).toBe(10);
+    expect(summary.outcomeCounts).toEqual(expect.objectContaining({ approved: 1, needs_fix: 1 }));
   });
 
   test('returns bucketed series + histograms', async () => {
@@ -57,6 +67,7 @@ describe('ProcessTelemetryService', () => {
         {
           id: 'a',
           updatedAt: iso(now),
+          doneAt: iso(now - 20_000),
           reviewStartedAt: iso(now - 10_000),
           reviewEndedAt: iso(now),
           promptSentAt: iso(now - 5_000),
@@ -65,6 +76,7 @@ describe('ProcessTelemetryService', () => {
         {
           id: 'b',
           updatedAt: iso(now - 2 * 60 * 60 * 1000),
+          doneAt: iso(now - 2 * 60 * 60 * 1000),
           reviewStartedAt: iso(now - 2 * 60 * 60 * 1000 - 30_000),
           reviewEndedAt: iso(now - 2 * 60 * 60 * 1000),
           promptSentAt: iso(now - 2 * 60 * 60 * 1000 + 2_000),
@@ -87,7 +99,8 @@ describe('ProcessTelemetryService', () => {
       expect(details.series[0]).toEqual(expect.objectContaining({
         t: expect.any(Number),
         reviewSamples: expect.any(Number),
-        promptSamples: expect.any(Number)
+        promptSamples: expect.any(Number),
+        doneCount: expect.any(Number)
       }));
 
       const reviewHist = details?.histograms?.reviewSeconds;
@@ -118,6 +131,8 @@ describe('ProcessTelemetryService', () => {
           updatedAt: iso(now),
           reviewStartedAt: iso(now - 10_000),
           reviewEndedAt: iso(now),
+          reviewOutcome: 'approved',
+          verifyMinutes: 5,
           promptSentAt: iso(now - 5_000),
           promptChars: 100,
           tier: 2,
@@ -130,6 +145,8 @@ describe('ProcessTelemetryService', () => {
           // telemetry exists via reviewedAt
           reviewStartedAt: iso(now - 20_000),
           reviewedAt: iso(now),
+          reviewOutcome: 'needs_fix',
+          verifyMinutes: 15,
           tier: 1
         },
         {
@@ -146,7 +163,7 @@ describe('ProcessTelemetryService', () => {
       const csv = await svc.exportCsv({ lookbackHours: 24 });
       const lines = csv.trim().split('\n');
 
-      expect(lines[0]).toBe('id,updatedAt,reviewStartedAt,reviewEndedAt,promptSentAt,promptChars,tier,ticketProvider,ticketCardId');
+      expect(lines[0]).toBe('id,updatedAt,doneAt,reviewStartedAt,reviewEndedAt,reviewOutcome,verifyMinutes,promptSentAt,promptChars,tier,ticketProvider,ticketCardId');
       expect(lines.length).toBe(3);
       expect(lines[1]).toContain('a,');
       expect(lines[1]).toContain('"id,with,comma"');
@@ -169,6 +186,8 @@ describe('ProcessTelemetryService', () => {
           updatedAt: iso(now),
           reviewStartedAt: iso(now - 10_000),
           reviewEndedAt: iso(now),
+          reviewOutcome: 'approved',
+          verifyMinutes: 5,
           promptSentAt: iso(now - 5_000),
           promptChars: 100,
           tier: 2,
@@ -181,6 +200,8 @@ describe('ProcessTelemetryService', () => {
           // telemetry exists via reviewedAt
           reviewStartedAt: iso(now - 20_000),
           reviewedAt: iso(now),
+          reviewOutcome: 'commented',
+          verifyMinutes: 10,
           tier: 1
         },
         {
@@ -204,8 +225,10 @@ describe('ProcessTelemetryService', () => {
       expect(out.records[0]).toEqual(expect.objectContaining({
         id: expect.any(String),
         updatedAt: expect.any(String),
+        doneAt: expect.any(String),
         reviewStartedAt: expect.any(String),
-        reviewEndedAt: expect.any(String)
+        reviewEndedAt: expect.any(String),
+        reviewOutcome: expect.any(String)
       }));
     } finally {
       Date.now = realNow;
