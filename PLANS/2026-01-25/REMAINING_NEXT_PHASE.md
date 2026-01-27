@@ -33,7 +33,7 @@ Known issues / follow-ups:
 - [x] Worktree “quick add” should re-evaluate after a new worktree is created (avoid suggesting the just-created worktree as “free”). (PR #289)
 - [x] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start (“quick work in background”). (PR #292)
 - [ ] Trello boards: confirm board background / color theming remains consistent per-board (if applicable).
-- [ ] Tasks board “wrap/expand” layout: re-check column auto-layout to ensure it minimizes columns (considers collapsed/hidden lists and fills vertically before adding columns).
+- [x] Tasks board “wrap/expand” layout: re-check column auto-layout to ensure it minimizes columns (considers collapsed/hidden lists and fills vertically before adding columns). (PR #294)
 
 ### Dashboard (project visibility)
 
