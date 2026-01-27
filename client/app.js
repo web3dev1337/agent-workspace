@@ -7067,12 +7067,15 @@ class ClaudeOrchestrator {
       lists: [],
       boardMembers: [],
       boardLabels: [],
-	      boards: [],
-	      boardCustomFields: [],
-	      boardMetaCache: new Map(), // boardId -> { lists, members, labels, customFields }
-	      selectedCardId: null,
-	      showDisabledBoards: localStorage.getItem('tasks-show-disabled-boards') === 'true'
-	    };
+      boards: [],
+      boardCustomFields: [],
+      boardMetaCache: new Map(), // boardId -> { lists, members, labels, customFields }
+      selectedCardId: null,
+      showDisabledBoards: localStorage.getItem('tasks-show-disabled-boards') === 'true'
+    };
+
+    // Keep Kanban views left-aligned on open/board switch (avoid “single column stuck on the right”).
+    let boardScrollResetNextRender = true;
 
     const modal = document.createElement('div');
     modal.id = 'tasks-panel';
@@ -10005,7 +10008,13 @@ class ClaudeOrchestrator {
 	      // Keep board view left-aligned on open/refresh (avoid landing scrolled to the far right).
 	      try {
 	        const boardView = cardsEl.querySelector('#tasks-board-view');
-	        if (boardView && !state.selectedCardId) boardView.scrollLeft = 0;
+	        if (boardView) {
+            const noHorizontalOverflow = (boardView.scrollWidth || 0) <= (boardView.clientWidth || 0) + 2;
+            if (boardScrollResetNextRender || !state.selectedCardId || noHorizontalOverflow) {
+              boardView.scrollLeft = 0;
+              boardScrollResetNextRender = false;
+            }
+          }
 	      } catch {
 	        // ignore
 	      }
@@ -10469,6 +10478,7 @@ class ClaudeOrchestrator {
     viewBoardBtn?.addEventListener('click', async () => {
       state.view = 'board';
       localStorage.setItem('tasks-view', state.view);
+      boardScrollResetNextRender = true;
       applyView();
       state.boardLayout = readBoardLayout();
       syncBoardLayoutUI();
@@ -10631,6 +10641,7 @@ class ClaudeOrchestrator {
 	    boardEl.addEventListener('change', async () => {
 	      state.boardId = boardEl.value || '';
 	      localStorage.setItem('tasks-board', state.boardId);
+      boardScrollResetNextRender = true;
       if (state.boardId === COMBINED_VIEW_ID) {
         state.listId = '';
         try { localStorage.removeItem('tasks-list'); } catch {}
@@ -11322,7 +11333,8 @@ class ClaudeOrchestrator {
 	        try {
 	          cardsEl.querySelectorAll('.task-card-row.active').forEach(el => el.classList.remove('active'));
 	          row.classList.add('active');
-	          row.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+            const isBoardView = state.view === 'board' && state.boardId !== ALL_BOARDS_ID;
+	          row.scrollIntoView?.({ block: 'nearest', inline: isBoardView ? 'start' : 'nearest' });
 	        } catch {
 	          // ignore
 	        }
