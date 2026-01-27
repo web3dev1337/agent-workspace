@@ -221,6 +221,17 @@ class CommandRegistry {
       }
     });
 
+    this.register('open-dashboard', {
+      category: 'ui',
+      description: 'Open the Dashboard (home)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-dashboard' });
+        return { message: 'Opening Dashboard' };
+      }
+    });
+
     // ============ PROCESS / WORKFLOW COMMANDS ============
 
     this.register('open-queue', {
