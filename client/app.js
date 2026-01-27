@@ -1238,6 +1238,29 @@ class ClaudeOrchestrator {
       });
     }
 
+    // Branch label settings
+    const branchesHidePrefixes = document.getElementById('branches-hide-prefixes');
+    if (branchesHidePrefixes) {
+      branchesHidePrefixes.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.branches.hidePrefixes', !!e.target.checked);
+        this.refreshBranchLabels();
+      });
+    }
+    const branchesColorize = document.getElementById('branches-colorize');
+    if (branchesColorize) {
+      branchesColorize.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.branches.colorize', !!e.target.checked);
+        this.refreshBranchLabels();
+      });
+    }
+    const branchesShowAtSidebar = document.getElementById('branches-show-at-sidebar');
+    if (branchesShowAtSidebar) {
+      branchesShowAtSidebar.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.branches.showAtInSidebar', !!e.target.checked);
+        this.refreshBranchLabels();
+      });
+    }
+
     // Notifications panel
     const notificationsPanel = document.getElementById('notifications-panel');
     const toggleNotificationsPanel = () => {
@@ -2400,7 +2423,8 @@ class ClaudeOrchestrator {
       item.dataset.worktreeId = worktree.id;
       item.title = 'Click to toggle • Ctrl+Click to show only this worktree';
 
-      const branch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
+      const rawBranch = worktree.claude?.branch || worktree.server?.branch || 'unknown';
+      const branchMeta = this.formatBranchLabel(rawBranch, { context: 'sidebar' });
       const displayName = worktree.displayName;
 
       // Single-dot sidebar status: prefer the agent (Claude) status
@@ -2435,9 +2459,9 @@ class ClaudeOrchestrator {
 	              <div class="worktree-name" title="${this.escapeHtml(displayName)}">${displayName}</div>
 	              <div class="worktree-meta">
 	                ${tierBadge}
-	                <span class="worktree-branch" title="${this.escapeHtml(branch)}">@${branch}</span>
-	              </div>
-	            </div>
+		                <span class="worktree-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
+		              </div>
+		            </div>
 	          </div>
 	          <div class="worktree-actions">
             <button class="ready-review-btn ${isReadyForReview ? 'ready' : ''}"
@@ -3095,6 +3119,108 @@ class ClaudeOrchestrator {
       }
     });
   }
+
+  getBranchLabelConfig() {
+    const cfg = this.userSettings?.global?.ui?.branches || {};
+    return {
+      hidePrefixes: cfg.hidePrefixes !== false,
+      colorize: cfg.colorize !== false,
+      showAtInSidebar: !!cfg.showAtInSidebar
+    };
+  }
+
+  classifyBranchType(rawBranch) {
+    const b = String(rawBranch || '').trim();
+    if (!b) return { type: 'other', prefix: '' };
+
+    const lower = b.toLowerCase();
+    if (lower === 'main' || lower === 'master' || lower.startsWith('main-') || lower.startsWith('master-')) {
+      return { type: 'main', prefix: '' };
+    }
+
+    const prefix = String(b.split('/')[0] || '').trim().toLowerCase();
+    const map = new Map([
+      ['feat', 'feature'],
+      ['feature', 'feature'],
+      ['fix', 'fix'],
+      ['bugfix', 'fix'],
+      ['hotfix', 'fix'],
+      ['chore', 'chore'],
+      ['refactor', 'refactor'],
+      ['docs', 'docs'],
+      ['doc', 'docs'],
+      ['test', 'test'],
+      ['tests', 'test'],
+      ['perf', 'perf'],
+      ['wip', 'wip'],
+      ['work', 'work'],
+      ['release', 'release'],
+      ['dependabot', 'bot'],
+      ['renovate', 'bot']
+    ]);
+    return { type: map.get(prefix) || 'other', prefix };
+  }
+
+  formatBranchLabel(rawBranch, { context = 'terminal' } = {}) {
+    const cfg = this.getBranchLabelConfig();
+    const raw = String(rawBranch || '').trim();
+    const { type, prefix } = this.classifyBranchType(raw);
+
+    let display = raw;
+    if (cfg.hidePrefixes && raw.includes('/')) {
+      const strip = new Set([
+        'feat', 'feature',
+        'fix', 'bugfix', 'hotfix',
+        'chore', 'refactor',
+        'docs', 'doc',
+        'test', 'tests',
+        'perf',
+        'wip',
+        'work',
+        'release',
+        'dependabot',
+        'renovate'
+      ]);
+      if (strip.has(prefix)) {
+        const rest = raw.split('/').slice(1).join('/');
+        if (rest) display = rest;
+      }
+    }
+
+    const withAt = context === 'sidebar' && cfg.showAtInSidebar;
+    const text = withAt && display ? `@${display}` : display;
+
+    const classes = [];
+    if (type === 'main') classes.push('master-branch');
+    if (cfg.colorize && type && type !== 'other') classes.push(`branch-type-${type}`);
+
+    return {
+      raw,
+      text,
+      title: raw,
+      className: classes.join(' ')
+    };
+  }
+
+  updateTerminalBranchLabel(sessionId, branch) {
+    const terminalElement = document.querySelector(`#wrapper-${sessionId} .terminal-branch`);
+    if (!terminalElement) return;
+    const meta = this.formatBranchLabel(branch, { context: 'terminal' });
+    terminalElement.textContent = meta.text || '';
+    terminalElement.title = meta.title || '';
+    terminalElement.className = `terminal-branch ${meta.className || ''}`.trim();
+  }
+
+  refreshBranchLabels() {
+    try {
+      for (const [sessionId, session] of this.sessions) {
+        this.updateTerminalBranchLabel(sessionId, session?.branch || '');
+      }
+    } catch {
+      // ignore
+    }
+    this.buildSidebar();
+  }
   
   createTerminalElement(sessionId, session) {
     const wrapper = document.createElement('div');
@@ -3111,12 +3237,13 @@ class ClaudeOrchestrator {
     const repositoryName = this.extractRepositoryName(sessionId);
     const worktreeId = session.worktreeId;
     const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
+    const branchMeta = this.formatBranchLabel(session.branch || '', { context: 'terminal' });
     wrapper.innerHTML = `
       <div class="terminal-header">
         <div class="terminal-title">
           <span class="status-indicator ${session.status}" id="status-${sessionId}"></span>
           <span>${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
-          <span class="terminal-branch ${(session.branch === 'master' || session.branch === 'main' || session.branch?.startsWith('master-') || session.branch?.startsWith('main-')) ? 'master-branch' : ''}">${session.branch || ''}</span>
+          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
         </div>
         <div class="terminal-controls">
           ${isClaudeSession ? `
@@ -3365,18 +3492,7 @@ class ClaudeOrchestrator {
     }
     
     // Update terminal branch display
-    const terminalElement = document.querySelector(`#wrapper-${sessionId} .terminal-branch`);
-    if (terminalElement) {
-      terminalElement.textContent = branch || '';
-      
-      // Add red styling for master/main branches
-      if (branch === 'master' || branch === 'main' || 
-          branch?.startsWith('master-') || branch?.startsWith('main-')) {
-        terminalElement.classList.add('master-branch');
-      } else {
-        terminalElement.classList.remove('master-branch');
-      }
-    }
+    this.updateTerminalBranchLabel(sessionId, branch || '');
     
     // Update sidebar
     this.buildSidebar();
@@ -5473,7 +5589,7 @@ class ClaudeOrchestrator {
       const worktreeNumber = sessionId.split('-')[0].replace('work', '');
       
       if (focusedTitle) focusedTitle.textContent = `${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${worktreeNumber}`;
-      if (focusedBranch) focusedBranch.textContent = session.branch || '';
+      if (focusedBranch) focusedBranch.textContent = this.formatBranchLabel(session.branch || '', { context: 'terminal' }).text || '';
       if (focusedStatus) focusedStatus.className = `status-indicator ${session.status || 'idle'}`;
       
       // Move the actual terminal element to focused container
@@ -6228,6 +6344,7 @@ class ClaudeOrchestrator {
         console.log('User settings loaded:', this.userSettings);
         this.syncUserSettingsUI();
         this.applyThemeFromUserSettings();
+        this.refreshBranchLabels();
       } else {
         console.error('Failed to load user settings:', response.statusText);
       }
@@ -6417,6 +6534,23 @@ class ClaudeOrchestrator {
     if (workflowNotifyReview) {
       const cfg = this.userSettings.global?.ui?.workflow?.notifications || {};
       workflowNotifyReview.checked = cfg.reviewCompleteNudges !== false;
+    }
+
+    // Branch label settings UI
+    const branchesHidePrefixes = document.getElementById('branches-hide-prefixes');
+    if (branchesHidePrefixes) {
+      const cfg = this.userSettings.global?.ui?.branches || {};
+      branchesHidePrefixes.checked = cfg.hidePrefixes !== false;
+    }
+    const branchesColorize = document.getElementById('branches-colorize');
+    if (branchesColorize) {
+      const cfg = this.userSettings.global?.ui?.branches || {};
+      branchesColorize.checked = cfg.colorize !== false;
+    }
+    const branchesShowAtSidebar = document.getElementById('branches-show-at-sidebar');
+    if (branchesShowAtSidebar) {
+      const cfg = this.userSettings.global?.ui?.branches || {};
+      branchesShowAtSidebar.checked = !!cfg.showAtInSidebar;
     }
 
     const trelloMeUsername = document.getElementById('trello-me-username');
