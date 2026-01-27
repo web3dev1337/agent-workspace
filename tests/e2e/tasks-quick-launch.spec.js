@@ -338,6 +338,76 @@ test.describe('Tasks quick launch', () => {
     expect(last.card?.id).toBe('c2');
   });
 
+  test('keyboard toggles agent/mode/yolo/auto defaults before launch', async ({ page }) => {
+    await mockUserSettings(page, {
+      initial: {
+        version: 'test',
+        global: {
+          ui: {
+            theme: 'dark',
+            tasks: {
+              theme: 'inherit',
+              me: { trelloUsername: '' },
+              filters: { assigneesByBoard: {} },
+              kanban: { collapsedByBoard: {}, expandedByBoard: {}, layoutByBoard: {} },
+              boardMappings: {
+                'trello:b1': { enabled: true, localPath: 'games/hytopia/mock-repo', defaultStartTier: 2 }
+              }
+            }
+          }
+        },
+        perTerminal: {}
+      }
+    });
+
+    await mockTasksApi(page);
+
+    await page.goto('/');
+    await ensureWorkspaceLoaded(page);
+    await dismissFocusOverlay(page);
+
+    await page.evaluate(() => {
+      localStorage.setItem('tasks-view', 'list');
+      localStorage.setItem('tasks-board', 'b1');
+      localStorage.setItem('tasks-list', '__all__');
+      // start from known defaults
+      localStorage.setItem('tasks-launch-agent', 'claude');
+      localStorage.setItem('tasks-launch-mode', 'fresh');
+      localStorage.setItem('tasks-launch-yolo', 'true');
+      localStorage.setItem('tasks-launch-auto-send', 'true');
+    });
+
+    await page.evaluate(() => document.getElementById('tasks-btn')?.click());
+    await expect(page.locator('#tasks-panel')).toBeVisible({ timeout: 10000 });
+    await page.locator('#tasks-board').selectOption({ value: 'b1' });
+    await expect(page.locator('.task-card-row[data-card-id="c1"]')).toBeVisible({ timeout: 20000 });
+
+    await page.evaluate(() => {
+      window.__launchCalls = [];
+      const o = window.orchestrator;
+      o.launchAgentFromTaskCard = async (args) => {
+        window.__launchCalls.push(args);
+        return null;
+      };
+    });
+
+    await page.locator('.task-card-row[data-card-id="c1"]').click();
+    await page.keyboard.press('X'); // codex
+    await page.keyboard.press('R'); // resume
+    await page.keyboard.press('Y'); // toggle yolo off
+    await page.keyboard.press('P'); // toggle auto-send off
+    await page.keyboard.press('1');
+
+    await page.waitForFunction(() => (window.__launchCalls?.length || 0) > 0, null, { timeout: 10000 });
+    const calls = await page.evaluate(() => window.__launchCalls || []);
+    const last = calls[calls.length - 1];
+    expect(last.agentId).toBe('codex');
+    expect(last.mode).toBe('resume');
+    expect(last.yolo).toBe(false);
+    expect(last.autoSendPrompt).toBe(false);
+    expect(last.tier).toBe(1);
+  });
+
   test('all boards view card detail launch uses per-card board mapping', async ({ page }) => {
     await mockUserSettings(page, {
       initial: {
