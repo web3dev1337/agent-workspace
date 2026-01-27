@@ -76,6 +76,9 @@ class UserSettingsService {
             // { enabled?: boolean, repoSlug?: string, localPath?: string, defaultStartTier?: 1|2|3|4 }
             // Local-only by default (stored in user-settings.json).
             boardMappings: {},
+            // Keyed by `${provider}:${boardId}` -> conventions/config:
+            // { doneListId?: string, dependencyChecklistName?: string, tierFromLabels?: boolean, tierByLabelColor?: { [color: string]: 1|2|3|4 } }
+            boardConventions: {},
             combined: {
               // Optional cross-board “combined view” column selections.
               // Each item: { boardId: string, listId: string }
@@ -360,6 +363,13 @@ class UserSettingsService {
             merged.global.ui.tasks.boardMappings = {
               ...(defaultsTasks.boardMappings || {}),
               ...(tasks.boardMappings || {})
+            };
+          }
+
+          if (tasks.boardConventions) {
+            merged.global.ui.tasks.boardConventions = {
+              ...(defaultsTasks.boardConventions || {}),
+              ...(tasks.boardConventions || {})
             };
           }
         }

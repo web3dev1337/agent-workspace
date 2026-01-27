@@ -37,6 +37,7 @@
           "trelloUsername": ""
         },
         "boardMappings": {},
+        "boardConventions": {},
         "combined": {
           "selections": []
         },
