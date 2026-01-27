@@ -328,11 +328,12 @@ class CommanderPanel {
           e.preventDefault();
           const action = btn.getAttribute('data-action');
           if (!action) return;
-          // Minimal wiring: map advisor actions to existing orchestrator commands.
-          if (action === 'open-queue') {
-            this.orchestrator?.showQueuePanel?.();
+          // Minimal wiring: map advisor actions to orchestrator commander actions when possible.
+          if (typeof this.orchestrator?.handleCommanderAction === 'function') {
+            this.orchestrator.handleCommanderAction(action, {});
             return;
           }
+          if (action === 'open-queue') this.orchestrator?.showQueuePanel?.();
         });
       });
     } catch (e) {
