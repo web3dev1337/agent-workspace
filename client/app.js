@@ -7114,12 +7114,13 @@ class ClaudeOrchestrator {
 		              <div class="tasks-board-menu hidden" id="tasks-board-menu" role="menu" aria-label="Boards"></div>
 		            </div>
 			          <button class="btn-secondary" id="tasks-board-settings" title="Board mapping / settings">⚙</button>
-			          <button class="btn-secondary" id="tasks-board-open-link" title="Open board in browser">🔗</button>
-	              <button class="btn-secondary" id="tasks-board-conventions" title="Board conventions wizard (Done list, label tiers, dependencies)">📏</button>
-	              <button class="btn-secondary" id="tasks-combined-settings" title="Combined view settings">🧲</button>
-	              <button class="btn-secondary" id="tasks-hotkeys" title="Hotkeys (?)">⌨</button>
-			          <select id="tasks-list" class="tasks-select" title="List"></select>
-            <div class="tasks-launch-defaults" id="tasks-launch-defaults" title="Defaults used by 🚀 quick launch">
+		              <button class="btn-secondary" id="tasks-board-open-link" title="Open board in browser">🔗</button>
+		              <button class="btn-secondary" id="tasks-board-conventions" title="Board conventions wizard (Done list, label tiers, dependencies)">📏</button>
+		              <button class="btn-secondary" id="tasks-combined-settings" title="Combined view settings">🧲</button>
+		              <select id="tasks-combined-preset" class="tasks-select tasks-select-inline" title="Combined preset"></select>
+		              <button class="btn-secondary" id="tasks-hotkeys" title="Hotkeys (?)">⌨</button>
+				          <select id="tasks-list" class="tasks-select" title="List"></select>
+	            <div class="tasks-launch-defaults" id="tasks-launch-defaults" title="Defaults used by 🚀 quick launch">
               <span class="tasks-launch-defaults-label">🚀</span>
               <div class="tasks-quick-tier-group tasks-launch-default-tier-group" id="tasks-launch-default-tier-group" title="Default tier">
                 <button class="btn-secondary tasks-quick-tier-btn" type="button" data-launch-default-tier-btn="1">T1</button>
@@ -7212,13 +7213,14 @@ class ClaudeOrchestrator {
 		    const providerEl = modal.querySelector('#tasks-provider');
 		    const boardEl = modal.querySelector('#tasks-board');
 	    const boardBtnEl = modal.querySelector('#tasks-board-btn');
-	    const boardMenuEl = modal.querySelector('#tasks-board-menu');
-			    const boardSettingsBtn = modal.querySelector('#tasks-board-settings');
-			    const boardOpenLinkBtn = modal.querySelector('#tasks-board-open-link');
-			    const boardConventionsBtn = modal.querySelector('#tasks-board-conventions');
-	      const combinedSettingsBtn = modal.querySelector('#tasks-combined-settings');
-	      const hotkeysBtn = modal.querySelector('#tasks-hotkeys');
-		    const listEl = modal.querySelector('#tasks-list');
+		    const boardMenuEl = modal.querySelector('#tasks-board-menu');
+				    const boardSettingsBtn = modal.querySelector('#tasks-board-settings');
+				    const boardOpenLinkBtn = modal.querySelector('#tasks-board-open-link');
+				    const boardConventionsBtn = modal.querySelector('#tasks-board-conventions');
+		      const combinedSettingsBtn = modal.querySelector('#tasks-combined-settings');
+		      const combinedPresetEl = modal.querySelector('#tasks-combined-preset');
+		      const hotkeysBtn = modal.querySelector('#tasks-hotkeys');
+			    const listEl = modal.querySelector('#tasks-list');
     const searchEl = modal.querySelector('#tasks-search');
     const updatedEl = modal.querySelector('#tasks-updated');
     const sortEl = modal.querySelector('#tasks-sort');
@@ -7956,36 +7958,102 @@ class ClaudeOrchestrator {
 		      return Math.min(...tiers);
 		    };
 
-	      const getCombinedSelections = () => {
-	        const raw = this.userSettings?.global?.ui?.tasks?.combined?.selections;
+		      const getCombinedConfig = () => {
+		        const raw = this.userSettings?.global?.ui?.tasks?.combined;
+		        return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+		      };
+
+		      const normalizeCombinedSelections = (rawSelections) => {
+		        const arr = Array.isArray(rawSelections) ? rawSelections : [];
+		        const clean = arr
+		          .map((s) => ({
+		            boardId: String(s?.boardId || '').trim(),
+		            listId: String(s?.listId || '').trim()
+		          }))
+		          .filter((s) => !!s.boardId && !!s.listId);
+
+		        // De-dupe while preserving order.
+		        const seen = new Set();
+		        const out = [];
+		        for (const item of clean) {
+		          const key = `${item.boardId}:${item.listId}`;
+		          if (seen.has(key)) continue;
+		          seen.add(key);
+		          out.push(item);
+		        }
+		        return out;
+		      };
+
+		      const getCombinedSelections = () => {
+		        const raw = getCombinedConfig()?.selections;
+		        const arr = Array.isArray(raw) ? raw : [];
+	        return normalizeCombinedSelections(arr);
+	      };
+
+	      const getCombinedPresets = () => {
+	        const raw = getCombinedConfig()?.presets;
 	        const arr = Array.isArray(raw) ? raw : [];
-        const clean = arr
-          .map((s) => ({
-            boardId: String(s?.boardId || '').trim(),
-            listId: String(s?.listId || '').trim()
-          }))
-          .filter((s) => !!s.boardId && !!s.listId);
+	        const out = [];
+	        const seen = new Set();
+	        for (const p of arr) {
+	          const id = String(p?.id || '').trim();
+	          if (!id || seen.has(id)) continue;
+	          seen.add(id);
+	          const name = String(p?.name || '').trim() || id;
+	          const selections = normalizeCombinedSelections(p?.selections);
+	          out.push({ id, name, selections });
+	        }
+	        return out;
+	      };
 
-        // De-dupe while preserving order.
-        const seen = new Set();
-        const out = [];
-        for (const item of clean) {
-          const key = `${item.boardId}:${item.listId}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          out.push(item);
-        }
-        return out;
-      };
+	      const getCombinedActivePresetId = () => String(getCombinedConfig()?.activePresetId || '').trim();
 
-      const updateCombinedSelections = async (selections) => {
-        const current = this.userSettings?.global?.ui?.tasks?.combined || {};
-        const next = { ...(current || {}), selections: Array.isArray(selections) ? selections : [] };
-        await this.updateGlobalUserSetting('ui.tasks.combined', next);
-      };
+	      const updateCombinedConfig = async (patch) => {
+	        const current = getCombinedConfig();
+	        const next = { ...(current || {}), ...(patch || {}) };
+	        await this.updateGlobalUserSetting('ui.tasks.combined', next);
+	      };
 
-      const renderCombinedSettings = async () => {
-        const selections = getCombinedSelections();
+	      const updateCombinedSelections = async (selections, { activePresetId = '' } = {}) => {
+	        await updateCombinedConfig({
+	          selections: Array.isArray(selections) ? selections : [],
+	          activePresetId: String(activePresetId ?? '').trim()
+	        });
+	      };
+
+	      const updateCombinedPresets = async ({ presets, activePresetId } = {}) => {
+	        await updateCombinedConfig({
+	          presets: Array.isArray(presets) ? presets : [],
+	          ...(activePresetId !== undefined ? { activePresetId: String(activePresetId ?? '').trim() } : {})
+	        });
+	      };
+
+	      const createPresetId = () => `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+	      const renderCombinedPresetSelect = () => {
+	        if (!combinedPresetEl) return;
+	        const isCombined = state.boardId === COMBINED_VIEW_ID;
+	        if (!isCombined) {
+	          combinedPresetEl.innerHTML = '';
+	          combinedPresetEl.disabled = true;
+	          combinedPresetEl.style.display = 'none';
+	          return;
+	        }
+
+	        const presets = getCombinedPresets();
+	        const active = getCombinedActivePresetId();
+	        combinedPresetEl.innerHTML = `
+	          <option value="">Custom</option>
+	          ${presets.map((p) => `<option value="${this.escapeHtml(p.id)}">${this.escapeHtml(p.name)}</option>`).join('')}
+	        `;
+	        combinedPresetEl.value = presets.some((p) => p.id === active) ? active : '';
+	        combinedPresetEl.disabled = presets.length === 0;
+	      };
+
+	    const renderCombinedSettings = async () => {
+	      const selections = getCombinedSelections();
+	      const presets = getCombinedPresets();
+	      const activePresetId = getCombinedActivePresetId();
 
         const boardOptions = (Array.isArray(state.boards) ? state.boards : [])
           .filter((b) => !!b?.id)
@@ -8009,19 +8077,37 @@ class ClaudeOrchestrator {
           labels.push(`${resolveBoardName(sel.boardId)} • ${listName}`);
         }
 
-        detailEl.innerHTML = `
-          <div class="tasks-detail-header">
-            <div class="tasks-detail-title">Combined View</div>
-            <div class="tasks-detail-actions">
-              <button class="btn-secondary" id="tasks-combined-close" type="button">Back</button>
-            </div>
-          </div>
-          <div class="tasks-detail-meta">Pick specific lists/columns across boards and show them together.</div>
+	        detailEl.innerHTML = `
+	          <div class="tasks-detail-header">
+	            <div class="tasks-detail-title">Combined View</div>
+	            <div class="tasks-detail-actions">
+	              <button class="btn-secondary" id="tasks-combined-close" type="button">Back</button>
+	            </div>
+	          </div>
+	          <div class="tasks-detail-meta">Pick specific lists/columns across boards and show them together.</div>
 
-          <div class="tasks-detail-block">
-            <div class="tasks-detail-block-title">Selected columns (${selections.length})</div>
-            <div class="tasks-combined-list" id="tasks-combined-list">
-              ${
+	          <div class="tasks-detail-block">
+	            <div class="tasks-detail-block-title">Presets</div>
+	            <div class="tasks-inline-row">
+	              <select id="tasks-combined-preset-select" class="tasks-select tasks-select-inline" title="Preset">
+	                <option value="">Custom</option>
+	                ${presets.map((p) => `<option value="${this.escapeHtml(p.id)}" ${p.id === activePresetId ? 'selected' : ''}>${this.escapeHtml(p.name)}</option>`).join('')}
+	              </select>
+	              <button class="btn-secondary" id="tasks-combined-preset-apply" type="button" ${presets.length ? '' : 'disabled'}>Apply</button>
+	              <button class="btn-secondary" id="tasks-combined-preset-delete" type="button" ${presets.length ? '' : 'disabled'}>Delete</button>
+	            </div>
+	            <div class="tasks-inline-row" style="margin-top:8px">
+	              <input id="tasks-combined-preset-name" class="tasks-input tasks-input-inline" placeholder="Preset name" />
+	              <button class="btn-secondary" id="tasks-combined-preset-save" type="button" title="Save current columns as a new preset">Save new</button>
+	              <button class="btn-secondary" id="tasks-combined-preset-overwrite" type="button" ${presets.length ? '' : 'disabled'} title="Overwrite selected preset with current columns">Overwrite</button>
+	            </div>
+	            <div class="tasks-detail-meta" style="margin-top:8px">Tip: presets are available in the toolbar when viewing Combined.</div>
+	          </div>
+
+	          <div class="tasks-detail-block">
+	            <div class="tasks-detail-block-title">Selected columns (${selections.length})</div>
+	            <div class="tasks-combined-list" id="tasks-combined-list">
+	              ${
                 selections.length
                   ? selections
                       .map((s, idx) => `
@@ -8054,44 +8140,118 @@ class ClaudeOrchestrator {
           </div>
         `;
 
-        detailEl.querySelector('#tasks-combined-close')?.addEventListener('click', () => {
-          renderDetail(null);
-          refreshAll({ force: false });
-        });
+	        detailEl.querySelector('#tasks-combined-close')?.addEventListener('click', () => {
+	          renderDetail(null);
+	          refreshAll({ force: false });
+	        });
 
-        const listWrap = detailEl.querySelector('#tasks-combined-list');
-        listWrap?.addEventListener('click', async (e) => {
-          const row = e.target?.closest?.('[data-combined-index]');
-          if (!row) return;
-          const idx = Number(row.getAttribute('data-combined-index') || '');
-          if (!Number.isFinite(idx)) return;
+	        const presetSelectEl = detailEl.querySelector('#tasks-combined-preset-select');
+	        const presetNameEl = detailEl.querySelector('#tasks-combined-preset-name');
+	        const presetApplyBtn = detailEl.querySelector('#tasks-combined-preset-apply');
+	        const presetDeleteBtn = detailEl.querySelector('#tasks-combined-preset-delete');
+	        const presetSaveBtn = detailEl.querySelector('#tasks-combined-preset-save');
+	        const presetOverwriteBtn = detailEl.querySelector('#tasks-combined-preset-overwrite');
 
-          if (e.target?.closest?.('[data-combined-remove]')) {
-            const next = selections.filter((_, i) => i !== idx);
-            await updateCombinedSelections(next);
-            renderCombinedSettings();
-            return;
-          }
-          if (e.target?.closest?.('[data-combined-up]')) {
-            if (idx <= 0) return;
-            const next = [...selections];
-            const tmp = next[idx - 1];
-            next[idx - 1] = next[idx];
-            next[idx] = tmp;
-            await updateCombinedSelections(next);
-            renderCombinedSettings();
-            return;
-          }
-          if (e.target?.closest?.('[data-combined-down]')) {
-            if (idx >= selections.length - 1) return;
-            const next = [...selections];
-            const tmp = next[idx + 1];
-            next[idx + 1] = next[idx];
-            next[idx] = tmp;
-            await updateCombinedSelections(next);
-            renderCombinedSettings();
-          }
-        });
+	        const resolveSelectedPreset = () => {
+	          const id = String(presetSelectEl?.value || '').trim();
+	          if (!id) return null;
+	          return getCombinedPresets().find((p) => p.id === id) || null;
+	        };
+
+	        presetApplyBtn?.addEventListener('click', async () => {
+	          const preset = resolveSelectedPreset();
+	          if (!preset) return;
+	          await updateCombinedSelections(preset.selections, { activePresetId: preset.id });
+	          renderCombinedPresetSelect();
+	          await refreshAll({ force: false });
+	          renderCombinedSettings();
+	        });
+
+	        presetSaveBtn?.addEventListener('click', async () => {
+	          const name = String(presetNameEl?.value || '').trim();
+	          if (!name) {
+	            this.showToast('Preset name required', 'warning');
+	            return;
+	          }
+	          const existing = getCombinedPresets();
+	          const id = createPresetId();
+	          const next = [...existing, { id, name, selections }];
+	          await updateCombinedPresets({ presets: next, activePresetId: id });
+	          renderCombinedPresetSelect();
+	          renderCombinedSettings();
+	        });
+
+	        presetOverwriteBtn?.addEventListener('click', async () => {
+	          const preset = resolveSelectedPreset();
+	          if (!preset) return;
+	          const existing = getCombinedPresets();
+	          const next = existing.map((p) => (p.id === preset.id ? { ...p, selections } : p));
+	          await updateCombinedPresets({ presets: next, activePresetId: preset.id });
+	          renderCombinedPresetSelect();
+	          renderCombinedSettings();
+	        });
+
+	        presetDeleteBtn?.addEventListener('click', async () => {
+	          const preset = resolveSelectedPreset();
+	          if (!preset) return;
+	          if (!window.confirm(`Delete preset "${preset.name}"?`)) return;
+	          const existing = getCombinedPresets();
+	          const next = existing.filter((p) => p.id !== preset.id);
+	          const nextActive = getCombinedActivePresetId() === preset.id ? '' : getCombinedActivePresetId();
+	          await updateCombinedPresets({ presets: next, activePresetId: nextActive });
+	          renderCombinedPresetSelect();
+	          renderCombinedSettings();
+	        });
+
+	        presetSelectEl?.addEventListener('change', () => {
+	          // Keep overwrite/delete buttons aligned to selection state.
+	          const has = !!resolveSelectedPreset();
+	          if (presetDeleteBtn) presetDeleteBtn.disabled = !has;
+	          if (presetOverwriteBtn) presetOverwriteBtn.disabled = !has;
+	          if (presetApplyBtn) presetApplyBtn.disabled = !has;
+	        });
+	        // Initial button state.
+	        const hasPreset = !!resolveSelectedPreset();
+	        if (presetDeleteBtn) presetDeleteBtn.disabled = !hasPreset;
+	        if (presetOverwriteBtn) presetOverwriteBtn.disabled = !hasPreset;
+	        if (presetApplyBtn) presetApplyBtn.disabled = !hasPreset;
+
+	        const listWrap = detailEl.querySelector('#tasks-combined-list');
+	        listWrap?.addEventListener('click', async (e) => {
+	          const row = e.target?.closest?.('[data-combined-index]');
+	          if (!row) return;
+	          const idx = Number(row.getAttribute('data-combined-index') || '');
+	          if (!Number.isFinite(idx)) return;
+
+	          if (e.target?.closest?.('[data-combined-remove]')) {
+	            const next = selections.filter((_, i) => i !== idx);
+	            await updateCombinedSelections(next);
+	            renderCombinedPresetSelect();
+	            renderCombinedSettings();
+	            return;
+	          }
+	          if (e.target?.closest?.('[data-combined-up]')) {
+	            if (idx <= 0) return;
+	            const next = [...selections];
+	            const tmp = next[idx - 1];
+	            next[idx - 1] = next[idx];
+	            next[idx] = tmp;
+	            await updateCombinedSelections(next);
+	            renderCombinedPresetSelect();
+	            renderCombinedSettings();
+	            return;
+	          }
+	          if (e.target?.closest?.('[data-combined-down]')) {
+	            if (idx >= selections.length - 1) return;
+	            const next = [...selections];
+	            const tmp = next[idx + 1];
+	            next[idx + 1] = next[idx];
+	            next[idx] = tmp;
+	            await updateCombinedSelections(next);
+	            renderCombinedPresetSelect();
+	            renderCombinedSettings();
+	          }
+	        });
 
         const addBoardEl = detailEl.querySelector('#tasks-combined-add-board');
         const addListEl = detailEl.querySelector('#tasks-combined-add-list');
@@ -8137,26 +8297,28 @@ class ClaudeOrchestrator {
           await loadListsForBoard(boardId);
         });
 
-        addBtn?.addEventListener('click', async () => {
-          const boardId = String(addBoardEl?.value || '').trim();
-          const listId = String(addListEl?.value || '').trim();
-          if (!boardId || !listId) return;
-          const next = [...selections, { boardId, listId }];
-          await updateCombinedSelections(next);
-          await refreshAll({ force: false });
-          renderCombinedSettings();
-        });
+	        addBtn?.addEventListener('click', async () => {
+	          const boardId = String(addBoardEl?.value || '').trim();
+	          const listId = String(addListEl?.value || '').trim();
+	          if (!boardId || !listId) return;
+	          const next = [...selections, { boardId, listId }];
+	          await updateCombinedSelections(next);
+	          renderCombinedPresetSelect();
+	          await refreshAll({ force: false });
+	          renderCombinedSettings();
+	        });
 
-        addCurrentBtn?.addEventListener('click', async () => {
-          const boardId = String(state.boardId || '').trim();
-          const listId = String(state.listId || '').trim();
-          if (!boardId || boardId === ALL_BOARDS_ID || boardId === COMBINED_VIEW_ID) return;
-          if (!listId || listId === '__all__') return;
-          const next = [...selections, { boardId, listId }];
-          await updateCombinedSelections(next);
-          await refreshAll({ force: false });
-          renderCombinedSettings();
-        });
+	        addCurrentBtn?.addEventListener('click', async () => {
+	          const boardId = String(state.boardId || '').trim();
+	          const listId = String(state.listId || '').trim();
+	          if (!boardId || boardId === ALL_BOARDS_ID || boardId === COMBINED_VIEW_ID) return;
+	          if (!listId || listId === '__all__') return;
+	          const next = [...selections, { boardId, listId }];
+	          await updateCombinedSelections(next);
+	          renderCombinedPresetSelect();
+	          await refreshAll({ force: false });
+	          renderCombinedSettings();
+	        });
 
         openBtn?.addEventListener('click', async () => {
           state.boardId = COMBINED_VIEW_ID;
@@ -10200,19 +10362,20 @@ class ClaudeOrchestrator {
       }
     };
 
-    const applyView = () => {
-      const isAllBoards = state.boardId === ALL_BOARDS_ID;
-      const isCombined = state.boardId === COMBINED_VIEW_ID;
-      const isBoard = state.view === 'board' && !isAllBoards;
+	    const applyView = () => {
+	      const isAllBoards = state.boardId === ALL_BOARDS_ID;
+	      const isCombined = state.boardId === COMBINED_VIEW_ID;
+	      const isBoard = state.view === 'board' && !isAllBoards;
       if (isAllBoards && state.view === 'board') {
         state.view = 'list';
         try { localStorage.setItem('tasks-view', state.view); } catch {}
       }
-      if (listEl) listEl.style.display = (isBoard || isAllBoards || isCombined) ? 'none' : '';
-      if (bodyEl) bodyEl.classList.toggle('tasks-body-board', isBoard);
-      if (bodyEl) bodyEl.classList.toggle('tasks-has-detail', isBoard && !!state.selectedCardId);
-      viewListBtn?.classList.toggle('active', !isBoard);
-      viewBoardBtn?.classList.toggle('active', isBoard);
+	      if (listEl) listEl.style.display = (isBoard || isAllBoards || isCombined) ? 'none' : '';
+	      if (combinedPresetEl) combinedPresetEl.style.display = isCombined ? '' : 'none';
+	      if (bodyEl) bodyEl.classList.toggle('tasks-body-board', isBoard);
+	      if (bodyEl) bodyEl.classList.toggle('tasks-has-detail', isBoard && !!state.selectedCardId);
+	      viewListBtn?.classList.toggle('active', !isBoard);
+	      viewBoardBtn?.classList.toggle('active', isBoard);
       if (viewBoardBtn) viewBoardBtn.disabled = isAllBoards;
       if (boardSettingsBtn) boardSettingsBtn.disabled = isAllBoards || isCombined;
       if (boardOpenLinkBtn) boardOpenLinkBtn.disabled = !state.boardId || isAllBoards || isCombined;
@@ -10276,9 +10439,9 @@ class ClaudeOrchestrator {
           .join('');
     };
 
-    const refreshAll = async ({ force = false } = {}) => {
-      cardsEl.innerHTML = `<div class="loading">Loading…</div>`;
-      renderDetail(null);
+	    const refreshAll = async ({ force = false } = {}) => {
+	      cardsEl.innerHTML = `<div class="loading">Loading…</div>`;
+	      renderDetail(null);
 
       try {
         const providersData = await fetchProviders();
@@ -10324,15 +10487,16 @@ class ClaudeOrchestrator {
 	        ];
 
 		        setSelectOptions(boardEl, withAllBoards, { placeholder: 'Select board...', valueKey: 'id', labelKey: '__selectLabel' });
-		        if (state.boardId) boardEl.value = state.boardId;
-	          syncBoardAccent();
-	          renderBoardPicker();
-	          syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
+			        if (state.boardId) boardEl.value = state.boardId;
+		          syncBoardAccent();
+		          renderBoardPicker();
+		          syncLaunchDefaultsUi({ mappingTier: getMappingTierForBoard(state.boardId) });
+		          renderCombinedPresetSelect();
 
-        // Fetch "me" (best-effort) so we can default the assignee filter.
-        try {
-          state.me = await fetchMe({ refresh: false });
-        } catch (e) {
+	        // Fetch "me" (best-effort) so we can default the assignee filter.
+	        try {
+	          state.me = await fetchMe({ refresh: false });
+	        } catch (e) {
           state.me = null;
         }
 
@@ -10589,8 +10753,8 @@ class ClaudeOrchestrator {
       refreshAll({ force: false });
     });
 
-    const assigneesList = modal.querySelector('#tasks-assignees-list');
-    assigneesList?.addEventListener('change', (e) => {
+	    const assigneesList = modal.querySelector('#tasks-assignees-list');
+	    assigneesList?.addEventListener('change', (e) => {
       const checkbox = e.target?.closest?.('input[type="checkbox"][data-assignee-id]');
       if (!checkbox) return;
       const id = checkbox.getAttribute('data-assignee-id');
@@ -10616,6 +10780,22 @@ class ClaudeOrchestrator {
 	      localStorage.removeItem('tasks-board');
 	      localStorage.removeItem('tasks-list');
 	      await refreshAll({ force: true });
+	    });
+
+	    combinedPresetEl?.addEventListener('change', async () => {
+	      const presetId = String(combinedPresetEl.value || '').trim();
+	      if (state.boardId !== COMBINED_VIEW_ID) return;
+	      if (!presetId) {
+	        await updateCombinedConfig({ activePresetId: '' });
+	        renderCombinedPresetSelect();
+	        return;
+	      }
+	      const presets = getCombinedPresets();
+	      const preset = presets.find((p) => p.id === presetId) || null;
+	      if (!preset) return;
+	      await updateCombinedSelections(preset.selections, { activePresetId: preset.id });
+	      renderCombinedPresetSelect();
+	      await refreshAll({ force: false });
 	    });
 
 			    boardSettingsBtn?.addEventListener('click', (e) => {
