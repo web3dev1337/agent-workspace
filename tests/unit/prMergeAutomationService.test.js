@@ -103,4 +103,88 @@ describe('PrMergeAutomationService webhook flow', () => {
     expect(rec).toBeTruthy();
     expect(rec.prMergedAt).toBe('2026-01-27T00:00:00.000Z');
   });
+
+  test('processMergedPullRequest uses board comment template placeholders', async () => {
+    const records = new Map();
+    records.set('pr:acme/demo#123', {
+      id: 'pr:acme/demo#123',
+      ticketProvider: 'trello',
+      ticketCardId: 'AbC123',
+      ticketCardUrl: 'https://trello.com/c/AbC123',
+      reviewOutcome: 'approved',
+      verifyMinutes: 12,
+      notes: 'Ran tests',
+      promptRef: 'pr:acme/demo#123'
+    });
+
+    const taskRecordService = {
+      get: (id) => records.get(id) || null,
+      upsert: async (id, patch) => {
+        const prev = records.get(id) || { id };
+        records.set(id, { ...prev, ...(patch || {}), id });
+        return records.get(id);
+      }
+    };
+
+    const calls = [];
+    const provider = {
+      getCard: async ({ cardId }) => ({ id: cardId, idBoard: 'board1', url: `https://trello.com/c/${cardId}` }),
+      listLists: async () => ([{ id: 'l1', name: 'Merged' }]),
+      updateCard: async ({ cardId, fields }) => {
+        calls.push({ type: 'updateCard', cardId, fields });
+        return { id: cardId };
+      },
+      addComment: async ({ cardId, text }) => {
+        calls.push({ type: 'addComment', cardId, text });
+        return { id: 'c1' };
+      }
+    };
+
+    const taskTicketingService = { getProvider: () => provider };
+    const userSettingsService = {
+      settings: {
+        global: {
+          ui: {
+            tasks: {
+              boardConventions: {
+                'trello:board1': {
+                  doneListId: 'l1',
+                  mergedCommentTemplate: 'Merged ✅\nPR: {prUrl}\nOutcome: {reviewOutcome}\nVerify: {verifyMinutes}m\nNotes: {notes}\nPrompt: {promptRef}'
+                }
+              },
+              automations: {
+                trello: {
+                  onPrMerged: {
+                    enabled: true,
+                    webhookEnabled: true,
+                    pollEnabled: false,
+                    comment: true,
+                    moveToDoneList: true,
+                    closeIfNoDoneList: false,
+                    pollMs: 60_000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    const svc = new PrMergeAutomationService({ taskRecordService, taskTicketingService, userSettingsService });
+    await svc.processMergedPullRequest({
+      owner: 'acme',
+      repo: 'demo',
+      number: 123,
+      body: 'Implements thing. Trello: https://trello.com/c/AbC123/something',
+      mergedAt: '2026-01-27T00:00:00.000Z',
+      url: 'https://github.com/acme/demo/pull/123'
+    });
+
+    const comment = calls.find((c) => c.type === 'addComment');
+    expect(comment).toBeTruthy();
+    expect(String(comment.text || '')).toContain('Outcome: approved');
+    expect(String(comment.text || '')).toContain('Verify: 12m');
+    expect(String(comment.text || '')).toContain('Notes: Ran tests');
+  });
 });
