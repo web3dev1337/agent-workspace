@@ -8160,21 +8160,30 @@ class ClaudeOrchestrator {
         const mode = fromServer.mode;
         const ids = Array.isArray(fromServer.ids) ? fromServer.ids.filter(Boolean) : [];
         if (mode === 'any') return { mode: 'any', ids: [] };
+        // Treat an empty selection as "any" (matches user expectation: show all cards by default).
+        if (ids.length === 0) return { mode: 'any', ids: [] };
         return { mode: 'selected', ids };
       }
-      if (Array.isArray(fromServer)) return { mode: 'selected', ids: fromServer.filter(Boolean) }; // legacy
+      if (Array.isArray(fromServer)) {
+        const ids = fromServer.filter(Boolean);
+        return ids.length === 0 ? { mode: 'any', ids: [] } : { mode: 'selected', ids }; // legacy
+      }
       try {
         const raw = localStorage.getItem(`tasks-assignees:${key}`);
-        const arr = raw ? JSON.parse(raw) : [];
+        if (!raw) return { mode: 'any', ids: [] };
+        const arr = JSON.parse(raw);
         if (arr && typeof arr === 'object' && !Array.isArray(arr)) {
           const mode = arr.mode;
           const ids = Array.isArray(arr.ids) ? arr.ids.filter(Boolean) : [];
           if (mode === 'any') return { mode: 'any', ids: [] };
+          if (ids.length === 0) return { mode: 'any', ids: [] };
           return { mode: 'selected', ids };
         }
-        return Array.isArray(arr) ? { mode: 'selected', ids: arr.filter(Boolean) } : { mode: 'selected', ids: [] };
+        if (!Array.isArray(arr)) return { mode: 'any', ids: [] };
+        const ids = arr.filter(Boolean);
+        return ids.length === 0 ? { mode: 'any', ids: [] } : { mode: 'selected', ids };
       } catch {
-        return { mode: 'selected', ids: [] };
+        return { mode: 'any', ids: [] };
       }
     };
 
@@ -10042,14 +10051,6 @@ class ClaudeOrchestrator {
             const assignee = readAssigneeFilter();
             state.assigneeFilterMode = assignee.mode;
             state.assigneeFilterIds = assignee.ids;
-            if (state.assigneeFilterMode !== 'any' && state.assigneeFilterIds.length === 0) {
-              const meId = resolveMeId();
-              if (meId) {
-                state.assigneeFilterIds = [meId];
-                state.assigneeFilterMode = 'selected';
-                persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
-              }
-            }
             renderAssigneeFilter();
           }
 
@@ -10111,14 +10112,6 @@ class ClaudeOrchestrator {
           const assignee = readAssigneeFilter();
           state.assigneeFilterMode = assignee.mode;
           state.assigneeFilterIds = assignee.ids;
-          if (state.assigneeFilterMode !== 'any' && state.assigneeFilterIds.length === 0) {
-            const meId = resolveMeId();
-            if (meId) {
-              state.assigneeFilterIds = [meId];
-              state.assigneeFilterMode = 'selected';
-              persistAssigneeFilter({ mode: 'selected', ids: state.assigneeFilterIds });
-            }
-          }
           renderAssigneeFilter();
           lastSnapshot = snapshot;
           renderBoard(snapshot);
