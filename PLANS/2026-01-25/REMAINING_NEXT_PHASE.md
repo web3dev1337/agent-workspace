@@ -21,6 +21,10 @@ Quality fixes shipped:
 - ✅ Kanban and card detail panels stay left/right aligned (no “detail opens on the left” layout glitch).
 - ✅ Kanban view opens left-aligned by default (no “single column stuck on the right” feel).
 
+Known issues / follow-ups:
+- [ ] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active.
+- [ ] Intermittent: card detail layout may still reflow or appear on the wrong side; capture view (List/Board/Combined) + screenshot when it happens.
+
 ### Dashboard (project visibility)
 
 - [ ] Project-level dashboard: per-project status, open PRs, review backlog, telemetry trends, and risk rollups.
@@ -33,7 +37,7 @@ Quality fixes shipped:
 
 ### Integrations / automation
 
-- [ ] Trello “board conventions” wizard (Done list naming, label/color mapping, dependency checklist policy).
+- [x] Trello “board conventions” wizard (Done list naming, label/color mapping, dependency checklist policy). (PR #273)
 
 ---
 
