@@ -9304,15 +9304,23 @@ class ClaudeOrchestrator {
         }
 
         // Compute after layout has settled.
-        window.requestAnimationFrame(() => {
-          columns.forEach(computeForColumn);
-        });
-      };
+	        window.requestAnimationFrame(() => {
+	          columns.forEach(computeForColumn);
+	        });
+	      };
 
-      // Fizzy-like collapsible columns (lightweight):
-      // - Persist per-board expanded column on narrow screens.
-      // - Allow collapsing/expanding columns by clicking the header.
-      const storageKey = `tasks-board-expanded:${state.provider}:${state.boardId}`;
+	      // Keep board view left-aligned on open/refresh (avoid landing scrolled to the far right).
+	      try {
+	        const boardView = cardsEl.querySelector('#tasks-board-view');
+	        if (boardView && !state.selectedCardId) boardView.scrollLeft = 0;
+	      } catch {
+	        // ignore
+	      }
+
+	      // Fizzy-like collapsible columns (lightweight):
+	      // - Persist per-board expanded column on narrow screens.
+	      // - Allow collapsing/expanding columns by clicking the header.
+	      const storageKey = `tasks-board-expanded:${state.provider}:${state.boardId}`;
       const collapsedKey = `tasks-board-collapsed:${state.provider}:${state.boardId}`;
       const boardKey = `${state.provider}:${state.boardId}`;
       const isNarrow = () => window.matchMedia('(max-width: 980px)').matches;
@@ -10142,22 +10150,27 @@ class ClaudeOrchestrator {
           })
           : Promise.resolve(state.boardCustomFields);
 
-        const labelsPromise = needsLabels
-          ? fetchBoardLabels({ refresh: false }).catch((err) => {
-            console.warn('Failed to load board labels:', err?.message || err);
-            return [];
-          })
-          : Promise.resolve(state.boardLabels);
+	        const labelsPromise = needsLabels
+	          ? fetchBoardLabels({ refresh: false }).catch((err) => {
+	            console.warn('Failed to load board labels:', err?.message || err);
+	            return [];
+	          })
+	          : Promise.resolve(state.boardLabels);
 
-        const [card, customFields, labels] = await Promise.all([cardPromise, customFieldsPromise, labelsPromise]);
-        if (needsCustomFields) state.boardCustomFields = customFields || [];
-        if (needsLabels) state.boardLabels = labels || [];
-	        const setDetail = (c) => {
-	          renderDetail(c);
+		        const card = await cardPromise;
 
-          const saveBtn = detailEl.querySelector('#tasks-card-save');
-          const moveBtn = detailEl.querySelector('#tasks-card-move-btn');
-          const commentBtn = detailEl.querySelector('#tasks-card-comment-btn');
+	        Promise.all([customFieldsPromise, labelsPromise]).then(([customFields, labels]) => {
+	          if (needsCustomFields) state.boardCustomFields = customFields || [];
+	          if (needsLabels) state.boardLabels = labels || [];
+	          if (state.selectedCardId === cardId) setDetail(card);
+	        }).catch(() => {});
+
+		        const setDetail = (c) => {
+		          renderDetail(c);
+
+	          const saveBtn = detailEl.querySelector('#tasks-card-save');
+	          const moveBtn = detailEl.querySelector('#tasks-card-move-btn');
+	          const commentBtn = detailEl.querySelector('#tasks-card-comment-btn');
 	          const dueSaveBtn = detailEl.querySelector('#tasks-card-due-save');
 	          const dueClearBtn = detailEl.querySelector('#tasks-card-due-clear');
           const assignBtn = detailEl.querySelector('#tasks-assign-member-btn');
@@ -10532,16 +10545,16 @@ class ClaudeOrchestrator {
               } finally {
                 checkbox.disabled = false;
               }
-            });
-          });
-        };
+	            });
+	          });
+	        };
 
-        setDetail(card);
-      } catch (error) {
-        console.error('Failed to fetch card detail:', error);
-        detailEl.innerHTML = `<div class="no-ports">${String(error?.message || error)}</div>`;
-      }
-    });
+	        setDetail(card);
+	      } catch (error) {
+	        console.error('Failed to fetch card detail:', error);
+	        detailEl.innerHTML = `<div class="no-ports">${String(error?.message || error)}</div>`;
+	      }
+	    });
 
     modal.addEventListener('click', (e) => {
       if (e.target === modal) modal.remove();
@@ -10904,22 +10917,26 @@ class ClaudeOrchestrator {
 
     const serverUrl = window.location.origin;
 
-		    const state = {
-		      mode: 'mine', // mine | all
-		      query: '',
-		      tasks: [],
-		      selectedId: null,
-		      reviewTier: 'all', // all | none | 1..4
-		      unreviewedOnly: false,
-		      autoOpenDiff: false,
-		      autoReviewer: localStorage.getItem('queue-auto-reviewer') === 'true',
-		      depGraphDepth: Math.max(1, Math.min(6, Number(localStorage.getItem('queue-dep-graph-depth') || 2) || 2)),
-		      depGraphView: (['tree', 'graph'].includes(String(localStorage.getItem('queue-dep-graph-view') || 'tree'))) ? String(localStorage.getItem('queue-dep-graph-view') || 'tree') : 'tree',
-		      depGraphShowSatisfied: localStorage.getItem('queue-dep-graph-show-satisfied') !== 'false',
-		      reviewActive: false,
-		      reviewTimer: { taskId: null, startedAtMs: null },
-		      reviewerSpawning: new Set()
-		    };
+			    const state = {
+			      mode: 'mine', // mine | all
+			      query: '',
+			      tasks: [],
+			      selectedId: null,
+			      reviewTier: 'all', // all | none | 1..4
+			      unreviewedOnly: false,
+			      autoOpenDiff: false,
+			      autoReviewer: localStorage.getItem('queue-auto-reviewer') === 'true',
+			      autoFixer: localStorage.getItem('queue-auto-fixer') === 'true',
+			      autoRecheck: localStorage.getItem('queue-auto-recheck') === 'true',
+			      depGraphDepth: Math.max(1, Math.min(6, Number(localStorage.getItem('queue-dep-graph-depth') || 2) || 2)),
+			      depGraphView: (['tree', 'graph'].includes(String(localStorage.getItem('queue-dep-graph-view') || 'tree'))) ? String(localStorage.getItem('queue-dep-graph-view') || 'tree') : 'tree',
+			      depGraphShowSatisfied: localStorage.getItem('queue-dep-graph-show-satisfied') !== 'false',
+			      reviewActive: false,
+			      reviewTimer: { taskId: null, startedAtMs: null },
+			      reviewerSpawning: new Set(),
+			      fixerSpawning: new Set(),
+			      recheckSpawning: new Set()
+			    };
 
     // Apply any one-shot preset (e.g. workflow review button).
     if (this.queuePanelPreset && typeof this.queuePanelPreset === 'object') {
@@ -10970,12 +10987,14 @@ class ClaudeOrchestrator {
             <button class="btn-secondary tasks-view-btn" id="queue-tier-4" data-tier="4" title="Tier 4">T4</button>
             <button class="btn-secondary tasks-view-btn" id="queue-tier-none" data-tier="none" title="No tier">None</button>
           </div>
-          <div class="tasks-view-toggle" role="group" aria-label="Review filters">
-            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
-            <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
-            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
-            <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
-          </div>
+	          <div class="tasks-view-toggle" role="group" aria-label="Review filters">
+	            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
+	            <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
+	            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
+	            <button class="btn-secondary tasks-view-btn" id="queue-auto-fixer" title="Toggle: auto-spawn a fixer when Outcome=needs_fix and Notes is set">Auto Fixer</button>
+	            <button class="btn-secondary tasks-view-btn" id="queue-auto-recheck" title="Toggle: auto-spawn a recheck reviewer after fixes land on the PR">Auto Recheck</button>
+	            <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
+	          </div>
           <div class="tasks-view-toggle" role="group" aria-label="Queue navigation">
             <button class="btn-secondary tasks-view-btn" id="queue-prev" title="Previous item (unblocked first)">Prev</button>
             <button class="btn-secondary tasks-view-btn" id="queue-next" title="Next item (unblocked first)">Next</button>
@@ -11007,13 +11026,15 @@ class ClaudeOrchestrator {
     const tier3Btn = modal.querySelector('#queue-tier-3');
     const tier4Btn = modal.querySelector('#queue-tier-4');
     const tierNoneBtn = modal.querySelector('#queue-tier-none');
-    const unreviewedBtn = modal.querySelector('#queue-unreviewed');
-    const autoDiffBtn = modal.querySelector('#queue-auto-diff');
-    const autoReviewerBtn = modal.querySelector('#queue-auto-reviewer');
-    const startReviewBtn = modal.querySelector('#queue-start-review');
-    const prevBtn = modal.querySelector('#queue-prev');
-    const nextBtn = modal.querySelector('#queue-next');
-    const closeBtn = modal.querySelector('#queue-close-btn');
+	    const unreviewedBtn = modal.querySelector('#queue-unreviewed');
+	    const autoDiffBtn = modal.querySelector('#queue-auto-diff');
+	    const autoReviewerBtn = modal.querySelector('#queue-auto-reviewer');
+	    const autoFixerBtn = modal.querySelector('#queue-auto-fixer');
+	    const autoRecheckBtn = modal.querySelector('#queue-auto-recheck');
+	    const startReviewBtn = modal.querySelector('#queue-start-review');
+	    const prevBtn = modal.querySelector('#queue-prev');
+	    const nextBtn = modal.querySelector('#queue-next');
+	    const closeBtn = modal.querySelector('#queue-close-btn');
 
     const setMode = (mode) => {
       state.mode = mode === 'all' ? 'all' : 'mine';
@@ -11040,11 +11061,13 @@ class ClaudeOrchestrator {
       tier3Btn?.classList.toggle('active', tier === 3);
       tier4Btn?.classList.toggle('active', tier === 4);
 
-      unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
-      autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
-      autoReviewerBtn?.classList.toggle('active', !!state.autoReviewer);
-      startReviewBtn?.classList.toggle('active', !!state.reviewActive);
-    };
+	      unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
+	      autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
+	      autoReviewerBtn?.classList.toggle('active', !!state.autoReviewer);
+	      autoFixerBtn?.classList.toggle('active', !!state.autoFixer);
+	      autoRecheckBtn?.classList.toggle('active', !!state.autoRecheck);
+	      startReviewBtn?.classList.toggle('active', !!state.reviewActive);
+	    };
 
     const setReviewTier = (tier) => {
       state.reviewTier = normalizeReviewTier(tier);
@@ -11080,12 +11103,26 @@ class ClaudeOrchestrator {
       if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     });
 
-    autoReviewerBtn?.addEventListener('click', () => {
-      state.autoReviewer = !state.autoReviewer;
-      localStorage.setItem('queue-auto-reviewer', state.autoReviewer ? 'true' : 'false');
-      syncReviewControlsUI();
-      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
-    });
+	    autoReviewerBtn?.addEventListener('click', () => {
+	      state.autoReviewer = !state.autoReviewer;
+	      localStorage.setItem('queue-auto-reviewer', state.autoReviewer ? 'true' : 'false');
+	      syncReviewControlsUI();
+	      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+	    });
+
+	    autoFixerBtn?.addEventListener('click', () => {
+	      state.autoFixer = !state.autoFixer;
+	      localStorage.setItem('queue-auto-fixer', state.autoFixer ? 'true' : 'false');
+	      syncReviewControlsUI();
+	      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+	    });
+
+	    autoRecheckBtn?.addEventListener('click', () => {
+	      state.autoRecheck = !state.autoRecheck;
+	      localStorage.setItem('queue-auto-recheck', state.autoRecheck ? 'true' : 'false');
+	      syncReviewControlsUI();
+	      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+	    });
 
     startReviewBtn?.addEventListener('click', async () => {
       state.reviewActive = true;
@@ -12903,10 +12940,10 @@ class ClaudeOrchestrator {
       }
     };
 
-    const maybeAutoSpawnReviewer = async (t) => {
-      if (!state.autoReviewer) return;
-      const task = t || {};
-      if (task.kind !== 'pr') return;
+	    const maybeAutoSpawnReviewer = async (t) => {
+	      if (!state.autoReviewer) return;
+	      const task = t || {};
+	      if (task.kind !== 'pr') return;
 
       const tier = Number(task?.record?.tier);
       if (tier !== 3) return;
@@ -12932,19 +12969,97 @@ class ClaudeOrchestrator {
       } finally {
         state.reviewerSpawning.delete(task.id);
       }
-    };
+	    };
 
-    const selectById = (id, { allowAutoOpenDiff } = {}) => {
-      state.selectedId = id;
-      state.allowAutoOpenDiff = !!allowAutoOpenDiff;
-      const t = getTaskById(id);
-      renderList();
-      renderDetail(t);
-      if (state.reviewActive && t?.id) {
-        startReviewTimer(t.id).catch(() => {});
-      }
-      maybeAutoSpawnReviewer(t).catch(() => {});
-    };
+	    const parseIsoMaybe = (v) => {
+	      const ms = Date.parse(String(v || ''));
+	      return Number.isFinite(ms) ? ms : 0;
+	    };
+
+	    const maybeAutoSpawnFixer = async (t) => {
+	      if (!state.autoFixer) return;
+	      const task = t || {};
+	      if (task.kind !== 'pr') return;
+
+	      const tier = Number(task?.record?.tier);
+	      if (tier !== 3) return;
+
+	      const rec = (task?.record && typeof task.record === 'object') ? task.record : {};
+	      if (rec?.fixerSpawnedAt) return;
+	      const outcome = String(rec?.reviewOutcome || '').trim().toLowerCase();
+	      if (outcome !== 'needs_fix') return;
+	      const notes = String(rec?.notes || '').trim();
+	      if (!notes) return;
+
+	      if (state.fixerSpawning?.has?.(task.id)) return;
+	      state.fixerSpawning.add(task.id);
+
+	      try {
+	        const info = await this.spawnFixAgentForPRTask(task, { tier: 2, agentId: 'claude', mode: 'fresh', yolo: true, notes });
+	        if (!info) return;
+	        const patch = { fixerSpawnedAt: new Date().toISOString() };
+	        if (info?.worktreeId) patch.fixerWorktreeId = info.worktreeId;
+	        const next = await upsertRecord(task.id, patch);
+	        updateTaskRecordInState(task.id, next);
+	        renderList();
+	        renderDetail(getTaskById(task.id));
+	      } catch (e) {
+	        console.warn('Auto fixer spawn failed:', e);
+	      } finally {
+	        state.fixerSpawning.delete(task.id);
+	      }
+	    };
+
+	    const maybeAutoSpawnRecheck = async (t) => {
+	      if (!state.autoRecheck) return;
+	      const task = t || {};
+	      if (task.kind !== 'pr') return;
+
+	      const tier = Number(task?.record?.tier);
+	      if (tier !== 3) return;
+
+	      const rec = (task?.record && typeof task.record === 'object') ? task.record : {};
+	      if (!rec?.fixerSpawnedAt) return;
+	      if (rec?.recheckSpawnedAt) return;
+	      const outcome = String(rec?.reviewOutcome || '').trim().toLowerCase();
+	      if (outcome !== 'needs_fix') return;
+
+	      const prUpdatedMs = parseIsoMaybe(task?.updatedAt);
+	      const fixerMs = parseIsoMaybe(rec?.fixerSpawnedAt);
+	      if (!prUpdatedMs || !fixerMs || prUpdatedMs <= fixerMs) return;
+
+	      if (state.recheckSpawning?.has?.(task.id)) return;
+	      state.recheckSpawning.add(task.id);
+
+	      try {
+	        const info = await this.spawnReviewAgentForPRTask(task, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+	        if (!info) return;
+	        const patch = { recheckSpawnedAt: new Date().toISOString() };
+	        if (info?.worktreeId) patch.recheckWorktreeId = info.worktreeId;
+	        const next = await upsertRecord(task.id, patch);
+	        updateTaskRecordInState(task.id, next);
+	        renderList();
+	        renderDetail(getTaskById(task.id));
+	      } catch (e) {
+	        console.warn('Auto recheck spawn failed:', e);
+	      } finally {
+	        state.recheckSpawning.delete(task.id);
+	      }
+	    };
+
+	    const selectById = (id, { allowAutoOpenDiff } = {}) => {
+	      state.selectedId = id;
+	      state.allowAutoOpenDiff = !!allowAutoOpenDiff;
+	      const t = getTaskById(id);
+	      renderList();
+	      renderDetail(t);
+	      if (state.reviewActive && t?.id) {
+	        startReviewTimer(t.id).catch(() => {});
+	      }
+	      maybeAutoSpawnReviewer(t).catch(() => {});
+	      maybeAutoSpawnFixer(t).catch(() => {});
+	      maybeAutoSpawnRecheck(t).catch(() => {});
+	    };
 
 	    listEl.addEventListener('click', (e) => {
 	      const row = e.target.closest('.task-card-row[data-queue-id]');

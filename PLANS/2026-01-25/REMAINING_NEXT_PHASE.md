@@ -17,6 +17,10 @@ Source context:
 
 All requested “click click click” Task launch UX is now shipped.
 
+Quality fixes shipped:
+- ✅ Kanban and card detail panels stay left/right aligned (no “detail opens on the left” layout glitch).
+- ✅ Kanban view opens left-aligned by default (no “single column stuck on the right” feel).
+
 ### Dashboard (project visibility)
 
 - [ ] Project-level dashboard: per-project status, open PRs, review backlog, telemetry trends, and risk rollups.
@@ -24,7 +28,7 @@ All requested “click click click” Task launch UX is now shipped.
 
 ### Review workflow (automation)
 
-- [ ] Auto reviewer→fixer→recheck loop (beyond manual buttons), including outcomes stored on the task record.
+- ✅ Auto reviewer→fixer→recheck loop v1 shipped (Queue toggles: Auto Reviewer / Auto Fixer / Auto Recheck).
 - [ ] Richer notification modes (beyond toast-only) and “review complete” nudges.
 
 ### Integrations / automation
