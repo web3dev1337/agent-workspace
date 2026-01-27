@@ -65,11 +65,54 @@ class ClaudeOrchestrator {
     this.pendingAutoPrompts = new Map(); // sessionId -> { text, createdAt, sentAt }
     this.pendingWorktreeLaunches = new Map(); // worktreeId -> { promptText, autoSendPrompt, agentConfig }
     this.scannedReposCache = { value: null, fetchedAt: 0 };
+    this.worktreeModalKeepOpen = this.loadWorktreeModalKeepOpenPreference();
 
     // Button registry - all available buttons with their implementations
     this.buttonRegistry = this.initButtonRegistry();
 
     this.init();
+  }
+
+  loadWorktreeModalKeepOpenPreference() {
+    try {
+      return localStorage.getItem('worktree-modal-keep-open') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  setWorktreeModalKeepOpenPreference(keepOpen) {
+    const next = !!keepOpen;
+    this.worktreeModalKeepOpen = next;
+    try {
+      localStorage.setItem('worktree-modal-keep-open', next ? 'true' : 'false');
+    } catch {
+      // ignore
+    }
+  }
+
+  getWorktreeModalKeepOpen() {
+    return !!this.worktreeModalKeepOpen;
+  }
+
+  refreshWorktreeAddModals() {
+    // Quick Work modal: rerender availability (recommended worktree + in-use flags)
+    if (document.getElementById('quick-worktree-modal')) {
+      try {
+        this.renderQuickWorktreeRepoList();
+      } catch {
+        // ignore
+      }
+    }
+
+    // Advanced add-worktree modal: update availability labels/classes without rebuilding everything
+    if (document.getElementById('add-worktree-modal')) {
+      try {
+        this.refreshAdvancedAddWorktreeModalAvailability();
+      } catch {
+        // ignore
+      }
+    }
   }
   
   async init() {
@@ -416,6 +459,7 @@ class ClaudeOrchestrator {
 
         // Show success message
         this.showTemporaryMessage(`Worktree ${worktreeId} terminals ready!`, 'success');
+        this.refreshWorktreeAddModals();
 
         // Auto-start Claude after a delay to let terminals initialize
         setTimeout(() => {
@@ -13886,6 +13930,10 @@ class ClaudeOrchestrator {
             <button class="filter-btn" data-filter="hytopia">Hytopia Games</button>
             <button class="filter-btn" data-filter="monogame">MonoGame</button>
           </div>
+          <label class="quick-checkbox" title="Keep this modal open after adding so you can add multiple worktrees">
+            <input type="checkbox" id="worktree-modal-keep-open">
+            Keep open
+          </label>
         </div>
         <div class="modal-body worktree-modal-body">
           ${Object.entries(categories).map(([category, repos]) => `
@@ -13904,6 +13952,13 @@ class ClaudeOrchestrator {
     `;
 
     document.body.appendChild(modal);
+    const keepOpenEl = modal.querySelector('#worktree-modal-keep-open');
+    if (keepOpenEl) {
+      keepOpenEl.checked = this.getWorktreeModalKeepOpen();
+      keepOpenEl.addEventListener('change', () => {
+        this.setWorktreeModalKeepOpenPreference(!!keepOpenEl.checked);
+      });
+    }
     this.setupWorktreeModalInteractions();
   }
 
@@ -13951,6 +14006,10 @@ class ClaudeOrchestrator {
         </div>
         <div class="quick-worktree-toolbar">
           <input type="text" id="quick-worktree-search" placeholder="Search repos..." class="search-input">
+          <label class="quick-checkbox" title="Keep this modal open after starting so you can start multiple worktrees">
+            <input type="checkbox" id="worktree-modal-keep-open">
+            Keep open
+          </label>
           <button class="btn-secondary quick-advanced-btn">Advanced</button>
         </div>
         <div class="modal-body quick-worktree-body">
@@ -14067,7 +14126,16 @@ class ClaudeOrchestrator {
       favoritesOnlyCheckbox.checked = !!this.quickWorktreeFavoritesOnly;
     }
 
+    const keepOpenCheckbox = modal.querySelector('#worktree-modal-keep-open');
+    if (keepOpenCheckbox) {
+      keepOpenCheckbox.checked = this.getWorktreeModalKeepOpen();
+    }
+
     modal.addEventListener('change', (e) => {
+      if (e.target && e.target.id === 'worktree-modal-keep-open') {
+        this.setWorktreeModalKeepOpenPreference(!!e.target.checked);
+        return;
+      }
       const sortInput = e.target.closest('input[name="quick-sort"]');
       if (sortInput) {
         this.quickWorktreeSortMode = sortInput.value;
@@ -14309,7 +14377,7 @@ class ClaudeOrchestrator {
       const worktreeId = btn.dataset.worktreeId;
       const worktreePath = btn.dataset.worktreePath;
       const repositoryRoot = btn.dataset.repoRoot || repoPath;
-      const keepOpen = event && (event.ctrlKey || event.metaKey);
+      const keepOpen = (event && (event.ctrlKey || event.metaKey)) || this.getWorktreeModalKeepOpen();
 
       if (!worktreeId || !worktreePath) {
         this.showTemporaryMessage('No available worktrees for this repo', 'error');
@@ -14451,7 +14519,7 @@ class ClaudeOrchestrator {
     const onMenuClick = (e) => {
       const item = e.target.closest('.quick-menu-item');
       if (!item) return;
-      const keepOpen = e.ctrlKey || e.metaKey;
+      const keepOpen = (e.ctrlKey || e.metaKey) || this.getWorktreeModalKeepOpen();
 
       const worktreeId = item.dataset.worktreeId;
       const worktreePath = item.dataset.worktreePath;
@@ -14947,7 +15015,7 @@ class ClaudeOrchestrator {
           const id = btn.dataset.id;
           const project = btn.dataset.project;
           const cwd = btn.dataset.cwd;
-          const keepOpen = event && (event.ctrlKey || event.metaKey);
+          const keepOpen = (event && (event.ctrlKey || event.metaKey)) || this.getWorktreeModalKeepOpen();
 
           if (this.conversationBrowser) {
             this.conversationBrowser.resumeConversation(id, project, cwd);
@@ -15095,7 +15163,11 @@ class ClaudeOrchestrator {
 
       worktreeOptions.push(`
         <button class="worktree-option ${isInUse ? 'in-use' : 'available'}"
-                onclick="window.orchestrator.addWorktreeToWorkspace('${repo.path}', '${worktreeId}', '${repo.type}', '${repo.name}', ${isInUse})">
+                data-repo-path="${this.escapeHtml(repo.path)}"
+                data-repo-type="${this.escapeHtml(repo.type)}"
+                data-repo-name="${this.escapeHtml(repo.name)}"
+                data-worktree-id="${this.escapeHtml(worktreeId)}"
+                onclick="window.orchestrator.handleAddWorktreeOptionClick(event, '${repo.path}', '${worktreeId}', '${repo.type}', '${repo.name}', ${isInUse})">
           <span class="worktree-id">${worktreeId}</span>
           <span class="worktree-status">${statusIcon} ${statusText}</span>
         </button>
@@ -15103,7 +15175,7 @@ class ClaudeOrchestrator {
     }
 
     return `
-      <div class="repo-section" data-repo-name="${repo.name.toLowerCase()}" data-repo-type="${repo.type}">
+      <div class="repo-section" data-repo-name="${repo.name.toLowerCase()}" data-repo-type="${repo.type}" data-repo-path="${this.escapeHtml(repo.path)}">
         <div class="repo-header">
           <span class="repo-icon">${getIcon(repo.type)}</span>
           <div class="repo-info">
@@ -15117,6 +15189,59 @@ class ClaudeOrchestrator {
         </div>
       </div>
     `;
+  }
+
+  handleAddWorktreeOptionClick(event, repoPath, worktreeId, repoType, repoName, isInUse = false) {
+    try {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+    } catch {
+      // ignore
+    }
+
+    const keepOpen = (event && (event.ctrlKey || event.metaKey)) || this.getWorktreeModalKeepOpen();
+
+    const btn = event?.currentTarget || event?.target?.closest?.('.worktree-option');
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('is-starting');
+      const statusEl = btn.querySelector('.worktree-status');
+      if (statusEl) statusEl.textContent = '⏳ Starting…';
+    }
+
+    this.addWorktreeToWorkspace(repoPath, worktreeId, repoType, repoName, !!isInUse, keepOpen);
+  }
+
+  refreshAdvancedAddWorktreeModalAvailability() {
+    const modal = document.getElementById('add-worktree-modal');
+    if (!modal) return;
+
+    modal.querySelectorAll('.repo-section').forEach((section) => {
+      const repoPath = section.getAttribute('data-repo-path') || '';
+      const repoName = section.getAttribute('data-repo-name') || '';
+      let available = 0;
+
+      section.querySelectorAll('.worktree-option[data-worktree-id]').forEach((btn) => {
+        const worktreeId = btn.getAttribute('data-worktree-id') || '';
+        if (!repoPath || !worktreeId) return;
+
+        const inUse = this.isWorktreeInUse(repoPath, worktreeId, repoName || null);
+        btn.disabled = false;
+        btn.classList.remove('is-starting');
+        btn.classList.toggle('in-use', inUse);
+        btn.classList.toggle('available', !inUse);
+
+        const statusEl = btn.querySelector('.worktree-status');
+        if (statusEl) {
+          statusEl.textContent = inUse ? '⚠️ In use' : '✅ Available';
+        }
+
+        if (!inUse) available += 1;
+      });
+
+      const countEl = section.querySelector('.available-count');
+      if (countEl) countEl.textContent = `${available}/8 available`;
+    });
   }
 
 	  isWorktreeInUse(repoPath, worktreeId, repoNameOverride = null) {
