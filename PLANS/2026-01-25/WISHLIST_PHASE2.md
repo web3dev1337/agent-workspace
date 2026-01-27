@@ -60,7 +60,7 @@ Process discipline:
 
 ## Live UX reports / regression watchlist (verify on latest `main`)
 
-- [ ] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active.
+- [x] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active. (PR #315)
 - [ ] Tasks panel: card detail pane sometimes opens on the wrong side and/or causes vertical reflow of the board area.
 - [ ] Tasks launch UX: from a card, launch `T1/T2/T3/T4` agent in 1–2 clicks (dropdown + hotkey-friendly).
 - [x] Tasks panel: Trello board “mapping/settings” control should always open (if it appears enabled); if no-op, surface an error/toast. (PR #314)

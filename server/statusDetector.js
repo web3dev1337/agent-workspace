@@ -49,14 +49,15 @@ class StatusDetector {
     ];
 
     // Per-session state (StatusDetector is shared across sessions).
-    this.sessionState = new Map(); // sessionId -> { lastBufferLength, lastOutputTime }
+    this.sessionState = new Map(); // sessionId -> { lastBufferLength, lastOutputTime, claudeLikely }
   }
   
   getState(sessionId) {
     if (!this.sessionState.has(sessionId)) {
       this.sessionState.set(sessionId, {
         lastBufferLength: 0,
-        lastOutputTime: Date.now()
+        lastOutputTime: Date.now(),
+        claudeLikely: false
       });
     }
     return this.sessionState.get(sessionId);
@@ -100,9 +101,25 @@ class StatusDetector {
     const trimmedLastNonEmptyLine = lastNonEmptyLine.trim();
     const lastNonEmptyLines = this.getLastNonEmptyLines(lines, 6);
 
+    // Heuristic: determine whether Claude Code UI is likely active in this session.
+    // This is used to avoid misclassifying shell-like prompts that can appear inside output while Claude is working.
+    const recentAll = lastNonEmptyLines.join('\n');
+    if (/Welcome to Claude Code!/.test(recentAll) || /\? for shortcuts/.test(recentAll)) {
+      state.claudeLikely = true;
+    }
+    // When the orchestrator restarts a Claude worktree as an interactive bash, it prints this banner.
+    if (/Claude session ended\./.test(recentAll) || /Type 'claude' to start a new Claude session\./.test(recentAll)) {
+      state.claudeLikely = false;
+    }
+
     // 1. HIGHEST PRIORITY: RELIABLE waiting prompt (must be the last non-empty line)
     // Avoid matching older prompt lines still visible in the last few lines.
-    if (trimmedLastNonEmptyLine === '? for shortcuts' || trimmedLastNonEmptyLine === '>') {
+    if (trimmedLastNonEmptyLine === '? for shortcuts') {
+      return 'waiting';
+    }
+    // Treat ">" as the Claude input prompt only when we have evidence this is actually Claude Code UI.
+    // This prevents bash PS2 (multiline) prompts from being treated as Claude "waiting".
+    if (trimmedLastNonEmptyLine === '>' && state.claudeLikely) {
       return 'waiting';
     }
 
@@ -116,6 +133,7 @@ class StatusDetector {
     // Avoid matching older "Cost" lines still visible in the scrollback while Claude continues output.
     for (const pattern of this.completionPatterns) {
       if (pattern.test(trimmedLastNonEmptyLine)) {
+        state.claudeLikely = true;
         logger.debug('Completion pattern matched - Claude done', { pattern: pattern.toString() });
         return 'waiting';
       }
@@ -124,6 +142,7 @@ class StatusDetector {
     // 4. Active tool usage (definitely busy)
     for (const pattern of this.toolPatterns) {
       if (pattern.test(lastFewLines)) {
+        state.claudeLikely = true;
         // Completion is only considered reliable when it is the last non-empty line (handled above).
         // Do not suppress tool activity because an older "Cost:" line is still visible in scrollback.
         logger.debug('Tool activity detected - busy', { pattern: pattern.toString() });
@@ -134,13 +153,15 @@ class StatusDetector {
     // 5. Check typing/thinking patterns
     for (const pattern of this.typingPatterns) {
       if (pattern.test(lastFewLines)) {
+        state.claudeLikely = true;
         logger.debug('Typing pattern detected - busy');
         return 'busy';
       }
     }
 
     // 6. Check if last line looks like a shell/input prompt (not Claude waiting prompt)
-    if (this.looksLikePrompt(trimmedLastNonEmptyLine)) {
+    // Only classify as idle when Claude is NOT likely active.
+    if (!state.claudeLikely && this.looksLikePrompt(trimmedLastNonEmptyLine)) {
       return 'idle';
     }
 
