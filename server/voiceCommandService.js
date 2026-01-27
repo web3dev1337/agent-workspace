@@ -205,6 +205,18 @@ class VoiceCommandService {
         command: 'open-settings',
         extractParams: () => ({})
       },
+      // Open dashboard (home)
+      {
+        patterns: [
+          /open\s+dashboard/i,
+          /show\s+dashboard/i,
+          /go\s+to\s+dashboard/i,
+          /^dashboard$/i,
+          /go\s+home/i,
+        ],
+        command: 'open-dashboard',
+        extractParams: () => ({})
+      },
       // Highlight worktree
       {
         patterns: [
