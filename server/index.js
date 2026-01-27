@@ -4,6 +4,7 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const winston = require('winston');
 
 // Initialize logger
@@ -123,8 +124,16 @@ app.use(express.static(clientPath, {
   index: false // Don't automatically serve index.html
 }));
 
-// Middleware for JSON parsing
-app.use(express.json());
+// Middleware for JSON parsing (capture rawBody for webhook signature verification)
+app.use(express.json({
+  verify: (req, res, buf) => {
+    try {
+      req.rawBody = buf;
+    } catch {
+      // ignore
+    }
+  }
+}));
 
 // Basic auth middleware (optional)
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
@@ -132,6 +141,10 @@ if (AUTH_TOKEN) {
   app.use((req, res, next) => {
     // Skip auth for socket.io requests
     if (req.path.startsWith('/socket.io/')) {
+      return next();
+    }
+    // GitHub webhooks use signature auth instead of the UI auth token.
+    if (req.path === '/api/webhooks/github') {
       return next();
     }
     
@@ -1404,6 +1417,83 @@ const prMergeAutomationService = PrMergeAutomationService.getInstance({
 
 // Start background automations (best-effort; gated by user settings)
 prMergeAutomationService.start();
+
+const verifyGitHubWebhookSignature = (req) => {
+  const secret = String(process.env.GITHUB_WEBHOOK_SECRET || '').trim();
+  if (!secret) {
+    return { ok: true, verified: false, reason: 'no_secret_configured' };
+  }
+
+  const sigHeader = String(req.headers['x-hub-signature-256'] || '').trim();
+  if (!sigHeader.startsWith('sha256=')) {
+    return { ok: false, verified: false, reason: 'missing_signature' };
+  }
+
+  const expected = sigHeader.slice('sha256='.length);
+  const raw = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(JSON.stringify(req.body || {}));
+  const actual = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+
+  try {
+    const a = Buffer.from(actual, 'hex');
+    const b = Buffer.from(expected, 'hex');
+    if (a.length !== b.length) return { ok: false, verified: false, reason: 'bad_signature' };
+    const ok = crypto.timingSafeEqual(a, b);
+    return ok ? { ok: true, verified: true } : { ok: false, verified: false, reason: 'bad_signature' };
+  } catch {
+    return { ok: false, verified: false, reason: 'bad_signature' };
+  }
+};
+
+app.post('/api/webhooks/github', async (req, res) => {
+  try {
+    const secret = String(process.env.GITHUB_WEBHOOK_SECRET || '').trim();
+    if (AUTH_TOKEN && !secret) {
+      return res.status(401).json({ error: 'GITHUB_WEBHOOK_SECRET is required when AUTH_TOKEN is enabled' });
+    }
+
+    const sig = verifyGitHubWebhookSignature(req);
+    if (!sig.ok) {
+      return res.status(401).json({ error: 'Invalid webhook signature', reason: sig.reason });
+    }
+
+    const event = String(req.headers['x-github-event'] || '').trim().toLowerCase();
+    if (!event) return res.status(400).json({ error: 'Missing x-github-event header' });
+
+    if (event === 'ping') {
+      return res.json({ ok: true, event, verified: sig.verified });
+    }
+
+    if (event !== 'pull_request') {
+      return res.json({ ok: true, event, ignored: true, verified: sig.verified });
+    }
+
+    const action = String(req.body?.action || '').trim().toLowerCase();
+    const pr = req.body?.pull_request || null;
+    if (!pr) return res.status(400).json({ error: 'Missing pull_request payload' });
+
+    const merged = !!pr.merged;
+    const mergedAt = pr.merged_at || null;
+    if (action !== 'closed' || !merged) {
+      return res.json({ ok: true, event, ignored: true, verified: sig.verified, action, merged });
+    }
+
+    const repoOwner = req.body?.repository?.owner?.login || req.body?.repository?.owner?.name || '';
+    const repoName = req.body?.repository?.name || '';
+    const result = await prMergeAutomationService.processMergedPullRequest({
+      owner: repoOwner,
+      repo: repoName,
+      number: pr.number,
+      body: pr.body || '',
+      mergedAt,
+      url: pr.html_url || pr.url || ''
+    });
+
+    res.json({ ok: true, event, verified: sig.verified, result });
+  } catch (error) {
+    logger.error('Failed to handle GitHub webhook', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to handle webhook' });
+  }
+});
 
 app.get('/api/process/automations', (req, res) => {
   try {

@@ -29,7 +29,6 @@ All requested “click click click” Task launch UX is now shipped.
 
 ### Integrations / automation
 
-- [ ] Optional webhook-driven PR merge automation (instead of polling), with configurable Trello conventions per board.
 - [ ] Trello “board conventions” wizard (Done list naming, label/color mapping, dependency checklist policy).
 
 ---
