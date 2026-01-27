@@ -47,6 +47,7 @@ The implementation plan derived from it is:
 - Status lights: stabilize worktree/agent busy/waiting detection: https://github.com/web3dev1337/claude-orchestrator/pull/248
 - Tasks board view: detail overlay on right (prevents kanban reflow): https://github.com/web3dev1337/claude-orchestrator/pull/250
 - Tests: reduce E2E workspace-load flake: https://github.com/web3dev1337/claude-orchestrator/pull/252
+- Tasks: colored board dropdown + left-aligned columns: https://github.com/web3dev1337/claude-orchestrator/pull/254
 
 ## Known UX issues / follow-ups
 
