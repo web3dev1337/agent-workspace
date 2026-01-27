@@ -219,12 +219,70 @@ class Dashboard {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
+    const renderAdvice = async ({ force = false } = {}) => {
+      if (!adviceEl) return;
+      adviceEl.textContent = 'Loading…';
+
+      let adviceRes = null;
+      let data = {};
+      try {
+        const url = new URL('/api/process/advice', window.location.origin);
+        url.searchParams.set('mode', 'mine');
+        if (force) url.searchParams.set('force', 'true');
+        adviceRes = await fetch(url.toString()).catch(() => null);
+        data = adviceRes ? await adviceRes.json().catch(() => ({})) : {};
+      } catch {
+        adviceRes = null;
+        data = {};
+      }
+
+      if (adviceRes && adviceRes.ok) {
+        const items = Array.isArray(data?.advice) ? data.advice : [];
+        const m = data?.metrics || {};
+        const reviewsCompleted = Number(m?.reviewsCompleted ?? 0);
+        const needsFix = Number(m?.reviewsNeedsFix ?? 0);
+        const blockedPrs = Number(m?.prsBlockedByDeps ?? 0);
+        const needsFixRate = Number.isFinite(Number(m?.needsFixRate)) ? Number(m.needsFixRate) : null;
+        const metricsHtml = `
+          <div style="display:grid; gap:4px; margin-bottom:8px; opacity:0.92;">
+            <div>Blocked PRs <strong>${blockedPrs}</strong></div>
+            <div>Reviews <strong>${reviewsCompleted}</strong> • needs_fix <strong>${needsFix}</strong>${needsFixRate === null ? '' : ` • rate <strong>${Math.round(needsFixRate * 100)}%</strong>`}</div>
+          </div>
+        `;
+        if (!items.length) {
+          adviceEl.innerHTML = metricsHtml + '<div style="opacity:0.8;">No advice right now.</div>';
+        } else {
+          adviceEl.innerHTML = `
+            ${metricsHtml}
+            <ul style="margin:0;padding-left:18px;">
+              ${items.slice(0, 3).map((a) => `<li><strong>${escapeHtml(a.title || '')}</strong> — ${escapeHtml(a.message || '')}</li>`).join('')}
+            </ul>
+          `;
+        }
+        return;
+      }
+
+      const statusText = adviceRes
+        ? `HTTP ${Number(adviceRes.status || 0)}`
+        : 'Network error';
+      const errorText = String(data?.error || '').trim();
+      adviceEl.innerHTML = `
+        <div style="opacity:0.9;">Failed to load advice.</div>
+        <div style="opacity:0.7; font-size:0.85rem; margin-top:4px;">${escapeHtml(statusText)}${errorText ? ` • ${escapeHtml(errorText)}` : ''}</div>
+        <div style="margin-top:10px;">
+          <button class="dashboard-topbar-btn" type="button" id="dashboard-advice-retry">↻ Retry</button>
+        </div>
+      `;
+      adviceEl.querySelector('#dashboard-advice-retry')?.addEventListener('click', () => {
+        renderAdvice({ force: true });
+      });
+    };
+
     try {
-      const [statusRes, telemetryRes, projectsRes, adviceRes] = await Promise.all([
+      const [statusRes, telemetryRes, projectsRes] = await Promise.all([
         fetch('/api/process/status?mode=mine').catch(() => null),
         fetch('/api/process/telemetry').catch(() => null),
-        fetch('/api/process/projects?mode=mine').catch(() => null),
-        fetch('/api/process/advice?mode=mine').catch(() => null)
+        fetch('/api/process/projects?mode=mine').catch(() => null)
       ]);
 
       if (statusEl) {
@@ -326,40 +384,12 @@ class Dashboard {
         }
       }
 
-      if (adviceEl) {
-        const data = adviceRes ? await adviceRes.json().catch(() => ({})) : {};
-        if (adviceRes && adviceRes.ok) {
-          const items = Array.isArray(data?.advice) ? data.advice : [];
-          const m = data?.metrics || {};
-          const reviewsCompleted = Number(m?.reviewsCompleted ?? 0);
-          const needsFix = Number(m?.reviewsNeedsFix ?? 0);
-          const blockedPrs = Number(m?.prsBlockedByDeps ?? 0);
-          const needsFixRate = Number.isFinite(Number(m?.needsFixRate)) ? Number(m.needsFixRate) : null;
-          const metricsHtml = `
-            <div style="display:grid; gap:4px; margin-bottom:8px; opacity:0.92;">
-              <div>Blocked PRs <strong>${blockedPrs}</strong></div>
-              <div>Reviews <strong>${reviewsCompleted}</strong> • needs_fix <strong>${needsFix}</strong>${needsFixRate === null ? '' : ` • rate <strong>${Math.round(needsFixRate * 100)}%</strong>`}</div>
-            </div>
-          `;
-          if (!items.length) {
-            adviceEl.innerHTML = metricsHtml + '<div style="opacity:0.8;">No advice right now.</div>';
-          } else {
-            adviceEl.innerHTML = `
-              ${metricsHtml}
-              <ul style="margin:0;padding-left:18px;">
-                ${items.slice(0, 3).map((a) => `<li><strong>${escapeHtml(a.title || '')}</strong> — ${escapeHtml(a.message || '')}</li>`).join('')}
-              </ul>
-            `;
-          }
-        } else {
-          adviceEl.textContent = 'Failed to load.';
-        }
-      }
+      await renderAdvice({ force: false });
 	    } catch (error) {
 	      if (statusEl) statusEl.textContent = 'Failed to load.';
 	      if (telemetryEl) telemetryEl.textContent = 'Failed to load.';
 	      if (projectsEl) projectsEl.textContent = 'Failed to load.';
-	      if (adviceEl) adviceEl.textContent = 'Failed to load.';
+	      await renderAdvice({ force: false });
 	    }
 	  }
 
