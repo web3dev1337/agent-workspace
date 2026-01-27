@@ -26,6 +26,10 @@ describe('UserSettingsService defaults', () => {
     expect(typeof defaults.global.ui.worktrees.autoCreateMinNumber).toBe('number');
     expect(typeof defaults.global.ui.worktrees.autoCreateMaxNumber).toBe('number');
     expect(typeof defaults.global.ui.worktrees.considerOtherWorkspaces).toBe('boolean');
+    expect(defaults.global.ui.worktrees.createPresets).toBeTruthy();
+    expect(typeof defaults.global.ui.worktrees.createPresets).toBe('object');
+    expect(defaults.global.ui.worktrees.createPresetByRepoPath).toBeTruthy();
+    expect(typeof defaults.global.ui.worktrees.createPresetByRepoPath).toBe('object');
   });
 
   test('includes ui.tasks.automations.trello.onPrMerged defaults', () => {
