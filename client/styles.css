@@ -7202,6 +7202,11 @@ header h1 {
   text-align: left;
 }
 
+.tasks-modal .tasks-body {
+  direction: ltr;
+  text-align: left;
+}
+
 .tasks-modal {
   background: transparent;
 }

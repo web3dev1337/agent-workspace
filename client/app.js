@@ -7127,13 +7127,14 @@ class ClaudeOrchestrator {
     const modal = document.createElement('div');
     modal.id = 'tasks-panel';
     modal.className = 'modal tasks-modal';
+    modal.setAttribute('dir', 'ltr');
     const tasksThemeSetting = this.userSettings?.global?.ui?.tasks?.theme;
     const resolvedTasksTheme = (tasksThemeSetting === 'light' || tasksThemeSetting === 'dark')
       ? tasksThemeSetting
       : (this.settings.theme === 'light' ? 'light' : 'dark');
     modal.classList.add(`tasks-theme-${resolvedTasksTheme}`);
     modal.innerHTML = `
-      <div class="modal-content tasks-content">
+      <div class="modal-content tasks-content" dir="ltr">
         <div class="modal-header">
           <h2>✅ Tasks</h2>
           <button class="close-btn tasks-close-btn" id="tasks-close-btn" aria-label="Close Tasks" title="Close (Esc)">×</button>
