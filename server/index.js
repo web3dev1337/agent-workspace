@@ -2482,13 +2482,22 @@ app.get('/api/process/telemetry/export', async (req, res) => {
   try {
     const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
     const format = String(req.query.format || 'csv').trim().toLowerCase();
-    if (format !== 'csv') {
+    if (format !== 'csv' && format !== 'json') {
       res.status(400).json({ error: 'Unsupported export format' });
       return;
     }
 
-    const csv = await processTelemetryService.exportCsv({ lookbackHours });
     const hoursLabel = Number.isFinite(Number(lookbackHours)) ? Number(lookbackHours) : 24;
+
+    if (format === 'json') {
+      const data = await processTelemetryService.exportJson({ lookbackHours });
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="telemetry-${hoursLabel}h.json"`);
+      res.send(JSON.stringify(data, null, 2) + '\n');
+      return;
+    }
+
+    const csv = await processTelemetryService.exportCsv({ lookbackHours });
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="telemetry-${hoursLabel}h.csv"`);
     res.send(csv);
