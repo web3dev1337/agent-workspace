@@ -19,7 +19,8 @@ class TrelloTaskProvider {
         addComment: true,
         moveCard: true,
         listBoardMembers: true,
-        dependencies: true
+        dependencies: true,
+        addChecklistItem: true
       }
     };
   }
@@ -450,6 +451,37 @@ class TrelloTaskProvider {
       state: next
     });
     await requestJson(url, { method: 'PUT' });
+    this._invalidateCacheKeys([`trello:card:${cardId}`]);
+    return true;
+  }
+
+  async addChecklistItem({ cardId, checklistName, name } = {}) {
+    if (!cardId) throw new Error('cardId is required');
+    const itemName = String(name || '').trim();
+    if (!itemName) throw new Error('name is required');
+    const desired = String(checklistName || '').trim() || 'Checklist';
+
+    const card = await this.getCard({ cardId, refresh: true });
+    const checklists = Array.isArray(card?.checklists) ? card.checklists : [];
+    const desiredNorm = desired.toLowerCase();
+    const existing = checklists.find((c) => String(c?.name || '').trim().toLowerCase() === desiredNorm);
+
+    let checklistId = existing?.id || null;
+    if (!checklistId) {
+      const createUrl = this._buildUrl(`/cards/${encodeURIComponent(cardId)}/checklists`, { name: desired });
+      const created = await requestJson(createUrl, { method: 'POST' });
+      checklistId = created?.id || null;
+    }
+    if (!checklistId) throw new Error('Failed to create/find checklist');
+
+    const addUrl = this._buildUrl(`/checklists/${encodeURIComponent(checklistId)}/checkItems`);
+    const body = new URLSearchParams({ name: itemName }).toString();
+    await requestJson(addUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body
+    });
+
     this._invalidateCacheKeys([`trello:card:${cardId}`]);
     return true;
   }

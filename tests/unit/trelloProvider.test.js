@@ -181,4 +181,58 @@ describe('TrelloTaskProvider', () => {
     expect(url).toContain('/members/me');
     expect(url).toContain('fields=fullName%2Cusername%2CavatarUrl');
   });
+
+  test('addChecklistItem creates checklist if missing and invalidates card cache', async () => {
+    const provider = new TrelloTaskProvider({ cache: null, logger: { warn: jest.fn() } });
+    provider.getCredentials = () => ({ apiKey: 'k', token: 't', source: 'test' });
+
+    provider._invalidateCacheKeys = jest.fn();
+    provider.getCard = jest.fn().mockResolvedValue({ id: 'c1', checklists: [] });
+
+    requestJson
+      .mockResolvedValueOnce({ id: 'cl-ship' }) // create checklist
+      .mockResolvedValueOnce({ ok: true }); // add check item
+
+    await provider.addChecklistItem({ cardId: 'c1', checklistName: 'Ship Log', name: 'Merged: https://example.com/pr/1' });
+
+    expect(requestJson).toHaveBeenCalledTimes(2);
+
+    const [createUrl, createOpts] = requestJson.mock.calls[0];
+    expect(createOpts).toEqual({ method: 'POST' });
+    expect(String(createUrl)).toContain('/cards/c1/checklists');
+    expect(String(createUrl)).toContain('name=Ship+Log');
+
+    const [addUrl, addOpts] = requestJson.mock.calls[1];
+    expect(String(addUrl)).toContain('/checklists/cl-ship/checkItems');
+    expect(addOpts.method).toBe('POST');
+    expect(addOpts.headers['content-type']).toBe('application/x-www-form-urlencoded');
+    expect(String(addOpts.body)).toContain('name=Merged%3A');
+    expect(String(addOpts.body)).toContain('https%3A%2F%2Fexample.com%2Fpr%2F1');
+
+    expect(provider._invalidateCacheKeys).toHaveBeenCalledTimes(1);
+    expect(provider._invalidateCacheKeys.mock.calls[0][0]).toEqual(['trello:card:c1']);
+  });
+
+  test('addChecklistItem reuses existing checklist by name (case-insensitive)', async () => {
+    const provider = new TrelloTaskProvider({ cache: null, logger: { warn: jest.fn() } });
+    provider.getCredentials = () => ({ apiKey: 'k', token: 't', source: 'test' });
+
+    provider._invalidateCacheKeys = jest.fn();
+    provider.getCard = jest.fn().mockResolvedValue({
+      id: 'c1',
+      checklists: [{ id: 'cl-existing', name: 'Ship Log' }]
+    });
+
+    requestJson.mockResolvedValueOnce({ ok: true });
+
+    await provider.addChecklistItem({
+      cardId: 'c1',
+      checklistName: 'ship log',
+      name: 'Merged: https://example.com/pr/2'
+    });
+
+    expect(requestJson).toHaveBeenCalledTimes(1);
+    const [addUrl] = requestJson.mock.calls[0];
+    expect(String(addUrl)).toContain('/checklists/cl-existing/checkItems');
+  });
 });

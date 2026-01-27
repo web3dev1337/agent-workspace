@@ -39,7 +39,8 @@ describe('PrMergeAutomationService webhook flow', () => {
         id: cardId,
         idBoard: 'board1',
         url: `https://trello.com/c/${cardId}`,
-        labels: [{ id: 'lbl0', name: 'Keep' }]
+        labels: [{ id: 'lbl0', name: 'Keep' }],
+        checklists: []
       }),
       listLists: async () => ([
         { id: 'l1', name: 'To Do' },
@@ -50,6 +51,10 @@ describe('PrMergeAutomationService webhook flow', () => {
         { id: 'lbl1', name: 'Merged', color: 'green' },
         { id: 'lbl2', name: 'Shipped', color: 'purple' }
       ]),
+      addChecklistItem: async ({ cardId, checklistName, name }) => {
+        calls.push({ type: 'addChecklistItem', cardId, checklistName, name });
+        return true;
+      },
       updateCard: async ({ cardId, fields }) => {
         calls.push({ type: 'updateCard', cardId, fields });
         return { id: cardId };
@@ -72,7 +77,9 @@ describe('PrMergeAutomationService webhook flow', () => {
               boardConventions: {
                 'trello:board1': {
                   doneListId: 'l1',
-                  mergedLabelNames: 'Merged, Shipped'
+                  mergedLabelNames: 'Merged, Shipped',
+                  mergedChecklistName: 'Ship Log',
+                  mergedChecklistItemTemplate: 'Merged: {prUrl}'
                 }
               },
               automations: {
@@ -114,6 +121,9 @@ describe('PrMergeAutomationService webhook flow', () => {
       && c.fields.idLabels.includes('lbl0')
       && c.fields.idLabels.includes('lbl1')
       && c.fields.idLabels.includes('lbl2'))).toBe(true);
+    expect(calls.some((c) => c.type === 'addChecklistItem'
+      && c.checklistName === 'Ship Log'
+      && String(c.name || '').includes('https://github.com/acme/demo/pull/123'))).toBe(true);
 
     const rec = records.get('pr:acme/demo#123');
     expect(rec).toBeTruthy();
