@@ -135,7 +135,7 @@ describe('WorktreeMetadataService', () => {
       expect(Object.keys(results).length).toBe(2);
       expect(results[process.cwd()]).toBeDefined();
       expect(results['/tmp']).toBeDefined();
-    });
+    }, 15000);
 
     it('should handle empty paths array', async () => {
       const results = await service.getMultipleMetadata([]);

@@ -20,6 +20,7 @@ Process discipline:
 - [x] “Conveyor” mode for Review: one-at-a-time Tier 2 queue + explicit “Next” affordances (minimize decision fatigue). (PR #313)
 - [x] Stronger “Review complete” feedback loop: per-task nudges, sound/desktop options, and auto-open next item when configured. (PR #313)
 - [ ] “Background” mode improvements: triage queue + auto-scheduling rules (e.g., tiered retries, safe backoff).
+  - [x] Background-launched worktrees become visible when switching to Background mode (without auto-showing them in Review/Focus). (PR #320)
 
 ## Advisor / Coach v2 (recommendations)
 
