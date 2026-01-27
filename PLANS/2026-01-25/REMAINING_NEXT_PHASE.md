@@ -31,7 +31,7 @@ Known issues / follow-ups:
 - [x] Tasks panel: default assignee filter to “All” (not “me”). (PR #283)
 - [x] Tasks panel: add an obvious “New task” button. (PR #287)
 - [x] Worktree “quick add” should re-evaluate after a new worktree is created (avoid suggesting the just-created worktree as “free”). (PR #289)
-- [ ] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start (“quick work in background”).
+- [x] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start (“quick work in background”). (PR #292)
 - [ ] Trello boards: confirm board background / color theming remains consistent per-board (if applicable).
 - [ ] Tasks board “wrap/expand” layout: re-check column auto-layout to ensure it minimizes columns (considers collapsed/hidden lists and fills vertically before adding columns).
 
