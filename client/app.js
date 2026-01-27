@@ -8422,7 +8422,7 @@ class ClaudeOrchestrator {
       const isAllBoards = state.boardId === ALL_BOARDS_ID;
       const boardColorById = new Map((Array.isArray(state.boards) ? state.boards : []).map((b) => [b?.id, b?.prefs?.backgroundColor]).filter(([id]) => !!id));
       const globalDefaults = readLaunchDefaults();
-      const quickTier = Number(globalDefaults?.tier || 3);
+      const globalTier = Number(globalDefaults?.tier || 3);
 
       cardsEl.innerHTML = filtered
         .map((c) => {
@@ -8438,6 +8438,8 @@ class ClaudeOrchestrator {
           const mappingEnabled = mappingForQuick ? (mappingForQuick.enabled !== false) : true;
           const mappingLocalPath = mappingForQuick ? String(mappingForQuick.localPath || '') : '';
           const canQuickLaunch = !!(mappingEnabled && mappingLocalPath && cardBoardId && cardBoardId !== ALL_BOARDS_ID);
+          const tierHint = getTierHintFromLabels(state.provider, cardBoardId, c?.labels);
+          const quickTier = (tierHint >= 1 && tierHint <= 4) ? tierHint : globalTier;
 
           const quickTierButtons = canQuickLaunch
             ? `
@@ -9001,7 +9003,7 @@ class ClaudeOrchestrator {
       };
 
       const globalDefaults = readLaunchDefaults();
-      const quickTier = Number(globalDefaults?.tier || 3);
+      const globalTier = Number(globalDefaults?.tier || 3);
 
       cardsEl.innerHTML = `
         <div class="tasks-board ${isWrap ? 'tasks-board-wrap tasks-board-grid' : ''} ${isWrapExpand ? 'tasks-board-expand tasks-board-grid' : ''}" id="tasks-board-view">
@@ -9031,6 +9033,8 @@ class ClaudeOrchestrator {
                         const mappingEnabled = mappingForQuick ? (mappingForQuick.enabled !== false) : true;
                         const mappingLocalPath = mappingForQuick ? String(mappingForQuick.localPath || '') : '';
                         const canQuickLaunch = !!(mappingEnabled && mappingLocalPath && cardBoardId && cardBoardId !== ALL_BOARDS_ID);
+                        const tierHint = getTierHintFromLabels(state.provider, cardBoardId, c?.labels);
+                        const quickTier = (tierHint >= 1 && tierHint <= 4) ? tierHint : globalTier;
 
                         const quickTierButtons = canQuickLaunch
                           ? `
@@ -9401,7 +9405,9 @@ class ClaudeOrchestrator {
                     const memberIds = Array.isArray(c?.idMembers) ? c.idMembers : [];
                     const members = memberIds.map(id => membersById.get(id)).filter(Boolean).slice(0, 3);
                     const moreMembers = Math.max(0, memberIds.length - members.length);
-	                    const quickTier = Number(quickDefaults?.tier || 3);
+	                    const fallbackTier = Number(quickDefaults?.tier || 3);
+	                    const tierHint = getTierHintFromLabels(state.provider, state.boardId, labels);
+	                    const quickTier = (tierHint >= 1 && tierHint <= 4) ? tierHint : fallbackTier;
                       const quickTierButtons = `
                         <div class="tasks-quick-tier-group" data-quick-tier-group>
                           <button class="btn-secondary tasks-quick-tier-btn ${quickTier === 1 ? 'is-selected' : ''}" type="button" data-quick-launch-tier-btn="1" title="Launch as T1">T1</button>
