@@ -24,7 +24,7 @@ describe('StatusDetector', () => {
     });
 
     it('should detect waiting status from input prompt', () => {
-      const buffer = 'Some output\n> ';
+      const buffer = 'Welcome to Claude Code!\nSome output\n> ';
       const status = detector.detectStatus(sessionId, buffer);
       expect(status).toBe('waiting');
     });
@@ -59,11 +59,27 @@ describe('StatusDetector', () => {
       expect(status).toBe('busy');
     });
 
+    it('should not treat bash PS2 > as waiting without Claude context', () => {
+      const buffer = 'echo \"hi\"\n> ';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).not.toBe('waiting');
+    });
+
     it('should detect busy status when thinking', () => {
       const state = detector.getState(sessionId);
       state.lastOutputTime = Date.now();
       state.lastBufferLength = 0;
       const buffer = 'Processing...\n\\u2234 Thinking...';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('busy');
+    });
+
+    it('should not classify shell prompts as idle when Claude is likely active', () => {
+      // "$" can appear in code blocks/snippets while Claude is working; do not flip to idle.
+      const state = detector.getState(sessionId);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      const buffer = `Welcome to Claude Code!\n${'Example output '.repeat(20)}\n$`;
       const status = detector.detectStatus(sessionId, buffer);
       expect(status).toBe('busy');
     });
