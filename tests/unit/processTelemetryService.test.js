@@ -9,6 +9,7 @@ describe('ProcessTelemetryService', () => {
       list: () => ([
         {
           id: 'a',
+          createdAt: iso(now),
           updatedAt: iso(now),
           doneAt: iso(now),
           prMergedAt: iso(now),
@@ -23,6 +24,7 @@ describe('ProcessTelemetryService', () => {
         },
         {
           id: 'b',
+          createdAt: iso(now),
           updatedAt: iso(now),
           doneAt: iso(now),
           ticketClosedAt: iso(now),
@@ -36,6 +38,7 @@ describe('ProcessTelemetryService', () => {
         },
         {
           id: 'c',
+          createdAt: iso(now),
           updatedAt: iso(now),
           // No review timer, no prompt
         }
@@ -48,6 +51,7 @@ describe('ProcessTelemetryService', () => {
     expect(summary.recordsConsidered).toBe(3);
     expect(summary.reviewedCount).toBe(2);
     expect(summary.promptSentCount).toBe(2);
+    expect(summary.createdCount).toBe(3);
     expect(summary.doneCount).toBe(2);
     expect(summary.prMergedCount).toBe(1);
     expect(summary.ticketMovedCount).toBe(1);
@@ -72,6 +76,7 @@ describe('ProcessTelemetryService', () => {
       list: () => ([
         {
           id: 'a',
+          createdAt: iso(now - 40_000),
           updatedAt: iso(now),
           doneAt: iso(now - 20_000),
           prMergedAt: iso(now - 20_000),
@@ -82,6 +87,7 @@ describe('ProcessTelemetryService', () => {
         },
         {
           id: 'b',
+          createdAt: iso(now - 2 * 60 * 60 * 1000),
           updatedAt: iso(now - 2 * 60 * 60 * 1000),
           doneAt: iso(now - 2 * 60 * 60 * 1000),
           ticketMovedAt: iso(now - 2 * 60 * 60 * 1000),
@@ -108,6 +114,7 @@ describe('ProcessTelemetryService', () => {
         t: expect.any(Number),
         reviewSamples: expect.any(Number),
         promptSamples: expect.any(Number),
+        createdCount: expect.any(Number),
         doneCount: expect.any(Number),
         prMergedCount: expect.any(Number),
         ticketMovedCount: expect.any(Number),
@@ -139,6 +146,7 @@ describe('ProcessTelemetryService', () => {
       list: () => ([
         {
           id: 'a',
+          createdAt: iso(now),
           updatedAt: iso(now),
           reviewStartedAt: iso(now - 10_000),
           reviewEndedAt: iso(now),
@@ -152,6 +160,7 @@ describe('ProcessTelemetryService', () => {
         },
         {
           id: 'b',
+          createdAt: iso(now),
           updatedAt: iso(now),
           // telemetry exists via reviewedAt
           reviewStartedAt: iso(now - 20_000),
@@ -162,8 +171,9 @@ describe('ProcessTelemetryService', () => {
         },
         {
           id: 'c',
+          createdAt: iso(now),
           updatedAt: iso(now),
-          // No telemetry -> should be excluded
+          // createdAt counts as telemetry
           tier: 3
         }
       ])
@@ -174,11 +184,12 @@ describe('ProcessTelemetryService', () => {
       const csv = await svc.exportCsv({ lookbackHours: 24 });
       const lines = csv.trim().split('\n');
 
-      expect(lines[0]).toBe('id,updatedAt,doneAt,reviewStartedAt,reviewEndedAt,reviewOutcome,verifyMinutes,promptSentAt,promptChars,prMergedAt,ticketMovedAt,ticketClosedAt,tier,ticketProvider,ticketCardId,ticketBoardId,prUrl');
-      expect(lines.length).toBe(3);
+      expect(lines[0]).toBe('id,createdAt,updatedAt,doneAt,reviewStartedAt,reviewEndedAt,reviewOutcome,verifyMinutes,promptSentAt,promptChars,prMergedAt,ticketMovedAt,ticketClosedAt,tier,ticketProvider,ticketCardId,ticketBoardId,prUrl');
+      expect(lines.length).toBe(4);
       expect(lines[1]).toContain('a,');
       expect(lines[1]).toContain('"id,with,comma"');
       expect(lines[2]).toContain('b,');
+      expect(lines[3]).toContain('c,');
     } finally {
       Date.now = realNow;
     }
@@ -194,6 +205,7 @@ describe('ProcessTelemetryService', () => {
       list: () => ([
         {
           id: 'a',
+          createdAt: iso(now),
           updatedAt: iso(now),
           reviewStartedAt: iso(now - 10_000),
           reviewEndedAt: iso(now),
@@ -207,6 +219,7 @@ describe('ProcessTelemetryService', () => {
         },
         {
           id: 'b',
+          createdAt: iso(now),
           updatedAt: iso(now),
           // telemetry exists via reviewedAt
           reviewStartedAt: iso(now - 20_000),
@@ -217,8 +230,9 @@ describe('ProcessTelemetryService', () => {
         },
         {
           id: 'c',
+          createdAt: iso(now),
           updatedAt: iso(now),
-          // No telemetry -> should be excluded
+          // createdAt counts as telemetry
           tier: 3
         }
       ])
@@ -232,7 +246,7 @@ describe('ProcessTelemetryService', () => {
         exportedAt: expect.any(String),
         records: expect.any(Array)
       }));
-      expect(out.records.length).toBe(2);
+      expect(out.records.length).toBe(3);
       expect(out.records[0]).toEqual(expect.objectContaining({
         id: expect.any(String),
         updatedAt: expect.any(String),

@@ -32,6 +32,22 @@ describe('TaskRecordService', () => {
     expect(raw.records[id].tier).toBe(3);
   });
 
+  test('upsert sets createdAt once and preserves it', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
+    const filePath = path.join(tmp, 'task-records.json');
+    const svc = new TaskRecordService({ filePath });
+
+    const rec1 = await svc.upsert('task:created-at', { tier: 1 });
+    expect(typeof rec1.createdAt).toBe('string');
+    expect(typeof rec1.updatedAt).toBe('string');
+
+    await new Promise((r) => setTimeout(r, 5));
+
+    const rec2 = await svc.upsert('task:created-at', { tier: 2 });
+    expect(rec2.createdAt).toBe(rec1.createdAt);
+    expect(rec2.updatedAt).not.toBe(rec1.updatedAt);
+  });
+
   test('upsert supports telemetry timestamps and prompt chars', async () => {
     const service = new TaskRecordService({ filePath: '/tmp/test-task-records-telemetry.json' });
     const rec = await service.upsert('task:telemetry', {
