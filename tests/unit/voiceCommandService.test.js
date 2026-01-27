@@ -28,6 +28,9 @@ describe('VoiceCommandService (rule parsing)', () => {
     const blockers = voiceCommandService.parseWithRules('show blockers');
     expect(blockers.command).toBe('queue-blockers');
 
+    const triage = voiceCommandService.parseWithRules('triage queue');
+    expect(triage.command).toBe('queue-triage');
+
     const next = voiceCommandService.parseWithRules('start next review');
     expect(next.command).toBe('queue-next');
 

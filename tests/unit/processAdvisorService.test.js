@@ -41,6 +41,26 @@ describe('ProcessAdvisorService', () => {
     expect(actions.some(a => a?.action === 'queue-next')).toBe(true);
   });
 
+  test('adds triage action for needs_fix backlog', async () => {
+    const processStatusService = { getStatus: async () => ({ qByTier: {}, qCaps: {}, wip: 0, wipMax: 0 }) };
+    const processTelemetryService = { getSummary: async () => ({ avgReviewSeconds: 0 }) };
+    const processTaskService = { listTasks: async () => ([]) };
+    const taskRecordService = {
+      list: () => ([
+        { id: 't1', reviewEndedAt: '2026-01-27T00:00:00Z', reviewOutcome: 'needs_fix' },
+        { id: 't2', reviewEndedAt: '2026-01-27T00:00:10Z', reviewOutcome: 'needs_fix' },
+        { id: 't3', reviewEndedAt: '2026-01-27T00:00:20Z', reviewOutcome: 'needs_fix' },
+      ])
+    };
+
+    const svc = new ProcessAdvisorService({ processStatusService, processTelemetryService, processTaskService, taskRecordService });
+    const result = await svc.getAdvice({ mode: 'mine', lookbackHours: 24, force: true });
+    const advice = (result.advice || []).find(a => a.code === 'needs_fix_backlog');
+    expect(advice).toBeTruthy();
+    const actions = Array.isArray(advice?.actions) ? advice.actions : [];
+    expect(actions.some(a => a?.action === 'queue-triage')).toBe(true);
+  });
+
   test('includes dependency-blocked signal for tier 1/2 PRs', async () => {
     const processStatusService = { getStatus: async () => ({ qByTier: {}, qCaps: {}, wip: 0, wipMax: 0 }) };
     const processTelemetryService = { getSummary: async () => ({ avgReviewSeconds: 0 }) };

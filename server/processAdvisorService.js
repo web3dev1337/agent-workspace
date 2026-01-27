@@ -286,6 +286,7 @@ class ProcessAdvisorService {
           title: 'Fix backlog',
           message: `${openNeedsFix.length} items are marked “needs_fix” in the last ${hours}h. Consider spawning fixers or consolidating feedback into actionable notes.`,
           actions: [
+            { type: 'ui', action: 'queue-triage', label: 'Open triage' },
             { type: 'ui', action: 'queue-next', label: 'Start next review' },
             { type: 'ui', action: 'open-queue', label: 'Open Queue' }
           ]
