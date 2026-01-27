@@ -27,7 +27,7 @@ Known issues / follow-ups:
 - [x] Add “Start server” control to the Agent terminal header (one click; mirrors Server window controls). (PR #277)
 - [x] Tasks panel: add a quick “Open Trello board” link/button for the currently selected board. (PR #279)
 - [ ] Add-worktree modal: support “Add & close” and “Add another” (keep adding without modal churn), and refresh availability immediately.
-- [ ] Removing a worktree from a workspace should remove both terminals immediately (no F5 needed).
+- [x] Removing a worktree from a workspace should remove both terminals immediately (no F5 needed). (PR #281)
 - [ ] Tasks panel: default assignee filter to “All” (not “me”), and add an obvious “New task” button.
 - [ ] Worktree “quick add” should re-evaluate after a new worktree is created (avoid suggesting the just-created worktree as “free”).
 - [ ] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start (“quick work in background”).
