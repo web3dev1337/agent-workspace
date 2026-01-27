@@ -7157,6 +7157,31 @@ header h1 {
   padding: 6px;
 }
 
+.tasks-board-menu-search-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-tertiary);
+  padding: 6px;
+  border-bottom: 1px solid var(--border-color);
+  margin: -6px -6px 6px;
+}
+
+.tasks-board-menu-search {
+  width: 100%;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  font-size: 0.85rem;
+}
+
+.tasks-board-menu-search:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 .tasks-board-menu.hidden {
   display: none;
 }
@@ -7178,6 +7203,10 @@ header h1 {
 .tasks-board-menu-item:hover {
   background: rgba(31, 111, 235, 0.12);
   border-color: rgba(31, 111, 235, 0.25);
+}
+
+.tasks-board-menu-item.is-active {
+  border-color: rgba(31, 111, 235, 0.5);
 }
 
 .tasks-board-menu-item.is-selected {
@@ -7202,6 +7231,12 @@ header h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tasks-board-menu-empty {
+  padding: 10px 12px;
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
 }
 
 .tasks-hotkeys-overlay {

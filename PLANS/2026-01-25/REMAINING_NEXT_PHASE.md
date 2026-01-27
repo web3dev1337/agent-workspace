@@ -1,8 +1,8 @@
 # Remaining Work (Next Phase)
 
-Last updated: 2026-01-26
+Last updated: 2026-01-27
 
-This is the “what’s left” list after the 2026-01-25 brain dump work that has already shipped (tiers/risk/prompt artifacts + Queue + telemetry + advisor + commander/voice + dependency graph).
+This is the “what’s left” list after the core 2026-01-25 brain dump work shipped (tiers/risk/prompt artifacts + Queue + telemetry/advice + tasks→launch + dependency graph + commander/voice).
 
 Source context:
 - `PLANS/2026-01-25/BRAIN_DUMP_2026-01-25.md`
@@ -11,41 +11,27 @@ Source context:
 
 ---
 
-## Remaining items (previously not shipped)
+## Still missing / next phase (larger items)
 
-Status: ✅ all items in this checklist are now implemented in the dev worktree as of 2026-01-26.
+### Tasks (ticket UX)
 
-### Automation / Integrations
+- [ ] Multi-board “combined view”: choose specific lists/columns across boards and show them together (standardized naming / minimal scrolling).
+- [ ] Faster per-card “launch preset” UI (optional): quick pick tier/agent/mode without relying on global defaults/hotkeys.
 
-- [x] Trello automation on PR merge (auto-move cards, status conventions, optional comments/labels)
-- [x] Policy + automation for prompt artifact pointers (auto-comment a short pointer on the Trello card when promoting to shared/encrypted)
+### Dashboard (project visibility)
 
-### Worktrees / Capacity management
+- [ ] Project-level dashboard: per-project status, open PRs, review backlog, telemetry trends, and risk rollups.
+- [ ] Long-term telemetry charts (trendlines, histograms) + export.
 
-- [x] Auto-create `work9+` when all worktrees are busy (bounded by `global.ui.worktrees.autoCreateMaxNumber`)
-- [x] Stronger “worktree in use” heuristics (cross-workspace + cross-repo, with explicit overrides)
+### Review workflow (automation)
 
-### Review conveyor (v2+)
+- [ ] Auto reviewer→fixer→recheck loop (beyond manual buttons), including outcomes stored on the task record.
+- [ ] Richer notification modes (beyond toast-only) and “review complete” nudges.
 
-- [x] True “one-at-a-time” review conveyor belt (explicit WIP limits + queue lock/claim)
-- [x] Notification modes (quiet vs aggressive; Tier 1 interrupts; “review complete” nudges)
-- [x] Multi-agent review loop beyond v1 (e.g., reviewer → fixer → reviewer recheck with recorded outcome)
+### Integrations / automation
 
-### Dashboard / Visibility
-
-- [x] Dashboard v2: process summary (status/telemetry/advice) + queue shortcut
-- [x] Cross-board / cross-project task view (aggregate selected lists/columns into a single pane)
-
-### Dependency graph (v3+)
-
-- [x] Unify Trello dependencies + orchestrator-native dependencies in one graph
-- [x] Faster linking UX (import ticket deps, quick-search, bulk add)
-- [x] Better graph features (cycle detection, pinning, filtering, “why blocked” drilldowns)
-
-### Advisor (v2+)
-
-- [x] Richer recommendations using telemetry trends + review outcomes + dependency graph signals
-- [x] Optional “coach dashboards” (what to do next, what’s risky, what’s stuck)
+- [ ] Optional webhook-driven PR merge automation (instead of polling), with configurable Trello conventions per board.
+- [ ] Trello “board conventions” wizard (Done list naming, label/color mapping, dependency checklist policy).
 
 ---
 
