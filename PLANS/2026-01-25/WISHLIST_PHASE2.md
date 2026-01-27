@@ -42,7 +42,9 @@ Process discipline:
 ## Telemetry v2 (trends, exports, more signals)
 
 - [ ] Add more signals: commits, PR reviews, PR merges, tasks created/completed, and per-project throughput.
-- [ ] Export formats beyond CSV (JSON) + simple “share snapshot” links (optional).
+- [ ] Exports + sharing:
+  - [x] JSON export (PR #308)
+  - [ ] “Share snapshot” links (optional)
 - [ ] Long-running “health” dashboards per project (risk rollups + backlog + lead time).
 
 ## Automation v2 (integrations)
