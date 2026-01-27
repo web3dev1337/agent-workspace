@@ -31,6 +31,8 @@ Process discipline:
 - [ ] Add “project readiness” checklists (playtest / launch / domain / hosting / security) as templates and/or heuristics.
 - [ ] Commander/voice hooks to consume advice: “what should I do next?”, “show blockers”, “start next review”.
   - [x] Voice: “what should I do next?” opens Advice. (PR #339)
+  - [x] Voice: “show blockers” opens Queue filtered to blocked items. (PR #341)
+  - [x] Voice: “start next review” opens Queue and advances to Next. (PR #341)
 
 ## Dependency graph v2 (UX)
 
