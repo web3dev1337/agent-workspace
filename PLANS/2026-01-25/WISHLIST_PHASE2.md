@@ -35,8 +35,8 @@ Process discipline:
 ## Tasks v2 (multi-board)
 
 - [ ] Multi-board “combined view” improvements:
-  - [ ] List view (not just board/columns), so you can scan lots of cards quickly across multiple selected columns.
-  - [ ] Better context in rows (board + list labels).
+  - [x] List view (not just board/columns), so you can scan lots of cards quickly across multiple selected columns. (PR #304)
+  - [x] Better context in rows (board + list labels). (PR #304)
   - [ ] Optional “pinned columns” presets and quick switching.
 
 ## Telemetry v2 (trends, exports, more signals)
@@ -53,4 +53,3 @@ Process discipline:
 - [ ] Worktree fleet automation:
   - [ ] “Create N worktrees” presets per project (small/medium/large).
   - [ ] Smarter “free worktree” scoring and cleanup hints.
-
