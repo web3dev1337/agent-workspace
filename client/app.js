@@ -3825,6 +3825,10 @@ class ClaudeOrchestrator {
         document.getElementById('settings-panel')?.classList.remove('hidden');
         break;
 
+      case 'open-dashboard':
+        this.showDashboard?.();
+        break;
+
       case 'open-queue':
         this.showQueuePanel?.().catch?.((err) => console.error('Failed to open queue:', err));
         break;
