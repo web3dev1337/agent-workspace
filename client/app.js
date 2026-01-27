@@ -8890,6 +8890,8 @@ class ClaudeOrchestrator {
       }
 
       const isAllBoards = state.boardId === ALL_BOARDS_ID;
+      const isCombined = state.boardId === COMBINED_VIEW_ID;
+      const isMultiBoard = isAllBoards || isCombined;
       const boardColorById = new Map((Array.isArray(state.boards) ? state.boards : []).map((b) => [b?.id, resolveBoardAccentColor(b)]).filter(([id]) => !!id));
       const globalDefaults = readLaunchDefaults();
       const globalTier = Number(globalDefaults?.tier || 3);
@@ -8898,10 +8900,12 @@ class ClaudeOrchestrator {
         .map((c) => {
           const title = (c?.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           const last = c?.dateLastActivity ? new Date(c.dateLastActivity).toLocaleString() : '';
-          const board = state.boardId === ALL_BOARDS_ID ? String(c?.__boardName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
-          const meta = [board, last].filter(Boolean).join(' • ');
+          const board = isMultiBoard ? String(c?.__boardName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+          const list = isMultiBoard ? String(c?.__listName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+          const boardList = (board && list) ? `${board} • ${list}` : board;
+          const meta = [boardList, last].filter(Boolean).join(' • ');
 
-          const cardBoardId = isAllBoards ? String(c?.idBoard || '').trim() : String(state.boardId || '').trim();
+          const cardBoardId = isMultiBoard ? String(c?.idBoard || '').trim() : String(state.boardId || '').trim();
           const cardBoardColor = sanitizeCssColor(isAllBoards ? boardColorById.get(cardBoardId) : (boardColorById.get(cardBoardId) || ''));
           const boardDot = cardBoardColor ? `<span class="tasks-card-board-dot" aria-hidden="true" style="background:${escapeHtml(cardBoardColor)}"></span>` : '';
           const mappingForQuick = cardBoardId ? (getBoardMapping(state.provider, cardBoardId) || null) : null;
@@ -10200,15 +10204,11 @@ class ClaudeOrchestrator {
       const isAllBoards = state.boardId === ALL_BOARDS_ID;
       const isCombined = state.boardId === COMBINED_VIEW_ID;
       const isBoard = state.view === 'board' && !isAllBoards;
-      if (isCombined && state.view !== 'board') {
-        state.view = 'board';
-        try { localStorage.setItem('tasks-view', state.view); } catch {}
-      }
       if (isAllBoards && state.view === 'board') {
         state.view = 'list';
         try { localStorage.setItem('tasks-view', state.view); } catch {}
       }
-      if (listEl) listEl.style.display = (isBoard || isAllBoards) ? 'none' : '';
+      if (listEl) listEl.style.display = (isBoard || isAllBoards || isCombined) ? 'none' : '';
       if (bodyEl) bodyEl.classList.toggle('tasks-body-board', isBoard);
       if (bodyEl) bodyEl.classList.toggle('tasks-has-detail', isBoard && !!state.selectedCardId);
       viewListBtn?.classList.toggle('active', !isBoard);
@@ -10336,19 +10336,28 @@ class ClaudeOrchestrator {
           state.me = null;
         }
 
-        // Combined view is board-only.
-        if (state.boardId === COMBINED_VIEW_ID && state.view !== 'board') {
-          state.view = 'board';
-          try { localStorage.setItem('tasks-view', state.view); } catch {}
-          applyView();
-          syncBoardLayoutUI();
-        }
-
         if (state.view === 'list') {
           const isAllBoards = state.boardId === ALL_BOARDS_ID;
-          if (isAllBoards) {
+          const isCombined = state.boardId === COMBINED_VIEW_ID;
+          if (isAllBoards || isCombined) {
             state.listId = '__all__';
             try { localStorage.setItem('tasks-list', state.listId); } catch {}
+          }
+          if (isCombined) {
+            state.boardMembers = [];
+            state.lists = [];
+            state.boardLabels = [];
+            state.boardCustomFields = [];
+            state.assigneeFilterMode = 'any';
+            state.assigneeFilterIds = [];
+            renderAssigneeFilter();
+
+            const snapshot = await fetchCombinedSnapshot({ refresh: force });
+            lastSnapshot = snapshot;
+            const cols = Array.isArray(snapshot?.columns) ? snapshot.columns : [];
+            const cards = cols.flatMap((c) => Array.isArray(c?.cards) ? c.cards : []);
+            renderCards(cards);
+            return;
           }
           const [lists, members, labels] = await Promise.all([
             isAllBoards ? Promise.resolve([]) : fetchLists({ refresh: force }),
@@ -10510,10 +10519,6 @@ class ClaudeOrchestrator {
     });
 
     viewListBtn?.addEventListener('click', async () => {
-      if (state.boardId === COMBINED_VIEW_ID) {
-        this.showToast('Combined view is board-only', 'error');
-        return;
-      }
       state.view = 'list';
       localStorage.setItem('tasks-view', state.view);
       applyView();
