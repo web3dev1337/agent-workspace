@@ -38,6 +38,7 @@ class ProcessTelemetryService {
       let recordsConsidered = 0;
       let reviewedCount = 0;
       let promptSentCount = 0;
+      let createdCount = 0;
       let doneCount = 0;
       let prMergedCount = 0;
       let ticketMovedCount = 0;
@@ -55,6 +56,9 @@ class ProcessTelemetryService {
         const updatedAtMs = parseIso(r?.updatedAt);
         if (updatedAtMs && updatedAtMs < cutoffMs) continue;
         recordsConsidered += 1;
+
+        const createdAtMs = parseIso(r?.createdAt);
+        if (createdAtMs && createdAtMs >= cutoffMs) createdCount += 1;
 
         if (r?.reviewEndedAt || r?.reviewedAt) reviewedCount += 1;
 
@@ -107,6 +111,7 @@ class ProcessTelemetryService {
         recordsConsidered,
         reviewedCount,
         promptSentCount,
+        createdCount,
         doneCount,
         prMergedCount,
         ticketMovedCount,
@@ -144,22 +149,29 @@ class ProcessTelemetryService {
 
       const addToBucket = (key, kind, value) => {
         if (!Number.isFinite(key)) return;
-        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], doneCount: 0, prMergedCount: 0, ticketMovedCount: 0, ticketClosedCount: 0 });
+        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], createdCount: 0, doneCount: 0, prMergedCount: 0, ticketMovedCount: 0, ticketClosedCount: 0 });
         const b = buckets.get(key);
         if (kind === 'reviewSeconds') b.reviewSeconds.push(value);
         if (kind === 'promptChars') b.promptChars.push(value);
       };
 
+      const bumpCreatedBucket = (key) => {
+        if (!Number.isFinite(key)) return;
+        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], createdCount: 0, doneCount: 0, prMergedCount: 0, ticketMovedCount: 0, ticketClosedCount: 0 });
+        const b = buckets.get(key);
+        b.createdCount += 1;
+      };
+
       const bumpDoneBucket = (key) => {
         if (!Number.isFinite(key)) return;
-        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], doneCount: 0, prMergedCount: 0, ticketMovedCount: 0, ticketClosedCount: 0 });
+        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], createdCount: 0, doneCount: 0, prMergedCount: 0, ticketMovedCount: 0, ticketClosedCount: 0 });
         const b = buckets.get(key);
         b.doneCount += 1;
       };
 
       const bumpBucket = (key, field) => {
         if (!Number.isFinite(key)) return;
-        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], doneCount: 0, prMergedCount: 0, ticketMovedCount: 0, ticketClosedCount: 0 });
+        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], createdCount: 0, doneCount: 0, prMergedCount: 0, ticketMovedCount: 0, ticketClosedCount: 0 });
         const b = buckets.get(key);
         if (field === 'prMergedCount') b.prMergedCount += 1;
         if (field === 'ticketMovedCount') b.ticketMovedCount += 1;
@@ -193,6 +205,9 @@ class ProcessTelemetryService {
         if (doneAtMs) {
           bumpDoneBucket(bucketKeyFor(doneAtMs));
         }
+
+        const createdAtMs = parseIso(r?.createdAt);
+        if (createdAtMs && createdAtMs >= cutoffMs) bumpCreatedBucket(bucketKeyFor(createdAtMs));
 
         const prMergedAtMs = parseIso(r?.prMergedAt);
         if (prMergedAtMs) bumpBucket(bucketKeyFor(prMergedAtMs), 'prMergedCount');
@@ -242,6 +257,7 @@ class ProcessTelemetryService {
           avgReviewSeconds: avg(b.reviewSeconds),
           promptSamples: b.promptChars.length,
           avgPromptChars: avg(b.promptChars),
+          createdCount: b.createdCount,
           doneCount: b.doneCount,
           prMergedCount: b.prMergedCount,
           ticketMovedCount: b.ticketMovedCount,
@@ -273,6 +289,7 @@ class ProcessTelemetryService {
 
     const header = [
       'id',
+      'createdAt',
       'updatedAt',
       'doneAt',
       'reviewStartedAt',
@@ -296,7 +313,8 @@ class ProcessTelemetryService {
       const updatedAtMs = parseIso(r?.updatedAt);
       if (updatedAtMs && updatedAtMs < cutoffMs) continue;
       const hasTelemetry = !!(
-        r?.reviewStartedAt
+        r?.createdAt
+        || r?.reviewStartedAt
         || r?.reviewEndedAt
         || r?.reviewedAt
         || r?.promptSentAt
@@ -312,6 +330,7 @@ class ProcessTelemetryService {
 
       const line = [
         escape(r?.id || ''),
+        escape(r?.createdAt || ''),
         escape(r?.updatedAt || ''),
         escape(r?.doneAt || ''),
         escape(r?.reviewStartedAt || ''),
@@ -345,7 +364,8 @@ class ProcessTelemetryService {
       const updatedAtMs = parseIso(r?.updatedAt);
       if (updatedAtMs && updatedAtMs < cutoffMs) continue;
       const hasTelemetry = !!(
-        r?.reviewStartedAt
+        r?.createdAt
+        || r?.reviewStartedAt
         || r?.reviewEndedAt
         || r?.reviewedAt
         || r?.promptSentAt
@@ -361,6 +381,7 @@ class ProcessTelemetryService {
 
       out.push({
         id: r?.id || '',
+        createdAt: r?.createdAt || '',
         updatedAt: r?.updatedAt || '',
         doneAt: r?.doneAt || '',
         reviewStartedAt: r?.reviewStartedAt || '',
