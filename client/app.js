@@ -7096,6 +7096,7 @@ class ClaudeOrchestrator {
             <button class="btn-secondary tasks-view-btn" id="tasks-view-list" data-view="list" title="List view">List</button>
             <button class="btn-secondary tasks-view-btn" id="tasks-view-board" data-view="board" title="Board view">Board</button>
           </div>
+          <button class="btn-primary" id="tasks-new-card" title="Create a new card">➕ New</button>
           <button class="btn-secondary" id="tasks-refresh">🔄 Refresh</button>
         </div>
 
@@ -7137,6 +7138,7 @@ class ClaudeOrchestrator {
     const updatedEl = modal.querySelector('#tasks-updated');
     const sortEl = modal.querySelector('#tasks-sort');
     const hideEmptyEl = modal.querySelector('#tasks-hide-empty');
+    const newCardBtn = modal.querySelector('#tasks-new-card');
     const refreshBtn = modal.querySelector('#tasks-refresh');
     const viewListBtn = modal.querySelector('#tasks-view-list');
     const viewBoardBtn = modal.querySelector('#tasks-view-board');
@@ -7318,6 +7320,141 @@ class ClaudeOrchestrator {
       const closeHotkeysOverlay = () => {
         const existing = modal.querySelector('#tasks-hotkeys-overlay');
         if (existing) existing.remove();
+      };
+
+      const closeNewCardOverlay = () => {
+        const existing = modal.querySelector('#tasks-new-card-overlay');
+        if (existing) existing.remove();
+      };
+
+      const openNewCardOverlay = async () => {
+        closeNewCardOverlay();
+
+        const bid = String(state.boardId || '').trim();
+        if (!bid || bid === ALL_BOARDS_ID || bid === COMBINED_VIEW_ID) {
+          this.showToast('Select a single board first', 'warning');
+          return;
+        }
+
+        let lists = Array.isArray(state.lists) ? state.lists : [];
+        if (!lists.length) {
+          try {
+            lists = await fetchLists({ boardId: bid, refresh: false });
+          } catch {
+            lists = [];
+          }
+        }
+        lists = (Array.isArray(lists) ? lists : [])
+          .filter((l) => l?.id && l?.name && l?.closed !== true);
+
+        if (!lists.length) {
+          this.showToast('No lists available on this board', 'warning');
+          return;
+        }
+
+        const curListId = String(state.listId || '').trim();
+        let defaultListId = (curListId && curListId !== '__all__') ? curListId : '';
+        if (!defaultListId || !lists.some(l => l.id === defaultListId)) {
+          defaultListId = lists[0].id;
+        }
+
+        const overlay = document.createElement('div');
+        overlay.id = 'tasks-new-card-overlay';
+        overlay.className = 'tasks-launch-popover-overlay';
+        overlay.innerHTML = `
+          <div class="tasks-launch-popover" id="tasks-new-card-popover" role="dialog" aria-label="New task">
+            <div class="tasks-launch-popover-header">
+              <div class="tasks-launch-popover-title">➕ New task</div>
+              <button class="btn-secondary" id="tasks-new-card-close" type="button" title="Close (Esc)">×</button>
+            </div>
+            <div class="tasks-launch-popover-meta">${this.escapeHtml(bid)}</div>
+
+            <div class="tasks-launch-popover-grid" style="grid-template-columns: 1fr;">
+              <label class="tasks-launch-popover-field" style="grid-column: 1 / -1;">
+                <span>List</span>
+                <select id="tasks-new-card-list" class="tasks-select tasks-select-inline">
+                  ${lists.map((l) => `<option value="${this.escapeHtml(l.id)}" ${l.id === defaultListId ? 'selected' : ''}>${this.escapeHtml(l.name)}</option>`).join('')}
+                </select>
+              </label>
+              <label class="tasks-launch-popover-field" style="grid-column: 1 / -1;">
+                <span>Title</span>
+                <input id="tasks-new-card-title" class="tasks-input" placeholder="Task title…" />
+              </label>
+              <label class="tasks-launch-popover-field" style="grid-column: 1 / -1;">
+                <span>Description</span>
+                <textarea id="tasks-new-card-desc" class="tasks-textarea" rows="6" placeholder="(optional)"></textarea>
+              </label>
+            </div>
+
+            <div class="tasks-launch-popover-actions">
+              <button class="btn-primary" id="tasks-new-card-create" type="button">Create</button>
+              <button class="btn-secondary" id="tasks-new-card-cancel" type="button">Cancel</button>
+            </div>
+          </div>
+        `;
+
+        modal.querySelector('.tasks-content')?.appendChild(overlay);
+
+        let cleanupKeydown = () => {};
+        const close = () => {
+          cleanupKeydown();
+          closeNewCardOverlay();
+        };
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) close();
+        });
+        overlay.querySelector('#tasks-new-card-close')?.addEventListener('click', close);
+        overlay.querySelector('#tasks-new-card-cancel')?.addEventListener('click', close);
+
+        const titleEl = overlay.querySelector('#tasks-new-card-title');
+        titleEl?.focus?.();
+
+        const createBtn = overlay.querySelector('#tasks-new-card-create');
+        createBtn?.addEventListener('click', async () => {
+          const listId = String(overlay.querySelector('#tasks-new-card-list')?.value || '').trim();
+          const title = String(overlay.querySelector('#tasks-new-card-title')?.value || '').trim();
+          const desc = String(overlay.querySelector('#tasks-new-card-desc')?.value || '');
+
+          if (!listId) return;
+          if (!title) {
+            this.showToast('Title is required', 'warning');
+            return;
+          }
+
+          try {
+            if (createBtn) createBtn.disabled = true;
+            const created = await createCard({ listId, name: title, desc });
+            if (!created?.id) throw new Error('Create succeeded but returned no card id');
+
+            // If user is in list view, ensure we show the list we created into.
+            if (state.view === 'list' && listEl) {
+              state.listId = listId;
+              try { localStorage.setItem('tasks-list', state.listId); } catch {}
+              listEl.value = listId;
+            }
+
+            close();
+            this.showToast('Created', 'success');
+
+            await refreshAll({ force: true });
+            const detail = await fetchCardDetail(created.id).catch(() => created);
+            if (detail) renderDetail(detail);
+          } catch (err) {
+            console.error('Create card failed:', err);
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            if (createBtn) createBtn.disabled = false;
+          }
+        });
+
+        const onKeyDown = (e) => {
+          if (e.key === 'Escape') close();
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            overlay.querySelector('#tasks-new-card-create')?.click?.();
+          }
+        };
+        document.addEventListener('keydown', onKeyDown);
+        cleanupKeydown = () => document.removeEventListener('keydown', onKeyDown);
       };
 
       const openHotkeysOverlay = () => {
@@ -9462,6 +9599,24 @@ class ClaudeOrchestrator {
       return json.card || null;
     };
 
+    const createCard = async ({ listId, name, desc = '' } = {}) => {
+      const lid = String(listId || '').trim();
+      const title = String(name || '').trim();
+      if (!lid) throw new Error('List is required');
+      if (!title) throw new Error('Title is required');
+
+      const url = new URL(`${serverUrl}/api/tasks/lists/${encodeURIComponent(lid)}/cards`);
+      url.searchParams.set('provider', state.provider);
+      const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: title, desc: String(desc || '') })
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to create card');
+      return json.card || null;
+    };
+
     const updateCustomField = async ({ cardId, customFieldId, payload } = {}) => {
       const res = await fetch(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/custom-fields/${encodeURIComponent(customFieldId)}?provider=${encodeURIComponent(state.provider)}`, {
         method: 'PUT',
@@ -9937,6 +10092,7 @@ class ClaudeOrchestrator {
       if (viewBoardBtn) viewBoardBtn.disabled = isAllBoards;
       if (boardSettingsBtn) boardSettingsBtn.disabled = isAllBoards || isCombined;
       if (boardOpenLinkBtn) boardOpenLinkBtn.disabled = !state.boardId || isAllBoards || isCombined;
+      if (newCardBtn) newCardBtn.disabled = !state.boardId || isAllBoards || isCombined;
     };
 
     const openSelectedBoardInBrowser = () => {
@@ -10472,6 +10628,17 @@ class ClaudeOrchestrator {
 
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => refreshAll({ force: true }));
+    }
+
+    if (newCardBtn) {
+      newCardBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openNewCardOverlay().catch((err) => {
+          console.error('Failed to open new task overlay:', err);
+          this.showToast(String(err?.message || err), 'error');
+        });
+      });
     }
 
 	    cardsEl.addEventListener('click', async (e) => {

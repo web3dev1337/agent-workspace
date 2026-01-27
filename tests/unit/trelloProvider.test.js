@@ -124,6 +124,33 @@ describe('TrelloTaskProvider', () => {
     expect(String(opts.body)).toContain('idLabels=a%2Cb');
   });
 
+  test('createCard posts form body and invalidates list/board caches', async () => {
+    const provider = new TrelloTaskProvider({ cache: null, logger: { warn: jest.fn() } });
+    provider.getCredentials = () => ({ apiKey: 'k', token: 't', source: 'test' });
+
+    provider._invalidateCacheKeys = jest.fn();
+    requestJson.mockResolvedValueOnce({ id: 'c1', idBoard: 'b1' });
+
+    const card = await provider.createCard({ listId: 'l1', name: 'Hello', desc: 'World' });
+    expect(card).toEqual({ id: 'c1', idBoard: 'b1' });
+
+    expect(requestJson).toHaveBeenCalledTimes(1);
+    const [, opts] = requestJson.mock.calls[0];
+    expect(opts.method).toBe('POST');
+    expect(opts.headers['content-type']).toBe('application/x-www-form-urlencoded');
+    expect(String(opts.body)).toContain('idList=l1');
+    expect(String(opts.body)).toContain('name=Hello');
+    expect(String(opts.body)).toContain('desc=World');
+
+    expect(provider._invalidateCacheKeys).toHaveBeenCalledTimes(1);
+    const keys = provider._invalidateCacheKeys.mock.calls[0][0];
+    expect(keys).toEqual(expect.arrayContaining([
+      'trello:cards:list:l1:open',
+      'trello:cards:board:b1:open',
+      'trello:lists:b1:open'
+    ]));
+  });
+
   test('setCustomFieldItem sends JSON payload to Trello', async () => {
     const provider = new TrelloTaskProvider({ cache: null, logger: { warn: jest.fn() } });
     provider.getCredentials = () => ({ apiKey: 'k', token: 't', source: 'test' });
