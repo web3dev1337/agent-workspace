@@ -80,6 +80,13 @@ const extractCardLabelIds = (card) => {
   return Array.from(ids);
 };
 
+const getChecklistByName = (card, name) => {
+  const desired = String(name || '').trim().toLowerCase();
+  if (!desired) return null;
+  const lists = Array.isArray(card?.checklists) ? card.checklists : [];
+  return lists.find((c) => String(c?.name || '').trim().toLowerCase() === desired) || null;
+};
+
 class PrMergeAutomationService {
   constructor({ taskRecordService, pullRequestService, taskTicketingService, userSettingsService } = {}) {
     this.taskRecordService = taskRecordService;
@@ -258,6 +265,37 @@ class PrMergeAutomationService {
       }
     }
 
+    // Optional checklist item on merge (per-board conventions).
+    if (boardId) {
+      try {
+        const key = `${providerId}:${boardId}`;
+        const configured = this.userSettingsService?.settings?.global?.ui?.tasks?.boardConventions?.[key] || null;
+        const checklistName = String(configured?.mergedChecklistName || '').trim();
+        const itemTemplate = String(configured?.mergedChecklistItemTemplate || '').trim();
+        if (checklistName && itemTemplate && typeof provider.addChecklistItem === 'function') {
+          const itemText = this.renderCommentTemplate(itemTemplate, {
+            prUrl,
+            mergedAt: mergedIso,
+            ticketCardUrl: cardUrl || (card?.url ? String(card.url) : ''),
+            reviewOutcome: String(existing?.reviewOutcome || ''),
+            verifyMinutes: existing?.verifyMinutes ?? '',
+            notes: String(existing?.notes || ''),
+            promptRef: String(existing?.promptRef || '')
+          });
+
+          if (itemText) {
+            const checklist = getChecklistByName(card, checklistName);
+            const already = checklist?.checkItems?.some((i) => String(i?.name || '').trim() === itemText) || false;
+            if (!already) {
+              await provider.addChecklistItem({ cardId: cardRef, checklistName, name: itemText });
+            }
+          }
+        }
+      } catch (e) {
+        logger.debug('Failed to add merge checklist item', { id, cardRef, boardId, error: e?.message || String(e) });
+      }
+    }
+
     // Optional label application (per-board conventions).
     if (boardId) {
       try {
@@ -416,6 +454,38 @@ class PrMergeAutomationService {
 	        logger.debug('Failed to comment on card', { id, cardRef, error: e?.message || String(e) });
 	      }
 	    }
+
+    // Optional checklist item on merge (per-board conventions).
+    if (boardId) {
+      try {
+        const prUrl = String(prInfo?.url || '').trim() || `${pr.owner}/${pr.repo}#${pr.number}`;
+        const key = `${providerId}:${boardId}`;
+        const configured = this.userSettingsService?.settings?.global?.ui?.tasks?.boardConventions?.[key] || null;
+        const checklistName = String(configured?.mergedChecklistName || '').trim();
+        const itemTemplate = String(configured?.mergedChecklistItemTemplate || '').trim();
+        if (checklistName && itemTemplate && typeof provider.addChecklistItem === 'function') {
+          const itemText = this.renderCommentTemplate(itemTemplate, {
+            prUrl,
+            mergedAt: mergedIso,
+            ticketCardUrl: cardUrl || (card?.url ? String(card.url) : ''),
+            reviewOutcome: String(record?.reviewOutcome || ''),
+            verifyMinutes: record?.verifyMinutes ?? '',
+            notes: String(record?.notes || ''),
+            promptRef: String(record?.promptRef || '')
+          });
+
+          if (itemText) {
+            const checklist = getChecklistByName(card, checklistName);
+            const already = checklist?.checkItems?.some((i) => String(i?.name || '').trim() === itemText) || false;
+            if (!already) {
+              await provider.addChecklistItem({ cardId: cardRef, checklistName, name: itemText });
+            }
+          }
+        }
+      } catch (e) {
+        logger.debug('Failed to add merge checklist item', { id, cardRef, boardId, error: e?.message || String(e) });
+      }
+    }
 
     // Optional label application (per-board conventions).
     if (boardId) {
