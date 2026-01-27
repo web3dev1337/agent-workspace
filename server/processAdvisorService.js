@@ -39,11 +39,15 @@ class ProcessAdvisorService {
       const lookbackMs = Math.max(1, hours) * 60 * 60 * 1000;
       const startMs = nowMs - lookbackMs;
 
-      const [status, telemetry, tasks] = await Promise.all([
+      const [statusRes, telemetryRes, tasksRes] = await Promise.allSettled([
         this.processStatusService?.getStatus?.({ mode, lookbackHours: hours, force }) || null,
         this.processTelemetryService?.getSummary?.({ lookbackHours: hours, force }) || null,
         this.processTaskService?.listTasks?.({ prs: { mode, state: 'open', sort: 'updated', limit: 50 } }) || []
       ]);
+
+      const status = statusRes.status === 'fulfilled' ? statusRes.value : null;
+      const telemetry = telemetryRes.status === 'fulfilled' ? telemetryRes.value : null;
+      const tasks = tasksRes.status === 'fulfilled' ? tasksRes.value : [];
 
       const records = typeof this.taskRecordService?.list === 'function'
         ? (this.taskRecordService.list() || [])

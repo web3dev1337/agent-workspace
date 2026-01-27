@@ -78,4 +78,4 @@ Process discipline:
 - [x] Worktree “quick add” should re-evaluate after creating a new worktree (avoid suggesting the just-created worktree as “free”). (PR #289)
 - [x] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start. (PR #292)
 - [x] Tasks board “wrap/expand” layout: ensure column auto-layout minimizes columns (consider collapsed/hidden lists and fill vertically before adding columns). (PR #294)
-- [ ] Dashboard “Advice” tile shows “Failed to load” (investigate `/api/process/advice` errors on fresh startups).
+- [ ] Dashboard “Advice” tile shows “Failed to load” (investigate `/api/process/advice` errors on fresh startups). (PR #TBD)
