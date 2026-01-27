@@ -236,6 +236,9 @@ class ClaudeOrchestrator {
       });
       document.getElementById('workflow-background')?.addEventListener('click', () => {
         this.setWorkflowMode('background');
+        // Background mode: open a triage-oriented queue view for Tier 3/4 items.
+        this.queuePanelPreset = { tierSet: [3, 4], triageMode: true, reviewActive: false };
+        this.showQueuePanel();
       });
 
       document.getElementById('workflow-focus-tier2')?.addEventListener('click', () => {
@@ -12048,14 +12051,17 @@ class ClaudeOrchestrator {
     const serverUrl = window.location.origin;
     const initialSelectedId = String(opts?.selectedId || '').trim() || null;
 
-				    const state = {
-				      mode: 'mine', // mine | all
-				      query: '',
-				      tasks: [],
-				      selectedId: initialSelectedId,
-				      reviewTier: 'all', // all | none | 1..4
-				      unreviewedOnly: false,
-				      autoOpenDiff: false,
+			    const state = {
+			      mode: 'mine', // mine | all
+			      query: '',
+			      tasks: [],
+			      selectedId: initialSelectedId,
+			      reviewTier: 'all', // all | none | 1..4
+            tierSet: null, // null | number[] (multi-tier presets like [3,4])
+			      unreviewedOnly: false,
+			      autoOpenDiff: false,
+            triageMode: localStorage.getItem('queue-triage') === 'true',
+            snoozes: {}, // taskId -> untilMs
 				      autoAdvance: localStorage.getItem('queue-auto-advance') === 'true',
 				      autoReviewer: localStorage.getItem('queue-auto-reviewer') === 'true',
 				      autoFixer: localStorage.getItem('queue-auto-fixer') === 'true',
@@ -12070,6 +12076,34 @@ class ClaudeOrchestrator {
 			      recheckSpawning: new Set()
 			    };
 
+    const loadSnoozes = () => {
+      try {
+        const raw = localStorage.getItem('queue-snoozes');
+        const parsed = raw ? JSON.parse(raw) : {};
+        return (parsed && typeof parsed === 'object') ? parsed : {};
+      } catch {
+        return {};
+      }
+    };
+
+    const saveSnoozes = (next) => {
+      state.snoozes = (next && typeof next === 'object') ? next : {};
+      try {
+        localStorage.setItem('queue-snoozes', JSON.stringify(state.snoozes));
+      } catch {
+        // ignore
+      }
+    };
+
+    const getSnoozeUntilMs = (taskId) => {
+      const id = String(taskId || '').trim();
+      if (!id) return 0;
+      const v = Number(state.snoozes?.[id] || 0);
+      return Number.isFinite(v) ? v : 0;
+    };
+
+    saveSnoozes(loadSnoozes());
+
     // Apply any one-shot preset (e.g. workflow review button).
     if (this.queuePanelPreset && typeof this.queuePanelPreset === 'object') {
       const preset = this.queuePanelPreset;
@@ -12079,9 +12113,14 @@ class ClaudeOrchestrator {
           ? preset.reviewTier
           : Number.parseInt(String(preset.reviewTier), 10);
       }
+      if (Array.isArray(preset.tierSet)) {
+        state.tierSet = preset.tierSet.map(Number).filter((n) => n >= 1 && n <= 4);
+        if (!state.tierSet.length) state.tierSet = null;
+      }
+      if (preset.triageMode !== undefined) state.triageMode = !!preset.triageMode;
       if (preset.unreviewedOnly !== undefined) state.unreviewedOnly = !!preset.unreviewedOnly;
       if (preset.autoOpenDiff !== undefined) state.autoOpenDiff = !!preset.autoOpenDiff;
-      state.reviewActive = true;
+      state.reviewActive = preset.reviewActive !== undefined ? !!preset.reviewActive : true;
     }
 
     state.allowAutoOpenDiff = false;
@@ -12117,9 +12156,11 @@ class ClaudeOrchestrator {
             <button class="btn-secondary tasks-view-btn" id="queue-tier-2" data-tier="2" title="Tier 2">T2</button>
             <button class="btn-secondary tasks-view-btn" id="queue-tier-3" data-tier="3" title="Tier 3">T3</button>
             <button class="btn-secondary tasks-view-btn" id="queue-tier-4" data-tier="4" title="Tier 4">T4</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-bg" data-tier="bg" title="Background tiers (T3+T4)">T3+</button>
             <button class="btn-secondary tasks-view-btn" id="queue-tier-none" data-tier="none" title="No tier">None</button>
           </div>
 		          <div class="tasks-view-toggle" role="group" aria-label="Review filters">
+		            <button class="btn-secondary tasks-view-btn" id="queue-triage" title="Triage ordering + snooze (safe backoff)">Triage</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-auto-next" title="Toggle: auto-advance when you complete a review">Auto Next</button>
@@ -12159,8 +12200,10 @@ class ClaudeOrchestrator {
     const tier2Btn = modal.querySelector('#queue-tier-2');
     const tier3Btn = modal.querySelector('#queue-tier-3');
     const tier4Btn = modal.querySelector('#queue-tier-4');
-    const tierNoneBtn = modal.querySelector('#queue-tier-none');
+    const tierBgBtn = modal.querySelector('#queue-tier-bg');
+	    const tierNoneBtn = modal.querySelector('#queue-tier-none');
 		    const unreviewedBtn = modal.querySelector('#queue-unreviewed');
+        const triageBtn = modal.querySelector('#queue-triage');
 		    const autoDiffBtn = modal.querySelector('#queue-auto-diff');
 		    const autoNextBtn = modal.querySelector('#queue-auto-next');
 		    const autoReviewerBtn = modal.querySelector('#queue-auto-reviewer');
@@ -12190,13 +12233,16 @@ class ClaudeOrchestrator {
 
 		    const syncReviewControlsUI = () => {
 		      const tier = normalizeReviewTier(state.reviewTier);
-		      tierAllBtn?.classList.toggle('active', tier === 'all');
+          const tierSet = Array.isArray(state.tierSet) && state.tierSet.length ? state.tierSet : null;
+		      tierAllBtn?.classList.toggle('active', tier === 'all' && !tierSet);
 		      tierNoneBtn?.classList.toggle('active', tier === 'none');
 		      tier1Btn?.classList.toggle('active', tier === 1);
 		      tier2Btn?.classList.toggle('active', tier === 2);
-		      tier3Btn?.classList.toggle('active', tier === 3);
-		      tier4Btn?.classList.toggle('active', tier === 4);
+		      tier3Btn?.classList.toggle('active', (tier === 3) || (tierSet && tierSet.includes(3)));
+		      tier4Btn?.classList.toggle('active', (tier === 4) || (tierSet && tierSet.includes(4)));
+          tierBgBtn?.classList.toggle('active', !!(tierSet && tierSet.length === 2 && tierSet.includes(3) && tierSet.includes(4)));
 
+          triageBtn?.classList.toggle('active', !!state.triageMode);
 		      unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
 		      autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
 		      autoNextBtn?.classList.toggle('active', !!state.autoAdvance);
@@ -12207,18 +12253,22 @@ class ClaudeOrchestrator {
 		      if (startReviewBtn) startReviewBtn.textContent = state.reviewActive ? 'Stop Review' : 'Start Review';
 		    };
 
-    const setReviewTier = (tier) => {
-      state.reviewTier = normalizeReviewTier(tier);
+    const applyFiltersAndMaybeClampSelection = ({ renderSelectedDetail = true } = {}) => {
       syncReviewControlsUI();
       renderList();
-
       const ordered = getOrderedTasks(getFilteredTasks());
       if (state.selectedId && !ordered.some(t => t.id === state.selectedId)) {
         state.selectedId = ordered[0]?.id || null;
       }
-      if (state.selectedId) {
+      if (renderSelectedDetail && state.selectedId) {
         renderDetail(getTaskById(state.selectedId));
       }
+    };
+
+    const setReviewTier = (tier) => {
+      state.tierSet = null;
+      state.reviewTier = normalizeReviewTier(tier);
+      applyFiltersAndMaybeClampSelection();
     };
 
     tierAllBtn?.addEventListener('click', () => setReviewTier('all'));
@@ -12227,6 +12277,19 @@ class ClaudeOrchestrator {
     tier3Btn?.addEventListener('click', () => setReviewTier(3));
     tier4Btn?.addEventListener('click', () => setReviewTier(4));
     tierNoneBtn?.addEventListener('click', () => setReviewTier('none'));
+    tierBgBtn?.addEventListener('click', () => {
+      state.reviewTier = 'all';
+      state.tierSet = [3, 4];
+      state.triageMode = true;
+      try { localStorage.setItem('queue-triage', 'true'); } catch {}
+      applyFiltersAndMaybeClampSelection();
+    });
+
+    triageBtn?.addEventListener('click', () => {
+      state.triageMode = !state.triageMode;
+      try { localStorage.setItem('queue-triage', state.triageMode ? 'true' : 'false'); } catch {}
+      applyFiltersAndMaybeClampSelection();
+    });
 
     unreviewedBtn?.addEventListener('click', () => {
       state.unreviewedOnly = !state.unreviewedOnly;
@@ -12333,6 +12396,9 @@ class ClaudeOrchestrator {
       const q = String(state.query || '').trim().toLowerCase();
       return (Array.isArray(state.tasks) ? state.tasks : []).filter((t) => {
         const tier = Number(t?.record?.tier);
+        if (state.tierSet && Array.isArray(state.tierSet) && state.tierSet.length) {
+          if (!state.tierSet.includes(tier)) return false;
+        }
         if (state.reviewTier !== 'all') {
           if (state.reviewTier === 'none') {
             if (Number.isFinite(tier)) return false;
@@ -12342,6 +12408,10 @@ class ClaudeOrchestrator {
         }
         if (state.unreviewedOnly) {
           if (t?.record?.reviewedAt) return false;
+        }
+        if (state.triageMode) {
+          const until = getSnoozeUntilMs(t?.id);
+          if (until && Date.now() < until) return false;
         }
         if (!q) return true;
         const hay = [
@@ -12368,7 +12438,37 @@ class ClaudeOrchestrator {
         else unblocked.push(t);
       }
 
-      if (!state.reviewActive) return unblocked.concat(blocked);
+      const parseUpdatedMs = (t) => {
+        const ms = Date.parse(String(t?.updatedAt || t?.createdAt || ''));
+        return Number.isFinite(ms) ? ms : 0;
+      };
+
+      const triagePriority = (t) => {
+        if (!state.triageMode) return 0;
+        if (t?.kind === 'session' && String(t?.status || '').toLowerCase() === 'waiting') return 0;
+        const outcome = String(t?.record?.reviewOutcome || '').toLowerCase();
+        if (!t?.record?.doneAt && outcome === 'needs_fix') return 1;
+        if (t?.kind === 'worktree') return 2;
+        if (t?.kind === 'pr' && !t?.record?.reviewedAt) return 3;
+        return 4;
+      };
+
+      const triageSort = (arr) => {
+        return [...arr].sort((a, b) => {
+          const pa = triagePriority(a);
+          const pb = triagePriority(b);
+          if (pa !== pb) return pa - pb;
+          const at = parseUpdatedMs(a);
+          const bt = parseUpdatedMs(b);
+          if (bt !== at) return bt - at;
+          return String(a?.title || a?.id || '').localeCompare(String(b?.title || b?.id || ''));
+        });
+      };
+
+      if (!state.reviewActive) {
+        if (state.triageMode) return triageSort(unblocked).concat(triageSort(blocked));
+        return unblocked.concat(blocked);
+      }
 
       const me = String(this.userSettings?.global?.ui?.tasks?.me?.trelloUsername || localStorage.getItem('orchestrator-claim-name') || 'me').trim() || 'me';
       const byClaim = (arr) => {
@@ -12504,8 +12604,10 @@ class ClaudeOrchestrator {
       const reviewed = t?.record?.reviewedAt ? 'reviewed' : '';
       const outcome = t?.record?.reviewOutcome ? `review:${t.record.reviewOutcome}` : '';
       const claim = t?.record?.claimedBy ? `claimed:${t.record.claimedBy}` : '';
+      const snoozedUntil = getSnoozeUntilMs(t?.id);
+      const snoozed = state.triageMode && snoozedUntil && Date.now() < snoozedUntil ? 'snoozed' : '';
       const meta = [tier, risk].filter(Boolean).join(' • ');
-      const meta2 = [depTotal, depBlocked, claim, reviewed, outcome].filter(Boolean).join(' • ');
+      const meta2 = [depTotal, depBlocked, claim, reviewed, outcome, snoozed].filter(Boolean).join(' • ');
       const selected = state.selectedId === t.id;
 
       const tags = [];
@@ -13390,6 +13492,9 @@ class ClaudeOrchestrator {
       const isTimerActive = state.reviewTimer?.taskId === t.id;
       const effectiveEndMs = isTimerActive ? nowMs : endedMs;
       const durationLabel = startedMs ? formatDuration((effectiveEndMs || nowMs) - startedMs) : '';
+      const snoozedUntilMs = getSnoozeUntilMs(t.id);
+      const isSnoozed = !!(snoozedUntilMs && nowMs < snoozedUntilMs);
+      const snoozeUntilLabel = isSnoozed ? new Date(snoozedUntilMs).toLocaleString() : '';
 
       detailEl.innerHTML = `
         <div class="tasks-detail-header">
@@ -13405,6 +13510,18 @@ class ClaudeOrchestrator {
             ${hasPR ? `<button class="btn-secondary" id="queue-spawn-recheck" title="Spawn a reviewer agent to recheck after fixes">🔁 Recheck</button>` : ''}
           </div>
         </div>
+
+        ${state.triageMode ? `
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Triage (safe backoff)</div>
+          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+            <button class="btn-secondary" id="queue-snooze-15m" type="button">😴 Snooze 15m</button>
+            <button class="btn-secondary" id="queue-snooze-1h" type="button">😴 Snooze 1h</button>
+            <button class="btn-secondary" id="queue-unsnooze" type="button" ${isSnoozed ? '' : 'disabled'}>🔔 Unsnooze</button>
+            <span class="tasks-detail-meta" style="opacity:0.9;">${isSnoozed ? `snoozed until <strong>${escapeHtml(snoozeUntilLabel)}</strong>` : 'not snoozed'}</span>
+          </div>
+        </div>
+        ` : ''}
 
         <div class="tasks-detail-block">
           <div class="tasks-detail-block-title">Tier + Risk</div>
@@ -13604,6 +13721,9 @@ class ClaudeOrchestrator {
       const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
       const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
       const notesEl = detailEl.querySelector('#queue-notes');
+      const snooze15Btn = detailEl.querySelector('#queue-snooze-15m');
+      const snooze1hBtn = detailEl.querySelector('#queue-snooze-1h');
+      const unsnoozeBtn = detailEl.querySelector('#queue-unsnooze');
       const depsEl = detailEl.querySelector('#queue-deps');
       const reverseDepsEl = detailEl.querySelector('#queue-reverse-deps');
       const depGraphBtn = detailEl.querySelector('#queue-dep-graph');
@@ -13647,6 +13767,37 @@ class ClaudeOrchestrator {
       };
 
 	      applyClaimUI(record);
+
+        const applySnooze = (msFromNow) => {
+          const id = String(t?.id || '').trim();
+          if (!id) return;
+          const until = Date.now() + Math.max(1, Number(msFromNow) || 0);
+          const next = { ...(state.snoozes || {}) };
+          next[id] = until;
+          saveSnoozes(next);
+          renderList();
+          if (state.selectedId === id) {
+            // If the current item was snoozed, move to next visible item (best-effort).
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+            renderList();
+            renderDetail(getTaskById(state.selectedId));
+          }
+        };
+
+        const clearSnooze = () => {
+          const id = String(t?.id || '').trim();
+          if (!id) return;
+          const next = { ...(state.snoozes || {}) };
+          delete next[id];
+          saveSnoozes(next);
+          renderList();
+          if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+        };
+
+        snooze15Btn?.addEventListener('click', () => applySnooze(15 * 60 * 1000));
+        snooze1hBtn?.addEventListener('click', () => applySnooze(60 * 60 * 1000));
+        unsnoozeBtn?.addEventListener('click', () => clearSnooze());
 
 	      let depSelection = new Set();
 
@@ -14458,11 +14609,9 @@ class ClaudeOrchestrator {
 
     try {
       await fetchTasks();
-      syncReviewControlsUI();
-      setReviewTier(state.reviewTier);
-      if (state.selectedId) {
-        selectById(state.selectedId, { allowAutoOpenDiff: state.reviewActive });
-      }
+      // Initial render respects triage mode + tierSet presets.
+      applyFiltersAndMaybeClampSelection({ renderSelectedDetail: false });
+      if (state.selectedId) selectById(state.selectedId, { allowAutoOpenDiff: state.reviewActive });
     } catch (e) {
       this.showToast(String(e?.message || e), 'error');
       listEl.innerHTML = `<div class="no-ports">Failed to load queue.</div>`;
