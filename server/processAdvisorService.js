@@ -82,7 +82,10 @@ class ProcessAdvisorService {
           code: 'wip_over_cap',
           title: 'Too many projects in flight',
           message: `WIP is ${wip} (cap ${wipMax}). Consider finishing/merging before starting new work.`,
-          actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+          actions: [
+            { type: 'ui', action: 'open-prs', label: 'Open PRs' },
+            { type: 'ui', action: 'open-queue', label: 'Open Queue' }
+          ]
         });
       }
 
@@ -94,7 +97,10 @@ class ProcessAdvisorService {
           code: 'tier12_over_cap',
           title: 'Tier 1/2 queue overloaded',
           message: `Tier 1/2 queue is ${q12} (cap ${q12Cap}). Consider reviewing, marking done, or re-tiering tasks.`,
-          actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+          actions: [
+            { type: 'ui', action: 'open-prs', label: 'Open PRs' },
+            { type: 'ui', action: 'open-queue', label: 'Open Queue' }
+          ]
         });
       }
 
