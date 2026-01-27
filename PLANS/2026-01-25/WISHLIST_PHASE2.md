@@ -67,6 +67,7 @@ Process discipline:
 
 - [x] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active. (PR #315)
   - Still occasionally reported; if seen again, capture a short screen recording + logs for a targeted follow-up.
+  - Added a small UI-side “delay idle” stabilizer to reduce rapid busy→idle flicker. (PR #TBD)
 - [x] Tasks panel: card detail pane sometimes opens on the wrong side and/or causes vertical reflow of the board area. (PR #327)
 - [x] Tasks launch UX: from a card, launch `T1/T2/T3/T4` agent in 1–2 clicks (dropdown + hotkey-friendly). (PR #321)
 - [x] Tasks panel: Trello board “mapping/settings” control should always open (if it appears enabled); if no-op, surface an error/toast. (PR #314)
