@@ -71,6 +71,8 @@ class PrMergeAutomationService {
     const cfg = this.userSettingsService?.settings?.global?.ui?.tasks?.automations?.trello?.onPrMerged || {};
     return {
       enabled: !!cfg.enabled,
+      pollEnabled: cfg.pollEnabled !== false,
+      webhookEnabled: !!cfg.webhookEnabled,
       comment: cfg.comment !== false,
       moveToDoneList: cfg.moveToDoneList !== false,
       closeIfNoDoneList: !!cfg.closeIfNoDoneList,
@@ -96,6 +98,117 @@ class PrMergeAutomationService {
       logger.debug('Ticket provider not configured; skipping automations', { providerId, error: e?.message || String(e) });
       return null;
     }
+  }
+
+  async processMergedPullRequest({ owner, repo, number, body, mergedAt, url } = {}) {
+    const prOwner = String(owner || '').trim();
+    const prRepo = String(repo || '').trim();
+    const prNumber = Number(number);
+    if (!prOwner || !prRepo || !Number.isFinite(prNumber) || prNumber <= 0) {
+      return { skipped: true, reason: 'invalid_pr' };
+    }
+
+    const mergedIso = mergedAt ? new Date(mergedAt).toISOString() : new Date().toISOString();
+    const id = `pr:${prOwner}/${prRepo}#${prNumber}`;
+
+    const cfg = this.getConfig();
+    if (!cfg.enabled || !cfg.webhookEnabled) {
+      await this.taskRecordService.upsert(id, { prMergedAt: mergedIso });
+      return { id, skipped: true, reason: cfg.enabled ? 'webhook_disabled' : 'automation_disabled' };
+    }
+
+    const prUrl = String(url || '').trim() || `${prOwner}/${prRepo}#${prNumber}`;
+
+    // Try existing record ticket link; fallback to PR body parsing.
+    const existing = typeof this.taskRecordService?.get === 'function' ? this.taskRecordService.get(id) : null;
+    const providerId = String(existing?.ticketProvider || 'trello').trim().toLowerCase() || 'trello';
+    let cardRef = String(existing?.ticketCardId || '').trim();
+    let cardUrl = String(existing?.ticketCardUrl || '').trim();
+
+    if (!cardRef) {
+      const refs = extractTrelloShortLinks(String(body || ''));
+      cardRef = refs[0] || '';
+      if (cardRef) {
+        cardUrl = cardUrl || `https://trello.com/c/${cardRef}`;
+      }
+    }
+
+    await this.taskRecordService.upsert(id, {
+      ticketProvider: providerId,
+      ticketCardId: cardRef || undefined,
+      ticketCardUrl: cardUrl || undefined,
+      prMergedAt: mergedIso,
+      prUrl
+    });
+
+    if (!cardRef) {
+      return { id, skipped: true, reason: 'no_ticket_link' };
+    }
+
+    const provider = await this.ensureProviderConfigured(providerId);
+    if (!provider) {
+      return { id, skipped: true, reason: 'provider_not_configured' };
+    }
+
+    // Load card + lists (to find a "Done/Merged" list).
+    let card;
+    try {
+      card = await provider.getCard({ cardId: cardRef, refresh: true });
+    } catch (e) {
+      logger.warn('Failed to load card', { id, providerId, cardRef, error: e?.message || String(e) });
+      return { id, skipped: true, reason: 'card_lookup_failed' };
+    }
+
+    const boardId = String(card?.idBoard || '').trim();
+    let targetListId = null;
+    if (cfg.moveToDoneList && boardId) {
+      try {
+        const lists = await provider.listLists({ boardId, refresh: true });
+        targetListId = pickDoneListId(lists);
+      } catch (e) {
+        logger.debug('Failed to list board lists', { boardId, error: e?.message || String(e) });
+      }
+    }
+
+    let moved = false;
+    let closed = false;
+    if (targetListId) {
+      try {
+        await provider.updateCard({ cardId: cardRef, fields: { idList: targetListId, pos: 'top' } });
+        moved = true;
+      } catch (e) {
+        logger.warn('Failed to move card', { id, cardRef, targetListId, error: e?.message || String(e) });
+      }
+    } else if (cfg.closeIfNoDoneList) {
+      try {
+        await provider.updateCard({ cardId: cardRef, fields: { closed: true } });
+        closed = true;
+      } catch (e) {
+        logger.warn('Failed to close card', { id, cardRef, error: e?.message || String(e) });
+      }
+    }
+
+    if (cfg.comment) {
+      try {
+        const text = `Merged ✅\nPR: ${prUrl}`;
+        await provider.addComment({ cardId: cardRef, text });
+      } catch (e) {
+        logger.debug('Failed to comment on card', { id, cardRef, error: e?.message || String(e) });
+      }
+    }
+
+    await this.taskRecordService.upsert(id, {
+      ticketProvider: providerId,
+      ticketCardId: cardRef,
+      ticketCardUrl: cardUrl || (card?.url ? String(card.url) : undefined),
+      ticketBoardId: boardId || undefined,
+      prMergedAt: mergedIso,
+      ticketMovedAt: moved ? new Date().toISOString() : undefined,
+      ticketMoveTargetListId: moved ? targetListId : undefined,
+      ticketClosedAt: closed ? new Date().toISOString() : undefined
+    });
+
+    return { id, moved, closed, targetListId, cardRef, providerId };
   }
 
   async processOnePrRecord(record) {
@@ -237,7 +350,7 @@ class PrMergeAutomationService {
 
   start() {
     const cfg = this.getConfig();
-    if (!cfg.enabled) return false;
+    if (!cfg.enabled || !cfg.pollEnabled) return false;
     if (this.intervalId) return true;
     const pollMs = cfg.pollMs;
     this.intervalId = setInterval(() => {
@@ -257,4 +370,3 @@ class PrMergeAutomationService {
 }
 
 module.exports = { PrMergeAutomationService, extractTrelloShortLinks, pickDoneListId };
-
