@@ -423,15 +423,16 @@ class Dashboard {
 	              <option value="240">4h</option>
 	            </select>
 	          </label>
-	          <div class="dashboard-telemetry-actions">
-	            <button class="btn-secondary" type="button" id="dashboard-telemetry-refresh">Refresh</button>
-	            <button class="btn-secondary" type="button" id="dashboard-telemetry-download">Download CSV</button>
-	            <button class="btn-secondary" type="button" id="dashboard-telemetry-download-json">Download JSON</button>
-	          </div>
-	        </div>
-	        <div id="dashboard-telemetry-body" class="dashboard-telemetry-body">Loading…</div>
-	      </div>
-	    `;
+		          <div class="dashboard-telemetry-actions">
+		            <button class="btn-secondary" type="button" id="dashboard-telemetry-refresh">Refresh</button>
+		            <button class="btn-secondary" type="button" id="dashboard-telemetry-download">Download CSV</button>
+		            <button class="btn-secondary" type="button" id="dashboard-telemetry-download-json">Download JSON</button>
+		            <button class="btn-secondary" type="button" id="dashboard-telemetry-snapshot" title="Create a snapshot link for this telemetry view">Copy snapshot link</button>
+		          </div>
+		        </div>
+		        <div id="dashboard-telemetry-body" class="dashboard-telemetry-body">Loading…</div>
+		      </div>
+		    `;
 
 	    document.body.appendChild(overlay);
 
@@ -451,13 +452,18 @@ class Dashboard {
 	      const hours = Number(lookbackEl?.value ?? 24);
 	      this.downloadTelemetryCsv(hours);
 	    });
-	    overlay.querySelector('#dashboard-telemetry-download-json')?.addEventListener('click', () => {
-	      const hours = Number(lookbackEl?.value ?? 24);
-	      this.downloadTelemetryJson(hours);
-	    });
-	    overlay.querySelector('#dashboard-telemetry-refresh')?.addEventListener('click', () => {
-	      this.loadTelemetryDetails({ lookbackHours: Number(lookbackEl?.value ?? 24), bucketMinutes: Number(bucketEl?.value ?? 60) });
-	    });
+		    overlay.querySelector('#dashboard-telemetry-download-json')?.addEventListener('click', () => {
+		      const hours = Number(lookbackEl?.value ?? 24);
+		      this.downloadTelemetryJson(hours);
+		    });
+		    overlay.querySelector('#dashboard-telemetry-snapshot')?.addEventListener('click', async () => {
+		      const hours = Number(lookbackEl?.value ?? 24);
+		      const bucket = Number(bucketEl?.value ?? 60);
+		      await this.createTelemetrySnapshotLink({ lookbackHours: hours, bucketMinutes: bucket });
+		    });
+		    overlay.querySelector('#dashboard-telemetry-refresh')?.addEventListener('click', () => {
+		      this.loadTelemetryDetails({ lookbackHours: Number(lookbackEl?.value ?? 24), bucketMinutes: Number(bucketEl?.value ?? 60) });
+		    });
 
 	    const onKey = (e) => {
 	      if (e.key !== 'Escape') return;
@@ -505,6 +511,48 @@ class Dashboard {
 	      body.innerHTML = this.renderTelemetryDetails(data);
 	    } catch {
 	      body.textContent = 'Failed to load.';
+	    }
+	  }
+
+	  async createTelemetrySnapshotLink({ lookbackHours = 24, bucketMinutes = 60 } = {}) {
+	    const hours = Number(lookbackHours);
+	    const bucket = Number(bucketMinutes);
+	    const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 24;
+	    const safeBucket = Number.isFinite(bucket) && bucket > 0 ? bucket : 60;
+
+	    try {
+	      const res = await fetch('/api/process/telemetry/snapshots', {
+	        method: 'POST',
+	        headers: { 'Content-Type': 'application/json' },
+	        body: JSON.stringify({ lookbackHours: safeHours, bucketMinutes: safeBucket })
+	      }).catch(() => null);
+	      const data = res ? await res.json().catch(() => ({})) : {};
+	      if (!res || !res.ok) throw new Error(data?.error || 'Failed to create snapshot');
+
+	      const url = String(data?.url || '').trim();
+	      const full = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+	      await this.copyToClipboard(full);
+	      try { this.orchestrator?.showToast?.('Snapshot link copied', 'success'); } catch {}
+	    } catch (e) {
+	      try { this.orchestrator?.showToast?.(String(e?.message || e), 'error'); } catch {}
+	    }
+	  }
+
+	  async copyToClipboard(text) {
+	    const t = String(text || '');
+	    if (!t) return;
+	    try {
+	      if (navigator?.clipboard?.writeText) {
+	        await navigator.clipboard.writeText(t);
+	        return;
+	      }
+	    } catch {
+	      // fall through
+	    }
+	    try {
+	      window.prompt('Copy link:', t);
+	    } catch {
+	      // ignore
 	    }
 	  }
 
