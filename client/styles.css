@@ -7567,6 +7567,7 @@ header h1 {
   min-height: 0;
   display: grid;
   grid-template-columns: 420px 1fr;
+  grid-template-rows: 1fr;
   grid-template-areas: "cards detail";
 }
 
@@ -7616,6 +7617,8 @@ header h1 {
 
 .tasks-cards {
   grid-area: cards;
+  grid-column: 1;
+  grid-row: 1;
   overflow-y: auto;
   padding: var(--space-md);
   border-right: 1px solid var(--border-color);
@@ -7623,6 +7626,7 @@ header h1 {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  min-width: 0;
 }
 
 .tasks-body.tasks-body-board .tasks-cards {
@@ -8063,9 +8067,12 @@ header h1 {
 
 .tasks-detail {
   grid-area: detail;
+  grid-column: 2;
+  grid-row: 1;
   overflow-y: auto;
   padding: var(--space-lg);
   background: var(--bg-primary);
+  min-width: 0;
 }
 
 .tasks-detail-empty {
