@@ -35,10 +35,20 @@ describe('PrMergeAutomationService webhook flow', () => {
 
     const calls = [];
     const provider = {
-      getCard: async ({ cardId }) => ({ id: cardId, idBoard: 'board1', url: `https://trello.com/c/${cardId}` }),
+      getCard: async ({ cardId }) => ({
+        id: cardId,
+        idBoard: 'board1',
+        url: `https://trello.com/c/${cardId}`,
+        labels: [{ id: 'lbl0', name: 'Keep' }]
+      }),
       listLists: async () => ([
         { id: 'l1', name: 'To Do' },
         { id: 'l2', name: 'Merged' }
+      ]),
+      listBoardLabels: async () => ([
+        { id: 'lbl0', name: 'Keep', color: 'blue' },
+        { id: 'lbl1', name: 'Merged', color: 'green' },
+        { id: 'lbl2', name: 'Shipped', color: 'purple' }
       ]),
       updateCard: async ({ cardId, fields }) => {
         calls.push({ type: 'updateCard', cardId, fields });
@@ -61,7 +71,8 @@ describe('PrMergeAutomationService webhook flow', () => {
             tasks: {
               boardConventions: {
                 'trello:board1': {
-                  doneListId: 'l1'
+                  doneListId: 'l1',
+                  mergedLabelNames: 'Merged, Shipped'
                 }
               },
               automations: {
@@ -98,6 +109,11 @@ describe('PrMergeAutomationService webhook flow', () => {
     expect(result.cardRef).toBe('AbC123');
     expect(calls.some((c) => c.type === 'updateCard' && c.fields?.idList === 'l1')).toBe(true);
     expect(calls.some((c) => c.type === 'addComment' && String(c.text || '').includes('Merged'))).toBe(true);
+    expect(calls.some((c) => c.type === 'updateCard'
+      && Array.isArray(c.fields?.idLabels)
+      && c.fields.idLabels.includes('lbl0')
+      && c.fields.idLabels.includes('lbl1')
+      && c.fields.idLabels.includes('lbl2'))).toBe(true);
 
     const rec = records.get('pr:acme/demo#123');
     expect(rec).toBeTruthy();
