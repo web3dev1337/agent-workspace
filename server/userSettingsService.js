@@ -46,6 +46,12 @@ class UserSettingsService {
         },
         ui: {
           theme: 'dark',
+          branches: {
+            // Branch label rendering in Worktree list and terminal headers.
+            hidePrefixes: true,
+            colorize: true,
+            showAtInSidebar: false
+          },
           worktrees: {
             autoCreateExtraWhenBusy: true,
             autoCreateMinNumber: 9,
