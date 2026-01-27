@@ -247,10 +247,16 @@ class Dashboard {
 	          this._telemetrySummary = data;
 	          const avgReview = data?.avgReviewSeconds ? `${Math.round(Number(data.avgReviewSeconds))}s` : '—';
 	          const avgChars = Number.isFinite(Number(data?.avgPromptChars)) ? Math.round(Number(data.avgPromptChars)) : null;
+	          const doneCount = Number(data?.doneCount ?? 0);
+	          const avgVerify = Number.isFinite(Number(data?.avgVerifyMinutes)) ? Math.round(Number(data.avgVerifyMinutes)) : null;
+	          const oc = (data?.outcomeCounts && typeof data.outcomeCounts === 'object') ? data.outcomeCounts : {};
+	          const needsFix = Number(oc?.needs_fix ?? 0);
 	          telemetryEl.innerHTML = `
 	            <div>Lookback <strong>${Number(data?.lookbackHours ?? 24)}h</strong></div>
 	            <div>Avg review <strong>${escapeHtml(avgReview)}</strong></div>
 	            <div>Avg prompt chars <strong>${avgChars === null ? '—' : avgChars}</strong></div>
+	            <div>Done <strong>${doneCount}</strong> • needs_fix <strong>${needsFix}</strong></div>
+	            <div>Avg verify <strong>${avgVerify === null ? '—' : `${avgVerify}m`}</strong></div>
 	          `;
 	        } else {
 	          telemetryEl.textContent = 'Failed to load.';
@@ -566,8 +572,11 @@ class Dashboard {
 	    const bucketMinutes = Number(data?.bucketMinutes ?? 60);
 	    const reviewedCount = Number(data?.reviewedCount ?? 0);
 	    const promptSentCount = Number(data?.promptSentCount ?? 0);
+	    const doneCount = Number(data?.doneCount ?? 0);
 	    const avgReviewSeconds = Number.isFinite(Number(data?.avgReviewSeconds)) ? Number(data.avgReviewSeconds) : null;
 	    const avgPromptChars = Number.isFinite(Number(data?.avgPromptChars)) ? Number(data.avgPromptChars) : null;
+	    const avgVerifyMinutes = Number.isFinite(Number(data?.avgVerifyMinutes)) ? Number(data.avgVerifyMinutes) : null;
+	    const oc = (data?.outcomeCounts && typeof data.outcomeCounts === 'object') ? data.outcomeCounts : {};
 
 	    const formatSeconds = (n) => {
 	      const v = Number(n);
@@ -631,8 +640,10 @@ class Dashboard {
 	    return `
 	      <div class="dashboard-telemetry-meta">
 	        <div>Bucket <strong>${escapeHtml(bucketMinutes)}m</strong></div>
-	        <div>Reviews <strong>${reviewedCount}</strong> • prompts <strong>${promptSentCount}</strong></div>
+	        <div>Reviews <strong>${reviewedCount}</strong> • prompts <strong>${promptSentCount}</strong> • done <strong>${doneCount}</strong></div>
 	        <div>Avg review <strong>${escapeHtml(formatSeconds(avgReviewSeconds))}</strong> • avg prompt <strong>${avgPromptChars === null ? '—' : escapeHtml(Math.round(avgPromptChars))}</strong></div>
+	        <div>Avg verify <strong>${avgVerifyMinutes === null ? '—' : escapeHtml(`${Math.round(avgVerifyMinutes)}m`)}</strong></div>
+	        <div>Outcomes: approved <strong>${Number(oc?.approved ?? 0)}</strong> • needs_fix <strong>${Number(oc?.needs_fix ?? 0)}</strong> • commented <strong>${Number(oc?.commented ?? 0)}</strong></div>
 	      </div>
 	      <div class="telemetry-chart-grid">
 	        <div class="telemetry-chart-card">
@@ -642,6 +653,10 @@ class Dashboard {
 	        <div class="telemetry-chart-card">
 	          <div class="telemetry-chart-title">Avg prompt chars</div>
 	          ${sparkline(series, 'avgPromptChars', { width: 520, height: 72 })}
+	        </div>
+	        <div class="telemetry-chart-card">
+	          <div class="telemetry-chart-title">Done throughput</div>
+	          ${sparkline(series, 'doneCount', { width: 520, height: 72 })}
 	        </div>
 	      </div>
 	      <div class="telemetry-chart-grid">
