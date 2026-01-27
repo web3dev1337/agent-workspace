@@ -23,7 +23,7 @@ Quality fixes shipped:
 
 Known issues / follow-ups:
 - [x] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active. (Mitigated further in PR #296; remaining edge cases may exist)
-- [ ] Intermittent: card detail layout may still reflow or appear on the wrong side; capture view (List/Board/Combined) + screenshot when it happens.
+- [x] Intermittent: card detail layout may still reflow or appear on the wrong side. (Hardened in PR #298; if it still happens, capture view (List/Board/Combined) + screenshot.)
 - [x] Add “Start server” control to the Agent terminal header (one click; mirrors Server window controls). (PR #277)
 - [x] Tasks panel: add a quick “Open Trello board” link/button for the currently selected board. (PR #279)
 - [x] Add-worktree modal: support “Add & close” and “Add another” (keep adding without modal churn), and refresh availability immediately. (PR #285)
