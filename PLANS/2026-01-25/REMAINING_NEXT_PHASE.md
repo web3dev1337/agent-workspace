@@ -24,6 +24,14 @@ Quality fixes shipped:
 Known issues / follow-ups:
 - [ ] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active.
 - [ ] Intermittent: card detail layout may still reflow or appear on the wrong side; capture view (List/Board/Combined) + screenshot when it happens.
+- [ ] Add “Start server” control to the Agent terminal header (one click; mirrors Server window controls).
+- [ ] Tasks panel: add a quick “Open Trello board” link/button for the currently selected board.
+- [ ] Add-worktree modal: support “Add & close” and “Add another” (keep adding without modal churn), and refresh availability immediately.
+- [ ] Removing a worktree from a workspace should remove both terminals immediately (no F5 needed).
+- [ ] Tasks panel: default assignee filter to “All” (not “me”), and add an obvious “New task” button.
+- [ ] Worktree “quick add” should re-evaluate after a new worktree is created (avoid suggesting the just-created worktree as “free”).
+- [ ] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start (“quick work in background”).
+- [ ] Trello boards: confirm board background / color theming remains consistent per-board (if applicable).
 
 ### Dashboard (project visibility)
 

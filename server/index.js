@@ -1378,6 +1378,12 @@ app.post('/api/claude-ready', express.json(), (req, res) => {
   const session = sessionManager.sessions.get(sessionId);
   if (session) {
     session.status = 'waiting';
+    session.statusChangedAt = Date.now();
+    if (session.pendingStatusTimer) {
+      clearTimeout(session.pendingStatusTimer);
+      session.pendingStatusTimer = null;
+    }
+    session.pendingStatus = null;
     sessionManager.emitStatusUpdate(sessionId, 'waiting');
     
     // Trigger notification
