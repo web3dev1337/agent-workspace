@@ -240,6 +240,18 @@ class VoiceCommandService {
         command: 'open-prs',
         extractParams: () => ({})
       },
+      // Open telemetry details
+      {
+        patterns: [
+          /open\s+telemetry/i,
+          /show\s+telemetry/i,
+          /telemetry\s+details/i,
+          /open\s+metrics/i,
+          /show\s+metrics/i,
+        ],
+        command: 'open-telemetry',
+        extractParams: () => ({})
+      },
       // Highlight worktree
       {
         patterns: [
