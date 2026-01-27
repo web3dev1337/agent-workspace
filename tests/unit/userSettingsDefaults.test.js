@@ -51,7 +51,9 @@ describe('UserSettingsService defaults', () => {
               'trello:b1': { enabled: true, localPath: 'games/hytopia/mock-repo', defaultStartTier: 3 }
             },
             combined: {
-              selections: [{ boardId: 'b1', listId: 'l1' }]
+              selections: [{ boardId: 'b1', listId: 'l1' }],
+              presets: [{ id: 'p1', name: 'My preset', selections: [{ boardId: 'b1', listId: 'l1' }] }],
+              activePresetId: 'p1'
             },
             automations: {
               trello: {
@@ -73,6 +75,10 @@ describe('UserSettingsService defaults', () => {
     // Keeps combined view selections when provided.
     expect(Array.isArray(merged.global.ui.tasks.combined.selections)).toBe(true);
     expect(merged.global.ui.tasks.combined.selections[0]).toEqual({ boardId: 'b1', listId: 'l1' });
+    // Keeps combined presets when provided.
+    expect(Array.isArray(merged.global.ui.tasks.combined.presets)).toBe(true);
+    expect(merged.global.ui.tasks.combined.presets[0]).toEqual({ id: 'p1', name: 'My preset', selections: [{ boardId: 'b1', listId: 'l1' }] });
+    expect(merged.global.ui.tasks.combined.activePresetId).toBe('p1');
     // Keeps nested automation defaults while allowing partial override.
     expect(merged.global.ui.tasks.automations.trello.onPrMerged.enabled).toBe(true);
     expect(typeof merged.global.ui.tasks.automations.trello.onPrMerged.pollMs).toBe('number');

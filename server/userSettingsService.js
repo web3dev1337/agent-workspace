@@ -82,7 +82,12 @@ class UserSettingsService {
             combined: {
               // Optional cross-board “combined view” column selections.
               // Each item: { boardId: string, listId: string }
-              selections: []
+              selections: [],
+              // Optional “presets” for quickly switching combined view selections.
+              // Each item: { id: string, name: string, selections: { boardId: string, listId: string }[] }
+              presets: [],
+              // Which preset is currently active (purely for UI convenience).
+              activePresetId: ''
             },
             automations: {
               trello: {
