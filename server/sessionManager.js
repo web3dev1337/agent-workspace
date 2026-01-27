@@ -1542,8 +1542,15 @@ class SessionManager extends EventEmitter {
       
       // If was waiting and user provided input, mark as busy
       if (session.status === 'waiting' && session.type === 'claude') {
-        session.status = 'busy';
-        this.emitStatusUpdate(sessionId, 'busy');
+        // Cancel any pending status flip (prevents "busy→waiting" flicker after input)
+        if (session.pendingStatusTimer) {
+          clearTimeout(session.pendingStatusTimer);
+          session.pendingStatusTimer = null;
+        }
+        session.pendingStatus = null;
+
+        // Use centralized status update so statusChangedAt stays accurate
+        this.applyStatusUpdate(sessionId, session, 'busy');
       }
       
       if (!session.currentCommand) {
