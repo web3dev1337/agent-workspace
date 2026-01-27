@@ -2971,6 +2971,49 @@ app.get('/api/tasks/lists/:listId/cards', async (req, res) => {
   }
 });
 
+app.post('/api/tasks/lists/:listId/cards', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.createCard !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support card creation', code: 'UNSUPPORTED_OPERATION' });
+    }
+
+    const body = req.body || {};
+    const name = String(body.name || '').trim();
+    const desc = String(body.desc || '');
+
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    const created = await provider.createCard({
+      listId: req.params.listId,
+      name,
+      desc,
+      idMembers: Array.isArray(body.idMembers) ? body.idMembers : null,
+      idLabels: Array.isArray(body.idLabels) ? body.idLabels : null,
+      pos: body.pos ?? null,
+      due: body.due ?? null
+    });
+
+    const card = typeof provider.getCard === 'function'
+      ? await provider.getCard({ cardId: created?.id || created?.cardId, refresh: true })
+      : created;
+
+    res.json({ provider: providerId, listId: req.params.listId, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to create task card', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      details: error.body
+    });
+  }
+});
+
 app.get('/api/tasks/cards/:cardId', async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';

@@ -14,6 +14,7 @@ class TrelloTaskProvider {
       read: true,
       write: true,
       operations: {
+        createCard: true,
         updateCard: true,
         addComment: true,
         moveCard: true,
@@ -332,6 +333,41 @@ class TrelloTaskProvider {
       card?.idBoard ? `trello:cards:board:${card.idBoard}:open` : null,
       card?.idBoard ? `trello:lists:${card.idBoard}:open` : null
     ]);
+    return card;
+  }
+
+  async createCard({ listId, name, desc = '', idMembers = null, idLabels = null, pos = null, due = null } = {}) {
+    const list = String(listId || '').trim();
+    const title = String(name || '').trim();
+    if (!list) throw new Error('listId is required');
+    if (!title) throw new Error('name is required');
+
+    const params = { idList: list, name: title };
+
+    const d = String(desc || '');
+    if (d.trim()) params.desc = d;
+
+    if (Array.isArray(idMembers)) params.idMembers = idMembers.filter(Boolean).join(',');
+    if (Array.isArray(idLabels)) params.idLabels = idLabels.filter(Boolean).join(',');
+    if (pos !== null && pos !== undefined && pos !== '') params.pos = pos;
+    if (due !== null && due !== undefined && due !== '') params.due = due;
+    if (due === null) params.due = ''; // Trello clears on empty string
+
+    // Trello accepts create via query params, but sending as form body is more reliable for clears/encoding.
+    const url = this._buildUrl('/cards');
+    const body = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
+    const card = await requestJson(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body
+    });
+
+    this._invalidateCacheKeys([
+      `trello:cards:list:${list}:open`,
+      card?.idBoard ? `trello:cards:board:${card.idBoard}:open` : null,
+      card?.idBoard ? `trello:lists:${card.idBoard}:open` : null
+    ]);
+
     return card;
   }
 
