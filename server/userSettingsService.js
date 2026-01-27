@@ -85,6 +85,8 @@ class UserSettingsService {
               trello: {
                 onPrMerged: {
                   enabled: false,
+                  pollEnabled: true,
+                  webhookEnabled: false,
                   comment: true,
                   moveToDoneList: true,
                   closeIfNoDoneList: false,
