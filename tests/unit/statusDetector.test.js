@@ -73,7 +73,7 @@ describe('StatusDetector', () => {
       const buffer = 'Task completed successfully. The operation finished without errors. All tests passed. No issues found. '.repeat(2);
       const state = detector.getState(sessionId);
       state.lastBufferLength = buffer.length; // Prevent update of lastOutputTime
-      state.lastOutputTime = Date.now() - 60000; // quiet long enough to be idle
+      state.lastOutputTime = Date.now() - 240000; // quiet long enough to be idle (busy-silence window is minutes)
       const status = detector.detectStatus(sessionId, buffer);
       expect(status).toBe('idle');
     });
