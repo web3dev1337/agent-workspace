@@ -74,6 +74,29 @@ class VoiceCommandService {
       // Open Queue
       {
         patterns: [
+          /(?:start|open)\s+next\s+review/i,
+          /review\s+next/i,
+          /next\s+review/i,
+        ],
+        command: 'queue-next',
+        extractParams: () => ({})
+      },
+      // Open Queue (blockers)
+      {
+        patterns: [
+          /show\s+blockers/i,
+          /show\s+blocked/i,
+          /show\s+blocking/i,
+          /what'?s\s+blocking/i,
+          /what\s+is\s+blocking/i,
+          /open\s+blockers/i,
+        ],
+        command: 'queue-blockers',
+        extractParams: () => ({})
+      },
+      // Open Queue
+      {
+        patterns: [
           /open\s+queue/i,
           /show\s+queue/i,
           /go\s+to\s+queue/i,
