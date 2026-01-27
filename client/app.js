@@ -329,11 +329,18 @@ class ClaudeOrchestrator {
         this.sessions.delete(sessionId);
         this.visibleTerminals.delete(sessionId);
 
-        // Remove terminal from UI
-        const terminalElement = document.getElementById(`terminal-${sessionId}`);
-        if (terminalElement) {
-          console.log(`Removing terminal element from DOM: ${sessionId}`);
-          terminalElement.remove();
+        // Remove terminal wrapper from UI
+        const wrapper = document.getElementById(`wrapper-${sessionId}`);
+        if (wrapper) {
+          console.log(`Removing terminal wrapper from DOM: ${sessionId}`);
+          wrapper.remove();
+        } else {
+          // Fallback for older DOM shapes
+          const terminalElement = document.getElementById(`terminal-${sessionId}`);
+          if (terminalElement) {
+            console.log(`Removing terminal element from DOM: ${sessionId}`);
+            terminalElement.remove();
+          }
         }
 
         // Remove from terminal manager
@@ -343,6 +350,7 @@ class ClaudeOrchestrator {
 
         // Rebuild sidebar to reflect changes
         this.buildSidebar();
+        this.updateTerminalGrid();
 
         // Reflow the grid after removing terminal
         if (this.terminalManager && this.terminalManager.fitAllTerminals) {
