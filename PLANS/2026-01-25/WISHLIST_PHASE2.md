@@ -87,3 +87,4 @@ Process discipline:
 - [x] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start. (PR #292)
 - [x] Tasks board “wrap/expand” layout: ensure column auto-layout minimizes columns (consider collapsed/hidden lists and fill vertically before adding columns). (PR #294)
 - [x] Dashboard “Advice” tile shows “Failed to load” (investigate `/api/process/advice` errors on fresh startups). (PR #323)
+  - Dashboard now shows HTTP error details and supports one-click retry. (PR #337)
