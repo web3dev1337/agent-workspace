@@ -8439,12 +8439,12 @@ class ClaudeOrchestrator {
 	                        <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-setup title="Set Board Settings to enable Launch">⚙</button>
 	                      `;
 
-	                    return `
-	                      <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-board-id="${escapeHtml(state.boardId)}" data-origin-list-id="${list.id}">
-	                        <div class="task-card-top">
-	                          ${renderCompactLabels(labels)}
-	                          <div class="task-card-top-right">
-	                            ${quickLaunchHtml}
+		                    return `
+		                      <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-board-id="${escapeHtml(state.boardId)}" data-origin-list-id="${list.id}" data-url="${escapeHtml(c?.url || '')}">
+		                        <div class="task-card-top">
+		                          ${renderCompactLabels(labels)}
+		                          <div class="task-card-top-right">
+		                            ${quickLaunchHtml}
 	                            <div class="task-card-assignees">
 	                              ${members.map(m => {
 	                                const url = m?.username ? `https://trello.com/${m.username}` : '';
@@ -9734,12 +9734,25 @@ class ClaudeOrchestrator {
 	      const tag = String(e?.target?.tagName || '').toLowerCase();
 	      const isTypingTarget = tag === 'input' || tag === 'textarea' || tag === 'select' || e?.target?.isContentEditable;
 
+	      const getRows = () => Array.from(cardsEl?.querySelectorAll?.('.task-card-row') || []);
+
 	      const getActiveRow = () => {
 	        // Works for list + board views (both use .task-card-row).
 	        const active = cardsEl?.querySelector?.('.task-card-row.active');
 	        if (active) return active;
 	        // Fallback: first visible card.
 	        return cardsEl?.querySelector?.('.task-card-row');
+	      };
+
+	      const setActiveRow = (row) => {
+	        if (!row || !cardsEl) return;
+	        try {
+	          cardsEl.querySelectorAll('.task-card-row.active').forEach(el => el.classList.remove('active'));
+	          row.classList.add('active');
+	          row.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+	        } catch {
+	          // ignore
+	        }
 	      };
 
 	      const resolveRowBoardId = (row) => {
@@ -9793,6 +9806,64 @@ class ClaudeOrchestrator {
 	      };
 
 	      if (!isTypingTarget) {
+	        if (e.key === 'ArrowDown') {
+	          e.preventDefault();
+	          const rows = getRows();
+	          if (rows.length === 0) return;
+	          const active = cardsEl?.querySelector?.('.task-card-row.active');
+	          if (!active) {
+	            setActiveRow(rows[0]);
+	            return;
+	          }
+	          const idx = rows.indexOf(active);
+	          const next = rows[Math.min(rows.length - 1, Math.max(0, idx + 1))];
+	          setActiveRow(next);
+	          return;
+	        }
+	        if (e.key === 'ArrowUp') {
+	          e.preventDefault();
+	          const rows = getRows();
+	          if (rows.length === 0) return;
+	          const active = cardsEl?.querySelector?.('.task-card-row.active');
+	          if (!active) {
+	            setActiveRow(rows[0]);
+	            return;
+	          }
+	          const idx = rows.indexOf(active);
+	          const prev = rows[Math.max(0, idx - 1)];
+	          setActiveRow(prev);
+	          return;
+	        }
+	        if (e.key === 'Enter') {
+	          const row = getActiveRow();
+	          if (!row) return;
+	          e.preventDefault();
+	          try {
+	            row.click();
+	          } catch {
+	            // ignore
+	          }
+	          return;
+	        }
+	        if (e.key === 'o' || e.key === 'O') {
+	          const row = getActiveRow();
+	          const url = String(row?.dataset?.url || '').trim();
+	          if (!url) return;
+	          e.preventDefault();
+	          try {
+	            window.open(url, '_blank');
+	          } catch {
+	            // ignore
+	          }
+	          return;
+	        }
+	        if (e.key === 'l' || e.key === 'L') {
+	          e.preventDefault();
+	          const defaults = readLaunchDefaults();
+	          const tier = Number(defaults?.tier || 3);
+	          quickLaunchWithTier(tier);
+	          return;
+	        }
 	        if (e.key === '1') {
 	          e.preventDefault();
 	          quickLaunchWithTier(1);

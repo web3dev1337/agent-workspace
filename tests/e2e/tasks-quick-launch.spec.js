@@ -63,6 +63,13 @@ const mockTasksApi = async (page) => {
     desc: 'Do the thing.\n'
   };
 
+  const card2 = {
+    ...cardBase,
+    id: 'c2',
+    name: 'Card 2',
+    url: 'https://trello.com/c/ZyXwVu98/card-2'
+  };
+
   await page.route('**/api/tasks/providers**', async (route) => {
     await route.fulfill({
       status: 200,
@@ -119,7 +126,7 @@ const mockTasksApi = async (page) => {
       body: JSON.stringify({
         provider: 'trello',
         boardId: 'b1',
-        cards: [cardBase]
+        cards: [cardBase, card2]
       })
     });
   });
@@ -132,7 +139,7 @@ const mockTasksApi = async (page) => {
         provider: 'trello',
         boardId: 'b1',
         lists: [{ id: 'l1', name: 'To Do', pos: 1 }],
-        cardsByList: { l1: [cardBase] }
+        cardsByList: { l1: [cardBase, card2] }
       })
     });
   });
@@ -142,6 +149,14 @@ const mockTasksApi = async (page) => {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ provider: 'trello', cardId: 'c1', card: cardBase })
+    });
+  });
+
+  await page.route(/\/api\/tasks\/cards\/c2(\?.*)?$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ provider: 'trello', cardId: 'c2', card: card2 })
     });
   });
 };
@@ -260,6 +275,67 @@ test.describe('Tasks quick launch', () => {
     const last = calls[calls.length - 1];
     expect(last.tier).toBe(2);
     expect(last.boardId).toBe('b1');
+  });
+
+  test('keyboard ArrowDown selects next card for launch', async ({ page }) => {
+    await mockUserSettings(page, {
+      initial: {
+        version: 'test',
+        global: {
+          ui: {
+            theme: 'dark',
+            tasks: {
+              theme: 'inherit',
+              me: { trelloUsername: '' },
+              filters: { assigneesByBoard: {} },
+              kanban: { collapsedByBoard: {}, expandedByBoard: {}, layoutByBoard: {} },
+              boardMappings: {
+                'trello:b1': { enabled: true, localPath: 'games/hytopia/mock-repo', defaultStartTier: 2 }
+              }
+            }
+          }
+        },
+        perTerminal: {}
+      }
+    });
+
+    await mockTasksApi(page);
+
+    await page.goto('/');
+    await ensureWorkspaceLoaded(page);
+    await dismissFocusOverlay(page);
+
+    await page.evaluate(() => {
+      localStorage.setItem('tasks-view', 'list');
+      localStorage.setItem('tasks-board', 'b1');
+      localStorage.setItem('tasks-list', '__all__');
+    });
+
+    await page.evaluate(() => document.getElementById('tasks-btn')?.click());
+    await expect(page.locator('#tasks-panel')).toBeVisible({ timeout: 10000 });
+    await page.locator('#tasks-board').selectOption({ value: 'b1' });
+    await expect(page.locator('.task-card-row[data-card-id="c1"]')).toBeVisible({ timeout: 20000 });
+    await expect(page.locator('.task-card-row[data-card-id="c2"]')).toBeVisible({ timeout: 20000 });
+
+    await page.evaluate(() => {
+      window.__launchCalls = [];
+      const o = window.orchestrator;
+      o.launchAgentFromTaskCard = async (args) => {
+        window.__launchCalls.push(args);
+        return null;
+      };
+    });
+
+    // No selection yet: ArrowDown selects first card; second ArrowDown selects second.
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('3');
+
+    await page.waitForFunction(() => (window.__launchCalls?.length || 0) > 0, null, { timeout: 10000 });
+    const calls = await page.evaluate(() => window.__launchCalls || []);
+    const last = calls[calls.length - 1];
+    expect(last.tier).toBe(3);
+    expect(last.card?.id).toBe('c2');
   });
 
   test('all boards view card detail launch uses per-card board mapping', async ({ page }) => {
