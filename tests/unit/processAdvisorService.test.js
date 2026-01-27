@@ -58,6 +58,40 @@ describe('ProcessAdvisorService', () => {
     expect(codes).toContain('tier12_blocked');
   });
 
+  test('adds verify + risk signals', async () => {
+    const realNow = Date.now;
+    const now = 1_700_000_000_000;
+    Date.now = () => now;
+    const iso = (ms) => new Date(ms).toISOString();
+
+    try {
+      const processStatusService = { getStatus: async () => ({ qByTier: {}, qCaps: {}, wip: 0, wipMax: 0 }) };
+      const processTelemetryService = { getSummary: async () => ({ avgReviewSeconds: 0, avgVerifyMinutes: 30 }) };
+      const processTaskService = {
+        listTasks: async () => ([
+          { id: 'pr:x/y#1', kind: 'pr', repository: 'x/y' }
+        ])
+      };
+      const taskRecordService = {
+        get: () => ({ tier: 1, changeRisk: 'high' }),
+        list: () => ([
+          { id: 'r1', reviewEndedAt: iso(now - 1_000), reviewOutcome: 'approved' },
+          { id: 'r2', reviewEndedAt: iso(now - 2_000), reviewOutcome: 'needs_fix' },
+          { id: 'r3', reviewEndedAt: iso(now - 3_000), reviewOutcome: 'commented' }
+        ])
+      };
+
+      const svc = new ProcessAdvisorService({ processStatusService, processTelemetryService, processTaskService, taskRecordService });
+      const result = await svc.getAdvice({ mode: 'mine', lookbackHours: 24, force: true });
+      const codes = (result.advice || []).map(a => a.code);
+      expect(codes).toContain('verify_slow');
+      expect(codes).toContain('verify_missing');
+      expect(codes).toContain('risky_tier12');
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
   test('does not throw when upstream services fail', async () => {
     const processStatusService = {
       getStatus: async () => {
