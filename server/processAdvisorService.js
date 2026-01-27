@@ -226,7 +226,10 @@ class ProcessAdvisorService {
           code: 'tier3_unreviewed_prs',
           title: 'Tier 3 PRs ready for review',
           message: `${unreviewedTier3Prs.length} Tier 3 PR(s) are unreviewed. Use “Start Review” or spawn a reviewer agent.`,
-          actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+          actions: [
+            { type: 'ui', action: 'queue-next', label: 'Start next review' },
+            { type: 'ui', action: 'open-queue', label: 'Open Queue' }
+          ]
         });
       }
 
@@ -282,7 +285,10 @@ class ProcessAdvisorService {
           code: 'needs_fix_backlog',
           title: 'Fix backlog',
           message: `${openNeedsFix.length} items are marked “needs_fix” in the last ${hours}h. Consider spawning fixers or consolidating feedback into actionable notes.`,
-          actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
+          actions: [
+            { type: 'ui', action: 'queue-next', label: 'Start next review' },
+            { type: 'ui', action: 'open-queue', label: 'Open Queue' }
+          ]
         });
       }
 
