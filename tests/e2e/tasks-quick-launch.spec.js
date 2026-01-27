@@ -587,4 +587,48 @@ test.describe('Tasks quick launch', () => {
     expect(last.card?.id).toBe('c1');
     expect(last.tier).toBe(4);
   });
+
+  test('hotkeys overlay opens with ? and closes with Esc', async ({ page }) => {
+    await mockUserSettings(page, {
+      initial: {
+        version: 'test',
+        global: {
+          ui: {
+            theme: 'dark',
+            tasks: {
+              theme: 'inherit',
+              me: { trelloUsername: '' },
+              filters: { assigneesByBoard: {} },
+              kanban: { collapsedByBoard: {}, expandedByBoard: {}, layoutByBoard: {} },
+              boardMappings: {
+                'trello:b1': { enabled: true, localPath: 'games/hytopia/mock-repo', defaultStartTier: 2 }
+              }
+            }
+          }
+        },
+        perTerminal: {}
+      }
+    });
+
+    await mockTasksApi(page);
+    await page.goto('/');
+    await ensureWorkspaceLoaded(page);
+    await dismissFocusOverlay(page);
+
+    await page.evaluate(() => {
+      localStorage.setItem('tasks-view', 'list');
+      localStorage.setItem('tasks-board', 'b1');
+      localStorage.setItem('tasks-list', '__all__');
+    });
+
+    await page.evaluate(() => document.getElementById('tasks-btn')?.click());
+    await expect(page.locator('#tasks-panel')).toBeVisible({ timeout: 10000 });
+    await page.locator('#tasks-board').selectOption({ value: 'b1' });
+    await expect(page.locator('.task-card-row[data-card-id="c1"]')).toBeVisible({ timeout: 20000 });
+
+    await page.keyboard.press('Shift+Slash');
+    await expect(page.locator('#tasks-hotkeys-overlay')).toBeVisible({ timeout: 10000 });
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#tasks-hotkeys-overlay')).toHaveCount(0);
+  });
 });
