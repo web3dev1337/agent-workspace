@@ -11,6 +11,8 @@ describe('ProcessTelemetryService', () => {
           id: 'a',
           updatedAt: iso(now),
           doneAt: iso(now),
+          prMergedAt: iso(now),
+          ticketMovedAt: iso(now),
           reviewStartedAt: iso(now - 10_000),
           reviewEndedAt: iso(now),
           promptSentAt: iso(now - 5_000),
@@ -23,6 +25,7 @@ describe('ProcessTelemetryService', () => {
           id: 'b',
           updatedAt: iso(now),
           doneAt: iso(now),
+          ticketClosedAt: iso(now),
           reviewStartedAt: iso(now - 20_000),
           reviewEndedAt: iso(now),
           promptSentAt: iso(now - 4_000),
@@ -46,6 +49,9 @@ describe('ProcessTelemetryService', () => {
     expect(summary.reviewedCount).toBe(2);
     expect(summary.promptSentCount).toBe(2);
     expect(summary.doneCount).toBe(2);
+    expect(summary.prMergedCount).toBe(1);
+    expect(summary.ticketMovedCount).toBe(1);
+    expect(summary.ticketClosedCount).toBe(1);
     expect(summary.samples.reviewSeconds).toBe(2);
     expect(summary.samples.promptChars).toBe(2);
     expect(summary.samples.verifyMinutes).toBe(2);
@@ -68,6 +74,7 @@ describe('ProcessTelemetryService', () => {
           id: 'a',
           updatedAt: iso(now),
           doneAt: iso(now - 20_000),
+          prMergedAt: iso(now - 20_000),
           reviewStartedAt: iso(now - 10_000),
           reviewEndedAt: iso(now),
           promptSentAt: iso(now - 5_000),
@@ -77,6 +84,7 @@ describe('ProcessTelemetryService', () => {
           id: 'b',
           updatedAt: iso(now - 2 * 60 * 60 * 1000),
           doneAt: iso(now - 2 * 60 * 60 * 1000),
+          ticketMovedAt: iso(now - 2 * 60 * 60 * 1000),
           reviewStartedAt: iso(now - 2 * 60 * 60 * 1000 - 30_000),
           reviewEndedAt: iso(now - 2 * 60 * 60 * 1000),
           promptSentAt: iso(now - 2 * 60 * 60 * 1000 + 2_000),
@@ -100,7 +108,10 @@ describe('ProcessTelemetryService', () => {
         t: expect.any(Number),
         reviewSamples: expect.any(Number),
         promptSamples: expect.any(Number),
-        doneCount: expect.any(Number)
+        doneCount: expect.any(Number),
+        prMergedCount: expect.any(Number),
+        ticketMovedCount: expect.any(Number),
+        ticketClosedCount: expect.any(Number)
       }));
 
       const reviewHist = details?.histograms?.reviewSeconds;
@@ -163,7 +174,7 @@ describe('ProcessTelemetryService', () => {
       const csv = await svc.exportCsv({ lookbackHours: 24 });
       const lines = csv.trim().split('\n');
 
-      expect(lines[0]).toBe('id,updatedAt,doneAt,reviewStartedAt,reviewEndedAt,reviewOutcome,verifyMinutes,promptSentAt,promptChars,tier,ticketProvider,ticketCardId');
+      expect(lines[0]).toBe('id,updatedAt,doneAt,reviewStartedAt,reviewEndedAt,reviewOutcome,verifyMinutes,promptSentAt,promptChars,prMergedAt,ticketMovedAt,ticketClosedAt,tier,ticketProvider,ticketCardId,ticketBoardId,prUrl');
       expect(lines.length).toBe(3);
       expect(lines[1]).toContain('a,');
       expect(lines[1]).toContain('"id,with,comma"');

@@ -39,6 +39,9 @@ class ProcessTelemetryService {
       let reviewedCount = 0;
       let promptSentCount = 0;
       let doneCount = 0;
+      let prMergedCount = 0;
+      let ticketMovedCount = 0;
+      let ticketClosedCount = 0;
 
       const reviewSeconds = [];
       const promptChars = [];
@@ -74,6 +77,15 @@ class ProcessTelemetryService {
         const doneAtMs = parseIso(r?.doneAt);
         if (doneAtMs) doneCount += 1;
 
+        const prMergedAtMs = parseIso(r?.prMergedAt);
+        if (prMergedAtMs) prMergedCount += 1;
+
+        const ticketMovedAtMs = parseIso(r?.ticketMovedAt);
+        if (ticketMovedAtMs) ticketMovedCount += 1;
+
+        const ticketClosedAtMs = parseIso(r?.ticketClosedAt);
+        if (ticketClosedAtMs) ticketClosedCount += 1;
+
         const vm = clampNonNegative(r?.verifyMinutes);
         if (vm !== null) verifyMinutes.push(vm);
 
@@ -96,6 +108,9 @@ class ProcessTelemetryService {
         reviewedCount,
         promptSentCount,
         doneCount,
+        prMergedCount,
+        ticketMovedCount,
+        ticketClosedCount,
         avgReviewSeconds: avg(reviewSeconds),
         avgPromptChars: avg(promptChars),
         avgVerifyMinutes: avg(verifyMinutes),
@@ -129,7 +144,7 @@ class ProcessTelemetryService {
 
       const addToBucket = (key, kind, value) => {
         if (!Number.isFinite(key)) return;
-        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], doneCount: 0 });
+        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], doneCount: 0, prMergedCount: 0, ticketMovedCount: 0, ticketClosedCount: 0 });
         const b = buckets.get(key);
         if (kind === 'reviewSeconds') b.reviewSeconds.push(value);
         if (kind === 'promptChars') b.promptChars.push(value);
@@ -137,9 +152,18 @@ class ProcessTelemetryService {
 
       const bumpDoneBucket = (key) => {
         if (!Number.isFinite(key)) return;
-        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], doneCount: 0 });
+        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], doneCount: 0, prMergedCount: 0, ticketMovedCount: 0, ticketClosedCount: 0 });
         const b = buckets.get(key);
         b.doneCount += 1;
+      };
+
+      const bumpBucket = (key, field) => {
+        if (!Number.isFinite(key)) return;
+        if (!buckets.has(key)) buckets.set(key, { reviewSeconds: [], promptChars: [], doneCount: 0, prMergedCount: 0, ticketMovedCount: 0, ticketClosedCount: 0 });
+        const b = buckets.get(key);
+        if (field === 'prMergedCount') b.prMergedCount += 1;
+        if (field === 'ticketMovedCount') b.ticketMovedCount += 1;
+        if (field === 'ticketClosedCount') b.ticketClosedCount += 1;
       };
 
       for (const r of rows) {
@@ -169,6 +193,15 @@ class ProcessTelemetryService {
         if (doneAtMs) {
           bumpDoneBucket(bucketKeyFor(doneAtMs));
         }
+
+        const prMergedAtMs = parseIso(r?.prMergedAt);
+        if (prMergedAtMs) bumpBucket(bucketKeyFor(prMergedAtMs), 'prMergedCount');
+
+        const ticketMovedAtMs = parseIso(r?.ticketMovedAt);
+        if (ticketMovedAtMs) bumpBucket(bucketKeyFor(ticketMovedAtMs), 'ticketMovedCount');
+
+        const ticketClosedAtMs = parseIso(r?.ticketClosedAt);
+        if (ticketClosedAtMs) bumpBucket(bucketKeyFor(ticketClosedAtMs), 'ticketClosedCount');
       }
 
       const avg = (arr) => {
@@ -209,7 +242,10 @@ class ProcessTelemetryService {
           avgReviewSeconds: avg(b.reviewSeconds),
           promptSamples: b.promptChars.length,
           avgPromptChars: avg(b.promptChars),
-          doneCount: b.doneCount
+          doneCount: b.doneCount,
+          prMergedCount: b.prMergedCount,
+          ticketMovedCount: b.ticketMovedCount,
+          ticketClosedCount: b.ticketClosedCount
         }));
 
       return {
@@ -245,16 +281,33 @@ class ProcessTelemetryService {
       'verifyMinutes',
       'promptSentAt',
       'promptChars',
+      'prMergedAt',
+      'ticketMovedAt',
+      'ticketClosedAt',
       'tier',
       'ticketProvider',
-      'ticketCardId'
+      'ticketCardId',
+      'ticketBoardId',
+      'prUrl'
     ];
 
     const lines = [header.join(',')];
     for (const r of rows) {
       const updatedAtMs = parseIso(r?.updatedAt);
       if (updatedAtMs && updatedAtMs < cutoffMs) continue;
-      const hasTelemetry = !!(r?.reviewStartedAt || r?.reviewEndedAt || r?.promptSentAt || r?.promptChars || r?.doneAt || r?.reviewOutcome || r?.verifyMinutes);
+      const hasTelemetry = !!(
+        r?.reviewStartedAt
+        || r?.reviewEndedAt
+        || r?.reviewedAt
+        || r?.promptSentAt
+        || r?.promptChars
+        || r?.doneAt
+        || r?.reviewOutcome
+        || r?.verifyMinutes
+        || r?.prMergedAt
+        || r?.ticketMovedAt
+        || r?.ticketClosedAt
+      );
       if (!hasTelemetry) continue;
 
       const line = [
@@ -267,9 +320,14 @@ class ProcessTelemetryService {
         escape(r?.verifyMinutes ?? ''),
         escape(r?.promptSentAt || ''),
         escape(r?.promptChars ?? ''),
+        escape(r?.prMergedAt || ''),
+        escape(r?.ticketMovedAt || ''),
+        escape(r?.ticketClosedAt || ''),
         escape(r?.tier ?? ''),
         escape(r?.ticketProvider ?? ''),
-        escape(r?.ticketCardId ?? '')
+        escape(r?.ticketCardId ?? ''),
+        escape(r?.ticketBoardId ?? ''),
+        escape(r?.prUrl ?? '')
       ].join(',');
       lines.push(line);
     }
@@ -286,7 +344,19 @@ class ProcessTelemetryService {
     for (const r of rows) {
       const updatedAtMs = parseIso(r?.updatedAt);
       if (updatedAtMs && updatedAtMs < cutoffMs) continue;
-      const hasTelemetry = !!(r?.reviewStartedAt || r?.reviewEndedAt || r?.promptSentAt || r?.promptChars || r?.doneAt || r?.reviewOutcome || r?.verifyMinutes);
+      const hasTelemetry = !!(
+        r?.reviewStartedAt
+        || r?.reviewEndedAt
+        || r?.reviewedAt
+        || r?.promptSentAt
+        || r?.promptChars
+        || r?.doneAt
+        || r?.reviewOutcome
+        || r?.verifyMinutes
+        || r?.prMergedAt
+        || r?.ticketMovedAt
+        || r?.ticketClosedAt
+      );
       if (!hasTelemetry) continue;
 
       out.push({
@@ -299,9 +369,14 @@ class ProcessTelemetryService {
         verifyMinutes: r?.verifyMinutes ?? '',
         promptSentAt: r?.promptSentAt || '',
         promptChars: r?.promptChars ?? '',
+        prMergedAt: r?.prMergedAt || '',
+        ticketMovedAt: r?.ticketMovedAt || '',
+        ticketClosedAt: r?.ticketClosedAt || '',
         tier: r?.tier ?? '',
         ticketProvider: r?.ticketProvider ?? '',
-        ticketCardId: r?.ticketCardId ?? ''
+        ticketCardId: r?.ticketCardId ?? '',
+        ticketBoardId: r?.ticketBoardId ?? '',
+        prUrl: r?.prUrl ?? ''
       });
     }
 
