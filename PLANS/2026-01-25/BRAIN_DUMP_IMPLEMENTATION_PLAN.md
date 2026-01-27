@@ -5,7 +5,7 @@ Source transcript: `PLANS/2026-01-25/BRAIN_DUMP_2026-01-25.md`.
 This file converts the brain dump into **decisions, current status, data model, and shippable PR-sized steps**.
 
 Date: 2026-01-25
-Last updated: 2026-01-27
+Last updated: 2026-01-28
 
 Process discipline (for this plan):
 - Make small PR-sized changes, run tests, then commit + push + merge (do not leave unpushed local work).
@@ -139,6 +139,9 @@ Current state:
   - Auto prompt send timestamps for sessions
   - Review timers stored per task record + visible in Queue
   - API summary endpoint: `GET /api/process/telemetry`
+- ✅ Telemetry v1.1:
+  - Task record `createdAt` (set on first insert)
+  - Process telemetry `createdCount` (tasks created in lookback window)
 - ✅ Advisor v2 now exists:
   - API: `GET /api/process/advice`
   - UI: Commander panel “Advice”
