@@ -38,7 +38,7 @@ Known issues / follow-ups:
 ### Dashboard (project visibility)
 
 - [x] Project-level dashboard: per-project status, open PRs, review backlog, telemetry trends, and risk rollups. (PR #275)
-- [ ] Long-term telemetry charts (trendlines, histograms) + export.
+- [x] Long-term telemetry charts (trendlines, histograms) + export. (PR #302)
 
 ### Review workflow (automation)
 
