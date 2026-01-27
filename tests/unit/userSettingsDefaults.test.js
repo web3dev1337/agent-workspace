@@ -50,6 +50,9 @@ describe('UserSettingsService defaults', () => {
             boardMappings: {
               'trello:b1': { enabled: true, localPath: 'games/hytopia/mock-repo', defaultStartTier: 3 }
             },
+            combined: {
+              selections: [{ boardId: 'b1', listId: 'l1' }]
+            },
             automations: {
               trello: {
                 onPrMerged: { enabled: true }
@@ -67,6 +70,9 @@ describe('UserSettingsService defaults', () => {
     expect(merged.global.ui.tasks.kanban.layoutByBoard).toBeTruthy();
     expect(merged.global.ui.tasks.filters).toBeTruthy();
     expect(merged.global.ui.tasks.filters.assigneesByBoard).toBeTruthy();
+    // Keeps combined view selections when provided.
+    expect(Array.isArray(merged.global.ui.tasks.combined.selections)).toBe(true);
+    expect(merged.global.ui.tasks.combined.selections[0]).toEqual({ boardId: 'b1', listId: 'l1' });
     // Keeps nested automation defaults while allowing partial override.
     expect(merged.global.ui.tasks.automations.trello.onPrMerged.enabled).toBe(true);
     expect(typeof merged.global.ui.tasks.automations.trello.onPrMerged.pollMs).toBe('number');

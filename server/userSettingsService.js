@@ -76,6 +76,11 @@ class UserSettingsService {
             // { enabled?: boolean, repoSlug?: string, localPath?: string, defaultStartTier?: 1|2|3|4 }
             // Local-only by default (stored in user-settings.json).
             boardMappings: {},
+            combined: {
+              // Optional cross-board “combined view” column selections.
+              // Each item: { boardId: string, listId: string }
+              selections: []
+            },
             automations: {
               trello: {
                 onPrMerged: {

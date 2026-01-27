@@ -7943,6 +7943,37 @@ header h1 {
   flex-wrap: wrap;
 }
 
+.tasks-combined-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tasks-combined-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.tasks-combined-label {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-combined-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .tasks-chips {
   display: inline-flex;
   gap: 6px;

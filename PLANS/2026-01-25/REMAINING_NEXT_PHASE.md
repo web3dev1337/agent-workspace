@@ -15,7 +15,6 @@ Source context:
 
 ### Tasks (ticket UX)
 
-- [ ] Multi-board “combined view”: choose specific lists/columns across boards and show them together (standardized naming / minimal scrolling).
 - [ ] Faster per-card “launch preset” UI (optional): quick pick tier/agent/mode without relying on global defaults/hotkeys.
 
 ### Dashboard (project visibility)
