@@ -301,24 +301,25 @@ class Dashboard {
 
 	      if (telemetryEl) {
 	        const data = telemetryRes ? await telemetryRes.json().catch(() => ({})) : {};
-	        if (telemetryRes && telemetryRes.ok) {
-	          this._telemetrySummary = data;
-	          const avgReview = data?.avgReviewSeconds ? `${Math.round(Number(data.avgReviewSeconds))}s` : '—';
-	          const avgChars = Number.isFinite(Number(data?.avgPromptChars)) ? Math.round(Number(data.avgPromptChars)) : null;
-	          const doneCount = Number(data?.doneCount ?? 0);
-	          const avgVerify = Number.isFinite(Number(data?.avgVerifyMinutes)) ? Math.round(Number(data.avgVerifyMinutes)) : null;
-	          const oc = (data?.outcomeCounts && typeof data.outcomeCounts === 'object') ? data.outcomeCounts : {};
-	          const needsFix = Number(oc?.needs_fix ?? 0);
-	          telemetryEl.innerHTML = `
-	            <div>Lookback <strong>${Number(data?.lookbackHours ?? 24)}h</strong></div>
-	            <div>Avg review <strong>${escapeHtml(avgReview)}</strong></div>
-	            <div>Avg prompt chars <strong>${avgChars === null ? '—' : avgChars}</strong></div>
-	            <div>Done <strong>${doneCount}</strong> • needs_fix <strong>${needsFix}</strong></div>
-	            <div>Avg verify <strong>${avgVerify === null ? '—' : `${avgVerify}m`}</strong></div>
-	          `;
-	        } else {
-	          telemetryEl.textContent = 'Failed to load.';
-	        }
+		        if (telemetryRes && telemetryRes.ok) {
+		          this._telemetrySummary = data;
+		          const avgReview = data?.avgReviewSeconds ? `${Math.round(Number(data.avgReviewSeconds))}s` : '—';
+		          const avgChars = Number.isFinite(Number(data?.avgPromptChars)) ? Math.round(Number(data.avgPromptChars)) : null;
+		          const createdCount = Number(data?.createdCount ?? 0);
+		          const doneCount = Number(data?.doneCount ?? 0);
+		          const avgVerify = Number.isFinite(Number(data?.avgVerifyMinutes)) ? Math.round(Number(data.avgVerifyMinutes)) : null;
+		          const oc = (data?.outcomeCounts && typeof data.outcomeCounts === 'object') ? data.outcomeCounts : {};
+		          const needsFix = Number(oc?.needs_fix ?? 0);
+		          telemetryEl.innerHTML = `
+		            <div>Lookback <strong>${Number(data?.lookbackHours ?? 24)}h</strong></div>
+		            <div>Avg review <strong>${escapeHtml(avgReview)}</strong></div>
+		            <div>Avg prompt chars <strong>${avgChars === null ? '—' : avgChars}</strong></div>
+		            <div>Created <strong>${createdCount}</strong> • Done <strong>${doneCount}</strong> • needs_fix <strong>${needsFix}</strong></div>
+		            <div>Avg verify <strong>${avgVerify === null ? '—' : `${avgVerify}m`}</strong></div>
+		          `;
+		        } else {
+		          telemetryEl.textContent = 'Failed to load.';
+		        }
 	      }
 
       if (projectsEl) {
