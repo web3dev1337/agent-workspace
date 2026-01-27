@@ -6831,6 +6831,7 @@ class ClaudeOrchestrator {
 	              <div class="tasks-board-menu hidden" id="tasks-board-menu" role="menu" aria-label="Boards"></div>
 	            </div>
 		          <button class="btn-secondary" id="tasks-board-settings" title="Board mapping / settings">⚙</button>
+              <button class="btn-secondary" id="tasks-hotkeys" title="Hotkeys (?)">⌨</button>
 		          <select id="tasks-list" class="tasks-select" title="List"></select>
             <div class="tasks-launch-defaults" id="tasks-launch-defaults" title="Defaults used by 🚀 quick launch">
               <span class="tasks-launch-defaults-label">🚀</span>
@@ -6926,6 +6927,7 @@ class ClaudeOrchestrator {
 	    const boardBtnEl = modal.querySelector('#tasks-board-btn');
 	    const boardMenuEl = modal.querySelector('#tasks-board-menu');
 		    const boardSettingsBtn = modal.querySelector('#tasks-board-settings');
+      const hotkeysBtn = modal.querySelector('#tasks-hotkeys');
 		    const listEl = modal.querySelector('#tasks-list');
     const searchEl = modal.querySelector('#tasks-search');
     const updatedEl = modal.querySelector('#tasks-updated');
@@ -7025,6 +7027,57 @@ class ClaudeOrchestrator {
             `;
           })
           .join('');
+      };
+
+      const closeHotkeysOverlay = () => {
+        const existing = modal.querySelector('#tasks-hotkeys-overlay');
+        if (existing) existing.remove();
+      };
+
+      const openHotkeysOverlay = () => {
+        closeHotkeysOverlay();
+        const overlay = document.createElement('div');
+        overlay.id = 'tasks-hotkeys-overlay';
+        overlay.className = 'tasks-hotkeys-overlay';
+        overlay.innerHTML = `
+          <div class="tasks-hotkeys-card" role="dialog" aria-label="Tasks hotkeys">
+            <div class="tasks-hotkeys-header">
+              <div class="tasks-hotkeys-title">⌨ Hotkeys</div>
+              <button class="btn-secondary" id="tasks-hotkeys-close" type="button" title="Close (Esc)">×</button>
+            </div>
+            <div class="tasks-hotkeys-grid">
+              <div class="tasks-hotkeys-group">
+                <div class="tasks-hotkeys-group-title">Navigate</div>
+                <div class="tasks-hotkeys-row"><code>↑</code>/<code>↓</code> select card</div>
+                <div class="tasks-hotkeys-row"><code>Enter</code> open details</div>
+                <div class="tasks-hotkeys-row"><code>Esc</code> close overlay/panel</div>
+              </div>
+              <div class="tasks-hotkeys-group">
+                <div class="tasks-hotkeys-group-title">Open</div>
+                <div class="tasks-hotkeys-row"><code>O</code> open card in browser</div>
+                <div class="tasks-hotkeys-row"><code>/</code> focus search</div>
+                <div class="tasks-hotkeys-row"><code>B</code> board picker</div>
+              </div>
+              <div class="tasks-hotkeys-group">
+                <div class="tasks-hotkeys-group-title">Defaults</div>
+                <div class="tasks-hotkeys-row"><code>C</code>/<code>X</code> Claude/Codex</div>
+                <div class="tasks-hotkeys-row"><code>F</code>/<code>N</code>/<code>R</code> Fresh/Cont/Res</div>
+                <div class="tasks-hotkeys-row"><code>Y</code> YOLO toggle</div>
+                <div class="tasks-hotkeys-row"><code>P</code> Auto-send toggle</div>
+              </div>
+              <div class="tasks-hotkeys-group">
+                <div class="tasks-hotkeys-group-title">Launch</div>
+                <div class="tasks-hotkeys-row"><code>L</code> launch with default tier</div>
+                <div class="tasks-hotkeys-row"><code>1</code>/<code>2</code>/<code>3</code>/<code>4</code> launch as T1–T4</div>
+              </div>
+            </div>
+          </div>
+        `;
+        modal.querySelector('.tasks-content')?.appendChild(overlay);
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) closeHotkeysOverlay();
+        });
+        overlay.querySelector('#tasks-hotkeys-close')?.addEventListener('click', closeHotkeysOverlay);
       };
 
       const getMappingTierForBoard = (boardId) => {
@@ -9076,10 +9129,16 @@ class ClaudeOrchestrator {
 	      await refreshAll({ force: true });
 	    });
 
-	    boardSettingsBtn?.addEventListener('click', (e) => {
-	      e.preventDefault();
-	      renderBoardSettings();
-	    });
+		    boardSettingsBtn?.addEventListener('click', (e) => {
+		      e.preventDefault();
+		      renderBoardSettings();
+		    });
+
+      hotkeysBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openHotkeysOverlay();
+      });
 
       boardBtnEl?.addEventListener('click', (e) => {
         e.preventDefault();
@@ -9809,11 +9868,16 @@ class ClaudeOrchestrator {
 	        }
 	      };
 
-	      if (!isTypingTarget) {
-	        if (e.key === '/' && searchEl) {
-	          e.preventDefault();
-	          try {
-	            searchEl.focus();
+		      if (!isTypingTarget) {
+		        if (e.key === '?' || e.key === 'h' || e.key === 'H') {
+		          e.preventDefault();
+		          openHotkeysOverlay();
+		          return;
+		        }
+		        if (e.key === '/' && searchEl) {
+		          e.preventDefault();
+		          try {
+		            searchEl.focus();
 	            searchEl.select?.();
 	          } catch {
 	            // ignore
@@ -9953,11 +10017,21 @@ class ClaudeOrchestrator {
 	        }
 	      }
 
-	      if (e.key === 'Escape') {
-	        e.preventDefault();
-	        modal.remove();
-	      }
-	    };
+		      if (e.key === 'Escape') {
+		        e.preventDefault();
+		        const hasHotkeys = !!modal.querySelector('#tasks-hotkeys-overlay');
+		        if (hasHotkeys) {
+		          closeHotkeysOverlay();
+		          return;
+		        }
+		        const hasBoardMenu = typeof isBoardMenuOpen === 'function' && isBoardMenuOpen();
+		        if (hasBoardMenu) {
+		          closeBoardMenu();
+		          return;
+		        }
+		        modal.remove();
+		      }
+		    };
     document.addEventListener('keydown', onTasksKeyDown);
 
     const originalRemove = modal.remove.bind(modal);
