@@ -57,6 +57,7 @@ The implementation plan derived from it is:
 - Tasks: per-card launch options popover: https://github.com/web3dev1337/claude-orchestrator/pull/268
 - Automations: GitHub webhook for PR-merge Trello automation: https://github.com/web3dev1337/claude-orchestrator/pull/270
 - Queue: auto fixer/recheck + tasks layout + status stability: https://github.com/web3dev1337/claude-orchestrator/pull/272
+- Tasks: Trello board conventions wizard (done list + dependency checklist + label→tier): https://github.com/web3dev1337/claude-orchestrator/pull/273
 
 ## Known UX issues / follow-ups
 
@@ -85,7 +86,7 @@ These are separate:
 
 ### ✅ Shipped (Trello-backed)
 
-Dependencies are represented in Trello via a **Checklist named `Dependencies`** on a card.
+Dependencies are represented in Trello via a **Checklist on the card** (default name `Dependencies`, configurable per board via Tasks → Board Settings → Trello conventions).
 
 - Team sharing: native Trello collaboration (source of truth is the Trello card).
 - UI: shown + editable in the Tasks card detail panel (add/remove/toggle).
