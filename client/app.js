@@ -478,7 +478,8 @@ class ClaudeOrchestrator {
           this.sessions.set(sessionId, {
             sessionId,
             ...sessionState,
-            hasUserInput: false
+            hasUserInput: false,
+            backgroundLaunch: !!isBackground
           });
 
           // If there's an existing PR, add it to GitHub links
@@ -488,11 +489,11 @@ class ClaudeOrchestrator {
             this.githubLinks.set(sessionId, links);
           }
 
-          if (!isBackground) {
-            // Mark new sessions as active so they show in the grid
-            this.sessionActivity.set(sessionId, 'active');
+          // Mark new sessions as active (active-only filter should treat background work as active too).
+          this.sessionActivity.set(sessionId, 'active');
 
-            // Add to visible terminals set
+          // Background launches intentionally do not auto-show in Review/Focus.
+          if (!isBackground) {
             this.visibleTerminals.add(sessionId);
           }
 
@@ -1776,8 +1777,15 @@ class ClaudeOrchestrator {
 	    return true;
 	  }
 
-	  isSessionVisibleInCurrentView(sessionId) {
-	    return this.visibleTerminals.has(sessionId)
+  isSessionVisibleInCurrentView(sessionId) {
+    const session = this.sessions.get(sessionId);
+    // Background-launched worktrees intentionally do not auto-show in Review/Focus,
+    // but they should become visible when the user explicitly switches to Background mode.
+    const backgroundLaunch = !!session?.backgroundLaunch;
+    const visibleByWorktreeToggle = this.visibleTerminals.has(sessionId)
+      || (this.workflowMode === 'background' && backgroundLaunch);
+
+	    return visibleByWorktreeToggle
         && this.matchesViewMode(sessionId)
         && this.matchesTierFilter(sessionId)
         && this.matchesWorkflowMode(sessionId);
@@ -2379,8 +2387,9 @@ class ClaudeOrchestrator {
       }
       
       // Check if any session in this worktree is visible
-      const isVisible = (worktree.claude && this.visibleTerminals.has(worktree.claude.sessionId)) ||
-                       (worktree.server && this.visibleTerminals.has(worktree.server.sessionId));
+      const backgroundMode = this.workflowMode === 'background';
+      const isVisible = (worktree.claude && (this.visibleTerminals.has(worktree.claude.sessionId) || (backgroundMode && worktree.claude.backgroundLaunch))) ||
+                       (worktree.server && (this.visibleTerminals.has(worktree.server.sessionId) || (backgroundMode && worktree.server.backgroundLaunch)));
       
       const item = document.createElement('div');
       // Only show visibility state, not activity state (activity filtering is handled separately)
