@@ -15388,6 +15388,27 @@ class ClaudeOrchestrator {
         return;
       }
 
+      const presetBtn = event.target.closest('.quick-create-preset-btn');
+      if (presetBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const repoPath = presetBtn.dataset.repoPath;
+        const preset = presetBtn.dataset.preset;
+        (async () => {
+          try {
+            presetBtn.disabled = true;
+            await this.toggleQuickWorktreeCreatePresetForRepoPath(repoPath, preset);
+            this.renderQuickWorktreeRepoList();
+          } catch (err) {
+            console.error('Failed to set create preset:', err);
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            presetBtn.disabled = false;
+          }
+        })();
+        return;
+      }
+
       const createBtn = event.target.closest('.quick-create-btn');
       if (createBtn) {
         event.preventDefault();
@@ -15395,7 +15416,7 @@ class ClaudeOrchestrator {
         const repoPath = createBtn.dataset.repoPath;
         const repoType = createBtn.dataset.repoType;
         const repoName = createBtn.dataset.repoName;
-        const count = Number(this.quickWorktreeCreateCount || 1);
+        const count = this.getQuickWorktreeCreateCountForRepoPath(repoPath);
         const background = !!this.quickWorktreeCreateBackground;
         const startTier = Number(this.quickWorktreeStartTier);
 
@@ -15817,6 +15838,68 @@ class ClaudeOrchestrator {
     return favoritesHtml + groupedHtml;
   }
 
+  getQuickWorktreeCreatePresets() {
+    const fromServer = this.userSettings?.global?.ui?.worktrees?.createPresets;
+    if (fromServer && typeof fromServer === 'object' && !Array.isArray(fromServer)) return fromServer;
+    return { small: 2, medium: 4, large: 6 };
+  }
+
+  getQuickWorktreeCreatePresetByRepoPath() {
+    const fromServer = this.userSettings?.global?.ui?.worktrees?.createPresetByRepoPath;
+    if (fromServer && typeof fromServer === 'object' && !Array.isArray(fromServer)) return fromServer;
+    try {
+      const raw = localStorage.getItem('quick-worktree-createPresetByRepoPath');
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch {
+      // ignore
+    }
+    return {};
+  }
+
+  getQuickWorktreeCreatePresetForRepoPath(repoPath) {
+    const key = String(repoPath || '').trim();
+    if (!key) return '';
+    const map = this.getQuickWorktreeCreatePresetByRepoPath();
+    const preset = String(map?.[key] || '').trim().toLowerCase();
+    return (preset === 'small' || preset === 'medium' || preset === 'large') ? preset : '';
+  }
+
+  getQuickWorktreeCreateCountForRepoPath(repoPath) {
+    const preset = this.getQuickWorktreeCreatePresetForRepoPath(repoPath);
+    const presets = this.getQuickWorktreeCreatePresets();
+    const presetCount = preset ? Number(presets?.[preset]) : NaN;
+    const raw = Number.isFinite(presetCount) && presetCount >= 1 ? presetCount : Number(this.quickWorktreeCreateCount || 1);
+    const n = Number.isFinite(raw) && raw >= 1 ? Math.min(8, Math.round(raw)) : 1;
+    return n;
+  }
+
+  async toggleQuickWorktreeCreatePresetForRepoPath(repoPath, presetName) {
+    const repoKey = String(repoPath || '').trim();
+    if (!repoKey) return;
+    const preset = String(presetName || '').trim().toLowerCase();
+    if (!['small', 'medium', 'large'].includes(preset)) return;
+
+    const current = this.getQuickWorktreeCreatePresetByRepoPath();
+    const currentPreset = String(current?.[repoKey] || '').trim().toLowerCase();
+    const next = { ...(current || {}) };
+    if (currentPreset === preset) delete next[repoKey];
+    else next[repoKey] = preset;
+
+    try {
+      await this.updateGlobalUserSetting('ui.worktrees.createPresetByRepoPath', next);
+    } catch {
+      // ignore
+    }
+
+    // Local fallback (for robustness if server settings aren't loaded yet).
+    try {
+      localStorage.setItem('quick-worktree-createPresetByRepoPath', JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }
+
   renderQuickRepoRow(repo) {
     const recommended = this.getRecommendedWorktree(repo);
     const mostRecent = this.getMostRecentWorktree(repo);
@@ -15829,6 +15912,39 @@ class ClaudeOrchestrator {
     const nextId = this.getNextWorktreeIdForRepo(repo);
     const nextNumber = Number(String(nextId || '').replace(/^work/i, ''));
     const canCreate = !!(this.currentWorkspace?.id && Number.isFinite(nextNumber) && nextNumber <= this.autoCreateWorktreeMaxNumber);
+    const createCount = this.getQuickWorktreeCreateCountForRepoPath(repo.path);
+    const createPreset = this.getQuickWorktreeCreatePresetForRepoPath(repo.path);
+    const presetCounts = this.getQuickWorktreeCreatePresets();
+    const presetTitleFor = (name) => {
+      const n = Number(presetCounts?.[name]);
+      const safe = Number.isFinite(n) && n >= 1 ? Math.min(8, Math.round(n)) : '';
+      return `${name} (${safe || '?'})`;
+    };
+    const presetButtons = `
+      <div class="quick-create-presets" title="Per-repo create presets">
+        <button class="btn-secondary quick-create-preset-btn ${createPreset === 'small' ? 'is-selected' : ''}"
+                type="button"
+                data-repo-path="${repo.path}"
+                data-preset="small"
+                title="${this.escapeHtml(presetTitleFor('small'))}">
+          S
+        </button>
+        <button class="btn-secondary quick-create-preset-btn ${createPreset === 'medium' ? 'is-selected' : ''}"
+                type="button"
+                data-repo-path="${repo.path}"
+                data-preset="medium"
+                title="${this.escapeHtml(presetTitleFor('medium'))}">
+          M
+        </button>
+        <button class="btn-secondary quick-create-preset-btn ${createPreset === 'large' ? 'is-selected' : ''}"
+                type="button"
+                data-repo-path="${repo.path}"
+                data-preset="large"
+                title="${this.escapeHtml(presetTitleFor('large'))}">
+          L
+        </button>
+      </div>
+    `;
 
     return `
       <div class="quick-repo-row"
@@ -15848,13 +15964,14 @@ class ClaudeOrchestrator {
             ${favoriteLabel}
           </button>
           ${recommended ? `<span class="quick-worktree-pill">${recommended.id}</span>` : ''}
+          ${presetButtons}
           <button class="btn-secondary quick-create-btn"
                   data-repo-path="${repo.path}"
                   data-repo-type="${repo.type}"
                   data-repo-name="${repo.name}"
-                  title="${canCreate ? `Create ${this.quickWorktreeCreateCount || 1} new worktree(s) starting at ${nextId}` : 'Cannot create more worktrees for this repo'}"
+                  title="${canCreate ? `Create ${createCount} new worktree(s) starting at ${nextId}` : 'Cannot create more worktrees for this repo'}"
                   ${canCreate ? '' : 'disabled'}>
-            ➕ ${this.escapeHtml(nextId)}
+            ➕ ${this.escapeHtml(nextId)}×${createCount}
           </button>
           <div class="quick-start-group">
             <button class="btn-primary quick-start-btn"

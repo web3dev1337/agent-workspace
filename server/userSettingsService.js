@@ -50,7 +50,11 @@ class UserSettingsService {
             autoCreateExtraWhenBusy: true,
             autoCreateMinNumber: 9,
             autoCreateMaxNumber: 25,
-            considerOtherWorkspaces: true
+            considerOtherWorkspaces: true,
+            // Quick Worktree: per-repo create-count presets.
+            createPresets: { small: 2, medium: 4, large: 6 },
+            // Keyed by repo path -> 'small'|'medium'|'large' (or empty for default).
+            createPresetByRepoPath: {}
           },
           workflow: {
             mode: 'review',
