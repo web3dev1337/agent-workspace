@@ -58,6 +58,7 @@ The implementation plan derived from it is:
 - Automations: GitHub webhook for PR-merge Trello automation: https://github.com/web3dev1337/claude-orchestrator/pull/270
 - Queue: auto fixer/recheck + tasks layout + status stability: https://github.com/web3dev1337/claude-orchestrator/pull/272
 - Tasks: Trello board conventions wizard (done list + dependency checklist + label→tier): https://github.com/web3dev1337/claude-orchestrator/pull/273
+- Workflow: richer notification modes + review complete nudges: https://github.com/web3dev1337/claude-orchestrator/pull/274
 
 ## Known UX issues / follow-ups
 

@@ -792,10 +792,17 @@ class ClaudeOrchestrator {
       'settings-toggle': null,
       'close-settings': null,
       'notification-toggle': null,
+      'notifications-panel': null,
+      'close-notifications': null,
+      'notifications-clear': null,
+      'notifications-mark-read': null,
       'enable-notifications': null,
       'enable-sounds': null,
       'auto-scroll': null,
       'theme-select': null,
+      'workflow-notify-mode': null,
+      'workflow-notify-tier1-interrupts': null,
+      'workflow-notify-review-nudges': null,
       'tasks-theme-select': null,
       'trello-me-username': null,
       'global-skip-permissions': null,
@@ -1071,13 +1078,54 @@ class ClaudeOrchestrator {
       document.getElementById('git-update-notification').classList.add('hidden');
     });
     
-    // Notification toggle - for now, just open settings to notification section
-    document.getElementById('notification-toggle').addEventListener('click', () => {
-      // Open settings panel
-      document.getElementById('settings-panel').classList.remove('hidden');
-      // Focus on notifications checkbox
-      document.getElementById('enable-notifications').focus();
-    });
+    // Workflow notification settings (server-persisted)
+    const workflowNotifyMode = document.getElementById('workflow-notify-mode');
+    if (workflowNotifyMode) {
+      workflowNotifyMode.addEventListener('change', (e) => {
+        const v = String(e.target.value || '').trim().toLowerCase();
+        const mode = (v === 'quiet' || v === 'normal' || v === 'aggressive') ? v : 'quiet';
+        this.updateGlobalUserSetting('ui.workflow.notifications.mode', mode);
+      });
+    }
+    const workflowNotifyTier1 = document.getElementById('workflow-notify-tier1-interrupts');
+    if (workflowNotifyTier1) {
+      workflowNotifyTier1.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.workflow.notifications.tier1Interrupts', !!e.target.checked);
+      });
+    }
+    const workflowNotifyReview = document.getElementById('workflow-notify-review-nudges');
+    if (workflowNotifyReview) {
+      workflowNotifyReview.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.workflow.notifications.reviewCompleteNudges', !!e.target.checked);
+      });
+    }
+
+    // Notifications panel
+    const notificationsPanel = document.getElementById('notifications-panel');
+    const toggleNotificationsPanel = () => {
+      if (!notificationsPanel) return;
+      // Only one side panel open at a time.
+      document.getElementById('settings-panel')?.classList.add('hidden');
+      notificationsPanel.classList.toggle('hidden');
+      if (!notificationsPanel.classList.contains('hidden')) {
+        this.notificationManager?.renderNotifications?.();
+      }
+    };
+
+    document.getElementById('notification-toggle').addEventListener('click', toggleNotificationsPanel);
+
+    const closeNotificationsBtn = document.getElementById('close-notifications');
+    if (closeNotificationsBtn) {
+      closeNotificationsBtn.addEventListener('click', () => notificationsPanel?.classList.add('hidden'));
+    }
+    const clearNotificationsBtn = document.getElementById('notifications-clear');
+    if (clearNotificationsBtn) {
+      clearNotificationsBtn.addEventListener('click', () => this.notificationManager?.clearAll?.());
+    }
+    const markReadBtn = document.getElementById('notifications-mark-read');
+    if (markReadBtn) {
+      markReadBtn.addEventListener('click', () => this.notificationManager?.markAllAsRead?.());
+    }
     
     // Claude startup modal handlers (simplified)
     const cancelClaudeBtn = document.getElementById('cancel-claude-startup');
@@ -1417,17 +1465,19 @@ class ClaudeOrchestrator {
 
         // Notification modes (best-effort; toast-only by default).
         try {
-          const cfg = this.userSettings?.global?.ui?.workflow?.notifications || {};
-          const mode = String(cfg.mode || 'quiet').toLowerCase();
-          const tier1Interrupts = cfg.tier1Interrupts !== false;
-          if (mode === 'aggressive' && tier1Interrupts) {
+          const cfg = this.getWorkflowNotificationConfig();
+          if (cfg.mode !== 'quiet' && cfg.tier1Interrupts) {
             const prevT1 = Number(prev?.qByTier?.[1] ?? 0);
             const nextT1 = Number(status?.qByTier?.[1] ?? 0);
             const now = Date.now();
             const last = Number(this.lastTier1InterruptToastAt || 0);
             if (nextT1 > 0 && prevT1 === 0 && (now - last > 90_000)) {
               this.lastTier1InterruptToastAt = now;
-              this.showToast?.(`Tier 1 queue: ${nextT1}`, 'warning');
+              this.notifyWorkflow({
+                type: 'waiting',
+                message: `Tier 1 queue: ${nextT1}`,
+                metadata: { kind: 'tier1_interrupt', tier: 1, count: nextT1 }
+              });
             }
           }
         } catch {
@@ -4846,6 +4896,51 @@ class ClaudeOrchestrator {
     
     return request;
   }
+
+  getWorkflowNotificationConfig() {
+    const cfg = this.userSettings?.global?.ui?.workflow?.notifications || {};
+    const modeRaw = String(cfg.mode || 'quiet').trim().toLowerCase();
+    const mode = (modeRaw === 'quiet' || modeRaw === 'normal' || modeRaw === 'aggressive') ? modeRaw : 'quiet';
+    return {
+      mode,
+      tier1Interrupts: cfg.tier1Interrupts !== false,
+      reviewCompleteNudges: cfg.reviewCompleteNudges !== false
+    };
+  }
+
+  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {
+    const msg = String(message || '').trim();
+    if (!msg) return;
+
+    const cfg = this.getWorkflowNotificationConfig();
+
+    try {
+      this.notificationManager?.handleNotification?.({
+        type,
+        message: msg,
+        sessionId: sessionId || undefined,
+        metadata: (metadata && typeof metadata === 'object') ? metadata : undefined
+      });
+    } catch {
+      // ignore
+    }
+
+    const toastType = type === 'error'
+      ? 'error'
+      : (type === 'waiting' ? 'warning' : (type === 'completed' ? 'success' : 'info'));
+
+    if (cfg.mode === 'aggressive') {
+      this.showToast?.(msg, toastType);
+      return;
+    }
+
+    if (cfg.mode === 'normal') {
+      // Only toast for higher-signal events.
+      if (toastType === 'warning' || toastType === 'error' || toastType === 'success') {
+        this.showToast?.(msg, toastType);
+      }
+    }
+  }
   
   showToast(message, type = 'info') {
     const toast = document.createElement('div');
@@ -5982,6 +6077,24 @@ class ClaudeOrchestrator {
       } else {
         tasksThemeSelect.value = 'inherit';
       }
+    }
+
+    // Workflow notification settings UI
+    const workflowNotifyMode = document.getElementById('workflow-notify-mode');
+    if (workflowNotifyMode) {
+      const cfg = this.userSettings.global?.ui?.workflow?.notifications || {};
+      const v = String(cfg.mode || 'quiet').trim().toLowerCase();
+      workflowNotifyMode.value = (v === 'quiet' || v === 'normal' || v === 'aggressive') ? v : 'quiet';
+    }
+    const workflowNotifyTier1 = document.getElementById('workflow-notify-tier1-interrupts');
+    if (workflowNotifyTier1) {
+      const cfg = this.userSettings.global?.ui?.workflow?.notifications || {};
+      workflowNotifyTier1.checked = cfg.tier1Interrupts !== false;
+    }
+    const workflowNotifyReview = document.getElementById('workflow-notify-review-nudges');
+    if (workflowNotifyReview) {
+      const cfg = this.userSettings.global?.ui?.workflow?.notifications || {};
+      workflowNotifyReview.checked = cfg.reviewCompleteNudges !== false;
     }
 
     const trelloMeUsername = document.getElementById('trello-me-username');
@@ -11180,19 +11293,20 @@ class ClaudeOrchestrator {
     await refreshAll({ force: false });
   }
 
-  async showQueuePanel() {
+  async showQueuePanel(opts = {}) {
     console.log('Opening Queue panel...');
 
     const existing = document.getElementById('queue-panel');
     if (existing) existing.remove();
 
     const serverUrl = window.location.origin;
+    const initialSelectedId = String(opts?.selectedId || '').trim() || null;
 
 			    const state = {
 			      mode: 'mine', // mine | all
 			      query: '',
 			      tasks: [],
-			      selectedId: null,
+			      selectedId: initialSelectedId,
 			      reviewTier: 'all', // all | none | 1..4
 			      unreviewedOnly: false,
 			      autoOpenDiff: false,
@@ -11583,7 +11697,7 @@ class ClaudeOrchestrator {
 	      else this.taskRecords.delete(id);
 	    };
 
-    const stopReviewTimer = async ({ endedAtIso } = {}) => {
+    const stopReviewTimer = async ({ endedAtIso, reason = 'manual', nudge = false } = {}) => {
       const activeId = state.reviewTimer?.taskId;
       if (!activeId) return;
       const endIso = endedAtIso || new Date().toISOString();
@@ -11593,19 +11707,41 @@ class ClaudeOrchestrator {
         const rec = await upsertRecord(activeId, { reviewEndedAt: endIso });
         updateTaskRecordInState(activeId, rec);
         renderList();
-        try {
-          const cfg = this.userSettings?.global?.ui?.workflow?.notifications || {};
-          const mode = String(cfg.mode || 'quiet').toLowerCase();
-          const nudges = cfg.reviewCompleteNudges !== false;
-          if (mode === 'aggressive' && nudges) {
-            this.showToast?.('Review timer stopped', 'success');
-          }
-        } catch {
-          // ignore
-        }
+        const cfg = this.getWorkflowNotificationConfig();
+        const shouldNudge = !!(nudge && cfg.reviewCompleteNudges);
+        if (shouldNudge) maybeNudgeReviewComplete(activeId, { reason });
       } catch {
         // best-effort
       }
+    };
+
+    const reviewNudgeAtByTaskIdMs = {};
+    const maybeNudgeReviewComplete = (taskId, { reason = 'manual' } = {}) => {
+      const cfg = this.getWorkflowNotificationConfig();
+      if (!cfg.reviewCompleteNudges) return false;
+      if (cfg.mode === 'quiet') return false;
+
+      const id = String(taskId || '').trim();
+      if (!id) return false;
+
+      const now = Date.now();
+      const last = Number(reviewNudgeAtByTaskIdMs[id] || 0);
+      if (last && (now - last < 45_000)) return false;
+      reviewNudgeAtByTaskIdMs[id] = now;
+
+      const task = getTaskById(id) || { id };
+      const title = String(task?.title || id).trim();
+      const prUrl = String(task?.url || '').trim();
+      this.notifyWorkflow({
+        type: 'completed',
+        message: `Review complete: ${title}`,
+        metadata: {
+          taskId: id,
+          prUrl: task?.kind === 'pr' ? prUrl : '',
+          reason: String(reason || 'manual')
+        }
+      });
+      return true;
     };
 
     const startReviewTimer = async (taskId) => {
@@ -11613,8 +11749,8 @@ class ClaudeOrchestrator {
       if (!state.reviewActive || !id) return;
       if (state.reviewTimer?.taskId === id) return;
 
-      // End previous timer (best-effort) when switching items.
-      await stopReviewTimer();
+      // End previous timer (best-effort) when switching items (no nudge).
+      await stopReviewTimer({ reason: 'switch', nudge: false });
 
       const nowMs = Date.now();
       state.reviewTimer.taskId = id;
@@ -13149,8 +13285,10 @@ class ClaudeOrchestrator {
       reviewedEl?.addEventListener('change', async () => {
         try {
           reviewedEl.disabled = true;
+          let nudged = false;
           if (reviewedEl.checked && state.reviewTimer?.taskId === t.id) {
-            await stopReviewTimer();
+            await stopReviewTimer({ reason: 'reviewed', nudge: true });
+            nudged = true;
           }
           const patch = { reviewed: !!reviewedEl.checked };
           if (reviewedEl.checked) patch.reviewEndedAt = new Date().toISOString();
@@ -13162,6 +13300,9 @@ class ClaudeOrchestrator {
           updateTaskRecordInState(t.id, rec);
           renderList();
           renderDetail(getTaskById(t.id));
+          if (reviewedEl.checked && !nudged) {
+            maybeNudgeReviewComplete(t.id, { reason: 'reviewed' });
+          }
         } catch (e) {
           this.showToast(String(e?.message || e), 'error');
         } finally {
@@ -13173,8 +13314,10 @@ class ClaudeOrchestrator {
         try {
           outcomeEl.disabled = true;
           const value = String(outcomeEl.value || '').trim();
+          let nudged = false;
           if (value && state.reviewTimer?.taskId === t.id) {
-            await stopReviewTimer();
+            await stopReviewTimer({ reason: 'outcome', nudge: true });
+            nudged = true;
           }
           const patch = { reviewOutcome: value || null };
           if (value) patch.reviewEndedAt = new Date().toISOString();
@@ -13186,6 +13329,9 @@ class ClaudeOrchestrator {
           updateTaskRecordInState(t.id, rec);
           await fetchTasks();
           renderDetail(getTaskById(t.id));
+          if (value && !nudged) {
+            maybeNudgeReviewComplete(t.id, { reason: 'outcome' });
+          }
         } catch (e) {
           this.showToast(String(e?.message || e), 'error');
         } finally {
@@ -13209,7 +13355,7 @@ class ClaudeOrchestrator {
         try {
           timerStopBtn.disabled = true;
           if (state.reviewTimer?.taskId === t.id) {
-            await stopReviewTimer();
+            await stopReviewTimer({ reason: 'manual', nudge: true });
           }
           renderDetail(getTaskById(t.id));
         } catch (e) {
@@ -13415,7 +13561,7 @@ class ClaudeOrchestrator {
     };
     const close = () => {
       document.removeEventListener('keydown', onKey);
-      stopReviewTimer().catch(() => {});
+      stopReviewTimer({ reason: 'close', nudge: false }).catch(() => {});
       modal.remove();
     };
 

@@ -59,7 +59,7 @@ class UserSettingsService {
               autoSwapToTier2WhenTier1Busy: false
             },
             notifications: {
-              mode: 'quiet', // quiet | aggressive
+              mode: 'quiet', // quiet | normal | aggressive
               tier1Interrupts: true,
               reviewCompleteNudges: true
             }
