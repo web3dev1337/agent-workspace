@@ -55,7 +55,9 @@ The implementation plan derived from it is:
 
 ## Known UX issues / follow-ups
 
-- (none currently tracked from the 2026-01-27 UX notes)
+- Status lights: if agent/worktree indicators still flicker (green/orange/grey), tune `STATUS_MIN_HOLD_MS` and/or waiting/busy heuristics.
+- Tasks board view: columns should be left-aligned (avoid “wasted space” / centered columns). If you still see right/center alignment, capture a screenshot + viewport width.
+- Tasks detail layout: card detail should render on the right (board view uses a right overlay; list view uses a right column). If details appear on the left or reflow the board, report board layout + view.
 
 ---
 

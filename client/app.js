@@ -6990,10 +6990,15 @@ class ClaudeOrchestrator {
 
       const isBoardMenuOpen = () => !!boardMenuEl && !boardMenuEl.classList.contains('hidden');
 
+      let boardMenuQuery = '';
+      let boardMenuActiveValue = '';
+
       const closeBoardMenu = () => {
         if (!boardMenuEl) return;
         boardMenuEl.classList.add('hidden');
         boardBtnEl?.setAttribute?.('aria-expanded', 'false');
+        boardMenuQuery = '';
+        boardMenuActiveValue = '';
       };
 
       const renderBoardPicker = () => {
@@ -7012,21 +7017,98 @@ class ClaudeOrchestrator {
         boardBtnEl.setAttribute('aria-expanded', isBoardMenuOpen() ? 'true' : 'false');
 
         const items = options.filter((o) => o.value);
-        boardMenuEl.innerHTML = items
-          .map((o) => {
-            const isSelected = o.value === selected;
-            const color = getBoardColorById(o.value);
-            const dot = color
-              ? `<span class="tasks-board-menu-dot" style="background-color:${this.escapeHtml(color)}" aria-hidden="true"></span>`
-              : `<span class="tasks-board-menu-dot is-hidden" aria-hidden="true"></span>`;
-            return `
-              <button type="button" class="tasks-board-menu-item ${isSelected ? 'is-selected' : ''}" role="menuitemradio" aria-checked="${isSelected ? 'true' : 'false'}" data-board-menu-value="${this.escapeHtml(o.value)}">
-                ${dot}
-                <span class="tasks-board-menu-label">${this.escapeHtml(o.label || o.value)}</span>
-              </button>
-            `;
-          })
-          .join('');
+        const q = String(boardMenuQuery || '').trim().toLowerCase();
+        const filtered = q
+          ? items.filter((o) => {
+              const label = String(o.label || o.value || '').toLowerCase();
+              const value = String(o.value || '').toLowerCase();
+              return label.includes(q) || value.includes(q);
+            })
+          : items;
+
+        const selectedInFiltered = filtered.some((o) => o.value === selected);
+        if (boardMenuActiveValue && !filtered.some((o) => o.value === boardMenuActiveValue)) {
+          boardMenuActiveValue = '';
+        }
+        if (!boardMenuActiveValue) {
+          boardMenuActiveValue = selectedInFiltered ? selected : (filtered[0]?.value || '');
+        }
+
+        boardMenuEl.innerHTML = `
+          <div class="tasks-board-menu-search-wrap" role="none">
+            <input id="tasks-board-menu-search" class="tasks-board-menu-search" type="text" placeholder="Filter boards…" autocomplete="off" spellcheck="false" aria-label="Filter boards" />
+          </div>
+          <div class="tasks-board-menu-items" role="none">
+            ${
+              filtered.length
+                ? filtered
+                    .map((o) => {
+                      const isSelected = o.value === selected;
+                      const isActive = o.value === boardMenuActiveValue;
+                      const color = getBoardColorById(o.value);
+                      const dot = color
+                        ? `<span class="tasks-board-menu-dot" style="background-color:${this.escapeHtml(color)}" aria-hidden="true"></span>`
+                        : `<span class="tasks-board-menu-dot is-hidden" aria-hidden="true"></span>`;
+                      return `
+                        <button type="button" class="tasks-board-menu-item ${isSelected ? 'is-selected' : ''} ${isActive ? 'is-active' : ''}" role="menuitemradio" aria-checked="${isSelected ? 'true' : 'false'}" data-board-menu-value="${this.escapeHtml(o.value)}">
+                          ${dot}
+                          <span class="tasks-board-menu-label">${this.escapeHtml(o.label || o.value)}</span>
+                        </button>
+                      `;
+                    })
+                    .join('')
+                : `<div class="tasks-board-menu-empty" role="none">No matching boards.</div>`
+            }
+          </div>
+        `;
+
+        const search = boardMenuEl.querySelector('#tasks-board-menu-search');
+        if (search) {
+          search.value = boardMenuQuery;
+          search.addEventListener('input', () => {
+            boardMenuQuery = String(search.value || '');
+            renderBoardPicker();
+          });
+          search.addEventListener('keydown', (e) => {
+            const key = e.key;
+            if (key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Enter') return;
+            e.preventDefault();
+            e.stopPropagation();
+
+            const itemButtons = Array.from(boardMenuEl.querySelectorAll('[data-board-menu-value]'));
+            if (itemButtons.length === 0) return;
+
+            const current = itemButtons.find((b) => String(b.getAttribute('data-board-menu-value') || '') === boardMenuActiveValue) || itemButtons[0];
+            const idx = Math.max(0, itemButtons.indexOf(current));
+
+            if (key === 'Enter') {
+              current?.click?.();
+              return;
+            }
+
+            const delta = key === 'ArrowDown' ? 1 : -1;
+            const next = itemButtons[Math.min(itemButtons.length - 1, Math.max(0, idx + delta))] || current;
+            const nextValue = String(next.getAttribute('data-board-menu-value') || '').trim();
+            if (nextValue) boardMenuActiveValue = nextValue;
+            itemButtons.forEach((b) => b.classList.toggle('is-active', String(b.getAttribute('data-board-menu-value') || '') === boardMenuActiveValue));
+            next.scrollIntoView?.({ block: 'nearest' });
+          });
+        }
+      };
+
+      const openBoardMenu = ({ focusSearch = false } = {}) => {
+        renderBoardPicker();
+        boardMenuEl?.classList?.remove?.('hidden');
+        boardBtnEl?.setAttribute?.('aria-expanded', 'true');
+        if (focusSearch) {
+          const search = boardMenuEl?.querySelector?.('#tasks-board-menu-search');
+          try {
+            search?.focus?.();
+            search?.select?.();
+          } catch {
+            // ignore
+          }
+        }
       };
 
       const closeHotkeysOverlay = () => {
@@ -7056,7 +7138,7 @@ class ClaudeOrchestrator {
                 <div class="tasks-hotkeys-group-title">Open</div>
                 <div class="tasks-hotkeys-row"><code>O</code> open card in browser</div>
                 <div class="tasks-hotkeys-row"><code>/</code> focus search</div>
-                <div class="tasks-hotkeys-row"><code>B</code> board picker</div>
+                <div class="tasks-hotkeys-row"><code>B</code> board picker (type to filter)</div>
               </div>
               <div class="tasks-hotkeys-group">
                 <div class="tasks-hotkeys-group-title">Defaults</div>
@@ -8695,7 +8777,7 @@ class ClaudeOrchestrator {
         collapseAllExcept(toExpand);
         if (toExpand) {
           const col = cardsEl.querySelector(`.tasks-column[data-list-id="${CSS.escape(toExpand)}"]`);
-          col?.scrollIntoView?.({ behavior: 'smooth', inline: 'center' });
+          col?.scrollIntoView?.({ behavior: 'smooth', inline: 'start' });
         }
       };
 
@@ -8719,7 +8801,7 @@ class ClaudeOrchestrator {
             } catch {
               // ignore
             }
-            col.scrollIntoView?.({ behavior: 'smooth', inline: 'center' });
+            col.scrollIntoView?.({ behavior: 'smooth', inline: 'start' });
             return;
           }
 
@@ -9143,9 +9225,8 @@ class ClaudeOrchestrator {
       boardBtnEl?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        renderBoardPicker();
         if (isBoardMenuOpen()) closeBoardMenu();
-        else boardMenuEl?.classList?.remove?.('hidden');
+        else openBoardMenu({ focusSearch: true });
       });
 
       boardMenuEl?.addEventListener('click', (e) => {
@@ -9158,6 +9239,17 @@ class ClaudeOrchestrator {
           boardEl.dispatchEvent(new Event('change', { bubbles: true }));
         }
         closeBoardMenu();
+      });
+
+      boardMenuEl?.addEventListener?.('mouseover', (e) => {
+        const btn = e.target?.closest?.('[data-board-menu-value]');
+        if (!btn) return;
+        const value = String(btn.getAttribute('data-board-menu-value') || '').trim();
+        if (!value) return;
+        boardMenuActiveValue = value;
+        boardMenuEl.querySelectorAll('[data-board-menu-value]').forEach((b) => {
+          b.classList.toggle('is-active', String(b.getAttribute('data-board-menu-value') || '') === boardMenuActiveValue);
+        });
       });
 
       modal.addEventListener('click', (e) => {
@@ -9886,10 +9978,14 @@ class ClaudeOrchestrator {
 	        }
 	        if (e.key === 'b' || e.key === 'B') {
 	          e.preventDefault();
-	          try {
-	            boardBtnEl?.click?.();
-	          } catch {
-	            // ignore
+	          if (typeof openBoardMenu === 'function') {
+	            openBoardMenu({ focusSearch: true });
+	          } else {
+	            try {
+	              boardBtnEl?.click?.();
+	            } catch {
+	              // ignore
+	            }
 	          }
 	          return;
 	        }
