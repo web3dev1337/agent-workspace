@@ -84,6 +84,7 @@ class UserSettingsService {
 	            // {
 	            //   doneListId?: string,
 	            //   mergedCommentTemplate?: string,
+	            //   mergedLabelNames?: string,
 	            //   dependencyChecklistName?: string,
 	            //   tierFromLabels?: boolean,
 	            //   tierByLabelColor?: { [color: string]: 1|2|3|4 },
