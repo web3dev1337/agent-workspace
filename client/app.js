@@ -3972,6 +3972,27 @@ class ClaudeOrchestrator {
     const now = Date.now();
     if (!this.lastNotificationTime) this.lastNotificationTime = {};
 
+    // Background scheduling rule: while you're in Focus/Review, don't spam toast/browser
+    // notifications for Tier 3/4 agents. Route them into the workflow notification
+    // system (respecting the user's notification mode) and let Background triage handle it.
+    try {
+      const tier = this.getTierForSession(sessionId);
+      if ((tier === 3 || tier === 4) && this.workflowMode !== 'background') {
+        const worktreeId = String(sessionId || '').replace('-claude', '');
+        const session = this.sessions.get(sessionId);
+        const branch = session ? session.branch : '';
+        this.notifyWorkflow?.({
+          type: 'info',
+          message: `Background agent ready: Claude ${worktreeId}${branch ? ` (${branch})` : ''}`,
+          sessionId,
+          metadata: { kind: 'background_ready', tier }
+        });
+        return;
+      }
+    } catch {
+      // ignore
+    }
+
     // Increased rate limit to 30 seconds to avoid spam during todo lists
     if (this.lastNotificationTime[sessionId] && (now - this.lastNotificationTime[sessionId]) < 30000) {
       console.log(`Rate limiting notification for ${sessionId} (shown ${Math.round((now - this.lastNotificationTime[sessionId]) / 1000)}s ago)`);
