@@ -18,8 +18,8 @@ Source context:
 All requested “click click click” Task launch UX is now shipped.
 
 Quality fixes shipped:
-- ✅ Kanban and card detail panels stay left/right aligned (no “detail opens on the left” layout glitch).
-- ✅ Kanban view opens left-aligned by default (no “single column stuck on the right” feel).
+- ✅ Kanban and card detail panels stay left/right aligned (no “detail opens on the left” layout glitch). (PR #290)
+- ✅ Kanban view opens left-aligned by default (no “single column stuck on the right” feel). (PR #290)
 
 Known issues / follow-ups:
 - [ ] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active. (Partially mitigated in PR #276)
@@ -30,7 +30,7 @@ Known issues / follow-ups:
 - [x] Removing a worktree from a workspace should remove both terminals immediately (no F5 needed). (PR #281)
 - [x] Tasks panel: default assignee filter to “All” (not “me”). (PR #283)
 - [x] Tasks panel: add an obvious “New task” button. (PR #287)
-- [ ] Worktree “quick add” should re-evaluate after a new worktree is created (avoid suggesting the just-created worktree as “free”).
+- [x] Worktree “quick add” should re-evaluate after a new worktree is created (avoid suggesting the just-created worktree as “free”). (PR #289)
 - [ ] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start (“quick work in background”).
 - [ ] Trello boards: confirm board background / color theming remains consistent per-board (if applicable).
 - [ ] Tasks board “wrap/expand” layout: re-check column auto-layout to ensure it minimizes columns (considers collapsed/hidden lists and fills vertically before adding columns).
