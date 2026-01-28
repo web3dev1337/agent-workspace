@@ -18,6 +18,8 @@ Process discipline:
 ## Workflow v2 (Focus / Review / Background)
 
 - [ ] Review Console v1: unified per-worktree review surface (terminals + files + commits + diff) tied to Queue “Next”. (See `PLANS/2026-01-25/REVIEW_CONSOLE_V1.md`)
+  - [x] Queue detail “Console” opens a docked Review Console (Worktree Inspector) for worktree tasks. (PR #371)
+  - [x] Review Console: merge PR button for mergeable open PRs. (PR #372)
 - [x] “Conveyor” mode for Review: one-at-a-time Tier 2 queue + explicit “Next” affordances (minimize decision fatigue). (PR #313)
 - [x] Stronger “Review complete” feedback loop: per-task nudges, sound/desktop options, and auto-open next item when configured. (PR #313)
 - [ ] “Background” mode improvements: triage queue + auto-scheduling rules (e.g., tiered retries, safe backoff).
@@ -109,3 +111,4 @@ Process discipline:
 - [x] Persist terminal filters (View mode + Tier filter) across refreshes (server-backed user settings). (PR #363)
 - [x] Queue: add 🗂 Inspect action to open Worktree Inspector from Queue detail (Review Console entrypoint). (PR #367)
 - [x] Worktree Inspector: Files Tree/List toggle with folder structure + aggregated staged/unstaged +/- stats. (PR #369)
+- [x] Worktree Inspector: ✅ Merge button for open PRs (server-backed `gh pr merge`). (PR #372)
