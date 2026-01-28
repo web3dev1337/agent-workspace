@@ -300,7 +300,7 @@ class TaskDependencyService {
       const deps = depsById.get(id) || [];
       for (const dep of deps) {
         ensureNode(dep);
-        edges.push({ from: id, to: dep });
+        edges.push({ from: id, to: dep, source: 'record' });
         const nextDist = dist + 1;
         const prev = visited.get(dep);
         if (prev === undefined || nextDist < prev) {
@@ -322,7 +322,7 @@ class TaskDependencyService {
             ensureNode(toId);
             const state = String(item?.state || '').toLowerCase();
             const satisfied = state === 'complete';
-            edges.push({ from: id, to: toId, satisfied, reason: satisfied ? 'trello_dep_complete' : 'trello_dep_incomplete' });
+            edges.push({ from: id, to: toId, satisfied, reason: satisfied ? 'trello_dep_complete' : 'trello_dep_incomplete', source: 'trello_checklist' });
 
             const nextDist = dist + 1;
             const prev = visited.get(toId);
@@ -362,14 +362,15 @@ class TaskDependencyService {
 
     const edgesResolved = edges.map((e) => {
       if (typeof e.satisfied === 'boolean') {
-        return { from: e.from, to: e.to, satisfied: !!e.satisfied, reason: e.reason || 'known' };
+        return { from: e.from, to: e.to, satisfied: !!e.satisfied, reason: e.reason || 'known', source: e.source || null };
       }
       const resolved = resolvedById.get(e.to);
       return {
         from: e.from,
         to: e.to,
         satisfied: resolved ? !!resolved.satisfied : false,
-        reason: resolved ? resolved.reason : 'unknown'
+        reason: resolved ? resolved.reason : 'unknown',
+        source: e.source || null
       };
     });
 
