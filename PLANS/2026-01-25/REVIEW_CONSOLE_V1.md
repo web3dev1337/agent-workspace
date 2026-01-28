@@ -100,10 +100,11 @@ In Review mode:
    - Add a Worktree Inspector modal showing per-file change stats (+/-) and recent/unpushed commits. (PR #366)
    - Expose the Worktree Inspector from Queue detail actions (so review can start from “Next”). (PR #367)
 3) **Worktree Inspector (v2)**
+   - Add a Tree/List toggle for files (folder structure + aggregated staged/unstaged +/-). (PR #369)
    - Server endpoint(s) to provide:
      - `git status --porcelain` lines (staged/unstaged/untracked)
      - `git diff --stat` (and optionally `--numstat`)
-     - optionally a folder tree aggregation
+     - optionally a folder tree aggregation (server-side, if needed for richer views)
 4) **Commit list**
    - Server endpoint to provide commit log for a worktree (ideally “since base branch merge-base”).
 5) **Review Console overlay**
