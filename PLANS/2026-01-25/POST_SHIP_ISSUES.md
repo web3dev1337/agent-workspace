@@ -7,7 +7,7 @@ The 2026-01-25 brain-dump implementation plan is fully checked off; this file tr
 - [x] Status lights: avoid false “waiting” when output ends with a lone `>` line (prompt gating in `StatusDetector`). (PR #394)
 - [ ] Status lights: investigate remaining green/orange/grey flicker for agent + worktree dots (esp. Codex sessions).
 - [ ] Tasks panel: board view sometimes appears scrolled to the far right (single column “right aligned”).
-- [ ] Tasks panel: selecting a card sometimes opens details on the wrong side / causes layout reflow.
+- [x] Tasks panel: selecting a card sometimes opens details on the wrong side / causes layout reflow. (PR #395)
 - [ ] Worktree status badges: green/grey/orange accuracy still fluctuates while agents are running.
 - [ ] Closing a worktree should remove agent/server terminals without requiring a full refresh.
 
