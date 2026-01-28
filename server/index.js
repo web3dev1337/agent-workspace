@@ -69,6 +69,7 @@ const { TaskDependencyService } = require('./taskDependencyService');
 const { TaskTicketingService } = require('./taskTicketingService');
 const { TaskTicketMoveService } = require('./taskTicketMoveService');
 const { PrMergeAutomationService } = require('./prMergeAutomationService');
+const { GitHubRepoService } = require('./githubRepoService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
@@ -202,6 +203,7 @@ const promptArtifactService = PromptArtifactService.getInstance();
 const taskTicketingService = TaskTicketingService.getInstance();
 const taskDependencyService = TaskDependencyService.getInstance({ taskRecordService, pullRequestService, taskTicketingService });
 const processAdvisorService = ProcessAdvisorService.getInstance({ processStatusService, processTelemetryService, processTaskService, taskRecordService, taskDependencyService });
+const githubRepoService = GitHubRepoService.getInstance();
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -2357,6 +2359,25 @@ app.post('/api/worktree-conflicts', async (req, res) => {
   } catch (error) {
     logger.error('Failed to analyze worktree conflicts', { error: error.message });
     res.status(500).json({ error: 'Failed to analyze worktree conflicts' });
+  }
+});
+
+// ============================================
+// GitHub API
+// ============================================
+
+app.get('/api/github/repos', async (req, res) => {
+  try {
+    const owner = typeof req.query.owner === 'string' ? req.query.owner.trim() : '';
+    const limitRaw = parseInt(String(req.query.limit || '200'), 10);
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 2000) : 200;
+    const force = String(req.query.force || '').toLowerCase() === 'true';
+
+    const repos = await githubRepoService.listRepos({ owner: owner || null, limit, force });
+    res.json(repos);
+  } catch (error) {
+    logger.error('Failed to list GitHub repos', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to list GitHub repos' });
   }
 });
 

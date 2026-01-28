@@ -10077,8 +10077,17 @@ class ClaudeOrchestrator {
 			          <div class="tasks-inline-row">
 			            <input id="tasks-board-local-path" class="tasks-input" placeholder="Local repo path or GitHub-relative path (e.g. games/hytopia/zoo)" value="${this.escapeHtml(localPath)}" />
 			          </div>
-		          <div class="tasks-inline-row" style="margin-top:8px">
-		            <input id="tasks-board-repo-slug" class="tasks-input" placeholder="GitHub repo slug (optional, e.g. owner/repo)" value="${this.escapeHtml(repoSlug)}" />
+	          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap; margin-top:8px;">
+	            <select id="tasks-board-gh-repo-picker" class="tasks-select tasks-select-inline" title="Pick a GitHub repo slug (via gh)" style="flex:1; min-width: 260px;" disabled>
+	              <option value="">Loading GitHub repos…</option>
+	            </select>
+	            <button class="btn-secondary" id="tasks-board-gh-repo-picker-refresh" type="button" title="Refresh GitHub repos">↻</button>
+	          </div>
+	          <div class="tasks-detail-meta" style="margin-top:8px">
+	            Pick from your GitHub repos (via <code>gh</code>) to fill <strong>Repo slug</strong>. You can still type manually.
+	          </div>
+	          <div class="tasks-inline-row" style="margin-top:8px">
+	            <input id="tasks-board-repo-slug" class="tasks-input" placeholder="GitHub repo slug (optional, e.g. owner/repo)" value="${this.escapeHtml(repoSlug)}" />
 	          </div>
 	          <div class="tasks-inline-row" style="margin-top:8px">
 	            <select id="tasks-board-default-tier" class="tasks-select tasks-select-inline" title="Default tier when launching from this board">
@@ -10118,6 +10127,9 @@ class ClaudeOrchestrator {
 		      const repoPickerEl = detailEl.querySelector('#tasks-board-repo-picker');
 		      const repoPickerRefreshEl = detailEl.querySelector('#tasks-board-repo-picker-refresh');
 		      const localPathEl = detailEl.querySelector('#tasks-board-local-path');
+		      const ghRepoPickerEl = detailEl.querySelector('#tasks-board-gh-repo-picker');
+		      const ghRepoPickerRefreshEl = detailEl.querySelector('#tasks-board-gh-repo-picker-refresh');
+		      const repoSlugEl = detailEl.querySelector('#tasks-board-repo-slug');
 
 		      const normalizePath = (value) => String(value || '')
 		        .replace(/\\/g, '/')
@@ -10184,9 +10196,46 @@ class ClaudeOrchestrator {
 		        repoPickerEl.disabled = false;
 		      };
 
+		      const populateGitHubRepoPicker = async ({ force = false } = {}) => {
+		        if (!ghRepoPickerEl) return;
+		        ghRepoPickerEl.disabled = true;
+		        ghRepoPickerEl.innerHTML = `<option value="">${force ? 'Refreshing GitHub repos…' : 'Loading GitHub repos…'}</option>`;
+
+		        let repos = [];
+		        try {
+		          repos = await this.getGitHubRepos({ force, limit: 500 });
+		        } catch (e) {
+		          ghRepoPickerEl.innerHTML = `<option value="">GitHub repos unavailable (gh auth login)</option>`;
+		          return;
+		        }
+
+		        const items = (Array.isArray(repos) ? repos : [])
+		          .map((r) => {
+		            const slug = String(r?.nameWithOwner || '').trim();
+		            const visibility = String(r?.visibility || '').trim();
+		            const label = visibility ? `${slug} • ${visibility}` : slug;
+		            return { slug, label };
+		          })
+		          .filter((x) => !!x.slug)
+		          .sort((a, b) => a.slug.localeCompare(b.slug));
+
+		        const current = String(repoSlugEl?.value || '').trim();
+		        ghRepoPickerEl.innerHTML = `<option value="">Pick GitHub repo…</option>` + items.map((it) => {
+		          const selected = current && it.slug.toLowerCase() === current.toLowerCase();
+		          return `<option value="${this.escapeHtml(it.slug)}" ${selected ? 'selected' : ''}>${this.escapeHtml(it.label)}</option>`;
+		        }).join('');
+
+		        ghRepoPickerEl.disabled = false;
+		      };
+
 		      repoPickerEl?.addEventListener('change', () => {
 		        const v = String(repoPickerEl.value || '').trim();
 		        if (v && localPathEl) localPathEl.value = v;
+		      });
+
+		      ghRepoPickerEl?.addEventListener('change', () => {
+		        const v = String(ghRepoPickerEl.value || '').trim();
+		        if (repoSlugEl && v) repoSlugEl.value = v;
 		      });
 
 		      repoPickerRefreshEl?.addEventListener('click', async () => {
@@ -10199,6 +10248,17 @@ class ClaudeOrchestrator {
 		      });
 
 		      populateRepoPicker({ force: false }).catch(() => {});
+
+		      ghRepoPickerRefreshEl?.addEventListener('click', async () => {
+		        if (ghRepoPickerRefreshEl) ghRepoPickerRefreshEl.disabled = true;
+		        try {
+		          await populateGitHubRepoPicker({ force: true });
+		        } finally {
+		          if (ghRepoPickerRefreshEl) ghRepoPickerRefreshEl.disabled = false;
+		        }
+		      });
+
+		      populateGitHubRepoPicker({ force: false }).catch(() => {});
 
 			      const saveBtn = detailEl.querySelector('#tasks-board-save');
 			      saveBtn?.addEventListener('click', async () => {
@@ -18775,6 +18835,33 @@ class ClaudeOrchestrator {
     const repos = await res.json();
     const arr = Array.isArray(repos) ? repos : [];
     this.scannedReposCache = { value: arr, fetchedAt: now };
+    return arr;
+  }
+
+  async getGitHubRepos({ force = false, limit = 500, owner = null } = {}) {
+    const now = Date.now();
+    const ttlMs = 60_000;
+    const limitRaw = Number(limit);
+    const safeLimit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.round(limitRaw), 1), 2000) : 500;
+    const ownerKey = owner ? String(owner).trim() : '';
+    const key = `${ownerKey}:${safeLimit}`;
+
+    if (!force && this.githubReposCache?.key === key && this.githubReposCache?.value && (now - (this.githubReposCache.fetchedAt || 0) < ttlMs)) {
+      return this.githubReposCache.value;
+    }
+
+    const url = new URL('/api/github/repos', window.location.origin);
+    url.searchParams.set('limit', String(safeLimit));
+    if (ownerKey) url.searchParams.set('owner', ownerKey);
+    if (force) url.searchParams.set('force', 'true');
+
+    const res = await fetch(url.toString());
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(String(data?.error || 'Failed to list GitHub repos'));
+    }
+    const arr = Array.isArray(data) ? data : [];
+    this.githubReposCache = { key, value: arr, fetchedAt: now };
     return arr;
   }
 
