@@ -5976,16 +5976,21 @@ class ClaudeOrchestrator {
 			        <div class="worktree-inspector-panel worktree-inspector-review-panel">
 			          <div class="worktree-inspector-panel-title">Review</div>
 			          <div class="worktree-inspector-review-controls">
-		            <button class="btn-secondary" type="button" data-review-start="true" title="Start review timer">⏱ Start</button>
-		            <button class="btn-secondary" type="button" data-review-stop="true" title="Stop review timer">⏹ Stop</button>
-		            <select class="tasks-select tasks-select-inline" data-review-outcome="true" title="Review outcome" style="width:180px;">
-		              <option value="" ${reviewOutcomeValue ? '' : 'selected'}>(outcome)</option>
-		              <option value="approved" ${reviewOutcomeValue === 'approved' ? 'selected' : ''}>approved</option>
-		              <option value="needs_fix" ${reviewOutcomeValue === 'needs_fix' ? 'selected' : ''}>needs_fix</option>
-		              <option value="commented" ${reviewOutcomeValue === 'commented' ? 'selected' : ''}>commented</option>
-		              <option value="skipped" ${reviewOutcomeValue === 'skipped' ? 'selected' : ''}>skipped</option>
-		            </select>
-		          </div>
+			            <button class="btn-secondary" type="button" data-review-start="true" title="Start review timer">⏱ Start</button>
+			            <button class="btn-secondary" type="button" data-review-stop="true" title="Stop review timer">⏹ Stop</button>
+			            <select class="tasks-select tasks-select-inline" data-review-outcome="true" title="Review outcome" style="width:180px;">
+			              <option value="" ${reviewOutcomeValue ? '' : 'selected'}>(outcome)</option>
+			              <option value="approved" ${reviewOutcomeValue === 'approved' ? 'selected' : ''}>approved</option>
+			              <option value="needs_fix" ${reviewOutcomeValue === 'needs_fix' ? 'selected' : ''}>needs_fix</option>
+			              <option value="commented" ${reviewOutcomeValue === 'commented' ? 'selected' : ''}>commented</option>
+			              <option value="skipped" ${reviewOutcomeValue === 'skipped' ? 'selected' : ''}>skipped</option>
+			            </select>
+			            ${reviewConsole ? `
+			              <span style="flex:1"></span>
+			              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-queue-nav="prev" title="Queue: previous item">◀ Prev</button>
+			              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-queue-nav="next" title="Queue: next item">Next ▶</button>
+			            ` : ''}
+			          </div>
 			          <div class="worktree-inspector-review-meta">
 			            <div><span style="opacity:0.8;">started:</span> <span id="worktree-inspector-review-started" class="mono">${escapeHtml(reviewStartedAt || '—')}</span></div>
 			            <div><span style="opacity:0.8;">ended:</span> <span id="worktree-inspector-review-ended" class="mono">${escapeHtml(reviewEndedAt || (reviewStartedAt ? 'running…' : '—'))}</span></div>
@@ -6627,25 +6632,56 @@ class ClaudeOrchestrator {
 		        }
 		      });
 
-		      const saveNotes = async () => {
-		        if (!reviewNotesEl) return;
-		        try {
-		          reviewNotesEl.disabled = true;
-		          const rec = await updateTaskRecord({ notes: String(reviewNotesEl.value || '') });
-		          applyReviewState(rec);
-		        } catch (e) {
-		          this.showToast(String(e?.message || e), 'error');
-		        } finally {
-		          if (reviewNotesEl) reviewNotesEl.disabled = false;
-		        }
-		      };
-		      reviewNotesEl?.addEventListener('change', saveNotes);
-		      reviewNotesEl?.addEventListener('blur', saveNotes);
-	    } catch (err) {
-	      bodyEl.innerHTML = `
-	        <div style="opacity:0.9; margin-bottom:10px;">Failed to load worktree summary.</div>
-	        <div style="opacity:0.7;" class="mono">${escapeHtml(String(err?.message || err))}</div>
-      `;
+			      const saveNotes = async () => {
+			        if (!reviewNotesEl) return;
+			        try {
+			          reviewNotesEl.disabled = true;
+			          const rec = await updateTaskRecord({ notes: String(reviewNotesEl.value || '') });
+			          applyReviewState(rec);
+			        } catch (e) {
+			          this.showToast(String(e?.message || e), 'error');
+			        } finally {
+			          if (reviewNotesEl) reviewNotesEl.disabled = false;
+			        }
+			      };
+			      reviewNotesEl?.addEventListener('change', saveNotes);
+			      reviewNotesEl?.addEventListener('blur', saveNotes);
+
+			      bodyEl.querySelectorAll('[data-queue-nav]').forEach((btn) => {
+			        btn.addEventListener('click', async () => {
+			          const dir = String(btn?.dataset?.queueNav || '').trim().toLowerCase();
+			          if (!reviewTaskId) return;
+			          if (dir !== 'next' && dir !== 'prev') return;
+
+			          btn.disabled = true;
+			          try {
+			            if (!this.queuePanelApi?.isOpen?.()) {
+			              await this.showQueuePanel({ selectedId: reviewTaskId });
+			            }
+			            const api = this.queuePanelApi;
+			            if (!api?.isOpen?.()) {
+			              this.showToast('Queue not available', 'warning');
+			              return;
+			            }
+			            if (dir === 'next') api.next?.();
+			            else api.prev?.();
+
+			            const selected = api.getSelectedTask?.();
+			            if (selected && (selected.sessionId || selected.worktreePath)) {
+			              this.openReviewConsoleForTask(selected);
+			            }
+			          } catch (e) {
+			            this.showToast(String(e?.message || e), 'error');
+			          } finally {
+			            btn.disabled = false;
+			          }
+			        });
+			      });
+		    } catch (err) {
+		      bodyEl.innerHTML = `
+		        <div style="opacity:0.9; margin-bottom:10px;">Failed to load worktree summary.</div>
+		        <div style="opacity:0.7;" class="mono">${escapeHtml(String(err?.message || err))}</div>
+	      `;
     }
   }
 
@@ -13556,6 +13592,7 @@ class ClaudeOrchestrator {
 
     const existing = document.getElementById('queue-panel');
     if (existing) existing.remove();
+    this.queuePanelApi = null;
 
     const serverUrl = window.location.origin;
     const initialSelectedId = String(opts?.selectedId || '').trim() || null;
@@ -16194,27 +16231,39 @@ class ClaudeOrchestrator {
       if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     });
 
-    const navigate = (dir) => {
-      const ordered = getOrderedTasks(getFilteredTasks());
-      if (!ordered.length) return;
-      const currentIndex = state.selectedId ? ordered.findIndex(t => t.id === state.selectedId) : -1;
-      const nextIndex = currentIndex === -1
-        ? 0
-        : (currentIndex + dir + ordered.length) % ordered.length;
-      selectById(ordered[nextIndex].id, { allowAutoOpenDiff: true });
-    };
+	    const navigate = (dir) => {
+	      const ordered = getOrderedTasks(getFilteredTasks());
+	      if (!ordered.length) return;
+	      const currentIndex = state.selectedId ? ordered.findIndex(t => t.id === state.selectedId) : -1;
+	      const nextIndex = currentIndex === -1
+	        ? 0
+	        : (currentIndex + dir + ordered.length) % ordered.length;
+	      selectById(ordered[nextIndex].id, { allowAutoOpenDiff: true });
+	    };
 
-    prevBtn?.addEventListener('click', () => navigate(-1));
-    nextBtn?.addEventListener('click', () => navigate(1));
+	    const api = {
+	      isOpen: () => !!document.getElementById('queue-panel'),
+	      getState: () => state,
+	      getSelectedId: () => state.selectedId,
+	      getSelectedTask: () => (state.selectedId ? getTaskById(state.selectedId) : null),
+	      selectById: (id, options) => selectById(id, options || {}),
+	      next: () => navigate(1),
+	      prev: () => navigate(-1)
+	    };
+	    this.queuePanelApi = api;
+
+	    prevBtn?.addEventListener('click', () => navigate(-1));
+	    nextBtn?.addEventListener('click', () => navigate(1));
 
     const onKey = (e) => {
       if (e.key === 'Escape') close();
     };
-    const close = () => {
-      document.removeEventListener('keydown', onKey);
-      stopReviewTimer({ reason: 'close', nudge: false }).catch(() => {});
-      modal.remove();
-    };
+	    const close = () => {
+	      document.removeEventListener('keydown', onKey);
+	      stopReviewTimer({ reason: 'close', nudge: false }).catch(() => {});
+	      if (this.queuePanelApi === api) this.queuePanelApi = null;
+	      modal.remove();
+	    };
 
     document.addEventListener('keydown', onKey);
     closeBtn?.addEventListener('click', close);
