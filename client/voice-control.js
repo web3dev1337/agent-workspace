@@ -269,14 +269,15 @@ class VoiceControl {
   setupKeyboardShortcut() {
     // V key for push-to-talk
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'v' && !e.repeat && !this.isInputFocused()) {
+      // Do not steal common shortcuts like Ctrl/Cmd+V.
+      if (e.key === 'v' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !this.isInputFocused()) {
         e.preventDefault();
         this.startListening();
       }
     });
 
     document.addEventListener('keyup', (e) => {
-      if (e.key === 'v' && !this.isInputFocused()) {
+      if (e.key === 'v' && !e.ctrlKey && !e.metaKey && !e.altKey && !this.isInputFocused()) {
         e.preventDefault();
         this.stopListening();
       }
