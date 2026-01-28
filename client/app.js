@@ -3912,6 +3912,7 @@ class ClaudeOrchestrator {
       controlsDiv.innerHTML = `
         ${this.getTierDropdownHTML(sessionId)}
         ${this.getServerQuickControlsHTMLForClaude(sessionId)}
+        ${this.getWorktreeInspectorButtonHTML(sessionId)}
         ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
         ${this.getGitHubButtons(sessionId)}
       `;
@@ -3920,6 +3921,13 @@ class ClaudeOrchestrator {
 
     // Server terminals: keep the existing launch controls.
     controlsDiv.innerHTML = this.getServerControlsHTML(sessionId);
+  }
+
+  getWorktreeInspectorButtonHTML(sessionId) {
+    const session = this.sessions.get(sessionId);
+    const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
+    const disabled = worktreePath ? '' : 'disabled';
+    return `<button class="control-btn" onclick="window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${disabled}>🗂</button>`;
   }
   
   updateServerStatus(sessionId, output) {
@@ -5706,6 +5714,204 @@ class ClaudeOrchestrator {
 
     popup.location.href = baseUrl;
     this.showToast('Opening Advanced Diff Viewer…', 'success');
+  }
+
+  async fetchWorktreeGitSummary(worktreePath, { maxFiles = 300, maxCommits = 25 } = {}) {
+    const p = String(worktreePath || '').trim();
+    if (!p) throw new Error('worktreePath is required');
+
+    const url = new URL('/api/worktree-git-summary', window.location.origin);
+    url.searchParams.set('path', p);
+    if (Number.isFinite(Number(maxFiles))) url.searchParams.set('maxFiles', String(Math.max(0, Math.round(Number(maxFiles)))));
+    if (Number.isFinite(Number(maxCommits))) url.searchParams.set('maxCommits', String(Math.max(0, Math.round(Number(maxCommits)))));
+
+    const res = await fetch(url.toString());
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = String(data?.error || data?.message || res.statusText || 'Failed to fetch git summary');
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  ensureWorktreeInspectorModal() {
+    let modal = document.getElementById('worktree-inspector-modal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'worktree-inspector-modal';
+    modal.className = 'modal hidden worktree-inspector-modal';
+    modal.innerHTML = `
+      <div class="modal-content large-modal">
+        <div class="modal-header">
+          <h3 id="worktree-inspector-title">Worktree Inspector</h3>
+          <button class="close-btn" type="button" id="worktree-inspector-close" aria-label="Close">✕</button>
+        </div>
+        <div class="worktree-inspector-body" id="worktree-inspector-body">
+          <div style="opacity:0.8;">Loading…</div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelector('#worktree-inspector-close')?.addEventListener('click', () => {
+      this.closeWorktreeInspector();
+    });
+
+    modal.addEventListener('mousedown', (e) => {
+      if (e.target === modal) this.closeWorktreeInspector();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.closeWorktreeInspector();
+    });
+
+    return modal;
+  }
+
+  closeWorktreeInspector() {
+    const modal = document.getElementById('worktree-inspector-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+  }
+
+  async openWorktreeInspector(sessionId) {
+    const sid = String(sessionId || '').trim();
+    const session = this.sessions.get(sid);
+    const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
+    if (!worktreePath) {
+      this.showToast('No worktree path found for this session', 'warning');
+      return;
+    }
+
+    const modal = this.ensureWorktreeInspectorModal();
+    modal.classList.remove('hidden');
+
+    const titleEl = modal.querySelector('#worktree-inspector-title');
+    if (titleEl) {
+      const label = session?.worktreeId ? `${session.worktreeId}` : sid;
+      titleEl.textContent = `Worktree Inspector • ${label}`;
+    }
+
+    const bodyEl = modal.querySelector('#worktree-inspector-body');
+    if (!bodyEl) return;
+    bodyEl.innerHTML = '<div style="opacity:0.8;">Loading…</div>';
+
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    try {
+      const summary = await this.fetchWorktreeGitSummary(worktreePath, { maxFiles: 300, maxCommits: 25 });
+      const pr = summary?.pr || {};
+
+      const header = (() => {
+        const branch = escapeHtml(summary?.branch || 'unknown');
+        const ahead = Number(summary?.ahead || 0);
+        const behind = Number(summary?.behind || 0);
+        const dirty = Array.isArray(summary?.files) ? summary.files.length : 0;
+        const prText = pr?.hasPR && pr?.number ? `PR #${Number(pr.number)}` : 'No PR';
+        const prState = pr?.hasPR ? String(pr?.state || '').toLowerCase() : '';
+        const prUrl = pr?.hasPR && pr?.url ? String(pr.url) : '';
+
+        const parts = [];
+        parts.push(`<span class="worktree-inspector-chip" title="${escapeHtml(worktreePath)}">📁 ${escapeHtml(worktreePath)}</span>`);
+        parts.push(`<span class="worktree-inspector-chip">🌿 ${branch}</span>`);
+        if (behind > 0) parts.push(`<span class="worktree-inspector-chip">⇣${behind}</span>`);
+        if (ahead > 0) parts.push(`<span class="worktree-inspector-chip">⇡${ahead}</span>`);
+        parts.push(`<span class="worktree-inspector-chip">Δ files ${dirty}</span>`);
+
+        const prChip = prUrl
+          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-pr-url="${escapeHtml(prUrl)}" title="Open PR">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</button>`
+          : `<span class="worktree-inspector-chip">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</span>`;
+        parts.push(prChip);
+
+        const diffBtn = prUrl
+          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff="${escapeHtml(prUrl)}" title="Open diff viewer for PR">🔍 Diff</button>`
+          : `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff-home="true" title="Open diff viewer">🔍 Diff</button>`;
+        parts.push(diffBtn);
+
+        return `<div class="worktree-inspector-header">${parts.join('')}</div>`;
+      })();
+
+      const files = Array.isArray(summary?.files) ? summary.files : [];
+      const fileRows = files.map((f) => {
+        const status = `${String(f?.indexStatus || ' ')}${String(f?.worktreeStatus || ' ')}`.trim() || '·';
+        const staged = f?.staged
+          ? (f.staged.binary ? 'bin' : `+${Number(f.staged.added || 0)}/-${Number(f.staged.deleted || 0)}`)
+          : '';
+        const unstaged = f?.unstaged
+          ? (f.unstaged.binary ? 'bin' : `+${Number(f.unstaged.added || 0)}/-${Number(f.unstaged.deleted || 0)}`)
+          : '';
+        const path = escapeHtml(f?.path || '');
+        const oldPath = f?.oldPath ? escapeHtml(f.oldPath) : '';
+        const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
+        return `
+          <tr>
+            <td class="mono">${escapeHtml(status)}</td>
+            <td class="mono">${path}${renameHint}</td>
+            <td class="mono">${escapeHtml(staged)}</td>
+            <td class="mono">${escapeHtml(unstaged)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const commits = Array.isArray(summary?.unpushedCommits) && summary.unpushedCommits.length
+        ? summary.unpushedCommits
+        : (Array.isArray(summary?.commits) ? summary.commits : []);
+      const commitsTitle = (Array.isArray(summary?.unpushedCommits) && summary.unpushedCommits.length) ? 'Unpushed commits' : 'Recent commits';
+      const commitRows = commits.slice(0, 50).map((c) => {
+        const hash = escapeHtml(c?.hash || '');
+        const date = escapeHtml(c?.date || '');
+        const msg = escapeHtml(c?.message || '');
+        return `<div class="worktree-inspector-commit mono"><span class="worktree-inspector-commit-hash">${hash}</span><span class="worktree-inspector-commit-date">${date}</span><span class="worktree-inspector-commit-msg">${msg}</span></div>`;
+      }).join('');
+
+      bodyEl.innerHTML = `
+        ${header}
+        <div class="worktree-inspector-grid">
+          <div class="worktree-inspector-panel">
+            <div class="worktree-inspector-panel-title">Files</div>
+            <table class="worktree-inspector-table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Path</th>
+                  <th>Staged</th>
+                  <th>Unstaged</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${fileRows || `<tr><td colspan="4" style="opacity:0.8;">No changes.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+          <div class="worktree-inspector-panel">
+            <div class="worktree-inspector-panel-title">${escapeHtml(commitsTitle)}</div>
+            <div class="worktree-inspector-commits">
+              ${commitRows || `<div style="opacity:0.8;">No commits found.</div>`}
+            </div>
+          </div>
+        </div>
+      `;
+
+      bodyEl.querySelector('[data-open-diff-home]')?.addEventListener('click', () => this.openDiffViewerHome());
+      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
+        const url = e.target?.dataset?.openDiff;
+        if (url) this.launchDiffViewer(url);
+      });
+      bodyEl.querySelector('[data-pr-url]')?.addEventListener('click', (e) => {
+        const url = e.target?.dataset?.prUrl;
+        if (url) this.openPRLink(url);
+      });
+    } catch (err) {
+      bodyEl.innerHTML = `
+        <div style="opacity:0.9; margin-bottom:10px;">Failed to load worktree summary.</div>
+        <div style="opacity:0.7;" class="mono">${escapeHtml(String(err?.message || err))}</div>
+      `;
+    }
   }
 
   getAuthToken() {
