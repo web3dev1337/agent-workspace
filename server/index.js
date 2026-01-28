@@ -51,6 +51,7 @@ const { ProductLauncherService } = require('./productLauncherService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
 const { WorktreeMetadataService } = require('./worktreeMetadataService');
+const { WorktreeGitService } = require('./worktreeGitService');
 const { ProjectMetadataService } = require('./projectMetadataService');
 const { WorktreeConflictService } = require('./worktreeConflictService');
 const { WorktreeTagService } = require('./worktreeTagService');
@@ -184,6 +185,7 @@ const quickLinksService = QuickLinksService.getInstance();
 const productLauncherService = ProductLauncherService.getInstance();
 const conversationService = ConversationService.getInstance();
 const worktreeMetadataService = WorktreeMetadataService.getInstance();
+const worktreeGitService = WorktreeGitService.getInstance();
 const projectMetadataService = ProjectMetadataService.getInstance();
 const worktreeConflictService = new WorktreeConflictService({ projectMetadataService, worktreeMetadataService });
 const worktreeTagService = WorktreeTagService.getInstance();
@@ -2266,6 +2268,34 @@ app.post('/api/worktree-metadata/refresh', async (req, res) => {
   } catch (error) {
     logger.error('Failed to refresh worktree metadata', { error: error.message });
     res.status(500).json({ error: 'Failed to refresh metadata' });
+  }
+});
+
+// ============================================
+// Worktree Git Summary API
+// ============================================
+
+app.get('/api/worktree-git-summary', async (req, res) => {
+  try {
+    const { path: worktreePath } = req.query;
+    if (!worktreePath) {
+      return res.status(400).json({ error: 'path query parameter is required' });
+    }
+
+    const maxFiles = req.query.maxFiles ? Number(req.query.maxFiles) : undefined;
+    const maxCommits = req.query.maxCommits ? Number(req.query.maxCommits) : undefined;
+
+    const summary = await worktreeGitService.getSummary(worktreePath, { maxFiles, maxCommits });
+    let pr = null;
+    try {
+      pr = await worktreeMetadataService.getPRStatus(worktreePath);
+    } catch {
+      pr = null;
+    }
+    res.json({ ...summary, pr });
+  } catch (error) {
+    logger.error('Failed to get worktree git summary', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get git summary' });
   }
 });
 
