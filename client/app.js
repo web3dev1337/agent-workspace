@@ -11007,12 +11007,12 @@ class ClaudeOrchestrator {
             `
             : (cardBoardId ? `<button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-setup title="Set Board Settings to enable Launch">⚙</button>` : '');
 
-          return `
-            <div class="task-card-row task-card-list" data-card-id="${c.id}" data-board-id="${escapeHtml(cardBoardId)}" data-url="${c.url || ''}">
-              <div class="task-card-list-main">
-                <div class="task-card-title">${boardDot}${title}</div>
-                <div class="task-card-meta">${meta}</div>
-              </div>
+	          return `
+	            <div class="task-card-row task-card-list" tabindex="-1" data-card-id="${c.id}" data-board-id="${escapeHtml(cardBoardId)}" data-url="${c.url || ''}">
+	              <div class="task-card-list-main">
+	                <div class="task-card-title">${boardDot}${title}</div>
+	                <div class="task-card-meta">${meta}</div>
+	              </div>
               ${quickLaunchHtml ? `<div class="task-card-list-actions">${quickLaunchHtml}</div>` : ''}
             </div>
           `;
@@ -11624,12 +11624,12 @@ class ClaudeOrchestrator {
                           last
                         ].filter(Boolean).join(' • ');
 
-                        return `
-                          <div class="task-card-row task-card-board" data-card-id="${escapeHtml(c.id)}" data-board-id="${escapeHtml(cardBoardId)}" data-url="${escapeHtml(c?.url || '')}">
-                            <div class="task-card-top">
-                              <div class="task-card-meta">${escapeHtml(meta)}</div>
-                              <div class="task-card-top-right">${quickLaunchHtml}</div>
-                            </div>
+	                        return `
+	                          <div class="task-card-row task-card-board" tabindex="-1" data-card-id="${escapeHtml(c.id)}" data-board-id="${escapeHtml(cardBoardId)}" data-url="${escapeHtml(c?.url || '')}">
+	                            <div class="task-card-top">
+	                              <div class="task-card-meta">${escapeHtml(meta)}</div>
+	                              <div class="task-card-top-right">${quickLaunchHtml}</div>
+	                            </div>
                             <div class="task-card-title">${title}</div>
                           </div>
                         `;
@@ -12007,12 +12007,12 @@ class ClaudeOrchestrator {
 	                        <button class="btn-secondary tasks-quick-launch-btn" type="button" data-quick-launch-setup title="Set Board Settings to enable Launch">⚙</button>
 	                      `;
 
-		                    return `
-		                      <div class="task-card-row task-card-board" draggable="true" data-card-id="${c.id}" data-board-id="${escapeHtml(state.boardId)}" data-origin-list-id="${list.id}" data-url="${escapeHtml(c?.url || '')}">
-		                        <div class="task-card-top">
-		                          ${renderCompactLabels(labels)}
-		                          <div class="task-card-top-right">
-		                            ${quickLaunchHtml}
+			                    return `
+			                      <div class="task-card-row task-card-board" tabindex="-1" draggable="true" data-card-id="${c.id}" data-board-id="${escapeHtml(state.boardId)}" data-origin-list-id="${list.id}" data-url="${escapeHtml(c?.url || '')}">
+			                        <div class="task-card-top">
+			                          ${renderCompactLabels(labels)}
+			                          <div class="task-card-top-right">
+			                            ${quickLaunchHtml}
 	                            <div class="task-card-assignees">
 	                              ${members.map(m => {
 	                                const url = m?.username ? `https://trello.com/${m.username}` : '';
@@ -13013,8 +13013,13 @@ class ClaudeOrchestrator {
 	      const cardId = row.dataset.cardId;
 	      if (!cardId) return;
 
-      cardsEl.querySelectorAll('.task-card-row.active').forEach(el => el.classList.remove('active'));
-      row.classList.add('active');
+	      cardsEl.querySelectorAll('.task-card-row.active').forEach(el => el.classList.remove('active'));
+	      row.classList.add('active');
+        try {
+          row.focus?.({ preventScroll: true });
+        } catch {
+          // ignore
+        }
 
       detailEl.innerHTML = `<div class="loading">Loading card…</div>`;
       try {
@@ -13568,17 +13573,18 @@ class ClaudeOrchestrator {
 	        return cardsEl?.querySelector?.('.task-card-row');
 	      };
 
-	      const setActiveRow = (row) => {
-	        if (!row || !cardsEl) return;
-	        try {
-	          cardsEl.querySelectorAll('.task-card-row.active').forEach(el => el.classList.remove('active'));
-	          row.classList.add('active');
-            const isBoardView = state.view === 'board' && state.boardId !== ALL_BOARDS_ID;
-	          row.scrollIntoView?.({ block: 'nearest', inline: isBoardView ? 'start' : 'nearest' });
-	        } catch {
-	          // ignore
-	        }
-	      };
+		      const setActiveRow = (row) => {
+		        if (!row || !cardsEl) return;
+		        try {
+		          cardsEl.querySelectorAll('.task-card-row.active').forEach(el => el.classList.remove('active'));
+		          row.classList.add('active');
+	            const isBoardView = state.view === 'board' && state.boardId !== ALL_BOARDS_ID;
+		          row.scrollIntoView?.({ block: 'nearest', inline: isBoardView ? 'start' : 'nearest' });
+              row.focus?.({ preventScroll: true });
+		        } catch {
+		          // ignore
+		        }
+		      };
 
 	      const resolveRowBoardId = (row) => {
 	        if (!row) return String(state.boardId || '').trim();
