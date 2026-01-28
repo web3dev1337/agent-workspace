@@ -79,6 +79,10 @@ With presets:
 - Deep review: Terminals + Files + Commits + Diff
 - Code-only: Files + Diff (no terminals)
 
+Shipped (v1):
+- The docked Review Console (Worktree Inspector) includes a **Layout** panel with presets (Default/Review/Deep/Terminals/Code) and section toggles (Terminals/Files/Commits).
+- Diff is still v1: opens the Advanced Diff Viewer (new tab) rather than embedding diffs inline.
+
 ### Scope (how many worktrees)
 
 Likely default to **one review unit at a time**, but allow 2–3 when screen allows.
