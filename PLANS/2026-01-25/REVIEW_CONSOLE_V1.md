@@ -74,14 +74,15 @@ The Review Console should allow these sections to be turned on/off:
 - Diff
 
 With presets:
-- Default: Terminals only
+- Default: Terminals + Files + Commits + Diff
 - Review: Terminals + Files + Diff
-- Deep review: Terminals + Files + Commits + Diff
-- Code-only: Files + Diff (no terminals)
+- Deep: Terminals + Files + Commits + Diff
+- Terminals: Terminals only
+- Code: Files + Commits + Diff (no terminals)
 
 Shipped (v1):
-- The docked Review Console (Worktree Inspector) includes a **Layout** panel with presets (Default/Review/Deep/Terminals/Code) and section toggles (Terminals/Files/Commits).
-- Diff is still v1: opens the Advanced Diff Viewer (new tab) rather than embedding diffs inline.
+- The docked Review Console (Worktree Inspector) includes a **Layout** panel with presets (Default/Review/Deep/Terminals/Code) and section toggles (Terminals/Files/Commits/Diff).
+- Diff supports both **Open** (new tab) and **Embed** (iframe) inside the console (opt-in; persisted via `ui.reviewConsole.diffEmbed`).
 
 ### Scope (how many worktrees)
 
@@ -92,6 +93,7 @@ Likely default to **one review unit at a time**, but allow 2–3 when screen all
 In Review mode:
 - Selecting an item in Queue should offer **Open Review Console**.
 - ✅ Queue: “Auto Console” toggle auto-opens Review Console for worktree/session items while navigating. (PR #378)
+- ✅ Review Console: Prev/Next buttons advance using Queue ordering (when Queue is open). (PR #383)
 - Queue detail now includes **🗂 Inspect** to open the Worktree Inspector for the selected task (session/worktree-aware). (PR #367)
 - “Next” should advance the review unit (Tier 3 first, but configurable).
 

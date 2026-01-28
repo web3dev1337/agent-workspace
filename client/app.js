@@ -5533,11 +5533,13 @@ class ClaudeOrchestrator {
       : { ...storedSections };
 
     const fullscreen = cfg.fullscreen === true || appliedSections.terminals === false;
+    const diffEmbed = cfg.diffEmbed === true;
 
     return {
       preset,
       sections: appliedSections,
-      fullscreen
+      fullscreen,
+      diffEmbed
     };
   }
 
@@ -5884,15 +5886,36 @@ class ClaudeOrchestrator {
 		      const rcShowTerminals = !reviewConsole || rcSections.terminals !== false;
 		      const rcShowFiles = !reviewConsole || rcSections.files !== false;
 		      const rcShowCommits = !reviewConsole || rcSections.commits !== false;
+		      const rcShowDiff = reviewConsole && rcSections.diff !== false;
+
+		      const prText = pr?.hasPR && pr?.number ? `PR #${Number(pr.number)}` : 'No PR';
+		      const prState = pr?.hasPR ? String(pr?.state || '').toLowerCase() : '';
+		      const prUrl = pr?.hasPR && pr?.url ? String(pr.url) : '';
+		      const getDiffViewerPathForGitHubUrl = (githubUrl) => {
+		        const url = String(githubUrl || '').trim();
+		        if (!url) return '';
+
+		        const prMatch = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
+		        if (prMatch) {
+		          const [, owner, repo, prNumber] = prMatch;
+		          return `/pr/${owner}/${repo}/${prNumber}`;
+		        }
+
+		        const commitMatch = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/i);
+		        if (commitMatch) {
+		          const [, owner, repo, sha] = commitMatch;
+		          return `/commit/${owner}/${repo}/${sha}`;
+		        }
+
+		        return '';
+		      };
+		      const diffViewerPath = prUrl ? getDiffViewerPathForGitHubUrl(prUrl) : '';
 
 		      const header = (() => {
 		        const branch = escapeHtml(summary?.branch || 'unknown');
 		        const ahead = Number(summary?.ahead || 0);
 		        const behind = Number(summary?.behind || 0);
 	        const dirty = Array.isArray(summary?.files) ? summary.files.length : 0;
-        const prText = pr?.hasPR && pr?.number ? `PR #${Number(pr.number)}` : 'No PR';
-        const prState = pr?.hasPR ? String(pr?.state || '').toLowerCase() : '';
-        const prUrl = pr?.hasPR && pr?.url ? String(pr.url) : '';
 
         const parts = [];
         parts.push(`<span class="worktree-inspector-chip" title="${escapeHtml(p)}">📁 ${escapeHtml(p)}</span>`);
@@ -5953,11 +5976,11 @@ class ClaudeOrchestrator {
 			            <div class="worktree-inspector-layout-row">
 			              <div class="worktree-inspector-layout-label">Preset</div>
 			              <div class="worktree-inspector-layout-buttons">
-			                ${presetBtn('default', 'Default', 'Terminals + Files + Commits')}
-			                ${presetBtn('review', 'Review', 'Terminals + Files')}
-			                ${presetBtn('deep', 'Deep', 'Terminals + Files + Commits')}
+			                ${presetBtn('default', 'Default', 'Terminals + Files + Commits + Diff')}
+			                ${presetBtn('review', 'Review', 'Terminals + Files + Diff')}
+			                ${presetBtn('deep', 'Deep', 'Terminals + Files + Commits + Diff')}
 			                ${presetBtn('terminals', 'Terminals', 'Terminals only')}
-			                ${presetBtn('code', 'Code', 'Files + Commits (no terminals)')}
+			                ${presetBtn('code', 'Code', 'Files + Commits + Diff (no terminals)')}
 			              </div>
 			            </div>
 			            <div class="worktree-inspector-layout-row">
@@ -5966,6 +5989,7 @@ class ClaudeOrchestrator {
 			                ${sectionBtn('terminals', 'Terminals', 'Docked view: show terminals outside the console')}
 			                ${sectionBtn('files', 'Files', 'Changed files')}
 			                ${sectionBtn('commits', 'Commits', 'Recent/unpushed commits')}
+			                ${sectionBtn('diff', 'Diff', 'Advanced Diff Viewer (embed or open in new tab)')}
 			              </div>
 			            </div>
 			          </div>
@@ -6188,17 +6212,33 @@ class ClaudeOrchestrator {
 	        return `<div class="worktree-inspector-commit mono"><span class="worktree-inspector-commit-hash">${hash}</span><span class="worktree-inspector-commit-date">${date}</span><span class="worktree-inspector-commit-msg">${msg}</span></div>`;
 	      }).join('');
 
-		      const visibleSections = (rcShowFiles ? 1 : 0) + (rcShowCommits ? 1 : 0);
+		      const visibleSections = (rcShowFiles ? 1 : 0) + (rcShowCommits ? 1 : 0) + (rcShowDiff ? 1 : 0);
 		      const gridClass = visibleSections === 1 ? 'one-column' : '';
 		      const gridHiddenClass = visibleSections === 0 ? 'hidden' : '';
 		      const filesPanelHiddenClass = rcShowFiles ? '' : 'hidden';
 		      const commitsPanelHiddenClass = rcShowCommits ? '' : 'hidden';
+		      const diffPanelHiddenClass = rcShowDiff ? '' : 'hidden';
+		      const diffPanelHtml = reviewConsole ? `
+		        <div class="worktree-inspector-panel worktree-inspector-diff-panel ${diffPanelHiddenClass}" data-rc-panel="diff">
+		          <div class="worktree-inspector-panel-title-row">
+		            <div class="worktree-inspector-panel-title">Diff</div>
+		            <div class="worktree-inspector-diff-controls">
+		              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-diff-embed="true" title="Embed Advanced Diff Viewer">Embed</button>
+		              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-diff-open="true" title="Open Advanced Diff Viewer in new tab">Open</button>
+		              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-diff-refresh="true" title="Reload embedded diff" disabled>Refresh</button>
+		              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-diff-close="true" title="Close embedded diff" disabled>Close</button>
+		            </div>
+		          </div>
+		          <div class="worktree-inspector-subtle worktree-inspector-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)')}</div>
+		          <iframe class="worktree-inspector-diff-iframe hidden" data-diff-iframe="true" title="Advanced Diff Viewer" referrerpolicy="no-referrer"></iframe>
+		        </div>
+		      ` : '';
 
 			      bodyEl.innerHTML = `
 			        ${header}
 			        ${layoutPanel}
 			        ${reviewPanel}
-			        <div class="worktree-inspector-subtle ${visibleSections === 0 ? '' : 'hidden'}" data-rc-empty="true">Enable Files/Commits sections to see git context.</div>
+			        <div class="worktree-inspector-subtle ${visibleSections === 0 ? '' : 'hidden'}" data-rc-empty="true">Enable Files/Commits/Diff sections to see context.</div>
 			        <div class="worktree-inspector-grid ${gridClass} ${gridHiddenClass}" data-rc-grid="true">
 			          <div class="worktree-inspector-panel worktree-inspector-files-panel ${filesPanelHiddenClass}" data-rc-panel="files">
 			            <div class="worktree-inspector-panel-title-row">
@@ -6235,6 +6275,7 @@ class ClaudeOrchestrator {
 	              ${commitRows || `<div style="opacity:0.8;">No commits found.</div>`}
 	            </div>
 	          </div>
+	          ${diffPanelHtml}
 	        </div>
 			      `;
 
@@ -6304,9 +6345,10 @@ class ClaudeOrchestrator {
 		        const emptyEl = bodyEl.querySelector('[data-rc-empty="true"]');
 		        const filesPanelEl = bodyEl.querySelector('[data-rc-panel="files"]');
 		        const commitsPanelEl = bodyEl.querySelector('[data-rc-panel="commits"]');
+		        const diffPanelEl = bodyEl.querySelector('[data-rc-panel="diff"]');
 
 		        const updateGrid = () => {
-		          const visible = [filesPanelEl, commitsPanelEl]
+		          const visible = [filesPanelEl, commitsPanelEl, diffPanelEl]
 		            .filter(Boolean)
 		            .filter(el => !el.classList.contains('hidden')).length;
 		          if (gridEl) {
@@ -6325,6 +6367,7 @@ class ClaudeOrchestrator {
 
 		          if (filesPanelEl) filesPanelEl.classList.toggle('hidden', currentSections.files === false);
 		          if (commitsPanelEl) commitsPanelEl.classList.toggle('hidden', currentSections.commits === false);
+		          if (diffPanelEl) diffPanelEl.classList.toggle('hidden', currentSections.diff === false);
 		          updateGrid();
 
 		          bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
@@ -6355,6 +6398,114 @@ class ClaudeOrchestrator {
 		          await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
 		        };
 
+		        let diffEmbedEnabled = rc?.diffEmbed === true;
+		        let diffLoadPromise = null;
+		        const diffIframeEl = bodyEl.querySelector('[data-diff-iframe="true"]');
+		        const diffStatusEl = bodyEl.querySelector('[data-diff-status="true"]');
+		        const diffEmbedBtn = bodyEl.querySelector('[data-diff-embed="true"]');
+		        const diffCloseBtn = bodyEl.querySelector('[data-diff-close="true"]');
+		        const diffRefreshBtn = bodyEl.querySelector('[data-diff-refresh="true"]');
+		        const diffOpenBtn = bodyEl.querySelector('[data-diff-open="true"]');
+
+		        const updateDiffControls = () => {
+		          const embedded = !!(diffIframeEl && !diffIframeEl.classList.contains('hidden') && diffIframeEl.src);
+		          if (diffEmbedBtn) diffEmbedBtn.disabled = embedded;
+		          if (diffCloseBtn) diffCloseBtn.disabled = !embedded;
+		          if (diffRefreshBtn) diffRefreshBtn.disabled = !embedded;
+		        };
+
+		        const persistDiffEmbed = async () => {
+		          const existing = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+		            ? this.userSettings.global.ui.reviewConsole
+		            : {};
+		          const nextCfg = { ...existing, diffEmbed: diffEmbedEnabled };
+		          await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
+		        };
+
+		        const ensureDiffViewerBaseUrl = async () => {
+		          let baseUrl = 'http://localhost:7655';
+		          const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
+		          const data = await resp.json().catch(() => ({}));
+		          if (!resp.ok) throw new Error(String(data?.message || data?.error || 'Failed to start diff viewer'));
+		          if (data?.baseUrl) baseUrl = String(data.baseUrl);
+
+		          if (!data?.running) {
+		            const start = Date.now();
+		            const timeoutMs = 120000;
+		            while (Date.now() - start < timeoutMs) {
+		              await new Promise(r => setTimeout(r, 1000));
+		              const statusResp = await fetch('/api/diff-viewer/status');
+		              const status = await statusResp.json().catch(() => ({}));
+		              if (status?.baseUrl) baseUrl = String(status.baseUrl);
+		              if (status?.running) break;
+		            }
+		          }
+
+		          return baseUrl;
+		        };
+
+		        const embedDiff = async ({ showToast = false } = {}) => {
+		          if (!diffIframeEl || !diffStatusEl) return;
+		          if (!diffEmbedEnabled) return;
+		          if (currentSections.diff === false) return;
+		          if (diffLoadPromise) return diffLoadPromise;
+
+		          const targetPath = prUrl ? diffViewerPath : '';
+		          if (prUrl && !targetPath) {
+		            diffStatusEl.textContent = 'Unable to embed: PR URL is not parseable by the Diff Viewer.';
+		            return;
+		          }
+
+		          diffLoadPromise = (async () => {
+		            diffStatusEl.textContent = 'Starting Diff Viewer…';
+		            if (showToast) this.showToast('Embedding diff…', 'info');
+		            try {
+		              const baseUrl = await ensureDiffViewerBaseUrl();
+		              if (!diffEmbedEnabled || currentSections.diff === false) return;
+		              const url = `${baseUrl}${targetPath}`;
+		              diffIframeEl.src = url;
+		              diffIframeEl.classList.remove('hidden');
+		              diffStatusEl.textContent = `Embedded: ${targetPath || baseUrl}`;
+		              if (showToast) this.showToast('Diff embedded', 'success');
+		            } catch (err) {
+		              diffStatusEl.textContent = `Diff Viewer failed to start: ${String(err?.message || err)}`;
+		              if (showToast) this.showToast(`Diff Viewer failed to start: ${String(err?.message || err)}`, 'error');
+		            } finally {
+		              diffLoadPromise = null;
+		              updateDiffControls();
+		            }
+		          })();
+
+		          return diffLoadPromise;
+		        };
+
+		        diffOpenBtn?.addEventListener('click', () => {
+		          if (prUrl) this.launchDiffViewer(prUrl);
+		          else this.openDiffViewerHome();
+		        });
+
+		        diffEmbedBtn?.addEventListener('click', async () => {
+		          diffEmbedEnabled = true;
+		          updateDiffControls();
+		          try { await persistDiffEmbed(); } catch {}
+		          await embedDiff({ showToast: true });
+		        });
+
+		        diffCloseBtn?.addEventListener('click', async () => {
+		          diffEmbedEnabled = false;
+		          if (diffIframeEl) {
+		            diffIframeEl.src = '';
+		            diffIframeEl.classList.add('hidden');
+		          }
+		          if (diffStatusEl) diffStatusEl.textContent = diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)';
+		          updateDiffControls();
+		          try { await persistDiffEmbed(); } catch {}
+		        });
+
+		        diffRefreshBtn?.addEventListener('click', () => {
+		          if (diffIframeEl?.src) diffIframeEl.src = diffIframeEl.src;
+		        });
+
 		        bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
 		          btn.addEventListener('click', async () => {
 		            const key = String(btn?.dataset?.reviewPreset || '').trim().toLowerCase();
@@ -6370,6 +6521,8 @@ class ClaudeOrchestrator {
 		            const nextTerminals = currentSections.terminals !== false;
 		            if (!prevTerminals && nextTerminals) focusTerminals();
 		            try { await persist(); } catch {}
+		            updateDiffControls();
+		            if (diffEmbedEnabled) await embedDiff({ showToast: false });
 		          });
 		        });
 
@@ -6386,10 +6539,14 @@ class ClaudeOrchestrator {
 		            const nextTerminals = currentSections.terminals !== false;
 		            if (key === 'terminals' && !prevTerminals && nextTerminals) focusTerminals();
 		            try { await persist(); } catch {}
+		            updateDiffControls();
+		            if (key === 'diff' && diffEmbedEnabled) await embedDiff({ showToast: false });
 		          });
 		        });
 
 		        applyLayout();
+		        updateDiffControls();
+		        if (diffEmbedEnabled) embedDiff({ showToast: false });
 		      }
 
 		      bodyEl.querySelector('[data-open-diff-home]')?.addEventListener('click', () => this.openDiffViewerHome());

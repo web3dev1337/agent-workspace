@@ -1390,6 +1390,29 @@ header h1 {
   margin-top: 10px;
 }
 
+.worktree-inspector-diff-panel {
+  grid-column: 1 / -1;
+}
+
+.worktree-inspector-diff-controls {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.worktree-inspector-diff-status {
+  margin-bottom: 10px;
+}
+
+.worktree-inspector-diff-iframe {
+  width: 100%;
+  height: clamp(320px, 65vh, 920px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: #0b0b0b;
+}
+
 .worktree-inspector-files.view-tree .worktree-inspector-files-list {
   display: none;
 }
