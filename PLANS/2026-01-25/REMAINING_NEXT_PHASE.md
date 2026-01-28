@@ -48,6 +48,7 @@ Known issues / follow-ups:
 - ✅ Review Console: merge PR button (docked Worktree Inspector). (PR #372)
 - ✅ Review Console: move ticket/card to Done list (board conventions + task record update). (PR #374)
 - ✅ Review Console: review timer + outcome + notes controls. (PR #376)
+- ✅ Queue: “Auto Console” toggle auto-opens Review Console while navigating. (PR #378)
 - [x] Richer notification modes (beyond toast-only) and “review complete” nudges. (PR #274)
 
 ### Integrations / automation
