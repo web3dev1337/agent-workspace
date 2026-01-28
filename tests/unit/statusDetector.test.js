@@ -134,6 +134,20 @@ describe('StatusDetector', () => {
       const status = detector.detectStatus(agentSessionId, buffer);
       expect(status).toBe('busy');
     });
+
+    it('should detect waiting status for Codex prompt', () => {
+      const buffer = 'Starting...\n> ';
+      const status = detector.detectStatus('work1-claude', buffer, { agent: 'codex' });
+      expect(status).toBe('waiting');
+    });
+
+    it('should not set claudeLikely when Codex is the active agent', () => {
+      const sessionId = 'work2-claude';
+      const buffer = 'Welcome to Claude Code!\n? for shortcuts\nSome output\n> ';
+      const status = detector.detectStatus(sessionId, buffer, { agent: 'codex' });
+      expect(status).toBe('waiting');
+      expect(detector.getState(sessionId).claudeLikely).toBe(false);
+    });
   });
 
   describe('looksLikePrompt', () => {
