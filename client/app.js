@@ -225,6 +225,10 @@ class ClaudeOrchestrator {
         this.showQueuePanel();
       });
 
+      document.getElementById('diff-viewer-open')?.addEventListener('click', () => {
+        this.openDiffViewerHome();
+      });
+
       // Workflow mode toggles (tier-aware visibility rules)
       document.getElementById('workflow-focus')?.addEventListener('click', () => {
         this.setWorkflowMode('focus');
@@ -5645,6 +5649,62 @@ class ClaudeOrchestrator {
 
     const diffViewerUrl = `${baseUrl}${diffViewerPath}`;
     popup.location.href = diffViewerUrl;
+    this.showToast('Opening Advanced Diff Viewer…', 'success');
+  }
+
+  async openDiffViewerHome() {
+    const popup = window.open('', '_blank');
+    if (!popup) {
+      this.showToast('Popup blocked - allow popups to open the diff viewer', 'warning');
+      return;
+    }
+
+    try {
+      popup.document.title = 'Starting Diff Viewer…';
+      popup.document.body.style.cssText = 'background:#0b0b0b;color:#d4d4d4;font-family:system-ui, sans-serif;padding:20px;';
+      popup.document.body.innerHTML = `
+        <h2 style="margin:0 0 8px 0;">Starting Advanced Diff Viewer…</h2>
+        <div style="color:#9a9a9a;margin-bottom:14px;">This may take a few seconds the first time.</div>
+      `;
+    } catch {
+      // ignore
+    }
+
+    let baseUrl = 'http://localhost:7655';
+    try {
+      const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data?.message || data?.error || 'Failed to start diff viewer');
+      }
+      if (data?.baseUrl) baseUrl = data.baseUrl;
+
+      if (!data?.running) {
+        const start = Date.now();
+        const timeoutMs = 120000;
+        while (Date.now() - start < timeoutMs) {
+          if (popup.closed) return;
+          await new Promise(r => setTimeout(r, 1000));
+          const statusResp = await fetch('/api/diff-viewer/status');
+          const status = await statusResp.json();
+          if (status?.baseUrl) baseUrl = status.baseUrl;
+          if (status?.running) break;
+        }
+      }
+    } catch (err) {
+      this.showToast(`Diff viewer failed to start: ${err.message}`, 'error');
+      try {
+        popup.document.title = 'Diff Viewer Error';
+        popup.document.body.innerHTML = `
+          <h2 style="margin:0 0 8px 0;color:#ff6b6b;">Failed to start diff viewer</h2>
+          <div style="color:#9a9a9a;margin-bottom:14px;">${String(err.message || err)}</div>
+          <div style="color:#9a9a9a;">Try running <code style="background:#111;border:1px solid #222;border-radius:6px;padding:2px 6px;">./diff-viewer/start-diff-viewer.sh</code> in the repo.</div>
+        `;
+      } catch {}
+      return;
+    }
+
+    popup.location.href = baseUrl;
     this.showToast('Opening Advanced Diff Viewer…', 'success');
   }
 
