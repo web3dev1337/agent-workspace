@@ -129,6 +129,7 @@ class Dashboard {
 	                <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
 	                <div class="dashboard-summary-actions">
                   <button class="dashboard-topbar-btn" id="dashboard-open-prs" title="Open Pull Requests">🔀 PRs</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-project-health" title="Open per-project health dashboard">🩺 Health</button>
                 </div>
               </div>
               <div class="dashboard-summary-card">
@@ -213,6 +214,12 @@ class Dashboard {
       e.preventDefault();
       try {
         this.orchestrator?.showPRsPanel?.();
+      } catch {}
+    });
+    document.getElementById('dashboard-open-project-health')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      try {
+        this.showProjectHealthOverlay();
       } catch {}
     });
     document.getElementById('dashboard-open-advice')?.addEventListener('click', (e) => {
@@ -707,6 +714,266 @@ class Dashboard {
 	      overlay._escHandler = null;
 	    }
 	    overlay.remove();
+	  }
+
+	  async showProjectHealthOverlay() {
+	    const existing = document.getElementById('dashboard-project-health-overlay');
+	    if (existing) {
+	      existing.classList.remove('hidden');
+	      return;
+	    }
+
+	    const overlay = document.createElement('div');
+	    overlay.id = 'dashboard-project-health-overlay';
+	    overlay.className = 'dashboard-telemetry-overlay';
+	    overlay.innerHTML = `
+	      <div class="dashboard-telemetry-panel" role="dialog" aria-label="Project health dashboard">
+	        <div class="dashboard-telemetry-header">
+	          <div class="dashboard-telemetry-title">Projects — Health</div>
+	          <button class="dashboard-topbar-btn" id="dashboard-project-health-close" title="Close (Esc)">✕</button>
+	        </div>
+	        <div class="dashboard-telemetry-controls">
+	          <label class="dashboard-telemetry-field">
+	            <span>Lookback</span>
+	            <select id="dashboard-project-health-lookback">
+	              <option value="168">7d</option>
+	              <option value="336" selected>14d</option>
+	              <option value="720">30d</option>
+	              <option value="2160">90d</option>
+	            </select>
+	          </label>
+	          <label class="dashboard-telemetry-field">
+	            <span>Bucket</span>
+	            <select id="dashboard-project-health-bucket">
+	              <option value="360">6h</option>
+	              <option value="720">12h</option>
+	              <option value="1440" selected>1d</option>
+	              <option value="2880">2d</option>
+	            </select>
+	          </label>
+	          <label class="dashboard-telemetry-field" style="min-width: 220px; flex: 1;">
+	            <span>Filter</span>
+	            <input id="dashboard-project-health-filter" type="text" placeholder="owner/repo…" />
+	          </label>
+	          <div class="dashboard-telemetry-actions">
+	            <button class="btn-secondary" type="button" id="dashboard-project-health-refresh">Refresh</button>
+	          </div>
+	        </div>
+	        <div id="dashboard-project-health-body" class="dashboard-telemetry-body">Loading…</div>
+	      </div>
+	    `;
+
+	    document.body.appendChild(overlay);
+
+	    const close = () => this.hideProjectHealthOverlay();
+	    overlay.addEventListener('click', (e) => {
+	      if (e.target === overlay) close();
+	    });
+	    overlay.querySelector('#dashboard-project-health-close')?.addEventListener('click', close);
+
+	    const onKey = (e) => {
+	      if (e.key !== 'Escape') return;
+	      const el = document.getElementById('dashboard-project-health-overlay');
+	      if (!el || el.classList.contains('hidden')) return;
+	      close();
+	    };
+	    overlay._escHandler = onKey;
+	    document.addEventListener('keydown', onKey);
+
+	    const lookbackEl = overlay.querySelector('#dashboard-project-health-lookback');
+	    const bucketEl = overlay.querySelector('#dashboard-project-health-bucket');
+	    const filterEl = overlay.querySelector('#dashboard-project-health-filter');
+
+	    overlay.querySelector('#dashboard-project-health-refresh')?.addEventListener('click', () => {
+	      this.loadProjectHealthDetails({
+	        lookbackHours: Number(lookbackEl?.value ?? 336),
+	        bucketMinutes: Number(bucketEl?.value ?? 1440)
+	      });
+	    });
+
+	    lookbackEl?.addEventListener('change', () => {
+	      this.loadProjectHealthDetails({
+	        lookbackHours: Number(lookbackEl?.value ?? 336),
+	        bucketMinutes: Number(bucketEl?.value ?? 1440)
+	      });
+	    });
+
+	    bucketEl?.addEventListener('change', () => {
+	      this.loadProjectHealthDetails({
+	        lookbackHours: Number(lookbackEl?.value ?? 336),
+	        bucketMinutes: Number(bucketEl?.value ?? 1440)
+	      });
+	    });
+
+	    filterEl?.addEventListener('input', () => {
+	      try {
+	        const body = document.getElementById('dashboard-project-health-body');
+	        if (!body) return;
+	        body.innerHTML = this.renderProjectHealthDetails(this._projectHealthData || {}, { filter: String(filterEl.value || '') });
+	        this.attachProjectHealthHandlers();
+	      } catch {}
+	    });
+
+	    await this.loadProjectHealthDetails({ lookbackHours: 336, bucketMinutes: 1440 });
+	  }
+
+	  hideProjectHealthOverlay() {
+	    const overlay = document.getElementById('dashboard-project-health-overlay');
+	    if (!overlay) return;
+	    overlay.classList.add('hidden');
+	    const handler = overlay._escHandler;
+	    if (handler) {
+	      document.removeEventListener('keydown', handler);
+	      overlay._escHandler = null;
+	    }
+	    overlay.remove();
+	  }
+
+	  async loadProjectHealthDetails({ lookbackHours = 336, bucketMinutes = 1440 } = {}) {
+	    const body = document.getElementById('dashboard-project-health-body');
+	    const overlay = document.getElementById('dashboard-project-health-overlay');
+	    if (!overlay || !body) return;
+	    body.textContent = 'Loading…';
+
+	    const hours = Number(lookbackHours);
+	    const bucket = Number(bucketMinutes);
+	    const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 336;
+	    const safeBucket = Number.isFinite(bucket) && bucket > 0 ? bucket : 1440;
+
+	    const filterEl = overlay.querySelector('#dashboard-project-health-filter');
+	    const filter = String(filterEl?.value || '');
+
+	    try {
+	      const url = `/api/process/projects/health?lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}`;
+	      const res = await fetch(url).catch(() => null);
+	      const data = res ? await res.json().catch(() => ({})) : {};
+	      if (!res || !res.ok) {
+	        body.textContent = 'Failed to load.';
+	        return;
+	      }
+	      this._projectHealthData = data;
+	      body.innerHTML = this.renderProjectHealthDetails(data, { filter });
+	      this.attachProjectHealthHandlers();
+	    } catch {
+	      body.textContent = 'Failed to load.';
+	    }
+	  }
+
+	  attachProjectHealthHandlers() {
+	    const root = document.getElementById('dashboard-project-health-body');
+	    if (!root) return;
+	    root.querySelectorAll('[data-open-repo-health]').forEach((btn) => {
+	      btn.addEventListener('click', () => {
+	        const repo = btn.getAttribute('data-open-repo-health') || '';
+	        if (!repo) return;
+	        try {
+	          localStorage.setItem('prs-panel-repo', repo);
+	        } catch {}
+	        try {
+	          this.orchestrator?.showPRsPanel?.();
+	        } catch {}
+	      });
+	    });
+	  }
+
+	  renderProjectHealthDetails(data, { filter = '' } = {}) {
+	    const escapeHtml = (value) => String(value ?? '')
+	      .replace(/&/g, '&amp;')
+	      .replace(/</g, '&lt;')
+	      .replace(/>/g, '&gt;');
+
+	    const repos = Array.isArray(data?.repos) ? data.repos : [];
+	    const totals = data?.totals || {};
+	    const filterText = String(filter || '').trim().toLowerCase();
+
+	    const pickWorst = (counts) => {
+	      const c = counts && typeof counts === 'object' ? counts : {};
+	      if (Number(c.critical || 0) > 0) return 'critical';
+	      if (Number(c.high || 0) > 0) return 'high';
+	      if (Number(c.medium || 0) > 0) return 'medium';
+	      if (Number(c.low || 0) > 0) return 'low';
+	      return '';
+	    };
+
+	    const riskChip = (risk) => {
+	      const r = String(risk || '').trim().toLowerCase();
+	      if (!r) return '';
+	      const cls = (r === 'critical' || r === 'high') ? 'level-warn' : '';
+	      return `<span class="process-chip ${cls}">${escapeHtml(r)}</span>`;
+	    };
+
+	    const fmtHours = (n) => {
+	      const v = Number(n);
+	      if (!Number.isFinite(v) || v <= 0) return '—';
+	      if (v < 2) return `${Math.round(v * 60)}m`;
+	      if (v < 48) return `${v.toFixed(1)}h`;
+	      const d = v / 24;
+	      return `${d.toFixed(1)}d`;
+	    };
+
+	    const spark = (series) => {
+	      const rows = Array.isArray(series) ? series : [];
+	      if (!rows.length) return '';
+	      const nets = rows.map((b) => Number(b?.createdCount || 0) - Number(b?.mergedCount || 0));
+	      const maxAbs = Math.max(1, ...nets.map(n => Math.abs(n)));
+	      return `
+	        <div style="display:flex; align-items:flex-end; gap:2px; height:26px;">
+	          ${rows.map((b, idx) => {
+	            const net = nets[idx];
+	            const abs = Math.abs(net);
+	            const h = Math.max(2, Math.round(24 * abs / maxAbs));
+	            const color = net > 0 ? '#d19a2b' : (net < 0 ? '#2dbf71' : '#4a5568');
+	            const label = `${new Date(Number(b?.t || 0)).toLocaleDateString()} • net ${net}`;
+	            return `<div style="width:6px; height:${h}px; background:${color}; border-radius:2px; opacity:0.9;" title="${escapeHtml(label)}"></div>`;
+	          }).join('')}
+	        </div>
+	      `;
+	    };
+
+	    const filtered = filterText
+	      ? repos.filter(r => String(r?.repo || '').toLowerCase().includes(filterText))
+	      : repos;
+
+	    return `
+	      <div class="dashboard-telemetry-meta">
+	        <div>Repos <strong>${Number(totals?.repos ?? filtered.length ?? 0)}</strong></div>
+	        <div>Open backlog <strong>${Number(totals?.openBacklog ?? 0)}</strong></div>
+	        <div>Created <strong>${Number(totals?.createdCount ?? 0)}</strong> • Merged <strong>${Number(totals?.mergedCount ?? 0)}</strong> • needs_fix <strong>${Number(totals?.needsFixCount ?? 0)}</strong></div>
+	      </div>
+	      <div style="display:flex; flex-direction:column; gap:10px;">
+	        ${filtered.length ? filtered.map((r) => {
+	          const repo = String(r?.repo || '').trim();
+	          const t = r?.totals || {};
+	          const open = Number(r?.openBacklog ?? 0);
+	          const created = Number(t?.createdCount ?? 0);
+	          const merged = Number(t?.mergedCount ?? 0);
+	          const needsFix = Number(t?.needsFixCount ?? 0);
+	          const worst = pickWorst(r?.openRiskCounts);
+	          const avgCycle = fmtHours(t?.avgCycleHours);
+	          const p50Cycle = fmtHours(t?.p50CycleHours);
+	          return `
+	            <div class="dashboard-telemetry-meta" style="display:flex; justify-content:space-between; gap:14px;">
+	              <div style="min-width:0; flex:1; display:flex; flex-direction:column; gap:6px;">
+	                <div style="display:flex; align-items:center; gap:10px;">
+	                  <button class="btn-secondary" type="button" data-open-repo-health="${escapeHtml(repo)}" title="Open PRs filtered to ${escapeHtml(repo)}" style="max-width: 520px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+	                    ${escapeHtml(repo)}
+	                  </button>
+	                  ${worst ? riskChip(worst) : ''}
+	                  <span style="opacity:0.8;">open <strong>${open}</strong></span>
+	                </div>
+	                <div style="opacity:0.9;">
+	                  created <strong>${created}</strong> • merged <strong>${merged}</strong> • needs_fix <strong>${needsFix}</strong>
+	                  <span style="opacity:0.75;"> • cycle avg <strong>${escapeHtml(avgCycle)}</strong> • p50 <strong>${escapeHtml(p50Cycle)}</strong></span>
+	                </div>
+	              </div>
+	              <div style="flex:0 0 auto; display:flex; align-items:center;">
+	                ${spark(r?.series)}
+	              </div>
+	            </div>
+	          `;
+	        }).join('') : `<div style="opacity:0.8;">No project records found.</div>`}
+	      </div>
+	    `;
 	  }
 
 	  async loadTelemetryDetails({ lookbackHours = 24, bucketMinutes = 60 } = {}) {
