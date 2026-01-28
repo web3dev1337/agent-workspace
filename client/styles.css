@@ -1294,6 +1294,27 @@ header h1 {
   gap: 6px;
 }
 
+.worktree-inspector-review-panel {
+  margin-bottom: 16px;
+}
+
+.worktree-inspector-review-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.worktree-inspector-review-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 0.82rem;
+  margin-bottom: 10px;
+  opacity: 0.92;
+}
+
 .worktree-inspector-files.view-tree .worktree-inspector-files-list {
   display: none;
 }
