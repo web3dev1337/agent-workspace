@@ -98,3 +98,4 @@ Process discipline:
   - Dashboard now shows HTTP error details and supports one-click retry. (PR #337)
 - [x] Worktree list + terminal headers: branch labels should be compact (hide common prefixes), remove forced “@”, and be color-coded by type (feature/fix/etc.), with toggles in Settings. (PR #357)
 - [x] Workflow: add an “All” view so you can see all tiers without swapping Focus/Background; explicit tier filter (T1–T4/None) should override workflow filtering. (PR #359)
+- [x] Header: add Tier filter buttons (All/T1/T2/T3/T4/None) so you can jump between tiers without re-filtering or swapping modes. (PR #360)
