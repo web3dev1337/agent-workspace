@@ -9906,13 +9906,22 @@ class ClaudeOrchestrator {
 	          </label>
 	        </div>
 
-		        <div class="tasks-detail-block">
-		          <div class="tasks-detail-block-title">Repo mapping</div>
-		          <div class="tasks-inline-row">
-		            <input id="tasks-board-local-path" class="tasks-input" placeholder="Local repo path or GitHub-relative path (e.g. games/hytopia/zoo)" value="${this.escapeHtml(localPath)}" />
-		          </div>
-	          <div class="tasks-inline-row" style="margin-top:8px">
-	            <input id="tasks-board-repo-slug" class="tasks-input" placeholder="GitHub repo slug (optional, e.g. owner/repo)" value="${this.escapeHtml(repoSlug)}" />
+			        <div class="tasks-detail-block">
+			          <div class="tasks-detail-block-title">Repo mapping</div>
+			          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+			            <select id="tasks-board-repo-picker" class="tasks-select tasks-select-inline" title="Pick a detected local repo to fill Local path" style="flex:1; min-width: 260px;" disabled>
+			              <option value="">Detecting repos…</option>
+			            </select>
+			            <button class="btn-secondary" id="tasks-board-repo-picker-refresh" type="button" title="Rescan repos">↻</button>
+			          </div>
+			          <div class="tasks-detail-meta" style="margin-top:8px">
+			            Pick from your local <code>~/GitHub</code> repos to fill <strong>Local path</strong>. You can still type manually.
+			          </div>
+			          <div class="tasks-inline-row">
+			            <input id="tasks-board-local-path" class="tasks-input" placeholder="Local repo path or GitHub-relative path (e.g. games/hytopia/zoo)" value="${this.escapeHtml(localPath)}" />
+			          </div>
+		          <div class="tasks-inline-row" style="margin-top:8px">
+		            <input id="tasks-board-repo-slug" class="tasks-input" placeholder="GitHub repo slug (optional, e.g. owner/repo)" value="${this.escapeHtml(repoSlug)}" />
 	          </div>
 	          <div class="tasks-inline-row" style="margin-top:8px">
 	            <select id="tasks-board-default-tier" class="tasks-select tasks-select-inline" title="Default tier when launching from this board">
@@ -9942,18 +9951,103 @@ class ClaudeOrchestrator {
 		        restoreBoardDetailOrClear().catch(() => renderDetail(null));
 		      });
 
-	      const showDisabledEl = detailEl.querySelector('#tasks-show-disabled');
-	      showDisabledEl?.addEventListener('change', async () => {
-	        state.showDisabledBoards = !!showDisabledEl.checked;
-	        localStorage.setItem('tasks-show-disabled-boards', state.showDisabledBoards ? 'true' : 'false');
-	        await refreshAll({ force: false });
-	      });
+		      const showDisabledEl = detailEl.querySelector('#tasks-show-disabled');
+		      showDisabledEl?.addEventListener('change', async () => {
+		        state.showDisabledBoards = !!showDisabledEl.checked;
+		        localStorage.setItem('tasks-show-disabled-boards', state.showDisabledBoards ? 'true' : 'false');
+		        await refreshAll({ force: false });
+		      });
 
-		      const saveBtn = detailEl.querySelector('#tasks-board-save');
-		      saveBtn?.addEventListener('click', async () => {
-	        try {
-	          saveBtn.disabled = true;
-	          const enabledNext = !!detailEl.querySelector('#tasks-board-enabled')?.checked;
+		      const repoPickerEl = detailEl.querySelector('#tasks-board-repo-picker');
+		      const repoPickerRefreshEl = detailEl.querySelector('#tasks-board-repo-picker-refresh');
+		      const localPathEl = detailEl.querySelector('#tasks-board-local-path');
+
+		      const normalizePath = (value) => String(value || '')
+		        .replace(/\\/g, '/')
+		        .replace(/\/+$/, '')
+		        .trim();
+		      const normalizeRel = (value) => normalizePath(value).replace(/^(\.\/)+/, '');
+
+		      const computeMappedRel = (raw) => {
+		        const mapped = normalizePath(raw);
+		        if (!mapped) return '';
+		        if (!mapped.startsWith('/')) {
+		          const idx = mapped.toLowerCase().indexOf('/github/');
+		          if (idx >= 0) return normalizeRel(mapped.slice(idx + '/github/'.length));
+		          if (mapped.startsWith('~/')) return normalizeRel(mapped.replace(/^~\//, ''));
+		          return normalizeRel(mapped);
+		        }
+		        const idx = mapped.toLowerCase().indexOf('/github/');
+		        return idx >= 0 ? normalizeRel(mapped.slice(idx + '/github/'.length)) : '';
+		      };
+
+		      const populateRepoPicker = async ({ force = false } = {}) => {
+		        if (!repoPickerEl) return;
+		        repoPickerEl.disabled = true;
+		        repoPickerEl.innerHTML = `<option value="">${force ? 'Rescanning repos…' : 'Loading repos…'}</option>`;
+
+		        let repos = [];
+		        try {
+		          repos = await this.getScannedRepos({ force });
+		        } catch (e) {
+		          repoPickerEl.innerHTML = `<option value="">Failed to load repos</option>`;
+		          return;
+		        }
+
+		        const items = (Array.isArray(repos) ? repos : [])
+		          .map((r) => {
+		            const rel = normalizeRel(r?.relativePath);
+		            const abs = normalizePath(r?.path);
+		            const name = String(r?.name || '').trim();
+		            const label = rel || abs || name || '';
+		            return {
+		              label,
+		              rel,
+		              abs,
+		              value: rel || abs || '',
+		              name
+		            };
+		          })
+		          .filter((x) => !!x.value)
+		          .sort((a, b) => a.label.localeCompare(b.label));
+
+		        const currentLocal = normalizePath(localPathEl?.value);
+		        const currentAbs = currentLocal.startsWith('/') ? currentLocal : '';
+		        const currentRel = computeMappedRel(currentLocal);
+
+		        repoPickerEl.innerHTML = `<option value="">Pick repo…</option>` + items.map((it) => {
+		          const selected = (currentAbs && it.abs && normalizePath(it.abs) === currentAbs)
+		            || (currentRel && it.rel && normalizeRel(it.rel) === currentRel)
+		            || (!currentAbs && !currentRel && currentLocal && normalizePath(it.value) === currentLocal);
+		          const label = this.escapeHtml(it.label);
+		          const value = this.escapeHtml(it.value);
+		          return `<option value="${value}" ${selected ? 'selected' : ''}>${label}</option>`;
+		        }).join('');
+
+		        repoPickerEl.disabled = false;
+		      };
+
+		      repoPickerEl?.addEventListener('change', () => {
+		        const v = String(repoPickerEl.value || '').trim();
+		        if (v && localPathEl) localPathEl.value = v;
+		      });
+
+		      repoPickerRefreshEl?.addEventListener('click', async () => {
+		        if (repoPickerRefreshEl) repoPickerRefreshEl.disabled = true;
+		        try {
+		          await populateRepoPicker({ force: true });
+		        } finally {
+		          if (repoPickerRefreshEl) repoPickerRefreshEl.disabled = false;
+		        }
+		      });
+
+		      populateRepoPicker({ force: false }).catch(() => {});
+
+			      const saveBtn = detailEl.querySelector('#tasks-board-save');
+			      saveBtn?.addEventListener('click', async () => {
+		        try {
+		          saveBtn.disabled = true;
+		          const enabledNext = !!detailEl.querySelector('#tasks-board-enabled')?.checked;
 	          const localPathNext = String(detailEl.querySelector('#tasks-board-local-path')?.value || '').trim();
 	          const repoSlugNext = String(detailEl.querySelector('#tasks-board-repo-slug')?.value || '').trim();
 	          const tierRaw = String(detailEl.querySelector('#tasks-board-default-tier')?.value || '').trim();
