@@ -108,3 +108,4 @@ Process discipline:
 - [x] Hotkeys: Alt+F/R/B/G switches workflow mode (Focus/Review/Background/All). (PR #362)
 - [x] Persist terminal filters (View mode + Tier filter) across refreshes (server-backed user settings). (PR #363)
 - [x] Queue: add 🗂 Inspect action to open Worktree Inspector from Queue detail (Review Console entrypoint). (PR #367)
+- [x] Worktree Inspector: Files Tree/List toggle with folder structure + aggregated staged/unstaged +/- stats. (PR #369)
