@@ -43,17 +43,23 @@ test.describe('Process banner', () => {
     const headerBanner = page.locator('#process-banner');
 
     // Depending on startup state we may be on the dashboard (banner in topbar) or inside a workspace
-    // (banner in header). Accept either.
+    // (banner in header). Accept either, but wait for chips to actually render.
     await expect
-      .poll(
-        async () =>
-          (await dashboardBanner.isVisible().catch(() => false)) || (await headerBanner.isVisible().catch(() => false)),
-        { timeout: 15000 }
-      )
-      .toBe(true);
-    const banner = (await dashboardBanner.isVisible().catch(() => false)) ? dashboardBanner : headerBanner;
+      .poll(async () => {
+        const useDashboard = await dashboardBanner.isVisible().catch(() => false);
+        const useHeader = await headerBanner.isVisible().catch(() => false);
+        const banner = useDashboard ? dashboardBanner : (useHeader ? headerBanner : null);
+        if (!banner) return null;
 
-    await expect(banner.locator('.process-chip').first()).toHaveText('WIP 2');
+        const chips = banner.locator('.process-chip');
+        const count = await chips.count();
+        if (!count) return null;
+        const text = await chips.first().textContent().catch(() => '');
+        return (text || '').trim();
+      }, { timeout: 15000 })
+      .toBe('WIP 2');
+
+    const banner = (await dashboardBanner.isVisible().catch(() => false)) ? dashboardBanner : headerBanner;
     await expect(banner).toContainText('T1 1');
     await expect(banner).toContainText('T2 0');
     await expect(banner).toContainText('T3 2');
