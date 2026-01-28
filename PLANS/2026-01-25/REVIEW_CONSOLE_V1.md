@@ -58,8 +58,7 @@ A review unit may be:
 
 ### Strongly desired
 - ✅ Merge PR from the Review Console (when mergeable). (PR #372)
-- ✅ Move the attached ticket/card to Done list when a ticket exists. (PR #374)
-  - Still TODO: configurable target lists beyond Done (Test/QA/etc).
+- ✅ Move the attached ticket/card to Done list or a selected list when a ticket exists. (PR #374, #380)
   - Should respect per-board conventions (Done list, etc) when configured.
 
 ---
