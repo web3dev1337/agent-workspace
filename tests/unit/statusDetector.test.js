@@ -93,6 +93,16 @@ describe('StatusDetector', () => {
       const status = detector.detectStatus(sessionId, buffer);
       expect(status).toBe('idle');
     });
+
+    it('should keep Claude sessions busy for longer quiet windows', () => {
+      const buffer = `Welcome to Claude Code!\n${'Working '.repeat(30)}\nstill working`;
+      const state = detector.getState(sessionId);
+      state.lastBufferLength = buffer.length;
+      state.lastOutputTime = Date.now() - 240000; // 4 minutes of silence
+      state.claudeLikely = true;
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('busy');
+    });
   });
 
   describe('looksLikePrompt', () => {
