@@ -253,6 +253,14 @@ class ClaudeOrchestrator {
         this.setFocusAutoSwapTier2WhenTier1Busy(!this.focusAutoSwapTier2WhenTier1Busy);
       });
 
+      // Tier filter toggles (quick tier switching without swapping workflow mode)
+      document.getElementById('tier-filter-all')?.addEventListener('click', () => this.setTierFilter('all'));
+      document.getElementById('tier-filter-1')?.addEventListener('click', () => this.setTierFilter('1'));
+      document.getElementById('tier-filter-2')?.addEventListener('click', () => this.setTierFilter('2'));
+      document.getElementById('tier-filter-3')?.addEventListener('click', () => this.setTierFilter('3'));
+      document.getElementById('tier-filter-4')?.addEventListener('click', () => this.setTierFilter('4'));
+      document.getElementById('tier-filter-none')?.addEventListener('click', () => this.setTierFilter('none'));
+
       // Tasks panel (ticketing providers like Trello)
       document.getElementById('tasks-btn')?.addEventListener('click', () => {
         this.showTasksPanel();
@@ -1394,9 +1402,35 @@ class ClaudeOrchestrator {
 
     if (this.tierFilter === normalized) return;
     this.tierFilter = normalized;
+    this.updateTierFilterButtons();
     this.ensureFilterToggleExists();
     this.updateTerminalGrid();
     this.buildSidebar();
+  }
+
+  updateTierFilterButtons() {
+    const byId = (id) => document.getElementById(id);
+    const allBtn = byId('tier-filter-all');
+    const t1Btn = byId('tier-filter-1');
+    const t2Btn = byId('tier-filter-2');
+    const t3Btn = byId('tier-filter-3');
+    const t4Btn = byId('tier-filter-4');
+    const noneBtn = byId('tier-filter-none');
+    const btns = [allBtn, t1Btn, t2Btn, t3Btn, t4Btn, noneBtn].filter(Boolean);
+    if (btns.length === 0) return;
+
+    const is = (v) => this.tierFilter === v;
+    if (allBtn) allBtn.classList.toggle('active', is('all'));
+    if (t1Btn) t1Btn.classList.toggle('active', is(1));
+    if (t2Btn) t2Btn.classList.toggle('active', is(2));
+    if (t3Btn) t3Btn.classList.toggle('active', is(3));
+    if (t4Btn) t4Btn.classList.toggle('active', is(4));
+    if (noneBtn) noneBtn.classList.toggle('active', is('none'));
+
+    for (const b of btns) {
+      const pressed = b.classList.contains('active') ? 'true' : 'false';
+      b.setAttribute('aria-pressed', pressed);
+    }
   }
 
   matchesTierFilter(sessionId) {
@@ -6358,6 +6392,7 @@ class ClaudeOrchestrator {
         this.syncUserSettingsUI();
         this.applyThemeFromUserSettings();
         this.refreshBranchLabels();
+        this.updateTierFilterButtons();
       } else {
         console.error('Failed to load user settings:', response.statusText);
       }
