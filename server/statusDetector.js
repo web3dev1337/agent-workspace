@@ -16,6 +16,8 @@ const logger = winston.createLogger({
 // Keep "busy" for longer silence windows (Claude can think silently for minutes).
 // This primarily reduces green/orange/grey flicker during long tool runs.
 const ASSUME_BUSY_SINCE_OUTPUT_MS = 180000; // 3 minutes
+// When we have strong evidence a Claude session is active, use a longer quiet window.
+const ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS = 600000; // 10 minutes
 
 class StatusDetector {
   constructor() {
@@ -166,7 +168,8 @@ class StatusDetector {
     }
 
     // 7. Default: assume busy for a while after the last output (Claude can think silently)
-    if (timeSinceOutput < ASSUME_BUSY_SINCE_OUTPUT_MS && buffer.length > 100) {
+    const assumeBusyWindowMs = state.claudeLikely ? ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS : ASSUME_BUSY_SINCE_OUTPUT_MS;
+    if (timeSinceOutput < assumeBusyWindowMs && buffer.length > 100) {
       return 'busy';
     }
 
