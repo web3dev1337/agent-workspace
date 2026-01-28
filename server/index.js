@@ -67,6 +67,7 @@ const { TaskRecordService } = require('./taskRecordService');
 const { PromptArtifactService, safeId, sha256, formatPointerComment } = require('./promptArtifactService');
 const { TaskDependencyService } = require('./taskDependencyService');
 const { TaskTicketingService } = require('./taskTicketingService');
+const { TaskTicketMoveService } = require('./taskTicketMoveService');
 const { PrMergeAutomationService } = require('./prMergeAutomationService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
@@ -1420,6 +1421,11 @@ app.post('/api/claude-notification', express.json(), (req, res) => {
 // Service instances
 const userSettingsService = UserSettingsService.getInstance();
 const gitUpdateService = GitUpdateService.getInstance();
+const taskTicketMoveService = TaskTicketMoveService.getInstance({
+  taskRecordService,
+  taskTicketingService,
+  userSettingsService
+});
 const prMergeAutomationService = PrMergeAutomationService.getInstance({
   taskRecordService,
   pullRequestService,
@@ -2727,6 +2733,22 @@ app.delete('/api/process/task-records/:id/dependencies/:depId', async (req, res)
   } catch (error) {
     logger.error('Failed to remove task dependency', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to remove task dependency' });
+  }
+});
+
+app.post('/api/process/task-records/:id/ticket-move', express.json(), async (req, res) => {
+  try {
+    const id = req.params.id;
+    const listId = String(req.body?.listId || '').trim();
+    const result = await taskTicketMoveService.moveTicketForTaskRecord(id, { listId });
+    res.json(result);
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to move ticket', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({
+      error: error.message || 'Failed to move ticket',
+      code: error.code
+    });
   }
 });
 
