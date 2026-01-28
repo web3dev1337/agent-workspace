@@ -174,8 +174,26 @@ test.describe('Queue Panel', () => {
           ],
           commits: [{ hash: 'abc1234', date: '2026-01-25 00:00:00 +0000', message: 'mock commit' }],
           unpushedCommits: [{ hash: 'abc1234', date: '2026-01-25 00:00:00 +0000', message: 'mock commit' }],
-          pr: { hasPR: false, branch: 'feature/mock-queue' }
+          pr: {
+            hasPR: true,
+            number: 4,
+            url: 'https://github.com/web3dev1337/incremental-game/pull/4',
+            state: 'open',
+            mergeable: 'MERGEABLE',
+            isDraft: false,
+            branch: 'feature/mock-queue'
+          }
         })
+      });
+    });
+
+    // Mock PR merge endpoint used by the Review Console.
+    await page.route('**/api/prs/merge', async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true })
       });
     });
 
@@ -246,5 +264,15 @@ test.describe('Queue Panel', () => {
     await page.locator('#queue-open-console').click();
     await expect(page.locator('#worktree-inspector-modal.docked')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#worktree-inspector-title')).toContainText('Review Console');
+
+    // Merge PR should call /api/prs/merge.
+    page.once('dialog', async (dialog) => dialog.accept());
+    const mergeReq = page.waitForRequest((req) => req.method() === 'POST' && req.url().includes('/api/prs/merge'), { timeout: 5000 });
+    await page.locator('#worktree-inspector-modal.docked [data-pr-merge]').click();
+    const req = await mergeReq;
+    expect(req.postDataJSON()).toMatchObject({
+      url: 'https://github.com/web3dev1337/incremental-game/pull/4',
+      method: 'merge'
+    });
   });
 });

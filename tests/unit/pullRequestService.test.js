@@ -10,6 +10,32 @@ describe('PullRequestService', () => {
     execFile.mockReset();
   });
 
+  test('mergePullRequestByUrl builds gh args and supports --auto', async () => {
+    execFile.mockImplementation((cmd, args, opts, cb) => cb(null, 'merged', ''));
+
+    const service = PullRequestService.getInstance();
+    const result = await service.mergePullRequestByUrl('https://github.com/web3dev1337/claude-orchestrator/pull/123', {
+      method: 'merge',
+      auto: true
+    });
+
+    expect(result.ok).toBe(true);
+    expect(execFile).toHaveBeenCalledTimes(1);
+    const [cmd, args] = execFile.mock.calls[0];
+    expect(cmd).toBe('gh');
+    expect(args).toEqual(expect.arrayContaining(['pr', 'merge']));
+    expect(args).toEqual(expect.arrayContaining(['--merge']));
+    expect(args).toEqual(expect.arrayContaining(['--auto']));
+  });
+
+  test('mergePullRequestByUrl rejects invalid URLs', async () => {
+    execFile.mockImplementation((cmd, args, opts, cb) => cb(null, 'merged', ''));
+
+    const service = PullRequestService.getInstance();
+    await expect(service.mergePullRequestByUrl('not-a-url')).rejects.toThrow('Invalid PR URL');
+    expect(execFile).toHaveBeenCalledTimes(0);
+  });
+
   test('searchPullRequests builds gh args and parses results', async () => {
     execFile.mockImplementation((cmd, args, opts, cb) => {
       cb(
@@ -67,4 +93,3 @@ describe('PullRequestService', () => {
     expect(args).toEqual(expect.arrayContaining(['--', '-is:merged']));
   });
 });
-
