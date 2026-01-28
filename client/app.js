@@ -5846,33 +5846,179 @@ class ClaudeOrchestrator {
         parts.push(diffBtn);
 
         return `<div class="worktree-inspector-header">${parts.join('')}</div>`;
-      })();
+	      })();
 
-      const files = Array.isArray(summary?.files) ? summary.files : [];
-      const fileRows = files.map((f) => {
-        const status = `${String(f?.indexStatus || ' ')}${String(f?.worktreeStatus || ' ')}`.trim() || '·';
-        const staged = f?.staged
-          ? (f.staged.binary ? 'bin' : `+${Number(f.staged.added || 0)}/-${Number(f.staged.deleted || 0)}`)
-          : '';
-        const unstaged = f?.unstaged
-          ? (f.unstaged.binary ? 'bin' : `+${Number(f.unstaged.added || 0)}/-${Number(f.unstaged.deleted || 0)}`)
-          : '';
-        const path = escapeHtml(f?.path || '');
-        const oldPath = f?.oldPath ? escapeHtml(f.oldPath) : '';
-        const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
-        return `
-          <tr>
-            <td class="mono">${escapeHtml(status)}</td>
-            <td class="mono">${path}${renameHint}</td>
-            <td class="mono">${escapeHtml(staged)}</td>
-            <td class="mono">${escapeHtml(unstaged)}</td>
-          </tr>
-        `;
-      }).join('');
+	      const files = Array.isArray(summary?.files) ? summary.files : [];
+	      const formatStat = (s) => {
+	        const stat = s && typeof s === 'object' ? s : null;
+	        if (!stat) return '';
+	        if (stat.binary) return 'bin';
+	        const added = Number(stat.added || 0);
+	        const deleted = Number(stat.deleted || 0);
+	        if (!added && !deleted) return '';
+	        return `+${added}/-${deleted}`;
+	      };
 
-      const commits = Array.isArray(summary?.unpushedCommits) && summary.unpushedCommits.length
-        ? summary.unpushedCommits
-        : (Array.isArray(summary?.commits) ? summary.commits : []);
+	      const fileRows = files.map((f) => {
+	        const status = `${String(f?.indexStatus || ' ')}${String(f?.worktreeStatus || ' ')}`.trim() || '·';
+	        const staged = formatStat(f?.staged);
+	        const unstaged = formatStat(f?.unstaged);
+	        const path = escapeHtml(f?.path || '');
+	        const oldPath = f?.oldPath ? escapeHtml(f.oldPath) : '';
+	        const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
+	        return `
+	          <tr>
+	            <td class="mono">${escapeHtml(status)}</td>
+	            <td class="mono">${path}${renameHint}</td>
+	            <td class="mono">${escapeHtml(staged)}</td>
+	            <td class="mono">${escapeHtml(unstaged)}</td>
+	          </tr>
+	        `;
+	      }).join('');
+
+	      const filesViewKey = 'worktree-inspector-files-view';
+	      const filesViewRaw = String(localStorage.getItem(filesViewKey) || '').trim().toLowerCase();
+	      const filesView = (filesViewRaw === 'list' || filesViewRaw === 'tree') ? filesViewRaw : 'tree';
+
+	      const aggFromStat = (s) => {
+	        const stat = s && typeof s === 'object' ? s : null;
+	        if (!stat) return { added: 0, deleted: 0, binary: false };
+	        if (stat.binary) return { added: 0, deleted: 0, binary: true };
+	        return {
+	          added: Number(stat.added || 0) || 0,
+	          deleted: Number(stat.deleted || 0) || 0,
+	          binary: false
+	        };
+	      };
+
+	      const mergeAgg = (acc, next) => {
+	        if (!acc) return { ...(next || { added: 0, deleted: 0, binary: false }) };
+	        const n = next || { added: 0, deleted: 0, binary: false };
+	        acc.added += Number(n.added || 0) || 0;
+	        acc.deleted += Number(n.deleted || 0) || 0;
+	        acc.binary = !!(acc.binary || n.binary);
+	        return acc;
+	      };
+
+	      const formatAgg = (agg) => {
+	        const a = Number(agg?.added || 0) || 0;
+	        const d = Number(agg?.deleted || 0) || 0;
+	        const hasNums = !!(a || d);
+	        const hasBin = !!agg?.binary;
+	        if (hasNums && hasBin) return `+${a}/-${d} +bin`;
+	        if (hasNums) return `+${a}/-${d}`;
+	        if (hasBin) return 'bin';
+	        return '';
+	      };
+
+	      const treeRoot = { type: 'dir', name: '', children: new Map(), staged: { added: 0, deleted: 0, binary: false }, unstaged: { added: 0, deleted: 0, binary: false } };
+	      for (const f of files) {
+	        const rawPath = String(f?.path || '').replace(/\\/g, '/').trim();
+	        if (!rawPath) continue;
+	        const parts = rawPath.split('/').filter(Boolean);
+	        if (!parts.length) continue;
+
+	        let node = treeRoot;
+	        for (let i = 0; i < parts.length - 1; i += 1) {
+	          const seg = parts[i];
+	          const key = `d:${seg}`;
+	          let child = node.children.get(key);
+	          if (!child) {
+	            child = { type: 'dir', name: seg, children: new Map(), staged: { added: 0, deleted: 0, binary: false }, unstaged: { added: 0, deleted: 0, binary: false } };
+	            node.children.set(key, child);
+	          }
+	          node = child;
+	        }
+
+	        const leaf = parts[parts.length - 1];
+	        const status = `${String(f?.indexStatus || ' ')}${String(f?.worktreeStatus || ' ')}`.trim() || '·';
+	        const stagedAgg = aggFromStat(f?.staged);
+	        const unstagedAgg = aggFromStat(f?.unstaged);
+	        const stagedLabel = formatAgg(stagedAgg);
+	        const unstagedLabel = formatAgg(unstagedAgg);
+	        node.children.set(`f:${leaf}`, {
+	          type: 'file',
+	          name: leaf,
+	          path: rawPath,
+	          oldPath: f?.oldPath ? String(f.oldPath) : '',
+	          status,
+	          staged: stagedAgg,
+	          unstaged: unstagedAgg,
+	          stagedLabel,
+	          unstagedLabel
+	        });
+	      }
+
+	      const computeAggs = (node) => {
+	        if (!node || typeof node !== 'object') return;
+	        if (node.type === 'file') return;
+	        node.staged = { added: 0, deleted: 0, binary: false };
+	        node.unstaged = { added: 0, deleted: 0, binary: false };
+	        for (const child of node.children.values()) {
+	          computeAggs(child);
+	          if (child.type === 'file') {
+	            mergeAgg(node.staged, child.staged);
+	            mergeAgg(node.unstaged, child.unstaged);
+	          } else {
+	            mergeAgg(node.staged, child.staged);
+	            mergeAgg(node.unstaged, child.unstaged);
+	          }
+	        }
+	      };
+	      computeAggs(treeRoot);
+
+	      const sortChildren = (node) => {
+	        const kids = Array.from(node?.children?.values?.() || []);
+	        kids.sort((a, b) => {
+	          if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+	          return String(a.name || '').localeCompare(String(b.name || ''));
+	        });
+	        return kids;
+	      };
+
+	      const renderTreeNode = (node, depth) => {
+	        const d = Math.max(0, Number(depth) || 0);
+	        if (node.type === 'file') {
+	          const oldPath = node.oldPath ? escapeHtml(node.oldPath) : '';
+	          const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
+	          return `
+	            <div class="worktree-inspector-tree-row" style="--indent:${d}">
+	              <div class="mono worktree-inspector-tree-status">${escapeHtml(node.status || '·')}</div>
+	              <div class="mono worktree-inspector-tree-path">${escapeHtml(node.name || '')}${renameHint}</div>
+	              <div class="mono worktree-inspector-tree-stat">${escapeHtml(node.stagedLabel || '')}</div>
+	              <div class="mono worktree-inspector-tree-stat">${escapeHtml(node.unstagedLabel || '')}</div>
+	            </div>
+	          `;
+	        }
+
+	        const childrenHtml = sortChildren(node).map((child) => renderTreeNode(child, d + 1)).join('');
+	        const stagedLabel = formatAgg(node.staged);
+	        const unstagedLabel = formatAgg(node.unstaged);
+	        const openAttr = d < 1 ? 'open' : '';
+	        return `
+	          <details class="worktree-inspector-tree-node" ${openAttr}>
+	            <summary class="worktree-inspector-tree-summary">
+	              <div class="worktree-inspector-tree-row" style="--indent:${d}">
+	                <div class="mono worktree-inspector-tree-status">📁</div>
+	                <div class="mono worktree-inspector-tree-path">${escapeHtml(node.name || '')}</div>
+	                <div class="mono worktree-inspector-tree-stat">${escapeHtml(stagedLabel)}</div>
+	                <div class="mono worktree-inspector-tree-stat">${escapeHtml(unstagedLabel)}</div>
+	              </div>
+	            </summary>
+	            <div class="worktree-inspector-tree-children">
+	              ${childrenHtml}
+	            </div>
+	          </details>
+	        `;
+	      };
+
+	      const treeHtml = files.length
+	        ? `<div class="worktree-inspector-tree">${sortChildren(treeRoot).map((n) => renderTreeNode(n, 0)).join('')}</div>`
+	        : `<div style="opacity:0.8;">No changes.</div>`;
+
+	      const commits = Array.isArray(summary?.unpushedCommits) && summary.unpushedCommits.length
+	        ? summary.unpushedCommits
+	        : (Array.isArray(summary?.commits) ? summary.commits : []);
       const commitsTitle = (Array.isArray(summary?.unpushedCommits) && summary.unpushedCommits.length) ? 'Unpushed commits' : 'Recent commits';
       const commitRows = commits.slice(0, 50).map((c) => {
         const hash = escapeHtml(c?.hash || '');
@@ -5881,38 +6027,78 @@ class ClaudeOrchestrator {
         return `<div class="worktree-inspector-commit mono"><span class="worktree-inspector-commit-hash">${hash}</span><span class="worktree-inspector-commit-date">${date}</span><span class="worktree-inspector-commit-msg">${msg}</span></div>`;
       }).join('');
 
-      bodyEl.innerHTML = `
-        ${header}
-        <div class="worktree-inspector-grid">
-          <div class="worktree-inspector-panel">
-            <div class="worktree-inspector-panel-title">Files</div>
-            <table class="worktree-inspector-table">
-              <thead>
-                <tr>
-                  <th>Status</th>
-                  <th>Path</th>
-                  <th>Staged</th>
-                  <th>Unstaged</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${fileRows || `<tr><td colspan="4" style="opacity:0.8;">No changes.</td></tr>`}
-              </tbody>
-            </table>
-          </div>
-          <div class="worktree-inspector-panel">
-            <div class="worktree-inspector-panel-title">${escapeHtml(commitsTitle)}</div>
-            <div class="worktree-inspector-commits">
+	      bodyEl.innerHTML = `
+	        ${header}
+	        <div class="worktree-inspector-grid">
+	          <div class="worktree-inspector-panel">
+	            <div class="worktree-inspector-panel-title-row">
+	              <div class="worktree-inspector-panel-title">Files</div>
+	              <div class="worktree-inspector-view-toggle">
+	                <button class="btn-secondary ${filesView === 'tree' ? 'active' : ''}" type="button" data-files-view-btn="tree" title="Folder tree">Tree</button>
+	                <button class="btn-secondary ${filesView === 'list' ? 'active' : ''}" type="button" data-files-view-btn="list" title="Flat list">List</button>
+	              </div>
+	            </div>
+	            <div class="worktree-inspector-files ${filesView === 'list' ? 'view-list' : 'view-tree'}" id="worktree-inspector-files">
+	              <div class="worktree-inspector-files-tree">
+	                ${treeHtml}
+	              </div>
+	              <div class="worktree-inspector-files-list">
+	                <table class="worktree-inspector-table">
+	                  <thead>
+	                    <tr>
+	                      <th>Status</th>
+	                      <th>Path</th>
+	                      <th>Staged</th>
+	                      <th>Unstaged</th>
+	                    </tr>
+	                  </thead>
+	                  <tbody>
+	                    ${fileRows || `<tr><td colspan="4" style="opacity:0.8;">No changes.</td></tr>`}
+	                  </tbody>
+	                </table>
+	              </div>
+	            </div>
+	          </div>
+	          <div class="worktree-inspector-panel">
+	            <div class="worktree-inspector-panel-title">${escapeHtml(commitsTitle)}</div>
+	            <div class="worktree-inspector-commits">
               ${commitRows || `<div style="opacity:0.8;">No commits found.</div>`}
             </div>
           </div>
         </div>
-      `;
+	      `;
 
-      bodyEl.querySelector('[data-open-diff-home]')?.addEventListener('click', () => this.openDiffViewerHome());
-      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
-        const url = e.target?.dataset?.openDiff;
-        if (url) this.launchDiffViewer(url);
+	      const filesRoot = bodyEl.querySelector('#worktree-inspector-files');
+	      const filesViewBtns = bodyEl.querySelectorAll('[data-files-view-btn]');
+	      const applyFilesView = (view) => {
+	        if (!filesRoot) return;
+	        const v = String(view || '').trim().toLowerCase();
+	        const next = (v === 'list' || v === 'tree') ? v : 'tree';
+	        filesRoot.classList.toggle('view-tree', next === 'tree');
+	        filesRoot.classList.toggle('view-list', next === 'list');
+	        filesViewBtns.forEach((btn) => {
+	          btn.classList.toggle('active', String(btn?.dataset?.filesViewBtn || '') === next);
+	        });
+	      };
+
+	      filesViewBtns.forEach((btn) => {
+	        btn.addEventListener('click', () => {
+	          const view = String(btn?.dataset?.filesViewBtn || '').trim().toLowerCase();
+	          const next = (view === 'list' || view === 'tree') ? view : 'tree';
+	          try {
+	            localStorage.setItem(filesViewKey, next);
+	          } catch {
+	            // ignore
+	          }
+	          applyFilesView(next);
+	        });
+	      });
+	      applyFilesView(filesView);
+
+	      bodyEl.querySelector('[data-open-diff-home]')?.addEventListener('click', () => this.openDiffViewerHome());
+	      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
+	        const url = e.target?.dataset?.openDiff;
+	        if (url) this.launchDiffViewer(url);
       });
       bodyEl.querySelector('[data-pr-url]')?.addEventListener('click', (e) => {
         const url = e.target?.dataset?.prUrl;
