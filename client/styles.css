@@ -1315,6 +1315,14 @@ header h1 {
   opacity: 0.92;
 }
 
+.worktree-inspector-ticket-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
 .worktree-inspector-files.view-tree .worktree-inspector-files-list {
   display: none;
 }
