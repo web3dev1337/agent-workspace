@@ -1215,7 +1215,7 @@ header h1 {
   width: min(720px, 48vw);
   justify-content: flex-end;
   align-items: stretch;
-  z-index: 150;
+  z-index: 2100;
 }
 
 .worktree-inspector-modal.docked .modal-content.large-modal {
