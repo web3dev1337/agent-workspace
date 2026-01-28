@@ -10003,12 +10003,12 @@ class ClaudeOrchestrator {
         });
       };
 
-			    const ensureBoardDetailVisible = (sentinelId) => {
-			      const current = String(state.selectedCardId || '').trim();
-			      if (current && !current.startsWith('__')) state.restoreDetailCardId = current;
-			      state.selectedCardId = sentinelId;
-			      if (state.view === 'board') bodyEl?.classList?.toggle?.('tasks-has-detail', true);
-			    };
+				    const ensureBoardDetailVisible = (sentinelId) => {
+				      const current = String(state.selectedCardId || '').trim();
+				      if (current && !current.startsWith('__')) state.restoreDetailCardId = current;
+				      state.selectedCardId = sentinelId;
+				      applyView();
+				    };
 
 			    const restoreBoardDetailOrClear = async () => {
 			      const restoreId = String(state.restoreDetailCardId || '').trim();
@@ -11020,16 +11020,16 @@ class ClaudeOrchestrator {
         .join('');
     };
 
-    const renderDetail = (card) => {
-      if (!card) {
-        state.selectedCardId = null;
-        bodyEl?.classList.toggle('tasks-has-detail', false);
-        detailEl.innerHTML = `<div class="tasks-detail-empty">Select a card to see details.</div>`;
-        return;
-      }
-
-      state.selectedCardId = card.id || null;
-      bodyEl?.classList.toggle('tasks-has-detail', !!state.selectedCardId);
+	    const renderDetail = (card) => {
+	      if (!card) {
+	        state.selectedCardId = null;
+	        detailEl.innerHTML = `<div class="tasks-detail-empty">Select a card to see details.</div>`;
+	        applyView();
+	        return;
+	      }
+	
+	      state.selectedCardId = card.id || null;
+	      applyView();
 
       const title = escapeHtml(card?.name || '');
       const desc = escapeHtml(card?.desc || '');
