@@ -19,6 +19,7 @@ Process discipline:
 
 - [ ] Review Console v1: unified per-worktree review surface (terminals + files + commits + diff) tied to Queue “Next”. (See `PLANS/2026-01-25/REVIEW_CONSOLE_V1.md`)
   - [x] Queue detail “Console” opens a docked Review Console (Worktree Inspector) for worktree tasks. (PR #371)
+  - [x] Queue: “Auto Console” toggle auto-opens Review Console while navigating. (PR #378)
   - [x] Review Console: merge PR button for mergeable open PRs. (PR #372)
   - [x] Review Console: move linked ticket/card to Done list. (PR #374)
   - [x] Review Console: review timer + outcome + notes controls. (PR #376)
