@@ -5785,13 +5785,25 @@ class ClaudeOrchestrator {
       return;
     }
 
+    const label = session?.worktreeId ? `${session.worktreeId}` : sid;
+    return this.openWorktreeInspectorForPath(worktreePath, { label });
+  }
+
+  async openWorktreeInspectorForPath(worktreePath, { label = '' } = {}) {
+    const p = String(worktreePath || '').trim();
+    if (!p) {
+      this.showToast('No worktree path provided', 'warning');
+      return;
+    }
+
     const modal = this.ensureWorktreeInspectorModal();
     modal.classList.remove('hidden');
 
     const titleEl = modal.querySelector('#worktree-inspector-title');
     if (titleEl) {
-      const label = session?.worktreeId ? `${session.worktreeId}` : sid;
-      titleEl.textContent = `Worktree Inspector • ${label}`;
+      const fallback = p.replace(/\\/g, '/').split('/').filter(Boolean).slice(-2).join('/');
+      const safe = String(label || fallback || 'Worktree').trim();
+      titleEl.textContent = `Worktree Inspector • ${safe}`;
     }
 
     const bodyEl = modal.querySelector('#worktree-inspector-body');
@@ -5804,7 +5816,7 @@ class ClaudeOrchestrator {
       .replace(/>/g, '&gt;');
 
     try {
-      const summary = await this.fetchWorktreeGitSummary(worktreePath, { maxFiles: 300, maxCommits: 25 });
+      const summary = await this.fetchWorktreeGitSummary(p, { maxFiles: 300, maxCommits: 25 });
       const pr = summary?.pr || {};
 
       const header = (() => {
@@ -5817,7 +5829,7 @@ class ClaudeOrchestrator {
         const prUrl = pr?.hasPR && pr?.url ? String(pr.url) : '';
 
         const parts = [];
-        parts.push(`<span class="worktree-inspector-chip" title="${escapeHtml(worktreePath)}">📁 ${escapeHtml(worktreePath)}</span>`);
+        parts.push(`<span class="worktree-inspector-chip" title="${escapeHtml(p)}">📁 ${escapeHtml(p)}</span>`);
         parts.push(`<span class="worktree-inspector-chip">🌿 ${branch}</span>`);
         if (behind > 0) parts.push(`<span class="worktree-inspector-chip">⇣${behind}</span>`);
         if (ahead > 0) parts.push(`<span class="worktree-inspector-chip">⇡${ahead}</span>`);
@@ -14286,20 +14298,21 @@ class ClaudeOrchestrator {
       const nextAutoSnoozeMs = computeBackoffMs(snoozeCount + 1);
       const nextAutoSnoozeLabel = formatBackoff(nextAutoSnoozeMs);
 
-      detailEl.innerHTML = `
-        <div class="tasks-detail-header">
-          <div class="tasks-detail-title">
-            <div class="pr-subtitle">${escapeHtml(t.title || t.id)}</div>
-            <div class="tasks-detail-meta">${escapeHtml(t.id)}</div>
-          </div>
-          <div class="tasks-detail-actions">
-            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
-            ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
-            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
-            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
-            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-recheck" title="Spawn a reviewer agent to recheck after fixes">🔁 Recheck</button>` : ''}
-          </div>
-        </div>
+	      detailEl.innerHTML = `
+	        <div class="tasks-detail-header">
+	          <div class="tasks-detail-title">
+	            <div class="pr-subtitle">${escapeHtml(t.title || t.id)}</div>
+	            <div class="tasks-detail-meta">${escapeHtml(t.id)}</div>
+	          </div>
+	          <div class="tasks-detail-actions">
+	            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
+	            ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
+	            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-inspector" title="Worktree files + commits">🗂 Inspect</button>` : ''}
+	            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
+	            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
+	            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-recheck" title="Spawn a reviewer agent to recheck after fixes">🔁 Recheck</button>` : ''}
+	          </div>
+	        </div>
 
         ${state.triageMode ? `
         <div class="tasks-detail-block">
@@ -14503,14 +14516,15 @@ class ClaudeOrchestrator {
       const ticketOpenBtn = detailEl.querySelector('#queue-ticket-open');
       const doneEl = detailEl.querySelector('#queue-done');
       const reviewedEl = detailEl.querySelector('#queue-reviewed');
-      const outcomeEl = detailEl.querySelector('#queue-review-outcome');
-      const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
-      const openDiffBtn = detailEl.querySelector('#queue-open-diff');
-      const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
-      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
-      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
-      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
-      const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
+	      const outcomeEl = detailEl.querySelector('#queue-review-outcome');
+	      const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
+	      const openDiffBtn = detailEl.querySelector('#queue-open-diff');
+	      const openInspectorBtn = detailEl.querySelector('#queue-open-inspector');
+	      const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
+	      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
+	      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
+	      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
+	      const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
       const notesEl = detailEl.querySelector('#queue-notes');
       const snoozeAutoBtn = detailEl.querySelector('#queue-snooze-auto');
       const snooze15Btn = detailEl.querySelector('#queue-snooze-15m');
@@ -15101,10 +15115,10 @@ class ClaudeOrchestrator {
         }
       });
 
-      spawnRecheckBtn?.addEventListener('click', async () => {
-        try {
-          spawnRecheckBtn.disabled = true;
-          const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+	      spawnRecheckBtn?.addEventListener('click', async () => {
+	        try {
+	          spawnRecheckBtn.disabled = true;
+	          const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
           if (info) {
             const rec = await upsertRecord(t.id, {
               recheckSpawnedAt: new Date().toISOString(),
@@ -15118,14 +15132,19 @@ class ClaudeOrchestrator {
           this.showToast(String(e?.message || e), 'error');
         } finally {
           spawnRecheckBtn.disabled = false;
-        }
-      });
+	        }
+	      });
 
-      reviewedEl?.addEventListener('change', async () => {
-        try {
-          reviewedEl.disabled = true;
-          let nudged = false;
-          if (reviewedEl.checked && state.reviewTimer?.taskId === t.id) {
+	      openInspectorBtn?.addEventListener('click', () => {
+	        if (t.sessionId) return this.openWorktreeInspector(t.sessionId);
+	        if (t.worktreePath) return this.openWorktreeInspectorForPath(t.worktreePath, { label: t.worktree || t.id || '' });
+	      });
+
+	      reviewedEl?.addEventListener('change', async () => {
+	        try {
+	          reviewedEl.disabled = true;
+	          let nudged = false;
+	          if (reviewedEl.checked && state.reviewTimer?.taskId === t.id) {
             await stopReviewTimer({ reason: 'reviewed', nudge: true });
             nudged = true;
           }
