@@ -5899,14 +5899,23 @@ class ClaudeOrchestrator {
 		              <option value="skipped" ${reviewOutcomeValue === 'skipped' ? 'selected' : ''}>skipped</option>
 		            </select>
 		          </div>
-		          <div class="worktree-inspector-review-meta">
-		            <div><span style="opacity:0.8;">started:</span> <span id="worktree-inspector-review-started" class="mono">${escapeHtml(reviewStartedAt || '—')}</span></div>
-		            <div><span style="opacity:0.8;">ended:</span> <span id="worktree-inspector-review-ended" class="mono">${escapeHtml(reviewEndedAt || (reviewStartedAt ? 'running…' : '—'))}</span></div>
-		            <div><span style="opacity:0.8;">reviewed:</span> <span id="worktree-inspector-review-reviewed" class="mono">${escapeHtml(reviewedAt || '—')}</span></div>
-		          </div>
-		          <textarea class="tasks-textarea" rows="3" data-review-notes="true" placeholder="Notes / fix request…">${escapeHtml(reviewNotes)}</textarea>
-		        </div>
-		      ` : '';
+			          <div class="worktree-inspector-review-meta">
+			            <div><span style="opacity:0.8;">started:</span> <span id="worktree-inspector-review-started" class="mono">${escapeHtml(reviewStartedAt || '—')}</span></div>
+			            <div><span style="opacity:0.8;">ended:</span> <span id="worktree-inspector-review-ended" class="mono">${escapeHtml(reviewEndedAt || (reviewStartedAt ? 'running…' : '—'))}</span></div>
+			            <div><span style="opacity:0.8;">reviewed:</span> <span id="worktree-inspector-review-reviewed" class="mono">${escapeHtml(reviewedAt || '—')}</span></div>
+			          </div>
+			          <textarea class="tasks-textarea" rows="3" data-review-notes="true" placeholder="Notes / fix request…">${escapeHtml(reviewNotes)}</textarea>
+			          ${(ticketCardId || ticketCardUrl) ? `
+			            <div class="worktree-inspector-ticket-controls">
+			              <select class="tasks-select tasks-select-inline" data-ticket-list="true" disabled style="flex:1;min-width:0;">
+			                <option value="">Ticket lists…</option>
+			              </select>
+			              <button class="btn-secondary" type="button" data-ticket-move-list="true" disabled title="Move ticket to selected list">➡ Move</button>
+			            </div>
+			            <div class="worktree-inspector-subtle" id="worktree-inspector-ticket-status">Loading ticket lists…</div>
+			          ` : ''}
+			        </div>
+			      ` : '';
 
 		      const files = Array.isArray(summary?.files) ? summary.files : [];
 		      const formatStat = (s) => {
@@ -6191,10 +6200,10 @@ class ClaudeOrchestrator {
 	        const url = e.target?.dataset?.ticketOpen;
 	        if (url) window.open(url, '_blank', 'noreferrer');
 	      });
-		      bodyEl.querySelector('[data-ticket-move]')?.addEventListener('click', async (e) => {
-		        const taskId = e.target?.dataset?.ticketMove;
-		        if (!taskId) return;
-		        if (!window.confirm(`Move ticket to Done?\n${taskId}`)) return;
+			      bodyEl.querySelector('[data-ticket-move]')?.addEventListener('click', async (e) => {
+			        const taskId = e.target?.dataset?.ticketMove;
+			        if (!taskId) return;
+			        if (!window.confirm(`Move ticket to Done?\n${taskId}`)) return;
 
 	        const btn = e.target;
 	        btn.disabled = true;
@@ -6210,14 +6219,112 @@ class ClaudeOrchestrator {
 	          this.showToast('Ticket moved', 'success');
 	        } catch (err) {
 		          this.showToast(String(err?.message || err), 'error');
-		          btn.disabled = false;
+			          btn.disabled = false;
+			        }
+			      });
+
+		      const ticketListEl = bodyEl.querySelector('[data-ticket-list]');
+		      const ticketMoveListBtn = bodyEl.querySelector('[data-ticket-move-list]');
+		      const ticketStatusEl = bodyEl.querySelector('#worktree-inspector-ticket-status');
+
+		      const parseTrelloCardId = (raw) => {
+		        const s = String(raw || '').trim();
+		        if (!s) return '';
+		        const mUrl = s.match(/https?:\/\/trello\.com\/c\/([a-zA-Z0-9]+)(?:\/|\b)/i);
+		        if (mUrl && mUrl[1]) return String(mUrl[1]);
+		        const mTag = s.match(/^trello:([a-zA-Z0-9]+)$/i);
+		        if (mTag && mTag[1]) return String(mTag[1]);
+		        if (/^[a-zA-Z0-9]{6,}$/.test(s)) return s;
+		        return '';
+		      };
+
+		      const loadTicketLists = async () => {
+		        if (!reviewTaskId) return;
+		        if (!ticketListEl || !ticketMoveListBtn) return;
+		        const providerId = String(reviewRecord?.ticketProvider || 'trello').trim().toLowerCase() || 'trello';
+		        const cardId = String(ticketCardId || '').trim() || parseTrelloCardId(ticketCardUrl || ticketUrl);
+		        if (!cardId) {
+		          if (ticketStatusEl) ticketStatusEl.textContent = 'No ticket id set.';
+		          return;
 		        }
+
+		        ticketListEl.disabled = true;
+		        ticketMoveListBtn.disabled = true;
+		        if (ticketStatusEl) ticketStatusEl.textContent = 'Loading ticket lists…';
+
+		        const cardRes = await fetch(`/api/tasks/cards/${encodeURIComponent(cardId)}?provider=${encodeURIComponent(providerId)}`);
+		        const cardData = await cardRes.json().catch(() => ({}));
+		        if (!cardRes.ok) {
+		          const msg = String(cardData?.error || cardData?.message || 'Failed to load ticket card');
+		          if (ticketStatusEl) ticketStatusEl.textContent = msg;
+		          return;
+		        }
+		        const card = cardData?.card || cardData;
+		        const boardId = String(card?.idBoard || '').trim();
+		        const currentListId = String(card?.idList || '').trim();
+		        if (!boardId) {
+		          if (ticketStatusEl) ticketStatusEl.textContent = 'Ticket board id not found.';
+		          return;
+		        }
+
+		        const listsRes = await fetch(`/api/tasks/boards/${encodeURIComponent(boardId)}/lists?provider=${encodeURIComponent(providerId)}&refresh=true`);
+		        const listsData = await listsRes.json().catch(() => ({}));
+		        if (!listsRes.ok) {
+		          const msg = String(listsData?.error || listsData?.message || 'Failed to load board lists');
+		          if (ticketStatusEl) ticketStatusEl.textContent = msg;
+		          return;
+		        }
+
+		        const lists = Array.isArray(listsData?.lists) ? listsData.lists : [];
+		        ticketListEl.innerHTML = `<option value="">Move ticket…</option>` + lists
+		          .filter((l) => !!l?.id)
+		          .map((l) => `<option value="${escapeHtml(l.id)}">${escapeHtml(l.name || l.id)}</option>`)
+		          .join('');
+
+		        const key = `${providerId}:${boardId}`;
+		        const doneListId = String(this.userSettings?.global?.ui?.tasks?.boardConventions?.[key]?.doneListId || '').trim();
+		        const listIds = new Set(lists.map((l) => String(l?.id || '').trim()).filter(Boolean));
+		        if (doneListId && listIds.has(doneListId)) ticketListEl.value = doneListId;
+		        else if (currentListId && listIds.has(currentListId)) ticketListEl.value = currentListId;
+
+		        ticketListEl.disabled = false;
+		        ticketMoveListBtn.disabled = !String(ticketListEl.value || '').trim();
+		        if (ticketStatusEl) ticketStatusEl.textContent = `Ticket: trello:${cardId}`;
+
+		        ticketListEl.addEventListener('change', () => {
+		          ticketMoveListBtn.disabled = !String(ticketListEl.value || '').trim();
+		        });
+
+		        ticketMoveListBtn.addEventListener('click', async () => {
+		          const listId = String(ticketListEl.value || '').trim();
+		          if (!listId) return;
+		          if (!window.confirm('Move ticket to selected list?')) return;
+		          ticketMoveListBtn.disabled = true;
+		          try {
+		            const res = await fetch(`/api/process/task-records/${encodeURIComponent(reviewTaskId)}/ticket-move`, {
+		              method: 'POST',
+		              headers: { 'Content-Type': 'application/json' },
+		              body: JSON.stringify({ listId })
+		            });
+		            const data = await res.json().catch(() => ({}));
+		            if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to move ticket'));
+		            this.showToast('Ticket moved', 'success');
+		          } catch (e) {
+		            this.showToast(String(e?.message || e), 'error');
+		          } finally {
+		            ticketMoveListBtn.disabled = !String(ticketListEl.value || '').trim();
+		          }
+		        });
+		      };
+
+		      loadTicketLists().catch((e) => {
+		        if (ticketStatusEl) ticketStatusEl.textContent = String(e?.message || e);
 		      });
 
-		      const reviewStartBtn = bodyEl.querySelector('[data-review-start]');
-		      const reviewStopBtn = bodyEl.querySelector('[data-review-stop]');
-		      const reviewOutcomeEl = bodyEl.querySelector('[data-review-outcome]');
-		      const reviewNotesEl = bodyEl.querySelector('[data-review-notes]');
+			      const reviewStartBtn = bodyEl.querySelector('[data-review-start]');
+			      const reviewStopBtn = bodyEl.querySelector('[data-review-stop]');
+			      const reviewOutcomeEl = bodyEl.querySelector('[data-review-outcome]');
+			      const reviewNotesEl = bodyEl.querySelector('[data-review-notes]');
 
 		      const updateTaskRecord = async (patch) => {
 		        if (!reviewTaskId) throw new Error('No task id available');
