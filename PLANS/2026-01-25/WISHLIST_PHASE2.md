@@ -8,6 +8,7 @@ Source context:
 - `PLANS/2026-01-25/BRAIN_DUMP_2026-01-25.md`
 - `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md`
 - `PLANS/2026-01-25/REMAINING_NEXT_PHASE.md` (what shipped + what’s left)
+- `PLANS/2026-01-25/POST_SHIP_ISSUES.md` (new issues discovered after Phase 2 completion)
 
 Process discipline:
 - Small PRs; run tests; commit + push + merge continuously.

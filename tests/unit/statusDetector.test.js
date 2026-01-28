@@ -29,6 +29,26 @@ describe('StatusDetector', () => {
       expect(status).toBe('waiting');
     });
 
+    it('should detect waiting status when prompt follows completion (Cost line)', () => {
+      const state = detector.getState(sessionId);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      state.claudeLikely = true;
+      const buffer = 'Task completed successfully.\nCost: $0.05\n> ';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('waiting');
+    });
+
+    it('should not treat markdown/code lines ending with ">" as waiting', () => {
+      const state = detector.getState(sessionId);
+      state.lastOutputTime = Date.now();
+      state.lastBufferLength = 0;
+      state.claudeLikely = true;
+      const buffer = `${'Example output '.repeat(20)}\n>`;
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('busy');
+    });
+
     it('should not treat y/N prompts as waiting', () => {
       const buffer = 'Do you want to continue? (y/N) ';
       const status = detector.detectStatus(sessionId, buffer);
