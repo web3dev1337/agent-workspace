@@ -97,7 +97,7 @@ Process discipline:
 - [x] Tasks board “wrap/expand” layout: ensure column auto-layout minimizes columns (consider collapsed/hidden lists and fill vertically before adding columns). (PR #294)
 - [x] Dashboard “Advice” tile shows “Failed to load” (investigate `/api/process/advice` errors on fresh startups). (PR #323)
   - Dashboard now shows HTTP error details and supports one-click retry. (PR #337)
-- [x] Header: add an explicit “🔍 Diff” button to open Advanced Diff Viewer (not only per-PR buttons). (PR TBD)
+- [x] Header: add an explicit “🔍 Diff” button to open Advanced Diff Viewer (not only per-PR buttons). (PR #365)
 - [x] Worktree list + terminal headers: branch labels should be compact (hide common prefixes), remove forced “@”, and be color-coded by type (feature/fix/etc.), with toggles in Settings. (PR #357)
   - Default/no-prefix branches now also render with a blue label (not just prefixed branches). (PR #364)
 - [x] Workflow: add an “All” view so you can see all tiers without swapping Focus/Background; explicit tier filter (T1–T4/None) should override workflow filtering. (PR #359)
