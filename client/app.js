@@ -3337,7 +3337,7 @@ class ClaudeOrchestrator {
 
     const classes = [];
     if (type === 'main') classes.push('master-branch');
-    if (cfg.colorize && type && raw) classes.push(`branch-type-${type}`);
+    if (cfg.colorize && type && type !== 'main' && raw) classes.push(`branch-type-${type}`);
 
     return {
       raw,
