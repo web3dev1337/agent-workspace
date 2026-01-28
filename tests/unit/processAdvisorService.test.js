@@ -157,6 +157,24 @@ describe('ProcessAdvisorService', () => {
     }
   });
 
+  test('detects dependency cycles from task records', async () => {
+    const processStatusService = { getStatus: async () => ({ qByTier: {}, qCaps: {}, wip: 0, wipMax: 0 }) };
+    const processTelemetryService = { getSummary: async () => ({ avgReviewSeconds: 0 }) };
+    const processTaskService = { listTasks: async () => ([]) };
+    const taskRecordService = {
+      list: () => ([
+        { id: 'pr:x/y#1', dependencies: ['pr:x/y#2'] },
+        { id: 'pr:x/y#2', dependencies: ['pr:x/y#1'] }
+      ])
+    };
+
+    const svc = new ProcessAdvisorService({ processStatusService, processTelemetryService, processTaskService, taskRecordService });
+    const result = await svc.getAdvice({ mode: 'mine', lookbackHours: 24, force: true });
+    const codes = (result.advice || []).map(a => a.code);
+    expect(codes).toContain('dep_cycles');
+    expect(result.metrics.depCycleCount).toBeGreaterThanOrEqual(1);
+  });
+
   test('does not throw when upstream services fail', async () => {
     const processStatusService = {
       getStatus: async () => {

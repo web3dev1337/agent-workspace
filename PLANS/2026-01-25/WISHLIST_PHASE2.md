@@ -35,7 +35,7 @@ Process discipline:
 
 ## Advisor / Coach v2 (recommendations)
 
-- [ ] Expand advisor inputs: dependencies + telemetry + risk + verifyMinutes + reviewOutcome history.
+- [x] Expand advisor inputs: dependencies + telemetry + risk + verifyMinutes + reviewOutcome history. (PR #390)
   - [x] Added verifyMinutes + changeRisk/tier mismatch signals. (PR #335)
 - [ ] Add “project readiness” checklists (playtest / launch / domain / hosting / security) as templates and/or heuristics.
 - [x] Commander/voice hooks to consume advice: “what should I do next?”, “show blockers”, “start next review”.
