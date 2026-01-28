@@ -48,8 +48,8 @@ Process discipline:
 
 ## Dependency graph v2 (UX)
 
-- [ ] Richer dependency graph UI: timeline-ish “blocked by / unblocks” flow, better satisfaction reasons, and quick edits.
-- [ ] Multi-board dependency normalization: show Trello + PR + local deps together with consistent icons and links.
+- [x] Richer dependency graph UI: timeline-ish “blocked by / unblocks” flow, better satisfaction reasons, and quick edits. (PR #392)
+- [x] Multi-board dependency normalization: show Trello + PR + local deps together with consistent icons and links. (PR #392)
 
 ## Tasks v2 (multi-board)
 
