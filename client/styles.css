@@ -1207,6 +1207,26 @@ header h1 {
   overflow: hidden;
 }
 
+.worktree-inspector-modal.docked {
+  top: var(--header-height);
+  left: auto;
+  right: 0;
+  bottom: 0;
+  width: min(720px, 48vw);
+  justify-content: flex-end;
+  align-items: stretch;
+  z-index: 150;
+}
+
+.worktree-inspector-modal.docked .modal-content.large-modal {
+  width: 100%;
+  max-width: none;
+  max-height: calc(100vh - var(--header-height));
+  height: 100%;
+  border-radius: 0;
+  border-left: 1px solid var(--border-color);
+}
+
 .worktree-inspector-body {
   overflow: auto;
   padding-right: 2px;
