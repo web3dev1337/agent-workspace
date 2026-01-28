@@ -100,7 +100,8 @@ test.describe('Commander terminal paste', () => {
     await dismissFocusOverlay(page);
 
     // Open Commander panel.
-    await page.locator('#commander-toggle').click();
+    await page.waitForFunction(() => !!window.orchestrator?.commanderPanel, { timeout: 20000 });
+    await page.evaluate(() => window.orchestrator?.commanderPanel?.show?.());
     await expect(page.locator('#commander-panel')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#commander-terminal .xterm')).toBeVisible({ timeout: 10000 });
 

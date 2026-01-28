@@ -41,11 +41,20 @@ const ensureWorkspaceLoaded = async (page) => {
 
 test.describe('Focus mode auto-swap', () => {
   test('shows Tier 2 only while Tier 1 is busy', async ({ page }) => {
+    const t1 = 'demo-work1-claude';
+    const t2 = 'demo-work2-claude';
+
     await page.route(/.*\/api\/process\/task-records$/, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ count: 0, records: [] })
+        body: JSON.stringify({
+          count: 2,
+          records: [
+            { id: `session:${t1}`, record: { tier: 1 } },
+            { id: `session:${t2}`, record: { tier: 2 } }
+          ]
+        })
       });
     });
 
@@ -53,10 +62,15 @@ test.describe('Focus mode auto-swap', () => {
     await ensureWorkspaceLoaded(page);
     await page.waitForFunction(() => !!window.orchestrator, { timeout: 10000 });
 
+    // Prevent other tests from broadcasting session updates that would reset our seeded state.
     await page.evaluate(() => {
-      const t1 = 'demo-work1-claude';
-      const t2 = 'demo-work2-claude';
+      try {
+        window.orchestrator?.socket?.off?.('sessions');
+        window.orchestrator?.socket?.off?.('workspace-changed');
+      } catch {}
+    });
 
+    await page.evaluate(({ t1, t2 }) => {
       window.orchestrator.showActiveOnly = false;
       window.orchestrator.viewMode = 'all';
       window.orchestrator.tierFilter = 'all';
@@ -76,20 +90,19 @@ test.describe('Focus mode auto-swap', () => {
       window.orchestrator.refreshTier1Busy({ suppressRerender: true });
       window.orchestrator.updateWorkflowModeButtons();
       window.orchestrator.updateTerminalGrid();
-    });
+    }, { t1, t2 });
 
     await expect(page.locator('#wrapper-demo-work2-claude')).toHaveCount(1);
     await expect(page.locator('#wrapper-demo-work1-claude')).toHaveCount(0);
 
     // Now mark Tier 1 as idle and verify Tier 1 comes back.
-    await page.evaluate(() => {
-      const t1 = 'demo-work1-claude';
+    await page.evaluate(({ t1 }) => {
       const session = window.orchestrator.sessions.get(t1);
       window.orchestrator.sessions.set(t1, { ...session, status: 'waiting' });
       window.orchestrator.refreshTier1Busy({ suppressRerender: true });
       window.orchestrator.updateWorkflowModeButtons();
       window.orchestrator.updateTerminalGrid();
-    });
+    }, { t1 });
 
     await expect.poll(async () => {
       return await page.locator('#wrapper-demo-work1-claude').count();
