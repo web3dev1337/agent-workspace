@@ -4,7 +4,7 @@ The 2026-01-25 brain-dump implementation plan is fully checked off; this file tr
 
 ## Bugs / regressions
 
-- [x] Status lights: avoid false “waiting” when output ends with a lone `>` line (prompt gating in `StatusDetector`). (PR TBD)
+- [x] Status lights: avoid false “waiting” when output ends with a lone `>` line (prompt gating in `StatusDetector`). (PR #394)
 - [ ] Status lights: investigate remaining green/orange/grey flicker for agent + worktree dots (esp. Codex sessions).
 - [ ] Tasks panel: board view sometimes appears scrolled to the far right (single column “right aligned”).
 - [ ] Tasks panel: selecting a card sometimes opens details on the wrong side / causes layout reflow.
@@ -25,4 +25,3 @@ The 2026-01-25 brain-dump implementation plan is fully checked off; this file tr
 
 - [ ] Unified review screen: terminals + changed-files tree + commit log + diff viewer, with presets and a one-at-a-time review conveyor.
 - [ ] PR workflow: merge from review screen + move linked Trello card to the correct column (Done/Test/etc) after merge.
-
