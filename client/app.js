@@ -5773,6 +5773,7 @@ class ClaudeOrchestrator {
   closeWorktreeInspector() {
     const modal = document.getElementById('worktree-inspector-modal');
     if (!modal) return;
+    modal.classList.remove('docked');
     modal.classList.add('hidden');
   }
 
@@ -5797,6 +5798,7 @@ class ClaudeOrchestrator {
     }
 
     const modal = this.ensureWorktreeInspectorModal();
+    modal.classList.remove('docked');
     modal.classList.remove('hidden');
 
     const titleEl = modal.querySelector('#worktree-inspector-title');
@@ -6109,6 +6111,47 @@ class ClaudeOrchestrator {
         <div style="opacity:0.9; margin-bottom:10px;">Failed to load worktree summary.</div>
         <div style="opacity:0.7;" class="mono">${escapeHtml(String(err?.message || err))}</div>
       `;
+    }
+  }
+
+  async openReviewConsoleForTask(task) {
+    const t = task && typeof task === 'object' ? task : {};
+    const sessionId = String(t.sessionId || '').trim();
+    const session = sessionId ? this.sessions.get(sessionId) : null;
+
+    const worktreePath = String(session?.config?.cwd || session?.cwd || session?.worktreePath || t.worktreePath || '').trim();
+    if (!worktreePath) {
+      this.showToast('No worktree path available for this task', 'warning');
+      return;
+    }
+
+    const inferredWorktreeId = String(
+      session?.worktreeId
+      || (sessionId ? sessionId.split('-')[0] : '')
+      || t.worktree
+      || this.extractWorktreeLabel(worktreePath)
+      || ''
+    ).trim();
+
+    if (inferredWorktreeId) {
+      this.showOnlyWorktree(inferredWorktreeId);
+    }
+
+    const label = inferredWorktreeId || String(t.id || '').trim() || worktreePath;
+    await this.openWorktreeInspectorForPath(worktreePath, { label });
+
+    const modal = this.ensureWorktreeInspectorModal();
+    modal.classList.add('docked');
+
+    const titleEl = modal.querySelector('#worktree-inspector-title');
+    if (titleEl) {
+      titleEl.textContent = `Review Console • ${label}`;
+    }
+
+    const preferredSessionId = sessionId || (inferredWorktreeId ? `${inferredWorktreeId}-claude` : '');
+    if (preferredSessionId) {
+      const wrapper = document.getElementById(`wrapper-${preferredSessionId}`);
+      wrapper?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
     }
   }
 
@@ -14490,15 +14533,16 @@ class ClaudeOrchestrator {
 	            <div class="pr-subtitle">${escapeHtml(t.title || t.id)}</div>
 	            <div class="tasks-detail-meta">${escapeHtml(t.id)}</div>
 	          </div>
-	          <div class="tasks-detail-actions">
-	            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
-	            ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
-	            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-inspector" title="Worktree files + commits">🗂 Inspect</button>` : ''}
-	            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
-	            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
-	            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-recheck" title="Spawn a reviewer agent to recheck after fixes">🔁 Recheck</button>` : ''}
-	          </div>
-	        </div>
+		          <div class="tasks-detail-actions">
+		            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
+		            ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
+		            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-inspector" title="Worktree files + commits">🗂 Inspect</button>` : ''}
+		            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-console" title="Review Console (docked)">🖥 Console</button>` : ''}
+		            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
+		            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
+		            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-recheck" title="Spawn a reviewer agent to recheck after fixes">🔁 Recheck</button>` : ''}
+		          </div>
+		        </div>
 
         ${state.triageMode ? `
         <div class="tasks-detail-block">
@@ -14702,15 +14746,16 @@ class ClaudeOrchestrator {
       const ticketOpenBtn = detailEl.querySelector('#queue-ticket-open');
       const doneEl = detailEl.querySelector('#queue-done');
       const reviewedEl = detailEl.querySelector('#queue-reviewed');
-	      const outcomeEl = detailEl.querySelector('#queue-review-outcome');
-	      const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
-	      const openDiffBtn = detailEl.querySelector('#queue-open-diff');
-	      const openInspectorBtn = detailEl.querySelector('#queue-open-inspector');
-	      const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
-	      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
-	      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
-	      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
-	      const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
+		      const outcomeEl = detailEl.querySelector('#queue-review-outcome');
+		      const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
+		      const openDiffBtn = detailEl.querySelector('#queue-open-diff');
+		      const openInspectorBtn = detailEl.querySelector('#queue-open-inspector');
+		      const openConsoleBtn = detailEl.querySelector('#queue-open-console');
+		      const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
+		      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
+		      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
+		      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
+		      const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
       const notesEl = detailEl.querySelector('#queue-notes');
       const snoozeAutoBtn = detailEl.querySelector('#queue-snooze-auto');
       const snooze15Btn = detailEl.querySelector('#queue-snooze-15m');
@@ -15324,6 +15369,10 @@ class ClaudeOrchestrator {
 	      openInspectorBtn?.addEventListener('click', () => {
 	        if (t.sessionId) return this.openWorktreeInspector(t.sessionId);
 	        if (t.worktreePath) return this.openWorktreeInspectorForPath(t.worktreePath, { label: t.worktree || t.id || '' });
+	      });
+
+	      openConsoleBtn?.addEventListener('click', () => {
+	        this.openReviewConsoleForTask(t);
 	      });
 
 	      reviewedEl?.addEventListener('change', async () => {
