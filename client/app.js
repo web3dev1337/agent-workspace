@@ -13234,20 +13234,21 @@ class ClaudeOrchestrator {
     const serverUrl = window.location.origin;
     const initialSelectedId = String(opts?.selectedId || '').trim() || null;
 
-			    const state = {
-			      mode: 'mine', // mine | all
-			      query: '',
-			      tasks: [],
-			      selectedId: initialSelectedId,
-			      reviewTier: 'all', // all | none | 1..4
-            tierSet: null, // null | number[] (multi-tier presets like [3,4])
-			      unreviewedOnly: false,
-            blockedOnly: localStorage.getItem('queue-blocked-only') === 'true',
-			      autoOpenDiff: false,
-            triageMode: localStorage.getItem('queue-triage') === 'true',
-            snoozes: {}, // taskId -> untilMs
-            snoozeCounts: {}, // taskId -> count
-				      autoAdvance: localStorage.getItem('queue-auto-advance') === 'true',
+				    const state = {
+				      mode: 'mine', // mine | all
+				      query: '',
+				      tasks: [],
+				      selectedId: initialSelectedId,
+				      reviewTier: 'all', // all | none | 1..4
+	            tierSet: null, // null | number[] (multi-tier presets like [3,4])
+				      unreviewedOnly: false,
+	            blockedOnly: localStorage.getItem('queue-blocked-only') === 'true',
+				      autoOpenDiff: false,
+	            autoConsole: localStorage.getItem('queue-auto-console') === 'true',
+	            triageMode: localStorage.getItem('queue-triage') === 'true',
+	            snoozes: {}, // taskId -> untilMs
+	            snoozeCounts: {}, // taskId -> count
+					      autoAdvance: localStorage.getItem('queue-auto-advance') === 'true',
 				      autoReviewer: localStorage.getItem('queue-auto-reviewer') === 'true',
 				      autoFixer: localStorage.getItem('queue-auto-fixer') === 'true',
 				      autoRecheck: localStorage.getItem('queue-auto-recheck') === 'true',
@@ -13364,15 +13365,16 @@ class ClaudeOrchestrator {
             <button class="btn-secondary tasks-view-btn" id="queue-tier-bg" data-tier="bg" title="Background tiers (T3+T4)">T3+</button>
             <button class="btn-secondary tasks-view-btn" id="queue-tier-none" data-tier="none" title="No tier">None</button>
           </div>
-		          <div class="tasks-view-toggle" role="group" aria-label="Review filters">
-		            <button class="btn-secondary tasks-view-btn" id="queue-triage" title="Triage ordering + snooze (safe backoff)">Triage</button>
-		            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
-		            <button class="btn-secondary tasks-view-btn" id="queue-blocked" title="Toggle: show blocked only (dependency-blocked items)">Blocked</button>
-		            <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
-		            <button class="btn-secondary tasks-view-btn" id="queue-auto-next" title="Toggle: auto-advance when you complete a review">Auto Next</button>
-		            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
-		            <button class="btn-secondary tasks-view-btn" id="queue-auto-fixer" title="Toggle: auto-spawn a fixer when Outcome=needs_fix and Notes is set">Auto Fixer</button>
-		            <button class="btn-secondary tasks-view-btn" id="queue-auto-recheck" title="Toggle: auto-spawn a recheck reviewer after fixes land on the PR">Auto Recheck</button>
+			          <div class="tasks-view-toggle" role="group" aria-label="Review filters">
+			            <button class="btn-secondary tasks-view-btn" id="queue-triage" title="Triage ordering + snooze (safe backoff)">Triage</button>
+			            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
+			            <button class="btn-secondary tasks-view-btn" id="queue-blocked" title="Toggle: show blocked only (dependency-blocked items)">Blocked</button>
+			            <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
+			            <button class="btn-secondary tasks-view-btn" id="queue-auto-console" title="Toggle: auto-open Review Console for worktree/session items">Auto Console</button>
+			            <button class="btn-secondary tasks-view-btn" id="queue-auto-next" title="Toggle: auto-advance when you complete a review">Auto Next</button>
+			            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
+			            <button class="btn-secondary tasks-view-btn" id="queue-auto-fixer" title="Toggle: auto-spawn a fixer when Outcome=needs_fix and Notes is set">Auto Fixer</button>
+			            <button class="btn-secondary tasks-view-btn" id="queue-auto-recheck" title="Toggle: auto-spawn a recheck reviewer after fixes land on the PR">Auto Recheck</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t2" title="Conveyor: Tier 2 + unreviewed + auto-next (one-at-a-time)">Conveyor T2</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
 		          </div>
@@ -13411,11 +13413,12 @@ class ClaudeOrchestrator {
 		    const unreviewedBtn = modal.querySelector('#queue-unreviewed');
         const blockedBtn = modal.querySelector('#queue-blocked');
         const triageBtn = modal.querySelector('#queue-triage');
-		    const autoDiffBtn = modal.querySelector('#queue-auto-diff');
-		    const autoNextBtn = modal.querySelector('#queue-auto-next');
-		    const autoReviewerBtn = modal.querySelector('#queue-auto-reviewer');
-		    const autoFixerBtn = modal.querySelector('#queue-auto-fixer');
-		    const autoRecheckBtn = modal.querySelector('#queue-auto-recheck');
+			    const autoDiffBtn = modal.querySelector('#queue-auto-diff');
+			    const autoConsoleBtn = modal.querySelector('#queue-auto-console');
+			    const autoNextBtn = modal.querySelector('#queue-auto-next');
+			    const autoReviewerBtn = modal.querySelector('#queue-auto-reviewer');
+			    const autoFixerBtn = modal.querySelector('#queue-auto-fixer');
+			    const autoRecheckBtn = modal.querySelector('#queue-auto-recheck');
 		    const conveyorT2Btn = modal.querySelector('#queue-conveyor-t2');
 		    const startReviewBtn = modal.querySelector('#queue-start-review');
 		    const prevBtn = modal.querySelector('#queue-prev');
@@ -13450,13 +13453,14 @@ class ClaudeOrchestrator {
           tierBgBtn?.classList.toggle('active', !!(tierSet && tierSet.length === 2 && tierSet.includes(3) && tierSet.includes(4)));
 
           triageBtn?.classList.toggle('active', !!state.triageMode);
-		      unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
-          blockedBtn?.classList.toggle('active', !!state.blockedOnly);
-		      autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
-		      autoNextBtn?.classList.toggle('active', !!state.autoAdvance);
-		      autoReviewerBtn?.classList.toggle('active', !!state.autoReviewer);
-		      autoFixerBtn?.classList.toggle('active', !!state.autoFixer);
-		      autoRecheckBtn?.classList.toggle('active', !!state.autoRecheck);
+			      unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
+	          blockedBtn?.classList.toggle('active', !!state.blockedOnly);
+			      autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
+			      autoConsoleBtn?.classList.toggle('active', !!state.autoConsole);
+			      autoNextBtn?.classList.toggle('active', !!state.autoAdvance);
+			      autoReviewerBtn?.classList.toggle('active', !!state.autoReviewer);
+			      autoFixerBtn?.classList.toggle('active', !!state.autoFixer);
+			      autoRecheckBtn?.classList.toggle('active', !!state.autoRecheck);
 		      startReviewBtn?.classList.toggle('active', !!state.reviewActive);
 		      if (startReviewBtn) startReviewBtn.textContent = state.reviewActive ? 'Stop Review' : 'Start Review';
 		    };
@@ -13512,17 +13516,27 @@ class ClaudeOrchestrator {
       applyFiltersAndMaybeClampSelection();
     });
 
-	    autoDiffBtn?.addEventListener('click', () => {
-	      state.autoOpenDiff = !state.autoOpenDiff;
-	      syncReviewControlsUI();
-	      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
-	    });
+		    autoDiffBtn?.addEventListener('click', () => {
+		      state.autoOpenDiff = !state.autoOpenDiff;
+		      syncReviewControlsUI();
+		      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+		    });
 
-	    autoNextBtn?.addEventListener('click', () => {
-	      state.autoAdvance = !state.autoAdvance;
-	      localStorage.setItem('queue-auto-advance', state.autoAdvance ? 'true' : 'false');
-	      syncReviewControlsUI();
-	    });
+		    autoConsoleBtn?.addEventListener('click', () => {
+		      state.autoConsole = !state.autoConsole;
+		      try { localStorage.setItem('queue-auto-console', state.autoConsole ? 'true' : 'false'); } catch {}
+		      syncReviewControlsUI();
+		      if (state.autoConsole && state.selectedId) {
+		        const t = getTaskById(state.selectedId);
+		        if (t && (t.sessionId || t.worktreePath)) this.openReviewConsoleForTask(t);
+		      }
+		    });
+
+		    autoNextBtn?.addEventListener('click', () => {
+		      state.autoAdvance = !state.autoAdvance;
+		      localStorage.setItem('queue-auto-advance', state.autoAdvance ? 'true' : 'false');
+		      syncReviewControlsUI();
+		    });
 
 		    autoReviewerBtn?.addEventListener('click', () => {
 		      state.autoReviewer = !state.autoReviewer;
@@ -15791,19 +15805,22 @@ class ClaudeOrchestrator {
 	      }
 	    };
 
-	    const selectById = (id, { allowAutoOpenDiff } = {}) => {
-	      state.selectedId = id;
-	      state.allowAutoOpenDiff = !!allowAutoOpenDiff;
-	      const t = getTaskById(id);
-	      renderList();
-	      renderDetail(t);
-	      if (state.reviewActive && t?.id) {
-	        startReviewTimer(t.id).catch(() => {});
-	      }
-	      maybeAutoSpawnReviewer(t).catch(() => {});
-	      maybeAutoSpawnFixer(t).catch(() => {});
-	      maybeAutoSpawnRecheck(t).catch(() => {});
-	    };
+		    const selectById = (id, { allowAutoOpenDiff } = {}) => {
+		      state.selectedId = id;
+		      state.allowAutoOpenDiff = !!allowAutoOpenDiff;
+		      const t = getTaskById(id);
+		      renderList();
+		      renderDetail(t);
+		      if (state.reviewActive && t?.id) {
+		        startReviewTimer(t.id).catch(() => {});
+		      }
+		      maybeAutoSpawnReviewer(t).catch(() => {});
+		      maybeAutoSpawnFixer(t).catch(() => {});
+		      maybeAutoSpawnRecheck(t).catch(() => {});
+		      if (state.autoConsole && (t?.sessionId || t?.worktreePath)) {
+		        this.openReviewConsoleForTask(t);
+		      }
+		    };
 
 	    listEl.addEventListener('click', (e) => {
 	      const row = e.target.closest('.task-card-row[data-queue-id]');
