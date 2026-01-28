@@ -679,7 +679,9 @@ class SessionManager extends EventEmitter {
 
         // Update status based on output (for Claude sessions)
         if (config.type === 'claude' && this.statusDetector) {
-          const newStatus = this.statusDetector.detectStatus(sessionId, session.buffer);
+          const recovery = session.workspace ? sessionRecoveryService.getSession(session.workspace, sessionId) : null;
+          const agent = recovery?.lastAgent || null;
+          const newStatus = this.statusDetector.detectStatus(sessionId, session.buffer, { agent });
           if (newStatus !== session.status) {
             this.maybeApplyStatusUpdate(sessionId, session, newStatus);
           } else if (session.pendingStatus && session.pendingStatus !== newStatus) {
