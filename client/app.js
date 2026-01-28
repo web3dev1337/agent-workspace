@@ -1404,6 +1404,32 @@ class ClaudeOrchestrator {
         this.setTierFilter('none');
       }
     });
+
+    // Keyboard: Alt+F/R/B/G switches workflow mode (Focus/Review/Background/All).
+    // This avoids constant clicking between modes when you just want to scan tiers.
+    document.addEventListener('keydown', (e) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+
+      // Ignore when typing in inputs/selects/contenteditable.
+      const t = e.target;
+      const tag = String(t?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return;
+
+      const lower = String(e.key || '').toLowerCase();
+      const map = {
+        f: 'focus',
+        r: 'review',
+        b: 'background',
+        g: 'all'
+      };
+      const mode = map[lower];
+      if (!mode) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      this.setWorkflowMode(mode);
+      this.showToast(`Mode: ${mode}`, 'info');
+    });
   }
 	  
 	  setViewMode(mode) {
