@@ -2384,6 +2384,25 @@ app.get('/api/prs', async (req, res) => {
   }
 });
 
+app.post('/api/prs/merge', express.json(), async (req, res) => {
+  try {
+    const url = String(req.body?.url || '').trim();
+    const method = String(req.body?.method || 'merge').trim().toLowerCase();
+    const auto = !!req.body?.auto;
+
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    if (!['merge', 'squash', 'rebase'].includes(method)) {
+      return res.status(400).json({ error: 'method must be merge|squash|rebase' });
+    }
+
+    const result = await pullRequestService.mergePullRequestByUrl(url, { method, auto });
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to merge PR', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to merge PR' });
+  }
+});
+
 // ============================================
 // Process tasks API (PR/worktree/session unified list)
 // ============================================

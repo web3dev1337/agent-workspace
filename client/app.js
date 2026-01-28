@@ -5837,17 +5837,29 @@ class ClaudeOrchestrator {
         if (ahead > 0) parts.push(`<span class="worktree-inspector-chip">⇡${ahead}</span>`);
         parts.push(`<span class="worktree-inspector-chip">Δ files ${dirty}</span>`);
 
-        const prChip = prUrl
-          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-pr-url="${escapeHtml(prUrl)}" title="Open PR">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</button>`
-          : `<span class="worktree-inspector-chip">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</span>`;
-        parts.push(prChip);
+	        const prChip = prUrl
+	          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-pr-url="${escapeHtml(prUrl)}" title="Open PR">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</button>`
+	          : `<span class="worktree-inspector-chip">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</span>`;
+	        parts.push(prChip);
 
-        const diffBtn = prUrl
-          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff="${escapeHtml(prUrl)}" title="Open diff viewer for PR">🔍 Diff</button>`
-          : `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff-home="true" title="Open diff viewer">🔍 Diff</button>`;
-        parts.push(diffBtn);
+	        const diffBtn = prUrl
+	          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff="${escapeHtml(prUrl)}" title="Open diff viewer for PR">🔍 Diff</button>`
+	          : `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff-home="true" title="Open diff viewer">🔍 Diff</button>`;
+	        parts.push(diffBtn);
 
-        return `<div class="worktree-inspector-header">${parts.join('')}</div>`;
+	        if (prUrl && prState === 'open') {
+	          const mergeable = String(pr?.mergeable || '').trim().toUpperCase();
+	          const isDraft = !!pr?.isDraft;
+	          const canMerge = !isDraft && (!mergeable || mergeable === 'MERGEABLE');
+	          const reason = isDraft
+	            ? 'PR is draft'
+	            : (mergeable && mergeable !== 'MERGEABLE' ? `Not mergeable (${mergeable})` : 'Merge PR');
+	          parts.push(
+	            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-pr-merge="${escapeHtml(prUrl)}" ${canMerge ? '' : 'disabled'} title="${escapeHtml(reason)}">✅ Merge</button>`
+	          );
+	        }
+
+	        return `<div class="worktree-inspector-header">${parts.join('')}</div>`;
 	      })();
 
 	      const files = Array.isArray(summary?.files) ? summary.files : [];
@@ -6101,11 +6113,33 @@ class ClaudeOrchestrator {
 	      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
 	        const url = e.target?.dataset?.openDiff;
 	        if (url) this.launchDiffViewer(url);
-      });
-      bodyEl.querySelector('[data-pr-url]')?.addEventListener('click', (e) => {
-        const url = e.target?.dataset?.prUrl;
-        if (url) this.openPRLink(url);
-      });
+	      });
+	      bodyEl.querySelector('[data-pr-merge]')?.addEventListener('click', async (e) => {
+	        const prUrl = e.target?.dataset?.prMerge;
+	        if (!prUrl) return;
+	        if (!window.confirm(`Merge PR?\n${prUrl}`)) return;
+
+	        const btn = e.target;
+	        btn.disabled = true;
+	        this.showToast('Merging PR…', 'info');
+	        try {
+	          const res = await fetch('/api/prs/merge', {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ url: prUrl, method: 'merge' })
+	          });
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to merge PR'));
+	          this.showToast('PR merged', 'success');
+	        } catch (err) {
+	          this.showToast(String(err?.message || err), 'error');
+	          btn.disabled = false;
+	        }
+	      });
+	      bodyEl.querySelector('[data-pr-url]')?.addEventListener('click', (e) => {
+	        const url = e.target?.dataset?.prUrl;
+	        if (url) this.openPRLink(url);
+	      });
     } catch (err) {
       bodyEl.innerHTML = `
         <div style="opacity:0.9; margin-bottom:10px;">Failed to load worktree summary.</div>
