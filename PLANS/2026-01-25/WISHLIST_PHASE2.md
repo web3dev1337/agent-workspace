@@ -23,6 +23,7 @@ Process discipline:
   - [x] Review Console: merge PR button for mergeable open PRs. (PR #372)
   - [x] Review Console: move linked ticket/card (Done + list picker). (PR #374, #380)
   - [x] Review Console: review timer + outcome + notes controls. (PR #376)
+  - [x] Review Console: layout presets + section toggles (Terminals / Files / Commits) including fullscreen “Code” mode (no terminals).
 - [x] “Conveyor” mode for Review: one-at-a-time Tier 2 queue + explicit “Next” affordances (minimize decision fatigue). (PR #313)
 - [x] Stronger “Review complete” feedback loop: per-task nudges, sound/desktop options, and auto-open next item when configured. (PR #313)
 - [ ] “Background” mode improvements: triage queue + auto-scheduling rules (e.g., tiered retries, safe backoff).
