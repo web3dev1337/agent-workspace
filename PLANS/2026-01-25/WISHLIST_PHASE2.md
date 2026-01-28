@@ -97,6 +97,7 @@ Process discipline:
 - [x] Tasks launch UX: from a card, launch `T1/T2/T3/T4` agent in 1–2 clicks (dropdown + hotkey-friendly). (PR #321)
 - [x] Tasks panel: Trello board “mapping/settings” control should always open (if it appears enabled); if no-op, surface an error/toast. (PR #314)
 - [x] Board Settings: repo mapping includes a dropdown of detected local repos (scan-repos) to auto-fill Local path; manual entry still supported. (PR #384)
+- [x] Board Settings: repo mapping includes a dropdown of GitHub repos (via `gh repo list`) to auto-fill Repo slug; manual entry still supported. (PR #388)
 - [x] Tasks panel: Trello board colors/background per-board (verify consistency). (PR #300)
 - [x] Agent terminal header: “Start server” control should be present and functional (no hunting in other panels). (PR #277)
 - [x] Tasks panel: “Open Trello board” quick link should exist and point at the selected board. (PR #279)

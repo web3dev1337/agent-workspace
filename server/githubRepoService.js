@@ -1,9 +1,16 @@
 const https = require('https');
 const { execFile } = require('child_process');
-const util = require('util');
 const winston = require('winston');
 
-const execFileAsync = util.promisify(execFile);
+const execFileAsync = (command, args, options) => new Promise((resolve, reject) => {
+  execFile(command, args, options, (error, stdout, stderr) => {
+    if (error) {
+      reject(error);
+      return;
+    }
+    resolve({ stdout, stderr });
+  });
+});
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -56,6 +63,9 @@ class GitHubRepoService {
     this.cache = new Map(); // key => { value, timestamp }
     this.cacheTtlMs = 12 * 60 * 60 * 1000; // 12h
     this.timeoutMs = 8000;
+
+    this.listCache = new Map(); // key => { value, timestamp }
+    this.listCacheTtlMs = 5 * 60 * 1000; // 5m
   }
 
   static getInstance() {
@@ -78,6 +88,65 @@ class GitHubRepoService {
   setCached(key, value) {
     this.cache.set(key, { value, timestamp: Date.now() });
     return value;
+  }
+
+  getListCached(key) {
+    const cached = this.listCache.get(key);
+    if (!cached) return null;
+    if (Date.now() - cached.timestamp > this.listCacheTtlMs) {
+      this.listCache.delete(key);
+      return null;
+    }
+    return cached.value;
+  }
+
+  setListCached(key, value) {
+    this.listCache.set(key, { value, timestamp: Date.now() });
+    return value;
+  }
+
+  async listRepos({ owner = null, limit = 200, force = false } = {}) {
+    const safeOwner = owner ? String(owner).trim() : '';
+    const limitRaw = Number(limit);
+    const safeLimit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.round(limitRaw), 1), 2000) : 200;
+    const key = `repos:${safeOwner || '@me'}:${safeLimit}`;
+
+    if (!force) {
+      const cached = this.getListCached(key);
+      if (cached) return cached;
+    }
+
+    const args = ['repo', 'list'];
+    if (safeOwner) args.push(safeOwner);
+    args.push(
+      '--limit',
+      String(safeLimit),
+      '--json',
+      'nameWithOwner,name,owner,isPrivate,visibility'
+    );
+
+    try {
+      const { stdout } = await execFileAsync('gh', args, { timeout: Math.max(15000, this.timeoutMs) });
+      const parsed = JSON.parse(stdout || '[]');
+      const repos = Array.isArray(parsed) ? parsed : [];
+      const normalized = repos.map((r) => {
+        const nameWithOwner = String(r?.nameWithOwner || '').trim();
+        const name = String(r?.name || '').trim();
+        const ownerLogin = String(r?.owner?.login || '').trim();
+        const visibility = normalizeVisibility(r?.visibility) || (r?.isPrivate ? 'private' : 'public');
+        return {
+          nameWithOwner,
+          name,
+          owner: ownerLogin,
+          isPrivate: !!r?.isPrivate,
+          visibility: visibility || null
+        };
+      }).filter((r) => !!r.nameWithOwner);
+      return this.setListCached(key, normalized);
+    } catch (error) {
+      logger.debug('gh repo list failed', { owner: safeOwner || '@me', error: error.message });
+      throw new Error('Failed to list GitHub repos (requires `gh auth login`)');
+    }
   }
 
   async getRepoVisibility(remoteUrl) {
@@ -159,4 +228,3 @@ module.exports = {
   parseGitHubOwnerRepo,
   normalizeVisibility
 };
-
