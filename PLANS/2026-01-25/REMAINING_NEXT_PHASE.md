@@ -32,6 +32,7 @@ Known issues / follow-ups:
 - [x] Tasks panel: default assignee filter to “All” (not “me”). (PR #283)
 - [x] Tasks panel: add an obvious “New task” button. (PR #287)
 - [x] Board Settings: repo mapping includes a dropdown of detected local repos to fill Local path (manual entry still supported). (PR #384)
+- [x] Board Settings: repo mapping includes a dropdown of GitHub repos (via `gh repo list`) to fill Repo slug (manual entry still supported). (PR #388)
 - [x] Worktree “quick add” should re-evaluate after a new worktree is created (avoid suggesting the just-created worktree as “free”). (PR #289)
 - [x] Worktree “quick add”: allow “create N worktrees” (e.g., 5 at once) + optional background start (“quick work in background”). (PR #292)
 - [x] Trello boards: confirm board background / color theming remains consistent per-board (if applicable). (PR #300)
