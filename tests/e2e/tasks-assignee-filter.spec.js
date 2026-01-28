@@ -117,11 +117,12 @@ const mockTasksApi = async (page) => {
 };
 
 test.describe('Tasks assignee filtering', () => {
-  test('defaults to me and can show any', async ({ page }) => {
+  test('defaults to any and can filter me', async ({ page }) => {
     await mockUserSettings(page);
     await mockTasksApi(page);
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.goto('/');
+    await dismissFocusOverlay(page);
     await ensureWorkspaceLoaded(page);
     await dismissFocusOverlay(page);
 
@@ -130,12 +131,22 @@ test.describe('Tasks assignee filtering', () => {
 
     await page.locator('#tasks-board').selectOption('b1');
 
-    // Default should be "me" -> only show one card.
+    // Default should be "Any" -> show both.
+    await expect(page.locator('.task-card-row')).toHaveCount(2);
+
+    // Switch to Only me -> show one card.
+    const assigneesDetails = page.locator('#tasks-assignees-filter');
+    const openAssignees = async () => {
+      await assigneesDetails.evaluate((el) => { el.open = true; });
+      await expect(page.locator('#tasks-assignees-me')).toBeVisible();
+    };
+    await openAssignees();
+    await page.locator('#tasks-assignees-me').click();
     await expect(page.locator('.task-card-row')).toHaveCount(1);
     await expect(page.locator('.task-card-title')).toHaveText('Mine');
 
-    // Switch to Any -> show both.
-    await page.locator('#tasks-assignees-filter > summary').click();
+    // Switch back to Any -> show both again.
+    await openAssignees();
     await page.locator('#tasks-assignees-any').click();
     await expect(page.locator('.task-card-row')).toHaveCount(2);
   });
