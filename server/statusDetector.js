@@ -51,7 +51,7 @@ class StatusDetector {
     ];
 
     // Per-session state (StatusDetector is shared across sessions).
-    this.sessionState = new Map(); // sessionId -> { lastBufferLength, lastOutputTime, claudeLikely }
+    this.sessionState = new Map(); // sessionId -> { lastBufferLength, lastOutputTime, claudeLikely, agent }
   }
   
   getState(sessionId) {
@@ -59,7 +59,8 @@ class StatusDetector {
       this.sessionState.set(sessionId, {
         lastBufferLength: 0,
         lastOutputTime: Date.now(),
-        claudeLikely: false
+        claudeLikely: false,
+        agent: null
       });
     }
     return this.sessionState.get(sessionId);
@@ -82,8 +83,13 @@ class StatusDetector {
     return out;
   }
 
-  detectStatus(sessionId, buffer) {
+  detectStatus(sessionId, buffer, options = {}) {
     const state = this.getState(sessionId);
+    const agent = String(options?.agent || '').trim() || null;
+    const isNonClaudeAgent = !!(agent && agent !== 'claude');
+    if (agent) {
+      state.agent = agent;
+    }
     // Track output timing for activity detection
     const now = Date.now();
     if (buffer.length > state.lastBufferLength) {
@@ -103,15 +109,30 @@ class StatusDetector {
     const trimmedLastNonEmptyLine = lastNonEmptyLine.trim();
     const lastNonEmptyLines = this.getLastNonEmptyLines(lines, 6);
 
+    // If a different agent (e.g. Codex) is running in this terminal, avoid reusing Claude UI heuristics.
+    if (isNonClaudeAgent) {
+      state.claudeLikely = false;
+    }
+
+    // Best-effort Codex interactive prompt detection.
+    // This prevents the ">" prompt from being misclassified as idle (grey) and reduces dot flicker.
+    if (agent === 'codex') {
+      if (trimmedLastNonEmptyLine === '>' || /^codex>\s*$/.test(trimmedLastNonEmptyLine)) {
+        return 'waiting';
+      }
+    }
+
     // Heuristic: determine whether Claude Code UI is likely active in this session.
     // This is used to avoid misclassifying shell-like prompts that can appear inside output while Claude is working.
     const recentAll = lastNonEmptyLines.join('\n');
-    if (/Welcome to Claude Code!/.test(recentAll) || /\? for shortcuts/.test(recentAll)) {
-      state.claudeLikely = true;
-    }
-    // When the orchestrator restarts a Claude worktree as an interactive bash, it prints this banner.
-    if (/Claude session ended\./.test(recentAll) || /Type 'claude' to start a new Claude session\./.test(recentAll)) {
-      state.claudeLikely = false;
+    if (!isNonClaudeAgent) {
+      if (/Welcome to Claude Code!/.test(recentAll) || /\? for shortcuts/.test(recentAll)) {
+        state.claudeLikely = true;
+      }
+      // When the orchestrator restarts a Claude worktree as an interactive bash, it prints this banner.
+      if (/Claude session ended\./.test(recentAll) || /Type 'claude' to start a new Claude session\./.test(recentAll)) {
+        state.claudeLikely = false;
+      }
     }
 
     // 1. HIGHEST PRIORITY: RELIABLE waiting prompt (must be the last non-empty line)
