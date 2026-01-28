@@ -21,6 +21,7 @@ Process discipline:
   - [x] Queue detail “Console” opens a docked Review Console (Worktree Inspector) for worktree tasks. (PR #371)
   - [x] Review Console: merge PR button for mergeable open PRs. (PR #372)
   - [x] Review Console: move linked ticket/card to Done list. (PR #374)
+  - [x] Review Console: review timer + outcome + notes controls. (PR #376)
 - [x] “Conveyor” mode for Review: one-at-a-time Tier 2 queue + explicit “Next” affordances (minimize decision fatigue). (PR #313)
 - [x] Stronger “Review complete” feedback loop: per-task nudges, sound/desktop options, and auto-open next item when configured. (PR #313)
 - [ ] “Background” mode improvements: triage queue + auto-scheduling rules (e.g., tiered retries, safe backoff).
