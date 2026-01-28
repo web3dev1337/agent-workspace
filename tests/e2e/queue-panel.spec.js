@@ -151,6 +151,34 @@ test.describe('Queue Panel', () => {
       return route.fallback();
     });
 
+    // Worktree inspector: return a tiny git summary.
+    await page.route('**/api/worktree-git-summary**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          path: '/tmp/demo/work2',
+          branch: 'feature/mock-queue',
+          ahead: 1,
+          behind: 0,
+          files: [
+            {
+              path: 'src/index.js',
+              oldPath: null,
+              indexStatus: 'M',
+              worktreeStatus: ' ',
+              isUntracked: false,
+              staged: { added: 3, deleted: 1, binary: false },
+              unstaged: null
+            }
+          ],
+          commits: [{ hash: 'abc1234', date: '2026-01-25 00:00:00 +0000', message: 'mock commit' }],
+          unpushedCommits: [{ hash: 'abc1234', date: '2026-01-25 00:00:00 +0000', message: 'mock commit' }],
+          pr: { hasPR: false, branch: 'feature/mock-queue' }
+        })
+      });
+    });
+
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.goto('/');
     await ensureWorkspaceLoaded(page);
@@ -211,5 +239,12 @@ test.describe('Queue Panel', () => {
     const reqPromise = page.waitForRequest((req) => req.method() === 'PUT' && req.url().includes('/api/process/task-records/'), { timeout: 5000 });
     await page.locator('#queue-tier').selectOption('3');
     await reqPromise;
+
+    // Open Review Console for the worktree task (docked inspector).
+    await page.locator('#queue-list .task-card-row[data-queue-id=\"worktree:/tmp/demo/work2\"]').click();
+    await expect(page.locator('#queue-open-console')).toBeVisible();
+    await page.locator('#queue-open-console').click();
+    await expect(page.locator('#worktree-inspector-modal.docked')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#worktree-inspector-title')).toContainText('Review Console');
   });
 });
