@@ -1261,6 +1261,78 @@ header h1 {
   margin-bottom: 10px;
 }
 
+.worktree-inspector-panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.worktree-inspector-view-toggle {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.worktree-inspector-files.view-tree .worktree-inspector-files-list {
+  display: none;
+}
+
+.worktree-inspector-files.view-list .worktree-inspector-files-tree {
+  display: none;
+}
+
+.worktree-inspector-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.worktree-inspector-tree-node {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.worktree-inspector-tree-summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.worktree-inspector-tree-summary::-webkit-details-marker {
+  display: none;
+}
+
+.worktree-inspector-tree-children {
+  padding: 6px 0;
+}
+
+.worktree-inspector-tree-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 120px 120px;
+  gap: 10px;
+  align-items: start;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.worktree-inspector-tree-row:last-child {
+  border-bottom: none;
+}
+
+.worktree-inspector-tree-status {
+  color: var(--text-secondary);
+}
+
+.worktree-inspector-tree-path {
+  padding-left: calc(var(--indent, 0) * 14px);
+}
+
+.worktree-inspector-tree-stat {
+  color: var(--text-secondary);
+}
+
 .worktree-inspector-table {
   width: 100%;
   border-collapse: collapse;
