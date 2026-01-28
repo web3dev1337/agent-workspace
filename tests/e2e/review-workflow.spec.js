@@ -116,12 +116,28 @@ test.describe('Focus Mode gating', () => {
   test('hides tier-2 while tier-1 is busy when enabled', async ({ page }) => {
     test.setTimeout(60000);
     await mockUserSettings(page);
+    const t1 = 'demo-work1-claude';
+    const t2 = 'demo-work2-claude';
+
+    await page.route(/.*\/api\/process\/task-records$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          count: 2,
+          records: [
+            { id: `session:${t1}`, record: { tier: 1 } },
+            { id: `session:${t2}`, record: { tier: 2 } }
+          ]
+        })
+      });
+    });
 
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.goto('/');
     await page.waitForFunction(() => !!window.orchestrator, { timeout: 30000 });
 
-    const seeded = await page.evaluate(() => {
+    const seeded = await page.evaluate(({ t1, t2 }) => {
       if (!window.orchestrator) return { ok: false };
       try { window.orchestrator?.socket?.disconnect?.(); } catch {}
       // Prevent any late socket/session events from resetting our seeded state.
@@ -133,9 +149,8 @@ test.describe('Focus Mode gating', () => {
       window.orchestrator.taskRecords = new Map();
       window.orchestrator.loadTaskRecords = async () => {};
       window.orchestrator.viewMode = 'all';
+      window.orchestrator.tierFilter = 'all';
 
-      const t1 = 'demo-work1-claude';
-      const t2 = 'demo-work2-claude';
       window.orchestrator.sessions.set(t1, { sessionId: t1, type: 'claude', status: 'busy' });
       window.orchestrator.sessions.set(t2, { sessionId: t2, type: 'claude', status: 'idle' });
       window.orchestrator.visibleTerminals.add(t1);
@@ -146,7 +161,7 @@ test.describe('Focus Mode gating', () => {
       window.orchestrator.refreshTier1Busy({ suppressRerender: true });
       window.orchestrator.setWorkflowMode('focus');
       return { ok: true, t1, t2, tier1Busy: window.orchestrator.tier1Busy };
-    });
+    }, { t1, t2 });
 
     expect(seeded.ok).toBeTruthy();
     expect(seeded.tier1Busy).toBeTruthy();

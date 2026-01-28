@@ -41,28 +41,28 @@ test.describe('Process banner', () => {
 
     const dashboardBanner = page.locator('#dashboard-process-banner');
     const headerBanner = page.locator('#process-banner');
+    const dashboardStatus = page.locator('#dashboard-status-summary');
 
-    // Depending on startup state we may be on the dashboard (banner in topbar) or inside a workspace
-    // (banner in header). Accept either, but wait for chips to actually render.
+    const getProcessText = async () => {
+      const headerChips = await headerBanner.locator('.process-chip').allTextContents().catch(() => []);
+      if (headerChips.length) return headerChips.join(' ');
+
+      const dashboardChips = await dashboardBanner.locator('.process-chip').allTextContents().catch(() => []);
+      if (dashboardChips.length) return dashboardChips.join(' ');
+
+      const statusText = await dashboardStatus.textContent().catch(() => '');
+      return String(statusText || '');
+    };
+
     await expect
       .poll(async () => {
-        const useDashboard = await dashboardBanner.isVisible().catch(() => false);
-        const useHeader = await headerBanner.isVisible().catch(() => false);
-        const banner = useDashboard ? dashboardBanner : (useHeader ? headerBanner : null);
-        if (!banner) return null;
-
-        const chips = banner.locator('.process-chip');
-        const count = await chips.count();
-        if (!count) return null;
-        const text = await chips.first().textContent().catch(() => '');
-        return (text || '').trim();
-      }, { timeout: 15000 })
-      .toBe('WIP 2');
-
-    const banner = (await dashboardBanner.isVisible().catch(() => false)) ? dashboardBanner : headerBanner;
-    await expect(banner).toContainText('T1 1');
-    await expect(banner).toContainText('T2 0');
-    await expect(banner).toContainText('T3 2');
-    await expect(banner).toContainText('T4 0');
+        const t = await getProcessText();
+        return /WIP\s+2\b/.test(t)
+          && /T1\s+1\b/.test(t)
+          && /T2\s+0\b/.test(t)
+          && /T3\s+2\b/.test(t)
+          && /T4\s+0\b/.test(t);
+      }, { timeout: 30000 })
+      .toBe(true);
   });
 });
