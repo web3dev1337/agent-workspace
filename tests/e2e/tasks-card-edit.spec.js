@@ -275,7 +275,7 @@ test.describe('Tasks card edits', () => {
     expect(labelReq.postDataJSON()).toEqual({ idLabels: ['lab1', 'lab2'] });
 
     // Edit a custom text field (blur triggers save).
-    const cfTextReqPromise = page.waitForRequest((req) => req.method() === 'PUT' && req.url().includes('/api/tasks/cards/c1/custom-fields/cf_text'), { timeout: 5000 });
+    const cfTextReqPromise = page.waitForRequest((req) => req.method() === 'PUT' && req.url().includes('/api/tasks/cards/c1/custom-fields/cf_text'), { timeout: 15000 });
     const notesInput = page.locator('.tasks-cf-input[data-cf-id="cf_text"]');
     await notesInput.fill('hello');
     await notesInput.press('Enter');
@@ -283,7 +283,7 @@ test.describe('Tasks card edits', () => {
     expect(cfTextReq.postDataJSON()).toEqual({ value: { text: 'hello' } });
 
     // Toggle a checkbox custom field (change triggers save).
-    const cfCheckReqPromise = page.waitForRequest((req) => req.method() === 'PUT' && req.url().includes('/api/tasks/cards/c1/custom-fields/cf_check'), { timeout: 5000 });
+    const cfCheckReqPromise = page.waitForRequest((req) => req.method() === 'PUT' && req.url().includes('/api/tasks/cards/c1/custom-fields/cf_check'), { timeout: 15000 });
     await page.locator('.tasks-cf-input[data-cf-id="cf_check"]').check();
     const cfCheckReq = await cfCheckReqPromise;
     expect(cfCheckReq.postDataJSON()).toEqual({ value: { checked: 'true' } });

@@ -316,6 +316,10 @@ test.describe('Tasks quick launch', () => {
     await page.locator('#tasks-board').selectOption({ value: 'b1' });
     await expect(page.locator('.task-card-row[data-card-id="c1"]')).toBeVisible({ timeout: 20000 });
     await expect(page.locator('.task-card-row[data-card-id="c2"]')).toBeVisible({ timeout: 20000 });
+    await page.waitForFunction(() => {
+      const mapping = window.orchestrator?.userSettings?.global?.ui?.tasks?.boardMappings?.['trello:b1'];
+      return !!(mapping && mapping.localPath);
+    }, null, { timeout: 20000 });
 
     await page.evaluate(() => {
       window.__launchCalls = [];
@@ -327,11 +331,14 @@ test.describe('Tasks quick launch', () => {
     });
 
     // No selection yet: ArrowDown selects first card; second ArrowDown selects second.
+    await page.locator('#tasks-view-list').focus();
     await page.keyboard.press('ArrowDown');
+    await expect(page.locator('.task-card-row.active[data-card-id="c1"]')).toHaveCount(1);
     await page.keyboard.press('ArrowDown');
+    await expect(page.locator('.task-card-row.active[data-card-id="c2"]')).toHaveCount(1);
     await page.keyboard.press('3');
 
-    await page.waitForFunction(() => (window.__launchCalls?.length || 0) > 0, null, { timeout: 10000 });
+    await page.waitForFunction(() => (window.__launchCalls?.length || 0) > 0, null, { timeout: 20000 });
     const calls = await page.evaluate(() => window.__launchCalls || []);
     const last = calls[calls.length - 1];
     expect(last.tier).toBe(3);

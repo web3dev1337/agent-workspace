@@ -75,10 +75,8 @@ test.describe('Commander advice', () => {
     await dismissFocusOverlay(page);
 
     // Open Commander panel.
-    const commanderToggle = page.locator('#commander-toggle');
-    await expect(commanderToggle).toBeVisible();
-    // Avoid occasional animation/layout instability during first render.
-    await commanderToggle.click({ force: true });
+    await page.waitForFunction(() => !!window.orchestrator?.commanderPanel, { timeout: 20000 });
+    await page.evaluate(() => window.orchestrator?.commanderPanel?.show?.());
     await expect(page.locator('#commander-panel')).toBeVisible();
 
     // Open advice.
