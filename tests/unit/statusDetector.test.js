@@ -123,6 +123,17 @@ describe('StatusDetector', () => {
       const status = detector.detectStatus(sessionId, buffer);
       expect(status).toBe('busy');
     });
+
+    it('should keep agent terminals busy for longer quiet windows', () => {
+      const agentSessionId = 'work1-claude';
+      const buffer = `Starting work...\n${'Working '.repeat(30)}\nstill working`;
+      const state = detector.getState(agentSessionId);
+      state.lastBufferLength = buffer.length;
+      state.lastOutputTime = Date.now() - 240000; // 4 minutes of silence
+      state.claudeLikely = false;
+      const status = detector.detectStatus(agentSessionId, buffer);
+      expect(status).toBe('busy');
+    });
   });
 
   describe('looksLikePrompt', () => {
