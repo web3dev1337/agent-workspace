@@ -176,7 +176,10 @@ class StatusDetector {
     }
 
     // 7. Default: assume busy for a while after the last output (Claude can think silently)
-    const assumeBusyWindowMs = state.claudeLikely ? ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS : ASSUME_BUSY_SINCE_OUTPUT_MS;
+    const isAgentTerminal = String(sessionId || '').includes('-claude');
+    const assumeBusyWindowMs = (state.claudeLikely || isAgentTerminal)
+      ? ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS
+      : ASSUME_BUSY_SINCE_OUTPUT_MS;
     if (timeSinceOutput < assumeBusyWindowMs && buffer.length > 100) {
       return 'busy';
     }
