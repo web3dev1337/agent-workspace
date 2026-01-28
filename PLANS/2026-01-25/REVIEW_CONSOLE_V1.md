@@ -96,7 +96,7 @@ In Review mode:
 1) **Entry points / navigation**
    - Ensure “Advanced Diff Viewer” has an obvious entry point from the main header (and not only from PR-link auto-detection).
 2) **Worktree Inspector (v1)**
-   - Add a compact “Files changed” panel using existing worktree metadata (counts + last commit).
+   - Add a Worktree Inspector modal showing per-file change stats (+/-) and recent/unpushed commits. (PR #366)
 3) **Worktree Inspector (v2)**
    - Server endpoint(s) to provide:
      - `git status --porcelain` lines (staged/unstaged/untracked)
@@ -110,4 +110,3 @@ In Review mode:
 6) **Actions**
    - Merge PR button (server-side `gh pr merge` wrapper; reuse existing PR metadata).
    - Ticket move button (Trello provider move list; reuse board conventions/mappings).
-

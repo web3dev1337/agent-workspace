@@ -1194,6 +1194,125 @@ header h1 {
   justify-content: flex-end;
 }
 
+.mono {
+  font-family: var(--font-mono);
+}
+
+.worktree-inspector-modal .modal-content.large-modal {
+  max-width: 980px;
+  width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.worktree-inspector-body {
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.worktree-inspector-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.worktree-inspector-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  line-height: 1.1;
+  max-width: 100%;
+}
+
+.worktree-inspector-chip-btn {
+  cursor: pointer;
+}
+
+.worktree-inspector-chip-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-secondary);
+}
+
+.worktree-inspector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.worktree-inspector-panel {
+  border: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  overflow: hidden;
+}
+
+.worktree-inspector-panel-title {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.worktree-inspector-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.worktree-inspector-table th,
+.worktree-inspector-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+}
+
+.worktree-inspector-table th {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.worktree-inspector-subtle {
+  opacity: 0.75;
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+
+.worktree-inspector-commits {
+  display: grid;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.worktree-inspector-commit {
+  display: grid;
+  grid-template-columns: 76px 170px 1fr;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.worktree-inspector-commit-hash {
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+
+.worktree-inspector-commit-date {
+  color: var(--text-secondary);
+}
+
+.worktree-inspector-commit-msg {
+  color: var(--text-primary);
+}
+
 /* Agent Startup Modal (Dynamic) */
 .agent-startup-dynamic {
   max-width: 600px;
