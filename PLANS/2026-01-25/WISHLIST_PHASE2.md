@@ -37,7 +37,7 @@ Process discipline:
 
 - [x] Expand advisor inputs: dependencies + telemetry + risk + verifyMinutes + reviewOutcome history. (PR #390)
   - [x] Added verifyMinutes + changeRisk/tier mismatch signals. (PR #335)
-- [ ] Add “project readiness” checklists (playtest / launch / domain / hosting / security) as templates and/or heuristics.
+- [x] Add “project readiness” checklists (playtest / launch / domain / hosting / security) as templates and/or heuristics. (PR #391)
 - [x] Commander/voice hooks to consume advice: “what should I do next?”, “show blockers”, “start next review”.
   - [x] Voice: “what should I do next?” opens Advice. (PR #339)
   - [x] Voice: “show blockers” opens Queue filtered to blocked items. (PR #341)
