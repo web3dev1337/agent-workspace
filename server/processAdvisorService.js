@@ -1,4 +1,5 @@
 const { TTLCache } = require('./utils/ttlCache');
+const { detectCycles } = require('./taskDependencyService');
 
 const DEFAULT_LOOKBACK_HOURS = 24;
 
@@ -66,6 +67,20 @@ class ProcessAdvisorService {
         ? (this.taskRecordService.list() || [])
         : [];
 
+      const taskById = new Map();
+      for (const t of Array.isArray(tasks) ? tasks : []) {
+        if (!t?.id) continue;
+        taskById.set(String(t.id), t);
+      }
+
+      const labelForId = (id) => {
+        const key = String(id || '').trim();
+        if (!key) return '';
+        const t = taskById.get(key);
+        const title = String(t?.title || '').trim();
+        return title || key;
+      };
+
       const qByTier = status?.qByTier || {};
       const qCaps = status?.qCaps || {};
       const wip = Number(status?.wip || 0);
@@ -81,6 +96,11 @@ class ProcessAdvisorService {
       metrics.createdCount = createdCount;
       metrics.doneCount = doneCount;
       metrics.netCreatedMinusDone = createdCount - doneCount;
+
+      const telemetryOutcomeCounts = (telemetry?.outcomeCounts && typeof telemetry.outcomeCounts === 'object' && !Array.isArray(telemetry.outcomeCounts))
+        ? telemetry.outcomeCounts
+        : null;
+      if (telemetryOutcomeCounts) metrics.telemetryOutcomeCounts = telemetryOutcomeCounts;
 
       if (wipMax && wip > wipMax) {
         advice.push({
@@ -173,12 +193,28 @@ class ProcessAdvisorService {
       metrics.reviewsApproved = recentApproved;
       metrics.needsFixRate = recentReviewTotal ? (recentNeedsFix / recentReviewTotal) : 0;
 
+      const recentReviewsSorted = recentReviews
+        .slice()
+        .sort((a, b) => parseIso(b?.reviewEndedAt) - parseIso(a?.reviewEndedAt));
+      metrics.recentReviewTimeline = recentReviewsSorted
+        .slice(0, 10)
+        .map((r) => ({
+          id: r?.id,
+          outcome: String(r?.reviewOutcome || '').trim().toLowerCase() || null,
+          endedAt: r?.reviewEndedAt || null
+        }));
+
       if (recentReviewTotal >= 5 && metrics.needsFixRate >= 0.5) {
+        const tail = recentReviewsSorted
+          .slice(0, 6)
+          .map(r => String(r?.reviewOutcome || '').trim().toLowerCase())
+          .filter(Boolean);
+        const tailText = tail.length ? ` Recent: ${tail.join(', ')}.` : '';
         advice.push({
           level: 'warn',
           code: 'needs_fix_rate_high',
           title: 'High “needs_fix” rate',
-          message: `In the last ${hours}h, ${recentNeedsFix}/${recentReviewTotal} reviews ended as “needs_fix”. Consider smaller PRs, more verification time, or raising Tier on risky items.`,
+          message: `In the last ${hours}h, ${recentNeedsFix}/${recentReviewTotal} reviews ended as “needs_fix”. Consider smaller PRs, more verification time, or raising Tier on risky items.${tailText}`,
           actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
         });
       }
@@ -191,11 +227,16 @@ class ProcessAdvisorService {
       });
       metrics.reviewsMissingVerify = missingVerify.length;
       if (missingVerify.length >= 3) {
+        const examples = missingVerify
+          .slice(0, 4)
+          .map(r => labelForId(r?.id))
+          .filter(Boolean);
+        const exampleText = examples.length ? ` Examples: ${examples.join(', ')}.` : '';
         advice.push({
           level: 'info',
           code: 'verify_missing',
           title: 'Verify minutes missing on reviews',
-          message: `${missingVerify.length} reviews in the last ${hours}h are missing verifyMinutes. Filling this in helps telemetry + planning accuracy.`,
+          message: `${missingVerify.length} reviews in the last ${hours}h are missing verifyMinutes. Filling this in helps telemetry + planning accuracy.${exampleText}`,
           actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
         });
       }
@@ -212,11 +253,16 @@ class ProcessAdvisorService {
 
       metrics.riskyTier12 = riskyLowTier.length;
       if (riskyLowTier.length) {
+        const examples = riskyLowTier
+          .slice(0, 3)
+          .map(t => labelForId(t?.id))
+          .filter(Boolean);
+        const exampleText = examples.length ? ` Examples: ${examples.join(', ')}.` : '';
         advice.push({
           level: 'warn',
           code: 'risky_tier12',
           title: 'High-risk items marked as Tier 1/2',
-          message: `${riskyLowTier.length} open PR(s) are Tier 1/2 with changeRisk high/critical. Consider re-tiering or tightening scope before review.`,
+          message: `${riskyLowTier.length} open PR(s) are Tier 1/2 with changeRisk high/critical. Consider re-tiering or tightening scope before review.${exampleText}`,
           actions: [{ type: 'ui', action: 'open-queue', label: 'Open Queue' }]
         });
       }
@@ -285,11 +331,46 @@ class ProcessAdvisorService {
 
         const tier12Blocked = blocked.filter(i => i.tier === 1 || i.tier === 2);
         if (tier12Blocked.length) {
+          const top = tier12Blocked
+            .slice()
+            .sort((a, b) => (b.blocked - a.blocked) || (b.total - a.total))
+            .slice(0, 3);
+
+          let exampleText = '';
+          if (top.length) {
+            let examples = top.map(i => `${labelForId(i.id)} (${i.blocked}/${i.total})`);
+
+            if (typeof this.taskDependencyService.resolveDependencies === 'function') {
+              const resolved = await Promise.allSettled(top.map(async (i) => {
+                const deps = await this.taskDependencyService.resolveDependencies(i.id);
+                const blockers = (Array.isArray(deps) ? deps : [])
+                  .filter((d) => d && !d.satisfied)
+                  .slice(0, 2)
+                  .map((d) => String(d.id || '').trim())
+                  .filter(Boolean);
+                return { ...i, blockers };
+              }));
+
+              examples = resolved
+                .filter((r) => r.status === 'fulfilled')
+                .map((r) => r.value)
+                .filter(Boolean)
+                .map((i) => {
+                  const label = labelForId(i.id);
+                  const blockers = Array.isArray(i.blockers) ? i.blockers : [];
+                  if (blockers.length) return `${label} blocked by ${blockers.join(', ')}`;
+                  return `${label} (${i.blocked}/${i.total})`;
+                });
+            }
+
+            exampleText = examples.length ? ` Examples: ${examples.join('; ')}.` : '';
+          }
+
           advice.push({
             level: 'warn',
             code: 'tier12_blocked',
             title: 'Tier 1/2 tasks blocked by dependencies',
-            message: `${tier12Blocked.length} Tier 1/2 PR(s) are blocked by dependencies. Consider clearing blockers or re-tiering to unblock execution.`,
+            message: `${tier12Blocked.length} Tier 1/2 PR(s) are blocked by dependencies. Consider clearing blockers or re-tiering to unblock execution.${exampleText}`,
             actions: [
               { type: 'ui', action: 'queue-blockers', label: 'Show blockers' },
               { type: 'ui', action: 'open-queue', label: 'Open Queue' }
@@ -319,6 +400,44 @@ class ProcessAdvisorService {
             { type: 'ui', action: 'open-queue', label: 'Open Queue' }
           ]
         });
+      }
+
+      // Dependency cycles (best-effort from local task record graph).
+      try {
+        const nodeIds = records.map(r => String(r?.id || '').trim()).filter(Boolean);
+        const edges = [];
+        for (const r of records) {
+          const from = String(r?.id || '').trim();
+          if (!from) continue;
+          const deps = Array.isArray(r?.dependencies) ? r.dependencies : [];
+          for (const dep of deps) {
+            const to = String(dep || '').trim();
+            if (!to) continue;
+            edges.push({ from, to });
+          }
+        }
+        const cycles = detectCycles({ nodeIds, edges, limit: 5 });
+        metrics.depCycleCount = cycles.length;
+        if (cycles.length) {
+          const cycleText = cycles
+            .slice(0, 2)
+            .map(c => (Array.isArray(c) ? c.map(id => labelForId(id)).join(' → ') : ''))
+            .filter(Boolean)
+            .join(' • ');
+          const exampleText = cycleText ? ` Example: ${cycleText}.` : '';
+          advice.push({
+            level: 'warn',
+            code: 'dep_cycles',
+            title: 'Dependency cycles detected',
+            message: `Found ${cycles.length} dependency cycle(s) in task records. Cycles block progress; consider removing or re-scoping dependencies.${exampleText}`,
+            actions: [
+              { type: 'ui', action: 'queue-blockers', label: 'Show blockers' },
+              { type: 'ui', action: 'open-queue', label: 'Open Queue' }
+            ]
+          });
+        }
+      } catch {
+        // ignore
       }
 
       return {
