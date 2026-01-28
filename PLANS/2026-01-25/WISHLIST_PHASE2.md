@@ -80,9 +80,11 @@ Process discipline:
 
 - [x] Status indicator lights (green/orange/grey) can flicker or be inaccurate while agents/worktrees are active. (PR #315)
   - Still occasionally reported; if seen again, capture a short screen recording + logs for a targeted follow-up.
+  - Reported again 2026-01-28: lights can bounce green→orange→grey while an agent is actively working.
   - Added a small UI-side “delay idle” stabilizer to reduce rapid busy→idle flicker. (PR #328)
   - Added UI-side “delay waiting” stabilizer to reduce rapid busy→waiting flicker. (PR #353)
 - [x] Tasks panel: card detail pane sometimes opens on the wrong side and/or causes vertical reflow of the board area. (PR #327)
+  - Reported again 2026-01-28: detail can appear on the left and/or shift the board vertically (capture List/Board/Combined + screenshot).
 - [x] Tasks launch UX: from a card, launch `T1/T2/T3/T4` agent in 1–2 clicks (dropdown + hotkey-friendly). (PR #321)
 - [x] Tasks panel: Trello board “mapping/settings” control should always open (if it appears enabled); if no-op, surface an error/toast. (PR #314)
 - [x] Tasks panel: Trello board colors/background per-board (verify consistency). (PR #300)
@@ -105,3 +107,4 @@ Process discipline:
 - [x] Hotkeys: Alt+1/2/3/4 sets Tier filter; Alt+0 or Alt+A sets All; Alt+N sets None. (PR #361)
 - [x] Hotkeys: Alt+F/R/B/G switches workflow mode (Focus/Review/Background/All). (PR #362)
 - [x] Persist terminal filters (View mode + Tier filter) across refreshes (server-backed user settings). (PR #363)
+- [x] Queue: add 🗂 Inspect action to open Worktree Inspector from Queue detail (Review Console entrypoint). (PR #367)
