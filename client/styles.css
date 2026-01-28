@@ -327,6 +327,12 @@ body {
   border-color: rgba(100, 116, 139, 0.4);
 }
 
+.worktree-branch.branch-type-other {
+  color: var(--accent-primary);
+  background: rgba(31, 111, 235, 0.14);
+  border-color: rgba(31, 111, 235, 0.4);
+}
+
 /* Agent status dots (waiting/busy/idle) */
 .status-dot.idle {
   background: var(--text-tertiary);
