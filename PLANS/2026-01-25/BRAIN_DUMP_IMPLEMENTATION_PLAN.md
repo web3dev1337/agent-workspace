@@ -57,6 +57,7 @@ We support dependencies in two places:
   - edit tier/risk/pFail/verify/promptRef
   - see dependency summary (`deps:X blocked:Y`)
   - open diff viewer
+  - open Worktree Inspector (files + commits) for session/worktree tasks (PR #367)
 
 ### ✅ Dashboard v2 (process summary)
 
