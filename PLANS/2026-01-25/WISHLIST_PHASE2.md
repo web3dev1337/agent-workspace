@@ -28,7 +28,7 @@ Process discipline:
   - [x] Review Console: Diff section supports Open (new tab) and Embed (iframe) with persisted preference (`ui.reviewConsole.diffEmbed`).
 - [x] “Conveyor” mode for Review: one-at-a-time Tier 2 queue + explicit “Next” affordances (minimize decision fatigue). (PR #313)
 - [x] Stronger “Review complete” feedback loop: per-task nudges, sound/desktop options, and auto-open next item when configured. (PR #313)
-- [ ] “Background” mode improvements: triage queue + auto-scheduling rules (e.g., tiered retries, safe backoff).
+- [x] “Background” mode improvements: triage queue + auto-scheduling rules (e.g., tiered retries, safe backoff).
   - [x] Background-launched worktrees become visible when switching to Background mode (without auto-showing them in Review/Focus). (PR #320)
   - [x] Background triage Queue preset (T3+T4) + snooze (“safe backoff”). (PR #324)
   - [x] Triage: tiered auto-snooze backoff (15m → 1h → 4h → 24h). (PR #331)
@@ -38,7 +38,7 @@ Process discipline:
 - [ ] Expand advisor inputs: dependencies + telemetry + risk + verifyMinutes + reviewOutcome history.
   - [x] Added verifyMinutes + changeRisk/tier mismatch signals. (PR #335)
 - [ ] Add “project readiness” checklists (playtest / launch / domain / hosting / security) as templates and/or heuristics.
-- [ ] Commander/voice hooks to consume advice: “what should I do next?”, “show blockers”, “start next review”.
+- [x] Commander/voice hooks to consume advice: “what should I do next?”, “show blockers”, “start next review”.
   - [x] Voice: “what should I do next?” opens Advice. (PR #339)
   - [x] Voice: “show blockers” opens Queue filtered to blocked items. (PR #341)
   - [x] Voice: “start next review” opens Queue and advances to Next. (PR #341)
@@ -60,7 +60,7 @@ Process discipline:
 
 ## Telemetry v2 (trends, exports, more signals)
 
-- [ ] Add more signals: commits, PR reviews, PR merges, tasks created/completed, and per-project throughput.
+- [x] Add more signals: commits, PR reviews, PR merges, tasks created/completed, and per-project throughput.
   - [x] Throughput + outcomes from task records: doneCount series, avgVerifyMinutes, outcomeCounts, richer exports. (PR #317)
   - [x] Dashboard UI shows done/outcomes/verify + throughput chart. (PR #318)
   - [x] PR merges + Trello automation events: prMergedAt, ticketMovedAt, ticketClosedAt (summary + series + exports). (PR #334)
@@ -72,8 +72,8 @@ Process discipline:
 
 ## Automation v2 (integrations)
 
-- [ ] Trello automation expansions on PR merge:
-  - [ ] Per-board conventions beyond “Done list”: labels, checklists, and “needs_fix” feedback loops.
+- [x] Trello automation expansions on PR merge:
+  - [x] Per-board conventions beyond “Done list”: labels, checklists, and “needs_fix” feedback loops.
     - [x] Queue outcome → Trello feedback loop: apply configured `needsFixLabelName` (and optional comment from Notes). (PR #316)
     - [x] PR merge → Trello labels: apply configured `mergedLabelNames` (case-insensitive by label name). (PR #333)
     - [x] PR merge → Trello checklist item: configure `mergedChecklistName` + `mergedChecklistItemTemplate`. (PR #336)
