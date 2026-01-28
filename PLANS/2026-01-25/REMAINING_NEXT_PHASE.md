@@ -46,6 +46,7 @@ Known issues / follow-ups:
 
 - ✅ Auto reviewer→fixer→recheck loop v1 shipped (Queue toggles: Auto Reviewer / Auto Fixer / Auto Recheck).
 - ✅ Review Console: merge PR button (docked Worktree Inspector). (PR #372)
+- ✅ Review Console: move ticket/card to Done list (board conventions + task record update). (PR #374)
 - [x] Richer notification modes (beyond toast-only) and “review complete” nudges. (PR #274)
 
 ### Integrations / automation
