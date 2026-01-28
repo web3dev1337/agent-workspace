@@ -166,6 +166,13 @@ class CommanderPanel {
       const key = (e.key || '').toLowerCase();
       const isModifier = e.ctrlKey || e.metaKey;
 
+      // Ctrl/Cmd+V: allow browser paste event (xterm otherwise treats this as ^V / SYN).
+      // We handle the actual paste in the `paste` event listener below, which is more reliable
+      // than navigator.clipboard.readText() across webviews and avoids image-only quirks.
+      if (isModifier && !e.altKey && key === 'v') {
+        return false;
+      }
+
       // Ctrl/Cmd+C: copy selection
       if (isModifier && key === 'c' && this.terminal?.hasSelection?.()) {
         e.preventDefault();
