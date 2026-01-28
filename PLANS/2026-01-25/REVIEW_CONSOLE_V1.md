@@ -58,7 +58,8 @@ A review unit may be:
 
 ### Strongly desired
 - ✅ Merge PR from the Review Console (when mergeable). (PR #372)
-- Move the attached ticket/card to another column (Test/Done/etc) when a ticket exists.
+- ✅ Move the attached ticket/card to Done list when a ticket exists. (PR #374)
+  - Still TODO: configurable target lists beyond Done (Test/QA/etc).
   - Should respect per-board conventions (Done list, etc) when configured.
 
 ---
@@ -112,4 +113,4 @@ In Review mode:
    - Bind to Queue selection / “Next”.
 6) **Actions**
    - ✅ Merge PR button (server-side `gh pr merge` wrapper; reuse existing PR metadata). (PR #372)
-   - Ticket move button (Trello provider move list; reuse board conventions/mappings).
+   - ✅ Ticket move button (Trello provider move list; reuse board conventions/mappings). (PR #374)
