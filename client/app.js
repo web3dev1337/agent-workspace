@@ -5822,10 +5822,15 @@ class ClaudeOrchestrator {
 	      const pr = summary?.pr || {};
 	      const reviewTask = task && typeof task === 'object' ? task : null;
 	      const reviewRecord = reviewTask && typeof reviewTask.record === 'object' ? reviewTask.record : null;
-	      const reviewTaskId = String(reviewTask?.id || '').trim();
-	      const ticketCardId = String(reviewRecord?.ticketCardId || '').trim();
-	      const ticketCardUrl = String(reviewRecord?.ticketCardUrl || '').trim();
-	      const ticketUrl = ticketCardUrl || (ticketCardId ? `https://trello.com/c/${ticketCardId}` : '');
+		      const reviewTaskId = String(reviewTask?.id || '').trim();
+		      const ticketCardId = String(reviewRecord?.ticketCardId || '').trim();
+		      const ticketCardUrl = String(reviewRecord?.ticketCardUrl || '').trim();
+		      const ticketUrl = ticketCardUrl || (ticketCardId ? `https://trello.com/c/${ticketCardId}` : '');
+		      const reviewStartedAt = String(reviewRecord?.reviewStartedAt || '').trim();
+		      const reviewEndedAt = String(reviewRecord?.reviewEndedAt || '').trim();
+		      const reviewedAt = String(reviewRecord?.reviewedAt || '').trim();
+		      const reviewOutcomeValue = String(reviewRecord?.reviewOutcome || '').trim();
+		      const reviewNotes = String(reviewRecord?.notes || '');
 
 	      const header = (() => {
 	        const branch = escapeHtml(summary?.branch || 'unknown');
@@ -5877,13 +5882,36 @@ class ClaudeOrchestrator {
 	          );
 	        }
 
-	        return `<div class="worktree-inspector-header">${parts.join('')}</div>`;
-	      })();
+		        return `<div class="worktree-inspector-header">${parts.join('')}</div>`;
+		      })();
 
-	      const files = Array.isArray(summary?.files) ? summary.files : [];
-	      const formatStat = (s) => {
-	        const stat = s && typeof s === 'object' ? s : null;
-	        if (!stat) return '';
+		      const reviewPanel = reviewTaskId ? `
+		        <div class="worktree-inspector-panel worktree-inspector-review-panel">
+		          <div class="worktree-inspector-panel-title">Review</div>
+		          <div class="worktree-inspector-review-controls">
+		            <button class="btn-secondary" type="button" data-review-start="true" title="Start review timer">⏱ Start</button>
+		            <button class="btn-secondary" type="button" data-review-stop="true" title="Stop review timer">⏹ Stop</button>
+		            <select class="tasks-select tasks-select-inline" data-review-outcome="true" title="Review outcome" style="width:180px;">
+		              <option value="" ${reviewOutcomeValue ? '' : 'selected'}>(outcome)</option>
+		              <option value="approved" ${reviewOutcomeValue === 'approved' ? 'selected' : ''}>approved</option>
+		              <option value="needs_fix" ${reviewOutcomeValue === 'needs_fix' ? 'selected' : ''}>needs_fix</option>
+		              <option value="commented" ${reviewOutcomeValue === 'commented' ? 'selected' : ''}>commented</option>
+		              <option value="skipped" ${reviewOutcomeValue === 'skipped' ? 'selected' : ''}>skipped</option>
+		            </select>
+		          </div>
+		          <div class="worktree-inspector-review-meta">
+		            <div><span style="opacity:0.8;">started:</span> <span id="worktree-inspector-review-started" class="mono">${escapeHtml(reviewStartedAt || '—')}</span></div>
+		            <div><span style="opacity:0.8;">ended:</span> <span id="worktree-inspector-review-ended" class="mono">${escapeHtml(reviewEndedAt || (reviewStartedAt ? 'running…' : '—'))}</span></div>
+		            <div><span style="opacity:0.8;">reviewed:</span> <span id="worktree-inspector-review-reviewed" class="mono">${escapeHtml(reviewedAt || '—')}</span></div>
+		          </div>
+		          <textarea class="tasks-textarea" rows="3" data-review-notes="true" placeholder="Notes / fix request…">${escapeHtml(reviewNotes)}</textarea>
+		        </div>
+		      ` : '';
+
+		      const files = Array.isArray(summary?.files) ? summary.files : [];
+		      const formatStat = (s) => {
+		        const stat = s && typeof s === 'object' ? s : null;
+		        if (!stat) return '';
 	        if (stat.binary) return 'bin';
 	        const added = Number(stat.added || 0);
 	        const deleted = Number(stat.deleted || 0);
@@ -6059,12 +6087,13 @@ class ClaudeOrchestrator {
         return `<div class="worktree-inspector-commit mono"><span class="worktree-inspector-commit-hash">${hash}</span><span class="worktree-inspector-commit-date">${date}</span><span class="worktree-inspector-commit-msg">${msg}</span></div>`;
       }).join('');
 
-	      bodyEl.innerHTML = `
-	        ${header}
-	        <div class="worktree-inspector-grid">
-	          <div class="worktree-inspector-panel">
-	            <div class="worktree-inspector-panel-title-row">
-	              <div class="worktree-inspector-panel-title">Files</div>
+		      bodyEl.innerHTML = `
+		        ${header}
+		        ${reviewPanel}
+		        <div class="worktree-inspector-grid">
+		          <div class="worktree-inspector-panel">
+		            <div class="worktree-inspector-panel-title-row">
+		              <div class="worktree-inspector-panel-title">Files</div>
 	              <div class="worktree-inspector-view-toggle">
 	                <button class="btn-secondary ${filesView === 'tree' ? 'active' : ''}" type="button" data-files-view-btn="tree" title="Folder tree">Tree</button>
 	                <button class="btn-secondary ${filesView === 'list' ? 'active' : ''}" type="button" data-files-view-btn="list" title="Flat list">List</button>
@@ -6162,10 +6191,10 @@ class ClaudeOrchestrator {
 	        const url = e.target?.dataset?.ticketOpen;
 	        if (url) window.open(url, '_blank', 'noreferrer');
 	      });
-	      bodyEl.querySelector('[data-ticket-move]')?.addEventListener('click', async (e) => {
-	        const taskId = e.target?.dataset?.ticketMove;
-	        if (!taskId) return;
-	        if (!window.confirm(`Move ticket to Done?\n${taskId}`)) return;
+		      bodyEl.querySelector('[data-ticket-move]')?.addEventListener('click', async (e) => {
+		        const taskId = e.target?.dataset?.ticketMove;
+		        if (!taskId) return;
+		        if (!window.confirm(`Move ticket to Done?\n${taskId}`)) return;
 
 	        const btn = e.target;
 	        btn.disabled = true;
@@ -6180,14 +6209,113 @@ class ClaudeOrchestrator {
 	          if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to move ticket'));
 	          this.showToast('Ticket moved', 'success');
 	        } catch (err) {
-	          this.showToast(String(err?.message || err), 'error');
-	          btn.disabled = false;
-	        }
-	      });
-    } catch (err) {
-      bodyEl.innerHTML = `
-        <div style="opacity:0.9; margin-bottom:10px;">Failed to load worktree summary.</div>
-        <div style="opacity:0.7;" class="mono">${escapeHtml(String(err?.message || err))}</div>
+		          this.showToast(String(err?.message || err), 'error');
+		          btn.disabled = false;
+		        }
+		      });
+
+		      const reviewStartBtn = bodyEl.querySelector('[data-review-start]');
+		      const reviewStopBtn = bodyEl.querySelector('[data-review-stop]');
+		      const reviewOutcomeEl = bodyEl.querySelector('[data-review-outcome]');
+		      const reviewNotesEl = bodyEl.querySelector('[data-review-notes]');
+
+		      const updateTaskRecord = async (patch) => {
+		        if (!reviewTaskId) throw new Error('No task id available');
+		        const res = await fetch(`/api/process/task-records/${encodeURIComponent(reviewTaskId)}`, {
+		          method: 'PUT',
+		          headers: { 'Content-Type': 'application/json' },
+		          body: JSON.stringify(patch || {})
+		        });
+		        const data = await res.json().catch(() => ({}));
+		        if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to update task record'));
+		        return data?.record || null;
+		      };
+
+		      const applyReviewState = (rec) => {
+		        const r = rec && typeof rec === 'object' ? rec : {};
+		        const started = String(r?.reviewStartedAt || '').trim();
+		        const ended = String(r?.reviewEndedAt || '').trim();
+		        const reviewed = String(r?.reviewedAt || '').trim();
+		        const outcome = String(r?.reviewOutcome || '').trim();
+
+		        const startedEl = bodyEl.querySelector('#worktree-inspector-review-started');
+		        const endedEl = bodyEl.querySelector('#worktree-inspector-review-ended');
+		        const reviewedEl = bodyEl.querySelector('#worktree-inspector-review-reviewed');
+		        if (startedEl) startedEl.textContent = started || '—';
+		        if (endedEl) endedEl.textContent = ended || (started ? 'running…' : '—');
+		        if (reviewedEl) reviewedEl.textContent = reviewed || '—';
+
+		        if (reviewStopBtn) reviewStopBtn.disabled = !started || !!ended;
+		        if (reviewOutcomeEl) reviewOutcomeEl.value = outcome || '';
+		        if (reviewNotesEl && reviewNotesEl.value !== undefined && String(reviewNotesEl.value) !== String(r?.notes || '')) {
+		          reviewNotesEl.value = String(r?.notes || '');
+		        }
+		      };
+
+		      if (reviewTaskId) {
+		        applyReviewState(reviewRecord);
+		      }
+
+		      reviewStartBtn?.addEventListener('click', async () => {
+		        try {
+		          reviewStartBtn.disabled = true;
+		          const now = new Date().toISOString();
+		          const rec = await updateTaskRecord({ reviewStartedAt: now, reviewEndedAt: null });
+		          applyReviewState(rec);
+		          this.showToast('Review started', 'success');
+		        } catch (e) {
+		          this.showToast(String(e?.message || e), 'error');
+		        } finally {
+		          if (reviewStartBtn) reviewStartBtn.disabled = false;
+		        }
+		      });
+
+		      reviewStopBtn?.addEventListener('click', async () => {
+		        try {
+		          reviewStopBtn.disabled = true;
+		          const now = new Date().toISOString();
+		          const rec = await updateTaskRecord({ reviewEndedAt: now });
+		          applyReviewState(rec);
+		          this.showToast('Review stopped', 'success');
+		        } catch (e) {
+		          this.showToast(String(e?.message || e), 'error');
+		        } finally {
+		          if (reviewStopBtn) reviewStopBtn.disabled = false;
+		        }
+		      });
+
+		      reviewOutcomeEl?.addEventListener('change', async () => {
+		        try {
+		          reviewOutcomeEl.disabled = true;
+		          const value = String(reviewOutcomeEl.value || '').trim();
+		          const rec = await updateTaskRecord({ reviewOutcome: value || null });
+		          applyReviewState(rec);
+		          this.showToast('Outcome saved', 'success');
+		        } catch (e) {
+		          this.showToast(String(e?.message || e), 'error');
+		        } finally {
+		          if (reviewOutcomeEl) reviewOutcomeEl.disabled = false;
+		        }
+		      });
+
+		      const saveNotes = async () => {
+		        if (!reviewNotesEl) return;
+		        try {
+		          reviewNotesEl.disabled = true;
+		          const rec = await updateTaskRecord({ notes: String(reviewNotesEl.value || '') });
+		          applyReviewState(rec);
+		        } catch (e) {
+		          this.showToast(String(e?.message || e), 'error');
+		        } finally {
+		          if (reviewNotesEl) reviewNotesEl.disabled = false;
+		        }
+		      };
+		      reviewNotesEl?.addEventListener('change', saveNotes);
+		      reviewNotesEl?.addEventListener('blur', saveNotes);
+	    } catch (err) {
+	      bodyEl.innerHTML = `
+	        <div style="opacity:0.9; margin-bottom:10px;">Failed to load worktree summary.</div>
+	        <div style="opacity:0.7;" class="mono">${escapeHtml(String(err?.message || err))}</div>
       `;
     }
   }
