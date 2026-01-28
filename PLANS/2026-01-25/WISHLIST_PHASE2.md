@@ -91,6 +91,7 @@ Process discipline:
   - Reported again 2026-01-28: lights can bounce green→orange→grey while an agent is actively working.
   - Added a small UI-side “delay idle” stabilizer to reduce rapid busy→idle flicker. (PR #328)
   - Added UI-side “delay waiting” stabilizer to reduce rapid busy→waiting flicker. (PR #353)
+  - Extended server-side StatusDetector “assume busy” window for Claude sessions to reduce long-silence flicker. (PR #386)
 - [x] Tasks panel: card detail pane sometimes opens on the wrong side and/or causes vertical reflow of the board area. (PR #327)
   - Reported again 2026-01-28: detail can appear on the left and/or shift the board vertically (capture List/Board/Combined + screenshot).
 - [x] Tasks launch UX: from a card, launch `T1/T2/T3/T4` agent in 1–2 clicks (dropdown + hotkey-friendly). (PR #321)
