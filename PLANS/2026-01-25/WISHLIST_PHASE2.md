@@ -68,7 +68,7 @@ Process discipline:
 - [x] Exports + sharing:
   - [x] JSON export (PR #308)
   - [x] “Share snapshot” links (PR #311)
-- [ ] Long-running “health” dashboards per project (risk rollups + backlog + lead time).
+- [x] Long-running “health” dashboards per project (risk rollups + backlog + lead time). (PR #393)
 
 ## Automation v2 (integrations)
 
