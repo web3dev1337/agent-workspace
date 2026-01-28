@@ -54,7 +54,7 @@ A review unit may be:
 ### Must-have
 - Open PR (if present).
 - Open Advanced Diff Viewer (PR or commit; and a “home” button for Diff Viewer).
-- Start/Stop review timer + set review outcome (already exists in Queue; Review Console should expose it too).
+- ✅ Start/Stop review timer + set review outcome (also supports notes). (PR #376)
 
 ### Strongly desired
 - ✅ Merge PR from the Review Console (when mergeable). (PR #372)
