@@ -21,6 +21,20 @@ class PullRequestService {
     return PullRequestService.instance;
   }
 
+  parsePullRequestUrl(prUrl) {
+    const raw = String(prUrl || '').trim();
+    if (!raw) return null;
+    try {
+      const u = new URL(raw);
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+      const m = u.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/|$)/);
+      if (!m) return null;
+      return { owner: m[1], repo: m[2], number: Number(m[3]), url: u.toString() };
+    } catch {
+      return null;
+    }
+  }
+
   async getPullRequest({ owner, repo, number }) {
     const o = String(owner || '').trim();
     const r = String(repo || '').trim();
@@ -51,6 +65,32 @@ class PullRequestService {
     });
 
     return JSON.parse(stdout || '{}');
+  }
+
+  async mergePullRequestByUrl(prUrl, { method = 'merge', auto = false } = {}) {
+    const parsed = this.parsePullRequestUrl(prUrl);
+    if (!parsed?.url) throw new Error('Invalid PR URL');
+
+    const normalized = String(method || 'merge').trim().toLowerCase();
+    const mergeFlag = normalized === 'squash'
+      ? '--squash'
+      : (normalized === 'rebase' ? '--rebase' : '--merge');
+
+    const args = ['pr', 'merge', parsed.url, mergeFlag];
+    if (auto) args.push('--auto');
+
+    const { stdout } = await new Promise((resolve, reject) => {
+      execFile('gh', args, { timeout: 60000 }, (error, stdout, stderr) => {
+        if (error) {
+          logger.error('gh pr merge failed', { error: error.message, stderr, url: parsed.url });
+          reject(error);
+          return;
+        }
+        resolve({ stdout, stderr });
+      });
+    });
+
+    return { ok: true, url: parsed.url, stdout: String(stdout || '') };
   }
 
   normalizeListParams(params = {}) {
