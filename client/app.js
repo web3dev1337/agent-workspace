@@ -290,6 +290,7 @@ class ClaudeOrchestrator {
       
       // Load user settings from server
       await this.loadUserSettings();
+      this.syncTerminalFiltersFromUserSettings();
       this.syncWorkflowModeFromUserSettings();
       this.syncFocusBehaviorFromUserSettings();
       this.syncWorktreeCreationFromUserSettings();
@@ -1432,15 +1433,19 @@ class ClaudeOrchestrator {
     });
   }
 	  
-	  setViewMode(mode) {
+	  setViewMode(mode, { persist = true } = {}) {
 	    const normalized = String(mode || '').toLowerCase();
 	    if (!['all', 'claude', 'server'].includes(normalized)) return;
 	    if (this.viewMode === normalized) return;
-	
+
 	    this.viewMode = normalized;
 	    this.updateViewModeButtons();
 	    // Second-layer filter only: do NOT modify worktree visibility (visibleTerminals).
 	    this.updateTerminalGrid();
+
+	    if (persist) {
+	      this.updateGlobalUserSetting('ui.terminals.viewMode', normalized);
+	    }
 	  }
 	  
   updateViewModeButtons() {
@@ -1454,7 +1459,7 @@ class ClaudeOrchestrator {
     serverBtn.classList.toggle('active', this.viewMode === 'server');
   }
 
-  setTierFilter(filter) {
+  setTierFilter(filter, { persist = true } = {}) {
     const raw = String(filter ?? '').trim().toLowerCase();
     const normalized = raw === '' || raw === 'all'
       ? 'all'
@@ -1470,6 +1475,11 @@ class ClaudeOrchestrator {
     this.ensureFilterToggleExists();
     this.updateTerminalGrid();
     this.buildSidebar();
+
+    if (persist) {
+      const next = (normalized === 'all' || normalized === 'none') ? String(normalized) : String(Number(normalized));
+      this.updateGlobalUserSetting('ui.terminals.tierFilter', next);
+    }
   }
 
   updateTierFilterButtons() {
@@ -1524,6 +1534,30 @@ class ClaudeOrchestrator {
     const normalized = String(mode || '').trim().toLowerCase();
     this.workflowMode = ['focus', 'review', 'background', 'all'].includes(normalized) ? normalized : 'review';
     this.updateWorkflowModeButtons();
+  }
+
+  syncTerminalFiltersFromUserSettings() {
+    const t = this.userSettings?.global?.ui?.terminals || {};
+    const viewMode = String(t?.viewMode || '').trim().toLowerCase();
+    const tierRaw = t?.tierFilter;
+
+    const normalizedView = ['all', 'claude', 'server'].includes(viewMode) ? viewMode : 'all';
+    const normalizedTier = (() => {
+      const raw = String(tierRaw ?? '').trim().toLowerCase();
+      if (!raw || raw === 'all') return 'all';
+      if (raw === 'none') return 'none';
+      const n = Number.parseInt(raw, 10);
+      return (n >= 1 && n <= 4) ? n : 'all';
+    })();
+
+    // Avoid persisting while syncing from server.
+    this.viewMode = normalizedView;
+    this.tierFilter = normalizedTier;
+    this.updateViewModeButtons();
+    this.updateTierFilterButtons();
+    this.ensureFilterToggleExists();
+    this.updateTerminalGrid();
+    this.buildSidebar();
   }
 
   syncFocusBehaviorFromUserSettings() {
