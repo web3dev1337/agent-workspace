@@ -405,33 +405,30 @@ class TerminalManager {
         return false;
       }
       
-      // Ctrl+V for paste with debouncing
+      // Ctrl+V for paste with debouncing (supports both text and images)
       if (e.ctrlKey && e.key === 'v') {
         e.preventDefault();
-        
+
         // Check if we're within the cooldown period
         const now = Date.now();
         const lastPaste = this.lastPasteTimes.get(sessionId) || 0;
-        
+
         if (now - lastPaste < this.pasteCooldown) {
           // Still in cooldown, ignore this paste
           console.log(`Ignoring paste for ${sessionId}, cooldown active`);
           return false;
         }
-        
+
         // Update last paste time
         this.lastPasteTimes.set(sessionId, now);
-        
-        // Perform the paste
-        navigator.clipboard.readText().then(text => {
-          this.orchestrator?.onManualTerminalInput?.(sessionId);
-          this.orchestrator.sendTerminalInput(sessionId, text);
-        }).catch(err => {
-          console.error('Failed to read clipboard:', err);
+
+        // Try to read clipboard with full access (images + text)
+        this.handleClipboardPaste(sessionId).catch(err => {
+          console.error('Failed to handle clipboard paste:', err);
           // Reset the paste time on error so user can retry immediately
           this.lastPasteTimes.delete(sessionId);
         });
-        
+
         return false;
       }
 
@@ -481,7 +478,109 @@ class TerminalManager {
       return true;
     });
   }
-  
+
+  /**
+   * Handle clipboard paste - supports both text and images
+   * Images are uploaded to the server and the file path is pasted into the terminal
+   */
+  async handleClipboardPaste(sessionId) {
+    try {
+      // Try to use the modern clipboard API that supports images
+      const clipboardItems = await navigator.clipboard.read();
+
+      for (const item of clipboardItems) {
+        // Check for image types first
+        const imageType = item.types.find(type => type.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          await this.uploadAndPasteImage(sessionId, blob, imageType);
+          return;
+        }
+
+        // Fall back to text
+        if (item.types.includes('text/plain')) {
+          const blob = await item.getType('text/plain');
+          const text = await blob.text();
+          this.orchestrator?.onManualTerminalInput?.(sessionId);
+          this.orchestrator.sendTerminalInput(sessionId, text);
+          return;
+        }
+      }
+
+      // If no supported content found, try readText as fallback
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        this.orchestrator?.onManualTerminalInput?.(sessionId);
+        this.orchestrator.sendTerminalInput(sessionId, text);
+      }
+    } catch (err) {
+      // Some browsers don't support clipboard.read(), fall back to readText
+      console.warn('clipboard.read() not supported, falling back to readText:', err.message);
+      try {
+        const text = await navigator.clipboard.readText();
+        this.orchestrator?.onManualTerminalInput?.(sessionId);
+        this.orchestrator.sendTerminalInput(sessionId, text);
+      } catch (textErr) {
+        console.error('Failed to read text from clipboard:', textErr);
+        throw textErr;
+      }
+    }
+  }
+
+  /**
+   * Upload an image blob to the server and paste the file path into the terminal
+   */
+  async uploadAndPasteImage(sessionId, blob, mimeType) {
+    try {
+      // Show a brief loading indicator in the terminal
+      const terminal = this.terminals.get(sessionId);
+      if (terminal) {
+        terminal.write('\r\n[Uploading image...]\r');
+      }
+
+      // Create FormData with the image
+      const formData = new FormData();
+      const extension = mimeType.split('/')[1] || 'png';
+      formData.append('image', blob, `clipboard_image.${extension}`);
+
+      // Upload to server
+      const response = await fetch('/api/terminal/upload-image', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+      }
+
+      const result = await response.json();
+
+      // Clear the loading indicator and paste the file path
+      if (terminal) {
+        // Clear the loading message (move cursor up and clear line)
+        terminal.write('\x1b[1A\x1b[2K');
+      }
+
+      // Send the file path to the terminal
+      this.orchestrator?.onManualTerminalInput?.(sessionId);
+      this.orchestrator.sendTerminalInput(sessionId, result.filePath);
+
+      console.log('Image uploaded and path pasted:', result.filePath);
+    } catch (err) {
+      console.error('Failed to upload image:', err);
+
+      // Clear loading indicator and show error
+      const terminal = this.terminals.get(sessionId);
+      if (terminal) {
+        terminal.write('\x1b[1A\x1b[2K');
+        terminal.write(`\r\n[Image paste failed: ${err.message}]\r\n`);
+      }
+
+      throw err;
+    }
+  }
+
   setupResizeObserver(sessionId) {
     const terminalElement = document.getElementById(`terminal-${sessionId}`);
     if (!terminalElement) return;

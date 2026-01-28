@@ -92,6 +92,34 @@ const audioUpload = multer({
   }
 });
 
+// Configure multer for image uploads (for terminal image paste)
+const imageUploadDir = path.join(os.tmpdir(), 'orchestrator-images');
+const fs = require('fs');
+if (!fs.existsSync(imageUploadDir)) {
+  fs.mkdirSync(imageUploadDir, { recursive: true });
+}
+
+const imageUpload = multer({
+  storage: multer.diskStorage({
+    destination: imageUploadDir,
+    filename: (req, file, cb) => {
+      // Generate unique filename with timestamp and extension
+      const ext = file.mimetype.split('/')[1] || 'png';
+      const filename = `clipboard_${Date.now()}.${ext}`;
+      cb(null, filename);
+    }
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB max for images
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/bmp'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid image format. Allowed: PNG, JPEG, GIF, WebP, BMP'));
+    }
+  }
+});
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -3959,6 +3987,34 @@ app.post('/api/whisper/command', audioUpload.single('audio'), async (req, res) =
       fs.unlinkSync(req.file.path);
     }
     logger.error('Whisper command failed', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Upload image from clipboard paste (for terminal image paste feature)
+app.post('/api/terminal/upload-image', imageUpload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    const filePath = req.file.path;
+    logger.info('Image uploaded for terminal paste', {
+      filename: req.file.filename,
+      path: filePath,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
+
+    // Return the absolute file path that can be used in Claude Code
+    res.json({
+      success: true,
+      filePath: filePath,
+      filename: req.file.filename,
+      size: req.file.size
+    });
+  } catch (error) {
+    logger.error('Image upload failed', { error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
