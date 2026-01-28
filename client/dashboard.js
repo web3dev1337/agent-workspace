@@ -139,6 +139,13 @@ class Dashboard {
                   <button class="dashboard-topbar-btn" id="dashboard-open-advice" title="Open Commander Advice">🧠 Advice</button>
                 </div>
               </div>
+              <div class="dashboard-summary-card">
+                <div class="dashboard-summary-title">Readiness</div>
+                <div id="dashboard-readiness-summary" class="dashboard-summary-body">Loading…</div>
+                <div class="dashboard-summary-actions">
+                  <button class="dashboard-topbar-btn" id="dashboard-open-readiness" title="Open project readiness checklists">✅ Checklists</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -182,6 +189,7 @@ class Dashboard {
 	    const telemetryEl = document.getElementById('dashboard-telemetry-summary');
 	    const projectsEl = document.getElementById('dashboard-projects-summary');
 	    const adviceEl = document.getElementById('dashboard-advice-summary');
+	    const readinessEl = document.getElementById('dashboard-readiness-summary');
 
 	    document.getElementById('dashboard-open-telemetry-details')?.addEventListener('click', (e) => {
 	      e.preventDefault();
@@ -211,6 +219,12 @@ class Dashboard {
       e.preventDefault();
       try {
         this.orchestrator?.handleCommanderAction?.('open-advice', {});
+      } catch {}
+    });
+    document.getElementById('dashboard-open-readiness')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      try {
+        this.showReadinessOverlay();
       } catch {}
     });
 
@@ -279,10 +293,11 @@ class Dashboard {
     };
 
     try {
-      const [statusRes, telemetryRes, projectsRes] = await Promise.all([
+      const [statusRes, telemetryRes, projectsRes, readinessRes] = await Promise.all([
         fetch('/api/process/status?mode=mine').catch(() => null),
         fetch('/api/process/telemetry').catch(() => null),
-        fetch('/api/process/projects?mode=mine').catch(() => null)
+        fetch('/api/process/projects?mode=mine').catch(() => null),
+        fetch('/api/process/readiness/templates').catch(() => null)
       ]);
 
       if (statusEl) {
@@ -385,11 +400,26 @@ class Dashboard {
         }
       }
 
+      if (readinessEl) {
+        const data = readinessRes ? await readinessRes.json().catch(() => ({})) : {};
+        if (readinessRes && readinessRes.ok) {
+          const templates = Array.isArray(data?.templates) ? data.templates : [];
+          const titles = templates.map(t => String(t?.title || '').trim()).filter(Boolean);
+          readinessEl.innerHTML = `
+            <div>Templates <strong>${templates.length}</strong></div>
+            <div style="opacity:0.9;">${escapeHtml(titles.slice(0, 5).join(' • ') || '—')}</div>
+          `;
+        } else {
+          readinessEl.textContent = 'Failed to load.';
+        }
+      }
+
       await renderAdvice({ force: false });
 	    } catch (error) {
 	      if (statusEl) statusEl.textContent = 'Failed to load.';
 	      if (telemetryEl) telemetryEl.textContent = 'Failed to load.';
 	      if (projectsEl) projectsEl.textContent = 'Failed to load.';
+	      if (readinessEl) readinessEl.textContent = 'Failed to load.';
 	      await renderAdvice({ force: false });
 	    }
 	  }
@@ -516,6 +546,159 @@ class Dashboard {
 
 	  hideTelemetryOverlay() {
 	    const overlay = document.getElementById('dashboard-telemetry-overlay');
+	    if (!overlay) return;
+	    overlay.classList.add('hidden');
+	    const handler = overlay._escHandler;
+	    if (handler) {
+	      document.removeEventListener('keydown', handler);
+	      overlay._escHandler = null;
+	    }
+	    overlay.remove();
+	  }
+
+	  async showReadinessOverlay() {
+	    const existing = document.getElementById('dashboard-readiness-overlay');
+	    if (existing) {
+	      existing.classList.remove('hidden');
+	      return;
+	    }
+
+	    const overlay = document.createElement('div');
+	    overlay.id = 'dashboard-readiness-overlay';
+	    overlay.className = 'dashboard-telemetry-overlay';
+	    overlay.innerHTML = `
+	      <div class="dashboard-telemetry-panel" role="dialog" aria-label="Project readiness checklists">
+	        <div class="dashboard-telemetry-header">
+	          <div class="dashboard-telemetry-title">Readiness — Checklists</div>
+	          <button class="dashboard-topbar-btn" id="dashboard-readiness-close" title="Close (Esc)">✕</button>
+	        </div>
+	        <div class="dashboard-telemetry-controls">
+	          <label class="dashboard-telemetry-field">
+	            <span>Template</span>
+	            <select id="dashboard-readiness-template"></select>
+	          </label>
+	          <div class="dashboard-telemetry-actions">
+	            <button class="btn-secondary" type="button" id="dashboard-readiness-copy-md">Copy Markdown</button>
+	            <button class="btn-secondary" type="button" id="dashboard-readiness-copy-text">Copy Text</button>
+	            <button class="btn-secondary" type="button" id="dashboard-readiness-copy-all">Copy All</button>
+	          </div>
+	        </div>
+	        <div id="dashboard-readiness-body" class="dashboard-telemetry-body">Loading…</div>
+	      </div>
+	    `;
+
+	    document.body.appendChild(overlay);
+
+	    const escapeHtml = (value) => String(value ?? '')
+	      .replace(/&/g, '&amp;')
+	      .replace(/</g, '&lt;')
+	      .replace(/>/g, '&gt;');
+
+	    const close = () => this.hideReadinessOverlay();
+	    overlay.addEventListener('click', (e) => {
+	      if (e.target === overlay) close();
+	    });
+	    overlay.querySelector('#dashboard-readiness-close')?.addEventListener('click', close);
+
+	    const onKey = (e) => {
+	      if (e.key !== 'Escape') return;
+	      const el = document.getElementById('dashboard-readiness-overlay');
+	      if (!el || el.classList.contains('hidden')) return;
+	      close();
+	    };
+	    overlay._escHandler = onKey;
+	    document.addEventListener('keydown', onKey);
+
+	    const selectEl = overlay.querySelector('#dashboard-readiness-template');
+	    const bodyEl = overlay.querySelector('#dashboard-readiness-body');
+	    const copyMdBtn = overlay.querySelector('#dashboard-readiness-copy-md');
+	    const copyTextBtn = overlay.querySelector('#dashboard-readiness-copy-text');
+	    const copyAllBtn = overlay.querySelector('#dashboard-readiness-copy-all');
+
+	    const res = await fetch('/api/process/readiness/templates').catch(() => null);
+	    const data = res ? await res.json().catch(() => ({})) : {};
+	    if (!res || !res.ok) {
+	      if (bodyEl) bodyEl.textContent = 'Failed to load.';
+	      return;
+	    }
+
+	    const templates = Array.isArray(data?.templates) ? data.templates : [];
+	    if (!templates.length) {
+	      if (bodyEl) bodyEl.textContent = 'No templates found.';
+	      return;
+	    }
+
+	    const byId = new Map(templates.map((t) => [String(t?.id || '').trim(), t]));
+
+	    const mdFor = (t) => {
+	      const title = String(t?.title || '').trim() || String(t?.id || '').trim() || 'Checklist';
+	      const items = Array.isArray(t?.items) ? t.items : [];
+	      return `## ${title}\n` + items.map(i => `- [ ] ${String(i || '').trim()}`).join('\n') + '\n';
+	    };
+
+	    const textFor = (t) => {
+	      const title = String(t?.title || '').trim() || String(t?.id || '').trim() || 'Checklist';
+	      const items = Array.isArray(t?.items) ? t.items : [];
+	      return `${title}\n` + items.map(i => `- ${String(i || '').trim()}`).join('\n') + '\n';
+	    };
+
+	    const render = () => {
+	      const id = String(selectEl?.value || '').trim();
+	      const t = byId.get(id) || templates[0];
+	      const title = escapeHtml(String(t?.title || '').trim() || id);
+	      const items = Array.isArray(t?.items) ? t.items : [];
+	      if (!bodyEl) return;
+	      bodyEl.innerHTML = `
+	        <div class="dashboard-telemetry-meta">
+	          <div><strong>${title}</strong></div>
+	          <div style="opacity:0.85;">${items.length} items</div>
+	        </div>
+	        <ul style="margin:0; padding-left: 18px; display:flex; flex-direction:column; gap:6px;">
+	          ${items.map((i) => `<li style="list-style: disc;"><label style="display:flex; gap:10px; align-items:flex-start;"><input type="checkbox" disabled /><span>${escapeHtml(String(i || '').trim())}</span></label></li>`).join('')}
+	        </ul>
+	      `;
+	    };
+
+	    if (selectEl) {
+	      selectEl.innerHTML = templates
+	        .map((t) => {
+	          const id = String(t?.id || '').trim();
+	          const title = String(t?.title || '').trim() || id;
+	          return `<option value="${escapeHtml(id)}">${escapeHtml(title)}</option>`;
+	        })
+	        .join('');
+	      selectEl.value = String(templates[0]?.id || '').trim();
+	      selectEl.addEventListener('change', render);
+	    }
+
+	    const getSelected = () => {
+	      const id = String(selectEl?.value || '').trim();
+	      return byId.get(id) || templates[0];
+	    };
+
+	    copyMdBtn?.addEventListener('click', async () => {
+	      const t = getSelected();
+	      await this.copyToClipboard(mdFor(t));
+	      try { this.orchestrator?.showToast?.('Checklist copied (Markdown)', 'success'); } catch {}
+	    });
+
+	    copyTextBtn?.addEventListener('click', async () => {
+	      const t = getSelected();
+	      await this.copyToClipboard(textFor(t));
+	      try { this.orchestrator?.showToast?.('Checklist copied', 'success'); } catch {}
+	    });
+
+	    copyAllBtn?.addEventListener('click', async () => {
+	      const all = templates.map(t => mdFor(t)).join('\n');
+	      await this.copyToClipboard(all);
+	      try { this.orchestrator?.showToast?.('All checklists copied (Markdown)', 'success'); } catch {}
+	    });
+
+	    render();
+	  }
+
+	  hideReadinessOverlay() {
+	    const overlay = document.getElementById('dashboard-readiness-overlay');
 	    if (!overlay) return;
 	    overlay.classList.add('hidden');
 	    const handler = overlay._escHandler;
