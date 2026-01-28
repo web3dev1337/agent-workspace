@@ -87,6 +87,7 @@ Likely default to **one review unit at a time**, but allow 2–3 when screen all
 
 In Review mode:
 - Selecting an item in Queue should offer **Open Review Console**.
+- Queue detail now includes **🗂 Inspect** to open the Worktree Inspector for the selected task (session/worktree-aware). (PR #367)
 - “Next” should advance the review unit (Tier 3 first, but configurable).
 
 ---
@@ -97,6 +98,7 @@ In Review mode:
    - Ensure “Advanced Diff Viewer” has an obvious entry point from the main header (and not only from PR-link auto-detection).
 2) **Worktree Inspector (v1)**
    - Add a Worktree Inspector modal showing per-file change stats (+/-) and recent/unpushed commits. (PR #366)
+   - Expose the Worktree Inspector from Queue detail actions (so review can start from “Next”). (PR #367)
 3) **Worktree Inspector (v2)**
    - Server endpoint(s) to provide:
      - `git status --porcelain` lines (staged/unstaged/untracked)
