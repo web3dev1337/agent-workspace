@@ -62,6 +62,7 @@ const { ProcessStatusService } = require('./processStatusService');
 const { ProcessTelemetryService } = require('./processTelemetryService');
 const { ProcessProjectDashboardService } = require('./processProjectDashboardService');
 const { ProcessAdvisorService } = require('./processAdvisorService');
+const { ProcessReadinessService } = require('./processReadinessService');
 const { TelemetrySnapshotService } = require('./telemetrySnapshotService');
 const { TaskRecordService } = require('./taskRecordService');
 const { PromptArtifactService, safeId, sha256, formatPointerComment } = require('./promptArtifactService');
@@ -203,6 +204,7 @@ const promptArtifactService = PromptArtifactService.getInstance();
 const taskTicketingService = TaskTicketingService.getInstance();
 const taskDependencyService = TaskDependencyService.getInstance({ taskRecordService, pullRequestService, taskTicketingService });
 const processAdvisorService = ProcessAdvisorService.getInstance({ processStatusService, processTelemetryService, processTaskService, taskRecordService, taskDependencyService });
+const processReadinessService = ProcessReadinessService.getInstance();
 const githubRepoService = GitHubRepoService.getInstance();
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
@@ -2659,6 +2661,16 @@ app.get('/api/process/advice', async (req, res) => {
   } catch (error) {
     logger.error('Failed to fetch process advice', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch process advice' });
+  }
+});
+
+app.get('/api/process/readiness/templates', (req, res) => {
+  try {
+    const data = processReadinessService.getTemplates();
+    res.json(data);
+  } catch (error) {
+    logger.error('Failed to fetch readiness templates', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to fetch readiness templates' });
   }
 });
 
