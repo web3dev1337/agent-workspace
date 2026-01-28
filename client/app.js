@@ -5790,7 +5790,7 @@ class ClaudeOrchestrator {
     return this.openWorktreeInspectorForPath(worktreePath, { label });
   }
 
-  async openWorktreeInspectorForPath(worktreePath, { label = '' } = {}) {
+  async openWorktreeInspectorForPath(worktreePath, { label = '', task = null } = {}) {
     const p = String(worktreePath || '').trim();
     if (!p) {
       this.showToast('No worktree path provided', 'warning');
@@ -5817,14 +5817,20 @@ class ClaudeOrchestrator {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
-    try {
-      const summary = await this.fetchWorktreeGitSummary(p, { maxFiles: 300, maxCommits: 25 });
-      const pr = summary?.pr || {};
+	    try {
+	      const summary = await this.fetchWorktreeGitSummary(p, { maxFiles: 300, maxCommits: 25 });
+	      const pr = summary?.pr || {};
+	      const reviewTask = task && typeof task === 'object' ? task : null;
+	      const reviewRecord = reviewTask && typeof reviewTask.record === 'object' ? reviewTask.record : null;
+	      const reviewTaskId = String(reviewTask?.id || '').trim();
+	      const ticketCardId = String(reviewRecord?.ticketCardId || '').trim();
+	      const ticketCardUrl = String(reviewRecord?.ticketCardUrl || '').trim();
+	      const ticketUrl = ticketCardUrl || (ticketCardId ? `https://trello.com/c/${ticketCardId}` : '');
 
-      const header = (() => {
-        const branch = escapeHtml(summary?.branch || 'unknown');
-        const ahead = Number(summary?.ahead || 0);
-        const behind = Number(summary?.behind || 0);
+	      const header = (() => {
+	        const branch = escapeHtml(summary?.branch || 'unknown');
+	        const ahead = Number(summary?.ahead || 0);
+	        const behind = Number(summary?.behind || 0);
         const dirty = Array.isArray(summary?.files) ? summary.files.length : 0;
         const prText = pr?.hasPR && pr?.number ? `PR #${Number(pr.number)}` : 'No PR';
         const prState = pr?.hasPR ? String(pr?.state || '').toLowerCase() : '';
@@ -5846,6 +5852,18 @@ class ClaudeOrchestrator {
 	          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff="${escapeHtml(prUrl)}" title="Open diff viewer for PR">🔍 Diff</button>`
 	          : `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff-home="true" title="Open diff viewer">🔍 Diff</button>`;
 	        parts.push(diffBtn);
+
+	        if (ticketUrl) {
+	          parts.push(
+	            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-ticket-open="${escapeHtml(ticketUrl)}" title="Open ticket">🎫 Ticket</button>`
+	          );
+	        }
+
+	        if (reviewTaskId && (ticketCardId || ticketCardUrl)) {
+	          parts.push(
+	            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-ticket-move="${escapeHtml(reviewTaskId)}" title="Move ticket to Done list">📦 Done</button>`
+	          );
+	        }
 
 	        if (prUrl && prState === 'open') {
 	          const mergeable = String(pr?.mergeable || '').trim().toUpperCase();
@@ -6140,6 +6158,32 @@ class ClaudeOrchestrator {
 	        const url = e.target?.dataset?.prUrl;
 	        if (url) this.openPRLink(url);
 	      });
+	      bodyEl.querySelector('[data-ticket-open]')?.addEventListener('click', (e) => {
+	        const url = e.target?.dataset?.ticketOpen;
+	        if (url) window.open(url, '_blank', 'noreferrer');
+	      });
+	      bodyEl.querySelector('[data-ticket-move]')?.addEventListener('click', async (e) => {
+	        const taskId = e.target?.dataset?.ticketMove;
+	        if (!taskId) return;
+	        if (!window.confirm(`Move ticket to Done?\n${taskId}`)) return;
+
+	        const btn = e.target;
+	        btn.disabled = true;
+	        this.showToast('Moving ticket…', 'info');
+	        try {
+	          const res = await fetch(`/api/process/task-records/${encodeURIComponent(taskId)}/ticket-move`, {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({})
+	          });
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to move ticket'));
+	          this.showToast('Ticket moved', 'success');
+	        } catch (err) {
+	          this.showToast(String(err?.message || err), 'error');
+	          btn.disabled = false;
+	        }
+	      });
     } catch (err) {
       bodyEl.innerHTML = `
         <div style="opacity:0.9; margin-bottom:10px;">Failed to load worktree summary.</div>
@@ -6172,7 +6216,7 @@ class ClaudeOrchestrator {
     }
 
     const label = inferredWorktreeId || String(t.id || '').trim() || worktreePath;
-    await this.openWorktreeInspectorForPath(worktreePath, { label });
+    await this.openWorktreeInspectorForPath(worktreePath, { label, task: t });
 
     const modal = this.ensureWorktreeInspectorModal();
     modal.classList.add('docked');
