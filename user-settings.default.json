@@ -18,6 +18,10 @@
         "colorize": true,
         "showAtInSidebar": false
       },
+      "terminals": {
+        "viewMode": "all",
+        "tierFilter": "all"
+      },
       "worktrees": {
         "autoCreateExtraWhenBusy": true,
         "autoCreateMinNumber": 9,
