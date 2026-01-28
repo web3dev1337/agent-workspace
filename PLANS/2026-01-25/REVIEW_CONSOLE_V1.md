@@ -57,7 +57,7 @@ A review unit may be:
 - Start/Stop review timer + set review outcome (already exists in Queue; Review Console should expose it too).
 
 ### Strongly desired
-- Merge PR from the Review Console (when mergeable).
+- ✅ Merge PR from the Review Console (when mergeable). (PR #372)
 - Move the attached ticket/card to another column (Test/Done/etc) when a ticket exists.
   - Should respect per-board conventions (Done list, etc) when configured.
 
@@ -111,5 +111,5 @@ In Review mode:
    - Layout engine for sections + presets.
    - Bind to Queue selection / “Next”.
 6) **Actions**
-   - Merge PR button (server-side `gh pr merge` wrapper; reuse existing PR metadata).
+   - ✅ Merge PR button (server-side `gh pr merge` wrapper; reuse existing PR metadata). (PR #372)
    - Ticket move button (Trello provider move list; reuse board conventions/mappings).
