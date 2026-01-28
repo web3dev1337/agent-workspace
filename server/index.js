@@ -61,6 +61,7 @@ const { ProcessTaskService } = require('./processTaskService');
 const { ProcessStatusService } = require('./processStatusService');
 const { ProcessTelemetryService } = require('./processTelemetryService');
 const { ProcessProjectDashboardService } = require('./processProjectDashboardService');
+const { ProcessProjectHealthService } = require('./processProjectHealthService');
 const { ProcessAdvisorService } = require('./processAdvisorService');
 const { ProcessReadinessService } = require('./processReadinessService');
 const { TelemetrySnapshotService } = require('./telemetrySnapshotService');
@@ -200,6 +201,7 @@ const processStatusService = ProcessStatusService.getInstance({ processTaskServi
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
 const telemetrySnapshotService = TelemetrySnapshotService.getInstance();
 const processProjectDashboardService = ProcessProjectDashboardService.getInstance({ pullRequestService, taskRecordService });
+const processProjectHealthService = ProcessProjectHealthService.getInstance({ taskRecordService });
 const promptArtifactService = PromptArtifactService.getInstance();
 const taskTicketingService = TaskTicketingService.getInstance();
 const taskDependencyService = TaskDependencyService.getInstance({ taskRecordService, pullRequestService, taskTicketingService });
@@ -2648,6 +2650,20 @@ app.get('/api/process/projects', async (req, res) => {
   } catch (error) {
     logger.error('Failed to fetch process projects dashboard', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch process projects dashboard' });
+  }
+});
+
+app.get('/api/process/projects/health', async (req, res) => {
+  try {
+    const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
+    const bucketMinutes = req.query.bucketMinutes ? Number(req.query.bucketMinutes) : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const force = String(req.query.force || '').toLowerCase() === 'true';
+    const data = await processProjectHealthService.getHealth({ lookbackHours, bucketMinutes, limit, force });
+    res.json(data);
+  } catch (error) {
+    logger.error('Failed to fetch project health dashboard', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to fetch project health dashboard' });
   }
 });
 
