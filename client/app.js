@@ -1357,6 +1357,11 @@ class ClaudeOrchestrator {
       if (!e.altKey || e.ctrlKey || e.metaKey) return;
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
 
+      // Ignore when typing in inputs/selects/contenteditable.
+      const t = e.target;
+      const tag = String(t?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return;
+
       const sessionId = this.focusedTerminalInfo?.sessionId || this.lastInteractedSessionId;
       if (!sessionId) return;
 
@@ -1365,6 +1370,39 @@ class ClaudeOrchestrator {
 
       const delta = e.key === 'ArrowUp' ? 1 : -1;
       this.cycleTierForSession(sessionId, delta);
+    });
+
+    // Keyboard: Alt+1/2/3/4 set tier filter; Alt+0 or Alt+A sets All; Alt+N sets None.
+    document.addEventListener('keydown', (e) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+
+      // Ignore when typing in inputs/selects/contenteditable.
+      const t = e.target;
+      const tag = String(t?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return;
+
+      const key = String(e.key || '');
+      const lower = key.toLowerCase();
+
+      if (key === '1' || key === '2' || key === '3' || key === '4') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.setTierFilter(key);
+        return;
+      }
+
+      if (key === '0' || lower === 'a') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.setTierFilter('all');
+        return;
+      }
+
+      if (lower === 'n') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.setTierFilter('none');
+      }
     });
   }
 	  
