@@ -88,6 +88,7 @@ Likely default to **one review unit at a time**, but allow 2–3 when screen all
 
 In Review mode:
 - Selecting an item in Queue should offer **Open Review Console**.
+- ✅ Queue: “Auto Console” toggle auto-opens Review Console for worktree/session items while navigating. (PR #378)
 - Queue detail now includes **🗂 Inspect** to open the Worktree Inspector for the selected task (session/worktree-aware). (PR #367)
 - “Next” should advance the review unit (Tier 3 first, but configurable).
 
