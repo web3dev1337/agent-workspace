@@ -14959,6 +14959,8 @@ class ClaudeOrchestrator {
 	              <option value="">Pinned…</option>
 	            </select>
 	            <button class="btn-secondary" id="queue-dep-graph-pin" title="Pin/unpin current root">📌 Pin</button>
+              <input id="queue-dep-graph-add" class="tasks-input" placeholder="Add dep id…" style="width: 260px; margin-left: 10px;" />
+              <button class="btn-secondary" id="queue-dep-graph-add-btn" title="Add dependency to current root">＋ Add</button>
 	            <span style="flex:1"></span>
 	            <button class="btn-secondary" id="queue-dep-graph-jump" title="Jump to this node (Queue/Trello)">↩ Jump</button>
 	            <button class="btn-secondary" id="queue-dep-graph-refresh">🔄 Refresh</button>
@@ -15032,6 +15034,9 @@ class ClaudeOrchestrator {
 	        const pinBtn = overlay.querySelector('#queue-dep-graph-pin');
 	        const pinned = pins.includes(currentRoot);
 	        if (pinBtn) pinBtn.textContent = pinned ? '📌 Unpin' : '📌 Pin';
+
+          const addEl = overlay.querySelector('#queue-dep-graph-add');
+          if (addEl) addEl.setAttribute('placeholder', `Add dep to ${currentRoot}…`);
 	      };
 
 	      const jumpTo = (targetId) => {
@@ -15236,6 +15241,53 @@ class ClaudeOrchestrator {
 	        const edges = state.depGraphShowSatisfied ? edgesAll : edgesAll.filter(e => !e?.satisfied);
 	        const nodeById = new Map(nodes.map((n) => [String(n.id), n]));
 
+          const reasonLabel = (reason) => {
+            const r = String(reason || '').trim().toLowerCase();
+            if (!r) return '';
+            if (r === 'doneat') return 'done';
+            if (r === 'pr_merged') return 'PR merged';
+            if (r === 'pr_open') return 'PR open';
+            if (r === 'pr_closed') return 'PR closed';
+            if (r === 'pr_unknown') return 'PR unknown';
+            if (r === 'pr_lookup_failed') return 'PR lookup failed';
+            if (r === 'trello_closed') return 'Trello closed';
+            if (r === 'trello_open') return 'Trello open';
+            if (r === 'trello_not_configured') return 'Trello not configured';
+            if (r === 'trello_lookup_failed') return 'Trello lookup failed';
+            if (r === 'trello_dep_complete') return 'checklist complete';
+            if (r === 'trello_dep_incomplete') return 'checklist incomplete';
+            if (r === 'manual') return 'manual';
+            if (r === 'unknown') return 'unknown';
+            return r.replace(/_/g, ' ');
+          };
+
+          const kindLabel = (node) => {
+            const k = String(node?.kind || '').trim().toLowerCase();
+            if (k === 'pr') return '🔀';
+            if (k === 'trello') return '📋';
+            if (k === 'worktree') return '🌳';
+            if (k === 'session') return '🧵';
+            return '🧩';
+          };
+
+          const depSummary = (() => {
+            const byId = new Map(); // id -> { total, blocked }
+            const seen = new Set();
+            for (const e of edgesAll) {
+              const from = String(e?.from || '').trim();
+              const to = String(e?.to || '').trim();
+              if (!from || !to) continue;
+              const key = `${from}->${to}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              if (!byId.has(from)) byId.set(from, { total: 0, blocked: 0 });
+              const row = byId.get(from);
+              row.total += 1;
+              if (!e?.satisfied) row.blocked += 1;
+            }
+            return byId;
+          })();
+
         const upAdj = new Map();   // id -> [{id, satisfied, reason}]
         const downAdj = new Map(); // id -> [{id, satisfied, reason}]
         for (const e of edges) {
@@ -15243,9 +15295,9 @@ class ClaudeOrchestrator {
           const to = String(e.to || '').trim();
           if (!from || !to) continue;
           if (!upAdj.has(from)) upAdj.set(from, []);
-          upAdj.get(from).push({ id: to, satisfied: !!e.satisfied, reason: String(e.reason || '') });
+          upAdj.get(from).push({ id: to, satisfied: !!e.satisfied, reason: String(e.reason || ''), source: String(e.source || '') });
           if (!downAdj.has(to)) downAdj.set(to, []);
-          downAdj.get(to).push({ id: from, satisfied: !!e.satisfied, reason: String(e.reason || '') });
+          downAdj.get(to).push({ id: from, satisfied: !!e.satisfied, reason: String(e.reason || ''), source: String(e.source || '') });
         }
 
         const walk = (startId, adj, remaining, visited) => {
@@ -15255,18 +15307,38 @@ class ClaudeOrchestrator {
           if (!children.length) return '';
           const nextVisited = new Set(visited);
           nextVisited.add(id2);
+          const isRootList = id2 === currentRoot;
           return `<ul style="margin: 8px 0 8px 18px; padding: 0;">
             ${children.map((c) => {
               const cid = String(c.id || '').trim();
               const node = nodeById.get(cid) || { label: cid, id: cid };
               const label = escapeHtml(node.label || cid);
-              const icon = (adj === upAdj) ? (c.satisfied ? '✅' : '⛔') : (node.doneAt ? '✅' : '⛔');
-              const reason = (adj === upAdj) ? (c.reason ? ` <span style="opacity:0.7">(${escapeHtml(c.reason)})</span>` : '') : '';
+              const icon = c.satisfied ? '✅' : '⛔';
+              const reason = (adj === upAdj)
+                ? (c.reason ? ` <span style="opacity:0.7">(${escapeHtml(reasonLabel(c.reason))})</span>` : '')
+                : '';
+              const counts = depSummary.get(cid);
+              const depsInfo = counts ? ` <span style="opacity:0.75">deps ${counts.blocked}/${counts.total}</span>` : '';
+              const canRemove = !!(isRootList && adj === upAdj && String(c.source || '') === 'record');
+              const url = String(node?.url || '').trim();
+              const prUrlFallback = cid.match(/^pr:([^/]+)\/([^#]+)#(\d+)$/) ? `https://github.com/${cid.replace(/^pr:/, '').replace('#', '/pull/')}` : '';
+              const openUrl = url || prUrlFallback;
+              const openBtn = openUrl ? `<a class="btn-secondary" href="${escapeHtml(openUrl)}" target="_blank" rel="noreferrer" title="Open in new tab" style="padding:2px 6px; font-size:0.8rem; line-height:1;">↗</a>` : '';
+              const removeBtn = canRemove ? `<button class="btn-secondary" type="button" data-dep-remove="${escapeHtml(cid)}" title="Remove dependency from current root" style="padding:2px 8px; font-size:0.9rem; line-height:1;">×</button>` : '';
               const childTree = nextVisited.has(cid) ? '' : walk(cid, adj, remaining - 1, nextVisited);
               return `<li style="list-style:none; margin: 6px 0;">
-                <a href="#" data-queue-jump="${escapeHtml(cid)}" style="color: inherit; text-decoration: none;">
-                  ${icon} <code>${label}</code>${reason}
-                </a>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <a href="#" data-queue-jump="${escapeHtml(cid)}" style="color: inherit; text-decoration: none; display:flex; gap:8px; align-items:center; min-width:0;">
+                    <span style="flex:0 0 auto;">${icon}</span>
+                    <span style="flex:0 0 auto;">${kindLabel(node)}</span>
+                    <code style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${label}</code>
+                    <span style="flex:0 0 auto;">${depsInfo}</span>
+                    <span style="flex:0 0 auto;">${reason}</span>
+                  </a>
+                  <span style="flex:1"></span>
+                  ${openBtn}
+                  ${removeBtn}
+                </div>
                 ${childTree}
               </li>`;
             }).join('')}
@@ -15291,6 +15363,29 @@ class ClaudeOrchestrator {
 	            fetchGraph().catch((err) => this.showToast(String(err?.message || err), 'error'));
 	          });
 	        });
+
+          overlay.querySelectorAll('[data-dep-remove]').forEach((btn) => {
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const depId = btn.getAttribute('data-dep-remove');
+              const did = String(depId || '').trim();
+              if (!did) return;
+              try {
+                btn.disabled = true;
+                const url = `${serverUrl}/api/process/task-records/${encodeURIComponent(currentRoot)}/dependencies/${encodeURIComponent(did)}`;
+                const res = await fetch(url, { method: 'DELETE' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data?.error || 'Failed to remove dependency');
+                this.showToast('Dependency removed', 'success');
+                await fetchGraph();
+              } catch (err) {
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
 
 	        updateToolbarMeta(graph);
 
@@ -15348,6 +15443,36 @@ class ClaudeOrchestrator {
 	      overlay.querySelector('#queue-dep-graph-refresh')?.addEventListener('click', () => {
 	        fetchGraph().catch((e) => this.showToast(String(e?.message || e), 'error'));
 	      });
+
+        const addEl = overlay.querySelector('#queue-dep-graph-add');
+        const addBtn = overlay.querySelector('#queue-dep-graph-add-btn');
+        const addDependency = async () => {
+          const depId = String(addEl?.value || '').trim();
+          if (!depId) return;
+          try {
+            if (addBtn) addBtn.disabled = true;
+            const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(currentRoot)}/dependencies`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ dependencyId: depId })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || 'Failed to add dependency');
+            if (addEl) addEl.value = '';
+            this.showToast('Dependency added', 'success');
+            await fetchGraph();
+          } catch (err) {
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            if (addBtn) addBtn.disabled = false;
+          }
+        };
+        addBtn?.addEventListener('click', addDependency);
+        addEl?.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          addDependency();
+        });
 
       await fetchGraph().catch((e) => this.showToast(String(e?.message || e), 'error'));
 	    };
