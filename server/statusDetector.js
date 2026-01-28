@@ -119,10 +119,18 @@ class StatusDetector {
     if (trimmedLastNonEmptyLine === '? for shortcuts') {
       return 'waiting';
     }
-    // Treat ">" as the Claude input prompt only when we have evidence this is actually Claude Code UI.
-    // This prevents bash PS2 (multiline) prompts from being treated as Claude "waiting".
+    // Treat ">" as the Claude input prompt only when we have evidence this is actually a prompt,
+    // not just a markdown/code line ending with ">".
+    // This prevents bash PS2 (multiline) prompts and occasional output lines from being treated as Claude "waiting".
     if (trimmedLastNonEmptyLine === '>' && state.claudeLikely) {
-      return 'waiting';
+      const hasStartupMarkers = /Welcome to Claude Code!/.test(recentAll) || /\? for shortcuts/.test(recentAll);
+      const hasRecentCompletion = lastNonEmptyLines
+        .slice(1)
+        .some(line => this.completionPatterns.some(pattern => pattern.test(String(line || '').trim())));
+
+      if (hasStartupMarkers || hasRecentCompletion) {
+        return 'waiting';
+      }
     }
 
     // 2. Claude startup/welcome screen
