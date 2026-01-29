@@ -8,6 +8,14 @@ describe('UserSettingsService defaults', () => {
     expect(typeof defaults.global.ui.tasks.boardMappings).toBe('object');
   });
 
+  test('includes ui.tasks.launch defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    const launch = defaults?.global?.ui?.tasks?.launch;
+    expect(launch).toBeTruthy();
+    expect(typeof launch.globalPromptPrefix).toBe('string');
+    expect(typeof launch.includeTicketTitle).toBe('boolean');
+  });
+
   test('includes ui.workflow focus defaults', () => {
     const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
     expect(defaults?.global?.ui?.workflow).toBeTruthy();
@@ -51,6 +59,9 @@ describe('UserSettingsService defaults', () => {
             mode: 'focus'
           },
           tasks: {
+            launch: {
+              includeTicketTitle: true
+            },
             boardMappings: {
               'trello:b1': { enabled: true, localPath: 'games/hytopia/mock-repo', defaultStartTier: 3 }
             },
@@ -86,6 +97,10 @@ describe('UserSettingsService defaults', () => {
     // Keeps nested automation defaults while allowing partial override.
     expect(merged.global.ui.tasks.automations.trello.onPrMerged.enabled).toBe(true);
     expect(typeof merged.global.ui.tasks.automations.trello.onPrMerged.pollMs).toBe('number');
+    // Does not drop tasks.launch defaults when only partially provided.
+    expect(merged.global.ui.tasks.launch).toBeTruthy();
+    expect(merged.global.ui.tasks.launch.includeTicketTitle).toBe(true);
+    expect(typeof merged.global.ui.tasks.launch.globalPromptPrefix).toBe('string');
     // Does not drop workflow defaults when only mode is provided.
     expect(merged.global.ui.workflow.focus).toBeTruthy();
     expect(merged.global.ui.workflow.notifications).toBeTruthy();

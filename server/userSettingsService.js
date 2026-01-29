@@ -84,6 +84,11 @@ class UserSettingsService {
           tasks: {
             // 'inherit' uses the main UI theme; 'light'/'dark' force the Tasks panel theme.
             theme: 'inherit',
+            launch: {
+              // Prepended before the ticket preface + card description when launching from Tasks.
+              globalPromptPrefix: '',
+              includeTicketTitle: false
+            },
             me: {
               // Optional override (useful if you want "me" to match a specific board member).
               // If unset, the UI will use `/api/tasks/me` from the provider credentials.
@@ -359,6 +364,13 @@ class UserSettingsService {
             merged.global.ui.tasks.me = {
               ...(defaultsTasks.me || {}),
               ...(tasks.me || {})
+            };
+          }
+
+          if (tasks.launch) {
+            merged.global.ui.tasks.launch = {
+              ...(defaultsTasks.launch || {}),
+              ...(tasks.launch || {})
             };
           }
 
