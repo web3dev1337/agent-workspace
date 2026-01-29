@@ -69,5 +69,45 @@ describe('SessionManager branch updates', () => {
       expect.objectContaining({ sessionId: 'work2-server', branch: 'feature/test' })
     );
   });
-});
 
+  test('updateGitBranch matches mixed-repo sessions when cwd is a subdirectory', async () => {
+    const io = { emit: jest.fn() };
+    const sessionManager = new SessionManager(io, null);
+    const gitHelper = {
+      getCurrentBranch: jest.fn(async () => 'feature/test'),
+      getRemoteUrl: jest.fn(async () => 'git@github.com:owner/repo.git'),
+      getDefaultBranch: jest.fn(async () => 'main'),
+      checkForExistingPR: jest.fn(async () => null)
+    };
+    sessionManager.setGitHelper(gitHelper);
+
+    sessionManager.sessions.set('repo-a-work2-claude', {
+      id: 'repo-a-work2-claude',
+      type: 'claude',
+      worktreeId: 'work2',
+      config: { cwd: '/tmp/repo-a/work2' },
+      branch: 'unknown'
+    });
+    sessionManager.sessions.set('repo-a-work2-server', {
+      id: 'repo-a-work2-server',
+      type: 'server',
+      worktreeId: 'work2',
+      config: { cwd: '/tmp/repo-a/work2' },
+      branch: 'unknown'
+    });
+
+    await sessionManager.updateGitBranch('work2', '/tmp/repo-a/work2/subdir', true);
+
+    expect(sessionManager.sessions.get('repo-a-work2-claude').branch).toBe('feature/test');
+    expect(sessionManager.sessions.get('repo-a-work2-server').branch).toBe('feature/test');
+
+    expect(io.emit).toHaveBeenCalledWith(
+      'branch-update',
+      expect.objectContaining({ sessionId: 'repo-a-work2-claude', branch: 'feature/test' })
+    );
+    expect(io.emit).toHaveBeenCalledWith(
+      'branch-update',
+      expect.objectContaining({ sessionId: 'repo-a-work2-server', branch: 'feature/test' })
+    );
+  });
+});
