@@ -155,13 +155,14 @@ class WorktreeMetadataService {
     const cached = this.getFromCache(cacheKey, this.prCacheMaxAge);
     if (cached) return cached;
 
+    let branch = null;
     try {
       // Get current branch
       const { stdout: branchOutput } = await execAsync(
         'git branch --show-current',
         { cwd: worktreePath, timeout: 5000 }
       );
-      const branch = branchOutput.trim();
+      branch = branchOutput.trim();
 
       if (!branch || branch === 'main' || branch === 'master') {
         return { hasPR: false, branch };
@@ -200,6 +201,7 @@ class WorktreeMetadataService {
       logger.debug('Failed to get PR status', { path: worktreePath, error: error.message });
       return {
         hasPR: false,
+        branch,
         error: error.message
       };
     }

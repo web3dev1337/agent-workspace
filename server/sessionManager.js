@@ -465,7 +465,7 @@ class SessionManager extends EventEmitter {
         if (headPath) {
           // Create a watcher for this HEAD file
           const watcher = fs.watch(headPath, (eventType) => {
-            if (eventType === 'change') {
+            if (eventType === 'change' || eventType === 'rename') {
               logger.info('👀 Detected .git/HEAD change', { 
                 worktree: worktree.id,
                 eventType,
@@ -1670,6 +1670,16 @@ class SessionManager extends EventEmitter {
     }
   }
 
+  isSameOrSubpath(parentPath, childPath) {
+    const parent = this.normalizeCwdPath(parentPath);
+    const child = this.normalizeCwdPath(childPath);
+    if (!parent || !child) return false;
+    if (parent === child) return true;
+
+    const rel = path.relative(parent, child);
+    return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+  }
+
   async updateGitBranch(worktreeId, worktreePath, skipCache = false) {
     logger.info('🔄 updateGitBranch called', { 
       worktreeId, 
@@ -1710,7 +1720,7 @@ class SessionManager extends EventEmitter {
         for (const [sessionId, session] of this.sessions) {
           // Check if this session belongs to the same worktree by comparing paths
           if (session.worktreeId === worktreeId && session.config &&
-            this.normalizeCwdPath(session.config.cwd) === normalizedWorktreePath) {
+            this.isSameOrSubpath(session.config.cwd, normalizedWorktreePath)) {
             sessionsToUpdate.add(sessionId);
           }
         }
@@ -1722,7 +1732,7 @@ class SessionManager extends EventEmitter {
       if (sessionsToUpdate.size === 0) {
         for (const [sessionId, session] of this.sessions) {
           if (!session?.config?.cwd) continue;
-          if (this.normalizeCwdPath(session.config.cwd) !== normalizedWorktreePath) continue;
+          if (!this.isSameOrSubpath(session.config.cwd, normalizedWorktreePath)) continue;
           if (session.type !== 'claude' && session.type !== 'server') continue;
           sessionsToUpdate.add(sessionId);
         }
