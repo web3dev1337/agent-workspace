@@ -992,6 +992,8 @@ class ClaudeOrchestrator {
       'workflow-notify-tier1-interrupts': null,
       'workflow-notify-review-nudges': null,
       'tasks-theme-select': null,
+      'tasks-launch-global-prefix': null,
+      'tasks-launch-include-title': null,
       'trello-me-username': null,
       'global-skip-permissions': null,
       'reset-to-defaults': null,
@@ -1152,6 +1154,21 @@ class ClaudeOrchestrator {
       trelloMeUsername.addEventListener('change', (e) => {
         const v = String(e.target.value || '').trim();
         this.updateGlobalUserSetting('ui.tasks.me.trelloUsername', v);
+      });
+    }
+
+    const tasksLaunchPrefix = document.getElementById('tasks-launch-global-prefix');
+    if (tasksLaunchPrefix) {
+      tasksLaunchPrefix.addEventListener('change', (e) => {
+        const v = String(e.target.value || '');
+        this.updateGlobalUserSetting('ui.tasks.launch.globalPromptPrefix', v);
+      });
+    }
+
+    const tasksLaunchIncludeTitle = document.getElementById('tasks-launch-include-title');
+    if (tasksLaunchIncludeTitle) {
+      tasksLaunchIncludeTitle.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.tasks.launch.includeTicketTitle', !!e.target.checked);
       });
     }
 
@@ -8113,6 +8130,16 @@ class ClaudeOrchestrator {
       trelloMeUsername.value = this.userSettings.global?.ui?.tasks?.me?.trelloUsername || '';
     }
 
+    const tasksLaunchPrefix = document.getElementById('tasks-launch-global-prefix');
+    if (tasksLaunchPrefix) {
+      tasksLaunchPrefix.value = this.userSettings.global?.ui?.tasks?.launch?.globalPromptPrefix || '';
+    }
+
+    const tasksLaunchIncludeTitle = document.getElementById('tasks-launch-include-title');
+    if (tasksLaunchIncludeTitle) {
+      tasksLaunchIncludeTitle.checked = this.userSettings.global?.ui?.tasks?.launch?.includeTicketTitle === true;
+    }
+
     // Update session recovery settings UI
     const sessionRecoveryEnabled = document.getElementById('session-recovery-enabled');
     const sessionRecoveryOptions = document.getElementById('session-recovery-options');
@@ -10218,6 +10245,7 @@ class ClaudeOrchestrator {
 		      const repoSlug = String(mapping.repoSlug || '');
 		      const localPath = String(mapping.localPath || '');
 		      const defaultTier = Number(mapping.defaultStartTier);
+		      const promptPrefix = String(mapping.promptPrefix || '');
 		      const boardName = ((Array.isArray(state.boards) ? state.boards : []).find(b => b.id === effectiveBoardId)?.name) || effectiveBoardId;
 
 		      detailEl.innerHTML = `
@@ -10277,9 +10305,17 @@ class ClaudeOrchestrator {
 	            </select>
 	            <button class="btn-secondary" id="tasks-board-save" type="button">💾 Save</button>
 	          </div>
-		          <div class="tasks-detail-empty" style="margin-top:8px">
-		            This mapping enables “Launch” in card detail (card → repo → worktree → agent).
+			          <div class="tasks-detail-empty" style="margin-top:8px">
+			            This mapping enables “Launch” in card detail (card → repo → worktree → agent).
+			          </div>
+			        </div>
+
+		        <div class="tasks-detail-block">
+		          <div class="tasks-detail-block-title">Launch prompt</div>
+		          <div class="tasks-detail-meta" style="margin-bottom:8px">
+		            Optional per-board prefix prepended <em>after</em> the global prefix (Settings → Tasks Launch).
 		          </div>
+		          <textarea id="tasks-board-prompt-prefix" class="tasks-textarea" rows="4" placeholder="(optional) Per-board system prompt / preface...">${this.escapeHtml(promptPrefix)}</textarea>
 		        </div>
 
 		        <div class="tasks-detail-block">
@@ -10445,12 +10481,14 @@ class ClaudeOrchestrator {
 		          const enabledNext = !!detailEl.querySelector('#tasks-board-enabled')?.checked;
 	          const localPathNext = String(detailEl.querySelector('#tasks-board-local-path')?.value || '').trim();
 	          const repoSlugNext = String(detailEl.querySelector('#tasks-board-repo-slug')?.value || '').trim();
+	          const promptPrefixNext = String(detailEl.querySelector('#tasks-board-prompt-prefix')?.value || '');
 	          const tierRaw = String(detailEl.querySelector('#tasks-board-default-tier')?.value || '').trim();
 	          const tierNum = Number(tierRaw);
 	          await updateBoardMapping(state.provider, effectiveBoardId, {
 	            enabled: enabledNext,
 	            localPath: localPathNext || null,
 	            repoSlug: repoSlugNext || null,
+	            promptPrefix: String(promptPrefixNext || '').trim() || null,
 	            defaultStartTier: (tierNum >= 1 && tierNum <= 4) ? tierNum : null
 	          });
 	          this.showToast('Board settings saved', 'success');
@@ -19455,7 +19493,12 @@ class ClaudeOrchestrator {
     const startTierSafe = (startTier >= 1 && startTier <= 4) ? startTier : undefined;
 
 	    const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
+	    const globalPromptPrefix = String(this.userSettings?.global?.ui?.tasks?.launch?.globalPromptPrefix || '').trim();
+	    const boardPromptPrefix = String(mapping?.promptPrefix || '').trim();
+	    const includeTicketTitle = this.userSettings?.global?.ui?.tasks?.launch?.includeTicketTitle === true;
+
 	    const rawPrompt = String(promptText || card?.desc || '');
+	    const rawPromptTrimmed = String(rawPrompt || '').trim();
 	    const cardUrl = String(card?.url || '').trim();
 	    const cardShortLink = (cardUrl.match(/trello\.com\/c\/([a-zA-Z0-9]+)/)?.[1]) || '';
 	    const ticketProvider = String(provider || 'trello').trim().toLowerCase() || 'trello';
@@ -19463,8 +19506,9 @@ class ClaudeOrchestrator {
 	    const ticketBoardId = String(boardId || '').trim();
 	    const ticketTitle = String(card?.name || '').trim();
 
-    const preface = (cardUrl || ticketCardId) ? [
+    const preface = (cardUrl || ticketCardId || (includeTicketTitle && ticketTitle)) ? [
       `Task context: this work is for a ticket.`,
+      (includeTicketTitle && ticketTitle) ? `Ticket title: ${ticketTitle}` : '',
       cardUrl ? `Trello card: ${cardUrl}` : '',
       ticketCardId ? `Ticket id: trello:${ticketCardId}` : '',
       ``,
@@ -19472,7 +19516,13 @@ class ClaudeOrchestrator {
       ``
     ].filter(Boolean).join('\n') : '';
 
-    const prompt = preface ? `${preface}\n${rawPrompt}` : rawPrompt;
+    const prompt = [
+      globalPromptPrefix || '',
+      boardPromptPrefix || '',
+      preface || '',
+      rawPromptTrimmed || ''
+    ].map((s) => String(s || '').replace(/\s+$/, '')).filter(Boolean).join('\n\n').trim();
+	    const autoSendPromptEffective = !!autoSendPrompt && !!rawPromptTrimmed;
 
     const recommended = this.getRecommendedWorktree(repo);
 
@@ -19481,7 +19531,7 @@ class ClaudeOrchestrator {
       this.reserveWorktree(repo.path, nextId);
 	      this.pendingWorktreeLaunches.set(nextId, {
 	        promptText: prompt,
-	        autoSendPrompt: !!autoSendPrompt,
+	        autoSendPrompt: autoSendPromptEffective,
 	        agentConfig,
 	        ticket: (ticketProvider && ticketCardId) ? { provider: ticketProvider, boardId: ticketBoardId, cardId: ticketCardId, cardUrl, title: ticketTitle } : null
 	      });
@@ -19511,7 +19561,7 @@ class ClaudeOrchestrator {
 	    this.reserveWorktree(repo.path, recommended.id);
 	    this.pendingWorktreeLaunches.set(recommended.id, {
 	      promptText: prompt,
-	      autoSendPrompt: !!autoSendPrompt,
+	      autoSendPrompt: autoSendPromptEffective,
 	      agentConfig,
 	      ticket: (ticketProvider && ticketCardId) ? { provider: ticketProvider, boardId: ticketBoardId, cardId: ticketCardId, cardUrl, title: ticketTitle } : null
 	    });

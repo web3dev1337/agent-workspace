@@ -115,11 +115,15 @@ test.describe('Tasks launch from card', () => {
             theme: 'dark',
             tasks: {
               theme: 'inherit',
+              launch: {
+                globalPromptPrefix: 'GLOBAL PREFIX',
+                includeTicketTitle: true
+              },
               me: { trelloUsername: '' },
               filters: { assigneesByBoard: {} },
               kanban: { collapsedByBoard: {}, expandedByBoard: {}, layoutByBoard: {} },
               boardMappings: {
-                'trello:b1': { enabled: true, localPath: 'games/hytopia/mock-repo', defaultStartTier: 3 }
+                'trello:b1': { enabled: true, localPath: 'games/hytopia/mock-repo', promptPrefix: 'BOARD PREFIX', defaultStartTier: 3 }
               }
             }
           }
@@ -199,12 +203,26 @@ test.describe('Tasks launch from card', () => {
     const probe = await page.evaluate(() => (window.__capturedEmits || []).some(e => e.event === '___probe'));
     expect(probe).toBeTruthy();
 
+    // Hook pendingWorktreeLaunches.set so we can capture the prompt even if the entry is
+    // immediately consumed and removed by fast worktree-sessions-added events.
+    await page.evaluate(() => {
+      window.__pendingLaunchCalls = [];
+      const map = window.orchestrator?.pendingWorktreeLaunches;
+      if (!map || map.__patchedForE2E) return;
+      const original = map.set.bind(map);
+      map.set = (key, value) => {
+        window.__pendingLaunchCalls.push({ key: String(key || ''), value });
+        return original(key, value);
+      };
+      map.__patchedForE2E = true;
+    });
+
     // Launch via the orchestrator method (less flaky than relying on click timing).
     await page.evaluate(async () => {
       await window.orchestrator.launchAgentFromTaskCard({
         provider: 'trello',
         boardId: 'b1',
-        card: { id: 'c1', desc: 'Do the thing.' },
+        card: { id: 'c1', name: 'Card 1', url: 'https://trello.com/c/AbCdEf12/card-1', desc: 'Do the thing.' },
         tier: 2,
         agentId: 'claude',
         mode: 'fresh',
@@ -213,6 +231,17 @@ test.describe('Tasks launch from card', () => {
         promptText: 'Do the thing.'
       });
     });
+
+    const promptText = await page.evaluate(() => {
+      const entries = window.__pendingLaunchCalls || [];
+      const match = entries.find(e => e.key === 'work99');
+      return String(match?.value?.promptText || '');
+    });
+    expect(promptText).toContain('GLOBAL PREFIX');
+    expect(promptText).toContain('BOARD PREFIX');
+    expect(promptText).toContain('Ticket title: Card 1');
+    expect(promptText).toContain('Do the thing.');
+    expect(promptText.indexOf('GLOBAL PREFIX')).toBeLessThan(promptText.indexOf('Task context:'));
 
     // Verify emit.
     const emitted = await page.evaluate(() => (window.__capturedEmits || []).filter(e => e.event === 'add-worktree-sessions'));
