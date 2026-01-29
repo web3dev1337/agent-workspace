@@ -442,7 +442,8 @@ class SessionManager extends EventEmitter {
     
     this.branchRefreshInterval = setInterval(() => {
       this.worktrees.forEach(worktree => {
-        this.updateGitBranch(worktree.id, worktree.path);
+        const worktreeIdForGit = worktree.worktreeId || worktree.id;
+        this.updateGitBranch(worktreeIdForGit, worktree.path);
       });
     }, this.branchRefreshMs);
   }
@@ -480,7 +481,8 @@ class SessionManager extends EventEmitter {
               // Small delay to ensure the file write is complete
               setTimeout(() => {
                 logger.debug('File watcher triggered branch update', { worktree: worktree.id });
-                this.updateGitBranch(worktree.id, worktree.path, true);
+                const worktreeIdForGit = worktree.worktreeId || worktree.id;
+                this.updateGitBranch(worktreeIdForGit, worktree.path, true);
               }, 50);
             }
           });
@@ -1657,10 +1659,21 @@ class SessionManager extends EventEmitter {
     }
   }
   
-  async updateGitBranch(worktreeId, path, skipCache = false) {
+  normalizeCwdPath(cwdPath) {
+    if (typeof cwdPath !== 'string' || cwdPath.length === 0) {
+      return cwdPath;
+    }
+    try {
+      return path.resolve(cwdPath);
+    } catch (error) {
+      return cwdPath;
+    }
+  }
+
+  async updateGitBranch(worktreeId, worktreePath, skipCache = false) {
     logger.info('🔄 updateGitBranch called', { 
       worktreeId, 
-      path, 
+      path: worktreePath, 
       skipCache,
       timestamp: new Date().toISOString()
     });
@@ -1671,9 +1684,9 @@ class SessionManager extends EventEmitter {
     }
     
     try {
-      const branch = await this.gitHelper.getCurrentBranch(path, skipCache);
-      const remoteUrl = await this.gitHelper.getRemoteUrl(path);
-      const defaultBranch = await this.gitHelper.getDefaultBranch(path);
+      const branch = await this.gitHelper.getCurrentBranch(worktreePath, skipCache);
+      const remoteUrl = await this.gitHelper.getRemoteUrl(worktreePath);
+      const defaultBranch = await this.gitHelper.getDefaultBranch(worktreePath);
       
       // Check for existing PR for this branch
       const existingPR = await this.gitHelper.checkForExistingPR(remoteUrl, branch);
@@ -1682,22 +1695,36 @@ class SessionManager extends EventEmitter {
       // For mixed-repo workspaces, session IDs have workspace prefix (e.g., "mixed-terminals-work1-claude")
       // For traditional workspaces, session IDs are just worktreeId-type (e.g., "work1-claude")
       // So we need to search through sessions to find matching ones
-      const sessionsToUpdate = [];
+      const sessionsToUpdate = new Set();
 
       // First try direct match (traditional workspaces)
       const claudeId = `${worktreeId}-claude`;
       const serverId = `${worktreeId}-server`;
-      if (this.sessions.has(claudeId)) sessionsToUpdate.push(claudeId);
-      if (this.sessions.has(serverId)) sessionsToUpdate.push(serverId);
+      if (this.sessions.has(claudeId)) sessionsToUpdate.add(claudeId);
+      if (this.sessions.has(serverId)) sessionsToUpdate.add(serverId);
 
       // If no direct match, search by worktreeId AND path (mixed-repo workspaces)
       // Important: Must match both worktreeId AND path to avoid cross-contamination
-      if (sessionsToUpdate.length === 0) {
+      const normalizedWorktreePath = this.normalizeCwdPath(worktreePath);
+      if (sessionsToUpdate.size === 0) {
         for (const [sessionId, session] of this.sessions) {
           // Check if this session belongs to the same worktree by comparing paths
-          if (session.worktreeId === worktreeId && session.config && session.config.cwd === path) {
-            sessionsToUpdate.push(sessionId);
+          if (session.worktreeId === worktreeId && session.config &&
+            this.normalizeCwdPath(session.config.cwd) === normalizedWorktreePath) {
+            sessionsToUpdate.add(sessionId);
           }
+        }
+      }
+
+      // Final fallback: match by path only.
+      // This handles cases where the worktreeId used for watchers/refresh differs from the
+      // session's stored worktreeId, but the cwd is authoritative.
+      if (sessionsToUpdate.size === 0) {
+        for (const [sessionId, session] of this.sessions) {
+          if (!session?.config?.cwd) continue;
+          if (this.normalizeCwdPath(session.config.cwd) !== normalizedWorktreePath) continue;
+          if (session.type !== 'claude' && session.type !== 'server') continue;
+          sessionsToUpdate.add(sessionId);
         }
       }
 
@@ -1727,7 +1754,7 @@ class SessionManager extends EventEmitter {
     } catch (error) {
       logger.error('❌ Failed to update git branch', { 
         worktreeId, 
-        path,
+        path: worktreePath,
         error: error.message,
         timestamp: new Date().toISOString()
       });
@@ -1966,7 +1993,7 @@ class SessionManager extends EventEmitter {
     // Update git branch info for the new sessions
     if (this.gitHelper) {
       try {
-        await this.updateGitBranch(worktreeId, worktreePath, repositoryName);
+        await this.updateGitBranch(worktreeId, worktreePath, true);
       } catch (error) {
         logger.error('Failed to update git branch for new worktree', { worktreeId, error: error.message });
       }
