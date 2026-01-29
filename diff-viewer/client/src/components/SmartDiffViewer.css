@@ -47,10 +47,23 @@
   border-radius: 8px;
   padding: 6px 10px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
 }
 
 .viewer-action-btn:hover {
   background: var(--bg-primary);
+}
+
+.viewer-action-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.viewer-action-merge-btn {
+  border-color: var(--badge-border-success);
 }
 
 .stat-item {

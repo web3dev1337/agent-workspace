@@ -6,6 +6,7 @@ import RichDiffView from './RichDiffView';
 import MarkdownSideBySide from './MarkdownSideBySide';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import { useTheme } from '../context/theme';
+import axios from 'axios';
 import './SmartDiffViewer.css';
 
 const isMarkdownFile = (path) => {
@@ -17,6 +18,9 @@ const SmartDiffViewer = ({ data }) => {
   const { theme, setTheme } = useTheme();
   const [selectedFile, setSelectedFile] = useState(null);
   const [reviewState, setReviewState] = useState({});
+  const [mergeBusy, setMergeBusy] = useState(false);
+  const [mergeOk, setMergeOk] = useState(false);
+  const [mergeError, setMergeError] = useState('');
   const [expandedSections, setExpandedSections] = useState({
     refactorings: true,
     moves: true,
@@ -40,6 +44,34 @@ const SmartDiffViewer = ({ data }) => {
     repo: metadata.repo,
     number: metadata.number || metadata.pr
   } : null;
+
+  const prUrl = prInfo
+    ? `https://github.com/${prInfo.owner}/${prInfo.repo}/pull/${prInfo.number}`
+    : '';
+
+  const prTitle = String(diff?.metadata?.pr?.title || metadata?.pr?.title || metadata?.title || 'Diff Viewer');
+
+  const mergePullRequest = async () => {
+    if (!prInfo) return;
+    if (mergeBusy) return;
+    setMergeError('');
+
+    if (!window.confirm(`Merge PR?\n${prUrl}`)) return;
+
+    setMergeBusy(true);
+    try {
+      await axios.post(`/github/pr/${prInfo.owner}/${prInfo.repo}/${prInfo.number}/merge`, {
+        method: 'merge'
+      });
+      setMergeOk(true);
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Failed to merge PR';
+      setMergeError(String(msg));
+      setMergeOk(false);
+    } finally {
+      setMergeBusy(false);
+    }
+  };
   
   // Merge metadata files with diff files
   const files = diff.files?.map(diffFile => {
@@ -192,9 +224,14 @@ const SmartDiffViewer = ({ data }) => {
       {/* Header with PR info and progress */}
       <div className="viewer-header">
         <div className="pr-info">
-          <h2>{metadata?.title || 'Diff Viewer'}</h2>
+          <h2>{prTitle}</h2>
           {metadata?.description && (
             <p className="pr-description">{metadata.description}</p>
+          )}
+          {!!mergeError && (
+            <p className="pr-description" style={{ color: 'var(--accent-danger)' }}>
+              {mergeError}
+            </p>
           )}
         </div>
         
@@ -216,6 +253,28 @@ const SmartDiffViewer = ({ data }) => {
         </div>
 
         <div className="viewer-actions">
+          {prInfo && (
+            <>
+              <a
+                className="viewer-action-btn"
+                href={prUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open PR on GitHub"
+              >
+                ↗ PR
+              </a>
+              <button
+                className="viewer-action-btn viewer-action-merge-btn"
+                onClick={mergePullRequest}
+                title={mergeOk ? 'PR merged' : 'Merge PR'}
+                type="button"
+                disabled={mergeBusy || mergeOk}
+              >
+                {mergeOk ? 'Merged' : (mergeBusy ? 'Merging…' : '✅ Merge')}
+              </button>
+            </>
+          )}
           <button
             className="viewer-action-btn"
             onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
