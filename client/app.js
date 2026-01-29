@@ -583,20 +583,53 @@ class ClaudeOrchestrator {
             this.startAgentWithConfig(agentSessionId, pending.agentConfig);
           }
 
-          if (agentSessionId && pending.ticket && typeof pending.ticket === 'object') {
-            const ticketProvider = String(pending.ticket.provider || '').trim().toLowerCase();
-            const ticketCardId = String(pending.ticket.cardId || '').trim();
-            const ticketCardUrl = String(pending.ticket.cardUrl || '').trim();
-            if (ticketProvider && ticketCardId) {
-              this.upsertTaskRecord(`session:${agentSessionId}`, {
-                ticketProvider,
-                ticketCardId,
-                ticketCardUrl: ticketCardUrl || null
-              }).then((rec) => {
-                if (rec) this.taskRecords.set(`session:${agentSessionId}`, rec);
-              }).catch(() => {});
-            }
-          }
+	          if (agentSessionId && pending.ticket && typeof pending.ticket === 'object') {
+	            const ticketProvider = String(pending.ticket.provider || '').trim().toLowerCase();
+	            const ticketBoardId = String(pending.ticket.boardId || '').trim();
+	            const ticketCardId = String(pending.ticket.cardId || '').trim();
+	            const ticketCardUrl = String(pending.ticket.cardUrl || '').trim();
+	            const ticketTitle = String(pending.ticket.title || '').trim();
+	            if (ticketProvider && ticketCardId) {
+	              const ticketPatch = {
+	                ticketProvider,
+	                ticketCardId,
+	                ticketCardUrl: ticketCardUrl || null,
+	                ticketBoardId: ticketBoardId || null,
+	                ticketTitle: ticketTitle || null
+	              };
+
+	              const sessionIdsToUpdate = sessionIds.slice();
+	              const sessionRecordId = `session:${agentSessionId}`;
+	              const session = this.sessions.get(agentSessionId);
+	              const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
+	              const worktreeRecordId = worktreePath ? `worktree:${worktreePath}` : null;
+
+	              const upserts = [
+	                this.upsertTaskRecord(sessionRecordId, ticketPatch)
+	                  .then((rec) => {
+	                    if (rec) this.taskRecords.set(sessionRecordId, rec);
+	                  })
+	                  .catch(() => {})
+	              ];
+
+	              if (worktreeRecordId) {
+	                upserts.push(
+	                  this.upsertTaskRecord(worktreeRecordId, ticketPatch)
+	                    .then((rec) => {
+	                      if (rec) this.taskRecords.set(worktreeRecordId, rec);
+	                    })
+	                    .catch(() => {})
+	                );
+	              }
+
+		              Promise.all(upserts).finally(() => {
+		                for (const sid of sessionIdsToUpdate) {
+		                  this.updateTerminalControls(sid);
+		                  this.updateTerminalTicketLabel(sid);
+		                }
+		              });
+		            }
+		          }
 
           if (agentSessionId && pending.autoSendPrompt && String(pending.promptText || '').trim()) {
             this.pendingAutoPrompts.set(agentSessionId, {
@@ -3127,14 +3160,15 @@ class ClaudeOrchestrator {
               }
             }, 50);
           }
-        } else {
-          // Show existing wrapper
-          wrapper.style.display = '';
+	        } else {
+	          // Show existing wrapper
+	          wrapper.style.display = '';
+	          this.updateTerminalTicketLabel(sessionId);
 
-          // Refit terminal if it exists
-          if (this.terminalManager.terminals.has(sessionId)) {
-            requestAnimationFrame(() => {
-              this.terminalManager.fitTerminal(sessionId);
+	          // Refit terminal if it exists
+	          if (this.terminalManager.terminals.has(sessionId)) {
+	            requestAnimationFrame(() => {
+	              this.terminalManager.fitTerminal(sessionId);
             });
           }
         }
@@ -3356,24 +3390,140 @@ class ClaudeOrchestrator {
     };
   }
 
-  updateTerminalBranchLabel(sessionId, branch) {
-    const terminalElement = document.querySelector(`#wrapper-${sessionId} .terminal-branch`);
-    if (!terminalElement) return;
-    const meta = this.formatBranchLabel(branch, { context: 'terminal' });
-    terminalElement.textContent = meta.text || '';
-    terminalElement.title = meta.title || '';
-    terminalElement.className = `terminal-branch ${meta.className || ''}`.trim();
-  }
+	  updateTerminalBranchLabel(sessionId, branch) {
+	    const terminalElement = document.querySelector(`#wrapper-${sessionId} .terminal-branch`);
+	    if (!terminalElement) return;
+	    const meta = this.formatBranchLabel(branch, { context: 'terminal' });
+	    terminalElement.textContent = meta.text || '';
+	    terminalElement.title = meta.title || '';
+	    terminalElement.className = `terminal-branch ${meta.className || ''}`.trim();
+	  }
 
-  refreshBranchLabels() {
-    try {
-      for (const [sessionId, session] of this.sessions) {
-        this.updateTerminalBranchLabel(sessionId, session?.branch || '');
-      }
-    } catch {
-      // ignore
-    }
-    this.buildSidebar();
+	  getTicketMetaForSession(sessionId, sessionOverride = null) {
+	    const sid = String(sessionId || '').trim();
+	    if (!sid) return null;
+	
+	    const session = sessionOverride || this.sessions.get(sid);
+	    const recordIds = [];
+	    recordIds.push(`session:${sid}`);
+	
+	    const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
+	    if (worktreePath) recordIds.push(`worktree:${worktreePath}`);
+	
+	    const prUrl = this.githubLinks.get(sid)?.pr || null;
+	    const prTaskId = prUrl ? this.getPRTaskIdFromUrl(prUrl) : null;
+	    if (prTaskId) recordIds.push(prTaskId);
+	
+	    for (const id of recordIds) {
+	      const rec = this.taskRecords.get(id);
+	      if (!rec) continue;
+	
+	      const ticketProvider = String(rec.ticketProvider || '').trim().toLowerCase();
+	      const ticketCardId = String(rec.ticketCardId || '').trim();
+	      const ticketCardUrl = String(rec.ticketCardUrl || '').trim();
+	      const ticketTitle = String(rec.ticketTitle || '').trim();
+	
+	      if (!ticketTitle && !ticketCardId && !ticketCardUrl) continue;
+	
+		      const rawUrl =
+		        ticketCardUrl
+		        || ((ticketProvider === 'trello' || !ticketProvider) && ticketCardId ? `https://trello.com/c/${ticketCardId}` : '');
+		      const url = (rawUrl && /^https?:\/\//i.test(rawUrl)) ? rawUrl : '';
+	
+	      const label = ticketTitle || (ticketProvider && ticketCardId ? `${ticketProvider}:${ticketCardId}` : (ticketCardId ? ticketCardId : url));
+	      const tooltipParts = [
+	        ticketTitle || null,
+	        ticketProvider && ticketCardId ? `${ticketProvider}:${ticketCardId}` : null,
+	        url || null
+	      ].filter(Boolean);
+	
+	      return {
+	        provider: ticketProvider || null,
+	        cardId: ticketCardId || null,
+	        url: url || null,
+	        title: ticketTitle || null,
+	        label: label || null,
+	        tooltip: tooltipParts.join(' • ')
+	      };
+	    }
+	
+	    return null;
+	  }
+	
+	  updateTerminalTicketLabel(sessionId) {
+	    const sid = String(sessionId || '').trim();
+	    if (!sid) return;
+	
+	    const wrapper = document.getElementById(`wrapper-${sid}`);
+	    if (!wrapper) return;
+	
+	    const titleRow = wrapper.querySelector('.terminal-title');
+	    if (!titleRow) return;
+	
+	    const existing = titleRow.querySelector('.terminal-ticket');
+	    const meta = this.getTicketMetaForSession(sid);
+	
+	    if (!meta || !meta.label) {
+	      existing?.remove();
+	      return;
+	    }
+	
+	    const label = `🧾 ${meta.label}`;
+	    const tooltip = meta.tooltip || meta.title || meta.label;
+	    const url = meta.url || '';
+	
+	    const wantsLink = !!url;
+	    const isLink = existing && existing.tagName && existing.tagName.toLowerCase() === 'a';
+	    const isSpan = existing && existing.tagName && existing.tagName.toLowerCase() === 'span';
+	
+	    if (wantsLink) {
+	      let el = existing;
+	      if (!isLink) {
+	        existing?.remove();
+	        el = document.createElement('a');
+	        el.className = 'terminal-ticket';
+	        el.target = '_blank';
+	        el.rel = 'noopener noreferrer';
+	
+	        const branchEl = titleRow.querySelector('.terminal-branch');
+	        if (branchEl && branchEl.parentElement === titleRow) {
+	          branchEl.insertAdjacentElement('afterend', el);
+	        } else {
+	          titleRow.appendChild(el);
+	        }
+	      }
+	      el.href = url;
+	      el.textContent = label;
+	      el.title = tooltip;
+	      return;
+	    }
+	
+	    let el = existing;
+	    if (!isSpan) {
+	      existing?.remove();
+	      el = document.createElement('span');
+	      el.className = 'terminal-ticket';
+	      const branchEl = titleRow.querySelector('.terminal-branch');
+	      if (branchEl && branchEl.parentElement === titleRow) {
+	        branchEl.insertAdjacentElement('afterend', el);
+	      } else {
+	        titleRow.appendChild(el);
+	      }
+	    }
+	    el.textContent = label;
+	    el.title = tooltip;
+	  }
+	
+	  refreshBranchLabels() {
+	    try {
+	      for (const [sessionId, session] of this.sessions) {
+	        this.updateTerminalBranchLabel(sessionId, session?.branch || '');
+	        this.updateTerminalTicketLabel(sessionId);
+	      }
+	    } catch {
+	      // ignore
+	    }
+	    this.buildSidebar();
   }
   
   createTerminalElement(sessionId, session) {
@@ -3390,18 +3540,25 @@ class ClaudeOrchestrator {
 	    // Build display name with repository info for mixed-repo workspaces
 	    const repositoryName = this.extractRepositoryName(sessionId);
 	    const worktreeId = session.worktreeId;
-	    const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
-	    const branchMeta = this.formatBranchLabel(session.branch || '', { context: 'terminal' });
-	    wrapper.innerHTML = `
-	      <div class="terminal-header">
-	        <div class="terminal-title">
-          <span class="status-indicator ${session.status}" id="status-${sessionId}"></span>
-          <span>${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
-          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
-	        </div>
-	        <div class="terminal-controls">
-	          ${isClaudeSession ? `
-	            ${this.getTierDropdownHTML(sessionId)}
+		    const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
+		    const branchMeta = this.formatBranchLabel(session.branch || '', { context: 'terminal' });
+		    const ticketMeta = this.getTicketMetaForSession(sessionId, session);
+		    const ticketChip = ticketMeta?.label ? (
+		      ticketMeta.url
+		      ? `<a class="terminal-ticket" href="${this.escapeHtml(ticketMeta.url)}" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(ticketMeta.tooltip || ticketMeta.title || ticketMeta.label)}">🧾 ${this.escapeHtml(ticketMeta.label)}</a>`
+		      : `<span class="terminal-ticket" title="${this.escapeHtml(ticketMeta.tooltip || ticketMeta.title || ticketMeta.label)}">🧾 ${this.escapeHtml(ticketMeta.label)}</span>`
+		    ) : '';
+		    wrapper.innerHTML = `
+		      <div class="terminal-header">
+		        <div class="terminal-title">
+	          <span class="status-indicator ${session.status}" id="status-${sessionId}"></span>
+	          <span>${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
+	          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
+	          ${ticketChip}
+		        </div>
+		        <div class="terminal-controls">
+		          ${isClaudeSession ? `
+		            ${this.getTierDropdownHTML(sessionId)}
 	            ${this.getServerQuickControlsHTMLForClaude(sessionId)}
 	            ${this.getWorktreeInspectorButtonHTML(sessionId)}
 	            ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
@@ -19247,10 +19404,10 @@ class ClaudeOrchestrator {
     return { worktreeId: recommended.id, worktreePath: recommended.path, repositoryRoot: repo.path, repositoryName: repo.name };
   }
 
-  async launchAgentFromTaskCard({ provider, boardId, card, tier, agentId, mode, yolo, autoSendPrompt, promptText } = {}) {
-    const mapping = this.getTaskBoardMapping(provider, boardId);
-    const mappingEnabled = mapping ? (mapping.enabled !== false) : true;
-    if (!mappingEnabled) {
+	  async launchAgentFromTaskCard({ provider, boardId, card, tier, agentId, mode, yolo, autoSendPrompt, promptText } = {}) {
+	    const mapping = this.getTaskBoardMapping(provider, boardId);
+	    const mappingEnabled = mapping ? (mapping.enabled !== false) : true;
+	    if (!mappingEnabled) {
       this.showToast('Board is disabled; enable it in Board Settings first', 'warning');
       return;
     }
@@ -19296,12 +19453,14 @@ class ClaudeOrchestrator {
     const startTier = Number(tier);
     const startTierSafe = (startTier >= 1 && startTier <= 4) ? startTier : undefined;
 
-    const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
-    const rawPrompt = String(promptText || card?.desc || '');
-    const cardUrl = String(card?.url || '').trim();
-    const cardShortLink = (cardUrl.match(/trello\.com\/c\/([a-zA-Z0-9]+)/)?.[1]) || '';
-    const ticketProvider = String(provider || 'trello').trim().toLowerCase() || 'trello';
-    const ticketCardId = cardShortLink || String(card?.id || '').trim();
+	    const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
+	    const rawPrompt = String(promptText || card?.desc || '');
+	    const cardUrl = String(card?.url || '').trim();
+	    const cardShortLink = (cardUrl.match(/trello\.com\/c\/([a-zA-Z0-9]+)/)?.[1]) || '';
+	    const ticketProvider = String(provider || 'trello').trim().toLowerCase() || 'trello';
+	    const ticketCardId = cardShortLink || String(card?.id || '').trim();
+	    const ticketBoardId = String(boardId || '').trim();
+	    const ticketTitle = String(card?.name || '').trim();
 
     const preface = (cardUrl || ticketCardId) ? [
       `Task context: this work is for a ticket.`,
@@ -19319,12 +19478,12 @@ class ClaudeOrchestrator {
     if (!recommended && this.autoCreateExtraWorktreesWhenBusy) {
       const nextId = this.getNextWorktreeIdForRepo(repo);
       this.reserveWorktree(repo.path, nextId);
-      this.pendingWorktreeLaunches.set(nextId, {
-        promptText: prompt,
-        autoSendPrompt: !!autoSendPrompt,
-        agentConfig,
-        ticket: (ticketProvider && ticketCardId) ? { provider: ticketProvider, cardId: ticketCardId, cardUrl } : null
-      });
+	      this.pendingWorktreeLaunches.set(nextId, {
+	        promptText: prompt,
+	        autoSendPrompt: !!autoSendPrompt,
+	        agentConfig,
+	        ticket: (ticketProvider && ticketCardId) ? { provider: ticketProvider, boardId: ticketBoardId, cardId: ticketCardId, cardUrl, title: ticketTitle } : null
+	      });
       try {
         await this.autoCreateExtraWorktreeForRepo(repo, { startTier: startTierSafe, worktreeId: nextId });
         this.showToast(`Creating ${repo.name} ${nextId} (work9+)`, 'success');
@@ -19348,13 +19507,13 @@ class ClaudeOrchestrator {
     }
 
     // Ensure we register the pending launch before emitting, to avoid races.
-    this.reserveWorktree(repo.path, recommended.id);
-    this.pendingWorktreeLaunches.set(recommended.id, {
-      promptText: prompt,
-      autoSendPrompt: !!autoSendPrompt,
-      agentConfig,
-      ticket: (ticketProvider && ticketCardId) ? { provider: ticketProvider, cardId: ticketCardId, cardUrl } : null
-    });
+	    this.reserveWorktree(repo.path, recommended.id);
+	    this.pendingWorktreeLaunches.set(recommended.id, {
+	      promptText: prompt,
+	      autoSendPrompt: !!autoSendPrompt,
+	      agentConfig,
+	      ticket: (ticketProvider && ticketCardId) ? { provider: ticketProvider, boardId: ticketBoardId, cardId: ticketCardId, cardUrl, title: ticketTitle } : null
+	    });
 
 	    if (!this.socket) {
 	      this.pendingWorktreeLaunches.delete(recommended.id);
