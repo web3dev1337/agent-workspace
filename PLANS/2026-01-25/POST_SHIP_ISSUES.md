@@ -28,7 +28,7 @@ The 2026-01-25 brain-dump implementation plan is fully checked off; this file tr
 - [x] Workflow modes: add an “All tiers” mode to avoid bouncing between focus/background.
 - [x] Terminal header: show linked ticket title on agent/server tiles when launched from Tasks (truncate + tooltip). (PR #408)
 - [ ] Tasks launch: optional global + per-board “system prompt” prefix for auto-send prompts (prepend before ticket preface + description), and optionally include ticket title in the prompt body.
-- [ ] Branch label: terminal/worktree branch name can remain stuck on `unknown` after checkout; ensure branch polling/updates refresh the UI reliably.
+- [x] Branch label: terminal/worktree branch name can remain stuck on `unknown` after checkout; ensure branch polling/updates refresh the UI reliably. (PR #413)
 
 ## Review UX v2 (bigger next phase)
 
