@@ -1,9 +1,9 @@
 /**
- * ConversationService - Index and search Claude Code conversations
+ * ConversationService - Index and search local conversations (Claude Code + Codex CLI)
  *
- * Scans ~/.claude/projects/ for conversation history and provides:
+ * Scans local CLI history locations and provides:
  * - Full-text search with autocomplete
- * - Filter by project, date, branch, folder
+ * - Filter by source, project, date, branch, folder
  * - Metadata extraction (branch, cwd, timestamps, tokens)
  * - Caching with periodic refresh
  */
@@ -31,7 +31,9 @@ const logger = winston.createLogger({
 });
 
 const CLAUDE_PROJECTS_DIR = path.join(process.env.HOME, '.claude', 'projects');
+const CODEX_SESSIONS_DIR = path.join(process.env.HOME, '.codex', 'sessions');
 const INDEX_CACHE_FILE = path.join(process.env.HOME, '.orchestrator', 'conversation-index.json');
+const INDEX_CACHE_VERSION = 3;
 
 class ConversationService {
   constructor() {
@@ -117,6 +119,10 @@ class ConversationService {
 
       const data = await fs.readFile(INDEX_CACHE_FILE, 'utf8');
       const index = JSON.parse(data);
+      const version = index?.cacheMeta?.version || 0;
+      if (version !== INDEX_CACHE_VERSION) {
+        return null;
+      }
       const savedAtMs = index?.cacheMeta?.savedAt ||
         (index?.stats?.indexedAt ? Date.parse(index.stats.indexedAt) : null) ||
         stat.mtimeMs;
@@ -177,32 +183,13 @@ class ConversationService {
         }
       }
 
-      // Check if projects directory exists
-      if (!fsSync.existsSync(CLAUDE_PROJECTS_DIR)) {
+      // Scan Claude project directories (optional)
+      const projectDirs = fsSync.existsSync(CLAUDE_PROJECTS_DIR)
+        ? await fs.readdir(CLAUDE_PROJECTS_DIR, { withFileTypes: true })
+        : [];
+      if (projectDirs.length === 0) {
         logger.warn('Claude projects directory not found', { path: CLAUDE_PROJECTS_DIR });
-        const savedAt = Date.now();
-        this.index = {
-          conversations: [],
-          projects: [],
-          stats: {
-            totalConversations: 0,
-            totalProjects: 0,
-            totalMessages: 0,
-            totalTokens: 0,
-            indexedAt: new Date().toISOString()
-          },
-          cacheMeta: {
-            savedAt,
-            version: 2
-          }
-        };
-        this.lastIndexTime = savedAt;
-        this.saveCachedIndex(this.index);
-        return this.index;
       }
-
-      // Scan project directories
-      const projectDirs = await fs.readdir(CLAUDE_PROJECTS_DIR, { withFileTypes: true });
 
       for (const dirent of projectDirs) {
         if (!dirent.isDirectory()) continue;
@@ -233,17 +220,18 @@ class ConversationService {
               (!hasFileMeta && cacheSavedAt && stat.mtimeMs <= cacheSavedAt)
             );
 
-            if (cachedConv && isUnchanged) {
-              if (!hasFileMeta) {
-                cachedConv.fileMtimeMs = stat.mtimeMs;
-                cachedConv.fileSize = stat.size;
-              }
-              if (!cachedConv.project) cachedConv.project = dirent.name;
-              conversations.push(cachedConv);
-              projects.add(cachedConv.project || dirent.name);
-              reuseCounters.reused++;
-              continue;
-            }
+	            if (cachedConv && isUnchanged) {
+	              if (!hasFileMeta) {
+	                cachedConv.fileMtimeMs = stat.mtimeMs;
+	                cachedConv.fileSize = stat.size;
+	              }
+	              if (!cachedConv.project) cachedConv.project = dirent.name;
+	              cachedConv.source = cachedConv.source || 'claude';
+	              conversations.push(cachedConv);
+	              projects.add(cachedConv.project || dirent.name);
+	              reuseCounters.reused++;
+	              continue;
+	            }
 
             const conv = await this.parseConversationFile(jsonlFile, dirent.name);
             if (conv) {
@@ -255,6 +243,52 @@ class ConversationService {
             }
           } catch (e) {
             logger.debug('Failed to parse conversation', { file: jsonlFile, error: e.message });
+          }
+        }
+      }
+
+      // Scan Codex sessions directory (~/.codex/sessions/**.jsonl)
+      if (fsSync.existsSync(CODEX_SESSIONS_DIR)) {
+        const codexFiles = await this.findJsonlFilesRecursive(CODEX_SESSIONS_DIR);
+        for (const jsonlFile of codexFiles) {
+          try {
+            const stat = await fs.stat(jsonlFile);
+            if (stat.size < 500) {
+              reuseCounters.skippedSmall++;
+              continue;
+            }
+
+            const cachedConv = !force ? cachedByPath.get(jsonlFile) : null;
+            const hasFileMeta = cachedConv &&
+              typeof cachedConv.fileMtimeMs === 'number' &&
+              typeof cachedConv.fileSize === 'number';
+            const isUnchanged = cachedConv && (
+              (hasFileMeta && cachedConv.fileMtimeMs === stat.mtimeMs && cachedConv.fileSize === stat.size) ||
+              (!hasFileMeta && cacheSavedAt && stat.mtimeMs <= cacheSavedAt)
+            );
+
+            if (cachedConv && isUnchanged) {
+              if (!hasFileMeta) {
+                cachedConv.fileMtimeMs = stat.mtimeMs;
+                cachedConv.fileSize = stat.size;
+              }
+              cachedConv.source = cachedConv.source || 'codex';
+              conversations.push(cachedConv);
+              if (cachedConv.project) projects.add(cachedConv.project);
+              reuseCounters.reused++;
+              continue;
+            }
+
+            const conv = await this.parseCodexSessionFile(jsonlFile, { stat });
+            if (conv) {
+              conv.fileMtimeMs = stat.mtimeMs;
+              conv.fileSize = stat.size;
+              conversations.push(conv);
+              if (conv.project) projects.add(conv.project);
+              reuseCounters.parsed++;
+            }
+          } catch (e) {
+            logger.debug('Failed to parse Codex session', { file: jsonlFile, error: e.message });
           }
         }
       }
@@ -282,7 +316,7 @@ class ConversationService {
         stats,
         cacheMeta: {
           savedAt,
-          version: 2
+          version: INDEX_CACHE_VERSION
         }
       };
 
@@ -317,6 +351,38 @@ class ConversationService {
       }
     }
 
+    return files;
+  }
+
+  /**
+   * Find all .jsonl files in a directory tree (depth-first).
+   */
+  async findJsonlFilesRecursive(dir, options = {}) {
+    const { maxDepth = 6 } = options;
+    const files = [];
+
+    const walk = async (currentDir, depth) => {
+      if (depth > maxDepth) return;
+      let entries = [];
+      try {
+        entries = await fs.readdir(currentDir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(fullPath, depth + 1);
+          continue;
+        }
+        if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+          files.push(fullPath);
+        }
+      }
+    };
+
+    await walk(dir, 0);
     return files;
   }
 
@@ -457,14 +523,15 @@ class ConversationService {
       gitRepoUrl = repoInfo?.url;
     }
 
-    return {
-      id: path.basename(filePath, '.jsonl'),
-      filename: path.basename(filePath),
-      filepath: filePath,
-      project: projectName,
-      summary,
-      preview,
-      firstUserMessage,   // Full first user message (up to 500 chars)
+	    return {
+	      id: path.basename(filePath, '.jsonl'),
+	      filename: path.basename(filePath),
+	      filepath: filePath,
+	      source: 'claude',
+	      project: projectName,
+	      summary,
+	      preview,
+	      firstUserMessage,   // Full first user message (up to 500 chars)
       lastMessage,        // Last message content (up to 500 chars)
       lastMessageRole,    // 'user' or 'assistant'
       branch,
@@ -479,6 +546,191 @@ class ConversationService {
       totalInputTokens,
       totalOutputTokens,
       totalTokens: totalInputTokens + totalOutputTokens,
+      firstTimestamp,
+	      lastTimestamp
+	    };
+	  }
+
+  /**
+   * Parse a Codex session JSONL file (lightweight metadata for listing/search).
+   * Codex sessions live under ~/.codex/sessions/YYYY/MM/DD/*.jsonl
+   */
+  async parseCodexSessionFile(filePath, options = {}) {
+    const { stat } = options;
+
+    const fileStream = fsSync.createReadStream(filePath);
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity
+    });
+
+    let summary = null;
+    let preview = '';
+    let firstUserMessage = '';
+    let lastMessage = '';
+    let lastMessageRole = '';
+    let firstTimestamp = null;
+    let lastTimestamp = null;
+    let branch = null;
+    let cwd = null;
+    let sessionId = null;
+    let model = null;
+    let messageCount = 0;
+    let userMessageCount = 0;
+
+    const extractText = (content) => {
+      if (!content) return '';
+      if (typeof content === 'string') return content.replace(/\n/g, ' ').trim();
+      if (!Array.isArray(content)) return '';
+
+      const parts = [];
+      for (const item of content) {
+        if (!item) continue;
+        if (typeof item === 'string') {
+          parts.push(item);
+          continue;
+        }
+        if (typeof item.text === 'string') {
+          parts.push(item.text);
+          continue;
+        }
+      }
+      return parts.join(' ').replace(/\n/g, ' ').trim();
+    };
+
+    const cleanMessage = (text) => {
+      if (!text) return '';
+      return text
+        .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/gi, '')
+        .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, '')
+        .replace(/<command-name>[\s\S]*?<\/command-name>/gi, '')
+        .replace(/<command-message>[\s\S]*?<\/command-message>/gi, '')
+        .replace(/<command-args>[\s\S]*?<\/command-args>/gi, '')
+        .replace(/Caveat:.*?consider them in your response[^.]*\./gi, '')
+        .replace(/\[Request interrupted by user\]/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .trim();
+    };
+
+    const isSystemCruft = (text) => {
+      if (!text) return true;
+      const cleaned = cleanMessage(text);
+      if (cleaned.length < 5) return true;
+      // Codex sessions commonly start with orchestrator boilerplate; don't use it as preview.
+      if (cleaned.includes('AGENTS.md instructions')) return true;
+      if (cleaned.includes('<environment_context')) return true;
+      return false;
+    };
+
+    // For very large sessions, avoid scanning the entire file (listing only needs metadata).
+    const maxBytesToScan = 4 * 1024 * 1024; // 4MB
+    let scannedBytes = 0;
+    const isLargeFile = stat && typeof stat.size === 'number' ? stat.size > 10 * 1024 * 1024 : false;
+
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      scannedBytes += Buffer.byteLength(line, 'utf8');
+
+      try {
+        const obj = JSON.parse(line);
+
+        if (obj.type === 'session_meta') {
+          const payload = obj.payload || {};
+          sessionId = payload.id || sessionId;
+          cwd = payload.cwd || cwd;
+          branch = payload.git?.branch || branch;
+          model = payload.model || payload.model_provider || model;
+
+          if (obj.timestamp) {
+            firstTimestamp = firstTimestamp || obj.timestamp;
+            lastTimestamp = obj.timestamp;
+          }
+          continue;
+        }
+
+        if (obj.type === 'response_item' && obj.payload?.type === 'message') {
+          const payload = obj.payload || {};
+          const role = payload.role || '';
+          messageCount++;
+          if (role === 'user') userMessageCount++;
+
+          if (obj.timestamp) {
+            firstTimestamp = firstTimestamp || obj.timestamp;
+            lastTimestamp = obj.timestamp;
+          }
+
+          const msgContent = extractText(payload.content);
+          const cleanedContent = cleanMessage(msgContent);
+
+          if (role === 'user' && !firstUserMessage && cleanedContent && !isSystemCruft(msgContent)) {
+            firstUserMessage = cleanedContent.slice(0, 500);
+            preview = cleanedContent.slice(0, 300);
+          }
+
+          if (msgContent) {
+            lastMessage = msgContent.slice(0, 500);
+            lastMessageRole = role;
+          }
+        }
+      } catch {
+        // Skip malformed lines
+      }
+
+      if (isLargeFile && firstUserMessage && scannedBytes >= maxBytesToScan) {
+        try {
+          rl.close();
+          fileStream.destroy();
+        } catch {
+          // ignore
+        }
+        break;
+      }
+    }
+
+    // Use file mtime as a stable "last used" timestamp for large sessions (we may have early-exited).
+    if (stat?.mtimeMs && (!lastTimestamp || isLargeFile)) {
+      lastTimestamp = new Date(stat.mtimeMs).toISOString();
+    }
+
+    // If we couldn't find a session id, try to parse from filename.
+    if (!sessionId) {
+      const match = String(path.basename(filePath)).match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+      if (match) sessionId = match[1];
+    }
+
+    if (!sessionId && messageCount === 0) return null;
+
+    // Get actual GitHub repo info from git remote
+    let gitRepo = null;
+    let gitRepoUrl = null;
+    if (cwd) {
+      const repoInfo = await this.getGitRepoInfo(cwd);
+      gitRepo = repoInfo?.repo;
+      gitRepoUrl = repoInfo?.url;
+    }
+
+    const projectName = gitRepo || (cwd ? path.basename(cwd) : 'Codex');
+
+    return {
+      id: sessionId || path.basename(filePath, '.jsonl'),
+      filename: path.basename(filePath),
+      filepath: filePath,
+      source: 'codex',
+      project: projectName,
+      summary,
+      preview,
+      firstUserMessage,
+      lastMessage,
+      lastMessageRole,
+      branch,
+      cwd,
+      sessionId,
+      model: model || 'Codex',
+      gitRepo,
+      gitRepoUrl,
+      messageCount: isLargeFile ? undefined : messageCount,
+      userMessageCount: isLargeFile ? undefined : userMessageCount,
+      totalTokens: undefined,
       firstTimestamp,
       lastTimestamp
     };
@@ -564,6 +816,7 @@ class ConversationService {
    */
   async search(query, options = {}) {
     const {
+      source,
       project,
       branch,
       folder,
@@ -576,10 +829,15 @@ class ConversationService {
     const index = await this.getIndex();
     let results = [...index.conversations];
 
+    // Filter by source (claude/codex)
+    if (source && source !== 'all') {
+      results = results.filter(c => c.source === source);
+    }
+
     // Filter by project
     if (project) {
       results = results.filter(c =>
-        c.project.toLowerCase().includes(project.toLowerCase())
+        (c.project || '').toLowerCase().includes(project.toLowerCase())
       );
     }
 
@@ -673,16 +931,21 @@ class ConversationService {
   /**
    * Get conversation details with full messages
    */
-  async getConversation(conversationId, project) {
+  async getConversation(conversationId, options = {}) {
+    const { project, source } = options || {};
     const index = await this.getIndex();
     const conv = index.conversations.find(c =>
-      c.id === conversationId && (!project || c.project === project)
+      c.id === conversationId &&
+      (!source || c.source === source) &&
+      (!project || c.project === project)
     );
 
     if (!conv) return null;
 
     // Parse full messages from file
-    const messages = await this.parseFullConversation(conv.filepath);
+    const messages = conv.source === 'codex'
+      ? await this.parseFullCodexConversation(conv.filepath)
+      : await this.parseFullConversation(conv.filepath);
 
     return {
       ...conv,
@@ -691,7 +954,7 @@ class ConversationService {
   }
 
   /**
-   * Parse full conversation messages from file
+   * Parse full Claude conversation messages from file
    */
   async parseFullConversation(filePath) {
     const messages = [];
@@ -748,6 +1011,59 @@ class ConversationService {
           });
         }
       } catch (e) {
+        // Skip malformed lines
+      }
+    }
+
+    return messages;
+  }
+
+  /**
+   * Parse full Codex session messages from file.
+   */
+  async parseFullCodexConversation(filePath) {
+    const messages = [];
+    const fileStream = fsSync.createReadStream(filePath);
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity
+    });
+
+    const extractText = (content) => {
+      if (!content) return '';
+      if (typeof content === 'string') return content;
+      if (!Array.isArray(content)) return '';
+
+      const parts = [];
+      for (const item of content) {
+        if (!item) continue;
+        if (typeof item === 'string') {
+          parts.push(item);
+          continue;
+        }
+        if (typeof item.text === 'string') {
+          parts.push(item.text);
+          continue;
+        }
+      }
+      return parts.join('');
+    };
+
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+
+      try {
+        const obj = JSON.parse(line);
+        if (obj.type === 'response_item' && obj.payload?.type === 'message') {
+          const role = obj.payload?.role || 'unknown';
+          const content = extractText(obj.payload?.content);
+          messages.push({
+            role,
+            content,
+            timestamp: obj.timestamp
+          });
+        }
+      } catch {
         // Skip malformed lines
       }
     }

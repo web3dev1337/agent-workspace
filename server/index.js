@@ -2134,9 +2134,10 @@ app.post('/api/greenfield/detect-category', (req, res) => {
 // Search conversations
 app.get('/api/conversations/search', async (req, res) => {
   try {
-    const { q, project, branch, folder, startDate, endDate, limit, offset } = req.query;
+    const { q, source, project, branch, folder, startDate, endDate, limit, offset } = req.query;
 
     const results = await conversationService.search(q, {
+      source,
       project,
       branch,
       folder,
@@ -2233,8 +2234,8 @@ app.post('/api/conversations/refresh', async (req, res) => {
 app.get('/api/conversations/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { project } = req.query;
-    const conversation = await conversationService.getConversation(id, project);
+    const { project, source } = req.query;
+    const conversation = await conversationService.getConversation(id, { project, source });
 
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' });
