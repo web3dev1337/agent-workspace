@@ -9130,17 +9130,18 @@ class ClaudeOrchestrator {
         return sanitizeCssColor(map[background] || '');
       };
 
-      const setBoardAccent = (value) => {
-        const color = sanitizeCssColor(value);
+	      const setBoardAccent = (value) => {
+	        const color = sanitizeCssColor(value);
 	      const show = !!color && state.boardId && state.boardId !== ALL_BOARDS_ID && state.boardId !== COMBINED_VIEW_ID;
-        if (contentEl) {
-          if (show) contentEl.style.setProperty('--tasks-board-accent', color);
-          else contentEl.style.removeProperty('--tasks-board-accent');
-        }
-        if (boardAccentEl) {
-          boardAccentEl.classList.toggle('is-hidden', !show);
-          if (show) boardAccentEl.style.backgroundColor = color;
-          else boardAccentEl.style.backgroundColor = '';
+	        if (contentEl) {
+	          contentEl.classList.toggle('tasks-has-board-accent', show);
+	          if (show) contentEl.style.setProperty('--tasks-board-accent', color);
+	          else contentEl.style.removeProperty('--tasks-board-accent');
+	        }
+	        if (boardAccentEl) {
+	          boardAccentEl.classList.toggle('is-hidden', !show);
+	          if (show) boardAccentEl.style.backgroundColor = color;
+	          else boardAccentEl.style.backgroundColor = '';
         }
       };
 

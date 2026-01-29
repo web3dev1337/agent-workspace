@@ -7744,6 +7744,18 @@ header h1 {
   text-align: left;
 }
 
+.tasks-modal .tasks-content.tasks-has-board-accent .tasks-toolbar {
+  border-bottom-color: color-mix(in srgb, var(--border-color) 55%, var(--tasks-board-accent) 45%);
+}
+
+.tasks-modal .tasks-content.tasks-has-board-accent .tasks-column-header {
+  background: color-mix(in srgb, var(--bg-tertiary) 86%, var(--tasks-board-accent) 14%);
+}
+
+.tasks-modal .tasks-content.tasks-has-board-accent .tasks-column-header:hover {
+  background: color-mix(in srgb, var(--bg-primary) 86%, var(--tasks-board-accent) 14%);
+}
+
 .tasks-modal .tasks-body {
   direction: ltr;
   text-align: left;
