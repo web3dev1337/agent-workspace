@@ -137,6 +137,7 @@ describe('TaskRecordService', () => {
       ticketCardId: 'abc123',
       ticketBoardId: 'board1',
       ticketCardUrl: 'https://trello.com/c/abc123/99-something',
+      ticketTitle: 'Fix launch button',
       prMergedAt: '2026-01-26T00:00:00Z',
       ticketMovedAt: '2026-01-26T00:00:10Z',
       ticketMoveTargetListId: 'list1'
@@ -146,6 +147,7 @@ describe('TaskRecordService', () => {
     expect(rec.ticketCardId).toBe('abc123');
     expect(rec.ticketBoardId).toBe('board1');
     expect(rec.ticketCardUrl).toBe('https://trello.com/c/abc123/99-something');
+    expect(rec.ticketTitle).toBe('Fix launch button');
     expect(rec.prMergedAt).toBe('2026-01-26T00:00:00.000Z');
     expect(rec.ticketMovedAt).toBe('2026-01-26T00:00:10.000Z');
     expect(rec.ticketMoveTargetListId).toBe('list1');
@@ -154,12 +156,14 @@ describe('TaskRecordService', () => {
       ticketProvider: null,
       ticketCardId: '',
       ticketCardUrl: null,
+      ticketTitle: null,
       ticketMovedAt: null,
       ticketMoveTargetListId: null
     });
     expect(rec2.ticketProvider).toBeUndefined();
     expect(rec2.ticketCardId).toBeUndefined();
     expect(rec2.ticketCardUrl).toBeUndefined();
+    expect(rec2.ticketTitle).toBeUndefined();
     expect(rec2.ticketMovedAt).toBeUndefined();
     expect(rec2.ticketMoveTargetListId).toBeUndefined();
   });
