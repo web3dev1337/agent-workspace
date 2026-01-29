@@ -26,6 +26,7 @@ class ConversationBrowser {
     this.yoloMode = savedYolo === null ? true : savedYolo === 'true';
     this.totalIndexed = 0;
     this.filters = {
+      source: 'all',
       repo: '',
       branch: '',
       folder: '',
@@ -60,7 +61,7 @@ class ConversationBrowser {
     modal.innerHTML = `
       <div class="modal-content browser-content">
         <div class="browser-header">
-          <h2>Claude Conversations</h2>
+          <h2>Conversations</h2>
           <button class="close-btn" onclick="window.conversationBrowser.close()">X</button>
         </div>
 
@@ -79,6 +80,12 @@ class ConversationBrowser {
 
           <div class="browser-toolbar-row">
             <div class="filter-group">
+              <select id="conv-source-filter" onchange="window.conversationBrowser.applyFilter('source', this.value)">
+                <option value="all">All Sources</option>
+                <option value="claude">Claude</option>
+                <option value="codex">Codex</option>
+              </select>
+
               <select id="conv-repo-filter" onchange="window.conversationBrowser.applyFilter('repo', this.value)">
                 <option value="">All Repos</option>
               </select>
@@ -223,10 +230,12 @@ class ConversationBrowser {
 
   async loadFilters() {
     // Extract repos and repo/branch combinations from loaded conversations
+    const sources = new Set();
     const repos = new Set();
     const repoBranches = new Map(); // Map of "repo/branch" -> { repo, branch, lastActivity }
 
     for (const conv of this.conversations) {
+      sources.add(String(conv.source || 'claude').toLowerCase());
       // Use actual GitHub repo if available, fallback to path extraction
       const repo = conv.gitRepo || this.extractRepoFromPath(conv.cwd);
       if (repo) repos.add(repo);
@@ -245,9 +254,33 @@ class ConversationBrowser {
       }
     }
 
+    // Populate source filter
+    const sourceSelect = document.getElementById('conv-source-filter');
+    if (sourceSelect) {
+      const prev = sourceSelect.value || 'all';
+      sourceSelect.innerHTML = `<option value="all">All Sources</option>`;
+      const preferredOrder = ['claude', 'codex'];
+      const rest = Array.from(sources)
+        .filter((s) => s && !preferredOrder.includes(s))
+        .sort();
+      const ordered = preferredOrder.filter((s) => sources.has(s)).concat(rest);
+
+      for (const src of ordered) {
+        const option = document.createElement('option');
+        option.value = src;
+        option.textContent = src.charAt(0).toUpperCase() + src.slice(1);
+        sourceSelect.appendChild(option);
+      }
+
+      // Restore selection if still available
+      const hasPrev = Array.from(sourceSelect.options).some((o) => o.value === prev);
+      sourceSelect.value = hasPrev ? prev : 'all';
+    }
+
     // Populate repo filter
     const repoSelect = document.getElementById('conv-repo-filter');
     if (repoSelect) {
+      repoSelect.innerHTML = `<option value="">All Repos</option>`;
       const sortedRepos = Array.from(repos).sort();
       for (const repo of sortedRepos) {
         const option = document.createElement('option');
@@ -260,6 +293,7 @@ class ConversationBrowser {
     // Populate branch filter with repo/branch format, sorted by last activity
     const branchSelect = document.getElementById('conv-branch-filter');
     if (branchSelect) {
+      branchSelect.innerHTML = `<option value="">All Branches</option>`;
       const sortedBranches = Array.from(repoBranches.values())
         .sort((a, b) => (b.lastActivity || '').localeCompare(a.lastActivity || ''));
 
@@ -396,6 +430,7 @@ class ConversationBrowser {
     try {
       const params = new URLSearchParams();
       if (this.filters.query) params.append('q', this.filters.query);
+      if (this.filters.source && this.filters.source !== 'all') params.append('source', this.filters.source);
       if (this.filters.project) params.append('project', this.filters.project);
       if (this.filters.branch) params.append('branch', this.filters.branch);
       if (this.filters.folder) params.append('folder', this.filters.folder);
@@ -435,9 +470,30 @@ class ConversationBrowser {
     localStorage.setItem('conversationBrowser.yoloMode', checked ? 'true' : 'false');
   }
 
-  getResumeCommand(id) {
-    const baseCmd = `claude --resume ${id}`;
+  quoteShellValue(value) {
+    const v = String(value || '');
+    return `"${v.replace(/"/g, '\\"')}"`;
+  }
+
+  getResumeCommand(id, source, cwd) {
+    const src = String(source || 'claude').toLowerCase();
+    if (src === 'codex') {
+      let cmd = 'codex resume';
+      if (this.yoloMode) cmd += ' --dangerously-bypass-approvals-and-sandbox';
+      if (cwd) cmd += ` -C ${this.quoteShellValue(cwd)}`;
+      if (id) cmd += ` ${id}`;
+      return cmd;
+    }
+
+    const baseCmd = id ? `claude --resume ${id}` : 'claude --resume';
     return this.yoloMode ? `${baseCmd} --dangerously-skip-permissions` : baseCmd;
+  }
+
+  getFullResumeCommand(id, source, cwd) {
+    const cmd = this.getResumeCommand(id, source, cwd);
+    if (String(source || 'claude').toLowerCase() !== 'claude') return cmd;
+    if (!cwd) return cmd;
+    return `cd ${this.quoteShellValue(cwd)} && ${cmd}`;
   }
 
   getDateFilterCutoff() {
@@ -488,6 +544,12 @@ class ConversationBrowser {
     }
 
     this.filteredConversations = this.conversations.filter(conv => {
+      // Source filter
+      const src = String(conv.source || 'claude').toLowerCase();
+      if (this.filters.source && this.filters.source !== 'all' && src !== this.filters.source) {
+        return false;
+      }
+
       // Repo filter - use gitRepo or fallback to path extraction
       if (this.filters.repo) {
         const convRepo = conv.gitRepo || this.extractRepoFromPath(conv.cwd);
@@ -602,6 +664,8 @@ class ConversationBrowser {
     const firstMsg = this.cleanPreview(conv.firstUserMessage || conv.preview || '');
     const lastMsg = this.cleanPreview(conv.lastMessage || '');
     const lastRole = conv.lastMessageRole || 'assistant';
+    const source = String(conv.source || 'claude').toLowerCase();
+    const sourceBadge = source ? `<span class="conv-source conv-source-${this.escapeHtml(source)}">${source.toUpperCase()}</span>` : '';
 
     // Build match indicator if search is active
     const matchIndicator = conv._matchedFields && conv._matchedFields.length > 0
@@ -615,6 +679,7 @@ class ConversationBrowser {
             ? `<a href="${repoUrl}" target="_blank" class="conv-project-name conv-repo-link">${repoName}</a>`
             : `<span class="conv-project-name">${repoName}</span>`
           }
+          ${sourceBadge}
           ${worktree ? `<span class="conv-worktree">${worktree}</span>` : ''}
           ${conv.branch ? `<span class="conv-branch">${conv.branch}</span>` : ''}
           ${matchIndicator}
@@ -628,7 +693,7 @@ class ConversationBrowser {
           </div>
           ${lastMsg && lastMsg !== firstMsg ? `
           <div class="msg-preview last-msg ${lastRole}">
-            <span class="msg-label">${lastRole === 'user' ? 'You:' : 'Claude:'}</span>
+            <span class="msg-label">${lastRole === 'user' ? 'You:' : (source === 'codex' ? 'Codex:' : 'Claude:')}</span>
             <span class="msg-text">${lastMsg}</span>
           </div>
           ` : ''}
@@ -645,18 +710,18 @@ class ConversationBrowser {
         <div class="conv-meta-row">
           <span class="meta-item">${conv.model || 'Unknown'}</span>
           <span class="meta-item">Started: ${startedStr}</span>
-          <span class="meta-item">${conv.messageCount || 0} msgs (${conv.userMessageCount || 0} user)</span>
+          <span class="meta-item">${conv.messageCount ?? '—'} msgs (${conv.userMessageCount ?? '—'} user)</span>
           <span class="meta-item">${this.formatTokens(conv.totalTokens)} tokens</span>
         </div>
 
         <div class="conv-actions">
-          <button class="btn-small primary" onclick="window.conversationBrowser.resumeConversation('${this.escapeAttr(conv.id)}', '${this.escapeAttr(conv.project)}', '${this.escapeAttr(conv.cwd || '')}')">
+          <button class="btn-small primary" onclick="window.conversationBrowser.resumeConversation('${this.escapeAttr(conv.id)}', '${this.escapeAttr(conv.project)}', '${this.escapeAttr(conv.cwd || '')}', '${this.escapeAttr(source)}')">
             Resume
           </button>
-          <button class="btn-small secondary" onclick="window.conversationBrowser.copyResumeCommand('${this.escapeAttr(conv.id)}', '${this.escapeAttr(fullPath)}')">
+          <button class="btn-small secondary" onclick="window.conversationBrowser.copyResumeCommand('${this.escapeAttr(conv.id)}', '${this.escapeAttr(fullPath)}', '${this.escapeAttr(source)}')">
             Copy Cmd
           </button>
-          <button class="btn-small secondary" onclick="window.conversationBrowser.viewConversation('${this.escapeAttr(conv.id)}', event)">
+          <button class="btn-small secondary" onclick="window.conversationBrowser.viewConversation('${this.escapeAttr(conv.id)}', '${this.escapeAttr(source)}', event)">
             View All
           </button>
         </div>
@@ -722,29 +787,32 @@ class ConversationBrowser {
     });
   }
 
-  copyResumeCommand(id, cwd) {
-    const cmd = `cd "${cwd}" && ${this.getResumeCommand(id)}`;
+  copyResumeCommand(id, cwd, source) {
+    const cmd = this.getFullResumeCommand(id, source, cwd);
     navigator.clipboard.writeText(cmd).then(() => {
       console.log('Resume command copied:', cmd);
     });
   }
 
-  async viewConversation(id, event) {
+  async viewConversation(id, source, event) {
     event.stopPropagation();
 
     const previewEl = document.getElementById(`full-preview-${id}`);
     if (!previewEl) return;
 
     // Toggle visibility
-    if (previewEl.style.display === 'none') {
-      previewEl.style.display = 'block';
-      const contentEl = previewEl.querySelector('.full-preview-content');
+      if (previewEl.style.display === 'none') {
+        previewEl.style.display = 'block';
+        const contentEl = previewEl.querySelector('.full-preview-content');
 
       // Load content if not already loaded
-      if (contentEl.textContent === 'Loading...') {
-        try {
-          const response = await fetch(`${this.serverUrl}/api/conversations/${id}`);
-          if (!response.ok) throw new Error('Failed to load');
+        if (contentEl.textContent === 'Loading...') {
+          try {
+            const params = new URLSearchParams();
+            if (source && source !== 'claude') params.append('source', source);
+            const qs = params.toString();
+            const response = await fetch(`${this.serverUrl}/api/conversations/${id}${qs ? `?${qs}` : ''}`);
+            if (!response.ok) throw new Error('Failed to load');
 
           const conv = await response.json();
           const messages = conv.messages || [];
@@ -789,6 +857,7 @@ class ConversationBrowser {
   }
 
   formatTokens(tokens) {
+    if (tokens === null || tokens === undefined) return '—';
     if (!tokens) return '0';
     if (tokens >= 1000000) return (tokens / 1000000).toFixed(1) + 'M';
     if (tokens >= 1000) return (tokens / 1000).toFixed(1) + 'K';
@@ -824,8 +893,9 @@ class ConversationBrowser {
     if (el) el.textContent = `${count} conversation${count !== 1 ? 's' : ''}`;
   }
 
-  async resumeConversation(id, project, cwd) {
-    console.log('Resuming conversation:', { id, project, cwd });
+  async resumeConversation(id, project, cwd, source = 'claude') {
+    const src = String(source || 'claude').toLowerCase();
+    console.log('Resuming conversation:', { id, project, cwd, source: src });
 
     if (!cwd) {
       alert('Cannot resume: no working directory found for this conversation');
@@ -833,26 +903,38 @@ class ConversationBrowser {
     }
 
     if (!this.orchestrator || !this.orchestrator.socket) {
-      alert(`To resume this conversation, run:\ncd ${cwd}\n${this.getResumeCommand(id)}`);
+      alert(`To resume this conversation, run:\n${this.getFullResumeCommand(id, src, cwd)}`);
       return;
     }
 
-    // Find a matching worktree session
-    const sessions = Array.from(this.orchestrator.sessions?.values() || []);
-    const matchingSession = sessions.find(s =>
-      s.worktreePath && (cwd === s.worktreePath || cwd.startsWith(s.worktreePath + '/'))
-    );
+    const agentId = src === 'codex' ? 'codex' : 'claude';
+    const flags = [];
+    if (this.yoloMode) {
+      flags.push(agentId === 'codex' ? 'yolo' : 'skipPermissions');
+    }
+    const agentConfig = {
+      agentId,
+      mode: 'resume',
+      flags,
+      resumeId: id,
+      cwd
+    };
 
-    if (matchingSession) {
-      // Found existing session - send resume command
-      this.orchestrator.socket.emit('start-claude', {
-        sessionId: matchingSession.id,
-        options: {
-          mode: 'resume',
-          resumeId: id,
-          skipPermissions: this.yoloMode,
-          cwd: cwd
-        }
+    const matchesCwd = (session) => {
+      const sessionCwd = session?.worktreePath || session?.config?.cwd || session?.cwd || '';
+      if (!sessionCwd) return false;
+      return cwd === sessionCwd || cwd.startsWith(sessionCwd + '/');
+    };
+
+    // Find a matching agent terminal (worktree session)
+    const sessions = Array.from(this.orchestrator.sessions?.entries?.() || []);
+    const matchingClaudeSessionId = sessions.find(([sid, s]) => sid.endsWith('-claude') && matchesCwd(s))?.[0];
+
+    if (matchingClaudeSessionId) {
+      // Found existing session - start the selected agent in resume mode
+      this.orchestrator.socket.emit('start-agent', {
+        sessionId: matchingClaudeSessionId,
+        config: agentConfig
       });
 
       // Close browser
@@ -881,18 +963,13 @@ class ConversationBrowser {
       if (data.worktreeId === worktreeId) {
         this.orchestrator.socket.off('worktree-sessions-added', sessionAddedHandler);
 
-        // Find the claude session and send resume command
+        // Find the agent session and send resume command
         const claudeSessionId = Object.keys(data.sessions).find(sid => sid.includes('claude'));
         if (claudeSessionId) {
           setTimeout(() => {
-            this.orchestrator.socket.emit('start-claude', {
+            this.orchestrator.socket.emit('start-agent', {
               sessionId: claudeSessionId,
-              options: {
-                mode: 'resume',
-                resumeId: id,
-                skipPermissions: this.yoloMode,
-                cwd: cwd
-              }
+              config: agentConfig
             });
           }, 500); // Small delay to let terminal initialize
         }
@@ -922,9 +999,13 @@ class ConversationBrowser {
     }, 10000);
   }
 
-  async showDetails(id, project) {
+  async showDetails(id, project, source) {
     try {
-      const response = await fetch(`${this.serverUrl}/api/conversations/${id}?project=${project}`);
+      const params = new URLSearchParams();
+      if (project) params.set('project', project);
+      if (source) params.set('source', source);
+      const qs = params.toString();
+      const response = await fetch(`${this.serverUrl}/api/conversations/${id}${qs ? `?${qs}` : ''}`);
       if (!response.ok) throw new Error('Failed to load conversation');
 
       const conv = await response.json();
@@ -972,7 +1053,7 @@ class ConversationBrowser {
         </div>
 
         <div class="details-actions">
-          <button class="btn-primary" onclick="window.conversationBrowser.resumeConversation('${conv.id}', '${conv.project}', '${conv.cwd || ''}')">
+          <button class="btn-primary" onclick="window.conversationBrowser.resumeConversation('${conv.id}', '${conv.project}', '${conv.cwd || ''}', '${conv.source || 'claude'}')">
             Resume Conversation
           </button>
         </div>
