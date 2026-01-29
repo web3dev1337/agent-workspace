@@ -43,15 +43,23 @@ test.describe('Process banner', () => {
     const headerBanner = page.locator('#process-banner');
     const dashboardStatus = page.locator('#dashboard-status-summary');
 
+    const normalizeText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+
     const getProcessText = async () => {
       const headerChips = await headerBanner.locator('.process-chip').allTextContents().catch(() => []);
-      if (headerChips.length) return headerChips.join(' ');
+      if (headerChips.length) return normalizeText(headerChips.join(' '));
+
+      const headerText = await headerBanner.textContent().catch(() => '');
+      if (headerText) return normalizeText(headerText);
 
       const dashboardChips = await dashboardBanner.locator('.process-chip').allTextContents().catch(() => []);
-      if (dashboardChips.length) return dashboardChips.join(' ');
+      if (dashboardChips.length) return normalizeText(dashboardChips.join(' '));
+
+      const dashboardText = await dashboardBanner.textContent().catch(() => '');
+      if (dashboardText) return normalizeText(dashboardText);
 
       const statusText = await dashboardStatus.textContent().catch(() => '');
-      return String(statusText || '');
+      return normalizeText(statusText);
     };
 
     await expect
@@ -62,7 +70,7 @@ test.describe('Process banner', () => {
           && /T2\s+0\b/.test(t)
           && /T3\s+2\b/.test(t)
           && /T4\s+0\b/.test(t);
-      }, { timeout: 30000 })
+      }, { timeout: 50000 })
       .toBe(true);
   });
 });

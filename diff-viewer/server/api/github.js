@@ -275,6 +275,65 @@ router.post('/pr/:owner/:repo/:pr/merge', async (req, res) => {
   }
 });
 
+// Get compare data (base...head)
+router.get('/compare/:owner/:repo', async (req, res) => {
+  try {
+    const { owner, repo } = req.params;
+    const base = String(req.query.base || '').trim();
+    const head = String(req.query.head || '').trim();
+
+    if (!base || !head) {
+      return res.status(400).json({ error: 'Missing base/head query params' });
+    }
+
+    const cacheKey = `${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+    const cached = dbCache.getMetadata('compare', owner, repo, cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    console.log(`📥 Fetching compare ${owner}/${repo}: ${base}...${head}`);
+
+    let compareData;
+    if (octokit) {
+      const compareRes = await octokit.repos.compareCommits({
+        owner,
+        repo,
+        base,
+        head,
+        per_page: 250
+      });
+      compareData = compareRes?.data;
+    } else {
+      const endpoint = `repos/${owner}/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+      compareData = await ghApiJson(endpoint);
+    }
+
+    const compareUrl = `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+    const result = {
+      compare: {
+        base,
+        head,
+        url: compareUrl,
+        status: compareData?.status || null,
+        ahead_by: compareData?.ahead_by ?? null,
+        behind_by: compareData?.behind_by ?? null,
+        total_commits: compareData?.total_commits ?? null
+      },
+      files: Array.isArray(compareData?.files) ? compareData.files.map(normalizeFileEntry) : []
+    };
+
+    dbCache.setMetadata('compare', owner, repo, cacheKey, result);
+    res.json(result);
+  } catch (error) {
+    console.error('GitHub API error:', error);
+    res.status(error.status || 500).json({
+      error: 'Failed to fetch compare data',
+      message: error.message
+    });
+  }
+});
+
 // Get commit data
 router.get('/commit/:owner/:repo/:sha', async (req, res) => {
   try {
