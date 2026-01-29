@@ -7449,17 +7449,13 @@ class ClaudeOrchestrator {
         mode: mode,
         flags: ['skipPermissions']  // Always use best settings
       };
-    } else if (selectedAgent === 'codex') {
-      config = {
-        agentId: 'codex',
-        mode: mode,
-        flags: [
-          'yolo',               // --yolo: no approvals + full access
-          'networkAccess',      // Enable network for package installs
-          'search'              // Enable web search tool
-        ]
-      };
-    }
+	    } else if (selectedAgent === 'codex') {
+	      config = {
+	        agentId: 'codex',
+	        mode: mode,
+	        flags: ['yolo']
+	      };
+	    }
 
     console.log(`Quick starting ${selectedAgent} with config:`, config);
 
@@ -19020,12 +19016,14 @@ class ClaudeOrchestrator {
     return arr;
   }
 
-  buildAgentConfigForLaunch({ agentId, mode, yolo } = {}) {
-    const id = String(agentId || 'claude').toLowerCase();
-    if (id === 'codex') {
-      // v1: minimal. If you want more advanced flags, use the Agent modal.
-      return { agentId: 'codex', mode: 'search', flags: [] };
-    }
+	  buildAgentConfigForLaunch({ agentId, mode, yolo } = {}) {
+	    const id = String(agentId || 'claude').toLowerCase();
+	    if (id === 'codex') {
+	      const m = ['fresh', 'continue', 'resume'].includes(String(mode)) ? String(mode) : 'fresh';
+	      const flags = [];
+	      if (yolo) flags.push('yolo');
+	      return { agentId: 'codex', mode: m, flags };
+	    }
 
     const m = ['fresh', 'continue', 'resume'].includes(String(mode)) ? String(mode) : 'fresh';
     const flags = [];

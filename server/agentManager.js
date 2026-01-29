@@ -67,26 +67,26 @@ class AgentManager {
     });
 
     // Codex Configuration
-    this.agentConfigs.set('codex', {
+	    this.agentConfigs.set('codex', {
       id: 'codex',
       name: 'Codex',
       icon: '⚡',
       description: 'OpenAI Codex CLI',
       baseCommand: 'codex',
-      modes: {
-        fresh: {
-          command: 'codex',
-          description: 'Start new session'
-        },
-        continue: {
-          command: 'codex',
-          description: 'Continue conversation'
-        },
-        resume: {
-          command: 'codex resume',
-          description: 'Resume interrupted session'
-        }
-      },
+	      modes: {
+	        fresh: {
+	          command: 'codex',
+	          description: 'Start new session'
+	        },
+	        continue: {
+	          command: 'codex resume --last',
+	          description: 'Continue most recent session'
+	        },
+	        resume: {
+	          command: 'codex resume',
+	          description: 'Resume interrupted session'
+	        }
+	      },
       // Supported models
       models: ['gpt-4', 'gpt-5', 'gpt-5-codex'],
       defaultModel: 'gpt-5-codex',
@@ -99,38 +99,20 @@ class AgentManager {
       verbosityLevels: ['low', 'medium', 'high'],
       defaultVerbosity: 'high',
 
-      flags: {
-        // YOLO Mode (replaces old bypassAll)
-        yolo: {
-          flag: '--yolo',
-          description: 'Full automation: no approvals + full system access',
-          label: '🚀 YOLO Mode',
-          category: 'sandbox',
-          default: true  // Now default!
-        },
+	      flags: {
+	        // YOLO Mode
+	        yolo: {
+	          flag: '--dangerously-bypass-approvals-and-sandbox',
+	          description: 'No approvals + no sandboxing (extremely dangerous)',
+	          label: '🚀 YOLO Mode',
+	          category: 'sandbox',
+	          default: true  // Now default!
+	        },
 
-        // Network Access
-        networkAccess: {
-          flag: '-c sandbox_workspace_write.network_access=true',
-          description: 'Enable network access for package installs/API calls',
-          label: '🌐 Network Access',
-          category: 'network',
-          default: true
-        },
-
-        // Web Search
-        search: {
-          flag: '--search',
-          description: 'Enable safe web search tool for documentation',
-          label: '🔍 Web Search',
-          category: 'network',
-          default: true
-        },
-
-        // Workspace Write (alternative to YOLO)
-        workspaceWrite: {
-          flag: '--sandbox workspace-write',
-          description: 'Write files in workspace only (safer than YOLO)',
+	        // Workspace Write (alternative to YOLO)
+	        workspaceWrite: {
+	          flag: '--sandbox workspace-write',
+	          description: 'Write files in workspace only (safer than YOLO)',
           label: '📝 Workspace Write',
           category: 'sandbox',
           default: false
@@ -154,24 +136,23 @@ class AgentManager {
           default: false
         },
 
-        askOnRequest: {
-          flag: '--ask-for-approval on-request',
-          description: 'Ask only on risky operations',
-          label: '🛡️ Ask on Risk',
-          category: 'approvals',
-          default: false
-        }
-      },
-      defaultMode: 'fresh',
-      // Default flags for "maximum power" configuration
-      defaultFlags: ['yolo', 'networkAccess', 'search'],
-      availableFlags: ['yolo', 'networkAccess', 'search', 'workspaceWrite', 'readOnly', 'neverAsk', 'askOnRequest'],
-      flagCategories: {
-        sandbox: { name: 'Sandbox Mode', mutuallyExclusive: true },
-        network: { name: 'Network & Search', mutuallyExclusive: false },
-        approvals: { name: 'Approval Policy', mutuallyExclusive: true }
-      }
-    });
+	        askOnRequest: {
+	          flag: '--ask-for-approval on-request',
+	          description: 'Ask only on risky operations',
+	          label: '🛡️ Ask on Risk',
+	          category: 'approvals',
+	          default: false
+	        }
+	      },
+	      defaultMode: 'fresh',
+	      // Default flags for "maximum power" configuration
+	      defaultFlags: ['yolo'],
+	      availableFlags: ['yolo', 'workspaceWrite', 'readOnly', 'neverAsk', 'askOnRequest'],
+	      flagCategories: {
+	        sandbox: { name: 'Sandbox Mode', mutuallyExclusive: true },
+	        approvals: { name: 'Approval Policy', mutuallyExclusive: true }
+	      }
+	    });
   }
 
   /**
@@ -192,7 +173,7 @@ class AgentManager {
    * Build command for specific agent, mode, and configuration
    * Supports both config object and enabledFlags array for backwards compatibility
    */
-  buildCommand(agentId, mode, configOrFlags = []) {
+	  buildCommand(agentId, mode, configOrFlags = []) {
     const agent = this.agentConfigs.get(agentId);
     if (!agent) {
       throw new Error(`Unknown agent: ${agentId}`);
@@ -203,16 +184,24 @@ class AgentManager {
       throw new Error(`Unknown mode '${mode}' for agent '${agentId}'`);
     }
 
-    let command = modeConfig.command;
+	    let command = modeConfig.command;
 
-    // Handle new config object format (for Codex with model/reasoning/verbosity)
-    if (typeof configOrFlags === 'object' && !Array.isArray(configOrFlags)) {
-      const config = configOrFlags;
+	    // Handle new config object format (for Codex with model/reasoning/verbosity)
+	    if (typeof configOrFlags === 'object' && !Array.isArray(configOrFlags)) {
+	      const config = configOrFlags;
 
-      // Add model if specified (Codex)
-      if (config.model && agent.models) {
-        command += ` -m ${config.model}`;
-      }
+	      // Inject explicit resume id when supported.
+	      if (mode === 'resume' && config.resumeId) {
+	        if (agentId === 'claude') {
+	          // Claude expects the resume id immediately after `--resume`.
+	          command = `${modeConfig.command} ${config.resumeId}`;
+	        }
+	      }
+
+	      // Add model if specified (Codex)
+	      if (config.model && agent.models) {
+	        command += ` -m ${config.model}`;
+	      }
 
       // Add reasoning level if specified (Codex)
       if (config.reasoning) {
@@ -224,24 +213,29 @@ class AgentManager {
         command += ` -c model_verbosity="${config.verbosity}"`;
       }
 
-      // Add flags
-      const enabledFlags = config.flags || [];
-      enabledFlags.forEach(flagId => {
-        const flag = agent.flags[flagId];
-        if (flag) {
-          command += ` ${flag.flag}`;
-        }
-      });
-    } else {
-      // Backwards compatibility: treat as array of flags
-      const enabledFlags = Array.isArray(configOrFlags) ? configOrFlags : [];
-      enabledFlags.forEach(flagId => {
-        const flag = agent.flags[flagId];
-        if (flag) {
-          command += ` ${flag.flag}`;
-        }
-      });
-    }
+	      // Add flags
+	      const enabledFlags = config.flags || [];
+	      enabledFlags.forEach(flagId => {
+	        const flag = agent.flags[flagId];
+	        if (flag) {
+	          command += ` ${flag.flag}`;
+	        }
+	      });
+
+	      if (agentId === 'codex' && mode === 'resume' && config.resumeId) {
+	        // Codex expects options first, then the session id.
+	        command += ` ${config.resumeId}`;
+	      }
+	    } else {
+	      // Backwards compatibility: treat as array of flags
+	      const enabledFlags = Array.isArray(configOrFlags) ? configOrFlags : [];
+	      enabledFlags.forEach(flagId => {
+	        const flag = agent.flags[flagId];
+	        if (flag) {
+	          command += ` ${flag.flag}`;
+	        }
+	      });
+	    }
 
     return command;
   }
