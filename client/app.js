@@ -935,11 +935,11 @@ class ClaudeOrchestrator {
     }, 30000);
   }
   
-  setupEventListeners() {
-    // Check if elements exist before adding listeners
-    const elements = {
-      'worktree-list': null,
-      'view-all': null,
+	  setupEventListeners() {
+	    // Check if elements exist before adding listeners
+	    const elements = {
+	      'worktree-list': null,
+	      'view-all': null,
       'view-claude-only': null,
       'view-servers-only': null,
       'view-presets': null,
@@ -965,19 +965,24 @@ class ClaudeOrchestrator {
       'save-as-default': null,
       'check-updates': null,
       'pull-updates': null,
-      'dismiss-settings-notification': null,
-      'dismiss-git-notification': null,
-      'start-claude': null,
-      'cancel-claude-startup': null
-    };
-    
-    // Check all elements exist
-    for (const id in elements) {
-      elements[id] = document.getElementById(id);
-      if (!elements[id]) {
-        console.warn(`Element not found: ${id}`);
-      }
-    }
+	      'dismiss-settings-notification': null,
+	      'dismiss-git-notification': null,
+	      'start-claude': null,
+	      'cancel-claude-startup': null
+	    };
+	    const optionalElementIds = new Set([
+	      // Claude startup modal elements only exist when the modal is open.
+	      'start-claude',
+	      'cancel-claude-startup'
+	    ]);
+	    
+	    // Check all elements exist
+	    for (const id in elements) {
+	      elements[id] = document.getElementById(id);
+	      if (!elements[id] && !optionalElementIds.has(id)) {
+	        console.warn(`Element not found: ${id}`);
+	      }
+	    }
     
     // Sidebar worktree clicks - use toggle instead of show
     if (elements['worktree-list']) {
@@ -3382,29 +3387,33 @@ class ClaudeOrchestrator {
     const isClaudeSession = session.type === 'claude';
     const isServerSession = session.type === 'server';
 
-    // Build display name with repository info for mixed-repo workspaces
-    const repositoryName = this.extractRepositoryName(sessionId);
-    const worktreeId = session.worktreeId;
-    const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
-    const branchMeta = this.formatBranchLabel(session.branch || '', { context: 'terminal' });
-    wrapper.innerHTML = `
-      <div class="terminal-header">
-        <div class="terminal-title">
+	    // Build display name with repository info for mixed-repo workspaces
+	    const repositoryName = this.extractRepositoryName(sessionId);
+	    const worktreeId = session.worktreeId;
+	    const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
+	    const branchMeta = this.formatBranchLabel(session.branch || '', { context: 'terminal' });
+	    wrapper.innerHTML = `
+	      <div class="terminal-header">
+	        <div class="terminal-title">
           <span class="status-indicator ${session.status}" id="status-${sessionId}"></span>
           <span>${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
           <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
-        </div>
-        <div class="terminal-controls">
-          ${isClaudeSession ? `
-            ${this.getTierDropdownHTML(sessionId)}
-            ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
-            ${this.getGitHubButtons(sessionId)}
-          ` : ''}
-          ${isServerSession ? `
-            ${this.getServerControlsHTML(sessionId)}
-          ` : ''}
-        </div>
-      </div>
+	        </div>
+	        <div class="terminal-controls">
+	          ${isClaudeSession ? `
+	            ${this.getTierDropdownHTML(sessionId)}
+	            ${this.getServerQuickControlsHTMLForClaude(sessionId)}
+	            ${this.getWorktreeInspectorButtonHTML(sessionId)}
+	            ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
+	            ${this.getGitHubButtons(sessionId)}
+	            ${this.getWorktreeRemoveButtonHTML(sessionId)}
+	          ` : ''}
+	          ${isServerSession ? `
+	            ${this.getServerControlsHTML(sessionId)}
+	            ${this.getWorktreeRemoveButtonHTML(sessionId)}
+	          ` : ''}
+	        </div>
+	      </div>
       <div class="terminal-body">
         <div class="terminal" id="terminal-${sessionId}"></div>
         ${isClaudeSession ? `
@@ -3902,33 +3911,48 @@ class ClaudeOrchestrator {
     return buttons;
   }
   
-  updateTerminalControls(sessionId) {
-    const wrapper = document.getElementById(`wrapper-${sessionId}`);
-    if (!wrapper) return;
-    const controlsDiv = wrapper.querySelector('.terminal-controls');
+	  updateTerminalControls(sessionId) {
+	    const wrapper = document.getElementById(`wrapper-${sessionId}`);
+	    if (!wrapper) return;
+	    const controlsDiv = wrapper.querySelector('.terminal-controls');
     if (!controlsDiv) return;
 
-    if (sessionId.includes('-claude')) {
-      controlsDiv.innerHTML = `
-        ${this.getTierDropdownHTML(sessionId)}
-        ${this.getServerQuickControlsHTMLForClaude(sessionId)}
-        ${this.getWorktreeInspectorButtonHTML(sessionId)}
-        ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
-        ${this.getGitHubButtons(sessionId)}
-      `;
-      return;
-    }
+	    if (sessionId.includes('-claude')) {
+	      controlsDiv.innerHTML = `
+	        ${this.getTierDropdownHTML(sessionId)}
+	        ${this.getServerQuickControlsHTMLForClaude(sessionId)}
+	        ${this.getWorktreeInspectorButtonHTML(sessionId)}
+	        ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
+	        ${this.getGitHubButtons(sessionId)}
+	        ${this.getWorktreeRemoveButtonHTML(sessionId)}
+	      `;
+	      return;
+	    }
 
-    // Server terminals: keep the existing launch controls.
-    controlsDiv.innerHTML = this.getServerControlsHTML(sessionId);
-  }
+	    // Server terminals: keep the existing launch controls.
+	    controlsDiv.innerHTML = `
+	      ${this.getServerControlsHTML(sessionId)}
+	      ${this.getWorktreeRemoveButtonHTML(sessionId)}
+	    `;
+	  }
 
-  getWorktreeInspectorButtonHTML(sessionId) {
+	  getWorktreeInspectorButtonHTML(sessionId) {
     const session = this.sessions.get(sessionId);
     const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
-    const disabled = worktreePath ? '' : 'disabled';
-    return `<button class="control-btn" onclick="window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${disabled}>🗂</button>`;
-  }
+	    const disabled = worktreePath ? '' : 'disabled';
+	    return `<button class="control-btn" onclick="window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${disabled}>🗂</button>`;
+	  }
+
+	  getWorktreeRemoveButtonHTML(sessionId) {
+	    const session = this.sessions.get(sessionId);
+	    const worktreeId = session?.worktreeId || String(sessionId || '').split('-')[0];
+	    if (!worktreeId) return '';
+
+	    const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
+	    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+	    const removeLabel = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId;
+	    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}')" title="Remove worktree from workspace (keeps files intact)">✕</button>`;
+	  }
   
   updateServerStatus(sessionId, output) {
     // Check if server started - look for various startup messages
