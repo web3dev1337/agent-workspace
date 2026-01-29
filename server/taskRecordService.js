@@ -348,6 +348,13 @@ class TaskRecordService {
         next.ticketCardUrl = String(p.ticketCardUrl || '').trim().slice(0, 600);
       }
     }
+    if (p.ticketTitle !== undefined) {
+      if (p.ticketTitle === null || p.ticketTitle === '') {
+        clear.add('ticketTitle');
+      } else {
+        next.ticketTitle = String(p.ticketTitle || '').trim().slice(0, 240);
+      }
+    }
 
     // Automation bookkeeping (best-effort; used to avoid repeating automations)
     if (p.prMergedAt !== undefined) {

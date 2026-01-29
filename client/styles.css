@@ -700,6 +700,7 @@ header h1 {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  min-width: 0;
 }
 
 .terminal-branch {
@@ -791,6 +792,31 @@ header h1 {
   gap: var(--space-xs);
   align-items: center;
   flex-wrap: wrap;
+}
+
+.terminal-ticket {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  margin-left: var(--space-sm);
+  background: rgba(99, 179, 237, 0.08);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  max-width: min(360px, 40vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  flex: 0 1 auto;
+}
+
+.terminal-ticket:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
 }
 
 .tier-dropdown {
