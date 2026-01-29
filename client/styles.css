@@ -6905,6 +6905,28 @@ header h1 {
   white-space: nowrap;
 }
 
+.conv-source {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.18);
+  padding: 3px 10px;
+  border-radius: 12px;
+  margin: 0 var(--space-xs);
+  flex-shrink: 0;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.conv-source-claude {
+  color: #b794f4;
+  background: rgba(159, 122, 234, 0.18);
+}
+
+.conv-source-codex {
+  color: #63b3ed;
+  background: rgba(99, 179, 237, 0.18);
+}
+
 .conv-date {
   font-size: 0.8rem;
   color: var(--text-muted);
