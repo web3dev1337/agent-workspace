@@ -224,6 +224,57 @@ router.get('/pr/:owner/:repo/:pr', async (req, res) => {
   }
 });
 
+// Merge a PR (uses the user's authenticated GitHub CLI session)
+router.post('/pr/:owner/:repo/:pr/merge', async (req, res) => {
+  try {
+    const owner = String(req.params?.owner || '').trim();
+    const repo = String(req.params?.repo || '').trim();
+    const prNumber = parseInt(String(req.params?.pr || ''), 10);
+    const methodRaw = String(req.body?.method || 'merge').trim().toLowerCase();
+    const auto = !!req.body?.auto;
+
+    if (!owner || !repo || !Number.isFinite(prNumber)) {
+      return res.status(400).json({ error: 'Invalid PR identifier' });
+    }
+    if (!['merge', 'squash', 'rebase'].includes(methodRaw)) {
+      return res.status(400).json({ error: 'method must be merge|squash|rebase' });
+    }
+
+    const mergeFlag = methodRaw === 'squash'
+      ? '--squash'
+      : (methodRaw === 'rebase' ? '--rebase' : '--merge');
+
+    const args = ['pr', 'merge', String(prNumber), '--repo', `${owner}/${repo}`, mergeFlag];
+    if (auto) args.push('--auto');
+
+    const { stdout } = await execFileAsync('gh', args, { timeout: 60000 });
+
+    // Best-effort: invalidate cached metadata/diff since the PR state likely changed.
+    try {
+      dbCache?.deleteMetadata?.('pr', owner, repo, String(prNumber));
+      dbCache?.deleteDiff?.('pr', owner, repo, String(prNumber));
+    } catch {
+      // ignore
+    }
+
+    res.json({
+      ok: true,
+      owner,
+      repo,
+      number: prNumber,
+      method: methodRaw,
+      auto,
+      stdout: String(stdout || '')
+    });
+  } catch (error) {
+    const message = error?.stderr || error?.message || String(error);
+    res.status(500).json({
+      error: 'Failed to merge PR',
+      message
+    });
+  }
+});
+
 // Get commit data
 router.get('/commit/:owner/:repo/:sha', async (req, res) => {
   try {
