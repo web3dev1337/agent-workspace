@@ -128,6 +128,68 @@ router.get('/commit/:owner/:repo/:sha', async (req, res) => {
   }
 });
 
+// Get diff analysis for a compare (base...head)
+router.get('/compare/:owner/:repo', async (req, res) => {
+  try {
+    const { owner, repo } = req.params;
+    const base = String(req.query.base || '').trim();
+    const head = String(req.query.head || '').trim();
+
+    if (!base || !head) {
+      return res.status(400).json({ error: 'Missing base/head query params' });
+    }
+
+    const cacheKey = `${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+
+    const cached = dbCache.getDiff('compare', owner, repo, cacheKey);
+    if (cached) {
+      return res.json(cached.analysis);
+    }
+
+    const compareData = dbCache.getMetadata('compare', owner, repo, cacheKey);
+    if (!compareData) {
+      return res.status(404).json({ error: 'Compare data not found. Fetch from GitHub first.' });
+    }
+
+    const { files } = compareData;
+    const analyzedFiles = await Promise.all(
+      (Array.isArray(files) ? files : []).map(async file => {
+        const diffAnalysis = await diffEngine.analyzeDiff(file);
+        return {
+          filename: file.filename,
+          path: file.filename,
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+          patch: file.patch,
+          analysis: diffAnalysis,
+          ...diffAnalysis,
+          semanticChanges: diffAnalysis.stats
+        };
+      })
+    );
+
+    const stats = calculateOverallStats(analyzedFiles);
+    const result = {
+      files: analyzedFiles,
+      stats,
+      metadata: {
+        compare: compareData.compare,
+        analyzedAt: new Date().toISOString()
+      }
+    };
+
+    dbCache.setDiff('compare', owner, repo, cacheKey, result, stats.semanticReduction || 0);
+    res.json(result);
+  } catch (error) {
+    console.error('Compare diff analysis error:', error);
+    res.status(500).json({
+      error: 'Failed to analyze compare diff',
+      message: error.message
+    });
+  }
+});
+
 // Process custom diff analysis
 router.post('/analyze', async (req, res) => {
   try {

@@ -226,7 +226,7 @@ class ClaudeOrchestrator {
       });
 
       document.getElementById('diff-viewer-open')?.addEventListener('click', () => {
-        this.openDiffViewerHome();
+        this.openDiffViewerFromCurrentContext();
       });
 
       // Workflow mode toggles (tier-aware visibility rules)
@@ -4055,13 +4055,16 @@ class ClaudeOrchestrator {
       
       // Use dynamic remote URL if available
       if (session.remoteUrl) {
-        const branchUrl = `${session.remoteUrl}/tree/${session.branch}`;
+        const encodeRef = (ref) => encodeURIComponent(String(ref || '').trim());
+        const branchRef = encodeRef(session.branch);
+        const branchUrl = `${session.remoteUrl}/tree/${branchRef}`;
         // Use the actual default branch from git, fallback to 'main' if not available
         const defaultBranch = session.defaultBranch || 'main';
-        const compareUrl = `${session.remoteUrl}/compare/${defaultBranch}...${session.branch}`;
+        const compareUrl = `${session.remoteUrl}/compare/${encodeRef(defaultBranch)}...${branchRef}`;
         
         buttons += `<button class="control-btn" onclick="window.open('${branchUrl}', '_blank')" title="View Branch on GitHub">🌿</button>`;
         buttons += `<button class="control-btn" onclick="window.open('${compareUrl}', '_blank')" title="View Branch Diff">📊</button>`;
+        buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${compareUrl}')" title="Advanced Branch Diff">🔍</button>`;
       }
     }
     
@@ -5820,6 +5823,7 @@ class ClaudeOrchestrator {
     // Parse GitHub URL to extract owner, repo, and PR/commit
     const prMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
     const commitMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/);
+    const compareMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/compare\/([^?#]+)/);
     
     let diffViewerPath = '';
     
@@ -5829,6 +5833,23 @@ class ClaudeOrchestrator {
     } else if (commitMatch) {
       const [, owner, repo, sha] = commitMatch;
       diffViewerPath = `/commit/${owner}/${repo}/${sha}`;
+    } else if (compareMatch) {
+      try {
+        const [, owner, repo, refsRaw] = compareMatch;
+        const parts = String(refsRaw || '').split('...');
+        if (parts.length !== 2) {
+          throw new Error('Compare URL must include base...head');
+        }
+        const decodeSafe = (value) => {
+          try { return decodeURIComponent(value); } catch { return value; }
+        };
+        const base = decodeSafe(parts[0]);
+        const head = decodeSafe(parts[1]);
+        diffViewerPath = `/compare/${owner}/${repo}?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`;
+      } catch (err) {
+        this.showToast(`Unable to parse compare URL: ${String(err?.message || err)}`, 'error');
+        return;
+      }
     } else {
       this.showToast('Unable to parse GitHub URL', 'error');
       return;
@@ -5896,6 +5917,28 @@ class ClaudeOrchestrator {
     const diffViewerUrl = `${baseUrl}${diffViewerPath}`;
     popup.location.href = diffViewerUrl;
     this.showToast('Opening Advanced Diff Viewer…', 'success');
+  }
+
+  async openDiffViewerFromCurrentContext() {
+    const sessionId = this.focusedTerminalInfo?.sessionId || this.lastInteractedSessionId;
+    if (sessionId) {
+      const links = this.githubLinks.get(sessionId) || {};
+      const url = links.pr || links.commit || '';
+      if (url) return this.launchDiffViewer(url);
+
+      const session = this.sessions.get(sessionId);
+      const remoteUrl = String(session?.remoteUrl || '').trim();
+      const branch = String(session?.branch || '').trim();
+      const defaultBranch = String(session?.defaultBranch || 'main').trim();
+
+      if (remoteUrl && branch && branch !== 'main' && branch !== 'master') {
+        const enc = (v) => encodeURIComponent(String(v || '').trim());
+        const compareUrl = `${remoteUrl}/compare/${enc(defaultBranch)}...${enc(branch)}`;
+        return this.launchDiffViewer(compareUrl);
+      }
+    }
+
+    return this.openDiffViewerHome();
   }
 
   async openDiffViewerHome() {
@@ -16543,14 +16586,7 @@ class ClaudeOrchestrator {
       openDiffBtn?.addEventListener('click', async () => {
         try {
           if (!url) return;
-          const m = url.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-          if (!m) {
-            window.open(url, '_blank', 'noreferrer');
-            return;
-          }
-          const [, owner, repo, prNum] = m;
-          const diffUrl = `${serverUrl.replace(/:\\d+$/, '')}:7655/pr/${owner}/${repo}/${prNum}`;
-          window.open(diffUrl, 'orchestrator_diff', 'noreferrer');
+          await this.launchDiffViewer(url);
         } catch {
           window.open(url, '_blank', 'noreferrer');
         }
