@@ -26,8 +26,11 @@ The 2026-01-25 brain-dump implementation plan is fully checked off; this file tr
 - [x] Worktree picker: after creating a worktree, exclude it from “next free worktree” suggestions.
 - [x] Worktrees: bulk “Create N worktrees” action.
 - [x] Workflow modes: add an “All tiers” mode to avoid bouncing between focus/background.
+- [x] Terminal header: show linked ticket title on agent/server tiles when launched from Tasks (truncate + tooltip). (PR #408)
+- [ ] Tasks launch: optional global + per-board “system prompt” prefix for auto-send prompts (prepend before ticket preface + description), and optionally include ticket title in the prompt body.
 
 ## Review UX v2 (bigger next phase)
 
 - [x] Unified review screen: terminals + changed-files tree + commit log + diff viewer, with presets and a one-at-a-time review conveyor.
 - [x] PR workflow: merge from review screen + move linked Trello card to the correct column (Done/Test/etc) after merge.
+- [ ] Diff viewer UX: clarify/remove the Queue-level “Diff” button when it isn’t scoped to a PR/branch, or re-scope it to the selected worktree/PR; ensure per-terminal “Advanced diff” is discoverable for PR/branch compare.
