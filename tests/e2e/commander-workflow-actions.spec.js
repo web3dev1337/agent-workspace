@@ -12,10 +12,6 @@ const ensureWorkspaceLoaded = async (page) => {
     });
 
     const openWorkspaceBtn = page.getByRole('button', { name: 'Open Workspace' }).first();
-    if (await openWorkspaceBtn.count() === 0) {
-      throw new Error('No workspace available to open for tests.');
-    }
-
     try {
       await openWorkspaceBtn.waitFor({ state: 'visible', timeout: 20000 });
     } catch {
