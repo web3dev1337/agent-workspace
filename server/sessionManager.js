@@ -2312,13 +2312,9 @@ class SessionManager extends EventEmitter {
     });
 
     try {
-      // Build command using AgentManager
-      // Pass full config for Codex (with model/reasoning/verbosity), or just flags for Claude
-      const commandInput = finalConfig.model || finalConfig.reasoning || finalConfig.verbosity
-        ? finalConfig  // Pass full config object for Codex
-        : finalConfig.flags;  // Pass just flags for Claude (backwards compat)
-
-      let command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, commandInput);
+      // Build command using AgentManager (agent-agnostic config object).
+      // This allows passing `resumeId`, model settings, etc. consistently.
+      let command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, finalConfig);
       if (finalConfig.agentId === 'claude') {
         const effectiveSettings = this.userSettings.getEffectiveSettings(sessionId);
         const provider = finalConfig.provider || effectiveSettings.claudeFlags.provider || 'anthropic';
@@ -2333,7 +2329,10 @@ class SessionManager extends EventEmitter {
       }
 
       // Send the command to the terminal
-      this.writeToSession(sessionId, `${command}\n`);
+      const commandToRun = finalConfig.cwd
+        ? `cd ${this.escapeShellValue(finalConfig.cwd)} && ${command}`
+        : command;
+      this.writeToSession(sessionId, `${commandToRun}\n`);
 
       // Emit event to notify UI that agent is starting
       this.io.emit('agent-started', { sessionId, config: finalConfig });

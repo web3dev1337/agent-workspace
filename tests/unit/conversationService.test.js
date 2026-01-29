@@ -49,6 +49,7 @@ describe('ConversationService', () => {
         conversations: [
           {
             id: 'conv1',
+            source: 'claude',
             project: 'test-project',
             branch: 'main',
             cwd: '/home/user/test-project',
@@ -60,6 +61,7 @@ describe('ConversationService', () => {
           },
           {
             id: 'conv2',
+            source: 'codex',
             project: 'other-project',
             branch: 'feature/new',
             cwd: '/home/user/other-project',
@@ -102,6 +104,12 @@ describe('ConversationService', () => {
 
     it('should filter by folder', async () => {
       const results = await service.search('', { folder: 'other-project' });
+      expect(results.results.length).toBe(1);
+      expect(results.results[0].id).toBe('conv2');
+    });
+
+    it('should filter by source', async () => {
+      const results = await service.search('', { source: 'codex' });
       expect(results.results.length).toBe(1);
       expect(results.results[0].id).toBe('conv2');
     });
