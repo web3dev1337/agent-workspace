@@ -97,6 +97,28 @@ const computeWipFromWorkspaces = ({ workspaceManager, lookbackHours }) => {
   return { wip, kind: 'workspaces' };
 };
 
+const computeFourQueuesSnapshot = ({ tasks, taskRecordService, wipCount }) => {
+  const list = Array.isArray(tasks) ? tasks : [];
+
+  const reviewCandidates = list.filter(t => t && (t.kind === 'pr' || t.kind === 'worktree'));
+  const review = reviewCandidates.length;
+
+  let rework = 0;
+  for (const task of reviewCandidates) {
+    const record = taskRecordService?.get?.(task?.id) || null;
+    const outcome = String(record?.reviewOutcome || '').trim().toLowerCase();
+    const doneAt = record?.doneAt || null;
+    if (outcome === 'needs_fix' && !doneAt) rework += 1;
+  }
+
+  return {
+    backlog: { count: null, supported: false },
+    inflight: { count: Number.isFinite(Number(wipCount)) ? Number(wipCount) : 0, supported: true },
+    review: { count: review, supported: true },
+    rework: { count: rework, supported: true }
+  };
+};
+
 const computeLevel = ({ wip, q12, q3, q4, caps }) => {
   const reasons = [];
   let level = 'ok';
@@ -228,6 +250,11 @@ class ProcessStatusService {
 
       const queue = computeQueueCounts({ tasks, taskRecordService: this.taskRecordService });
       const qByTier = queue.counts;
+      const fourQueues = computeFourQueuesSnapshot({
+        tasks,
+        taskRecordService: this.taskRecordService,
+        wipCount: wip.wip
+      });
 
       const level = computeLevel({
         wip: wip.wip,
@@ -243,6 +270,7 @@ class ProcessStatusService {
         wip: wip.wip,
         wipKind: wip.kind,
         wipMax: caps.wipMax,
+        fourQueues,
         qByTier,
         q12: queue.q12,
         qTotal: queue.qTotal,
