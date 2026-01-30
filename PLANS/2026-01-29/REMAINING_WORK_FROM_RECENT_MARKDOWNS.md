@@ -1,7 +1,8 @@
 # Remaining Work Found in Recently-Created Plan Docs (Last 7 Days)
 
 Generated: 2026-01-29  
-Repo state: `origin/main` @ `31c46e2`
+Last updated: 2026-01-30  
+Repo state: `origin/main` @ `f554b2f`
 
 ## Scope + method
 
@@ -131,73 +132,76 @@ Notes:
 
 ## Per-file scan results (what we found)
 
-### `PLANS/2026-01-24/CHECKLIST.md`
-- Template checklist (intentionally unchecked); not a product backlog.
+### Files with remaining work
 
-### `PLANS/2026-01-24/FIZZY_UI_NOTES.md`
-- No remaining work. The referenced patterns (drag/drop + collapsible columns) are already present in the current Tasks UI.
-
-### `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md`
+#### `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md`
 - Remaining: items #1–#3 and #2 above (settings/caps endpoint + pairing heuristics + explicit B/W/Q/X snapshot).
 
-### `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md`
+#### `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md`
 - Template daily checklist items are intentionally unchecked (not backlog).
 - Remaining: items #2–#5 above (pairing heuristics, four-queues snapshot surfacing, review checklist UI, overnight runner).
 
-### `PLANS/2026-01-24/TASKS_TICKETING.md`
+#### `PLANS/2026-01-24/TASKS_TICKETING.md`
 - Remaining: item #17 above (persistent/stale-while-revalidate cache).
 
-### `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md`
+#### `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md`
 - Remaining: items #13–#16 above (attachments/cover, full checklist CRUD, “perfect reorder”).
 
-### `PLANS/2026-01-25/BRAIN_DUMP_2026-01-25.md`
-- Historical transcript; not an actionable checklist. (The shippable plan/checklist lives in `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md`.)
-
-### `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md`
-- No remaining work (all checklist items are marked shipped).
-
-### `PLANS/2026-01-25/DATA_MODEL.md`
-- Reference doc; no remaining work items.
-
-### `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md`
+#### `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md`
 - Remaining: items #11–#12 above (shared/encrypted task records; richer satisfaction rules).
 
-### `PLANS/2026-01-25/POST_SHIP_ISSUES.md`
-- No remaining work (all items are checked off).
-
-### `PLANS/2026-01-25/PROJECT_RISK_AND_CONFLICTS.md`
+#### `PLANS/2026-01-25/PROJECT_RISK_AND_CONFLICTS.md`
 - Remaining: items #8–#9 above (`overallRisk` + conflict warnings integration).
 
-### `PLANS/2026-01-25/PROMPT_ARTIFACTS_PR.md`
-- No remaining work from this doc (prompt artifacts + promotion + Trello embed are already shipped).
-
-### `PLANS/2026-01-25/QUEUE_REVIEW_INBOX_PR.md`
-- No remaining work (checklist is fully checked off).
-
-### `PLANS/2026-01-25/REMAINING_NEXT_PHASE.md`
-- No remaining work (all items are checked off).
-
-### `PLANS/2026-01-25/REVIEW_CONSOLE_V1.md`
-- No remaining work (the described v1 capabilities are now shipped).
-
-### `PLANS/2026-01-25/TASK_RECORDS_PR.md`
-- No remaining work (task records API is shipped).
-
-### `PLANS/2026-01-25/TIER_FILTERS_PR.md`
-- No remaining work (tier filters + resolution helpers are shipped).
-
-### `PLANS/2026-01-25/TRELLO_PARITY_PR.md`
+#### `PLANS/2026-01-25/TRELLO_PARITY_PR.md`
 - Remaining: items #13–#16 above (attachments/cover, full checklist CRUD, list reorder/creation, within-list reorder).
 
-### `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
+#### `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
 - Remaining: items #13, #16, #17 above (attachments/cover, within-list reorder, persistent cache).
 
-### `PLANS/2026-01-25/WISHLIST_PHASE2.md`
-- No remaining work (all items are checked off).
-
-### `PLANS/2026-01-25/WORKFLOW_MODES_PR.md`
+#### `PLANS/2026-01-25/WORKFLOW_MODES_PR.md`
 - Remaining: items #6–#7 above (Queue merge/request-changes actions; mode-specific sorting by risk/verify).
 
-### `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md`
+#### `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md`
 - Remaining: item #10 above (ticket↔ticket conflict probability heuristics: explicitly “missing future work”).
 
+### Files with no remaining work (or reference/templates only)
+
+#### `PLANS/2026-01-24/CHECKLIST.md`
+- Template checklist (intentionally unchecked); not a product backlog.
+
+#### `PLANS/2026-01-24/FIZZY_UI_NOTES.md`
+- No remaining work. The referenced patterns (drag/drop + collapsible columns) are already present in the current Tasks UI.
+
+#### `PLANS/2026-01-25/BRAIN_DUMP_2026-01-25.md`
+- Historical transcript; not an actionable checklist. (The shippable plan/checklist lives in `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md`.)
+
+#### `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md`
+- No remaining work (all checklist items are marked shipped).
+
+#### `PLANS/2026-01-25/DATA_MODEL.md`
+- Reference doc; no remaining work items.
+
+#### `PLANS/2026-01-25/POST_SHIP_ISSUES.md`
+- No remaining work (all items are checked off).
+
+#### `PLANS/2026-01-25/PROMPT_ARTIFACTS_PR.md`
+- No remaining work from this doc (prompt artifacts + promotion + Trello embed are already shipped).
+
+#### `PLANS/2026-01-25/QUEUE_REVIEW_INBOX_PR.md`
+- No remaining work (checklist is fully checked off).
+
+#### `PLANS/2026-01-25/REMAINING_NEXT_PHASE.md`
+- No remaining work (all items are checked off).
+
+#### `PLANS/2026-01-25/REVIEW_CONSOLE_V1.md`
+- No remaining work (the described v1 capabilities are now shipped).
+
+#### `PLANS/2026-01-25/TASK_RECORDS_PR.md`
+- No remaining work (task records API is shipped).
+
+#### `PLANS/2026-01-25/TIER_FILTERS_PR.md`
+- No remaining work (tier filters + resolution helpers are shipped).
+
+#### `PLANS/2026-01-25/WISHLIST_PHASE2.md`
+- No remaining work (all items are checked off).
