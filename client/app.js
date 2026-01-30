@@ -11303,6 +11303,71 @@ class ClaudeOrchestrator {
       const last = card?.dateLastActivity ? new Date(card.dateLastActivity).toLocaleString() : '';
       const url = card?.url || '';
 
+      const cover = (card?.cover && typeof card.cover === 'object') ? card.cover : null;
+      const coverAttachmentId = String(card?.idAttachmentCover || '').trim();
+      const attachments = Array.isArray(card?.attachments) ? card.attachments : [];
+
+      const pickBestPreviewUrl = (att) => {
+        const previews = Array.isArray(att?.previews) ? att.previews : [];
+        const best = [...previews].sort((a, b) => (Number(b?.width || 0) - Number(a?.width || 0)) || (Number(b?.bytes || 0) - Number(a?.bytes || 0)))[0];
+        return String(best?.url || '').trim();
+      };
+
+      const coverUrl = (() => {
+        if (cover && typeof cover === 'object') {
+          const scaled = Array.isArray(cover.scaled) ? cover.scaled : [];
+          const best = [...scaled].sort((a, b) => (Number(b?.width || 0) - Number(a?.width || 0)) || (Number(b?.bytes || 0) - Number(a?.bytes || 0)))[0];
+          const url = String(best?.url || cover.url || '').trim();
+          if (url) return url;
+        }
+        if (coverAttachmentId && attachments.length) {
+          const match = attachments.find(a => String(a?.id || '').trim() === coverAttachmentId);
+          const preview = pickBestPreviewUrl(match);
+          return preview || String(match?.url || '').trim();
+        }
+        return '';
+      })();
+
+      const coverColor = String(cover?.color || '').trim();
+
+      const formatBytes = (n) => {
+        const bytes = Number(n);
+        if (!Number.isFinite(bytes) || bytes <= 0) return '';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let v = bytes;
+        let i = 0;
+        while (v >= 1024 && i < units.length - 1) {
+          v /= 1024;
+          i += 1;
+        }
+        const rounded = i === 0 ? Math.round(v) : Math.round(v * 10) / 10;
+        return `${rounded}${units[i]}`;
+      };
+
+      const attachmentsHtml = attachments.length
+        ? attachments
+          .slice(0, 50)
+          .map((a) => {
+            const name = String(a?.name || '').trim() || String(a?.url || '').trim() || 'attachment';
+            const href = String(a?.url || '').trim();
+            const bytes = formatBytes(a?.bytes);
+            const mime = String(a?.mimeType || '').trim();
+            const isCover = !!(coverAttachmentId && String(a?.id || '').trim() === coverAttachmentId);
+            const preview = pickBestPreviewUrl(a);
+            const meta = [isCover ? 'cover' : '', bytes, mime].filter(Boolean).join(' • ');
+            return `
+              <div class="tasks-attachment">
+                ${preview ? `<a class="tasks-attachment-thumb" href="${escapeHtml(href || preview)}" target="_blank" rel="noreferrer"><img src="${escapeHtml(preview)}" alt=""></a>` : `<div class="tasks-attachment-thumb is-empty"></div>`}
+                <div class="tasks-attachment-body">
+                  ${href ? `<a class="tasks-attachment-name" href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${escapeHtml(name)}</a>` : `<div class="tasks-attachment-name">${escapeHtml(name)}</div>`}
+                  ${meta ? `<div class="tasks-attachment-meta">${escapeHtml(meta)}</div>` : ''}
+                </div>
+              </div>
+            `;
+          })
+          .join('')
+        : `<div class="tasks-detail-empty">No attachments.</div>`;
+
       const members = Array.isArray(card?.members) ? card.members : [];
       const memberById = new Map(members.map(m => [m?.id, m]).filter(([id]) => !!id));
       const allMembers = Array.isArray(state.boardMembers) ? state.boardMembers : [];
@@ -11577,6 +11642,20 @@ class ClaudeOrchestrator {
           <div class="tasks-inline-row tasks-dep-add">
             <input id="tasks-dep-input" class="tasks-input" placeholder="Paste Trello card URL or shortLink…" />
             <button class="btn-secondary" id="tasks-dep-add-btn">＋ Add</button>
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Cover</div>
+          ${coverUrl
+            ? `<a class="tasks-cover" href="${escapeHtml(coverUrl)}" target="_blank" rel="noreferrer"><img src="${escapeHtml(coverUrl)}" alt=""></a>`
+            : (coverColor ? `<div class="tasks-cover tasks-cover-color" style="background:${escapeHtml(coverColor)}"></div>` : `<div class="tasks-detail-empty">No cover.</div>`)}
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Attachments (${attachments.length})</div>
+          <div class="tasks-attachments">
+            ${attachmentsHtml}
           </div>
         </div>
 
