@@ -6310,12 +6310,14 @@ class ClaudeOrchestrator {
 	        const path = escapeHtml(f?.path || '');
 	        const oldPath = f?.oldPath ? escapeHtml(f.oldPath) : '';
 	        const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
+	        const rawPath = escapeHtml(String(f?.path || '').replace(/\\/g, '/'));
 	        return `
 	          <tr>
 	            <td class="mono">${escapeHtml(status)}</td>
 	            <td class="mono">${path}${renameHint}</td>
 	            <td class="mono">${escapeHtml(staged)}</td>
 	            <td class="mono">${escapeHtml(unstaged)}</td>
+	            <td><button class="btn-secondary worktree-inspector-mini-btn" type="button" data-file-sync="${rawPath}" title="Copy this file to another worktree">Sync</button></td>
 	          </tr>
 	        `;
 	      }).join('');
@@ -6519,10 +6521,11 @@ class ClaudeOrchestrator {
 		                      <th>Path</th>
 		                      <th>Staged</th>
 		                      <th>Unstaged</th>
+		                      <th>Sync</th>
 		                    </tr>
 		                  </thead>
 		                  <tbody>
-		                    ${fileRows || `<tr><td colspan="4" style="opacity:0.8;">No changes.</td></tr>`}
+		                    ${fileRows || `<tr><td colspan="5" style="opacity:0.8;">No changes.</td></tr>`}
 		                  </tbody>
 		                </table>
 		              </div>
@@ -6564,6 +6567,120 @@ class ClaudeOrchestrator {
 		        });
 		      });
 		      applyFilesView(filesView);
+
+		      const fileSyncButtons = bodyEl.querySelectorAll('[data-file-sync]');
+		      const openFileSyncModal = (relativePath) => {
+		        const rel = String(relativePath || '').trim();
+		        if (!rel) return;
+
+		        const candidates = [];
+		        const seen = new Set();
+		        for (const [sid2, sess] of this.sessions) {
+		          const cwd2 = String(sess?.config?.cwd || sess?.cwd || sess?.worktreePath || '').trim();
+		          if (!cwd2) continue;
+		          if (cwd2 === p) continue;
+		          if (seen.has(cwd2)) continue;
+		          seen.add(cwd2);
+
+		          const repoName = sess?.repositoryName || this.extractRepositoryName(sid2) || '';
+		          const wt = sess?.worktreeId || String(sid2).split('-')[0] || '';
+		          const label = repoName ? `${repoName}/${wt}` : wt || cwd2.replace(/\\/g, '/').split('/').slice(-2).join('/');
+		          candidates.push({ path: cwd2, label });
+		        }
+
+		        if (!candidates.length) {
+		          this.showToast('No other worktrees found to sync to', 'warning');
+		          return;
+		        }
+
+		        const existing = document.getElementById('file-sync-modal');
+		        if (existing) existing.remove();
+
+		        const overlay = document.createElement('div');
+		        overlay.id = 'file-sync-modal';
+		        overlay.className = 'modal';
+		        overlay.innerHTML = `
+		          <div class="modal-content" style="max-width: 640px;">
+		            <div class="modal-header">
+		              <h3>Sync file</h3>
+		              <button class="close-btn" type="button" data-file-sync-close="true">✕</button>
+		            </div>
+		            <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;">
+		              <div style="opacity:0.85;">Source: <code>${escapeHtml(p)}</code></div>
+		              <div style="opacity:0.85;">File: <code>${escapeHtml(rel)}</code></div>
+		              <label style="display:flex;flex-direction:column;gap:6px;">
+		                <span>Destination</span>
+		                <select id="file-sync-target" class="tasks-select">
+		                  ${candidates.map(c => `<option value="${escapeHtml(c.path)}">${escapeHtml(c.label)} — ${escapeHtml(c.path)}</option>`).join('')}
+		                </select>
+		              </label>
+		              <label style="display:flex;align-items:center;gap:8px;">
+		                <input type="checkbox" id="file-sync-all" />
+		                Sync to all listed worktrees
+		              </label>
+		              <label style="display:flex;align-items:center;gap:8px;">
+		                <input type="checkbox" id="file-sync-overwrite" />
+		                Overwrite if destination already exists
+		              </label>
+		              <div id="file-sync-status" style="opacity:0.85;"></div>
+		            </div>
+		            <div class="modal-footer">
+		              <button class="btn-secondary" type="button" data-file-sync-close="true">Cancel</button>
+		              <button class="btn-primary" type="button" id="file-sync-run">Sync</button>
+		            </div>
+		          </div>
+		        `;
+
+		        document.body.appendChild(overlay);
+
+		        const close = () => overlay.remove();
+		        overlay.addEventListener('mousedown', (e) => {
+		          if (e.target === overlay) close();
+		        });
+		        overlay.querySelectorAll('[data-file-sync-close="true"]').forEach((btn) => btn.addEventListener('click', close));
+
+		        const statusEl = overlay.querySelector('#file-sync-status');
+		        const runBtn = overlay.querySelector('#file-sync-run');
+		        runBtn?.addEventListener('click', async () => {
+		          const all = !!overlay.querySelector('#file-sync-all')?.checked;
+		          const overwrite = !!overlay.querySelector('#file-sync-overwrite')?.checked;
+		          const selected = String(overlay.querySelector('#file-sync-target')?.value || '').trim();
+		          const targets = all ? candidates.map(c => c.path) : [selected].filter(Boolean);
+		          if (!targets.length) return;
+
+		          if (statusEl) statusEl.textContent = 'Syncing…';
+		          runBtn.disabled = true;
+		          try {
+		            const resp = await fetch('/api/files/sync', {
+		              method: 'POST',
+		              headers: { 'Content-Type': 'application/json' },
+		              body: JSON.stringify({ sourceRoot: p, relativePath: rel, targets, overwrite })
+		            });
+		            const data = await resp.json().catch(() => ({}));
+		            if (!resp.ok || !data?.ok) {
+		              throw new Error(String(data?.error || 'Sync failed'));
+		            }
+		            const results = Array.isArray(data?.results) ? data.results : [];
+		            const written = results.filter(r => r.status === 'written').length;
+		            const exists = results.filter(r => r.status === 'exists').length;
+		            const errors = results.filter(r => r.status === 'error').length;
+		            if (statusEl) statusEl.textContent = `Done: ${written} written, ${exists} skipped (exists), ${errors} errors`;
+		            this.showToast(`Synced ${written} file(s)`, errors ? 'warning' : 'success');
+		          } catch (err) {
+		            if (statusEl) statusEl.textContent = `Failed: ${String(err?.message || err)}`;
+		            this.showToast(`Sync failed: ${String(err?.message || err)}`, 'error');
+		          } finally {
+		            runBtn.disabled = false;
+		          }
+		        });
+		      };
+
+		      fileSyncButtons.forEach((btn) => {
+		        btn.addEventListener('click', () => {
+		          const rel = String(btn?.dataset?.fileSync || '').trim();
+		          openFileSyncModal(rel);
+		        });
+		      });
 
 		      if (reviewConsole) {
 		        let currentPreset = rcPreset;
