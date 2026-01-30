@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
+const os = require('os');
 const { exec, spawn } = require('child_process');
 const util = require('util');
 const winston = require('winston');
@@ -20,29 +21,48 @@ const logger = winston.createLogger({
 });
 
 // Project categories - determines folder structure
+function expandUserPath(p) {
+  const raw = String(p || '').trim();
+  if (!raw) return raw;
+
+  if (raw === '~') return os.homedir();
+  if (raw.startsWith('~/')) return path.join(os.homedir(), raw.slice(2));
+  return raw;
+}
+
+function resolveGitHubRoot() {
+  const envRoot = process.env.GREENFIELD_GITHUB_ROOT || process.env.GITHUB_ROOT || '';
+  const root = envRoot ? expandUserPath(envRoot) : path.join(os.homedir(), 'GitHub');
+  return root;
+}
+
+function joinGitHubRoot(...parts) {
+  return path.join(resolveGitHubRoot(), ...parts);
+}
+
 const PROJECT_CATEGORIES = {
   'website': {
-    path: '~/GitHub/websites',
+    path: joinGitHubRoot('websites'),
     keywords: ['website', 'web app', 'frontend', 'landing page', 'portfolio', 'blog']
   },
   'game': {
-    path: '~/GitHub/games',
+    path: joinGitHubRoot('games'),
     keywords: ['game', 'hytopia', 'unity', 'godot', 'gaming']
   },
   'tool': {
-    path: '~/GitHub/tools',
+    path: joinGitHubRoot('tools'),
     keywords: ['tool', 'cli', 'utility', 'automation', 'script']
   },
   'api': {
-    path: '~/GitHub/apis',
+    path: joinGitHubRoot('apis'),
     keywords: ['api', 'backend', 'server', 'service', 'rest', 'graphql']
   },
   'library': {
-    path: '~/GitHub/libraries',
+    path: joinGitHubRoot('libraries'),
     keywords: ['library', 'package', 'module', 'npm', 'sdk']
   },
   'other': {
-    path: '~/GitHub/projects',
+    path: joinGitHubRoot('projects'),
     keywords: []
   }
 };
@@ -54,7 +74,7 @@ const PROJECT_TEMPLATES = {
     description: 'Hytopia SDK game project',
     initCommand: 'npx create-hytopia@latest',
     postInit: [],
-    defaultPath: '~/GitHub/games/hytopia/games'
+    defaultPath: joinGitHubRoot('games', 'hytopia', 'games')
   },
   'node-typescript': {
     name: 'Node.js TypeScript',
@@ -93,7 +113,7 @@ dist/
 .env
 *.log`
     },
-    defaultPath: '~/GitHub/tools'
+    defaultPath: joinGitHubRoot('tools')
   },
   'empty': {
     name: 'Empty Project',
@@ -103,7 +123,7 @@ dist/
       'README.md': `# {{projectName}}\n\nProject description here.`,
       '.gitignore': `node_modules/\n.env\n*.log`
     },
-    defaultPath: '~/GitHub'
+    defaultPath: resolveGitHubRoot()
   }
 };
 
@@ -252,7 +272,7 @@ class GreenfieldService {
     // Detect or use provided category
     const category = providedCategory || this.detectCategory(description);
     const categoryConfig = this.categories[category];
-    const basePath = categoryConfig.path.replace('~', process.env.HOME);
+    const basePath = expandUserPath(categoryConfig.path);
 
     logger.info('Detected category', { category, basePath });
 
@@ -663,7 +683,7 @@ Start by understanding the requirements, then design and implement the solution.
    * Validate a project path
    */
   async validatePath(projectPath) {
-    const expandedPath = projectPath.replace('~', process.env.HOME);
+    const expandedPath = expandUserPath(projectPath);
 
     try {
       const stats = await fs.stat(expandedPath);
