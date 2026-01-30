@@ -9088,6 +9088,75 @@ header h1 {
   word-break: break-word;
 }
 
+.tasks-checklists {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.tasks-checklist {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  padding: 10px;
+}
+
+.tasks-checklist-header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tasks-checklist-title {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.tasks-checklist-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.tasks-checkitems {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tasks-checkitem-row {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+}
+
+.tasks-checkitem-row.done {
+  opacity: 0.75;
+}
+
+.tasks-checkitem-text {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  word-break: break-word;
+}
+
+.tasks-checkitem-add,
+.tasks-checklist-add {
+  margin-top: 8px;
+}
+
 .tasks-dep-row.done .tasks-dep-text {
   text-decoration: line-through;
 }

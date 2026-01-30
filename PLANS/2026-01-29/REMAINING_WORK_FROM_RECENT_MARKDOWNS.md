@@ -57,7 +57,7 @@ Notes:
      - `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md` (Out of scope)
 
 6) **Full checklist CRUD (beyond Dependencies convention)**
-   - Current: Dependencies checklist is supported; “all checklists” CRUD is not.
+   - Current: shipped (Tasks card detail supports creating/renaming/deleting checklists + adding/renaming/deleting/toggling items).
    - Sources:
      - `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md` (Follow-ups)
      - `PLANS/2026-01-25/TRELLO_PARITY_PR.md` (Follow-ups)

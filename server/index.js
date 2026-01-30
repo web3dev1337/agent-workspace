@@ -3531,6 +3531,161 @@ app.put('/api/tasks/cards/:cardId/dependencies/:itemId', express.json(), async (
   }
 });
 
+// ============================================
+// Checklists (generic CRUD beyond Dependencies)
+// ============================================
+
+app.post('/api/tasks/cards/:cardId/checklists', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.createChecklist !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support checklists', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'name is required' });
+
+    const checklist = await provider.createChecklist({ cardId: req.params.cardId, name });
+    const card = typeof provider.getCard === 'function'
+      ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
+      : null;
+    res.json({ provider: providerId, cardId: req.params.cardId, checklist, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to create checklist', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.put('/api/tasks/checklists/:checklistId', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const cardId = String(req.body?.cardId || '').trim();
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.updateChecklist !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support checklists', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'name is required' });
+
+    const checklist = await provider.updateChecklist({ checklistId: req.params.checklistId, name });
+    const card = (cardId && typeof provider.getCard === 'function')
+      ? await provider.getCard({ cardId, refresh: true })
+      : null;
+    res.json({ provider: providerId, checklistId: req.params.checklistId, checklist, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to rename checklist', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.delete('/api/tasks/checklists/:checklistId', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const cardId = String(req.query.cardId || '').trim();
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.removeChecklist !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support checklists', code: 'UNSUPPORTED_OPERATION' });
+    }
+    await provider.removeChecklist({ checklistId: req.params.checklistId });
+    const card = (cardId && typeof provider.getCard === 'function')
+      ? await provider.getCard({ cardId, refresh: true })
+      : null;
+    res.json({ provider: providerId, checklistId: req.params.checklistId, removed: true, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to delete checklist', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.post('/api/tasks/checklists/:checklistId/check-items', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const cardId = String(req.body?.cardId || '').trim();
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.addCheckItem !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support checklist items', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'name is required' });
+
+    await provider.addCheckItem({ checklistId: req.params.checklistId, name });
+    const card = (cardId && typeof provider.getCard === 'function')
+      ? await provider.getCard({ cardId, refresh: true })
+      : null;
+    res.json({ provider: providerId, checklistId: req.params.checklistId, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to add checklist item', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.put('/api/tasks/checklists/:checklistId/check-items/:itemId', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const cardId = String(req.body?.cardId || '').trim();
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.updateCheckItem !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support checklist items', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'name is required' });
+
+    await provider.updateCheckItem({ checklistId: req.params.checklistId, itemId: req.params.itemId, name });
+    const card = (cardId && typeof provider.getCard === 'function')
+      ? await provider.getCard({ cardId, refresh: true })
+      : null;
+    res.json({ provider: providerId, checklistId: req.params.checklistId, itemId: req.params.itemId, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to rename checklist item', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.delete('/api/tasks/checklists/:checklistId/check-items/:itemId', async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const cardId = String(req.query.cardId || '').trim();
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.removeCheckItem !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support checklist items', code: 'UNSUPPORTED_OPERATION' });
+    }
+    await provider.removeCheckItem({ checklistId: req.params.checklistId, itemId: req.params.itemId });
+    const card = (cardId && typeof provider.getCard === 'function')
+      ? await provider.getCard({ cardId, refresh: true })
+      : null;
+    res.json({ provider: providerId, checklistId: req.params.checklistId, itemId: req.params.itemId, removed: true, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to delete checklist item', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.put('/api/tasks/cards/:cardId/check-items/:itemId', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.setCheckItemState !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support checklist item state updates', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const state = req.body?.state;
+    await provider.setCheckItemState({ cardId: req.params.cardId, itemId: req.params.itemId, state });
+    const card = typeof provider.getCard === 'function'
+      ? await provider.getCard({ cardId: req.params.cardId, refresh: true })
+      : null;
+    res.json({ provider: providerId, cardId: req.params.cardId, itemId: req.params.itemId, card });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to update checklist item state', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
 app.post('/api/tasks/cards/:cardId/comments', express.json(), async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';
