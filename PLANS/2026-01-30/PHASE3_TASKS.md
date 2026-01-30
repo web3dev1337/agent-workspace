@@ -45,7 +45,7 @@ Guidelines:
 - [x] **P3-09 Within-list drag reorder v1**: true within-list reorder (pos math) + optional WIP limits/swimlanes follow-ups.
   - Sources: `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md`, `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
 
-- [ ] **P3-10 Persistent SWR cache v1**: stale-while-revalidate cache persisted across restarts.
+- [x] **P3-10 Persistent SWR cache v1**: stale-while-revalidate cache persisted across restarts.
   - Sources: `PLANS/2026-01-24/TASKS_TICKETING.md`, `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
 
 ## Done (shipped)
