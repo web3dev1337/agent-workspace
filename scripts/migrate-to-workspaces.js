@@ -124,6 +124,9 @@ async function ensureDirectories(basePath) {
 }
 
 function createHyFire2Workspace(oldConfig) {
+  const fallbackPath = path.join(os.homedir(), 'HyFire2');
+  const candidatePath = oldConfig?.worktrees?.basePath || oldConfig?.worktrees?.masterPath || oldConfig?.worktrees?.path || null;
+  const resolvedPath = candidatePath ? path.resolve(String(candidatePath)) : fallbackPath;
   return {
     id: 'hyfire2',
     name: 'HyFire 2',
@@ -133,7 +136,7 @@ function createHyFire2Workspace(oldConfig) {
     access: 'team',
 
     repository: {
-      path: '/home/ab/HyFire2',
+      path: resolvedPath,
       masterBranch: 'master',
       remote: 'https://github.com/web3dev1337/hyfire2'
     },
