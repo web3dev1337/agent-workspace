@@ -1461,6 +1461,9 @@ class Dashboard {
           <button class="btn-primary workspace-open-btn">
             Open Workspace
           </button>
+          <button class="btn-secondary workspace-export-btn" title="Export workspace config (JSON)">
+            ⬇
+          </button>
           <button class="btn-danger workspace-delete-btn" title="Delete workspace (keeps worktrees)">
             🗑️
           </button>
@@ -1487,6 +1490,7 @@ class Dashboard {
         <div class="workspace-card-footer">
           <button class="btn-primary workspace-create-btn">Create Workspace</button>
           <button class="btn-cta-empty workspace-create-empty-btn">One‑Click Empty</button>
+          <button class="btn-secondary workspace-import-btn" title="Import a workspace config (JSON)">⬆ Import</button>
         </div>
       </div>
     `;
@@ -1558,6 +1562,16 @@ class Dashboard {
       });
     });
 
+    // Workspace export handlers
+    document.querySelectorAll('.workspace-export-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const card = e.target.closest('.workspace-card');
+        const workspaceId = card?.dataset?.workspaceId;
+        if (workspaceId) this.downloadWorkspaceExport(workspaceId);
+      });
+    });
+
     // Create workspace button
     const createBtn = document.querySelector('.workspace-create-btn');
     if (createBtn) {
@@ -1570,6 +1584,13 @@ class Dashboard {
     if (createEmptyBtn) {
       createEmptyBtn.addEventListener('click', () => {
         this.createEmptyWorkspaceQuick();
+      });
+    }
+
+    const importBtn = document.querySelector('.workspace-import-btn');
+    if (importBtn) {
+      importBtn.addEventListener('click', () => {
+        this.importWorkspaceFromFile();
       });
     }
 
@@ -1753,6 +1774,64 @@ class Dashboard {
     } catch (error) {
       console.error('Failed to create empty workspace:', error);
       alert('Failed to create empty workspace: ' + error.message);
+    }
+  }
+
+  async downloadWorkspaceExport(workspaceId) {
+    const id = String(workspaceId || '').trim();
+    if (!id) return;
+    try {
+      const url = `/api/workspaces/${encodeURIComponent(id)}/export`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(await resp.text());
+      const blob = await resp.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${id}.workspace.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2500);
+    } catch (err) {
+      try { this.orchestrator?.showToast?.(`Export failed: ${String(err?.message || err)}`, 'error'); } catch {}
+    }
+  }
+
+  async importWorkspaceFromFile() {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,application/json';
+      input.style.display = 'none';
+      document.body.appendChild(input);
+
+      input.addEventListener('change', async () => {
+        const file = input.files && input.files[0];
+        input.remove();
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const payload = JSON.parse(text);
+          const resp = await fetch('/api/workspaces/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data?.ok) {
+            throw new Error(String(data?.error || 'Import failed'));
+          }
+          try { this.orchestrator?.showToast?.('Workspace imported', 'success'); } catch {}
+          await this.loadWorkspaces();
+          this.render();
+        } catch (err) {
+          try { this.orchestrator?.showToast?.(`Import failed: ${String(err?.message || err)}`, 'error'); } catch {}
+        }
+      });
+
+      input.click();
+    } catch (err) {
+      try { this.orchestrator?.showToast?.(`Import failed: ${String(err?.message || err)}`, 'error'); } catch {}
     }
   }
 
