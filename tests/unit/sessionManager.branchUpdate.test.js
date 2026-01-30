@@ -25,8 +25,8 @@ describe('SessionManager branch updates', () => {
     sessionManager.startBranchRefresh();
     jest.advanceTimersByTime(11);
 
-    expect(updateSpy).toHaveBeenCalledWith('work2', '/tmp/repo-a/work2');
-    expect(updateSpy).toHaveBeenCalledWith('work1', '/tmp/repo-a/work1');
+    expect(updateSpy).toHaveBeenCalledWith('work2', '/tmp/repo-a/work2', true);
+    expect(updateSpy).toHaveBeenCalledWith('work1', '/tmp/repo-a/work1', true);
   });
 
   test('updateGitBranch falls back to matching by cwd path', async () => {
