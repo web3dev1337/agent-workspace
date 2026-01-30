@@ -31,7 +31,7 @@ class WorkspaceWizard {
   async scanProjects() {
     try {
       // Use same server detection logic as main app
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const serverUrl = window.location.origin;
       const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
       if (response.ok) {
         this.discoveredProjects = await response.json();
@@ -489,7 +489,7 @@ class WorkspaceWizard {
       };
 
       // Send to server
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const serverUrl = window.location.origin;
       const response = await fetch(`${serverUrl}/api/workspaces`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

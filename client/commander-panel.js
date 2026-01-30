@@ -9,9 +9,8 @@ class CommanderPanel {
     this.orchestrator = orchestrator;
     this.isVisible = false;
     this.isRunning = false;
-    this.serverUrl = window.location.port === '2080' || window.location.port === '2081'
-      ? `http://localhost:${window.location.port === '2080' ? '3000' : '4000'}`
-      : window.location.origin;
+    // Always use same-origin API requests; the dev server proxies `/api` to the backend.
+    this.serverUrl = window.location.origin;
     this.terminal = null;
     this.fitAddon = null;
     this.lastPasteAt = 0;
