@@ -339,6 +339,25 @@ io.on('connection', (socket) => {
     logger.debug('Terminal input received', { sessionId, dataLength: inputData.length });
     sessionManager.writeToSession(sessionId, inputData);
   });
+
+  // Client hint: terminal output suggests the branch changed (e.g. "Switched to branch ...").
+  // This is a best-effort fast path to keep branch labels from staying stuck on "unknown".
+  socket.on('refresh-branch', ({ sessionId }) => {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+
+    const session = sessionManager.sessions.get(sid);
+    if (!session) return;
+    if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') return;
+
+    const cwd = (typeof sessionManager.getSessionCwd === 'function')
+      ? (sessionManager.getSessionCwd(session) || session?.config?.cwd || null)
+      : (session?.config?.cwd || null);
+    if (!cwd) return;
+
+    const worktreeId = session.worktreeId || sid;
+    sessionManager.updateGitBranch(worktreeId, cwd, true);
+  });
   
   // Handle terminal resize
   socket.on('terminal-resize', ({ sessionId, cols, rows }) => {
