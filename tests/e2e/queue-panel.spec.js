@@ -275,4 +275,118 @@ test.describe('Queue Panel', () => {
       method: 'merge'
     });
   });
+
+  test('review mode orders by overallRisk then verifyMinutes', async ({ page }) => {
+    // Mock process tasks list (3 unblocked PRs + 1 blocked PR)
+    await page.route(/.*\/api\/process\/tasks.*/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          count: 4,
+          tasks: [
+            {
+              id: 'pr:web3dev1337/demo#1',
+              kind: 'pr',
+              status: 'open',
+              title: 'PR A',
+              url: 'https://github.com/web3dev1337/demo/pull/1',
+              repository: 'web3dev1337/demo',
+              updatedAt: '2026-01-25T00:00:00Z',
+              record: { tier: 2, changeRisk: 'high', pFailFirstPass: 0.5, verifyMinutes: 20 },
+              dependencySummary: { total: 0, blocked: 0 }
+            },
+            {
+              id: 'pr:web3dev1337/demo#2',
+              kind: 'pr',
+              status: 'open',
+              title: 'PR B',
+              url: 'https://github.com/web3dev1337/demo/pull/2',
+              repository: 'web3dev1337/demo',
+              updatedAt: '2026-01-25T00:00:01Z',
+              record: { tier: 2, changeRisk: 'high', pFailFirstPass: 0.5, verifyMinutes: 5 },
+              dependencySummary: { total: 0, blocked: 0 }
+            },
+            {
+              id: 'pr:web3dev1337/demo#3',
+              kind: 'pr',
+              status: 'open',
+              title: 'PR C',
+              url: 'https://github.com/web3dev1337/demo/pull/3',
+              repository: 'web3dev1337/demo',
+              updatedAt: '2026-01-25T00:00:02Z',
+              record: { tier: 2, changeRisk: 'medium', pFailFirstPass: 0.5, verifyMinutes: 1 },
+              dependencySummary: { total: 0, blocked: 0 }
+            },
+            {
+              id: 'pr:web3dev1337/demo#4',
+              kind: 'pr',
+              status: 'open',
+              title: 'PR D (blocked)',
+              url: 'https://github.com/web3dev1337/demo/pull/4',
+              repository: 'web3dev1337/demo',
+              updatedAt: '2026-01-25T00:00:03Z',
+              record: { tier: 2, changeRisk: 'critical', pFailFirstPass: 1, verifyMinutes: 1 },
+              dependencySummary: { total: 1, blocked: 1 }
+            }
+          ]
+        })
+      });
+    });
+
+    // Mock upsert task record (used when starting review timer).
+    await page.route(/.*\/api\/process\/task-records\/.+/, async (route) => {
+      if (route.request().method() !== 'PUT') return route.fallback();
+      const body = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'x',
+          record: { ...(body || {}) }
+        })
+      });
+    });
+
+    // Dependencies: empty list (and allow writes).
+    await page.route(/.*\/api\/process\/task-records\/.+\/dependencies.*/, async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: 'x', dependencies: [] })
+        });
+        return;
+      }
+      if (['POST', 'DELETE'].includes(route.request().method())) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: 'x', record: { dependencies: [] } })
+        });
+        return;
+      }
+      return route.fallback();
+    });
+
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.goto('/');
+    await ensureWorkspaceLoaded(page);
+    await dismissFocusOverlay(page);
+
+    await page.evaluate(() => document.getElementById('queue-btn')?.click());
+    await expect(page.locator('#queue-panel')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#queue-list .task-card-row')).toHaveCount(4);
+
+    await page.locator('#queue-start-review').click();
+    await page.waitForTimeout(200);
+
+    const ids = await page.locator('#queue-list .task-card-row').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-queue-id')));
+    expect(ids).toEqual([
+      'pr:web3dev1337/demo#2',
+      'pr:web3dev1337/demo#1',
+      'pr:web3dev1337/demo#3',
+      'pr:web3dev1337/demo#4'
+    ]);
+  });
 });
