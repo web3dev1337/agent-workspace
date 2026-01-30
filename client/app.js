@@ -15820,6 +15820,8 @@ class ClaudeOrchestrator {
 			          <div class="tasks-detail-actions">
 			            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
 			            ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
+			            ${hasPR ? `<button class="btn-secondary" id="queue-review-approve" title="Approve PR on GitHub">👍 Approve</button>` : ''}
+			            ${hasPR ? `<button class="btn-secondary" id="queue-review-request-changes" title="Request changes on GitHub (uses Notes as the review body)">🛑 Changes</button>` : ''}
 			            ${hasPR ? `<button class="btn-secondary" id="queue-merge-pr" ${t?.isDraft ? 'disabled' : ''} title="${t?.isDraft ? 'Draft PRs cannot be merged' : 'Merge PR'}">✅ Merge</button>` : ''}
 			            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-inspector" title="Worktree files + commits">🗂 Inspect</button>` : ''}
 			            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-console" title="Review Console (docked)">🖥 Console</button>` : ''}
@@ -16034,6 +16036,8 @@ class ClaudeOrchestrator {
 		      const outcomeEl = detailEl.querySelector('#queue-review-outcome');
 			      const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
 			      const openDiffBtn = detailEl.querySelector('#queue-open-diff');
+			      const approvePrBtn = detailEl.querySelector('#queue-review-approve');
+			      const requestChangesBtn = detailEl.querySelector('#queue-review-request-changes');
 			      const mergePrBtn = detailEl.querySelector('#queue-merge-pr');
 			      const openInspectorBtn = detailEl.querySelector('#queue-open-inspector');
 			      const openConsoleBtn = detailEl.querySelector('#queue-open-console');
@@ -16591,6 +16595,92 @@ class ClaudeOrchestrator {
 	          await this.launchDiffViewer(url);
 	        } catch {
 	          window.open(url, '_blank', 'noreferrer');
+	        }
+	      });
+
+	      const runGitHubReview = async ({ action, body } = {}) => {
+	        const res = await fetch('/api/prs/review', {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify({ url, action, body })
+	        });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to submit PR review'));
+	        return data;
+	      };
+
+	      approvePrBtn?.addEventListener('click', async () => {
+	        try {
+	          if (!url) return;
+	          if (!window.confirm(`Approve PR?\n${url}`)) return;
+
+	          approvePrBtn.disabled = true;
+	          if (requestChangesBtn) requestChangesBtn.disabled = true;
+	          if (mergePrBtn) mergePrBtn.disabled = true;
+	          this.showToast('Submitting approval…', 'info');
+
+	          await runGitHubReview({ action: 'approve' });
+
+	          let nudged = false;
+	          if (state.reviewTimer?.taskId === t.id) {
+	            await stopReviewTimer({ reason: 'outcome', nudge: true });
+	            nudged = true;
+	          }
+
+	          const patch = { reviewed: true, reviewOutcome: 'approved', reviewEndedAt: new Date().toISOString(), claimedBy: null, claimedAt: null };
+	          const rec = await upsertRecord(t.id, patch);
+	          updateTaskRecordInState(t.id, rec);
+
+	          await fetchTasks().catch(() => {});
+	          renderDetail(getTaskById(t.id));
+
+	          if (!nudged) maybeNudgeReviewComplete(t.id, { reason: 'outcome' });
+	          maybeAutoAdvanceAfterReview(t.id);
+	          this.showToast('Approved', 'success');
+	        } catch (err) {
+	          this.showToast(String(err?.message || err), 'error');
+	          if (approvePrBtn) approvePrBtn.disabled = false;
+	          if (requestChangesBtn) requestChangesBtn.disabled = false;
+	          if (mergePrBtn) mergePrBtn.disabled = !!t?.isDraft;
+	        }
+	      });
+
+	      requestChangesBtn?.addEventListener('click', async () => {
+	        try {
+	          if (!url) return;
+	          const body = String(notesEl?.value || '').trim();
+	          const suffix = body ? '\n\n(Will include Notes as review body)' : '\n\n(No Notes text; review body will be empty)';
+	          if (!window.confirm(`Request changes?\n${url}${suffix}`)) return;
+
+	          requestChangesBtn.disabled = true;
+	          if (approvePrBtn) approvePrBtn.disabled = true;
+	          if (mergePrBtn) mergePrBtn.disabled = true;
+	          this.showToast('Requesting changes…', 'info');
+
+	          await runGitHubReview({ action: 'request_changes', body });
+
+	          let nudged = false;
+	          if (state.reviewTimer?.taskId === t.id) {
+	            await stopReviewTimer({ reason: 'outcome', nudge: true });
+	            nudged = true;
+	          }
+
+	          const patch = { reviewed: true, reviewOutcome: 'needs_fix', reviewEndedAt: new Date().toISOString(), claimedBy: null, claimedAt: null };
+	          const rec = await upsertRecord(t.id, patch);
+	          updateTaskRecordInState(t.id, rec);
+	          await maybeApplyTrelloNeedsFixLabel({ taskId: t.id, outcome: 'needs_fix', notes: body }).catch(() => {});
+
+	          await fetchTasks().catch(() => {});
+	          renderDetail(getTaskById(t.id));
+
+	          if (!nudged) maybeNudgeReviewComplete(t.id, { reason: 'outcome' });
+	          maybeAutoAdvanceAfterReview(t.id);
+	          this.showToast('Requested changes', 'success');
+	        } catch (err) {
+	          this.showToast(String(err?.message || err), 'error');
+	          if (requestChangesBtn) requestChangesBtn.disabled = false;
+	          if (approvePrBtn) approvePrBtn.disabled = false;
+	          if (mergePrBtn) mergePrBtn.disabled = !!t?.isDraft;
 	        }
 	      });
 
