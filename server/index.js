@@ -203,6 +203,7 @@ if (AUTH_TOKEN) {
 // Initialize services
 const workspaceManager = WorkspaceManager.getInstance();
 const { WorkspaceSuggestionService } = require('./workspaceSuggestionService');
+const { FileSyncService } = require('./fileSyncService');
 const agentManager = new AgentManager();
 const sessionManager = new SessionManager(io, agentManager);
 const statusDetector = new StatusDetector();
@@ -1158,6 +1159,23 @@ app.get('/api/workspaces/suggestions', async (req, res) => {
   } catch (error) {
     logger.error('Failed to get workspace suggestions', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get workspace suggestions' });
+  }
+});
+
+app.post('/api/files/sync', async (req, res) => {
+  try {
+    const sourceRoot = String(req.body?.sourceRoot || '').trim();
+    const relativePath = String(req.body?.relativePath || '').trim();
+    const overwrite = !!req.body?.overwrite;
+    const targetsRaw = Array.isArray(req.body?.targets) ? req.body.targets : [];
+    const targets = targetsRaw.map(String).map(s => s.trim()).filter(Boolean).slice(0, 25);
+
+    const svc = new FileSyncService();
+    const data = await svc.syncFile({ sourceRoot, relativePath, targets, overwrite });
+    res.json({ ok: true, ...data });
+  } catch (error) {
+    logger.error('Failed to sync file', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: error.message });
   }
 });
 

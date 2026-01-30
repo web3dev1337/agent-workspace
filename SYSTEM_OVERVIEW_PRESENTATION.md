@@ -1060,9 +1060,8 @@ Each switch < 5 seconds, full context preserved
 - [x] **AI-Powered Workspace Suggestions**
   - Shipped (v1): Dashboard → ✨ Suggestions shows frequent repo combos and recent-activity repos (best-effort).
 
-- [ ] **Cross-Workspace File Sync**
-  - Share utility files between projects
-  - Auto-sync common UI components
+- [x] **Cross-Workspace File Sync**
+  - Shipped (v1): Worktree Inspector → Files (List view) includes per-file “Sync” to copy the file to other worktree roots (opt-in; no auto-sync).
 
 - [ ] **Advanced Performance Monitoring**
   - Per-terminal resource usage
