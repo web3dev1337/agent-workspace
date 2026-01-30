@@ -13,8 +13,8 @@ This turns the “future work” bullets into a checkbox task list so we can shi
 
 ## Phase 3B: Agent management
 
-- [ ] Polecat management panel: spawn/kill/view logs
-- [ ] Polecat status dashboard
+- [x] Polecat management panel: spawn/kill/view logs (shipped: PR #484 on 2026-01-30)
+- [x] Polecat status dashboard (shipped: PR #485 on 2026-01-30)
 - [x] Agent identity management (shipped: PR #480 on 2026-01-30)
 
 ## Phase 3C: Monitoring
