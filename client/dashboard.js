@@ -139,6 +139,7 @@ class Dashboard {
                 <div id="dashboard-advice-summary" class="dashboard-summary-body">Loading…</div>
                 <div class="dashboard-summary-actions">
                   <button class="dashboard-topbar-btn" id="dashboard-open-queue" title="Open Queue">📥 Queue</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-queue-viz" title="Work queue visualization">🧭 Viz</button>
                   <button class="dashboard-topbar-btn" id="dashboard-open-advice" title="Open Commander Advice">🧠 Advice</button>
                   <button class="dashboard-topbar-btn" id="dashboard-open-suggestions" title="Open workspace suggestions">✨ Suggestions</button>
                   <button class="dashboard-topbar-btn" id="dashboard-open-distribution" title="Suggested terminal per PR/task">🎯 Distribution</button>
@@ -224,6 +225,10 @@ class Dashboard {
 	      e.preventDefault();
 	      this.orchestrator?.showQueuePanel?.().catch?.(() => {});
 	    });
+    document.getElementById('dashboard-open-queue-viz')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.showQueueVizOverlay().catch(() => {});
+    });
     document.getElementById('dashboard-open-prs')?.addEventListener('click', (e) => {
       e.preventDefault();
       try {
@@ -637,6 +642,187 @@ class Dashboard {
 
 	    await this.loadPerformanceDetails();
 	  }
+
+    async showQueueVizOverlay() {
+      const existing = document.getElementById('dashboard-queue-viz-overlay');
+      if (existing) {
+        existing.classList.remove('hidden');
+        return;
+      }
+
+      const overlay = document.createElement('div');
+      overlay.id = 'dashboard-queue-viz-overlay';
+      overlay.className = 'dashboard-telemetry-overlay';
+      overlay.innerHTML = `
+        <div class="dashboard-telemetry-panel" role="dialog" aria-label="Work queue visualization">
+          <div class="dashboard-telemetry-header">
+            <div class="dashboard-telemetry-title">Queue — Visualization</div>
+            <button class="dashboard-topbar-btn" id="dashboard-queue-viz-close" title="Close (Esc)">✕</button>
+          </div>
+          <div class="dashboard-telemetry-controls">
+            <div class="dashboard-telemetry-actions">
+              <button class="btn-secondary" type="button" id="dashboard-queue-viz-open-queue">📥 Open Queue</button>
+              <button class="btn-secondary" type="button" id="dashboard-queue-viz-refresh">Refresh</button>
+            </div>
+          </div>
+          <div id="dashboard-queue-viz-body" class="dashboard-telemetry-body">Loading…</div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      const close = () => this.hideQueueVizOverlay();
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+      });
+      overlay.querySelector('#dashboard-queue-viz-close')?.addEventListener('click', close);
+      overlay.querySelector('#dashboard-queue-viz-open-queue')?.addEventListener('click', () => {
+        close();
+        this.orchestrator?.showQueuePanel?.().catch?.(() => {});
+      });
+      overlay.querySelector('#dashboard-queue-viz-refresh')?.addEventListener('click', () => {
+        this.loadQueueVizDetails().catch(() => {});
+      });
+
+      const onKey = (e) => {
+        if (e.key !== 'Escape') return;
+        const el = document.getElementById('dashboard-queue-viz-overlay');
+        if (!el || el.classList.contains('hidden')) return;
+        close();
+      };
+      overlay._escHandler = onKey;
+      document.addEventListener('keydown', onKey);
+
+      await this.loadQueueVizDetails();
+    }
+
+    hideQueueVizOverlay() {
+      const overlay = document.getElementById('dashboard-queue-viz-overlay');
+      if (!overlay) return;
+      overlay.classList.add('hidden');
+      const handler = overlay._escHandler;
+      if (handler) {
+        document.removeEventListener('keydown', handler);
+        overlay._escHandler = null;
+      }
+      overlay.remove();
+    }
+
+    async loadQueueVizDetails() {
+      const bodyEl = document.getElementById('dashboard-queue-viz-body');
+      if (bodyEl) bodyEl.textContent = 'Loading…';
+
+      let data = null;
+      try {
+        const url = new URL('/api/process/tasks', window.location.origin);
+        url.searchParams.set('mode', 'all');
+        url.searchParams.set('state', 'open');
+        url.searchParams.set('include', 'dependencySummary');
+        const res = await fetch(url.toString());
+        data = res && res.ok ? await res.json().catch(() => null) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!bodyEl) return;
+      const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+      if (!data || !tasks) {
+        bodyEl.textContent = 'Failed to load.';
+        return;
+      }
+
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      const tierKey = (t) => {
+        const tier = t?.record?.tier;
+        const n = Number(tier);
+        return (Number.isFinite(n) && n >= 1 && n <= 4) ? `T${n}` : 'None';
+      };
+
+      const counts = { T1: 0, T2: 0, T3: 0, T4: 0, None: 0 };
+      const unclaimed = { T1: 0, T2: 0, T3: 0, T4: 0, None: 0 };
+      const unassigned = { T1: 0, T2: 0, T3: 0, T4: 0, None: 0 };
+      const byAssignee = {};
+
+      for (const t of tasks) {
+        const k = tierKey(t);
+        counts[k] = (counts[k] || 0) + 1;
+        const claimedBy = String(t?.record?.claimedBy || '').trim();
+        const assignedTo = String(t?.record?.assignedTo || '').trim();
+        if (!claimedBy) unclaimed[k] = (unclaimed[k] || 0) + 1;
+        if (!assignedTo) unassigned[k] = (unassigned[k] || 0) + 1;
+
+        const bucket = assignedTo || '(unassigned)';
+        if (!byAssignee[bucket]) byAssignee[bucket] = { T1: 0, T2: 0, T3: 0, T4: 0, None: 0, total: 0 };
+        byAssignee[bucket][k] = (byAssignee[bucket][k] || 0) + 1;
+        byAssignee[bucket].total += 1;
+      }
+
+      const assignees = Object.entries(byAssignee)
+        .sort((a, b) => (b[1].total || 0) - (a[1].total || 0) || String(a[0]).localeCompare(String(b[0])));
+
+      const rows = assignees.map(([who, c]) => {
+        return `
+          <tr>
+            <td class="mono">${escapeHtml(who)}</td>
+            <td class="mono">${escapeHtml(c.T1 || 0)}</td>
+            <td class="mono">${escapeHtml(c.T2 || 0)}</td>
+            <td class="mono">${escapeHtml(c.T3 || 0)}</td>
+            <td class="mono">${escapeHtml(c.T4 || 0)}</td>
+            <td class="mono">${escapeHtml(c.None || 0)}</td>
+            <td class="mono">${escapeHtml(c.total || 0)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const sumRow = `
+        <tr>
+          <td class="mono"><strong>Total</strong></td>
+          <td class="mono"><strong>${escapeHtml(counts.T1)}</strong></td>
+          <td class="mono"><strong>${escapeHtml(counts.T2)}</strong></td>
+          <td class="mono"><strong>${escapeHtml(counts.T3)}</strong></td>
+          <td class="mono"><strong>${escapeHtml(counts.T4)}</strong></td>
+          <td class="mono"><strong>${escapeHtml(counts.None)}</strong></td>
+          <td class="mono"><strong>${escapeHtml(tasks.length)}</strong></td>
+        </tr>
+      `;
+
+      bodyEl.innerHTML = `
+        <div class="dashboard-telemetry-muted">
+          Items: <strong>${escapeHtml(tasks.length)}</strong> • Unclaimed: <strong>${escapeHtml(Object.values(unclaimed).reduce((a, b) => a + (b || 0), 0))}</strong> • Unassigned: <strong>${escapeHtml(Object.values(unassigned).reduce((a, b) => a + (b || 0), 0))}</strong>
+        </div>
+        <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px;">
+          <span class="pr-badge" title="Total items per tier">T1 ${escapeHtml(counts.T1)}</span>
+          <span class="pr-badge">T2 ${escapeHtml(counts.T2)}</span>
+          <span class="pr-badge">T3 ${escapeHtml(counts.T3)}</span>
+          <span class="pr-badge">T4 ${escapeHtml(counts.T4)}</span>
+          <span class="pr-badge">None ${escapeHtml(counts.None)}</span>
+          <span class="pr-badge" title="Unclaimed items per tier">Unclaimed T1 ${escapeHtml(unclaimed.T1)} • T2 ${escapeHtml(unclaimed.T2)} • T3 ${escapeHtml(unclaimed.T3)} • T4 ${escapeHtml(unclaimed.T4)} • None ${escapeHtml(unclaimed.None)}</span>
+          <span class="pr-badge" title="Unassigned items per tier">Unassigned T1 ${escapeHtml(unassigned.T1)} • T2 ${escapeHtml(unassigned.T2)} • T3 ${escapeHtml(unassigned.T3)} • T4 ${escapeHtml(unassigned.T4)} • None ${escapeHtml(unassigned.None)}</span>
+        </div>
+
+        <table class="worktree-inspector-table" style="margin-top:12px;">
+          <thead>
+            <tr>
+              <th>Assigned to</th>
+              <th>T1</th>
+              <th>T2</th>
+              <th>T3</th>
+              <th>T4</th>
+              <th>None</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || `<tr><td colspan="7" style="opacity:0.8;">No items.</td></tr>`}
+            ${sumRow}
+          </tbody>
+        </table>
+      `;
+    }
 
 	  hidePerformanceOverlay() {
 	    const overlay = document.getElementById('dashboard-performance-overlay');
