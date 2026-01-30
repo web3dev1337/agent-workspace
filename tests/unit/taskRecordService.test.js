@@ -127,6 +127,19 @@ describe('TaskRecordService', () => {
     expect(rec2.reviewedAt).toBeUndefined();
   });
 
+  test('upsert supports overnight runner fields', async () => {
+    const svc = TaskRecordService.getInstance();
+    svc.data = { version: 1, records: {} };
+
+    const rec = await svc.upsert('pr:owner/repo#99', {
+      overnightSpawnedAt: new Date('2026-01-30T00:00:00Z').toISOString(),
+      overnightWorktreeId: 'work9'
+    });
+
+    expect(rec.overnightSpawnedAt).toBe('2026-01-30T00:00:00.000Z');
+    expect(rec.overnightWorktreeId).toBe('work9');
+  });
+
   test('upsert supports ticket fields and automation timestamps', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
     const filePath = path.join(tmp, 'task-records.json');
