@@ -4435,6 +4435,14 @@ class ClaudeOrchestrator {
         }
         break;
 
+      case 'open-activity':
+        try {
+          this.activityFeedPanel?.show?.();
+        } catch (e) {
+          console.error('Failed to open activity feed:', e);
+        }
+        break;
+
       case 'open-queue':
         this.showQueuePanel?.().catch?.((err) => console.error('Failed to open queue:', err));
         break;
