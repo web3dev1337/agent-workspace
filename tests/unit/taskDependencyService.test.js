@@ -1,4 +1,4 @@
-const { TaskDependencyService, parsePrTaskId, parseTrelloTaskId, detectCycles } = require('../../server/taskDependencyService');
+const { TaskDependencyService, parsePrTaskId, parseTrelloTaskId, parseWorktreeTaskId, parseSessionTaskId, detectCycles } = require('../../server/taskDependencyService');
 
 describe('TaskDependencyService', () => {
   test('parsePrTaskId parses pr:owner/repo#num', () => {
@@ -14,6 +14,16 @@ describe('TaskDependencyService', () => {
     expect(parseTrelloTaskId('trello:AbC123')).toEqual({ shortLink: 'AbC123' });
     expect(parseTrelloTaskId('https://trello.com/c/XYZ999/whatever')).toEqual({ shortLink: 'XYZ999' });
     expect(parseTrelloTaskId('nope')).toEqual(null);
+  });
+
+  test('parseWorktreeTaskId parses worktree:/abs/path', () => {
+    expect(parseWorktreeTaskId('worktree:/tmp/repo/work1')).toEqual({ worktreePath: '/tmp/repo/work1' });
+    expect(parseWorktreeTaskId('nope')).toEqual(null);
+  });
+
+  test('parseSessionTaskId parses session:sessionId', () => {
+    expect(parseSessionTaskId('session:work1-claude')).toEqual({ sessionId: 'work1-claude' });
+    expect(parseSessionTaskId('nope')).toEqual(null);
   });
 
   test('detectCycles finds simple cycle', () => {
@@ -103,6 +113,64 @@ describe('TaskDependencyService', () => {
     expect(deps[0].id).toBe('trello:AbC123');
     expect(deps[0].satisfied).toBe(true);
     expect(deps[0].reason).toBe('trello_closed');
+  });
+
+  test('resolveDependencies supports worktree: dependencies (merged PR => satisfied)', async () => {
+    const taskRecordService = {
+      get: (id) => (id === 'task:A' ? { dependencies: ['worktree:/tmp/repo/work1'] } : null)
+    };
+    const pullRequestService = { getPullRequest: jest.fn() };
+    const worktreeMetadataService = {
+      getPRStatus: jest.fn().mockResolvedValue({ hasPR: true, state: 'merged' }),
+      getGitStatus: jest.fn().mockResolvedValue({ branch: 'feature/x', hasUncommittedChanges: false, ahead: 1, behind: 0 })
+    };
+    const svc = new TaskDependencyService({ taskRecordService, pullRequestService, worktreeMetadataService });
+
+    const deps = await svc.resolveDependencies('task:A');
+    expect(deps[0].id).toBe('worktree:/tmp/repo/work1');
+    expect(deps[0].satisfied).toBe(true);
+    expect(deps[0].reason).toBe('worktree_pr_merged');
+  });
+
+  test('resolveDependencies supports worktree: dependencies (clean main => satisfied)', async () => {
+    const taskRecordService = {
+      get: (id) => (id === 'task:A' ? { dependencies: ['worktree:/tmp/repo/work2'] } : null)
+    };
+    const pullRequestService = { getPullRequest: jest.fn() };
+    const worktreeMetadataService = {
+      getPRStatus: jest.fn().mockResolvedValue({ hasPR: false, branch: 'main' }),
+      getGitStatus: jest.fn().mockResolvedValue({ branch: 'main', hasUncommittedChanges: false, ahead: 0, behind: 0 })
+    };
+    const svc = new TaskDependencyService({ taskRecordService, pullRequestService, worktreeMetadataService });
+
+    const deps = await svc.resolveDependencies('task:A');
+    expect(deps[0].satisfied).toBe(true);
+    expect(deps[0].reason).toBe('worktree_clean_main');
+  });
+
+  test('resolveDependencies supports session: dependencies (idle => satisfied; waiting => blocked)', async () => {
+    const taskRecordService = {
+      get: (id) => (id === 'task:A'
+        ? { dependencies: ['session:work1-claude', 'session:work2-claude', 'session:missing'] }
+        : null)
+    };
+    const pullRequestService = { getPullRequest: jest.fn() };
+    const sessionManager = {
+      sessions: new Map([
+        ['work1-claude', { status: 'idle' }],
+        ['work2-claude', { status: 'waiting' }]
+      ])
+    };
+    const svc = new TaskDependencyService({ taskRecordService, pullRequestService, sessionManager });
+
+    const deps = await svc.resolveDependencies('task:A');
+    const byId = Object.fromEntries(deps.map(d => [d.id, d]));
+    expect(byId['session:work1-claude'].satisfied).toBe(true);
+    expect(byId['session:work1-claude'].reason).toBe('session_idle');
+    expect(byId['session:work2-claude'].satisfied).toBe(false);
+    expect(byId['session:work2-claude'].reason).toBe('session_waiting');
+    expect(byId['session:missing'].satisfied).toBe(true);
+    expect(byId['session:missing'].reason).toBe('session_not_found');
   });
 
   test('buildGraph expands trello dependencies with per-edge satisfaction', async () => {

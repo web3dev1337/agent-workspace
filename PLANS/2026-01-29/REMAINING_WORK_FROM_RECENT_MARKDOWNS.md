@@ -43,7 +43,7 @@ Notes:
      - `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md` (Follow-ups)
 
 4) **Richer satisfaction rules for worktree/session dependencies**
-   - Current: dependency satisfaction is `doneAt` or PR merged; worktree/session completion inference is not implemented.
+   - Current: shipped (worktree/session deps infer satisfaction via worktree PR state + git clean main; session status).
    - Source:
      - `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md` (Follow-ups)
 
