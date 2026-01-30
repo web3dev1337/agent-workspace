@@ -80,5 +80,37 @@ describe('TestOrchestrationService', () => {
     expect(done.results[0].status).toBe('passed');
     expect(done.results[0].outputTail).toContain('ok');
   });
-});
 
+  test('cancelRun marks queued targets cancelled', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchestrator-tests-'));
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({
+      name: 'example',
+      scripts: { test: 'echo ok' }
+    }, null, 2));
+
+    const spawnImpl = () => {
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = jest.fn();
+      // Never closes on its own (simulates long test run)
+      return child;
+    };
+
+    const service = new TestOrchestrationService({
+      sessionManager: { worktrees: [{ id: 'work1', path: dir }, { id: 'work2', path: dir }] },
+      workspaceManager: { getActiveWorkspace: () => ({ id: 'ws1', name: 'WS' }) },
+      spawnImpl
+    });
+
+    const run = await service.startRun({ script: 'test', concurrency: 1, existingOnly: true });
+    expect(run.ok).toBe(true);
+
+    const cancelRes = service.cancelRun(run.runId);
+    expect(cancelRes.ok).toBe(true);
+
+    const after = service.getRun(run.runId);
+    const queued = after.results.find(r => r.worktreeId === 'work2');
+    expect(queued.status).toBe('cancelled');
+  });
+});
