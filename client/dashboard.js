@@ -2172,7 +2172,7 @@ class Dashboard {
         }
       };
 
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const serverUrl = window.location.origin;
       const response = await fetch(`${serverUrl}/api/workspaces`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2339,7 +2339,7 @@ class Dashboard {
 
   async deleteWorkspace(workspaceId) {
     try {
-      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
+      const serverUrl = window.location.origin;
       const response = await fetch(`${serverUrl}/api/workspaces/${workspaceId}`, {
         method: 'DELETE'
       });
@@ -2370,9 +2370,7 @@ class Dashboard {
     const gridEl = document.getElementById('ports-dashboard-grid');
     if (!gridEl) return;
 
-    const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
-                      window.location.port === '2081' ? 'http://localhost:4000' :
-                      window.location.origin;
+    const serverUrl = window.location.origin;
 
     try {
       const response = await fetch(`${serverUrl}/api/ports/scan`);
