@@ -83,12 +83,12 @@ describe('TaskRecordService', () => {
     const rec = await svc.upsert('task:prompt', {
       promptRef: 'task:prompt',
       promptVisibility: 'shared',
-      promptRepoRoot: '/home/ab/GitHub/games/hytopia/mock-repo',
+      promptRepoRoot: '/tmp/mock-repo',
       promptPath: '.orchestrator/prompts/task-prompt.md'
     });
 
     expect(rec.promptVisibility).toBe('shared');
-    expect(rec.promptRepoRoot).toBe('/home/ab/GitHub/games/hytopia/mock-repo');
+    expect(rec.promptRepoRoot).toBe('/tmp/mock-repo');
     expect(rec.promptPath).toBe('.orchestrator/prompts/task-prompt.md');
 
     const rec2 = await svc.upsert('task:prompt', { promptRepoRoot: null, promptPath: null });

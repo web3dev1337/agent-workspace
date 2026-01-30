@@ -11369,7 +11369,7 @@ class ClaudeOrchestrator {
                 </label>
               </div>
               <div class="tasks-inline-row" id="prompt-store-extra" style="margin-bottom: 10px; gap: 8px; flex-wrap: wrap;">
-                <input id="prompt-repo-root" class="tasks-input" style="min-width: 340px; flex: 1;" placeholder="Repo root (for shared/encrypted), e.g. /home/ab/GitHub/games/hytopia/zoo-game" />
+                <input id="prompt-repo-root" class="tasks-input" style="min-width: 340px; flex: 1;" placeholder="Repo root (for shared/encrypted), e.g. ~/GitHub/games/hytopia/zoo-game" />
                 <input id="prompt-rel-path" class="tasks-input" style="min-width: 260px; flex: 1;" placeholder="Repo-relative path (optional; default .orchestrator/prompts/<id>.md)" />
                 <label class="tasks-toggle" id="prompt-comment-pointer-wrap" style="display:none" title="Add a pointer comment back to this card">
                   <input type="checkbox" id="prompt-comment-pointer" checked />
@@ -16083,7 +16083,7 @@ class ClaudeOrchestrator {
 	                </label>
 	              </div>
 	              <div class="tasks-inline-row" id="prompt-store-extra" style="margin-bottom: 10px; gap: 8px; flex-wrap: wrap;">
-	                <input id="prompt-repo-root" class="tasks-input" style="min-width: 340px; flex: 1;" placeholder="Repo root (for shared/encrypted), e.g. /home/ab/GitHub/games/hytopia/zoo-game" />
+	                <input id="prompt-repo-root" class="tasks-input" style="min-width: 340px; flex: 1;" placeholder="Repo root (for shared/encrypted), e.g. ~/GitHub/games/hytopia/zoo-game" />
 	                <input id="prompt-rel-path" class="tasks-input" style="min-width: 260px; flex: 1;" placeholder="Repo-relative path (optional; default .orchestrator/prompts/<id>.md)" />
 	                <label class="tasks-toggle" id="prompt-comment-pointer-wrap" style="display:none" title="Add a pointer comment back to the selected card">
 	                  <input type="checkbox" id="prompt-comment-pointer" checked />
