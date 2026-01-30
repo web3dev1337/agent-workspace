@@ -252,6 +252,18 @@ class VoiceCommandService {
         command: 'open-telemetry',
         extractParams: () => ({})
       },
+      // Open activity feed
+      {
+        patterns: [
+          /open\s+activity/i,
+          /show\s+activity/i,
+          /activity\s+feed/i,
+          /open\s+activity\s+feed/i,
+          /show\s+activity\s+feed/i,
+        ],
+        command: 'open-activity',
+        extractParams: () => ({})
+      },
       // Highlight worktree
       {
         patterns: [
