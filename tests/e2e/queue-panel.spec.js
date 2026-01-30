@@ -239,6 +239,22 @@ test.describe('Queue Panel', () => {
     await expect(page.locator('#queue-tier')).toBeVisible();
     await expect(page.locator('#queue-reverse-deps')).toContainText('Mock Worktree Task');
 
+    // Review checklist should be editable and saved.
+    const checklistReq = page.waitForRequest((req) => {
+      if (req.method() !== 'PUT') return false;
+      if (!req.url().includes('/api/process/task-records/')) return false;
+      try {
+        const body = req.postDataJSON();
+        return body?.reviewChecklist?.tests?.done === true;
+      } catch {
+        return false;
+      }
+    }, { timeout: 5000 });
+    await page.locator('#queue-review-tests-done').check();
+    await page.locator('#queue-review-tests-command').fill('npm run test:unit');
+    await page.locator('#queue-review-tests-command').blur();
+    await checklistReq;
+
     // Start Review should kick off a review timer (PUT includes reviewStartedAt).
     const startReq = page.waitForRequest((req) => {
       if (req.method() !== 'PUT') return false;
