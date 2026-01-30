@@ -2,7 +2,7 @@
 
 Generated: 2026-01-29  
 Last updated: 2026-01-30  
-Repo state (at generation time): `origin/main` @ `9cebd5b`
+Repo state (at last update): `origin/main` @ `aded01a`
 
 ## Scope + method
 
@@ -20,6 +20,12 @@ Notes:
 ---
 
 ## Remaining work (deduped)
+
+None — all items found by this scan were shipped as Phase 3 tasks (see `PLANS/2026-01-30/PHASE3_TASKS.md`).
+
+---
+
+## Shipped (formerly “remaining work”, deduped)
 
 ### Process layer / workflow
 
@@ -83,7 +89,7 @@ Notes:
 
 ## Per-file scan results (what we found)
 
-### Files with remaining work
+### Files that previously had remaining work (now shipped)
 
 #### `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md`
 - Remaining: none.
@@ -93,22 +99,22 @@ Notes:
 - Remaining: none.
 
 #### `PLANS/2026-01-24/TASKS_TICKETING.md`
-- Remaining: item #9 above (persistent/stale-while-revalidate cache).
+- Remaining: none (item #9 shipped; see `PLANS/2026-01-30/PHASE3_TASKS.md`).
 
 #### `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md`
-- Remaining: items #5–#8 above (attachments/cover, full checklist CRUD, “perfect reorder”).
+- Remaining: none (items #5–#8 shipped; see `PLANS/2026-01-30/PHASE3_TASKS.md`).
 
 #### `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md`
-- Remaining: items #3–#4 above (shared/encrypted task records; richer satisfaction rules).
+- Remaining: none (items #3–#4 shipped; see `PLANS/2026-01-30/PHASE3_TASKS.md`).
 
 #### `PLANS/2026-01-25/TRELLO_PARITY_PR.md`
-- Remaining: items #5–#8 above (attachments/cover, full checklist CRUD, list reorder/creation, within-list reorder).
+- Remaining: none (items #5–#8 shipped; see `PLANS/2026-01-30/PHASE3_TASKS.md`).
 
 #### `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
-- Remaining: items #5, #8, #9 above (attachments/cover, within-list reorder, persistent cache).
+- Remaining: none (items #5, #8, #9 shipped; see `PLANS/2026-01-30/PHASE3_TASKS.md`).
 
 #### `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md`
-- Remaining: item #2 above (ticket↔ticket conflict probability heuristics: explicitly “missing future work”).
+- Remaining: none (item #2 shipped; see `PLANS/2026-01-30/PHASE3_TASKS.md`).
 
 ### Files with no remaining work (or reference/templates only)
 
