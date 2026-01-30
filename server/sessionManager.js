@@ -1457,7 +1457,7 @@ class SessionManager extends EventEmitter {
 
   /**
    * Convert a path to Claude's folder name format
-   * /home/<user>/foo → -home-ab-foo
+	   * $HOME/foo → -home-user-foo
    */
   pathToFolderName(p) {
     if (!p) return '';
