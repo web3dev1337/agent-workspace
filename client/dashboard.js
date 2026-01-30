@@ -140,6 +140,7 @@ class Dashboard {
                   <button class="dashboard-topbar-btn" id="dashboard-open-queue" title="Open Queue">📥 Queue</button>
                   <button class="dashboard-topbar-btn" id="dashboard-open-advice" title="Open Commander Advice">🧠 Advice</button>
                   <button class="dashboard-topbar-btn" id="dashboard-open-suggestions" title="Open workspace suggestions">✨ Suggestions</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-distribution" title="Suggested terminal per PR/task">🎯 Distribution</button>
                 </div>
               </div>
               <div class="dashboard-summary-card">
@@ -244,6 +245,12 @@ class Dashboard {
       e.preventDefault();
       try {
         this.showSuggestionsOverlay();
+      } catch {}
+    });
+    document.getElementById('dashboard-open-distribution')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      try {
+        this.showDistributionOverlay();
       } catch {}
     });
 
@@ -1006,6 +1013,145 @@ class Dashboard {
 	      <h4 style="margin-top: 14px;">Recent activity</h4>
 	      ${recent.length ? recent.map(renderSuggestion).join('') : '<div class="dashboard-telemetry-muted">None found.</div>'}
 	    `;
+	  }
+
+	  async showDistributionOverlay() {
+	    const existing = document.getElementById('dashboard-distribution-overlay');
+	    if (existing) {
+	      existing.classList.remove('hidden');
+	      return;
+	    }
+
+	    const overlay = document.createElement('div');
+	    overlay.id = 'dashboard-distribution-overlay';
+	    overlay.className = 'dashboard-telemetry-overlay';
+	    overlay.innerHTML = `
+	      <div class="dashboard-telemetry-panel" role="dialog" aria-label="Task distribution">
+	        <div class="dashboard-telemetry-header">
+	          <div class="dashboard-telemetry-title">Distribution — Suggested terminals</div>
+	          <button class="dashboard-topbar-btn" id="dashboard-distribution-close" title="Close (Esc)">✕</button>
+	        </div>
+	        <div class="dashboard-telemetry-controls">
+	          <div class="dashboard-telemetry-actions">
+	            <button class="btn-secondary" type="button" id="dashboard-distribution-refresh">Refresh</button>
+	          </div>
+	        </div>
+	        <div id="dashboard-distribution-body" class="dashboard-telemetry-body">Loading…</div>
+	      </div>
+	    `;
+
+	    document.body.appendChild(overlay);
+
+	    const close = () => this.hideDistributionOverlay();
+	    overlay.addEventListener('click', (e) => {
+	      if (e.target === overlay) close();
+	    });
+	    overlay.querySelector('#dashboard-distribution-close')?.addEventListener('click', close);
+
+	    const onKey = (e) => {
+	      if (e.key !== 'Escape') return;
+	      const el = document.getElementById('dashboard-distribution-overlay');
+	      if (!el || el.classList.contains('hidden')) return;
+	      close();
+	    };
+	    overlay._escHandler = onKey;
+	    document.addEventListener('keydown', onKey);
+
+	    overlay.querySelector('#dashboard-distribution-refresh')?.addEventListener('click', () => {
+	      this.loadDistributionDetails();
+	    });
+
+	    await this.loadDistributionDetails();
+	  }
+
+	  hideDistributionOverlay() {
+	    const overlay = document.getElementById('dashboard-distribution-overlay');
+	    if (!overlay) return;
+	    overlay.classList.add('hidden');
+	    const handler = overlay._escHandler;
+	    if (handler) {
+	      document.removeEventListener('keydown', handler);
+	      overlay._escHandler = null;
+	    }
+	    overlay.remove();
+	  }
+
+	  async loadDistributionDetails() {
+	    const bodyEl = document.getElementById('dashboard-distribution-body');
+	    if (bodyEl) bodyEl.textContent = 'Loading…';
+
+	    let data = null;
+	    try {
+	      const res = await fetch('/api/process/distribution?mode=mine&state=open&sort=updated&limit=25');
+	      data = res && res.ok ? await res.json().catch(() => null) : null;
+	    } catch {
+	      data = null;
+	    }
+
+	    if (!bodyEl) return;
+	    if (!data || !data.ok) {
+	      bodyEl.textContent = 'Failed to load.';
+	      return;
+	    }
+
+	    const escapeHtml = (value) => String(value ?? '')
+	      .replace(/&/g, '&amp;')
+	      .replace(/</g, '&lt;')
+	      .replace(/>/g, '&gt;');
+
+	    const rows = (Array.isArray(data.suggestions) ? data.suggestions : []).map((s) => {
+	      const t = s.task || {};
+	      const title = escapeHtml(t.title || t.id || '');
+	      const repo = escapeHtml(t.repository || '');
+	      const url = escapeHtml(t.url || '');
+	      const sid = escapeHtml(s.recommendedSessionId || '');
+	      const agent = escapeHtml(s.recommendedAgent || '');
+	      const reason = escapeHtml(s.reason || '');
+	      const focusBtn = s.recommendedSessionId
+	        ? `<button class="btn-secondary worktree-inspector-mini-btn" type="button" data-focus-session="${escapeHtml(s.recommendedSessionId)}">Focus</button>`
+	        : '';
+	      const prBtn = url ? `<button class="btn-secondary worktree-inspector-mini-btn" type="button" data-open-url="${url}">PR</button>` : '';
+	      return `<tr><td>${title}</td><td class="mono">${repo}</td><td class="mono">${agent || '—'}</td><td class="mono">${sid || '—'}</td><td class="mono">${reason}</td><td>${prBtn} ${focusBtn}</td></tr>`;
+	    }).join('');
+
+	    bodyEl.innerHTML = `
+	      <div class="dashboard-telemetry-muted">Generated: ${escapeHtml(data.generatedAt)} • PR tasks: ${escapeHtml(String(data.totalTasks || 0))}</div>
+	      <table class="worktree-inspector-table" style="margin-top:10px;">
+	        <thead>
+	          <tr>
+	            <th>Task</th>
+	            <th>Repo</th>
+	            <th>Agent</th>
+	            <th>Suggested terminal</th>
+	            <th>Reason</th>
+	            <th>Actions</th>
+	          </tr>
+	        </thead>
+	        <tbody>
+	          ${rows || `<tr><td colspan="6" style="opacity:0.8;">No PR tasks found.</td></tr>`}
+	        </tbody>
+	      </table>
+	    `;
+
+	    bodyEl.querySelectorAll('[data-open-url]').forEach((btn) => {
+	      btn.addEventListener('click', () => {
+	        const u = String(btn?.dataset?.openUrl || '').trim();
+	        if (!u) return;
+	        try { window.open(u, '_blank'); } catch {}
+	      });
+	    });
+	    bodyEl.querySelectorAll('[data-focus-session]').forEach((btn) => {
+	      btn.addEventListener('click', () => {
+	        const sid2 = String(btn?.dataset?.focusSession || '').trim();
+	        if (!sid2) return;
+	        try {
+	          this.orchestrator?.hideDashboard?.();
+	          setTimeout(() => {
+	            try { this.orchestrator?.focusTerminal?.(sid2); } catch {}
+	          }, 50);
+	        } catch {}
+	      });
+	    });
 	  }
 
 	  async showProjectHealthOverlay() {
