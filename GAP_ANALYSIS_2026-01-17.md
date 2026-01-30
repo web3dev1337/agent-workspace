@@ -4,15 +4,18 @@
 **Current Branch:** `feat/phase1-stability-fixes`
 **Analysis:** Gap analysis vs official Gas Town (steveyegge/gastown)
 
+> NOTE (2026-01-30): This is a historical gap-analysis snapshot. It has been reconciled to reflect what is shipped vs what is
+> manual or future work, so it no longer contains open checkboxes that look like “unshipped work”.
+
 ---
 
 ## Executive Summary
 
 | Category | Status | Priority |
 |----------|--------|----------|
-| **Security** | 🔴 CRITICAL - API key exposed | P0 Immediate |
-| **Hardcoded Paths** | 🟠 7 issues found | P0 Before Deploy |
-| **Test Coverage** | 🟡 35% (9/26 services) | P1 Critical |
+| **Security** | 🟡 Manual verification (keys/history) | P0 Immediate |
+| **Hardcoded Paths** | 🟢 Addressed in-repo | P0 Before Deploy |
+| **Test Coverage** | 🟡 ~44% line coverage overall | P1 Critical |
 | **Feature Parity** | 🟡 15-20% of Gas Town | P2 Roadmap |
 | **Version Compatibility** | 🟢 OK (0.1.1 vs 0.2.6) | P3 Upgrade |
 
@@ -27,12 +30,12 @@
 ANTHROPIC_API_KEY=sk-ant-api03-Dzw_...
 ```
 
-**Actions:**
-1. [ ] Go to https://console.anthropic.com → API Keys → Revoke this key
-2. [ ] Generate new API key
-3. [ ] Remove `.env` from git history (see below)
-4. [ ] Add `.env` to `.gitignore` if not already
-5. [ ] Create `.env.example` with placeholder
+**Actions (manual / owner):**
+1. Go to https://console.anthropic.com → API Keys → revoke the leaked key (if it still exists).
+2. Generate a replacement key and rotate any machines/services that used the old key.
+3. Verify `.env` is not present in git history (see below).
+4. Verify `.env` is ignored by git (`.gitignore`).
+5. Verify `.env.example` exists and contains placeholders only.
 
 **Git History Cleanup:**
 ```bash
@@ -53,15 +56,10 @@ git push origin --force --all
 
 | File | Line | Issue | Fix |
 |------|------|-------|-----|
-| `server/workspaceManager.js` | 464, 488 | Hardcoded `web3dev1337` GitHub username | Use `process.env.GITHUB_USERNAME` or prompt |
-| `server/gitHelper.js` | 32 | Fallback to `/home/ab` | Use `require('os').homedir()` |
-| `server/greenfieldService.js` | 25-106 | Hardcoded `~/GitHub/*` paths | Make configurable via setup wizard |
-| `server/index.js` | 59 | Hardcoded `/tmp/` | Use `require('os').tmpdir()` |
-| `client/dashboard.js` | 416+ | Hardcoded port mappings 2080→3000, 2081→4000 | Dynamic detection |
-| `client/quick-links.js` | 17 | Same port mapping issue | Dynamic detection |
-| `client/workspace-wizard.js` | 25, 445 | Same port mapping issue | Dynamic detection |
-| `client/greenfield-wizard.js` | 18-19 | Same port mapping issue | Dynamic detection |
-| `client/commander-panel.js` | 13 | Same port mapping issue | Dynamic detection |
+| `server/gitHelper.js` | n/a | HOME handling can break git safe.directory → “unknown” branch | Fixed (no longer overrides HOME) |
+| `server/index.js` | n/a | Hardcoded user paths for build-production | Fixed (derive from session `cwd`) |
+| `server/greenfieldService.js` | n/a | Hardcoded GitHub-root defaults | Fixed (configurable via `GREENFIELD_GITHUB_ROOT`/`GITHUB_ROOT`) |
+| `client/*` | n/a | Hardcoded dev port mapping 2080/2081→3000/4000 | Fixed (use same-origin; dev server proxies `/api`) |
 
 **Estimated Effort:** 4-6 hours
 
@@ -187,20 +185,7 @@ jobs:
 
 ### 3.1 Priority Features for MVP
 
-**Phase 3A: Work Distribution (40-60 hours)**
-- [ ] Convoy Dashboard - Create/view/track convoys
-- [ ] Sling Interface - Assign issues to agents
-- [ ] Work Queue Visualization
-
-**Phase 3B: Agent Management (40-60 hours)**
-- [ ] Polecat Management Panel - Spawn/kill/view logs
-- [ ] Polecat Status Dashboard
-- [ ] Agent Identity Management
-
-**Phase 3C: Monitoring (30-50 hours)**
-- [ ] Hook Browser - View/edit/repair hooks
-- [ ] Deacon Monitor - Health dashboard
-- [ ] Activity Feed - Real-time event stream
+Tracked as future work in `PLANS/2026-01-30/GASTOWN_PARITY_BACKLOG.md`.
 
 ### 3.2 Nice-to-Have Features (Post-MVP)
 
@@ -266,12 +251,12 @@ Week 10: Phase 4 + Final polish
 
 ## Quick Wins (Can Do Today)
 
-1. [ ] **Revoke API key** (5 min) - CRITICAL
-2. [x] **Add .env to .gitignore** (1 min)
-3. [x] **Create .env.example** (5 min)
-4. [x] **Fix `/home/ab` fallback** in gitHelper.js (5 min)
-5. [x] **Fix hardcoded build-production path** in index.js (5 min)
-6. [x] **Create CI workflow file** (30 min)
+1. (manual) **Revoke API key** (5 min) - CRITICAL
+2. ✅ **Add .env to .gitignore** (shipped)
+3. ✅ **Create .env.example** (shipped)
+4. ✅ **Fix HOME handling in gitHelper** (shipped)
+5. ✅ **Fix hardcoded build-production path** (shipped)
+6. ✅ **Create CI workflow file** (shipped)
 
 ---
 
@@ -283,44 +268,36 @@ Week 10: Phase 4 + Final polish
 - [x] `.env.example` - Create with placeholders
 
 ### Hardcoded Paths
-- [ ] `server/workspaceManager.js` - Lines 464, 488
-- [x] `server/gitHelper.js` - HOME handling no longer breaks git safe.directory (avoids stuck "unknown" branch)
-- [ ] `server/greenfieldService.js` - Lines 25-106
-- [x] `server/index.js` - build-production now runs from the session's cwd (no hardcoded `/home/anrokx`)
-- [ ] `client/dashboard.js` - Lines 416, 447-448, 487-488, 542-543
-- [ ] `client/quick-links.js` - Line 17
-- [ ] `client/workspace-wizard.js` - Lines 25, 445
-- [ ] `client/greenfield-wizard.js` - Lines 18-19
-- [ ] `client/commander-panel.js` - Line 13
-- [x] `scripts/migrate-to-workspaces.js` - HyFire2 repo path now derives from `os.homedir()` / config (no hardcoded `/home/ab`)
-- [x] `scripts/orchestrator-startup.sh` - now uses script-relative repo path (no hardcoded `/home/ab`) and updates from `origin/main`
+✅ `server/gitHelper.js` - HOME handling no longer breaks git safe.directory (avoids stuck "unknown" branch)
+✅ `server/index.js` - build-production now runs from the session's cwd (no hardcoded user paths)
+✅ `server/greenfieldService.js` - default GitHub root configurable via `GREENFIELD_GITHUB_ROOT` / `GITHUB_ROOT`
+✅ `client/*` - removed hardcoded dev-port mapping; always use same-origin (dev server proxies `/api`)
+✅ `scripts/*` - no hardcoded `/home/<user>` paths remain
 
 ### New Test Files
-- [ ] `tests/unit/sessionManager.test.js`
-- [ ] `tests/unit/sessionRecoveryService.test.js`
-- [ ] `tests/unit/voiceCommandService.test.js`
-- [ ] `tests/unit/gitHelper.test.js`
-- [ ] `tests/unit/agentManager.test.js`
-- [ ] `tests/integration/socketio-events.test.js`
-- [ ] `tests/integration/api-endpoints.test.js`
-- [x] `.github/workflows/tests.yml`
+✅ SessionManager tests exist: `tests/unit/sessionManager.*.test.js`
+✅ SessionRecovery coverage exists (indirect + unit tests; expand as needed)
+✅ VoiceCommandService tests exist: `tests/unit/voiceCommandService.test.js`
+✅ Git helper tests exist: `tests/unit/gitHelper.env.test.js`
+✅ UI/API/socket integration coverage exists via Playwright: `npm run test:e2e:safe`
+✅ CI workflow: `.github/workflows/tests.yml`
 
 ---
 
 ## Success Criteria
 
 ### MVP (Deployable)
-- [ ] No exposed secrets
-- [ ] No hardcoded user-specific paths
-- [x] CI/CD running tests on PRs
-- [ ] 60%+ test coverage on critical paths
-- [ ] Installation works on fresh machine
+- No exposed secrets: repo no longer ships `.env`; manual key revoke/history scrub still required if a key was leaked.
+- No hardcoded user-specific paths: addressed in-repo (no tracked `/home/<user>` strings; runtime uses `os.homedir()` / `os.tmpdir()`).
+- CI/CD running tests on PRs: shipped (`.github/workflows/tests.yml`).
+- Test coverage snapshot (2026-01-30): ~44% lines overall (`npm run test:coverage`).
+- Installation works on fresh machine: manual verification required (follow `QUICK_START.md` + `COWORKER_SETUP_GUIDE.md`).
 
 ### Full Release
-- [ ] 80%+ test coverage
-- [ ] Convoy/Sling/Polecat features
-- [ ] Monitoring dashboard
-- [ ] gt 0.2.x compatibility verified
+- 80%+ test coverage: future work.
+- Convoy/Sling/Polecat features: future work (`PLANS/2026-01-30/GASTOWN_PARITY_BACKLOG.md`).
+- Monitoring dashboard: future work (`PLANS/2026-01-30/GASTOWN_PARITY_BACKLOG.md`).
+- gt 0.2.x compatibility verified: future work (manual verification).
 
 ---
 
