@@ -439,13 +439,24 @@ class SessionManager extends EventEmitter {
     if (this.branchRefreshInterval) {
       clearInterval(this.branchRefreshInterval);
     }
-    
-    this.branchRefreshInterval = setInterval(() => {
+
+    const refreshWorktrees = () => {
       this.worktrees.forEach(worktree => {
+        if (!worktree?.id || !worktree?.path) return;
+
+        // Ensure watchers eventually come online even if the worktree didn't exist at initial setup.
+        if (!this.fileWatchers.has(worktree.id)) {
+          this.setupGitWatcherForWorktree(worktree);
+        }
+
         const worktreeIdForGit = worktree.worktreeId || worktree.id;
-        this.updateGitBranch(worktreeIdForGit, worktree.path);
+        this.updateGitBranch(worktreeIdForGit, worktree.path, true);
       });
-    }, this.branchRefreshMs);
+    };
+
+    // Do an initial refresh immediately (don't wait for the first interval tick).
+    refreshWorktrees();
+    this.branchRefreshInterval = setInterval(refreshWorktrees, this.branchRefreshMs);
   }
   
   stopBranchRefresh() {
@@ -487,6 +498,23 @@ class SessionManager extends EventEmitter {
 	            timestamp: new Date().toISOString()
 	          });
 
+	          // On some platforms, a HEAD update may present as a rename (atomic replace).
+	          // Re-arm the watcher so future updates keep firing.
+	          if (eventType === 'rename') {
+	            const existing = this.fileWatchers.get(worktree.id);
+	            if (existing) {
+	              try {
+	                existing.close();
+	              } catch {
+	                // ignore
+	              }
+	            }
+	            this.fileWatchers.delete(worktree.id);
+	            setTimeout(() => {
+	              this.setupGitWatcherForWorktree(worktree);
+	            }, 200);
+	          }
+
 	          // Clear cache and update branch immediately
 	          if (this.gitHelper) {
 	            this.gitHelper.clearCacheForPath(worktree.path);
@@ -514,7 +542,7 @@ class SessionManager extends EventEmitter {
 	    }
 	  }
   
-  findHeadFile(repoPath) {
+	  findHeadFile(repoPath) {
     // 1. Check for regular .git/HEAD (normal repository)
     const regularHeadPath = path.join(repoPath, '.git', 'HEAD');
     if (fs.existsSync(regularHeadPath)) {
@@ -559,12 +587,16 @@ class SessionManager extends EventEmitter {
     // 3. Try to find git directory using git command as fallback
     try {
       const { execSync } = require('child_process');
-      const gitDir = execSync('git rev-parse --git-dir', { 
+      let gitDir = execSync('git rev-parse --git-dir', { 
         cwd: repoPath,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe']
       }).trim();
-      
+
+      if (gitDir && !path.isAbsolute(gitDir)) {
+        gitDir = path.resolve(repoPath, gitDir);
+      }
+
       const headPath = path.join(gitDir, 'HEAD');
       if (fs.existsSync(headPath)) {
         logger.debug('Found HEAD via git command', { 
