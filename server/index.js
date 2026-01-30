@@ -3416,7 +3416,24 @@ app.get('/api/process/task-records/:id', (req, res) => {
 app.put('/api/process/task-records/:id', express.json(), async (req, res) => {
   try {
     const id = req.params.id;
+    const before = taskRecordService.get(id) || null;
     const record = await taskRecordService.upsert(id, req.body || {});
+    try {
+      const keys = ['tier', 'risk', 'pFail', 'doneAt', 'reviewedAt', 'reviewOutcome', 'claimedAt', 'claimedBy'];
+      const changes = {};
+      for (const k of keys) {
+        const from = before?.[k] ?? null;
+        const to = record?.[k] ?? null;
+        if (from !== to) {
+          changes[k] = { from, to };
+        }
+      }
+      if (Object.keys(changes).length > 0) {
+        activityFeed.track('task-record.updated', { id, changes });
+      }
+    } catch {
+      // ignore
+    }
     res.json({ id, record });
   } catch (error) {
     logger.error('Failed to upsert task record', { error: error.message, stack: error.stack });
