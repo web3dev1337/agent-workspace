@@ -855,6 +855,57 @@ app.post('/api/workspaces', async (req, res) => {
   }
 });
 
+app.get('/api/workspaces/:id/export', async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ error: 'workspaceId is required' });
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
+
+    const filename = `${workspaceId}.workspace.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(workspace, null, 2));
+  } catch (error) {
+    logger.error('Failed to export workspace', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to export workspace' });
+  }
+});
+
+app.post('/api/workspaces/import', async (req, res) => {
+  try {
+    const incoming = req.body && typeof req.body === 'object' ? req.body : null;
+    if (!incoming) return res.status(400).json({ error: 'Workspace JSON body required' });
+
+    const baseId = String(incoming.id || incoming.name || 'imported-workspace')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 80) || 'imported-workspace';
+
+    let id = baseId;
+    let i = 2;
+    while (workspaceManager.getWorkspace(id)) {
+      id = `${baseId}-${i}`;
+      i += 1;
+      if (i > 50) throw new Error('Unable to find available workspace id');
+    }
+
+    const workspaceData = { ...incoming, id };
+    if (!workspaceData.name) workspaceData.name = incoming.name || `Imported ${id}`;
+    if (workspaceData.id !== incoming.id) {
+      workspaceData.name = workspaceData.name || incoming.name || `Imported ${id}`;
+    }
+
+    const created = await workspaceManager.createWorkspace(workspaceData);
+    res.json({ ok: true, workspace: created });
+  } catch (error) {
+    logger.error('Failed to import workspace', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
 app.get('/api/workspaces/scan-repos', async (req, res) => {
   try {
     logger.info('Starting repository scan...');
