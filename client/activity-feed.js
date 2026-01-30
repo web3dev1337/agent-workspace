@@ -280,12 +280,14 @@ class ActivityFeedPanel {
     const summary = this.escapeHtml(this.summarizeEvent(ev));
     const dataJson = this.escapeHtml(this.compactJson(ev?.data));
     const group = this.getGroup(kind);
+    const actions = this.renderEventActions(ev);
 
     return `
       <div class="activity-event">
         <div class="activity-meta">
           <span class="activity-time">${this.escapeHtml(time)}</span>
           <span class="activity-kind activity-kind-${this.escapeHtml(group)}">${this.escapeHtml(kind)}</span>
+          ${actions}
         </div>
         <div class="activity-summary">${summary}</div>
         <div class="activity-data">${dataJson}</div>
@@ -293,11 +295,77 @@ class ActivityFeedPanel {
     `;
   }
 
+  renderEventActions(ev) {
+    const data = ev?.data && typeof ev.data === 'object' ? ev.data : {};
+    const sessionId = String(data.sessionId || '').trim();
+    const url = String(data.url || '').trim();
+
+    const parts = [];
+    if (sessionId) {
+      parts.push(`<button class="btn-secondary activity-action-btn" onclick="event.stopPropagation(); window.activityFeedPanel.handleEventAction('focus', '${this.escapeHtml(ev.id)}')">Focus</button>`);
+    }
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      parts.push(`<button class="btn-secondary activity-action-btn" onclick="event.stopPropagation(); window.activityFeedPanel.handleEventAction('open', '${this.escapeHtml(ev.id)}')">Open</button>`);
+    }
+    parts.push(`<button class="btn-secondary activity-action-btn" onclick="event.stopPropagation(); window.activityFeedPanel.handleEventAction('copy', '${this.escapeHtml(ev.id)}')">Copy</button>`);
+
+    return `<div class="activity-actions">${parts.join('')}</div>`;
+  }
+
+  async handleEventAction(action, eventId) {
+    const id = String(eventId || '').trim();
+    if (!id) return;
+    const ev = this.events.find((e) => e && e.id === id) || null;
+    if (!ev) return;
+
+    const data = ev?.data && typeof ev.data === 'object' ? ev.data : {};
+    const sessionId = String(data.sessionId || '').trim();
+    const url = String(data.url || '').trim();
+
+    try {
+      if (action === 'focus' && sessionId) {
+        this.orchestrator?.focusTerminal?.(sessionId);
+        return;
+      }
+
+      if (action === 'open' && url) {
+        window.open(url, '_blank');
+        return;
+      }
+
+      if (action === 'copy') {
+        const text = JSON.stringify(ev, null, 2);
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   summarizeEvent(ev) {
     const kind = String(ev?.kind || '');
     const data = ev?.data && typeof ev.data === 'object' ? ev.data : {};
 
     if (kind === 'server.started') return `Server started (port ${data.port || 'unknown'})`;
+    if (kind === 'workspace.switch.requested') return `Workspace switch requested (${data.fromWorkspaceId || '?'} → ${data.toWorkspaceId || '?'})`;
+    if (kind === 'workspace.switch.completed') return `Workspace switched (${data.fromWorkspaceId || '?'} → ${data.toWorkspaceName || data.toWorkspaceId || '?'})`;
+    if (kind === 'workspace.switch.failed') return `Workspace switch failed (${data.toWorkspaceId || '?'})`;
+    if (kind === 'worktree.sessions.add.requested') return `Add worktree sessions requested (${data.repositoryName ? `${data.repositoryName}/` : ''}${data.worktreeId || '?'})`;
+    if (kind === 'worktree.sessions.add.completed') return `Worktree sessions added (${data.worktreeId || '?'})`;
+    if (kind === 'worktree.sessions.add.failed') return `Add worktree sessions failed (${data.worktreeId || '?'})`;
+    if (kind === 'tab.closed') return `Tab closed (${data.tabId || '?'}, closed ${data.closed || 0})`;
+    if (kind === 'session.closed') return `Session closed (${data.sessionId || '?'})`;
     if (kind === 'git.pull') return `Git pull (${data.ok ? 'ok' : 'failed'})`;
     if (kind === 'pr.merge') return `PR merge ${data.ok ? 'ok' : 'failed'} (${data.repo || 'repo'} #${data.prNumber || '?'})`;
     if (kind === 'pr.review') return `PR review ${data.ok ? 'ok' : 'failed'} (${data.repo || 'repo'} #${data.prNumber || '?'})`;

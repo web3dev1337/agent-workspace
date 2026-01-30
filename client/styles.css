@@ -9931,6 +9931,19 @@ header h1 {
   justify-content: space-between;
 }
 
+.activity-actions {
+  display: flex;
+  gap: var(--space-xs);
+  align-items: center;
+  margin-left: auto;
+}
+
+.activity-action-btn {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
 .activity-time {
   color: var(--text-muted);
   font-size: 0.8rem;
