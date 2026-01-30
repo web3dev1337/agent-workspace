@@ -98,7 +98,7 @@ class WorkspaceManager {
    * This loads the config from the actual worktree directory (work1, work2, master, etc.)
    * Merges: Global → Category → Framework → Project → Worktree-specific config
    * @param {string} repositoryType - e.g., "hyfire2-game"
-   * @param {string} worktreePath - Full path to worktree, e.g., "/home/<user>/GitHub/games/hytopia/games/HyFire2/work1"
+	   * @param {string} worktreePath - Full path to worktree, e.g., "$HOME/GitHub/games/hytopia/games/HyFire2/work1"
    * @returns {object} Fully merged config with worktree-specific overrides
    */
   async getCascadedConfigForWorktree(repositoryType, worktreePath) {
