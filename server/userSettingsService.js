@@ -44,6 +44,17 @@ class UserSettingsService {
         terminal: {
           // Add other global terminal settings here in the future
         },
+        process: {
+          status: {
+            lookbackHours: 24,
+            caps: {
+              wipMax: 3,
+              q12: 3,
+              q3: 6,
+              q4: 10
+            }
+          }
+        },
         ui: {
           theme: 'dark',
           branches: {
@@ -310,6 +321,22 @@ class UserSettingsService {
       if (userSettings.global.terminal) {
         Object.assign(merged.global.terminal, userSettings.global.terminal);
       }
+      if (userSettings.global.process) {
+        const procDefaults = (merged.global.process || {});
+        const proc = userSettings.global.process || {};
+        merged.global.process = {
+          ...procDefaults,
+          ...proc,
+          status: {
+            ...(procDefaults.status || {}),
+            ...(proc.status || {}),
+            caps: {
+              ...((procDefaults.status || {}).caps || {}),
+              ...((proc.status || {}).caps || {})
+            }
+          }
+        };
+      }
       if (userSettings.global.ui) {
         const ui = userSettings.global.ui || {};
 
@@ -496,6 +523,23 @@ class UserSettingsService {
         this.settings.global.terminal = {
           ...this.getDefaultSettings().global.terminal,
           ...newGlobal.terminal
+        };
+      }
+
+      if (newGlobal.process) {
+        const defaultsProcess = (this.getDefaultSettings().global.process || {});
+        const next = (newGlobal.process || {});
+        this.settings.global.process = {
+          ...defaultsProcess,
+          ...next,
+          status: {
+            ...(defaultsProcess.status || {}),
+            ...(next.status || {}),
+            caps: {
+              ...((defaultsProcess.status || {}).caps || {}),
+              ...((next.status || {}).caps || {})
+            }
+          }
         };
       }
 

@@ -50,10 +50,25 @@ describe('UserSettingsService defaults', () => {
     expect(typeof cfg.pollMs).toBe('number');
   });
 
+  test('includes global.process.status caps defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    const status = defaults?.global?.process?.status;
+    expect(status).toBeTruthy();
+    expect(typeof status.lookbackHours).toBe('number');
+    expect(status.caps).toBeTruthy();
+    expect(typeof status.caps.wipMax).toBe('number');
+    expect(typeof status.caps.q12).toBe('number');
+    expect(typeof status.caps.q3).toBe('number');
+    expect(typeof status.caps.q4).toBe('number');
+  });
+
   test('mergeSettings deep-merges ui.tasks without dropping defaults', () => {
     const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
     const merged = UserSettingsService.prototype.mergeSettings.call({}, defaults, {
       global: {
+        process: {
+          status: { caps: { wipMax: 9 } }
+        },
         ui: {
           workflow: {
             mode: 'focus'
@@ -104,5 +119,12 @@ describe('UserSettingsService defaults', () => {
     // Does not drop workflow defaults when only mode is provided.
     expect(merged.global.ui.workflow.focus).toBeTruthy();
     expect(merged.global.ui.workflow.notifications).toBeTruthy();
+
+    // Does not drop process.status defaults when only one cap is provided.
+    expect(merged.global.process.status.lookbackHours).toBeTruthy();
+    expect(merged.global.process.status.caps.wipMax).toBe(9);
+    expect(typeof merged.global.process.status.caps.q12).toBe('number');
+    expect(typeof merged.global.process.status.caps.q3).toBe('number');
+    expect(typeof merged.global.process.status.caps.q4).toBe('number');
   });
 });
