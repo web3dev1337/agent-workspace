@@ -50,7 +50,7 @@ Notes:
 ### Tasks / Trello parity
 
 5) **Attachments + cover images support**
-   - Current: no attachments/cover support exists in Tasks UI/API.
+   - Current: shipped (Tasks card detail shows cover + attachments; Trello card fetch includes cover/idAttachmentCover + attachments).
    - Sources:
      - `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md` (Follow-ups)
      - `PLANS/2026-01-25/TRELLO_PARITY_PR.md` (Follow-ups)
