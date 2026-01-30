@@ -31,6 +31,7 @@ class ClaudeOrchestrator {
     this.githubLinks = new Map(); // Track GitHub PR/branch links per session
     this.githubLinkLogs = new Map(); // Track last logged GitHub links per session
     this.sessionActivity = new Map(); // Track which sessions have been used
+    this.branchRefreshRequestAt = new Map(); // sessionId -> last refresh timestamp (ms)
     this.dismissedStartupUI = new Map(); // Track which sessions have dismissed startup UI
     this.startupUIDebounce = new Map(); // Debounce startup UI showing
     this.sessionAgentPreferences = new Map(); // Track agent preferences per session
@@ -450,6 +451,9 @@ class ClaudeOrchestrator {
         if (sessionId.includes('-claude')) {
           this.detectGitHubLinks(sessionId, data);
         }
+
+        // Fast-path branch refresh when git reports a branch change in output.
+        this.maybeRequestBranchRefreshFromOutput(sessionId, data);
 
         // Detect clear commands to reset PR links and activity
         if (data.includes('/clear') || data.includes('clear')) {
@@ -3488,6 +3492,38 @@ class ClaudeOrchestrator {
       title: raw,
       className: classes.join(' ')
     };
+  }
+
+  maybeRequestBranchRefreshFromOutput(sessionId, data) {
+    if (!this.socket) return;
+
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+
+    const t = String(data || '');
+    if (!t) return;
+
+    // Cheap filter first.
+    if (!/(switched to|already on|on branch|head is now at|your branch is up to date)/i.test(t)) {
+      return;
+    }
+
+    // Only trigger when output is very likely a branch-changing/branch-reporting git message.
+    const looksLikeBranchEvent =
+      /Switched to (a new )?branch\b/i.test(t) ||
+      /\bAlready on\b/i.test(t) ||
+      /^\s*On branch\b/im.test(t) ||
+      /\bHEAD is now at\b/i.test(t) ||
+      /\bYour branch is up to date with\b/i.test(t);
+
+    if (!looksLikeBranchEvent) return;
+
+    const now = Date.now();
+    const last = this.branchRefreshRequestAt.get(sid) || 0;
+    if (now - last < 1500) return;
+    this.branchRefreshRequestAt.set(sid, now);
+
+    this.socket.emit('refresh-branch', { sessionId: sid });
   }
 
 	  updateTerminalBranchLabel(sessionId, branch) {
