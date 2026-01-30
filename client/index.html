@@ -296,6 +296,24 @@
             </div>
 
             <div class="setting-section">
+                <h4>Identity</h4>
+                <div class="setting-group">
+                    <label>
+                        Claim / reviewer name:
+                        <input id="identity-claim-name" type="text" placeholder="me" style="width: 180px;" />
+                    </label>
+                    <p class="setting-description">Used for Queue “Claim” and assignment labels. If empty, falls back to Trello Username (Me), then <code>me</code>.</p>
+                </div>
+                <div class="setting-group">
+                    <button class="btn-secondary" type="button" id="identity-save">Save current</button>
+                    <button class="btn-secondary" type="button" id="identity-clear">Clear</button>
+                </div>
+                <div class="setting-group">
+                    <div class="identity-saved-list" id="identity-saved-list"></div>
+                </div>
+            </div>
+
+            <div class="setting-section">
                 <h4>Diff Viewer</h4>
                 <div class="setting-group">
                     <label>
