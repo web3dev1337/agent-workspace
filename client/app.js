@@ -15909,6 +15909,11 @@ class ClaudeOrchestrator {
       const ticketCardId = record.ticketCardId || '';
       const ticketCardUrl = record.ticketCardUrl || '';
       const notes = record.notes || '';
+      const reviewChecklist = (record.reviewChecklist && typeof record.reviewChecklist === 'object') ? record.reviewChecklist : {};
+      const reviewTestsDone = !!reviewChecklist?.tests?.done;
+      const reviewTestsCommand = String(reviewChecklist?.tests?.command || '');
+      const reviewManualDone = !!reviewChecklist?.manual?.done;
+      const reviewManualSteps = String(reviewChecklist?.manual?.steps || '');
 
       const url = t.url || '';
       const hasPR = t.kind === 'pr' && url;
@@ -16095,6 +16100,26 @@ class ClaudeOrchestrator {
 	          <div class="tasks-detail-meta">Tip: set Outcome to <code>needs_fix</code> and paste review feedback here, then click <strong>🛠 Fixer</strong>.</div>
 	        </div>
 
+          ${(t.kind === 'pr' || t.kind === 'worktree') ? `
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Review checklist</div>
+	          <div class="tasks-inline-row" style="gap: 10px; align-items: center; margin-bottom: 10px;">
+	            <label class="tasks-detail-meta" style="display:flex;align-items:center;gap:8px;">
+	              <input type="checkbox" id="queue-review-tests-done" ${reviewTestsDone ? 'checked' : ''} />
+	              Tests run
+	            </label>
+	            <input id="queue-review-tests-command" class="tasks-input" value="${escapeHtml(reviewTestsCommand)}" placeholder="Test command (e.g. npm run test:unit)" style="flex:1;min-width:0;" />
+	          </div>
+	          <div class="tasks-inline-row" style="gap: 10px; align-items: center; margin-bottom: 10px;">
+	            <label class="tasks-detail-meta" style="display:flex;align-items:center;gap:8px;">
+	              <input type="checkbox" id="queue-review-manual-done" ${reviewManualDone ? 'checked' : ''} />
+	              Manual verify done
+	            </label>
+	          </div>
+	          <textarea id="queue-review-manual-steps" class="tasks-textarea" rows="3" placeholder="Manual verify steps / notes…">${escapeHtml(reviewManualSteps)}</textarea>
+	        </div>
+          ` : ''}
+
 	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Telemetry</div>
 	          <div class="tasks-kv">
@@ -16199,6 +16224,10 @@ class ClaudeOrchestrator {
 		      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
 		      const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
       const notesEl = detailEl.querySelector('#queue-notes');
+      const reviewTestsDoneEl = detailEl.querySelector('#queue-review-tests-done');
+      const reviewTestsCommandEl = detailEl.querySelector('#queue-review-tests-command');
+      const reviewManualDoneEl = detailEl.querySelector('#queue-review-manual-done');
+      const reviewManualStepsEl = detailEl.querySelector('#queue-review-manual-steps');
       const snoozeAutoBtn = detailEl.querySelector('#queue-snooze-auto');
       const snooze15Btn = detailEl.querySelector('#queue-snooze-15m');
       const snooze1hBtn = detailEl.querySelector('#queue-snooze-1h');
@@ -16559,6 +16588,26 @@ class ClaudeOrchestrator {
             promptRef: prEl?.value || null,
             ...ticketPatch
           };
+
+          if (reviewTestsDoneEl || reviewTestsCommandEl || reviewManualDoneEl || reviewManualStepsEl) {
+            const testsDone = !!reviewTestsDoneEl?.checked;
+            const testsCommand = String(reviewTestsCommandEl?.value || '').trim();
+            const manualDone = !!reviewManualDoneEl?.checked;
+            const manualSteps = String(reviewManualStepsEl?.value || '').trim();
+            const reviewChecklist = {};
+            if (testsDone || testsCommand) {
+              reviewChecklist.tests = {};
+              if (testsDone) reviewChecklist.tests.done = true;
+              if (testsCommand) reviewChecklist.tests.command = testsCommand;
+            }
+            if (manualDone || manualSteps) {
+              reviewChecklist.manual = {};
+              if (manualDone) reviewChecklist.manual.done = true;
+              if (manualSteps) reviewChecklist.manual.steps = manualSteps;
+            }
+            patch.reviewChecklist = Object.keys(reviewChecklist).length ? reviewChecklist : null;
+          }
+
 	          const rec = await upsertRecord(t.id, patch);
 	          updateTaskRecordInState(t.id, rec);
 	          this.showToast('Saved', 'success');
@@ -16607,7 +16656,7 @@ class ClaudeOrchestrator {
 	        renderReverseDeps();
 	      };
 
-      [tierEl, riskEl, pfEl, vEl, prEl].forEach((el) => {
+      [tierEl, riskEl, pfEl, vEl, prEl, reviewTestsDoneEl, reviewTestsCommandEl, reviewManualDoneEl, reviewManualStepsEl].forEach((el) => {
         el?.addEventListener('change', () => savePatch());
         el?.addEventListener('blur', () => savePatch());
       });
