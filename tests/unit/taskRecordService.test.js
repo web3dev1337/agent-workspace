@@ -215,4 +215,75 @@ describe('TaskRecordService', () => {
     const rec2 = await svc.upsert('pr:me/repo#777', { reviewChecklist: null });
     expect(rec2.reviewChecklist).toBeUndefined();
   });
+
+  test('task records can be promoted to repo-backed shared store', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
+    const filePath = path.join(tmp, 'task-records.json');
+    const repoRoot = path.join(tmp, 'repo');
+    fs.mkdirSync(repoRoot, { recursive: true });
+
+    const svc = new TaskRecordService({ filePath });
+    const id = 'pr:me/repo#200';
+
+    const rec = await svc.upsert(id, {
+      tier: 2,
+      changeRisk: 'low',
+      recordVisibility: 'shared',
+      recordRepoRoot: repoRoot
+    });
+
+    expect(rec.recordVisibility).toBe('shared');
+    expect(rec.recordRepoRoot).toBe(repoRoot);
+    expect(typeof rec.recordPath).toBe('string');
+
+    const onDisk = path.join(repoRoot, rec.recordPath);
+    expect(fs.existsSync(onDisk)).toBe(true);
+    const payload = JSON.parse(fs.readFileSync(onDisk, 'utf8'));
+    expect(payload.v).toBe(1);
+    expect(payload.record.tier).toBe(2);
+
+    const resolved = svc.get(id);
+    expect(resolved.tier).toBe(2);
+    expect(resolved.recordVisibility).toBe('shared');
+
+    const detached = await svc.upsert(id, { recordVisibility: 'private' });
+    expect(detached.recordVisibility).toBeUndefined();
+    expect(detached.tier).toBe(2);
+  });
+
+  test('task records can be promoted to repo-backed encrypted store', async () => {
+    const prev = process.env.ORCHESTRATOR_TASK_RECORDS_ENCRYPTION_KEY;
+    process.env.ORCHESTRATOR_TASK_RECORDS_ENCRYPTION_KEY = 'test-passphrase';
+    try {
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
+      const filePath = path.join(tmp, 'task-records.json');
+      const repoRoot = path.join(tmp, 'repo');
+      fs.mkdirSync(repoRoot, { recursive: true });
+
+      const svc = new TaskRecordService({ filePath });
+      const id = 'task:encrypted-store';
+
+      const rec = await svc.upsert(id, {
+        tier: 4,
+        recordVisibility: 'encrypted',
+        recordRepoRoot: repoRoot
+      });
+
+      expect(rec.recordVisibility).toBe('encrypted');
+      expect(rec.recordRepoRoot).toBe(repoRoot);
+      expect(typeof rec.recordPath).toBe('string');
+      expect(rec.recordPath.endsWith('.enc.json')).toBe(true);
+
+      const onDisk = path.join(repoRoot, rec.recordPath);
+      expect(fs.existsSync(onDisk)).toBe(true);
+      const payload = JSON.parse(fs.readFileSync(onDisk, 'utf8'));
+      expect(payload.alg).toBe('aes-256-gcm');
+
+      const resolved = svc.get(id);
+      expect(resolved.tier).toBe(4);
+      expect(resolved.recordVisibility).toBe('encrypted');
+    } finally {
+      process.env.ORCHESTRATOR_TASK_RECORDS_ENCRYPTION_KEY = prev;
+    }
+  });
 });
