@@ -235,4 +235,49 @@ describe('TrelloTaskProvider', () => {
     const [addUrl] = requestJson.mock.calls[0];
     expect(String(addUrl)).toContain('/checklists/cl-existing/checkItems');
   });
+
+  test('generic checklist CRUD hits expected Trello endpoints', async () => {
+    const provider = new TrelloTaskProvider({ cache: null, logger: { warn: jest.fn() } });
+    provider.getCredentials = () => ({ apiKey: 'k', token: 't', source: 'test' });
+
+    requestJson
+      .mockResolvedValueOnce({ id: 'cl1' }) // createChecklist
+      .mockResolvedValueOnce({ id: 'cl1', name: 'Renamed' }) // updateChecklist
+      .mockResolvedValueOnce({ ok: true }) // addCheckItem
+      .mockResolvedValueOnce({ ok: true }) // updateCheckItem
+      .mockResolvedValueOnce({ ok: true }); // removeCheckItem
+
+    await provider.createChecklist({ cardId: 'c1', name: 'My Checklist' });
+    await provider.updateChecklist({ checklistId: 'cl1', name: 'Renamed' });
+    await provider.addCheckItem({ checklistId: 'cl1', name: 'Item 1' });
+    await provider.updateCheckItem({ checklistId: 'cl1', itemId: 'it1', name: 'Item 1b' });
+    await provider.removeCheckItem({ checklistId: 'cl1', itemId: 'it1' });
+
+    expect(requestJson).toHaveBeenCalledTimes(5);
+
+    const [createUrl, createOpts] = requestJson.mock.calls[0];
+    expect(String(createUrl)).toContain('/cards/c1/checklists');
+    expect(String(createUrl)).toContain('name=My+Checklist');
+    expect(createOpts.method).toBe('POST');
+
+    const [renameUrl, renameOpts] = requestJson.mock.calls[1];
+    expect(String(renameUrl)).toContain('/checklists/cl1');
+    expect(String(renameUrl)).toContain('name=Renamed');
+    expect(renameOpts.method).toBe('PUT');
+
+    const [addUrl, addOpts] = requestJson.mock.calls[2];
+    expect(String(addUrl)).toContain('/checklists/cl1/checkItems');
+    expect(addOpts.method).toBe('POST');
+    expect(addOpts.headers['content-type']).toBe('application/x-www-form-urlencoded');
+    expect(String(addOpts.body)).toContain('name=Item+1');
+
+    const [renameItemUrl, renameItemOpts] = requestJson.mock.calls[3];
+    expect(String(renameItemUrl)).toContain('/checklists/cl1/checkItems/it1');
+    expect(String(renameItemUrl)).toContain('name=Item+1b');
+    expect(renameItemOpts.method).toBe('PUT');
+
+    const [delItemUrl, delItemOpts] = requestJson.mock.calls[4];
+    expect(String(delItemUrl)).toContain('/checklists/cl1/checkItems/it1');
+    expect(delItemOpts.method).toBe('DELETE');
+  });
 });

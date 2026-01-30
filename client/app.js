@@ -11508,6 +11508,54 @@ class ClaudeOrchestrator {
         };
       }).filter(d => !!d.id);
 
+      const otherChecklists = checklists.filter((cl) => {
+        const key = String(cl?.name || '').trim().toLowerCase();
+        return !!key && key !== dependencyChecklistKey;
+      });
+
+      const otherChecklistsHtml = otherChecklists.length
+        ? otherChecklists.map((cl) => {
+          const checklistId = String(cl?.id || '').trim();
+          const checklistName = String(cl?.name || '').trim() || 'Checklist';
+          const items = Array.isArray(cl?.checkItems) ? cl.checkItems : [];
+          const itemsHtml = items.length
+            ? items.map((i) => {
+              const itemId = String(i?.id || '').trim();
+              const itemName = String(i?.name || '').trim();
+              const state = String(i?.state || '').trim().toLowerCase();
+              const done = state === 'complete';
+              if (!itemId) return '';
+              return `
+                <div class="tasks-checkitem-row ${done ? 'done' : ''}">
+                  <input type="checkbox" class="tasks-checkitem-checkbox" data-checkitem-id="${escapeHtml(itemId)}" data-checklist-id="${escapeHtml(checklistId)}" ${done ? 'checked' : ''} />
+                  <div class="tasks-checkitem-text" data-rename-checkitem="${escapeHtml(itemId)}" data-checklist-id="${escapeHtml(checklistId)}" title="Click to rename">${escapeHtml(itemName || '(empty)')}</div>
+                  <button class="btn-secondary tasks-checkitem-remove" type="button" title="Delete item" data-delete-checkitem="${escapeHtml(itemId)}" data-checklist-id="${escapeHtml(checklistId)}">×</button>
+                </div>
+              `;
+            }).join('')
+            : `<div class="tasks-detail-empty">No items.</div>`;
+
+          return `
+            <div class="tasks-checklist" data-checklist-id="${escapeHtml(checklistId)}">
+              <div class="tasks-checklist-header">
+                <div class="tasks-checklist-title">${escapeHtml(checklistName)}</div>
+                <div class="tasks-checklist-actions">
+                  <button class="btn-secondary" type="button" data-rename-checklist="${escapeHtml(checklistId)}" data-checklist-name="${escapeHtml(checklistName)}" title="Rename checklist">✎</button>
+                  <button class="btn-secondary" type="button" data-delete-checklist="${escapeHtml(checklistId)}" title="Delete checklist">×</button>
+                </div>
+              </div>
+              <div class="tasks-checkitems">
+                ${itemsHtml}
+              </div>
+              <div class="tasks-inline-row tasks-checkitem-add">
+                <input class="tasks-input" data-checkitem-input="${escapeHtml(checklistId)}" placeholder="Add item…" />
+                <button class="btn-secondary" type="button" data-add-checkitem-btn="${escapeHtml(checklistId)}">＋ Add</button>
+              </div>
+            </div>
+          `;
+        }).join('')
+        : `<div class="tasks-detail-empty">No checklists.</div>`;
+
 	      const mapping = effectiveBoardId ? (getBoardMapping(state.provider, effectiveBoardId) || null) : null;
 	      const mappingEnabled = mapping ? (mapping.enabled !== false) : true;
 	      const mappingLocalPath = mapping ? String(mapping.localPath || '') : '';
@@ -11642,6 +11690,17 @@ class ClaudeOrchestrator {
           <div class="tasks-inline-row tasks-dep-add">
             <input id="tasks-dep-input" class="tasks-input" placeholder="Paste Trello card URL or shortLink…" />
             <button class="btn-secondary" id="tasks-dep-add-btn">＋ Add</button>
+          </div>
+        </div>
+
+        <div class="tasks-detail-block">
+          <div class="tasks-detail-block-title">Checklists (${otherChecklists.length})</div>
+          <div class="tasks-checklists">
+            ${otherChecklistsHtml}
+          </div>
+          <div class="tasks-inline-row tasks-checklist-add">
+            <input id="tasks-checklist-new" class="tasks-input" placeholder="New checklist name…" />
+            <button class="btn-secondary" id="tasks-checklist-add-btn">＋ Add checklist</button>
           </div>
         </div>
 
@@ -12235,6 +12294,91 @@ class ClaudeOrchestrator {
       });
       const { raw, json } = await parseResponseJson(res);
       if (!res.ok) throw new Error(json?.error || json?.details || raw || 'Failed to update dependency');
+      return json.card || null;
+    };
+
+    const createChecklist = async ({ cardId, name } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/checklists`);
+      url.searchParams.set('provider', state.provider);
+      const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || raw || 'Failed to create checklist');
+      return json.card || null;
+    };
+
+    const renameChecklist = async ({ checklistId, cardId, name } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/checklists/${encodeURIComponent(checklistId)}`);
+      url.searchParams.set('provider', state.provider);
+      const res = await fetch(url.toString(), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, cardId })
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || raw || 'Failed to rename checklist');
+      return json.card || null;
+    };
+
+    const deleteChecklist = async ({ checklistId, cardId } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/checklists/${encodeURIComponent(checklistId)}`);
+      url.searchParams.set('provider', state.provider);
+      if (cardId) url.searchParams.set('cardId', String(cardId));
+      const res = await fetch(url.toString(), { method: 'DELETE' });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || raw || 'Failed to delete checklist');
+      return json.card || null;
+    };
+
+    const addCheckItem = async ({ checklistId, cardId, name } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/checklists/${encodeURIComponent(checklistId)}/check-items`);
+      url.searchParams.set('provider', state.provider);
+      const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, cardId })
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || raw || 'Failed to add checklist item');
+      return json.card || null;
+    };
+
+    const renameCheckItem = async ({ checklistId, itemId, cardId, name } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/checklists/${encodeURIComponent(checklistId)}/check-items/${encodeURIComponent(itemId)}`);
+      url.searchParams.set('provider', state.provider);
+      const res = await fetch(url.toString(), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, cardId })
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || raw || 'Failed to rename checklist item');
+      return json.card || null;
+    };
+
+    const deleteCheckItem = async ({ checklistId, itemId, cardId } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/checklists/${encodeURIComponent(checklistId)}/check-items/${encodeURIComponent(itemId)}`);
+      url.searchParams.set('provider', state.provider);
+      if (cardId) url.searchParams.set('cardId', String(cardId));
+      const res = await fetch(url.toString(), { method: 'DELETE' });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || raw || 'Failed to delete checklist item');
+      return json.card || null;
+    };
+
+    const setCheckItemState = async ({ cardId, itemId, state: nextState } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/cards/${encodeURIComponent(cardId)}/check-items/${encodeURIComponent(itemId)}`);
+      url.searchParams.set('provider', state.provider);
+      const res = await fetch(url.toString(), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: nextState })
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || raw || 'Failed to update checklist item');
       return json.card || null;
     };
 
@@ -13886,6 +14030,146 @@ class ClaudeOrchestrator {
               }
 	            });
 	          });
+
+          const checklistAddBtn = detailEl.querySelector('#tasks-checklist-add-btn');
+          checklistAddBtn?.addEventListener('click', async () => {
+            const input = detailEl.querySelector('#tasks-checklist-new');
+            const name = String(input?.value || '').trim();
+            if (!state.selectedCardId || !name) return;
+            try {
+              checklistAddBtn.disabled = true;
+              const updated = await createChecklist({ cardId: state.selectedCardId, name });
+              if (input) input.value = '';
+              if (updated) setDetail(updated);
+              this.showToast('Checklist created', 'success');
+            } catch (err) {
+              console.error('Create checklist failed:', err);
+              this.showToast(String(err?.message || err), 'error');
+            } finally {
+              checklistAddBtn.disabled = false;
+            }
+          });
+
+          detailEl.querySelectorAll('[data-rename-checklist]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const checklistId = btn.getAttribute('data-rename-checklist');
+              const currentName = btn.getAttribute('data-checklist-name') || '';
+              if (!state.selectedCardId || !checklistId) return;
+              const nextName = String(window.prompt('Checklist name:', currentName) || '').trim();
+              if (!nextName || nextName === currentName) return;
+              try {
+                btn.disabled = true;
+                const updated = await renameChecklist({ checklistId, cardId: state.selectedCardId, name: nextName });
+                if (updated) setDetail(updated);
+                this.showToast('Checklist renamed', 'success');
+              } catch (err) {
+                console.error('Rename checklist failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+
+          detailEl.querySelectorAll('[data-delete-checklist]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const checklistId = btn.getAttribute('data-delete-checklist');
+              if (!state.selectedCardId || !checklistId) return;
+              if (!window.confirm('Delete this checklist?')) return;
+              try {
+                btn.disabled = true;
+                const updated = await deleteChecklist({ checklistId, cardId: state.selectedCardId });
+                if (updated) setDetail(updated);
+                this.showToast('Checklist deleted', 'success');
+              } catch (err) {
+                console.error('Delete checklist failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+
+          detailEl.querySelectorAll('[data-add-checkitem-btn]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const checklistId = btn.getAttribute('data-add-checkitem-btn');
+              if (!state.selectedCardId || !checklistId) return;
+              const wrapper = btn.closest('.tasks-checklist');
+              const input = wrapper ? wrapper.querySelector('[data-checkitem-input]') : null;
+              const name = String(input?.value || '').trim();
+              if (!name) return;
+              try {
+                btn.disabled = true;
+                const updated = await addCheckItem({ checklistId, cardId: state.selectedCardId, name });
+                if (input) input.value = '';
+                if (updated) setDetail(updated);
+                this.showToast('Item added', 'success');
+              } catch (err) {
+                console.error('Add checklist item failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+
+          detailEl.querySelectorAll('[data-checkitem-id]').forEach((checkbox) => {
+            checkbox.addEventListener('change', async () => {
+              const itemId = checkbox.getAttribute('data-checkitem-id');
+              if (!state.selectedCardId || !itemId) return;
+              const desired = checkbox.checked ? 'complete' : 'incomplete';
+              try {
+                checkbox.disabled = true;
+                const updated = await setCheckItemState({ cardId: state.selectedCardId, itemId, state: desired });
+                if (updated) setDetail(updated);
+              } catch (err) {
+                console.error('Toggle checklist item failed:', err);
+                checkbox.checked = !checkbox.checked;
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                checkbox.disabled = false;
+              }
+            });
+          });
+
+          detailEl.querySelectorAll('[data-rename-checkitem]').forEach((el) => {
+            el.addEventListener('click', async () => {
+              const itemId = el.getAttribute('data-rename-checkitem');
+              const checklistId = el.getAttribute('data-checklist-id');
+              if (!state.selectedCardId || !itemId || !checklistId) return;
+              const current = String(el.textContent || '').trim();
+              const nextName = String(window.prompt('Item name:', current) || '').trim();
+              if (!nextName || nextName === current) return;
+              try {
+                const updated = await renameCheckItem({ checklistId, itemId, cardId: state.selectedCardId, name: nextName });
+                if (updated) setDetail(updated);
+                this.showToast('Item renamed', 'success');
+              } catch (err) {
+                console.error('Rename checklist item failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              }
+            });
+          });
+
+          detailEl.querySelectorAll('[data-delete-checkitem]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const itemId = btn.getAttribute('data-delete-checkitem');
+              const checklistId = btn.getAttribute('data-checklist-id');
+              if (!state.selectedCardId || !itemId || !checklistId) return;
+              if (!window.confirm('Delete this item?')) return;
+              try {
+                btn.disabled = true;
+                const updated = await deleteCheckItem({ checklistId, itemId, cardId: state.selectedCardId });
+                if (updated) setDetail(updated);
+                this.showToast('Item deleted', 'success');
+              } catch (err) {
+                console.error('Delete checklist item failed:', err);
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
 	        };
 
 	        setDetail(card);
