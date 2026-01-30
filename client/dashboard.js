@@ -138,6 +138,7 @@ class Dashboard {
                 <div class="dashboard-summary-actions">
                   <button class="dashboard-topbar-btn" id="dashboard-open-queue" title="Open Queue">📥 Queue</button>
                   <button class="dashboard-topbar-btn" id="dashboard-open-advice" title="Open Commander Advice">🧠 Advice</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-suggestions" title="Open workspace suggestions">✨ Suggestions</button>
                 </div>
               </div>
               <div class="dashboard-summary-card">
@@ -232,6 +233,12 @@ class Dashboard {
       e.preventDefault();
       try {
         this.showReadinessOverlay();
+      } catch {}
+    });
+    document.getElementById('dashboard-open-suggestions')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      try {
+        this.showSuggestionsOverlay();
       } catch {}
     });
 
@@ -714,6 +721,133 @@ class Dashboard {
 	      overlay._escHandler = null;
 	    }
 	    overlay.remove();
+	  }
+
+	  async showSuggestionsOverlay() {
+	    const existing = document.getElementById('dashboard-suggestions-overlay');
+	    if (existing) {
+	      existing.classList.remove('hidden');
+	      return;
+	    }
+
+	    const overlay = document.createElement('div');
+	    overlay.id = 'dashboard-suggestions-overlay';
+	    overlay.className = 'dashboard-telemetry-overlay';
+	    overlay.innerHTML = `
+	      <div class="dashboard-telemetry-panel" role="dialog" aria-label="Workspace suggestions">
+	        <div class="dashboard-telemetry-header">
+	          <div class="dashboard-telemetry-title">Workspaces — Suggestions</div>
+	          <button class="dashboard-topbar-btn" id="dashboard-suggestions-close" title="Close (Esc)">✕</button>
+	        </div>
+	        <div class="dashboard-telemetry-controls">
+	          <div class="dashboard-telemetry-actions">
+	            <button class="btn-secondary" type="button" id="dashboard-suggestions-refresh">Refresh</button>
+	            <button class="btn-secondary" type="button" id="dashboard-suggestions-copy">Copy JSON</button>
+	          </div>
+	        </div>
+	        <div id="dashboard-suggestions-body" class="dashboard-telemetry-body">Loading…</div>
+	      </div>
+	    `;
+
+	    document.body.appendChild(overlay);
+
+	    const close = () => this.hideSuggestionsOverlay();
+	    overlay.addEventListener('click', (e) => {
+	      if (e.target === overlay) close();
+	    });
+	    overlay.querySelector('#dashboard-suggestions-close')?.addEventListener('click', close);
+
+	    const onKey = (e) => {
+	      if (e.key !== 'Escape') return;
+	      const el = document.getElementById('dashboard-suggestions-overlay');
+	      if (!el || el.classList.contains('hidden')) return;
+	      close();
+	    };
+	    overlay._escHandler = onKey;
+	    document.addEventListener('keydown', onKey);
+
+	    overlay.querySelector('#dashboard-suggestions-refresh')?.addEventListener('click', () => {
+	      this.loadWorkspaceSuggestions();
+	    });
+	    overlay.querySelector('#dashboard-suggestions-copy')?.addEventListener('click', async () => {
+	      const data = this._workspaceSuggestions || null;
+	      if (!data) return;
+	      try {
+	        await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+	        try { this.orchestrator?.showToast?.('Copied suggestions JSON', 'success'); } catch {}
+	      } catch {}
+	    });
+
+	    await this.loadWorkspaceSuggestions();
+	  }
+
+	  hideSuggestionsOverlay() {
+	    const overlay = document.getElementById('dashboard-suggestions-overlay');
+	    if (!overlay) return;
+	    overlay.classList.add('hidden');
+	    const handler = overlay._escHandler;
+	    if (handler) {
+	      document.removeEventListener('keydown', handler);
+	      overlay._escHandler = null;
+	    }
+	    overlay.remove();
+	  }
+
+	  async loadWorkspaceSuggestions() {
+	    const bodyEl = document.getElementById('dashboard-suggestions-body');
+	    if (bodyEl) bodyEl.textContent = 'Loading…';
+
+	    let data = null;
+	    try {
+	      const res = await fetch('/api/workspaces/suggestions?limit=8');
+	      data = res && res.ok ? await res.json().catch(() => null) : null;
+	    } catch {
+	      data = null;
+	    }
+
+	    this._workspaceSuggestions = data;
+	    if (!bodyEl) return;
+	    if (!data) {
+	      bodyEl.textContent = 'Failed to load.';
+	      return;
+	    }
+
+	    const escapeHtml = (value) => String(value ?? '')
+	      .replace(/&/g, '&amp;')
+	      .replace(/</g, '&lt;')
+	      .replace(/>/g, '&gt;');
+
+	    const combos = Array.isArray(data?.suggestions?.frequentCombos) ? data.suggestions.frequentCombos : [];
+	    const recent = Array.isArray(data?.suggestions?.recentRepos) ? data.suggestions.recentRepos : [];
+
+	    const renderRepos = (repos) => {
+	      const list = Array.isArray(repos) ? repos : [];
+	      if (!list.length) return '';
+	      return `<ul class="dashboard-telemetry-list">${list.map(r => `<li><code>${escapeHtml(r?.path || '')}</code></li>`).join('')}</ul>`;
+	    };
+
+	    const renderSuggestion = (s) => {
+	      const label = escapeHtml(s?.label || '');
+	      const score = escapeHtml(String(s?.score ?? ''));
+	      const kind = escapeHtml(s?.kind || '');
+	      const seen = Array.isArray(s?.seenInWorkspaces) ? s.seenInWorkspaces : [];
+	      const seenHtml = seen.length ? `<div class="dashboard-telemetry-muted">Seen in: ${seen.map(escapeHtml).join(', ')}</div>` : '';
+	      return `
+	        <div class="dashboard-telemetry-card">
+	          <div><strong>${label}</strong> <span class="dashboard-telemetry-muted">(${kind}, score: ${score})</span></div>
+	          ${seenHtml}
+	          ${renderRepos(s?.repositories)}
+	        </div>
+	      `;
+	    };
+
+	    bodyEl.innerHTML = `
+	      <div class="dashboard-telemetry-muted">Generated: ${escapeHtml(data.generatedAt)} • Workspaces: ${escapeHtml(data?.sources?.workspaceCount)} • Repos: ${escapeHtml(data?.sources?.repoCount)}</div>
+	      <h4 style="margin-top: 14px;">Frequent repo combos</h4>
+	      ${combos.length ? combos.map(renderSuggestion).join('') : '<div class="dashboard-telemetry-muted">None found.</div>'}
+	      <h4 style="margin-top: 14px;">Recent activity</h4>
+	      ${recent.length ? recent.map(renderSuggestion).join('') : '<div class="dashboard-telemetry-muted">None found.</div>'}
+	    `;
 	  }
 
 	  async showProjectHealthOverlay() {
