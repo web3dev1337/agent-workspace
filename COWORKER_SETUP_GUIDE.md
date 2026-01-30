@@ -1040,19 +1040,19 @@ Located in `master/scripts/`:
 
 For a new co-worker (in this EXACT order):
 
-- [ ] **Step 1**: Install Node.js v18+ and Git v2.30+
-- [ ] **Step 2**: Clone AI standards: `git clone https://github.com/web3dev1337/ai-claude-standards ~/.claude`
-- [ ] **Step 3**: Run bootstrap: `cd ~/.claude && bash scripts/bootstrap.sh`
-- [ ] **Step 4**: Create folder structure: `mkdir -p ~/GitHub/{games,tools,web,writing,docs}/...`
-- [ ] **Step 5**: Verify symlinks created: `ls -la ~/GitHub/games/hytopia/CLAUDE.md`
-- [ ] **Step 6**: Clone projects into `PROJECT/master/` folders
-- [ ] **Step 7**: Clone orchestrator to `~/GitHub/tools/automation/claude-orchestrator/`
-- [ ] **Step 8**: Run `npm install` in orchestrator/master
-- [ ] **Step 9**: Run `bash scripts/install-startup.sh`
-- [ ] **Step 10**: Launch orchestrator: `orchestrator` or `npm run dev:all`
-- [ ] **Step 11**: Create first workspace using wizard
-- [ ] **Step 12**: Switch to workspace and verify worktrees auto-create
-- [ ] **Step 13**: Start coding!
+1. **Install** Node.js v18+ and Git v2.30+
+2. **Clone AI standards**: `git clone https://github.com/web3dev1337/ai-claude-standards ~/.claude`
+3. **Run bootstrap**: `cd ~/.claude && bash scripts/bootstrap.sh`
+4. **Create folder structure**: `mkdir -p ~/GitHub/{games,tools,web,writing,docs}/...`
+5. **Verify symlinks created**: `ls -la ~/GitHub/games/hytopia/CLAUDE.md`
+6. **Clone projects** into `PROJECT/master/` folders
+7. **Clone orchestrator** to `~/GitHub/tools/automation/claude-orchestrator/`
+8. **Install deps**: run `npm install` in `claude-orchestrator/master`
+9. **Install shortcuts**: `bash scripts/install-startup.sh`
+10. **Launch orchestrator**: `orchestrator` or `npm run dev:all`
+11. **Create first workspace** using wizard
+12. **Switch to workspace** and verify worktrees auto-create
+13. **Start coding**
 
 ---
 
