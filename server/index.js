@@ -2537,13 +2537,24 @@ app.get('/api/process/tasks', async (req, res) => {
     const metadataByPath = worktreePaths.length
       ? await worktreeMetadataService.getMultipleMetadata(worktreePaths)
       : {};
+    if (worktreePaths.length) {
+      await Promise.all(worktreePaths.map(async (p) => {
+        try {
+          const project = await projectMetadataService.getForWorktree(p);
+          if (metadataByPath[p]) metadataByPath[p].project = project;
+        } catch {
+          // ignore
+        }
+      }));
+    }
 
     const withLabels = enriched.map((t) => {
       const fromPath = deriveLabelsFromWorktreePath(t?.worktreePath);
       const project = t?.project || fromPath.project || deriveProjectFromRepository(t?.repository) || t?.repositoryName || null;
       const worktree = t?.worktree || fromPath.worktree || t?.worktreeId || null;
       const branch = t?.branch || (t?.worktreePath ? metadataByPath?.[t.worktreePath]?.git?.branch : null) || null;
-      return { ...t, project, worktree, branch };
+      const baseImpactRisk = (t?.worktreePath ? metadataByPath?.[t.worktreePath]?.project?.baseImpactRisk : null) || null;
+      return { ...t, project, worktree, branch, baseImpactRisk };
     });
 
     const include = String(req.query.include || '').toLowerCase();
