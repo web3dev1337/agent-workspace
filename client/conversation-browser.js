@@ -721,6 +721,9 @@ class ConversationBrowser {
           <button class="btn-small secondary" onclick="window.conversationBrowser.copyResumeCommand('${this.escapeAttr(conv.id)}', '${this.escapeAttr(fullPath)}', '${this.escapeAttr(source)}')">
             Copy Cmd
           </button>
+          <button class="btn-small secondary" onclick="window.conversationBrowser.exportConversation('${this.escapeAttr(conv.id)}', '${this.escapeAttr(conv.project)}', '${this.escapeAttr(source)}', 'json')">
+            Export
+          </button>
           <button class="btn-small secondary" onclick="window.conversationBrowser.viewConversation('${this.escapeAttr(conv.id)}', '${this.escapeAttr(source)}', event)">
             View All
           </button>
@@ -1056,6 +1059,12 @@ class ConversationBrowser {
           <button class="btn-primary" onclick="window.conversationBrowser.resumeConversation('${conv.id}', '${conv.project}', '${conv.cwd || ''}', '${conv.source || 'claude'}')">
             Resume Conversation
           </button>
+          <button class="btn-secondary" onclick="window.conversationBrowser.exportConversation('${conv.id}', '${conv.project}', '${conv.source || 'claude'}', 'json')">
+            Download JSON
+          </button>
+          <button class="btn-secondary" onclick="window.conversationBrowser.exportConversation('${conv.id}', '${conv.project}', '${conv.source || 'claude'}', 'md')">
+            Download MD
+          </button>
         </div>
       </div>
     `;
@@ -1111,6 +1120,22 @@ class ConversationBrowser {
   showError(message) {
     const list = document.getElementById('conversation-list');
     list.innerHTML = `<div class="error">${message}</div>`;
+  }
+
+  exportConversation(id, project, source = 'claude', format = 'json') {
+    const cid = String(id || '').trim();
+    if (!cid) return;
+    const params = new URLSearchParams();
+    const src = String(source || '').trim().toLowerCase();
+    if (project) params.set('project', String(project));
+    if (src && src !== 'claude') params.set('source', src);
+    params.set('format', String(format || 'json'));
+    const url = `${this.serverUrl}/api/conversations/${encodeURIComponent(cid)}/export?${params.toString()}`;
+    try {
+      window.open(url, '_blank');
+    } catch {
+      try { window.location.href = url; } catch {}
+    }
   }
 }
 
