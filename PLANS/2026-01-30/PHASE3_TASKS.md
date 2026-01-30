@@ -36,7 +36,7 @@ Guidelines:
 - [x] **P3-06 Attachments + cover images v1**: show attachments + cover in Tasks UI (read-only first).
   - Sources: `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md`, `PLANS/2026-01-25/TRELLO_PARITY_PR.md`
 
-- [ ] **P3-07 Checklist CRUD v1**: full checklist CRUD (not just Dependencies convention).
+- [x] **P3-07 Checklist CRUD v1**: full checklist CRUD (not just Dependencies convention).
   - Sources: `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md`, `PLANS/2026-01-25/TRELLO_PARITY_PR.md`
 
 - [ ] **P3-08 List create/reorder v1**: create lists + reorder lists in Tasks UI.

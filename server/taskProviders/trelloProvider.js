@@ -488,6 +488,70 @@ class TrelloTaskProvider {
     return true;
   }
 
+  // ==========================
+  // Generic checklist CRUD (v1)
+  // ==========================
+
+  async createChecklist({ cardId, name } = {}) {
+    if (!cardId) throw new Error('cardId is required');
+    const title = String(name || '').trim();
+    if (!title) throw new Error('name is required');
+    const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}/checklists`, { name: title });
+    return requestJson(url, { method: 'POST' });
+  }
+
+  async updateChecklist({ checklistId, name } = {}) {
+    if (!checklistId) throw new Error('checklistId is required');
+    const title = String(name || '').trim();
+    if (!title) throw new Error('name is required');
+    const url = this._buildUrl(`/checklists/${encodeURIComponent(checklistId)}`, { name: title });
+    return requestJson(url, { method: 'PUT' });
+  }
+
+  async removeChecklist({ checklistId } = {}) {
+    if (!checklistId) throw new Error('checklistId is required');
+    const url = this._buildUrl(`/checklists/${encodeURIComponent(checklistId)}`);
+    await requestJson(url, { method: 'DELETE' });
+    return true;
+  }
+
+  async addCheckItem({ checklistId, name } = {}) {
+    if (!checklistId) throw new Error('checklistId is required');
+    const itemName = String(name || '').trim();
+    if (!itemName) throw new Error('name is required');
+    const url = this._buildUrl(`/checklists/${encodeURIComponent(checklistId)}/checkItems`);
+    const body = new URLSearchParams({ name: itemName }).toString();
+    await requestJson(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body
+    });
+    return true;
+  }
+
+  async updateCheckItem({ checklistId, itemId, name } = {}) {
+    if (!checklistId) throw new Error('checklistId is required');
+    if (!itemId) throw new Error('itemId is required');
+    const itemName = String(name || '').trim();
+    if (!itemName) throw new Error('name is required');
+    const url = this._buildUrl(`/checklists/${encodeURIComponent(checklistId)}/checkItems/${encodeURIComponent(itemId)}`, { name: itemName });
+    await requestJson(url, { method: 'PUT' });
+    return true;
+  }
+
+  async removeCheckItem({ checklistId, itemId } = {}) {
+    if (!checklistId) throw new Error('checklistId is required');
+    if (!itemId) throw new Error('itemId is required');
+    const url = this._buildUrl(`/checklists/${encodeURIComponent(checklistId)}/checkItems/${encodeURIComponent(itemId)}`);
+    await requestJson(url, { method: 'DELETE' });
+    return true;
+  }
+
+  async setCheckItemState({ cardId, itemId, state } = {}) {
+    // Reuse Trello's card-scoped state toggle endpoint (works for any checklist item).
+    return this.setDependencyState({ cardId, itemId, state });
+  }
+
   async getBoardSnapshot({ boardId, refresh = false, q = '', updatedSince = null } = {}) {
     if (!boardId) throw new Error('boardId is required');
 
