@@ -78,6 +78,37 @@ class ClaudeOrchestrator {
     this.init();
   }
 
+  isMobileLayout() {
+    try {
+      return window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+    } catch {
+      return false;
+    }
+  }
+
+  syncSidebarBackdrop() {
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (!backdrop) return;
+    const isOpen = document.body.classList.contains('sidebar-open');
+    backdrop.classList.toggle('hidden', !isOpen);
+  }
+
+  openSidebar() {
+    document.body.classList.add('sidebar-open');
+    this.syncSidebarBackdrop();
+  }
+
+  closeSidebar() {
+    document.body.classList.remove('sidebar-open');
+    this.syncSidebarBackdrop();
+  }
+
+  toggleSidebar() {
+    const isOpen = document.body.classList.contains('sidebar-open');
+    if (isOpen) this.closeSidebar();
+    else this.openSidebar();
+  }
+
   loadWorktreeModalKeepOpenPreference() {
     try {
       return localStorage.getItem('worktree-modal-keep-open') === 'true';
@@ -968,7 +999,7 @@ class ClaudeOrchestrator {
     }, 30000);
   }
   
-	  setupEventListeners() {
+		  setupEventListeners() {
 	    // Check if elements exist before adding listeners
 	    const elements = {
 	      'worktree-list': null,
@@ -1019,9 +1050,9 @@ class ClaudeOrchestrator {
 	      }
 	    }
     
-    // Sidebar worktree clicks - use toggle instead of show
-    if (elements['worktree-list']) {
-      elements['worktree-list'].addEventListener('click', (e) => {
+	    // Sidebar worktree clicks - use toggle instead of show
+	    if (elements['worktree-list']) {
+	      elements['worktree-list'].addEventListener('click', (e) => {
         // Check if click was on ready-for-review toggle
         const readyBtn = e.target.closest('.ready-review-btn');
         if (readyBtn) {
@@ -1040,21 +1071,49 @@ class ClaudeOrchestrator {
           return; // Let the button's onclick handler deal with it
         }
 
-        const item = e.target.closest('.worktree-item');
-        if (item) {
-          const worktreeId = item.dataset.worktreeId;
-          console.log(`Tab clicked: ${worktreeId}, Ctrl: ${e.ctrlKey}, Meta: ${e.metaKey}`);
+	        const item = e.target.closest('.worktree-item');
+	        if (item) {
+	          const worktreeId = item.dataset.worktreeId;
+	          console.log(`Tab clicked: ${worktreeId}, Ctrl: ${e.ctrlKey}, Meta: ${e.metaKey}`);
 
           // Ctrl+Click or Cmd+Click = solo mode (show only this worktree)
-          if (e.ctrlKey || e.metaKey) {
-            this.showOnlyWorktree(worktreeId);
-          } else {
-            // Normal click = toggle visibility
-            this.toggleWorktreeVisibility(worktreeId);
-          }
-        }
-      });
-    }
+	          if (e.ctrlKey || e.metaKey) {
+	            this.showOnlyWorktree(worktreeId);
+	          } else {
+	            // Normal click = toggle visibility
+	            this.toggleWorktreeVisibility(worktreeId);
+	          }
+
+	          // On mobile, hide sidebar after selection so the terminals are visible.
+	          if (this.isMobileLayout()) {
+	            this.closeSidebar();
+	          }
+	        }
+	      });
+	    }
+
+	    const sidebarToggle = document.getElementById('sidebar-toggle');
+	    if (sidebarToggle) {
+	      sidebarToggle.addEventListener('click', (e) => {
+	        e.preventDefault();
+	        this.toggleSidebar();
+	      });
+	    }
+
+	    const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+	    if (sidebarBackdrop) {
+	      sidebarBackdrop.addEventListener('click', (e) => {
+	        e.preventDefault();
+	        this.closeSidebar();
+	      });
+	    }
+
+	    document.addEventListener('keydown', (e) => {
+	      if (e.key !== 'Escape') return;
+	      if (!this.isMobileLayout()) return;
+	      if (!document.body.classList.contains('sidebar-open')) return;
+	      this.closeSidebar();
+	    });
     
 	    // View buttons
 	    const dashboardBtn = document.getElementById('dashboard-btn');
@@ -1064,17 +1123,20 @@ class ClaudeOrchestrator {
 	      });
 	    }
 
-    document.getElementById('view-all').addEventListener('click', () => {
-		      this.setViewMode('all');
+	    document.getElementById('view-all').addEventListener('click', () => {
+			      this.setViewMode('all');
+			      if (this.isMobileLayout()) this.closeSidebar();
+			    });
+		    
+		    document.getElementById('view-claude-only').addEventListener('click', () => {
+		      this.setViewMode('claude');
+		      if (this.isMobileLayout()) this.closeSidebar();
 		    });
-	    
-	    document.getElementById('view-claude-only').addEventListener('click', () => {
-	      this.setViewMode('claude');
-	    });
-	    
-	    document.getElementById('view-servers-only').addEventListener('click', () => {
-	      this.setViewMode('server');
-	    });
+		    
+		    document.getElementById('view-servers-only').addEventListener('click', () => {
+		      this.setViewMode('server');
+		      if (this.isMobileLayout()) this.closeSidebar();
+		    });
     
     // Presets
     document.getElementById('view-presets').addEventListener('click', () => {
