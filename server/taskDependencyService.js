@@ -30,6 +30,24 @@ const parseTrelloTaskId = (id) => {
   return null;
 };
 
+const parseWorktreeTaskId = (id) => {
+  const raw = String(id || '').trim();
+  const m = raw.match(/^worktree:(.+)$/);
+  if (!m) return null;
+  const worktreePath = String(m[1] || '').trim();
+  if (!worktreePath) return null;
+  return { worktreePath };
+};
+
+const parseSessionTaskId = (id) => {
+  const raw = String(id || '').trim();
+  const m = raw.match(/^session:(.+)$/);
+  if (!m) return null;
+  const sessionId = String(m[1] || '').trim();
+  if (!sessionId) return null;
+  return { sessionId };
+};
+
 const detectCycles = ({ nodeIds, edges, limit = 5 } = {}) => {
   const ids = Array.isArray(nodeIds) ? nodeIds.map(String) : [];
   const edgeList = Array.isArray(edges) ? edges : [];
@@ -92,10 +110,12 @@ const detectCycles = ({ nodeIds, edges, limit = 5 } = {}) => {
 };
 
 class TaskDependencyService {
-  constructor({ taskRecordService, pullRequestService, taskTicketingService } = {}) {
+  constructor({ taskRecordService, pullRequestService, taskTicketingService, sessionManager, worktreeMetadataService } = {}) {
     this.taskRecordService = taskRecordService;
     this.pullRequestService = pullRequestService;
     this.taskTicketingService = taskTicketingService;
+    this.sessionManager = sessionManager;
+    this.worktreeMetadataService = worktreeMetadataService;
     this.prCache = new Map(); // key -> { value, expiresAt }
     this.trelloCardCache = new Map(); // shortLink -> { value, expiresAt }
     this.trelloDepsCache = new Map(); // shortLink -> { value, expiresAt }
@@ -183,6 +203,50 @@ class TaskDependencyService {
       } catch (error) {
         logger.warn('Failed to resolve PR dependency', { dep, error: error.message });
         return { id: dep, satisfied: false, reason: 'pr_lookup_failed' };
+      }
+    }
+
+    const worktree = parseWorktreeTaskId(dep);
+    if (worktree) {
+      const p = worktree.worktreePath;
+      try {
+        if (!this.worktreeMetadataService) return { id: dep, satisfied: false, reason: 'worktree_manual' };
+
+        const prStatus = await this.worktreeMetadataService.getPRStatus(p);
+        const prState = String(prStatus?.state || '').trim().toLowerCase();
+        if (prStatus?.hasPR) {
+          if (prState === 'merged') return { id: dep, satisfied: true, reason: 'worktree_pr_merged' };
+          if (prState) return { id: dep, satisfied: false, reason: `worktree_pr_${prState}` };
+          return { id: dep, satisfied: false, reason: 'worktree_pr_unknown' };
+        }
+
+        const git = await this.worktreeMetadataService.getGitStatus(p);
+        const branch = String(git?.branch || prStatus?.branch || '').trim().toLowerCase();
+        const clean = !git?.hasUncommittedChanges && Number(git?.ahead || 0) === 0;
+        if ((branch === 'main' || branch === 'master') && clean) {
+          return { id: dep, satisfied: true, reason: 'worktree_clean_main' };
+        }
+
+        return { id: dep, satisfied: false, reason: branch ? `worktree_${branch}` : 'worktree_open' };
+      } catch (error) {
+        logger.warn('Failed to resolve worktree dependency', { dep, error: error.message });
+        return { id: dep, satisfied: false, reason: 'worktree_lookup_failed' };
+      }
+    }
+
+    const session = parseSessionTaskId(dep);
+    if (session) {
+      try {
+        const sid = session.sessionId;
+        const sessions = this.sessionManager?.sessions;
+        const sess = (sessions && typeof sessions.get === 'function') ? sessions.get(sid) : null;
+        if (!sess) return { id: dep, satisfied: true, reason: 'session_not_found' };
+        const status = String(sess?.status || '').trim().toLowerCase() || 'unknown';
+        if (status === 'idle' || status === 'exited') return { id: dep, satisfied: true, reason: `session_${status}` };
+        return { id: dep, satisfied: false, reason: `session_${status}` };
+      } catch (error) {
+        logger.warn('Failed to resolve session dependency', { dep, error: error.message });
+        return { id: dep, satisfied: false, reason: 'session_lookup_failed' };
       }
     }
 
@@ -419,4 +483,4 @@ class TaskDependencyService {
   }
 }
 
-module.exports = { TaskDependencyService, parsePrTaskId, parseTrelloTaskId, detectCycles };
+module.exports = { TaskDependencyService, parsePrTaskId, parseTrelloTaskId, parseWorktreeTaskId, parseSessionTaskId, detectCycles };

@@ -28,7 +28,7 @@ Guidelines:
 - [x] **P3-04 Shared/encrypted task records store v1**: support shared/encrypted storage + “promote private → shared”.
   - Source: `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md`
 
-- [ ] **P3-05 Dependency satisfaction rules v1**: richer satisfaction for `worktree:` / `session:` dependencies (infer completion).
+- [x] **P3-05 Dependency satisfaction rules v1**: richer satisfaction for `worktree:` / `session:` dependencies (infer completion).
   - Source: `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md`
 
 ## Tasks / Trello parity
