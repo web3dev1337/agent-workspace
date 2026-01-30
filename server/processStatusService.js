@@ -147,11 +147,12 @@ const computeLaunchAllowedByTier = ({ wip, qByTier, q12, caps }) => {
 };
 
 class ProcessStatusService {
-  constructor({ processTaskService, taskRecordService, sessionManager, workspaceManager } = {}) {
+  constructor({ processTaskService, taskRecordService, sessionManager, workspaceManager, userSettingsService } = {}) {
     this.processTaskService = processTaskService;
     this.taskRecordService = taskRecordService;
     this.sessionManager = sessionManager;
     this.workspaceManager = workspaceManager;
+    this.userSettingsService = userSettingsService || null;
     this.cache = new TTLCache({ defaultTtlMs: 25_000, maxEntries: 50 });
   }
 
@@ -162,18 +163,58 @@ class ProcessStatusService {
     return ProcessStatusService.instance;
   }
 
-  async getStatus({ mode = 'mine', lookbackHours = DEFAULT_LOOKBACK_HOURS, force = false } = {}) {
-    const cacheKey = `status:${mode}:${Number(lookbackHours) || DEFAULT_LOOKBACK_HOURS}`;
-    return this.cache.getOrCompute(cacheKey, async () => {
-      const caps = {
-        wipMax: DEFAULT_WIP_MAX,
-        q12: DEFAULT_Q12_CAP,
-        q3: DEFAULT_Q3_CAP,
-        q4: DEFAULT_Q4_CAP
+  getEffectiveProcessSettings() {
+    try {
+      const settings = this.userSettingsService?.settings;
+      const status = settings?.global?.process?.status || {};
+      const caps = status?.caps && typeof status.caps === 'object' ? status.caps : {};
+
+      const normalizeInt = (v, { min, max }) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return null;
+        const rounded = Math.round(n);
+        if (rounded < min || rounded > max) return null;
+        return rounded;
       };
 
-      const sessionWip = computeWipFromSessions({ sessionManager: this.sessionManager, lookbackHours });
-      const wip = sessionWip || computeWipFromWorkspaces({ workspaceManager: this.workspaceManager, lookbackHours });
+      const lookback = normalizeInt(status.lookbackHours, { min: 1, max: 24 * 14 }); // 1h .. 14 days
+
+      const wipMax = normalizeInt(caps.wipMax, { min: 0, max: 50 });
+      const q12 = normalizeInt(caps.q12, { min: 0, max: 200 });
+      const q3 = normalizeInt(caps.q3, { min: 0, max: 200 });
+      const q4 = normalizeInt(caps.q4, { min: 0, max: 200 });
+
+      return {
+        lookbackHours: lookback ?? DEFAULT_LOOKBACK_HOURS,
+        caps: {
+          wipMax: wipMax ?? DEFAULT_WIP_MAX,
+          q12: q12 ?? DEFAULT_Q12_CAP,
+          q3: q3 ?? DEFAULT_Q3_CAP,
+          q4: q4 ?? DEFAULT_Q4_CAP
+        }
+      };
+    } catch {
+      return {
+        lookbackHours: DEFAULT_LOOKBACK_HOURS,
+        caps: {
+          wipMax: DEFAULT_WIP_MAX,
+          q12: DEFAULT_Q12_CAP,
+          q3: DEFAULT_Q3_CAP,
+          q4: DEFAULT_Q4_CAP
+        }
+      };
+    }
+  }
+
+  async getStatus({ mode = 'mine', lookbackHours, force = false } = {}) {
+    const settings = this.getEffectiveProcessSettings();
+    const effectiveLookback = Number.isFinite(Number(lookbackHours)) ? Number(lookbackHours) : settings.lookbackHours;
+    const cacheKey = `status:${mode}:${Number(effectiveLookback) || DEFAULT_LOOKBACK_HOURS}`;
+    return this.cache.getOrCompute(cacheKey, async () => {
+      const caps = settings.caps;
+
+      const sessionWip = computeWipFromSessions({ sessionManager: this.sessionManager, lookbackHours: effectiveLookback });
+      const wip = sessionWip || computeWipFromWorkspaces({ workspaceManager: this.workspaceManager, lookbackHours: effectiveLookback });
 
       let tasks = [];
       if (this.processTaskService?.listTasks) {
@@ -198,7 +239,7 @@ class ProcessStatusService {
 
       return {
         mode,
-        lookbackHours: Number(lookbackHours) || DEFAULT_LOOKBACK_HOURS,
+        lookbackHours: Number(effectiveLookback) || DEFAULT_LOOKBACK_HOURS,
         wip: wip.wip,
         wipKind: wip.kind,
         wipMax: caps.wipMax,
