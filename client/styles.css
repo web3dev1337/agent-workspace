@@ -9924,6 +9924,11 @@ header h1 {
   margin-bottom: var(--space-sm);
 }
 
+.activity-event.activity-failed {
+  border-color: rgba(248, 81, 73, 0.55);
+  box-shadow: 0 0 0 1px rgba(248, 81, 73, 0.18);
+}
+
 .activity-meta {
   display: flex;
   gap: var(--space-sm);

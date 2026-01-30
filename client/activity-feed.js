@@ -5,14 +5,42 @@ class ActivityFeedPanel {
     this.eventIds = new Set();
     this.socket = null;
     this.serverUrl = window.location.origin;
-    this.filterText = '';
-    this.groupFilter = 'all';
-    this.paused = false;
+    this.filterText = this.loadPref('activityFeed.filterText', '');
+    this.groupFilter = this.loadPref('activityFeed.groupFilter', 'all');
+    this.paused = this.loadPrefBool('activityFeed.paused', false);
+    this.errorsOnly = this.loadPrefBool('activityFeed.errorsOnly', false);
     this.unseenCount = 0;
 
     this._dismissPointerHandler = null;
     this._dismissKeyHandler = null;
     this._socketHandler = null;
+  }
+
+  loadPref(key, fallback) {
+    try {
+      const v = localStorage.getItem(key);
+      return v === null ? fallback : v;
+    } catch {
+      return fallback;
+    }
+  }
+
+  loadPrefBool(key, fallback) {
+    try {
+      const v = localStorage.getItem(key);
+      if (v === null) return fallback;
+      return v === 'true';
+    } catch {
+      return fallback;
+    }
+  }
+
+  savePref(key, value) {
+    try {
+      localStorage.setItem(key, String(value));
+    } catch {
+      // ignore
+    }
   }
 
   isOpen() {
@@ -105,6 +133,11 @@ class ActivityFeedPanel {
                 Pause live
               </label>
 
+              <label class="option-toggle" title="Show only failing/error events">
+                <input type="checkbox" id="activity-errors-only">
+                Errors only
+              </label>
+
               <button class="btn-secondary" id="activity-refresh-btn">Refresh</button>
               <button class="btn-secondary" id="activity-clear-btn" title="Clear only this UI list (does not delete server history)">Clear</button>
             </div>
@@ -126,6 +159,7 @@ class ActivityFeedPanel {
       textInput.value = this.filterText;
       textInput.oninput = () => {
         this.filterText = String(textInput.value || '');
+        this.savePref('activityFeed.filterText', this.filterText);
         this.renderList();
       };
     }
@@ -135,6 +169,7 @@ class ActivityFeedPanel {
       groupSelect.value = this.groupFilter;
       groupSelect.onchange = () => {
         this.groupFilter = String(groupSelect.value || 'all');
+        this.savePref('activityFeed.groupFilter', this.groupFilter);
         this.renderList();
       };
     }
@@ -144,7 +179,18 @@ class ActivityFeedPanel {
       pauseCb.checked = !!this.paused;
       pauseCb.onchange = () => {
         this.paused = !!pauseCb.checked;
+        this.savePref('activityFeed.paused', this.paused ? 'true' : 'false');
         this.renderStats();
+      };
+    }
+
+    const errorsCb = document.getElementById('activity-errors-only');
+    if (errorsCb) {
+      errorsCb.checked = !!this.errorsOnly;
+      errorsCb.onchange = () => {
+        this.errorsOnly = !!errorsCb.checked;
+        this.savePref('activityFeed.errorsOnly', this.errorsOnly ? 'true' : 'false');
+        this.renderList();
       };
     }
 
@@ -260,10 +306,22 @@ class ActivityFeedPanel {
       const kind = String(ev?.kind || '');
       const groupOk = group === 'all' ? true : this.getGroup(kind) === group;
       if (!groupOk) return false;
+      if (this.errorsOnly && !this.isErrorEvent(ev)) return false;
       if (!text) return true;
       const hay = `${kind} ${JSON.stringify(ev?.data || {})}`.toLowerCase();
       return hay.includes(text);
     });
+  }
+
+  isErrorEvent(ev) {
+    const kind = String(ev?.kind || '');
+    const data = ev?.data && typeof ev.data === 'object' ? ev.data : {};
+    if (data.ok === false) return true;
+    if (kind.includes('failed')) return true;
+    if (kind.includes('.error')) return true;
+    if (kind.endsWith('.failed')) return true;
+    if (kind.includes('close.failed')) return true;
+    return false;
   }
 
   getGroup(kind) {
@@ -281,9 +339,10 @@ class ActivityFeedPanel {
     const dataJson = this.escapeHtml(this.compactJson(ev?.data));
     const group = this.getGroup(kind);
     const actions = this.renderEventActions(ev);
+    const failedClass = this.isErrorEvent(ev) ? ' activity-failed' : '';
 
     return `
-      <div class="activity-event">
+      <div class="activity-event${failedClass}">
         <div class="activity-meta">
           <span class="activity-time">${this.escapeHtml(time)}</span>
           <span class="activity-kind activity-kind-${this.escapeHtml(group)}">${this.escapeHtml(kind)}</span>
