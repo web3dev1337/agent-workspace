@@ -614,6 +614,13 @@ io.on('connection', (socket) => {
   // Workspace management handlers
   socket.on('switch-workspace', async ({ workspaceId }) => {
     try {
+      const previous = workspaceManager.getActiveWorkspace?.() || null;
+      activityFeed.track('workspace.switch.requested', {
+        fromWorkspaceId: previous?.id || null,
+        toWorkspaceId: String(workspaceId || '').trim() || null,
+        socketId: socket.id
+      });
+
       logger.info('Workspace switch requested', { workspaceId });
 
       const newWorkspace = await workspaceManager.switchWorkspace(workspaceId);
@@ -649,7 +656,18 @@ io.on('connection', (socket) => {
       }
 
       logger.info('Workspace switched successfully', { workspace: newWorkspace.name });
+      activityFeed.track('workspace.switch.completed', {
+        fromWorkspaceId: previous?.id || null,
+        toWorkspaceId: newWorkspace?.id || null,
+        toWorkspaceName: newWorkspace?.name || null,
+        socketId: socket.id
+      });
     } catch (error) {
+      activityFeed.track('workspace.switch.failed', {
+        toWorkspaceId: String(workspaceId || '').trim() || null,
+        socketId: socket.id,
+        error: error.message
+      });
       logger.error('Failed to switch workspace', { error: error.message, stack: error.stack });
       socket.emit('error', { message: 'Failed to switch workspace', error: error.message, stack: error.stack });
     }
@@ -673,6 +691,14 @@ io.on('connection', (socket) => {
   socket.on('add-worktree-sessions', async ({ worktreeId, worktreePath, repositoryName, repositoryType, repositoryRoot, startTier }) => {
     try {
       logger.info('Adding sessions for new worktree', { worktreeId, worktreePath, repositoryName });
+      activityFeed.track('worktree.sessions.add.requested', {
+        worktreeId: String(worktreeId || '').trim() || null,
+        worktreePath: String(worktreePath || '').trim() || null,
+        repositoryName: String(repositoryName || '').trim() || null,
+        repositoryType: String(repositoryType || '').trim() || null,
+        startTier: startTier === undefined ? null : Number(startTier),
+        socketId: socket.id
+      });
 
       // Create sessions for just this worktree
       const newSessions = await sessionManager.createSessionsForWorktree({
@@ -754,7 +780,19 @@ io.on('connection', (socket) => {
         worktreeId,
         sessionCount: Object.keys(newSessions).length
       });
+      activityFeed.track('worktree.sessions.add.completed', {
+        worktreeId: String(worktreeId || '').trim() || null,
+        sessionCount: Object.keys(newSessions).length,
+        socketId: socket.id
+      });
     } catch (error) {
+      activityFeed.track('worktree.sessions.add.failed', {
+        worktreeId: String(worktreeId || '').trim() || null,
+        worktreePath: String(worktreePath || '').trim() || null,
+        repositoryName: String(repositoryName || '').trim() || null,
+        socketId: socket.id,
+        error: error.message
+      });
       logger.error('Failed to add worktree sessions', { worktreeId, error: error.message });
       socket.emit('error', { message: 'Failed to add worktree sessions', error: error.message });
     }
@@ -777,7 +815,18 @@ io.on('connection', (socket) => {
       }
 
       logger.info('Tab closed', { tabId, closed });
+      activityFeed.track('tab.closed', {
+        tabId: String(tabId || '').trim() || null,
+        closed,
+        sessionCount: ids.length,
+        socketId: socket.id
+      });
     } catch (error) {
+      activityFeed.track('tab.close.failed', {
+        tabId: String(tabId || '').trim() || null,
+        socketId: socket.id,
+        error: error.message
+      });
       logger.error('Failed to close tab', { tabId, error: error.message });
     }
   });
@@ -791,7 +840,13 @@ io.on('connection', (socket) => {
       if (ok) {
         io.emit('session-closed', { sessionId: id });
       }
+      activityFeed.track('session.closed', { sessionId: id, ok: !!ok, socketId: socket.id });
     } catch (error) {
+      activityFeed.track('session.close.failed', {
+        sessionId: String(sessionId || '').trim() || null,
+        socketId: socket.id,
+        error: error.message
+      });
       logger.error('Failed to destroy session', { sessionId, error: error.message });
     }
   });
