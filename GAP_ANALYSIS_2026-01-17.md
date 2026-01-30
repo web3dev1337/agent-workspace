@@ -267,20 +267,20 @@ Week 10: Phase 4 + Final polish
 ## Quick Wins (Can Do Today)
 
 1. [ ] **Revoke API key** (5 min) - CRITICAL
-2. [ ] **Add .env to .gitignore** (1 min)
-3. [ ] **Create .env.example** (5 min)
+2. [x] **Add .env to .gitignore** (1 min)
+3. [x] **Create .env.example** (5 min)
 4. [ ] **Fix `/home/ab` fallback** in gitHelper.js (5 min)
 5. [ ] **Fix `/tmp/` path** in index.js (5 min)
-6. [ ] **Create CI workflow file** (30 min)
+6. [x] **Create CI workflow file** (30 min)
 
 ---
 
 ## Files to Modify
 
 ### Security Fixes
-- [ ] `.env` - Remove from repo
-- [ ] `.gitignore` - Add `.env`
-- [ ] `.env.example` - Create with placeholders
+- [x] `.env` - Remove from repo
+- [x] `.gitignore` - Add `.env`
+- [x] `.env.example` - Create with placeholders
 
 ### Hardcoded Paths
 - [ ] `server/workspaceManager.js` - Lines 464, 488
@@ -301,7 +301,7 @@ Week 10: Phase 4 + Final polish
 - [ ] `tests/unit/agentManager.test.js`
 - [ ] `tests/integration/socketio-events.test.js`
 - [ ] `tests/integration/api-endpoints.test.js`
-- [ ] `.github/workflows/test.yml`
+- [x] `.github/workflows/tests.yml`
 
 ---
 
@@ -310,7 +310,7 @@ Week 10: Phase 4 + Final polish
 ### MVP (Deployable)
 - [ ] No exposed secrets
 - [ ] No hardcoded user-specific paths
-- [ ] CI/CD running tests on PRs
+- [x] CI/CD running tests on PRs
 - [ ] 60%+ test coverage on critical paths
 - [ ] Installation works on fresh machine
 
