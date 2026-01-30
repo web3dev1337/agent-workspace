@@ -4,6 +4,13 @@ const path = require('path');
 const os = require('os');
 const winston = require('winston');
 
+const {
+  safeId,
+  resolveSafeRelativePath,
+  encryptText,
+  decryptText
+} = require('./promptArtifactService');
+
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
@@ -17,6 +24,81 @@ const logger = winston.createLogger({
 });
 
 const DEFAULT_PATH = path.join(os.homedir(), '.orchestrator', 'task-records.json');
+
+const RECORD_POINTER_KEYS = new Set(['recordVisibility', 'recordRepoRoot', 'recordPath']);
+
+const getTaskRecordPassphrase = () => {
+  return String(
+    process.env.ORCHESTRATOR_TASK_RECORDS_ENCRYPTION_KEY
+    || process.env.ORCHESTRATOR_TASK_RECORDS_PASSPHRASE
+    || process.env.ORCHESTRATOR_PROMPT_ENCRYPTION_KEY
+    || process.env.ORCHESTRATOR_PROMPT_PASSPHRASE
+    || ''
+  );
+};
+
+const stripRecordPointers = (rec) => {
+  const r = rec && typeof rec === 'object' ? rec : {};
+  const out = {};
+  for (const [k, v] of Object.entries(r)) {
+    if (RECORD_POINTER_KEYS.has(k)) continue;
+    out[k] = v;
+  }
+  return out;
+};
+
+const getDefaultRepoTaskRecordPaths = (id) => {
+  const sid = safeId(id);
+  return {
+    shared: path.join('.orchestrator', 'task-records', `${sid}.json`),
+    encrypted: path.join('.orchestrator', 'task-records', `${sid}.enc.json`)
+  };
+};
+
+const readTaskRecordFromRepoSync = ({ id, repoRoot, relPath, visibility = 'shared', passphrase } = {}) => {
+  const full = resolveSafeRelativePath(repoRoot, relPath);
+  if (!fsSync.existsSync(full)) return null;
+
+  if (visibility === 'encrypted') {
+    const raw = fsSync.readFileSync(full, 'utf8');
+    const parsed = JSON.parse(raw);
+    const jsonText = decryptText({ payload: parsed, passphrase });
+    const unpacked = JSON.parse(jsonText);
+    const record = (unpacked && typeof unpacked === 'object' && unpacked.record && typeof unpacked.record === 'object')
+      ? unpacked.record
+      : (unpacked && typeof unpacked === 'object' ? unpacked : null);
+    if (!record) return null;
+    return record;
+  }
+
+  const raw = fsSync.readFileSync(full, 'utf8');
+  const parsed = JSON.parse(raw);
+  const record = (parsed && typeof parsed === 'object' && parsed.record && typeof parsed.record === 'object')
+    ? parsed.record
+    : (parsed && typeof parsed === 'object' ? parsed : null);
+  if (!record) return null;
+  return record;
+};
+
+const writeTaskRecordToRepo = async ({ id, repoRoot, relPath, visibility = 'shared', record, passphrase } = {}) => {
+  const full = resolveSafeRelativePath(repoRoot, relPath);
+  await fs.mkdir(path.dirname(full), { recursive: true });
+
+  const body = {
+    v: 1,
+    id: safeId(id),
+    record: stripRecordPointers(record)
+  };
+
+  if (visibility === 'encrypted') {
+    const payload = encryptText({ text: JSON.stringify(body), passphrase });
+    await fs.writeFile(full, JSON.stringify(payload, null, 2), 'utf8');
+    return true;
+  }
+
+  await fs.writeFile(full, JSON.stringify(body, null, 2), 'utf8');
+  return true;
+};
 
 const clamp01 = (n) => {
   const x = Number(n);
@@ -149,12 +231,35 @@ class TaskRecordService {
 
   list() {
     const records = this.data?.records || {};
-    return Object.entries(records).map(([id, rec]) => ({ id, ...(rec || {}) }));
+    return Object.entries(records).map(([id]) => ({ id, ...(this.get(id) || {}) }));
   }
 
   get(id) {
     if (!id) return null;
-    return this.data?.records?.[id] || null;
+
+    const local = this.data?.records?.[id] || null;
+    const visibility = String(local?.recordVisibility || '').trim().toLowerCase();
+    if (visibility !== 'shared' && visibility !== 'encrypted') return local;
+
+    const repoRoot = String(local?.recordRepoRoot || '').trim();
+    const relPath = String(local?.recordPath || '').trim() || getDefaultRepoTaskRecordPaths(id)[visibility];
+    if (!repoRoot || !relPath) return local;
+
+    try {
+      const passphrase = visibility === 'encrypted' ? getTaskRecordPassphrase() : '';
+      if (visibility === 'encrypted' && !passphrase) return local;
+      const fromRepo = readTaskRecordFromRepoSync({ id, repoRoot, relPath, visibility, passphrase });
+      if (!fromRepo) return local;
+      return {
+        ...stripRecordPointers(fromRepo),
+        recordVisibility: visibility,
+        recordRepoRoot: repoRoot,
+        recordPath: relPath
+      };
+    } catch (error) {
+      logger.warn('Failed to resolve task record from repo', { id, error: error.message });
+      return local;
+    }
   }
 
   normalizePatch(patch) {
@@ -464,6 +569,24 @@ class TaskRecordService {
       else next.notes = String(p.notes || '');
     }
 
+    // Task record store pointers (v1)
+    if (p.recordVisibility !== undefined) {
+      if (p.recordVisibility === null || p.recordVisibility === '') {
+        clear.add('recordVisibility');
+      } else {
+        const v = normalizeVisibility(p.recordVisibility);
+        if (v !== null) next.recordVisibility = v;
+      }
+    }
+    if (p.recordRepoRoot !== undefined) {
+      if (p.recordRepoRoot === null || p.recordRepoRoot === '') clear.add('recordRepoRoot');
+      else next.recordRepoRoot = String(p.recordRepoRoot || '').trim().slice(0, 600);
+    }
+    if (p.recordPath !== undefined) {
+      if (p.recordPath === null || p.recordPath === '') clear.add('recordPath');
+      else next.recordPath = String(p.recordPath || '').trim().slice(0, 600);
+    }
+
     return { next, clear: Array.from(clear) };
   }
 
@@ -471,18 +594,104 @@ class TaskRecordService {
     if (!id) throw new Error('id is required');
     if (!this.data.records) this.data.records = {};
 
-    const existed = !!this.data.records[id];
-    const existing = this.data.records[id] || {};
-    const { next, clear } = this.normalizePatch(patch);
     const nowIso = new Date().toISOString();
-    const merged = { ...existing, ...next, updatedAt: nowIso };
-    if (!existed && !merged.createdAt) merged.createdAt = nowIso;
-    for (const k of clear) {
-      delete merged[k];
+
+    const existed = !!this.data.records[id];
+    const existingLocal = this.data.records[id] || {};
+    const { next, clear } = this.normalizePatch(patch);
+
+    const pointerVisibility = String(next.recordVisibility || existingLocal.recordVisibility || 'private').trim().toLowerCase();
+    const toSharedOrEncrypted = pointerVisibility === 'shared' || pointerVisibility === 'encrypted';
+
+    // If switching from repo-backed -> private, import the latest repo record first (best-effort).
+    if (!toSharedOrEncrypted && (existingLocal.recordVisibility === 'shared' || existingLocal.recordVisibility === 'encrypted')) {
+      const oldVisibility = String(existingLocal.recordVisibility).trim().toLowerCase();
+      const repoRoot = String(existingLocal.recordRepoRoot || '').trim();
+      const relPath = String(existingLocal.recordPath || '').trim() || getDefaultRepoTaskRecordPaths(id)[oldVisibility];
+      if (repoRoot && relPath) {
+        try {
+          const passphrase = oldVisibility === 'encrypted' ? getTaskRecordPassphrase() : '';
+          if (oldVisibility !== 'encrypted' || passphrase) {
+            const fromRepo = readTaskRecordFromRepoSync({ id, repoRoot, relPath, visibility: oldVisibility, passphrase });
+            if (fromRepo) {
+              this.data.records[id] = {
+                ...stripRecordPointers(fromRepo),
+                createdAt: fromRepo.createdAt || existingLocal.createdAt || nowIso,
+                updatedAt: fromRepo.updatedAt || nowIso
+              };
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
     }
-    this.data.records[id] = merged;
+
+    const baseLocal = this.data.records[id] || {};
+    const nextNonPointers = {};
+    for (const [k, v] of Object.entries(next)) {
+      if (RECORD_POINTER_KEYS.has(k)) continue;
+      nextNonPointers[k] = v;
+    }
+    const clearNonPointers = clear.filter((k) => !RECORD_POINTER_KEYS.has(k));
+
+    const mergedCandidate = { ...baseLocal, ...nextNonPointers, updatedAt: nowIso };
+    if (!existed && !mergedCandidate.createdAt) mergedCandidate.createdAt = nowIso;
+    for (const k of clearNonPointers) delete mergedCandidate[k];
+
+    if (!toSharedOrEncrypted) {
+      // private store (local JSON)
+      const merged = { ...mergedCandidate };
+      for (const k of Array.from(RECORD_POINTER_KEYS)) delete merged[k];
+      this.data.records[id] = merged;
+      await this.save();
+      return merged;
+    }
+
+    const repoRoot = String(next.recordRepoRoot || existingLocal.recordRepoRoot || '').trim();
+    if (!repoRoot) throw new Error('recordRepoRoot is required for shared/encrypted records');
+    const relPath = String(next.recordPath || existingLocal.recordPath || '').trim() || getDefaultRepoTaskRecordPaths(id)[pointerVisibility];
+    if (!relPath) throw new Error('recordPath is required for shared/encrypted records');
+
+    if (pointerVisibility === 'encrypted') {
+      const passphrase = getTaskRecordPassphrase();
+      if (!passphrase) {
+        throw new Error('Encrypted task records require ORCHESTRATOR_TASK_RECORDS_ENCRYPTION_KEY (or ORCHESTRATOR_TASK_RECORDS_PASSPHRASE) to be set');
+      }
+    }
+
+    // Write to repo, then cache the merged record locally with pointers.
+    const passphrase = pointerVisibility === 'encrypted' ? getTaskRecordPassphrase() : '';
+    const existingRepo = (() => {
+      try {
+        return readTaskRecordFromRepoSync({ id, repoRoot, relPath, visibility: pointerVisibility, passphrase }) || null;
+      } catch {
+        return null;
+      }
+    })();
+    const baseRepo = existingRepo ? stripRecordPointers(existingRepo) : stripRecordPointers(existingLocal);
+    const createdAt = baseRepo.createdAt || existingLocal.createdAt || nowIso;
+    const mergedRepo = { ...baseRepo, ...nextNonPointers, createdAt, updatedAt: nowIso };
+    for (const k of clearNonPointers) delete mergedRepo[k];
+
+    await writeTaskRecordToRepo({
+      id,
+      repoRoot,
+      relPath,
+      visibility: pointerVisibility,
+      record: mergedRepo,
+      passphrase
+    });
+
+    const cached = {
+      ...stripRecordPointers(mergedRepo),
+      recordVisibility: pointerVisibility,
+      recordRepoRoot: repoRoot,
+      recordPath: relPath
+    };
+    this.data.records[id] = cached;
     await this.save();
-    return merged;
+    return cached;
   }
 
   async remove(id) {
@@ -492,6 +701,46 @@ class TaskRecordService {
     delete this.data.records[id];
     await this.save();
     return existed;
+  }
+
+  defaultRepoTaskRecordPaths(id) {
+    return getDefaultRepoTaskRecordPaths(id);
+  }
+
+  async promoteToRepo({ id, repoRoot, relPath, visibility = 'shared' } = {}) {
+    const taskId = String(id || '').trim();
+    if (!taskId) throw new Error('id is required');
+    const store = String(visibility || '').trim().toLowerCase();
+    if (store !== 'shared' && store !== 'encrypted') throw new Error('visibility must be shared|encrypted');
+
+    const root = String(repoRoot || '').trim();
+    if (!root) throw new Error('repoRoot is required');
+    const defaults = this.defaultRepoTaskRecordPaths(taskId);
+    const rp = String(relPath || defaults[store] || '').trim();
+    if (!rp) throw new Error('relPath is required');
+
+    const passphrase = store === 'encrypted' ? getTaskRecordPassphrase() : '';
+    if (store === 'encrypted' && !passphrase) {
+      throw new Error('Encrypted task records require ORCHESTRATOR_TASK_RECORDS_ENCRYPTION_KEY (or ORCHESTRATOR_TASK_RECORDS_PASSPHRASE) to be set');
+    }
+
+    const existing = this.data?.records?.[taskId] || null;
+    if (!existing) return null;
+    const record = stripRecordPointers(existing);
+
+    await writeTaskRecordToRepo({ id: taskId, repoRoot: root, relPath: rp, visibility: store, record, passphrase });
+
+    const cached = {
+      ...stripRecordPointers(record),
+      recordVisibility: store,
+      recordRepoRoot: root,
+      recordPath: rp,
+      updatedAt: new Date().toISOString()
+    };
+    if (!cached.createdAt) cached.createdAt = existing?.createdAt || cached.updatedAt;
+    this.data.records[taskId] = cached;
+    await this.save();
+    return cached;
   }
 }
 
