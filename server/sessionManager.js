@@ -62,7 +62,8 @@ class SessionManager extends EventEmitter {
     this.statusMinHoldMs = parseInt(process.env.STATUS_MIN_HOLD_MS || '1500');
     // Extra hysteresis for transitioning to idle (prevents flicker when output pauses briefly).
     this.statusIdleHoldMs = parseInt(process.env.STATUS_IDLE_HOLD_MS || '6000');
-    this.branchRefreshMs = parseInt(process.env.BRANCH_REFRESH_MS || '60000');
+    // Default to 30s to keep branch labels reasonably fresh without relying on user git commands.
+    this.branchRefreshMs = parseInt(process.env.BRANCH_REFRESH_MS || '30000');
     this.conversationSnapshotTtlMs = parseInt(process.env.CONVERSATION_SNAPSHOT_TTL_MS || '5000');
     this.conversationSnapshotCache = { timestamp: 0, files: null };
 
@@ -1744,6 +1745,10 @@ class SessionManager extends EventEmitter {
     return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
   }
 
+  pathsOverlap(a, b) {
+    return this.isSameOrSubpath(a, b) || this.isSameOrSubpath(b, a);
+  }
+
   async updateGitBranch(worktreeId, worktreePath, skipCache = false) {
     logger.info('🔄 updateGitBranch called', { 
       worktreeId, 
@@ -1786,7 +1791,7 @@ class SessionManager extends EventEmitter {
         for (const [sessionId, session] of this.sessions) {
           // Check if this session belongs to the same worktree by comparing paths
           if (session.worktreeId === worktreeId && session.config &&
-            this.isSameOrSubpath(session.config.cwd, normalizedWorktreePath)) {
+            this.pathsOverlap(session.config.cwd, normalizedWorktreePath)) {
             sessionsToUpdate.add(sessionId);
           }
         }
@@ -1798,7 +1803,7 @@ class SessionManager extends EventEmitter {
       if (sessionsToUpdate.size === 0) {
         for (const [sessionId, session] of this.sessions) {
           if (!session?.config?.cwd) continue;
-          if (!this.isSameOrSubpath(session.config.cwd, normalizedWorktreePath)) continue;
+          if (!this.pathsOverlap(session.config.cwd, normalizedWorktreePath)) continue;
           if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
           sessionsToUpdate.add(sessionId);
         }
