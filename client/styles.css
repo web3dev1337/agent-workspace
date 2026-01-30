@@ -791,6 +791,12 @@ header h1 {
   border-color: #64748b;
 }
 
+.terminal-branch.branch-type-other {
+  color: var(--accent-primary);
+  background: rgba(31, 111, 235, 0.12);
+  border-color: rgba(31, 111, 235, 0.4);
+}
+
 .terminal-controls {
   display: flex;
   gap: var(--space-xs);

@@ -441,6 +441,15 @@ class SessionManager extends EventEmitter {
     }
 
     const refreshWorktrees = () => {
+      const refreshedPaths = new Set();
+      const refreshPath = (worktreeId, cwd) => {
+        const normalized = this.normalizeCwdPath(cwd);
+        if (!normalized) return;
+        if (refreshedPaths.has(normalized)) return;
+        refreshedPaths.add(normalized);
+        this.updateGitBranch(worktreeId, normalized, true);
+      };
+
       this.worktrees.forEach(worktree => {
         if (!worktree?.id || !worktree?.path) return;
 
@@ -450,8 +459,24 @@ class SessionManager extends EventEmitter {
         }
 
         const worktreeIdForGit = worktree.worktreeId || worktree.id;
-        this.updateGitBranch(worktreeIdForGit, worktree.path, true);
+        refreshPath(worktreeIdForGit, worktree.path);
       });
+
+      // Also refresh any "loose" sessions (not represented in this.worktrees).
+      // This prevents branch labels from getting stuck on "unknown" when checkout happens
+      // outside the Orchestrator terminal (e.g., in an external editor/terminal).
+      for (const [sessionId, session] of this.sessions) {
+        if (!session) continue;
+        if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
+
+        const branch = String(session.branch || '').trim();
+        if (branch && branch !== 'unknown' && branch !== 'no-git') continue;
+
+        const cwd = this.getSessionCwd(session) || session?.config?.cwd || null;
+        if (!cwd) continue;
+
+        refreshPath(session.worktreeId || sessionId, cwd);
+      }
     };
 
     // Do an initial refresh immediately (don't wait for the first interval tick).
