@@ -23,65 +23,57 @@ Notes:
 
 ### Process layer / workflow
 
-1) **Safe-parallelism “pairing” recommendations (conflict probability + context distance)**
-   - Roadmap calls for `GET /api/process/pairing` (ranked safe pairings for Tier 2/3) and heuristics for `q(i,j)` / `d(i,j)`.
-   - Current: minimal conflicts exist (`POST /api/worktree-conflicts`), but there is no `/api/process/pairing` endpoint or pairing UX.
-   - Sources:
-     - `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md` (PR 0.3)
-     - `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md` (Conflict + context distance)
-     - `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md` (ticket-level conflicts: “missing future work”)
-
-2) **Tier 4 “Overnight runner” preset (YOLO + run tests + leave summary/checklist)**
+1) **Tier 4 “Overnight runner” preset (YOLO + run tests + leave summary/checklist)**
    - Current: no “overnight runner” preset/command is present.
    - Source:
      - `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md` (Overnight runner preset)
 
 ### Risk / conflicts
 
-4) **Ticket↔ticket “conflict probability” heuristic layer (future)**
+2) **Ticket↔ticket “conflict probability” heuristic layer (future)**
    - Current: explicitly deferred; not implemented.
    - Source:
      - `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md` (Ticket-level conflicts → “❌ Missing (future work)”)
 
 ### Dependencies
 
-5) **Shared/encrypted task records store + promote private → shared**
+3) **Shared/encrypted task records store + promote private → shared**
    - Current: task records are local-only (`~/.orchestrator/task-records.json`).
    - Source:
      - `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md` (Follow-ups)
 
-6) **Richer satisfaction rules for worktree/session dependencies**
+4) **Richer satisfaction rules for worktree/session dependencies**
    - Current: dependency satisfaction is `doneAt` or PR merged; worktree/session completion inference is not implemented.
    - Source:
      - `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md` (Follow-ups)
 
 ### Tasks / Trello parity
 
-7) **Attachments + cover images support**
+5) **Attachments + cover images support**
    - Current: no attachments/cover support exists in Tasks UI/API.
    - Sources:
      - `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md` (Follow-ups)
      - `PLANS/2026-01-25/TRELLO_PARITY_PR.md` (Follow-ups)
      - `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md` (Out of scope)
 
-8) **Full checklist CRUD (beyond Dependencies convention)**
+6) **Full checklist CRUD (beyond Dependencies convention)**
    - Current: Dependencies checklist is supported; “all checklists” CRUD is not.
    - Sources:
      - `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md` (Follow-ups)
      - `PLANS/2026-01-25/TRELLO_PARITY_PR.md` (Follow-ups)
 
-9) **List creation/reorder**
+7) **List creation/reorder**
    - Current: lists are fetched, but list create/reorder isn’t exposed.
    - Source:
      - `PLANS/2026-01-25/TRELLO_PARITY_PR.md` (Follow-ups)
 
-10) **True within-list drag reorder (pos math), plus swimlanes/WIP limits**
+8) **True within-list drag reorder (pos math), plus swimlanes/WIP limits**
    - Current: Trello `pos` is supported at the API layer, but there’s no “perfect reorder” UI/logic, swimlanes, or WIP limits.
    - Sources:
      - `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md` (Follow-ups)
      - `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md` (Out of scope)
 
-11) **Persistent/stale-while-revalidate cache (+ persistence across restarts)**
+9) **Persistent/stale-while-revalidate cache (+ persistence across restarts)**
    - Current: Tasks provider caching is in-memory TTL only.
    - Sources:
      - `PLANS/2026-01-24/TASKS_TICKETING.md` (Future)
@@ -94,29 +86,29 @@ Notes:
 ### Files with remaining work
 
 #### `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md`
-- Remaining: item #1 above (pairing heuristics).
+- Remaining: none.
 
 #### `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md`
 - Template daily checklist items are intentionally unchecked (not backlog).
-- Remaining: items #1–#2 above (pairing heuristics, overnight runner).
+- Remaining: item #1 above (overnight runner).
 
 #### `PLANS/2026-01-24/TASKS_TICKETING.md`
-- Remaining: item #11 above (persistent/stale-while-revalidate cache).
+- Remaining: item #9 above (persistent/stale-while-revalidate cache).
 
 #### `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md`
-- Remaining: items #7–#10 above (attachments/cover, full checklist CRUD, “perfect reorder”).
+- Remaining: items #5–#8 above (attachments/cover, full checklist CRUD, “perfect reorder”).
 
 #### `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md`
-- Remaining: items #5–#6 above (shared/encrypted task records; richer satisfaction rules).
+- Remaining: items #3–#4 above (shared/encrypted task records; richer satisfaction rules).
 
 #### `PLANS/2026-01-25/TRELLO_PARITY_PR.md`
-- Remaining: items #7–#10 above (attachments/cover, full checklist CRUD, list reorder/creation, within-list reorder).
+- Remaining: items #5–#8 above (attachments/cover, full checklist CRUD, list reorder/creation, within-list reorder).
 
 #### `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
-- Remaining: items #7, #10, #11 above (attachments/cover, within-list reorder, persistent cache).
+- Remaining: items #5, #8, #9 above (attachments/cover, within-list reorder, persistent cache).
 
 #### `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md`
-- Remaining: item #4 above (ticket↔ticket conflict probability heuristics: explicitly “missing future work”).
+- Remaining: item #2 above (ticket↔ticket conflict probability heuristics: explicitly “missing future work”).
 
 ### Files with no remaining work (or reference/templates only)
 

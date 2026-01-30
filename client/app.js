@@ -14333,12 +14333,13 @@ class ClaudeOrchestrator {
 		            <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t2" title="Conveyor: Tier 2 + unreviewed + auto-next (one-at-a-time)">Conveyor T2</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
 		          </div>
-          <div class="tasks-view-toggle" role="group" aria-label="Queue navigation">
-            <button class="btn-secondary tasks-view-btn" id="queue-prev" title="Previous item (unblocked first)">Prev</button>
-            <button class="btn-secondary tasks-view-btn" id="queue-next" title="Next item (unblocked first)">Next</button>
-          </div>
-          <button class="btn-secondary" id="queue-refresh">🔄 Refresh</button>
-        </div>
+	          <div class="tasks-view-toggle" role="group" aria-label="Queue navigation">
+	            <button class="btn-secondary tasks-view-btn" id="queue-prev" title="Previous item (unblocked first)">Prev</button>
+	            <button class="btn-secondary tasks-view-btn" id="queue-next" title="Next item (unblocked first)">Next</button>
+	          </div>
+	          <button class="btn-secondary" id="queue-pairing" title="Safe-parallel pairing recommendations (Tier 2/3)">🧩 Pairing</button>
+	          <button class="btn-secondary" id="queue-refresh">🔄 Refresh</button>
+	        </div>
         <div class="tasks-body">
           <div class="tasks-cards" id="queue-list">
             <div class="loading">Loading queue…</div>
@@ -14352,10 +14353,11 @@ class ClaudeOrchestrator {
 
     document.body.appendChild(modal);
 
-    const listEl = modal.querySelector('#queue-list');
-    const detailEl = modal.querySelector('#queue-detail');
-    const searchEl = modal.querySelector('#queue-search');
-    const refreshBtn = modal.querySelector('#queue-refresh');
+	    const listEl = modal.querySelector('#queue-list');
+	    const detailEl = modal.querySelector('#queue-detail');
+	    const searchEl = modal.querySelector('#queue-search');
+	    const refreshBtn = modal.querySelector('#queue-refresh');
+	    const pairingBtn = modal.querySelector('#queue-pairing');
     const mineBtn = modal.querySelector('#queue-mode-mine');
     const allBtn = modal.querySelector('#queue-mode-all');
     const tierAllBtn = modal.querySelector('#queue-tier-all');
@@ -14378,7 +14380,110 @@ class ClaudeOrchestrator {
 		    const startReviewBtn = modal.querySelector('#queue-start-review');
 		    const prevBtn = modal.querySelector('#queue-prev');
 		    const nextBtn = modal.querySelector('#queue-next');
-		    const closeBtn = modal.querySelector('#queue-close-btn');
+	    const closeBtn = modal.querySelector('#queue-close-btn');
+
+	    const showPairingModal = async () => {
+	      const existing = document.getElementById('queue-pairing-modal');
+	      if (existing) existing.remove();
+
+	      const overlay = document.createElement('div');
+	      overlay.id = 'queue-pairing-modal';
+	      overlay.className = 'modal tasks-modal';
+	      overlay.classList.add(`tasks-theme-${resolvedTheme}`);
+	      overlay.innerHTML = `
+	        <div class="modal-content tasks-content">
+	          <div class="modal-header">
+	            <h2>🧩 Pairing (Tier 2/3)</h2>
+	            <button class="close-btn tasks-close-btn" id="queue-pairing-close" aria-label="Close Pairing" title="Close (Esc)">×</button>
+	          </div>
+	          <div class="tasks-body" style="grid-template-columns: 1fr;">
+	            <div class="tasks-cards" id="queue-pairing-body" style="padding: 12px;">
+	              <div class="tasks-detail-meta" style="margin-bottom: 10px; opacity: 0.9;">
+	                Ranked by low conflict probability + low context distance (v1 heuristic).
+	              </div>
+	              <div class="loading">Loading pairing…</div>
+	            </div>
+	          </div>
+	        </div>
+	      `;
+	      document.body.appendChild(overlay);
+
+	      const close = () => overlay.remove();
+	      overlay.querySelector('#queue-pairing-close')?.addEventListener('click', close);
+	      overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close(); });
+
+	      const body = overlay.querySelector('#queue-pairing-body');
+	      try {
+	        const url = new URL('/api/process/pairing', window.location.origin);
+	        url.searchParams.set('mode', state.mode);
+	        url.searchParams.set('tiers', '2,3');
+	        url.searchParams.set('limit', '12');
+	        const res = await fetch(url.toString());
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok) throw new Error(String(data?.error || res.statusText || 'pairing failed'));
+
+	        const pairs = Array.isArray(data?.pairs) ? data.pairs : [];
+	        if (!pairs.length) {
+	          body.innerHTML = `<div class="tasks-detail-empty">No Tier 2/3 pairing suggestions right now.</div>`;
+	          return;
+	        }
+
+	        const formatSide = (side) => {
+	          const id = String(side?.id || '').trim();
+	          const title = String(side?.title || '').trim();
+	          const tier = side?.tier ?? '';
+	          return `
+	            <div style="min-width:0;">
+	              <div><strong>T${escapeHtml(String(tier || ''))}</strong> ${escapeHtml(title || id)}</div>
+	              <div class="tasks-detail-meta">${escapeHtml(id)}</div>
+	            </div>
+	          `;
+	        };
+
+	        const renderPair = (p) => {
+	          const a = p?.a || {};
+	          const b = p?.b || {};
+	          const reasons = Array.isArray(p?.reasons) ? p.reasons.join(', ') : '';
+	          const overlap = Array.isArray(p?.overlapFiles) && p.overlapFiles.length ? p.overlapFiles.slice(0, 6).join(', ') : '';
+	          return `
+	            <div class="tasks-card" style="padding: 12px;">
+	              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+	                ${formatSide(a)}
+	                ${formatSide(b)}
+	              </div>
+	              <div class="tasks-detail-meta" style="margin-top: 8px;">
+	                score: <code>${escapeHtml(String(p?.score ?? ''))}</code> • conflict: <code>${escapeHtml(String(p?.conflict ?? ''))}</code> • distance: <code>${escapeHtml(String(p?.distance ?? ''))}</code>
+	              </div>
+	              ${reasons ? `<div class="tasks-detail-meta">reasons: ${escapeHtml(reasons)}</div>` : ''}
+	              ${overlap ? `<div class="tasks-detail-meta">overlap: ${escapeHtml(overlap)}</div>` : ''}
+	              <div style="display:flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
+	                <button class="btn-secondary" type="button" data-select-task="${escapeHtml(String(a.id || ''))}">Select A</button>
+	                <button class="btn-secondary" type="button" data-select-task="${escapeHtml(String(b.id || ''))}">Select B</button>
+	              </div>
+	            </div>
+	          `;
+	        };
+
+	        body.innerHTML = `
+	          <div class="tasks-detail-meta" style="margin-bottom: 10px; opacity: 0.9;">
+	            Ranked by low conflict probability + low context distance (v1 heuristic).
+	          </div>
+	          ${pairs.map(renderPair).join('')}
+	        `;
+
+	        body.querySelectorAll('[data-select-task]').forEach((btn) => {
+	          btn.addEventListener('click', () => {
+	            const id = String(btn?.dataset?.selectTask || '').trim();
+	            if (!id) return;
+	            state.selectedId = id;
+	            applyFiltersAndMaybeClampSelection({ renderSelectedDetail: true });
+	            close();
+	          });
+	        });
+	      } catch (error) {
+	        body.innerHTML = `<div class="tasks-detail-empty">Failed to load pairing: ${escapeHtml(String(error?.message || error))}</div>`;
+	      }
+	    };
 
     const setMode = (mode) => {
       state.mode = mode === 'all' ? 'all' : 'mine';
@@ -17315,16 +17420,22 @@ class ClaudeOrchestrator {
       if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     });
 
-    refreshBtn.addEventListener('click', async () => {
-      refreshBtn.disabled = true;
-      try {
-        await fetchTasks();
+	    refreshBtn.addEventListener('click', async () => {
+	      refreshBtn.disabled = true;
+	      try {
+	        await fetchTasks();
       } catch (e) {
         this.showToast(String(e?.message || e), 'error');
       } finally {
         refreshBtn.disabled = false;
-      }
-    });
+	      }
+	    });
+
+	    if (pairingBtn) {
+	      pairingBtn.addEventListener('click', () => {
+	        showPairingModal().catch((e) => this.showToast(String(e?.message || e), 'error'));
+	      });
+	    }
 
     mineBtn.addEventListener('click', async () => {
       setMode('mine');
