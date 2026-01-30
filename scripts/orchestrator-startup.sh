@@ -9,7 +9,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-ORCHESTRATOR_DIR="/home/<user>/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev"
+ORCHESTRATOR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-4000}"
 CLIENT_PORT=2080
 
@@ -41,14 +41,14 @@ cd "$ORCHESTRATOR_DIR" || {
 # Optional: Update to latest (can be disabled with --no-update flag)
 if [[ "$1" != "--no-update" ]]; then
   echo -e "${BLUE}📥 Checking for updates...${NC}"
-  git fetch origin feature/multi-workspace-system >/dev/null 2>&1 || true
-
+  git fetch origin main >/dev/null 2>&1 || true
+  
   LOCAL=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
-  REMOTE=$(git rev-parse origin/feature/multi-workspace-system 2>/dev/null || echo "unknown")
-
+  REMOTE=$(git rev-parse origin/main 2>/dev/null || echo "unknown")
+  
   if [ "$LOCAL" != "$REMOTE" ] && [ "$REMOTE" != "unknown" ]; then
     echo -e "${BLUE}⬇️ Pulling updates...${NC}"
-    git pull origin feature/multi-workspace-system 2>/dev/null || echo -e "${YELLOW}⚠ Could not pull (offline?)${NC}"
+    git pull --ff-only origin main 2>/dev/null || echo -e "${YELLOW}⚠ Could not pull (offline?)${NC}"
 
     # Update dependencies if package.json changed
     if git diff --name-only HEAD~1..HEAD 2>/dev/null | grep -q package.json; then
