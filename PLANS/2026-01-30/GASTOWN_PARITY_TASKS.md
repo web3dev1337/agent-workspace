@@ -7,7 +7,7 @@ This turns the “future work” bullets into a checkbox task list so we can shi
 
 ## Phase 3A: Work distribution
 
-- [ ] Convoy dashboard: create/view/track convoys
+- [x] Convoy dashboard: create/view/track convoys (shipped: PR #487 on 2026-01-30)
 - [x] Sling interface: assign issues to agents (shipped: PR #481 on 2026-01-30)
 - [x] Work queue visualization (shipped: PR #482 on 2026-01-30)
 
@@ -19,6 +19,6 @@ This turns the “future work” bullets into a checkbox task list so we can shi
 
 ## Phase 3C: Monitoring
 
-- [ ] Hook browser: view/edit/repair hooks
-- [ ] Deacon monitor: health dashboard
+- [x] Hook browser: view/edit/repair hooks (shipped: PR #488 on 2026-01-30)
+- [x] Deacon monitor: health dashboard (shipped: PR #489 on 2026-01-30)
 - [x] Activity feed: real-time event stream (shipped: Activity Feed v1, merged PRs #469–#476 on 2026-01-30)
