@@ -95,6 +95,38 @@ class TestOrchestrationService {
     return run ? this.serializeRun(run, { includeResults: true }) : null;
   }
 
+  cancelRun(runId) {
+    const id = String(runId || '').trim();
+    if (!id) return { ok: false, error: 'Missing runId' };
+    const run = this.runs.get(id);
+    if (!run) return { ok: false, error: 'Run not found' };
+    if (run.status !== 'running') return { ok: false, error: 'Run is not running' };
+
+    run.cancelRequestedAt = new Date().toISOString();
+    run.cancelled = true;
+
+    const results = Array.isArray(run.results) ? run.results : [];
+    for (const r of results) {
+      if (r.status === 'queued') {
+        r.status = 'cancelled';
+        r.exitCode = null;
+        r.durationMs = null;
+        r.finishedAt = new Date().toISOString();
+      } else if (r.status === 'running') {
+        r.status = 'cancelling';
+        try {
+          if (r._child && typeof r._child.kill === 'function') {
+            r._child.kill('SIGTERM');
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    return { ok: true };
+  }
+
   serializeRun(run, { includeResults = true } = {}) {
     const results = Array.isArray(run.results) ? run.results : [];
     const summary = results.reduce((acc, r) => {
@@ -105,9 +137,10 @@ class TestOrchestrationService {
       else if (status === 'unsupported') acc.unsupported += 1;
       else if (status === 'running') acc.running += 1;
       else if (status === 'queued') acc.queued += 1;
+      else if (status === 'cancelled' || status === 'cancelling') acc.cancelled += 1;
       else acc.other += 1;
       return acc;
-    }, { total: 0, passed: 0, failed: 0, unsupported: 0, running: 0, queued: 0, other: 0 });
+    }, { total: 0, passed: 0, failed: 0, unsupported: 0, running: 0, queued: 0, cancelled: 0, other: 0 });
 
     return {
       ok: true,
@@ -117,10 +150,16 @@ class TestOrchestrationService {
       script: run.script,
       concurrency: run.concurrency,
       status: run.status,
+      cancelRequestedAt: run.cancelRequestedAt || null,
       createdAt: run.createdAt,
       finishedAt: run.finishedAt || null,
       summary,
-      results: includeResults ? results : undefined
+      results: includeResults
+        ? results.map((r) => {
+          const { _child, ...rest } = r || {};
+          return rest;
+        })
+        : undefined
     };
   }
 
@@ -152,6 +191,8 @@ class TestOrchestrationService {
       script: desiredScript,
       concurrency: maxConcurrency,
       status: 'running',
+      cancelled: false,
+      cancelRequestedAt: null,
       createdAt: new Date().toISOString(),
       finishedAt: null,
       results: unique.map(t => ({
@@ -195,6 +236,14 @@ class TestOrchestrationService {
       result.startedAt = new Date().toISOString();
       result.status = 'running';
 
+      if (run.cancelled) {
+        result.status = 'cancelled';
+        result.exitCode = null;
+        result.durationMs = Date.now() - started;
+        result.finishedAt = new Date().toISOString();
+        return;
+      }
+
       if (existingOnly) {
         const ok = await isExistingDir(result.worktreePath);
         if (!ok) {
@@ -235,18 +284,26 @@ class TestOrchestrationService {
           return;
         }
 
+        result._child = child;
+
         child.stdout?.on('data', (d) => appendOutput(result, d));
         child.stderr?.on('data', (d) => appendOutput(result, d));
         child.on('error', (error) => {
           appendOutput(result, `\nProcess error: ${error.message}\n`);
         });
         child.on('close', (code) => {
+          const cancelled = !!run.cancelled || result.status === 'cancelling';
           result.exitCode = Number.isFinite(code) ? Number(code) : null;
-          result.status = result.exitCode === 0 ? 'passed' : 'failed';
+          result.status = cancelled ? 'cancelled' : (result.exitCode === 0 ? 'passed' : 'failed');
           result.durationMs = Date.now() - started;
           result.finishedAt = new Date().toISOString();
+          result._child = null;
           resolve();
         });
+
+        if (run.cancelled) {
+          try { child.kill('SIGTERM'); } catch {}
+        }
       });
     };
 
@@ -271,7 +328,7 @@ class TestOrchestrationService {
       }
 
       if (index >= queue.length && active === 0) {
-        run.status = 'done';
+        run.status = run.cancelled ? 'cancelled' : 'done';
         run.finishedAt = new Date().toISOString();
       }
     };
