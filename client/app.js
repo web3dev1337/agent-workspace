@@ -1793,14 +1793,22 @@ class ClaudeOrchestrator {
       }
 
       if (!status || typeof status !== 'object') {
-        banner.innerHTML = `<span class="process-chip level-warn">WIP —</span><span class="process-chip">T1 —</span><span class="process-chip">T2 —</span><span class="process-chip">T3 —</span><span class="process-chip">T4 —</span>`;
+        banner.innerHTML = `<span class="process-chip level-warn">WIP —</span><span class="process-chip">BWQX —/—/—/—</span><span class="process-chip">T1 —</span><span class="process-chip">T2 —</span><span class="process-chip">T3 —</span><span class="process-chip">T4 —</span>`;
         return;
       }
 
       const level = status.level === 'warn' || status.level === 'blocked' ? status.level : 'ok';
       const q = status.qByTier || {};
+      const fq = status.fourQueues || {};
+      const bwqx = {
+        b: fq.backlog?.supported === true ? Number(fq.backlog?.count ?? 0) : '—',
+        w: fq.inflight?.supported === true ? Number(fq.inflight?.count ?? 0) : '—',
+        q: fq.review?.supported === true ? Number(fq.review?.count ?? 0) : '—',
+        x: fq.rework?.supported === true ? Number(fq.rework?.count ?? 0) : '—'
+      };
       banner.innerHTML = `
         <span class="process-chip level-${level}">WIP ${Number(status.wip ?? 0)}</span>
+        <span class="process-chip" title="Four Queues snapshot (Backlog / In-flight / Review / Rework)">BWQX ${bwqx.b}/${bwqx.w}/${bwqx.q}/${bwqx.x}</span>
         <span class="process-chip">T1 ${Number(q[1] ?? 0)}</span>
         <span class="process-chip">T2 ${Number(q[2] ?? 0)}</span>
         <span class="process-chip">T3 ${Number(q[3] ?? 0)}</span>
