@@ -19,7 +19,7 @@ Guidelines:
 
 ## Risk / conflicts
 
-- [ ] **P3-03 Ticket↔ticket conflict probability v1 (heuristics)**: compute/estimate potential conflicts between tickets.
+- [x] **P3-03 Ticket↔ticket conflict probability v1 (heuristics)**: compute/estimate potential conflicts between tickets.
   - Note: explicitly deferred previously; do as a small, explainable heuristic first.
   - Source: `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md`
 
