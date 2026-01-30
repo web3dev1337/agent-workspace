@@ -1063,10 +1063,8 @@ Each switch < 5 seconds, full context preserved
 - [x] **Cross-Workspace File Sync**
   - Shipped (v1): Worktree Inspector → Files (List view) includes per-file “Sync” to copy the file to other worktree roots (opt-in; no auto-sync).
 
-- [ ] **Advanced Performance Monitoring**
-  - Per-terminal resource usage
-  - Game server health monitoring
-  - Build time tracking
+- [x] **Advanced Performance Monitoring**
+  - Shipped (v1): Dashboard → ⚙ Perf shows per-session PID + child count + RSS (best-effort).
 
 - [ ] **Collaborative Features**
   - Share workspaces with teammates (via config export)
