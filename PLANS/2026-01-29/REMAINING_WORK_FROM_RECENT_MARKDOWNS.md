@@ -74,7 +74,7 @@ Notes:
      - `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md` (Out of scope)
 
 9) **Persistent/stale-while-revalidate cache (+ persistence across restarts)**
-   - Current: Tasks provider caching is in-memory TTL only.
+   - Current: shipped (Tasks provider cache persists to disk with stale-while-revalidate semantics).
    - Sources:
      - `PLANS/2026-01-24/TASKS_TICKETING.md` (Future)
      - `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md` (Design decisions)
