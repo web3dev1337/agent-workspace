@@ -1179,6 +1179,83 @@ app.post('/api/files/sync', async (req, res) => {
   }
 });
 
+app.get('/api/process/performance', async (req, res) => {
+  const { exec } = require('child_process');
+  const util = require('util');
+  const execAsync = util.promisify(exec);
+
+  const parseIntSafe = (s) => {
+    const n = Number(String(s || '').trim());
+    return Number.isFinite(n) ? Math.round(n) : null;
+  };
+
+  const getChildPids = async (pid) => {
+    const p = Number(pid);
+    if (!Number.isFinite(p) || p <= 0) return [];
+    try {
+      const { stdout } = await execAsync(`pgrep -P ${p}`, { timeout: 1500 });
+      return String(stdout || '')
+        .split('\n')
+        .map(l => parseIntSafe(l))
+        .filter(n => Number.isFinite(n) && n > 0);
+    } catch {
+      return [];
+    }
+  };
+
+  const getRssKb = async (pid) => {
+    const p = Number(pid);
+    if (!Number.isFinite(p) || p <= 0) return null;
+    try {
+      const { stdout } = await execAsync(`ps -o rss= -p ${p}`, { timeout: 1500 });
+      return parseIntSafe(stdout);
+    } catch {
+      return null;
+    }
+  };
+
+  try {
+    const sessions = [];
+    for (const [sessionId, session] of sessionManager.sessions) {
+      sessions.push({ sessionId, session });
+    }
+
+    const metrics = await Promise.all(sessions.map(async ({ sessionId, session }) => {
+      const pid = session?.pty?.pid || null;
+      const childPids = pid ? await getChildPids(pid) : [];
+      const pids = pid ? [pid, ...childPids] : [];
+      const rssList = await Promise.all(pids.map(getRssKb));
+      const totalRssKb = rssList.reduce((acc, v) => acc + (Number(v) || 0), 0) || null;
+
+      return {
+        sessionId,
+        type: session?.type || null,
+        worktreeId: session?.worktreeId || null,
+        repositoryName: session?.repositoryName || null,
+        pid,
+        childCount: childPids.length,
+        totalRssKb,
+        updatedAt: new Date().toISOString()
+      };
+    }));
+
+    res.json({
+      ok: true,
+      generatedAt: new Date().toISOString(),
+      node: {
+        pid: process.pid,
+        uptimeSeconds: Math.round(process.uptime()),
+        rssBytes: process.memoryUsage().rss
+      },
+      sessions: metrics
+        .sort((a, b) => String(a.sessionId).localeCompare(String(b.sessionId)))
+    });
+  } catch (error) {
+    logger.error('Failed to get performance metrics', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get performance metrics' });
+  }
+});
+
 app.post('/api/workspaces/create-worktree', async (req, res) => {
   try {
     const { workspaceId, repositoryPath, worktreeNumber } = req.body;
