@@ -1,5 +1,5 @@
 const winston = require('winston');
-const { TTLCache } = require('./utils/ttlCache');
+const { PersistentSWRCache } = require('./utils/persistentSWRCache');
 const { TrelloTaskProvider } = require('./taskProviders/trelloProvider');
 
 const logger = winston.createLogger({
@@ -13,7 +13,11 @@ const logger = winston.createLogger({
 
 class TaskTicketingService {
   constructor() {
-    this.cache = new TTLCache({ defaultTtlMs: 30_000, maxEntries: 500 });
+    this.cache = new PersistentSWRCache({
+      defaultTtlMs: 30_000,
+      staleWhileRevalidateMs: 10 * 60_000,
+      maxEntries: 500
+    });
     this.providers = new Map();
 
     const trello = new TrelloTaskProvider({ cache: this.cache, logger });
@@ -57,4 +61,3 @@ class TaskTicketingService {
 }
 
 module.exports = { TaskTicketingService };
-
