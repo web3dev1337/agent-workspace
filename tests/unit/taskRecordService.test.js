@@ -195,6 +195,20 @@ describe('TaskRecordService', () => {
     expect(rec2.claimedAt).toBeUndefined();
   });
 
+  test('upsert supports assignment fields', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
+    const filePath = path.join(tmp, 'task-records.json');
+    const svc = new TaskRecordService({ filePath });
+
+    const rec = await svc.upsert('task:assign', { assignedTo: 'alice' });
+    expect(rec.assignedTo).toBe('alice');
+    expect(typeof rec.assignedAt).toBe('string');
+
+    const rec2 = await svc.upsert('task:assign', { assignedTo: null });
+    expect(rec2.assignedTo).toBeUndefined();
+    expect(rec2.assignedAt).toBeUndefined();
+  });
+
   test('upsert supports review checklist fields', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
     const filePath = path.join(tmp, 'task-records.json');
