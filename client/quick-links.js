@@ -541,7 +541,7 @@ class QuickLinks {
         </div>
         <div class="form-group">
           <label for="product-master-path">Master Path:</label>
-          <input type="text" id="product-master-path" placeholder="/home/ab/GitHub/websites/my-app/master" />
+	          <input type="text" id="product-master-path" placeholder="~/GitHub/websites/my-app/master" />
         </div>
         <div class="form-group">
           <label for="product-start-command">Start Command:</label>

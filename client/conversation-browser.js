@@ -315,7 +315,7 @@ class ConversationBrowser {
 
   /**
    * Parse a path into its components:
-   * /home/ab/GitHub/games/hytopia/zoo-game/work2
+   * $HOME/GitHub/games/hytopia/zoo-game/work2
    * -> { category: 'games', project: 'hytopia/zoo-game', worktree: 'work2' }
    */
   parseProjectPath(path) {

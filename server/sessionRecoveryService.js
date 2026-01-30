@@ -295,7 +295,7 @@ class SessionRecoveryService {
     let bestMtime = 0;
 
     for (const checkPath of pathsToCheck) {
-      // Convert path to Claude's folder format: /home/ab/foo → -home-ab-foo
+      // Convert path to Claude's folder format: $HOME/foo → -home-user-foo
       const folderName = checkPath.replace(/\//g, '-');
       const projectsDir = path.join(process.env.HOME, '.claude', 'projects', folderName);
 
