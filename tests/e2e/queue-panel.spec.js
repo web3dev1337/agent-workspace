@@ -389,4 +389,98 @@ test.describe('Queue Panel', () => {
       'pr:web3dev1337/demo#4'
     ]);
   });
+
+  test('shows worktree conflict warnings when available', async ({ page }) => {
+    await page.route(/.*\/api\/process\/tasks.*/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          count: 2,
+          tasks: [
+            {
+              id: 'worktree:/tmp/demo/work2',
+              kind: 'worktree',
+              status: 'ready',
+              title: 'Worktree A',
+              worktreePath: '/tmp/demo/work2',
+              project: 'demo',
+              worktree: 'work2',
+              branch: 'feature/a',
+              updatedAt: '2026-01-25T00:00:00Z',
+              record: { tier: 2 },
+              dependencySummary: { total: 0, blocked: 0 }
+            },
+            {
+              id: 'worktree:/tmp/demo/work3',
+              kind: 'worktree',
+              status: 'ready',
+              title: 'Worktree B',
+              worktreePath: '/tmp/demo/work3',
+              project: 'demo',
+              worktree: 'work3',
+              branch: 'feature/b',
+              updatedAt: '2026-01-25T00:00:01Z',
+              record: { tier: 2 },
+              dependencySummary: { total: 0, blocked: 0 }
+            }
+          ]
+        })
+      });
+    });
+
+    await page.route('**/api/worktree-conflicts**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          count: 1,
+          conflicts: [
+            {
+              projectKey: 'demo',
+              type: 'file-overlap',
+              a: { worktreePath: '/tmp/demo/work2', branch: 'feature/a', pr: { hasPR: false }, changedFilesCount: 2 },
+              b: { worktreePath: '/tmp/demo/work3', branch: 'feature/b', pr: { hasPR: false }, changedFilesCount: 1 },
+              overlapFiles: ['package.json']
+            }
+          ],
+          groups: []
+        })
+      });
+    });
+
+    await page.route(/.*\/api\/process\/task-records\/.+\/dependencies.*/, async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: 'x', dependencies: [] })
+        });
+        return;
+      }
+      if (['POST', 'DELETE'].includes(route.request().method())) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: 'x', record: { dependencies: [] } })
+        });
+        return;
+      }
+      return route.fallback();
+    });
+
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.goto('/');
+    await ensureWorkspaceLoaded(page);
+    await dismissFocusOverlay(page);
+
+    await page.evaluate(() => document.getElementById('queue-btn')?.click());
+    await expect(page.locator('#queue-panel')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#queue-list .task-card-row')).toHaveCount(2);
+
+    await expect(page.locator('#queue-list .task-card-row[data-queue-id=\"worktree:/tmp/demo/work2\"]')).toContainText('conflicts:1');
+
+    await page.locator('#queue-list .task-card-row[data-queue-id=\"worktree:/tmp/demo/work2\"]').click();
+    await expect(page.locator('#queue-conflicts')).toContainText('/tmp/demo/work3');
+  });
 });
