@@ -73,6 +73,7 @@ const { TaskTicketMoveService } = require('./taskTicketMoveService');
 const { PrMergeAutomationService } = require('./prMergeAutomationService');
 const { GitHubRepoService } = require('./githubRepoService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
+const { sanitizeFilename, formatConversationAsMarkdown } = require('./conversationExportService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
@@ -2507,6 +2508,47 @@ app.post('/api/conversations/refresh', async (req, res) => {
   } catch (error) {
     logger.error('Failed to refresh index', { error: error.message });
     res.status(500).json({ error: 'Failed to refresh index' });
+  }
+});
+
+// Export conversation as a downloadable file (JSON/Markdown).
+// Must be above /api/conversations/:id.
+app.get('/api/conversations/:id/export', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { project, source } = req.query;
+    const format = String(req.query.format || 'json').toLowerCase();
+
+    const conversation = await conversationService.getConversation(id, { project, source });
+    if (!conversation) {
+      res.status(404).json({ error: 'Conversation not found' });
+      return;
+    }
+
+    const safeProject = sanitizeFilename(conversation.project || project || 'conversation') || 'conversation';
+    const safeSource = sanitizeFilename(conversation.source || source || 'claude') || 'claude';
+    const safeId = sanitizeFilename(conversation.id || id) || 'conversation';
+    const baseName = `${safeProject}_${safeSource}_${safeId}`;
+
+    if (format === 'md' || format === 'markdown') {
+      const md = formatConversationAsMarkdown(conversation);
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.md"`);
+      res.send(md);
+      return;
+    }
+
+    if (format !== 'json') {
+      res.status(400).json({ error: 'Unsupported export format' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${baseName}.json"`);
+    res.send(JSON.stringify(conversation, null, 2));
+  } catch (error) {
+    logger.error('Failed to export conversation', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to export conversation' });
   }
 });
 

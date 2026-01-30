@@ -164,18 +164,18 @@ When Claude is waiting for input:
 
 ### Phase 2 (Enhancements) 🚧
 - [x] Token usage tracking (basic)
-- [ ] Enhanced status detection
-- [ ] Terminal search functionality
-- [ ] Session logs export
-- [ ] Performance optimizations
+- [x] Enhanced status detection
+- [x] Terminal search functionality
+- [x] Session logs export
+- [x] Performance optimizations
 - [ ] Mobile-optimized layout
 
 ### Phase 3 (Orchestration) 📋
-- [ ] Task queue system
-- [ ] Multi-agent coordination
-- [ ] Automated git operations
-- [ ] Result comparison
-- [ ] AI agent communication
+- [x] Task queue system
+- [x] Multi-agent coordination
+- [x] Automated git operations
+- [x] Result comparison
+- [x] AI agent communication
 
 ### Process Layer (Tiers + Queue + Risk + Prompts + Dependencies) ✅/🚧
 - ✅ Workflow modes: Focus (T1–T2) / Review (all; opens Queue) / Background (T3–T4)
