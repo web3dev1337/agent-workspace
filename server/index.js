@@ -74,6 +74,7 @@ const { PrMergeAutomationService } = require('./prMergeAutomationService');
 const { GitHubRepoService } = require('./githubRepoService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
 const { sanitizeFilename, formatConversationAsMarkdown } = require('./conversationExportService');
+const { ActivityFeedService } = require('./activityFeedService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
@@ -218,6 +219,9 @@ greenfieldService.setSessionManager(sessionManager);
 greenfieldService.setIO(io);
 const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
+const activityFeed = ActivityFeedService.getInstance();
+activityFeed.setIO(io);
+activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 3000) });
 const productLauncherService = ProductLauncherService.getInstance();
 const conversationService = ConversationService.getInstance();
 const worktreeMetadataService = WorktreeMetadataService.getInstance();
@@ -345,18 +349,21 @@ io.on('connection', (socket) => {
   // Handle session restart
   socket.on('restart-session', ({ sessionId }) => {
     logger.info('Session restart requested', { sessionId });
+    activityFeed.track('session.restart', { sessionId });
     sessionManager.restartSession(sessionId);
   });
   
   // Handle Claude start with specific options (legacy)
   socket.on('start-claude', ({ sessionId, options }) => {
     logger.info('Claude start requested (legacy)', { sessionId, options });
+    activityFeed.track('agent.start_legacy', { sessionId, agent: 'claude', mode: options?.mode || null });
     sessionManager.startClaudeWithOptions(sessionId, options);
   });
 
   // Handle agent start with configuration
   socket.on('start-agent', ({ sessionId, config }) => {
     logger.info('Agent start requested', { sessionId, config });
+    activityFeed.track('agent.start', { sessionId, agent: config?.agent || null, mode: config?.mode || null });
     sessionManager.startAgentWithConfig(sessionId, config);
   });
   
@@ -368,6 +375,7 @@ io.on('connection', (socket) => {
   // Handle server control
   socket.on('server-control', async ({ sessionId, action, environment, launchSettings }) => {
     logger.info('Server control request', { sessionId, action, environment, launchSettings });
+    activityFeed.track('server.control', { sessionId, action, environment: environment || null });
 
     if (action === 'start') {
       // Get session info to find repository path and worktree ID
@@ -445,6 +453,7 @@ io.on('connection', (socket) => {
   // Handle build production request
   socket.on('build-production', ({ sessionId, worktreeNum }) => {
     logger.info('Build production requested', { sessionId, worktreeNum });
+    activityFeed.track('build.production.requested', { sessionId, worktreeNum });
     
     const { spawn } = require('child_process');
     const fs = require('fs');
@@ -470,6 +479,7 @@ io.on('connection', (socket) => {
     // Check if script exists
     if (!fs.existsSync(scriptPath)) {
       logger.error('Build script not found', { scriptPath });
+      activityFeed.track('build.production.failed', { sessionId, worktreeNum, error: 'Build script not found' });
       socket.emit('build-failed', { 
         sessionId, 
         worktreeNum, 
@@ -501,6 +511,7 @@ io.on('connection', (socket) => {
     
     buildProcess.on('error', (error) => {
       logger.error('Build process error', { worktreeNum, error: error.message, stack: error.stack });
+      activityFeed.track('build.production.failed', { sessionId, worktreeNum, error: error.message });
       socket.emit('build-failed', { 
         sessionId, 
         worktreeNum, 
@@ -533,6 +544,7 @@ io.on('connection', (socket) => {
               worktreeNum, 
               zipPath: latestZip.path 
             });
+            activityFeed.track('build.production.completed', { sessionId, worktreeNum, zipPath: latestZip.path });
             
             socket.emit('build-completed', { 
               sessionId, 
@@ -541,6 +553,7 @@ io.on('connection', (socket) => {
             });
           } else {
             logger.warn('Build completed but no zip file found', { worktreeNum });
+            activityFeed.track('build.production.failed', { sessionId, worktreeNum, error: 'Build completed but no zip file was created' });
             socket.emit('build-failed', { 
               sessionId, 
               worktreeNum, 
@@ -552,6 +565,7 @@ io.on('connection', (socket) => {
             worktreeNum, 
             error: error.message 
           });
+          activityFeed.track('build.production.failed', { sessionId, worktreeNum, error: 'Failed to locate build output' });
           socket.emit('build-failed', { 
             sessionId, 
             worktreeNum, 
@@ -564,6 +578,7 @@ io.on('connection', (socket) => {
           code, 
           errorOutput 
         });
+        activityFeed.track('build.production.failed', { sessionId, worktreeNum, error: `Build failed with exit code ${code}` });
         socket.emit('build-failed', { 
           sessionId, 
           worktreeNum, 
@@ -1419,6 +1434,18 @@ app.get('/api/process/performance', async (req, res) => {
   }
 });
 
+app.get('/api/activity', (req, res) => {
+  try {
+    const since = req.query?.since;
+    const limit = req.query?.limit;
+    const events = activityFeed.list({ since, limit });
+    res.json({ ok: true, events });
+  } catch (error) {
+    logger.error('Failed to list activity events', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to list activity events' });
+  }
+});
+
 app.post('/api/workspaces/create-worktree', async (req, res) => {
   try {
     const { workspaceId, repositoryPath, worktreeNumber } = req.body;
@@ -2038,6 +2065,7 @@ app.get('/api/git/check-updates', (req, res) => {
 });
 
 app.post('/api/git/pull', (req, res) => {
+  activityFeed.track('git.pull', { source: 'api' });
   gitUpdateService.pullLatest()
     .then(result => {
       if (result.success) {
@@ -2791,8 +2819,10 @@ app.post('/api/prs/merge', express.json(), async (req, res) => {
     }
 
     const result = await pullRequestService.mergePullRequestByUrl(url, { method, auto });
+    activityFeed.track('pr.merge', { url, method, auto, ok: true });
     res.json(result);
   } catch (error) {
+    activityFeed.track('pr.merge', { url: String(req.body?.url || '').trim() || null, ok: false, error: error.message });
     logger.error('Failed to merge PR', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to merge PR' });
   }
@@ -2810,8 +2840,10 @@ app.post('/api/prs/review', express.json(), async (req, res) => {
     }
 
     const result = await pullRequestService.reviewPullRequestByUrl(url, { action, body });
+    activityFeed.track('pr.review', { url, action, ok: true });
     res.json(result);
   } catch (error) {
+    activityFeed.track('pr.review', { url: String(req.body?.url || '').trim() || null, action: String(req.body?.action || '').trim() || null, ok: false, error: error.message });
     logger.error('Failed to review PR', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to review PR' });
   }
@@ -3026,8 +3058,10 @@ app.post('/api/process/tests/run', async (req, res) => {
     const existingOnly = String(req.body?.existingOnly ?? 'true').toLowerCase() !== 'false';
 
     const run = await testOrchestrationService.startRun({ script, concurrency, existingOnly });
+    activityFeed.track('tests.run', { script, concurrency: concurrency ?? null, existingOnly, runId: run?.runId || run?.id || null });
     res.json(run);
   } catch (error) {
+    activityFeed.track('tests.run', { ok: false, error: error.message });
     logger.error('Failed to start test orchestration run', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to start test run' });
   }
@@ -3061,6 +3095,7 @@ app.get('/api/process/tests/runs/:runId', (req, res) => {
 app.post('/api/process/tests/runs/:runId/cancel', (req, res) => {
   try {
     const runId = String(req.params.runId || '').trim();
+    activityFeed.track('tests.cancel', { runId });
     const result = testOrchestrationService.cancelRun(runId);
     if (!result?.ok) {
       res.status(400).json(result);
@@ -3068,6 +3103,7 @@ app.post('/api/process/tests/runs/:runId/cancel', (req, res) => {
     }
     res.json({ ok: true });
   } catch (error) {
+    activityFeed.track('tests.cancel', { runId: String(req.params.runId || '').trim() || null, ok: false, error: error.message });
     logger.error('Failed to cancel test orchestration run', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to cancel test run' });
   }
