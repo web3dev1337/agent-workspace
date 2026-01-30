@@ -491,14 +491,15 @@ class ClaudeOrchestrator {
         this.sessions.delete(sessionId);
         this.visibleTerminals.delete(sessionId);
 
-        // Remove terminal wrapper from UI
-        const wrapper = document.getElementById(`wrapper-${sessionId}`);
+        // Remove terminal wrapper from UI (scope to the active grid to avoid cross-tab collisions)
+        const grid = this.getTerminalGrid();
+        const wrapper = grid ? grid.querySelector(`#wrapper-${sessionId}`) : document.getElementById(`wrapper-${sessionId}`);
         if (wrapper) {
           console.log(`Removing terminal wrapper from DOM: ${sessionId}`);
           wrapper.remove();
         } else {
           // Fallback for older DOM shapes
-          const terminalElement = document.getElementById(`terminal-${sessionId}`);
+          const terminalElement = grid ? grid.querySelector(`#terminal-${sessionId}`) : document.getElementById(`terminal-${sessionId}`);
           if (terminalElement) {
             console.log(`Removing terminal element from DOM: ${sessionId}`);
             terminalElement.remove();
@@ -3214,10 +3215,10 @@ class ClaudeOrchestrator {
     this.renderTerminalsWithVisibility(allSessions);
   }
   
-	  renderTerminalsWithVisibility(sessionIds) {
-	    // Render all terminals but apply visibility using CSS (don't destroy DOM)
-	    this.activeView = sessionIds.filter(id => this.isSessionVisibleInCurrentView(id));
-	    const grid = this.getTerminalGrid();
+  renderTerminalsWithVisibility(sessionIds) {
+    // Render all terminals but apply visibility using CSS (don't destroy DOM)
+    this.activeView = sessionIds.filter(id => this.isSessionVisibleInCurrentView(id));
+    const grid = this.getTerminalGrid();
 
     if (!grid) {
       console.error('Terminal grid not found!');
@@ -3236,9 +3237,9 @@ class ClaudeOrchestrator {
 
     sessionIds.forEach((sessionId) => {
       const session = this.sessions.get(sessionId);
-	      const isVisible = this.isSessionVisibleInCurrentView(sessionId);
-	      const wrapperId = `wrapper-${sessionId}`;
-	      let wrapper = document.getElementById(wrapperId);
+      const isVisible = this.isSessionVisibleInCurrentView(sessionId);
+      const wrapperId = `wrapper-${sessionId}`;
+      let wrapper = grid.querySelector(`#${wrapperId}`);
 
       console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}, exists=${!!wrapper}`);
 
@@ -3251,23 +3252,23 @@ class ClaudeOrchestrator {
             grid.appendChild(wrapper);
             console.log(`✅ Appended terminal to grid: ${sessionId}`);
 
-            // Initialize terminal for newly created element
+            // Initialize terminal for newly created element (scope query to wrapper/grid to avoid cross-tab collisions)
             setTimeout(() => {
-              const terminalEl = document.getElementById(`terminal-${sessionId}`);
+              const terminalEl = wrapper?.querySelector?.(`#terminal-${sessionId}`) || grid.querySelector(`#terminal-${sessionId}`);
               if (terminalEl && !this.terminalManager.terminals.has(sessionId)) {
                 this.terminalManager.createTerminal(sessionId, session);
               }
             }, 50);
           }
-	        } else {
-	          // Show existing wrapper
-	          wrapper.style.display = '';
-	          this.updateTerminalTicketLabel(sessionId);
+        } else {
+          // Show existing wrapper
+          wrapper.style.display = '';
+          this.updateTerminalTicketLabel(sessionId);
 
-	          // Refit terminal if it exists
-	          if (this.terminalManager.terminals.has(sessionId)) {
-	            requestAnimationFrame(() => {
-	              this.terminalManager.fitTerminal(sessionId);
+          // Refit terminal if it exists
+          if (this.terminalManager.terminals.has(sessionId)) {
+            requestAnimationFrame(() => {
+              this.terminalManager.fitTerminal(sessionId);
             });
           }
         }
@@ -3285,7 +3286,7 @@ class ClaudeOrchestrator {
   
 	  showClaudeOnly() {
 	    this.setViewMode('claude');
-	  }
+  }
 	  
 	  showServersOnly() {
 	    this.setViewMode('server');
