@@ -256,6 +256,15 @@ class ClaudeOrchestrator {
         this.showQueuePanel();
       });
 
+      // Activity feed (recent system events)
+      if (typeof ActivityFeedPanel !== 'undefined') {
+        this.activityFeedPanel = new ActivityFeedPanel(this);
+        document.getElementById('activity-btn')?.addEventListener('click', () => {
+          this.activityFeedPanel.toggle();
+        });
+        console.log('Activity feed initialized');
+      }
+
       document.getElementById('diff-viewer-open')?.addEventListener('click', () => {
         this.openDiffViewerFromCurrentContext();
       });
@@ -322,6 +331,9 @@ class ClaudeOrchestrator {
       
       // Connect to server
       await this.connectToServer();
+
+      // Hook panels that depend on socket events
+      this.activityFeedPanel?.onSocketConnected?.(this.socket);
       
       // Load user settings from server
       await this.loadUserSettings();
