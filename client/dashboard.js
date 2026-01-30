@@ -148,6 +148,7 @@ class Dashboard {
                 <div class="dashboard-summary-actions">
                   <button class="dashboard-topbar-btn" id="dashboard-open-queue" title="Open Queue">📥 Queue</button>
                   <button class="dashboard-topbar-btn" id="dashboard-open-queue-viz" title="Work queue visualization">🧭 Viz</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-convoys" title="Convoy dashboard (by assignment)">🚚 Convoys</button>
                   <button class="dashboard-topbar-btn" id="dashboard-open-advice" title="Open Commander Advice">🧠 Advice</button>
                   <button class="dashboard-topbar-btn" id="dashboard-open-suggestions" title="Open workspace suggestions">✨ Suggestions</button>
                   <button class="dashboard-topbar-btn" id="dashboard-open-distribution" title="Suggested terminal per PR/task">🎯 Distribution</button>
@@ -245,6 +246,10 @@ class Dashboard {
     document.getElementById('dashboard-open-queue-viz')?.addEventListener('click', (e) => {
       e.preventDefault();
       this.showQueueVizOverlay().catch(() => {});
+    });
+    document.getElementById('dashboard-open-convoys')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.showConvoysOverlay().catch(() => {});
     });
     document.getElementById('dashboard-open-prs')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1092,9 +1097,171 @@ class Dashboard {
       await render();
     }
 
-	  hidePerformanceOverlay() {
-	    const overlay = document.getElementById('dashboard-performance-overlay');
-	    if (!overlay) return;
+    async showConvoysOverlay() {
+      const existing = document.getElementById('dashboard-convoys-overlay');
+      if (existing) {
+        existing.classList.remove('hidden');
+        return;
+      }
+
+      const overlay = document.createElement('div');
+      overlay.id = 'dashboard-convoys-overlay';
+      overlay.className = 'dashboard-telemetry-overlay';
+      overlay.innerHTML = `
+        <div class="dashboard-telemetry-panel" role="dialog" aria-label="Convoy dashboard">
+          <div class="dashboard-telemetry-header">
+            <div class="dashboard-telemetry-title">Convoys — by assignment</div>
+            <button class="dashboard-topbar-btn" id="dashboard-convoys-close" title="Close (Esc)">✕</button>
+          </div>
+          <div class="dashboard-telemetry-controls">
+            <div class="dashboard-telemetry-actions">
+              <button class="btn-secondary" type="button" id="dashboard-convoys-refresh">Refresh</button>
+            </div>
+          </div>
+          <div id="dashboard-convoys-body" class="dashboard-telemetry-body">Loading…</div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      const close = () => this.hideConvoysOverlay();
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+      });
+      overlay.querySelector('#dashboard-convoys-close')?.addEventListener('click', close);
+      overlay.querySelector('#dashboard-convoys-refresh')?.addEventListener('click', () => {
+        this.loadConvoysDetails().catch(() => {});
+      });
+
+      const onKey = (e) => {
+        if (e.key !== 'Escape') return;
+        const el = document.getElementById('dashboard-convoys-overlay');
+        if (!el || el.classList.contains('hidden')) return;
+        close();
+      };
+      overlay._escHandler = onKey;
+      document.addEventListener('keydown', onKey);
+
+      await this.loadConvoysDetails();
+    }
+
+    hideConvoysOverlay() {
+      const overlay = document.getElementById('dashboard-convoys-overlay');
+      if (!overlay) return;
+      overlay.classList.add('hidden');
+      const handler = overlay._escHandler;
+      if (handler) {
+        document.removeEventListener('keydown', handler);
+        overlay._escHandler = null;
+      }
+      overlay.remove();
+    }
+
+    async loadConvoysDetails() {
+      const bodyEl = document.getElementById('dashboard-convoys-body');
+      if (bodyEl) bodyEl.textContent = 'Loading…';
+
+      let data = null;
+      try {
+        const url = new URL('/api/process/tasks', window.location.origin);
+        url.searchParams.set('mode', 'all');
+        url.searchParams.set('state', 'open');
+        url.searchParams.set('include', 'dependencySummary');
+        const res = await fetch(url.toString());
+        data = res && res.ok ? await res.json().catch(() => null) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!bodyEl) return;
+      const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+      if (!data || !tasks) {
+        bodyEl.textContent = 'Failed to load.';
+        return;
+      }
+
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      const tierKey = (t) => {
+        const tier = t?.record?.tier;
+        const n = Number(tier);
+        return (Number.isFinite(n) && n >= 1 && n <= 4) ? `T${n}` : 'None';
+      };
+
+      const byConvoy = {};
+      for (const t of tasks) {
+        const assignedTo = String(t?.record?.assignedTo || '').trim() || '(unassigned)';
+        const k = tierKey(t);
+        if (!byConvoy[assignedTo]) {
+          byConvoy[assignedTo] = { T1: 0, T2: 0, T3: 0, T4: 0, None: 0, total: 0, unclaimed: 0 };
+        }
+        byConvoy[assignedTo][k] = (byConvoy[assignedTo][k] || 0) + 1;
+        byConvoy[assignedTo].total += 1;
+        if (!String(t?.record?.claimedBy || '').trim()) byConvoy[assignedTo].unclaimed += 1;
+      }
+
+      const convoys = Object.entries(byConvoy)
+        .sort((a, b) => (b[1].total || 0) - (a[1].total || 0) || String(a[0]).localeCompare(String(b[0])));
+
+      const rows = convoys.map(([name, c]) => {
+        const q = name === '(unassigned)' ? 'assigned:none' : `assigned:${name}`;
+        return `
+          <tr>
+            <td class="mono">${escapeHtml(name)}</td>
+            <td class="mono">${escapeHtml(c.T1 || 0)}</td>
+            <td class="mono">${escapeHtml(c.T2 || 0)}</td>
+            <td class="mono">${escapeHtml(c.T3 || 0)}</td>
+            <td class="mono">${escapeHtml(c.T4 || 0)}</td>
+            <td class="mono">${escapeHtml(c.None || 0)}</td>
+            <td class="mono">${escapeHtml(c.total || 0)}</td>
+            <td class="mono">${escapeHtml(c.unclaimed || 0)}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn-secondary" type="button" data-open-queue-query="${escapeHtml(q)}" title="Open Queue filtered to this convoy">📥</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      bodyEl.innerHTML = `
+        <div class="dashboard-telemetry-muted">Tip: use Queue search <code>assigned:NAME</code> (or <code>assigned:none</code> for unassigned).</div>
+        <table class="worktree-inspector-table" style="margin-top:10px;">
+          <thead>
+            <tr>
+              <th>Convoy</th>
+              <th>T1</th>
+              <th>T2</th>
+              <th>T3</th>
+              <th>T4</th>
+              <th>None</th>
+              <th>Total</th>
+              <th>Unclaimed</th>
+              <th>Queue</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || `<tr><td colspan="9" style="opacity:0.8;">No items.</td></tr>`}
+          </tbody>
+        </table>
+      `;
+
+      bodyEl.querySelectorAll('button[data-open-queue-query]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const q = String(btn.getAttribute('data-open-queue-query') || '').trim();
+          this.hideConvoysOverlay();
+          try {
+            this.orchestrator.queuePanelPreset = { query: q };
+          } catch {}
+          this.orchestrator?.showQueuePanel?.().catch?.(() => {});
+        });
+      });
+    }
+
+    hidePerformanceOverlay() {
+      const overlay = document.getElementById('dashboard-performance-overlay');
+      if (!overlay) return;
 	    overlay.classList.add('hidden');
 	    const handler = overlay._escHandler;
 	    if (handler) {
