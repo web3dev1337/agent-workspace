@@ -2823,6 +2823,38 @@ header h1 {
   margin-bottom: var(--space-md);
 }
 
+.identity-saved-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.identity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.03);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  max-width: 100%;
+}
+
+.identity-chip button {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.identity-chip button:hover {
+  color: var(--text-secondary);
+}
+
 .per-terminal-item {
   display: flex;
   align-items: center;
