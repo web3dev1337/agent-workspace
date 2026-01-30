@@ -168,7 +168,7 @@ When Claude is waiting for input:
 - [x] Terminal search functionality
 - [x] Session logs export
 - [x] Performance optimizations
-- [ ] Mobile-optimized layout
+- [x] Mobile-optimized layout
 
 ### Phase 3 (Orchestration) 📋
 - [x] Task queue system
