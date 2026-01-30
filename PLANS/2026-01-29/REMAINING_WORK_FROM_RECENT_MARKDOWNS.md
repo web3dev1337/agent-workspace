@@ -2,7 +2,7 @@
 
 Generated: 2026-01-29  
 Last updated: 2026-01-30  
-Repo state: `origin/main` @ `2a99391`
+Repo state: `origin/main` @ `61d629a`
 
 ## Scope + method
 
@@ -58,55 +58,50 @@ Notes:
 
 ### Risk / conflicts
 
-6) **UI integration for conflict warnings (`POST /api/worktree-conflicts`)**
-   - Current: endpoint exists, but there’s no client usage to warn on overlaps when launching/triaging.
-   - Source:
-     - `PLANS/2026-01-25/PROJECT_RISK_AND_CONFLICTS.md` (Next steps)
-
-7) **Ticket↔ticket “conflict probability” heuristic layer (future)**
+6) **Ticket↔ticket “conflict probability” heuristic layer (future)**
    - Current: explicitly deferred; not implemented.
    - Source:
      - `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md` (Ticket-level conflicts → “❌ Missing (future work)”)
 
 ### Dependencies
 
-8) **Shared/encrypted task records store + promote private → shared**
+7) **Shared/encrypted task records store + promote private → shared**
    - Current: task records are local-only (`~/.orchestrator/task-records.json`).
    - Source:
      - `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md` (Follow-ups)
 
-9) **Richer satisfaction rules for worktree/session dependencies**
+8) **Richer satisfaction rules for worktree/session dependencies**
    - Current: dependency satisfaction is `doneAt` or PR merged; worktree/session completion inference is not implemented.
    - Source:
      - `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md` (Follow-ups)
 
 ### Tasks / Trello parity
 
-10) **Attachments + cover images support**
+9) **Attachments + cover images support**
    - Current: no attachments/cover support exists in Tasks UI/API.
    - Sources:
      - `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md` (Follow-ups)
      - `PLANS/2026-01-25/TRELLO_PARITY_PR.md` (Follow-ups)
      - `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md` (Out of scope)
 
-11) **Full checklist CRUD (beyond Dependencies convention)**
+10) **Full checklist CRUD (beyond Dependencies convention)**
    - Current: Dependencies checklist is supported; “all checklists” CRUD is not.
    - Sources:
      - `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md` (Follow-ups)
      - `PLANS/2026-01-25/TRELLO_PARITY_PR.md` (Follow-ups)
 
-12) **List creation/reorder**
+11) **List creation/reorder**
    - Current: lists are fetched, but list create/reorder isn’t exposed.
    - Source:
      - `PLANS/2026-01-25/TRELLO_PARITY_PR.md` (Follow-ups)
 
-13) **True within-list drag reorder (pos math), plus swimlanes/WIP limits**
+12) **True within-list drag reorder (pos math), plus swimlanes/WIP limits**
    - Current: Trello `pos` is supported at the API layer, but there’s no “perfect reorder” UI/logic, swimlanes, or WIP limits.
    - Sources:
      - `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md` (Follow-ups)
      - `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md` (Out of scope)
 
-14) **Persistent/stale-while-revalidate cache (+ persistence across restarts)**
+13) **Persistent/stale-while-revalidate cache (+ persistence across restarts)**
    - Current: Tasks provider caching is in-memory TTL only.
    - Sources:
      - `PLANS/2026-01-24/TASKS_TICKETING.md` (Future)
@@ -126,25 +121,22 @@ Notes:
 - Remaining: items #2–#5 above (pairing heuristics, four-queues snapshot surfacing, review checklist UI, overnight runner).
 
 #### `PLANS/2026-01-24/TASKS_TICKETING.md`
-- Remaining: item #14 above (persistent/stale-while-revalidate cache).
+- Remaining: item #13 above (persistent/stale-while-revalidate cache).
 
 #### `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md`
-- Remaining: items #10–#13 above (attachments/cover, full checklist CRUD, “perfect reorder”).
+- Remaining: items #9–#12 above (attachments/cover, full checklist CRUD, “perfect reorder”).
 
 #### `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md`
-- Remaining: items #8–#9 above (shared/encrypted task records; richer satisfaction rules).
-
-#### `PLANS/2026-01-25/PROJECT_RISK_AND_CONFLICTS.md`
-- Remaining: item #6 above (conflict warnings integration).
+- Remaining: items #7–#8 above (shared/encrypted task records; richer satisfaction rules).
 
 #### `PLANS/2026-01-25/TRELLO_PARITY_PR.md`
-- Remaining: items #10–#13 above (attachments/cover, full checklist CRUD, list reorder/creation, within-list reorder).
+- Remaining: items #9–#12 above (attachments/cover, full checklist CRUD, list reorder/creation, within-list reorder).
 
 #### `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md`
-- Remaining: items #10, #13, #14 above (attachments/cover, within-list reorder, persistent cache).
+- Remaining: items #9, #12, #13 above (attachments/cover, within-list reorder, persistent cache).
 
 #### `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md`
-- Remaining: item #7 above (ticket↔ticket conflict probability heuristics: explicitly “missing future work”).
+- Remaining: item #6 above (ticket↔ticket conflict probability heuristics: explicitly “missing future work”).
 
 ### Files with no remaining work (or reference/templates only)
 
@@ -180,6 +172,9 @@ Notes:
 
 #### `PLANS/2026-01-25/WORKFLOW_MODES_PR.md`
 - No remaining work (follow-ups shipped: Queue PR actions + review-mode risk/verify sorting).
+
+#### `PLANS/2026-01-25/PROJECT_RISK_AND_CONFLICTS.md`
+- No remaining work (overallRisk + Queue sorting + conflict warnings are now shipped).
 
 #### `PLANS/2026-01-25/TASK_RECORDS_PR.md`
 - No remaining work (task records API is shipped).
