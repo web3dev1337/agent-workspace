@@ -12,48 +12,10 @@ Scope: markdown files touched in the last 7 days via git history.
 
 ## Summary
 - Scanned: 46
-- With remaining markers: 4
-- With no remaining markers: 42
+- With remaining markers: 3
+- With no remaining markers: 43
 
 ## Files with remaining items
-
-### `GAP_ANALYSIS_2026-01-17.md`
-
-- Remaining markers: 31 (unchecked: 31, TODO/FIXME: 0)
-- Classification: doc/backlog
-
-**Unchecked**
-- GAP_ANALYSIS_2026-01-17.md:191 — Convoy Dashboard - Create/view/track convoys
-- GAP_ANALYSIS_2026-01-17.md:192 — Sling Interface - Assign issues to agents
-- GAP_ANALYSIS_2026-01-17.md:193 — Work Queue Visualization
-- GAP_ANALYSIS_2026-01-17.md:196 — Polecat Management Panel - Spawn/kill/view logs
-- GAP_ANALYSIS_2026-01-17.md:197 — Polecat Status Dashboard
-- GAP_ANALYSIS_2026-01-17.md:198 — Agent Identity Management
-- GAP_ANALYSIS_2026-01-17.md:201 — Hook Browser - View/edit/repair hooks
-- GAP_ANALYSIS_2026-01-17.md:202 — Deacon Monitor - Health dashboard
-- GAP_ANALYSIS_2026-01-17.md:203 — Activity Feed - Real-time event stream
-- GAP_ANALYSIS_2026-01-17.md:286 — \`server/workspaceManager.js\` - Lines 464, 488
-- GAP_ANALYSIS_2026-01-17.md:288 — \`server/greenfieldService.js\` - Lines 25-106
-- GAP_ANALYSIS_2026-01-17.md:290 — \`client/dashboard.js\` - Lines 416, 447-448, 487-488, 542-543
-- GAP_ANALYSIS_2026-01-17.md:291 — \`client/quick-links.js\` - Line 17
-- GAP_ANALYSIS_2026-01-17.md:292 — \`client/workspace-wizard.js\` - Lines 25, 445
-- GAP_ANALYSIS_2026-01-17.md:293 — \`client/greenfield-wizard.js\` - Lines 18-19
-- GAP_ANALYSIS_2026-01-17.md:294 — \`client/commander-panel.js\` - Line 13
-- GAP_ANALYSIS_2026-01-17.md:299 — \`tests/unit/sessionManager.test.js\`
-- GAP_ANALYSIS_2026-01-17.md:300 — \`tests/unit/sessionRecoveryService.test.js\`
-- GAP_ANALYSIS_2026-01-17.md:301 — \`tests/unit/voiceCommandService.test.js\`
-- GAP_ANALYSIS_2026-01-17.md:302 — \`tests/unit/gitHelper.test.js\`
-- GAP_ANALYSIS_2026-01-17.md:303 — \`tests/unit/agentManager.test.js\`
-- GAP_ANALYSIS_2026-01-17.md:304 — \`tests/integration/socketio-events.test.js\`
-- GAP_ANALYSIS_2026-01-17.md:305 — \`tests/integration/api-endpoints.test.js\`
-- GAP_ANALYSIS_2026-01-17.md:313 — No exposed secrets
-- GAP_ANALYSIS_2026-01-17.md:314 — No hardcoded user-specific paths
-- GAP_ANALYSIS_2026-01-17.md:316 — 60%+ test coverage on critical paths
-- GAP_ANALYSIS_2026-01-17.md:317 — Installation works on fresh machine
-- GAP_ANALYSIS_2026-01-17.md:320 — 80%+ test coverage
-- GAP_ANALYSIS_2026-01-17.md:321 — Convoy/Sling/Polecat features
-- GAP_ANALYSIS_2026-01-17.md:322 — Monitoring dashboard
-- GAP_ANALYSIS_2026-01-17.md:323 — gt 0.2.x compatibility verified
 
 ### `PLANS/2026-01-24/CHECKLIST.md`
 
@@ -113,6 +75,7 @@ Scope: markdown files touched in the last 7 days via git history.
 - `COWORKER_SETUP.md`
 - `diff-viewer/README.md`
 - `DOCUMENTATION.md`
+- `GAP_ANALYSIS_2026-01-17.md`
 - `IMPLEMENTATION_NOTES.md`
 - `IMPLEMENTATION_PLAN.md`
 - `IMPLEMENTATION_STATUS.md`
