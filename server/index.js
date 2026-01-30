@@ -1520,6 +1520,37 @@ app.get('/api/activity', (req, res) => {
   }
 });
 
+app.get('/api/sessions/:sessionId/log', (req, res) => {
+  try {
+    const sessionId = String(req.params.sessionId || '').trim();
+    if (!sessionId) return res.status(400).json({ ok: false, error: 'sessionId is required' });
+
+    const session = sessionManager.sessions.get(sessionId);
+    if (!session) return res.status(404).json({ ok: false, error: 'Session not found' });
+
+    const requested = Number(req.query?.tailChars ?? 20000);
+    const tailChars = Math.max(1000, Math.min(200000, Number.isFinite(requested) ? requested : 20000));
+
+    const buffer = String(session.buffer || '');
+    const log = buffer.length > tailChars ? buffer.slice(-tailChars) : buffer;
+
+    res.json({
+      ok: true,
+      sessionId,
+      tailChars,
+      status: session.status || null,
+      branch: session.branch || null,
+      worktreeId: session.worktreeId || null,
+      repositoryName: session.repositoryName || null,
+      cwd: session?.cwdState?.current || session?.config?.cwd || null,
+      log
+    });
+  } catch (error) {
+    logger.error('Failed to get session log', { sessionId: req.params.sessionId, error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get session log' });
+  }
+});
+
 app.post('/api/workspaces/create-worktree', async (req, res) => {
   try {
     const { workspaceId, repositoryPath, worktreeNumber } = req.body;

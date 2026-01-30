@@ -121,6 +121,7 @@ class Dashboard {
 		                <div class="dashboard-summary-actions">
 		                  <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
 		                  <button class="dashboard-topbar-btn" id="dashboard-open-performance" title="Per-terminal resource usage">⚙ Perf</button>
+                      <button class="dashboard-topbar-btn" id="dashboard-open-polecats" title="Manage sessions (restart/kill/logs)">🐾 Polecats</button>
 		                  <button class="dashboard-topbar-btn" id="dashboard-open-tests" title="Run tests across worktrees">🧪 Tests</button>
 		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
 		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
@@ -205,6 +206,10 @@ class Dashboard {
 		      e.preventDefault();
 		      this.showPerformanceOverlay();
 		    });
+        document.getElementById('dashboard-open-polecats')?.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.showPolecatOverlay().catch(() => {});
+        });
 		    document.getElementById('dashboard-open-tests')?.addEventListener('click', (e) => {
 		      e.preventDefault();
 		      try {
@@ -822,6 +827,201 @@ class Dashboard {
           </tbody>
         </table>
       `;
+	  }
+
+    async showPolecatOverlay() {
+      const existing = document.getElementById('dashboard-polecats-overlay');
+      if (existing) {
+        existing.classList.remove('hidden');
+        return;
+      }
+
+      const overlay = document.createElement('div');
+      overlay.id = 'dashboard-polecats-overlay';
+      overlay.className = 'dashboard-telemetry-overlay';
+      overlay.innerHTML = `
+        <div class="dashboard-telemetry-panel" role="dialog" aria-label="Polecat management">
+          <div class="dashboard-telemetry-header">
+            <div class="dashboard-telemetry-title">Polecats — Sessions</div>
+            <button class="dashboard-topbar-btn" id="dashboard-polecats-close" title="Close (Esc)">✕</button>
+          </div>
+          <div class="dashboard-telemetry-controls">
+            <div class="dashboard-telemetry-actions">
+              <button class="btn-secondary" type="button" id="dashboard-polecats-refresh">Refresh</button>
+            </div>
+          </div>
+          <div id="dashboard-polecats-body" class="dashboard-telemetry-body">Loading…</div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      const close = () => this.hidePolecatOverlay();
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+      });
+      overlay.querySelector('#dashboard-polecats-close')?.addEventListener('click', close);
+      overlay.querySelector('#dashboard-polecats-refresh')?.addEventListener('click', () => {
+        this.loadPolecatDetails().catch(() => {});
+      });
+
+      const onKey = (e) => {
+        if (e.key !== 'Escape') return;
+        const el = document.getElementById('dashboard-polecats-overlay');
+        if (!el || el.classList.contains('hidden')) return;
+        close();
+      };
+      overlay._escHandler = onKey;
+      document.addEventListener('keydown', onKey);
+
+      await this.loadPolecatDetails();
+    }
+
+    hidePolecatOverlay() {
+      const overlay = document.getElementById('dashboard-polecats-overlay');
+      if (!overlay) return;
+      overlay.classList.add('hidden');
+      const handler = overlay._escHandler;
+      if (handler) {
+        document.removeEventListener('keydown', handler);
+        overlay._escHandler = null;
+      }
+      overlay.remove();
+    }
+
+    async loadPolecatDetails() {
+      const bodyEl = document.getElementById('dashboard-polecats-body');
+      if (!bodyEl) return;
+
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      const sessions = Array.from(this.orchestrator?.sessions?.entries?.() || []);
+      sessions.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+      if (!sessions.length) {
+        bodyEl.textContent = 'No sessions.';
+        return;
+      }
+
+      const state = {
+        selected: sessions[0]?.[0] || ''
+      };
+
+      const render = async () => {
+        const selected = state.selected;
+        const selectedSession = this.orchestrator?.sessions?.get?.(selected) || null;
+        const selectedTitle = selectedSession ? `${selected} (${selectedSession.type || ''})` : selected;
+
+        const rows = sessions.map(([id, s]) => {
+          const status = escapeHtml(s?.status || 'idle');
+          const branch = escapeHtml(s?.branch || '');
+          const type = escapeHtml(s?.type || '');
+          const worktreeId = escapeHtml(s?.worktreeId || '');
+          const repo = escapeHtml(s?.repositoryName || '');
+          const label = repo ? `${repo}/${worktreeId || ''}` : (worktreeId || '');
+          const isSel = id === selected;
+          return `
+            <tr data-polecat-session="${escapeHtml(id)}" style="${isSel ? 'background: rgba(255,255,255,0.04);' : ''}">
+              <td class="mono">${escapeHtml(id)}</td>
+              <td>${escapeHtml(label)}</td>
+              <td>${type}</td>
+              <td>${status}</td>
+              <td class="mono">${branch}</td>
+              <td style="white-space:nowrap;">
+                <button class="btn-secondary" type="button" data-polecat-restart="${escapeHtml(id)}" title="Restart session">↻</button>
+                <button class="btn-secondary" type="button" data-polecat-kill="${escapeHtml(id)}" title="Kill/close session">✕</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        bodyEl.innerHTML = `
+          <div style="display:flex; gap:12px; align-items:stretch; min-height: 50vh;">
+            <div style="flex: 0 0 min(720px, 58vw); min-width: 320px; overflow:auto;">
+              <table class="worktree-inspector-table">
+                <thead>
+                  <tr>
+                    <th>Session</th>
+                    <th>Worktree</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Branch</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows}
+                </tbody>
+              </table>
+            </div>
+            <div style="flex:1; min-width: 260px; display:flex; flex-direction:column;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;">
+                <div class="mono" style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(selectedTitle)}</div>
+                <button class="btn-secondary" type="button" id="dashboard-polecats-log-refresh" ${selected ? '' : 'disabled'}>Refresh log</button>
+              </div>
+              <pre id="dashboard-polecats-log" style="flex:1; margin:0; padding:10px; border-radius:8px; border:1px solid var(--border-color); background: rgba(0,0,0,0.25); overflow:auto; white-space:pre-wrap; word-break:break-word;">Loading…</pre>
+            </div>
+          </div>
+        `;
+
+        const loadLog = async () => {
+          const pre = bodyEl.querySelector('#dashboard-polecats-log');
+          if (!pre) return;
+          if (!selected) {
+            pre.textContent = 'No session selected.';
+            return;
+          }
+          pre.textContent = 'Loading…';
+          try {
+            const res = await fetch(`/api/sessions/${encodeURIComponent(selected)}/log?tailChars=20000`);
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data?.ok) throw new Error(data?.error || 'Failed to load log');
+            pre.textContent = String(data.log || '');
+          } catch (err) {
+            pre.textContent = `Failed to load: ${String(err?.message || err)}`;
+          }
+        };
+
+        await loadLog();
+
+        bodyEl.querySelector('#dashboard-polecats-log-refresh')?.addEventListener('click', (e) => {
+          e.preventDefault();
+          loadLog().catch(() => {});
+        });
+
+        bodyEl.querySelectorAll('[data-polecat-session]').forEach((row) => {
+          row.addEventListener('click', () => {
+            const id = row.getAttribute('data-polecat-session');
+            if (!id) return;
+            state.selected = id;
+            render().catch(() => {});
+          });
+        });
+
+        bodyEl.querySelectorAll('button[data-polecat-restart]').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = btn.getAttribute('data-polecat-restart');
+            if (!id) return;
+            this.orchestrator?.socket?.emit?.('restart-session', { sessionId: id });
+          });
+        });
+        bodyEl.querySelectorAll('button[data-polecat-kill]').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = btn.getAttribute('data-polecat-kill');
+            if (!id) return;
+            this.orchestrator?.socket?.emit?.('destroy-session', { sessionId: id });
+          });
+        });
+      };
+
+      await render();
     }
 
 	  hidePerformanceOverlay() {
