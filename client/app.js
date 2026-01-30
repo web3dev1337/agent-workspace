@@ -16296,7 +16296,7 @@ class ClaudeOrchestrator {
 		          <div id="queue-deps" class="tasks-detail-meta">Loading…</div>
 		        </div>
 
-          ${t?.worktreePath ? `
+	          ${t?.worktreePath ? `
 	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Conflicts</div>
 	          <div class="tasks-inline-row" style="margin-bottom: 10px; gap: 8px;">
@@ -16305,7 +16305,15 @@ class ClaudeOrchestrator {
 	          </div>
 	          <div id="queue-conflicts" class="tasks-detail-meta">Loading…</div>
 	        </div>
-          ` : ''}
+	          ` : ''}
+
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Ticket conflicts (heuristic)</div>
+	          <div class="tasks-detail-meta" style="opacity:0.85; margin-bottom: 10px;">
+	            Best-effort: uses prompt repo/path + dependencies to estimate parallel-work conflicts even before files overlap exists.
+	          </div>
+	          <div id="queue-ticket-conflicts" class="tasks-detail-meta">Loading…</div>
+	        </div>
 
 	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Dependents</div>
@@ -16349,7 +16357,8 @@ class ClaudeOrchestrator {
       const snooze1hBtn = detailEl.querySelector('#queue-snooze-1h');
       const unsnoozeBtn = detailEl.querySelector('#queue-unsnooze');
       const depsEl = detailEl.querySelector('#queue-deps');
-      const conflictsEl = detailEl.querySelector('#queue-conflicts');
+	      const conflictsEl = detailEl.querySelector('#queue-conflicts');
+	      const ticketConflictsEl = detailEl.querySelector('#queue-ticket-conflicts');
       const conflictsRefreshBtn = detailEl.querySelector('#queue-conflicts-refresh');
       const reverseDepsEl = detailEl.querySelector('#queue-reverse-deps');
       const depGraphBtn = detailEl.querySelector('#queue-dep-graph');
@@ -16411,8 +16420,8 @@ class ClaudeOrchestrator {
         return hit?.id ? String(hit.id) : '';
       };
 
-      const renderConflicts = () => {
-        if (!conflictsEl) return;
+	      const renderConflicts = () => {
+	        if (!conflictsEl) return;
         if (conflictsRefreshBtn) conflictsRefreshBtn.disabled = !!state.conflicts.loading;
 
         const p = String(t?.worktreePath || '').trim();
@@ -16477,7 +16486,140 @@ class ClaudeOrchestrator {
         refreshConflicts({ force: true }).catch(() => {});
       });
 
-      renderConflicts();
+	      renderConflicts();
+
+	      const normalizeRepoKey = (task) => {
+	        const rec = (task?.record && typeof task.record === 'object') ? task.record : {};
+	        const repoRoot = String(rec.promptRepoRoot || '').trim();
+	        if (repoRoot) return repoRoot.replace(/\\/g, '/').replace(/\/+$/, '');
+	        const repo = String(task?.repository || '').trim();
+	        if (repo) return repo.toLowerCase();
+	        const project = String(task?.project || '').trim();
+	        if (project) return project.toLowerCase();
+	        return '';
+	      };
+
+	      const normalizePathKey = (task) => {
+	        const rec = (task?.record && typeof task.record === 'object') ? task.record : {};
+	        const p = String(rec.promptPath || '').trim();
+	        if (!p) return '';
+	        return p.replace(/\\/g, '/').replace(/\/+$/, '');
+	      };
+
+	      const estimateTicketConflict = (a, b) => {
+	        const reasons = [];
+	        if (!a?.id || !b?.id) return { score: 0, reasons };
+	        if (a.id === b.id) return { score: 0, reasons };
+
+	        const aRec = (a.record && typeof a.record === 'object') ? a.record : {};
+	        const bRec = (b.record && typeof b.record === 'object') ? b.record : {};
+	        const aDeps = Array.isArray(aRec.dependencies) ? aRec.dependencies : [];
+	        const bDeps = Array.isArray(bRec.dependencies) ? bRec.dependencies : [];
+
+	        if (aDeps.includes(b.id) || bDeps.includes(a.id)) {
+	          return { score: 1, reasons: ['dependency'] };
+	        }
+
+	        const aRepo = normalizeRepoKey(a);
+	        const bRepo = normalizeRepoKey(b);
+	        const sameRepo = !!(aRepo && bRepo && aRepo === bRepo);
+	        if (sameRepo) reasons.push('same_repo');
+
+	        const aPath = normalizePathKey(a);
+	        const bPath = normalizePathKey(b);
+	        const sameTopDir = (() => {
+	          const top = (p) => p.split('/').filter(Boolean)[0] || '';
+	          const at = top(aPath);
+	          const bt = top(bPath);
+	          return !!(at && bt && at === bt);
+	        })();
+
+	        let score = 0.05;
+	        if (sameRepo) score = 0.3;
+
+	        if (sameRepo && aPath && bPath) {
+	          if (aPath === bPath) {
+	            score = 0.95;
+	            reasons.push('same_path');
+	          } else if (aPath.startsWith(bPath + '/') || bPath.startsWith(aPath + '/')) {
+	            score = 0.85;
+	            reasons.push('path_overlap');
+	          } else if (sameTopDir) {
+	            score = 0.65;
+	            reasons.push('same_topdir');
+	          } else {
+	            score = Math.max(score, 0.45);
+	            reasons.push('same_repo_diff_path');
+	          }
+	        } else if (sameRepo) {
+	          // Same repo but no path signals.
+	          score = Math.max(score, 0.35);
+	          reasons.push('missing_path');
+	        } else {
+	          reasons.push('different_repo');
+	        }
+
+	        const riskA = String(a?.record?.baseImpactRisk || a?.baseImpactRisk || '').trim().toLowerCase();
+	        const riskB = String(b?.record?.baseImpactRisk || b?.baseImpactRisk || '').trim().toLowerCase();
+	        const high = new Set(['high', 'critical']);
+	        if (sameRepo && (high.has(riskA) || high.has(riskB))) {
+	          score = Math.min(1, score + 0.1);
+	          reasons.push('high_risk_repo');
+	        }
+
+	        return { score: Number(score.toFixed(2)), reasons };
+	      };
+
+	      const renderTicketConflicts = () => {
+	        if (!ticketConflictsEl) return;
+	        const tasks = Array.isArray(state.tasks) ? state.tasks : [];
+	        const current = tasks.find((x) => x && x.id === t.id) || t;
+	        const currentRepo = normalizeRepoKey(current);
+	        const currentPath = normalizePathKey(current);
+	        const currentDeps = Array.isArray(current?.record?.dependencies) ? current.record.dependencies : [];
+	        const hasAnySignal = !!(currentRepo || currentPath || currentDeps.length);
+
+	        if (!hasAnySignal) {
+	          ticketConflictsEl.textContent = 'No prompt repo/path/dependency metadata yet for this item.';
+	          return;
+	        }
+
+	        const scored = tasks
+	          .filter((x) => x && x.id && x.id !== current.id)
+	          .map((x) => ({ task: x, ...estimateTicketConflict(current, x) }))
+	          .filter((x) => x.score >= 0.5)
+	          .sort((a, b) => b.score - a.score);
+
+	        if (!scored.length) {
+	          ticketConflictsEl.textContent = 'No predicted conflicts.';
+	          return;
+	        }
+
+	        ticketConflictsEl.innerHTML = scored.slice(0, 12).map((row) => {
+	          const other = row.task;
+	          const title = escapeHtml(other?.title || other?.id || '');
+	          const meta = escapeHtml(`${row.score} • ${row.reasons.join(', ')}`);
+	          return `
+	            <div class="task-card-row" data-queue-jump="${escapeHtml(other.id)}" style="margin:6px 0; cursor:pointer;" title="${escapeHtml(other.id)}">
+	              <div class="task-card-title">${title}</div>
+	              <div class="task-card-meta" style="opacity:0.8;">${meta}</div>
+	            </div>
+	          `;
+	        }).join('');
+
+	        ticketConflictsEl.querySelectorAll('[data-queue-jump]').forEach((row) => {
+	          row.addEventListener('click', (e) => {
+	            e.preventDefault();
+	            const targetId = row.getAttribute('data-queue-jump');
+	            if (!targetId) return;
+	            state.selectedId = targetId;
+	            renderList();
+	            renderDetail(getTaskById(targetId));
+	          });
+	        });
+	      };
+
+	      renderTicketConflicts();
 
       const applySnooze = (msFromNow, { incrementCount = false } = {}) => {
           const id = String(t?.id || '').trim();

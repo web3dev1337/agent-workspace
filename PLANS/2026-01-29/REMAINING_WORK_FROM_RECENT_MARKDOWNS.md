@@ -31,7 +31,7 @@ Notes:
 ### Risk / conflicts
 
 2) **Ticket↔ticket “conflict probability” heuristic layer (future)**
-   - Current: explicitly deferred; not implemented.
+   - Current: shipped (Queue detail shows “Ticket conflicts (heuristic)”).
    - Source:
      - `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md` (Ticket-level conflicts → “❌ Missing (future work)”)
 
