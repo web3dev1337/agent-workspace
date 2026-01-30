@@ -237,6 +237,8 @@ const taskDependencyService = TaskDependencyService.getInstance({ taskRecordServ
 const processAdvisorService = ProcessAdvisorService.getInstance({ processStatusService, processTelemetryService, processTaskService, taskRecordService, taskDependencyService });
 const processReadinessService = ProcessReadinessService.getInstance();
 const githubRepoService = GitHubRepoService.getInstance();
+const { ProcessPairingService } = require('./processPairingService');
+const processPairingService = ProcessPairingService.getInstance({ processTaskService, taskRecordService, worktreeConflictService, projectMetadataService });
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -2591,6 +2593,22 @@ app.get('/api/process/status', async (req, res) => {
   } catch (error) {
     logger.error('Failed to fetch process status', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch process status' });
+  }
+});
+
+app.get('/api/process/pairing', async (req, res) => {
+  try {
+    const mode = req.query.mode || 'mine';
+    const tiersRaw = String(req.query.tiers || '2,3');
+    const tiers = tiersRaw.split(',').map(s => Number.parseInt(String(s).trim(), 10)).filter(n => n >= 1 && n <= 4);
+    const limit = req.query.limit ? Number(req.query.limit) : 10;
+    const refresh = String(req.query.refresh || '').toLowerCase() === 'true';
+
+    const result = await processPairingService.getPairings({ mode, tiers: tiers.length ? tiers : [2, 3], limit, refresh });
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to compute process pairing', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to compute pairing' });
   }
 });
 

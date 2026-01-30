@@ -10,7 +10,7 @@ Guidelines:
 
 ## Process / workflow
 
-- [ ] **P3-01 Pairing recommendations v1**: add `GET /api/process/pairing` (Tier 2/3 safe pairings) + minimal Queue UX entrypoint.
+- [x] **P3-01 Pairing recommendations v1**: add `GET /api/process/pairing` (Tier 2/3 safe pairings) + minimal Queue UX entrypoint.
   - Output shape: ranked pairs + reason codes (conflicts/context distance).
   - Sources: `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md`, `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md`
 
@@ -51,4 +51,3 @@ Guidelines:
 ## Done (shipped)
 
 - [x] **P2 Four Queues snapshot surfaced**: BWQX chip + `/api/process/status.fourQueues` (PR #431)
-
