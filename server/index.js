@@ -1213,6 +1213,102 @@ app.get('/api/workspaces/suggestions', async (req, res) => {
   }
 });
 
+app.post('/api/workspaces/create-recent', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+
+    const count = Math.max(1, Math.min(12, Number(req.body?.count) || 4));
+    const service = new WorkspaceSuggestionService({ workspaceManager });
+    const suggestions = await service.getSuggestions({ limit: Math.max(8, count) });
+    const recent = Array.isArray(suggestions?.suggestions?.recentRepos) ? suggestions.suggestions.recentRepos : [];
+    const repos = recent.slice(0, count).flatMap((s) => Array.isArray(s?.repositories) ? s.repositories : []).filter(Boolean);
+
+    if (!repos.length) {
+      return res.status(400).json({ ok: false, error: 'No recent repos available to build a workspace' });
+    }
+
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    const baseId = `recent-${stamp}`.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
+    let id = baseId;
+    let i = 2;
+    while (workspaceManager.getWorkspace(id)) {
+      id = `${baseId}-${i}`;
+      i += 1;
+      if (i > 50) throw new Error('Unable to find available workspace id');
+    }
+
+    const workspaceName = `Recent (auto) ${stamp.replace(/-/g, ':').replace(':', ' ')}`;
+
+    const terminals = [];
+    const slugify = (s) => String(s || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 28) || 'repo';
+
+    repos.forEach((r, idx) => {
+      const repoPath = String(r?.path || '').trim();
+      if (!repoPath) return;
+
+      const repoName = String(r?.name || '').trim() || path.basename(repoPath) || `repo${idx + 1}`;
+      const repoSlug = slugify(repoName);
+
+      const masterPath = path.join(repoPath, 'master');
+      const worktreePath = fs.existsSync(masterPath) ? masterPath : repoPath;
+      const worktree = fs.existsSync(masterPath) ? 'master' : path.basename(worktreePath);
+
+      const visible = idx === 0;
+
+      const baseRepo = {
+        name: repoName,
+        path: repoPath,
+        type: 'custom',
+        masterBranch: 'master'
+      };
+
+      terminals.push({
+        id: `${id}-${repoSlug}-${worktree}-claude`,
+        repository: baseRepo,
+        worktree,
+        worktreePath,
+        terminalType: 'claude',
+        visible
+      });
+      terminals.push({
+        id: `${id}-${repoSlug}-${worktree}-server`,
+        repository: baseRepo,
+        worktree,
+        worktreePath,
+        terminalType: 'server',
+        visible
+      });
+    });
+
+    const workspaceData = {
+      id,
+      name: workspaceName,
+      type: 'custom',
+      icon: '✨',
+      description: 'Auto-created from recent git activity',
+      access: 'private',
+      empty: true,
+      repository: { path: '', masterBranch: 'master', remote: '' },
+      worktrees: { enabled: false, count: 0, namingPattern: 'work{n}', autoCreate: false },
+      terminals,
+      workspaceType: 'mixed-repo',
+      layout: { type: 'dynamic', arrangement: 'auto' }
+    };
+
+    const created = await workspaceManager.createWorkspace(workspaceData);
+    res.json({ ok: true, workspace: created });
+  } catch (error) {
+    logger.error('Failed to create recent workspace', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
 app.post('/api/files/sync', async (req, res) => {
   try {
     const sourceRoot = String(req.body?.sourceRoot || '').trim();

@@ -875,6 +875,7 @@ class Dashboard {
 	        </div>
 	        <div class="dashboard-telemetry-controls">
 	          <div class="dashboard-telemetry-actions">
+	            <button class="btn-secondary" type="button" id="dashboard-suggestions-create-recent" title="Create a new workspace from recent git activity">Create Recent Workspace</button>
 	            <button class="btn-secondary" type="button" id="dashboard-suggestions-refresh">Refresh</button>
 	            <button class="btn-secondary" type="button" id="dashboard-suggestions-copy">Copy JSON</button>
 	          </div>
@@ -902,6 +903,29 @@ class Dashboard {
 
 	    overlay.querySelector('#dashboard-suggestions-refresh')?.addEventListener('click', () => {
 	      this.loadWorkspaceSuggestions();
+	    });
+	    overlay.querySelector('#dashboard-suggestions-create-recent')?.addEventListener('click', async () => {
+	      const btn = overlay.querySelector('#dashboard-suggestions-create-recent');
+	      if (btn) btn.disabled = true;
+	      try {
+	        const resp = await fetch('/api/workspaces/create-recent', {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify({ count: 4 })
+	        });
+	        const data = await resp.json().catch(() => ({}));
+	        if (!resp.ok || !data?.ok || !data?.workspace?.id) {
+	          throw new Error(String(data?.error || 'Failed to create workspace'));
+	        }
+	        try { this.orchestrator?.showToast?.('Created recent workspace', 'success'); } catch {}
+	        await this.loadWorkspaces();
+	        this.render();
+	        this.openWorkspace(data.workspace.id);
+	      } catch (err) {
+	        try { this.orchestrator?.showToast?.(`Create failed: ${String(err?.message || err)}`, 'error'); } catch {}
+	      } finally {
+	        if (btn) btn.disabled = false;
+	      }
 	    });
 	    overlay.querySelector('#dashboard-suggestions-copy')?.addEventListener('click', async () => {
 	      const data = this._workspaceSuggestions || null;
