@@ -63,7 +63,7 @@ Notes:
      - `PLANS/2026-01-25/TRELLO_PARITY_PR.md` (Follow-ups)
 
 7) **List creation/reorder**
-   - Current: lists are fetched, but list create/reorder isn’t exposed.
+   - Current: shipped (Tasks toolbar includes Lists manager for create + reorder; backend supports create/update list pos).
    - Source:
      - `PLANS/2026-01-25/TRELLO_PARITY_PR.md` (Follow-ups)
 

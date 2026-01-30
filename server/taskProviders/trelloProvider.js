@@ -83,6 +83,33 @@ class TrelloTaskProvider {
     return this._getCached(cacheKey, url, { ttlMs: 60_000, force: refresh });
   }
 
+  async createList({ boardId, name, pos = null } = {}) {
+    if (!boardId) throw new Error('boardId is required');
+    const title = String(name || '').trim();
+    if (!title) throw new Error('name is required');
+    const params = { name: title };
+    if (pos !== undefined && pos !== null && pos !== '') params.pos = pos;
+    const url = this._buildUrl(`/boards/${encodeURIComponent(boardId)}/lists`, params);
+    const created = await requestJson(url, { method: 'POST' });
+    this._invalidateCacheKeys([`trello:lists:${boardId}:open`]);
+    return created;
+  }
+
+  async updateList({ listId, boardId = null, name = null, pos = null } = {}) {
+    if (!listId) throw new Error('listId is required');
+    const params = {};
+    if (name !== undefined && name !== null) {
+      const title = String(name || '').trim();
+      if (!title) throw new Error('name is required');
+      params.name = title;
+    }
+    if (pos !== undefined && pos !== null && pos !== '') params.pos = pos;
+    const url = this._buildUrl(`/lists/${encodeURIComponent(listId)}`, params);
+    const updated = await requestJson(url, { method: 'PUT' });
+    if (boardId) this._invalidateCacheKeys([`trello:lists:${boardId}:open`]);
+    return updated;
+  }
+
   async listBoardMembers({ boardId, refresh = false } = {}) {
     if (!boardId) throw new Error('boardId is required');
     const url = this._buildUrl(`/boards/${encodeURIComponent(boardId)}/members`, {

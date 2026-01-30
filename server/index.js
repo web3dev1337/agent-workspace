@@ -3269,6 +3269,50 @@ app.get('/api/tasks/boards/:boardId/lists', async (req, res) => {
   }
 });
 
+app.post('/api/tasks/boards/:boardId/lists', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.createList !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support list creation', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const pos = req.body?.pos ?? null;
+    const created = await provider.createList({ boardId: req.params.boardId, name, pos });
+    const lists = typeof provider.listLists === 'function'
+      ? await provider.listLists({ boardId: req.params.boardId, refresh: true })
+      : [];
+    res.json({ provider: providerId, boardId: req.params.boardId, list: created, lists });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to create task list', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
+app.put('/api/tasks/lists/:listId', express.json(), async (req, res) => {
+  try {
+    const providerId = req.query.provider || 'trello';
+    const provider = taskTicketingService.getProvider(providerId);
+    if (typeof provider.updateList !== 'function') {
+      return res.status(400).json({ error: 'Provider does not support list updates', code: 'UNSUPPORTED_OPERATION' });
+    }
+    const boardId = String(req.body?.boardId || '').trim();
+    const name = req.body?.name ?? null;
+    const pos = req.body?.pos ?? null;
+    const updated = await provider.updateList({ listId: req.params.listId, boardId: boardId || null, name, pos });
+    const lists = boardId && typeof provider.listLists === 'function'
+      ? await provider.listLists({ boardId, refresh: true })
+      : [];
+    res.json({ provider: providerId, listId: req.params.listId, list: updated, lists });
+  } catch (error) {
+    const status = error.code === 'UNKNOWN_PROVIDER' || error.code === 'PROVIDER_NOT_CONFIGURED' ? 400 : 500;
+    logger.error('Failed to update task list', { error: error.message, code: error.code, stack: error.stack });
+    res.status(status).json({ error: error.message, code: error.code });
+  }
+});
+
 app.get('/api/tasks/boards/:boardId/members', async (req, res) => {
   try {
     const providerId = req.query.provider || 'trello';

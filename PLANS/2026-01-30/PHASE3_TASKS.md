@@ -39,7 +39,7 @@ Guidelines:
 - [x] **P3-07 Checklist CRUD v1**: full checklist CRUD (not just Dependencies convention).
   - Sources: `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md`, `PLANS/2026-01-25/TRELLO_PARITY_PR.md`
 
-- [ ] **P3-08 List create/reorder v1**: create lists + reorder lists in Tasks UI.
+- [x] **P3-08 List create/reorder v1**: create lists + reorder lists in Tasks UI.
   - Source: `PLANS/2026-01-25/TRELLO_PARITY_PR.md`
 
 - [ ] **P3-09 Within-list drag reorder v1**: true within-list reorder (pos math) + optional WIP limits/swimlanes follow-ups.
