@@ -15327,6 +15327,7 @@ class ClaudeOrchestrator {
       if (preset.unreviewedOnly !== undefined) state.unreviewedOnly = !!preset.unreviewedOnly;
       if (preset.autoOpenDiff !== undefined) state.autoOpenDiff = !!preset.autoOpenDiff;
       state.reviewActive = preset.reviewActive !== undefined ? !!preset.reviewActive : true;
+      if (preset.query !== undefined) state.query = String(preset.query || '');
     }
 
     state.allowAutoOpenDiff = false;
@@ -15426,6 +15427,10 @@ class ClaudeOrchestrator {
 		    const prevBtn = modal.querySelector('#queue-prev');
 		    const nextBtn = modal.querySelector('#queue-next');
 	    const closeBtn = modal.querySelector('#queue-close-btn');
+
+      if (searchEl) {
+        searchEl.value = String(state.query || '');
+      }
 
 	    const showPairingModal = async () => {
 	      const existing = document.getElementById('queue-pairing-modal');
@@ -15751,6 +15756,8 @@ class ClaudeOrchestrator {
           if (until && Date.now() < until) return false;
         }
         if (!q) return true;
+        const claimedBy = String(t?.record?.claimedBy || '').trim();
+        const assignedTo = String(t?.record?.assignedTo || '').trim();
         const hay = [
           t?.title,
           t?.project,
@@ -15760,7 +15767,11 @@ class ClaudeOrchestrator {
           t?.worktreePath,
           t?.branch,
           t?.sessionId,
-          t?.url
+          t?.url,
+          claimedBy,
+          assignedTo,
+          `claimed:${claimedBy || 'none'}`,
+          `assigned:${assignedTo || 'none'}`
         ].filter(Boolean).join(' ').toLowerCase();
         return hay.includes(q);
       });
