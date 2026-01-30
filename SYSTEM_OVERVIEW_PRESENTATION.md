@@ -1074,9 +1074,9 @@ Each switch < 5 seconds, full context preserved
 - [x] **AI Workspace Optimizer**
   - Shipped (v1): Dashboard → ✨ Suggestions includes “Create Recent Workspace” (auto-creates a mixed workspace from recent git activity; best-effort).
 
-- [ ] **Smart Task Distribution**
-  - AI suggests which terminal for each task
-  - Load balancing across worktrees
+- [x] **Smart Task Distribution**
+  - Shipped (v1): Dashboard → 🎯 Distribution suggests a terminal per PR task (repo-match to active agent sessions; fallback to most-idle).
+  - Supports `agents=claude,codex` (future agents can be added without changing the UI).
 
 - [ ] **Automated Testing Orchestration**
   - Run tests across all worktrees in parallel
