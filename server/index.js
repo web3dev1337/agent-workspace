@@ -2858,6 +2858,110 @@ app.get('/api/process/tasks', async (req, res) => {
   }
 });
 
+app.get('/api/process/distribution', async (req, res) => {
+  try {
+    const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const repoRaw = typeof req.query.repo === 'string' ? req.query.repo.trim() : '';
+    const ownerRaw = typeof req.query.owner === 'string' ? req.query.owner.trim() : '';
+    const agentsRaw = typeof req.query.agents === 'string' ? req.query.agents.trim() : '';
+
+    const repos = repoRaw ? repoRaw.split(',').map(r => r.trim()).filter(Boolean).slice(0, 20) : [];
+    const owners = ownerRaw ? ownerRaw.split(',').map(o => o.trim()).filter(Boolean).slice(0, 20) : [];
+    const defaultAgents = ['claude', 'codex'];
+    const agents = (agentsRaw ? agentsRaw.split(',') : defaultAgents)
+      .map(a => String(a || '').trim().toLowerCase())
+      .filter(a => a && /^[a-z0-9_-]+$/.test(a))
+      .slice(0, 10);
+    const agentSet = new Set(agents.length ? agents : defaultAgents);
+
+    const tasks = await processTaskService.listTasks({
+      prs: {
+        mode: req.query.mode || 'mine',
+        state: req.query.state || 'open',
+        sort: req.query.sort || 'updated',
+        limit: req.query.limit || '50',
+        query,
+        repos,
+        owners
+      }
+    });
+
+    const prs = tasks.filter(t => t?.kind === 'pr');
+
+    const normalizeRepoSlugFromUrl = (url) => {
+      const u = String(url || '').trim();
+      if (!u) return null;
+      const m = u.match(/github\.com\/([^/]+)\/([^/]+)(?:$|\b|\/)/i);
+      if (!m) return null;
+      return `${m[1]}/${m[2]}`.replace(/\.git$/i, '');
+    };
+
+    const sessions = [];
+    for (const session of sessionManager.sessions.values()) {
+      const agent = String(session?.type || '').trim().toLowerCase();
+      if (!agentSet.has(agent)) continue;
+      const repoSlug = normalizeRepoSlugFromUrl(session?.remoteUrl);
+      sessions.push({
+        id: session.id,
+        agent,
+        status: session.status,
+        repoSlug,
+        worktreeId: session.worktreeId || null,
+        worktreePath: session.config?.cwd || null,
+        repositoryName: session.repositoryName || null
+      });
+    }
+
+    const scoreStatus = (status) => {
+      if (status === 'idle') return 3;
+      if (status === 'waiting') return 2;
+      if (status === 'busy') return 1;
+      return 0;
+    };
+
+    const pickBest = (list) => {
+      const arr = Array.isArray(list) ? list.slice() : [];
+      arr.sort((a, b) => {
+        const ds = scoreStatus(b.status) - scoreStatus(a.status);
+        if (ds) return ds;
+        return String(a.id).localeCompare(String(b.id));
+      });
+      return arr[0] || null;
+    };
+
+    const suggestions = prs.map((t) => {
+      const repoSlug = String(t?.repository || '').trim();
+      const matches = repoSlug ? sessions.filter(s => s.repoSlug && s.repoSlug.toLowerCase() === repoSlug.toLowerCase()) : [];
+      const bestMatch = pickBest(matches);
+      const bestAny = pickBest(sessions);
+
+      const chosen = bestMatch || bestAny;
+      const reason = bestMatch
+        ? `repo_match_${String(bestMatch.agent || 'agent')}_${String(bestMatch.status || 'unknown')}`
+        : (bestAny ? `idle_fallback_${String(bestAny.agent || 'agent')}_${String(bestAny.status || 'unknown')}` : 'no_sessions');
+
+      return {
+        taskId: t.id,
+        task: t,
+        recommendedSessionId: chosen?.id || null,
+        recommendedAgent: chosen?.agent || null,
+        recommendedWorktreePath: chosen?.worktreePath || null,
+        reason
+      };
+    });
+
+    res.json({
+      ok: true,
+      generatedAt: new Date().toISOString(),
+      totalTasks: prs.length,
+      suggestions
+    });
+  } catch (error) {
+    logger.error('Failed to compute task distribution', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to compute task distribution' });
+  }
+});
+
 app.get('/api/process/status', async (req, res) => {
   try {
     const mode = req.query.mode || 'mine';
