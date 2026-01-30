@@ -54,11 +54,19 @@ describe('SessionManager branch updates', () => {
       config: { cwd: '/tmp/repo-a/work2/' },
       branch: 'unknown'
     });
+    sessionManager.sessions.set('work2-codex', {
+      id: 'work2-codex',
+      type: 'codex',
+      worktreeId: 'work2',
+      config: { cwd: '/tmp/repo-a/work2/' },
+      branch: 'unknown'
+    });
 
     await sessionManager.updateGitBranch('repo-a-work2', '/tmp/repo-a/work2', true);
 
     expect(sessionManager.sessions.get('work2-claude').branch).toBe('feature/test');
     expect(sessionManager.sessions.get('work2-server').branch).toBe('feature/test');
+    expect(sessionManager.sessions.get('work2-codex').branch).toBe('feature/test');
 
     expect(io.emit).toHaveBeenCalledWith(
       'branch-update',
@@ -67,6 +75,10 @@ describe('SessionManager branch updates', () => {
     expect(io.emit).toHaveBeenCalledWith(
       'branch-update',
       expect.objectContaining({ sessionId: 'work2-server', branch: 'feature/test' })
+    );
+    expect(io.emit).toHaveBeenCalledWith(
+      'branch-update',
+      expect.objectContaining({ sessionId: 'work2-codex', branch: 'feature/test' })
     );
   });
 
@@ -95,11 +107,19 @@ describe('SessionManager branch updates', () => {
       config: { cwd: '/tmp/repo-a/work2' },
       branch: 'unknown'
     });
+    sessionManager.sessions.set('repo-a-work2-codex', {
+      id: 'repo-a-work2-codex',
+      type: 'codex',
+      worktreeId: 'work2',
+      config: { cwd: '/tmp/repo-a/work2' },
+      branch: 'unknown'
+    });
 
     await sessionManager.updateGitBranch('work2', '/tmp/repo-a/work2/subdir', true);
 
     expect(sessionManager.sessions.get('repo-a-work2-claude').branch).toBe('feature/test');
     expect(sessionManager.sessions.get('repo-a-work2-server').branch).toBe('feature/test');
+    expect(sessionManager.sessions.get('repo-a-work2-codex').branch).toBe('feature/test');
 
     expect(io.emit).toHaveBeenCalledWith(
       'branch-update',
@@ -108,6 +128,10 @@ describe('SessionManager branch updates', () => {
     expect(io.emit).toHaveBeenCalledWith(
       'branch-update',
       expect.objectContaining({ sessionId: 'repo-a-work2-server', branch: 'feature/test' })
+    );
+    expect(io.emit).toHaveBeenCalledWith(
+      'branch-update',
+      expect.objectContaining({ sessionId: 'repo-a-work2-codex', branch: 'feature/test' })
     );
   });
 });
