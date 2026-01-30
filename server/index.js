@@ -225,7 +225,8 @@ const diffViewerService = DiffViewerService.getInstance();
 const pullRequestService = PullRequestService.getInstance();
 const processTaskService = ProcessTaskService.getInstance({ sessionManager, worktreeTagService, pullRequestService });
 const taskRecordService = TaskRecordService.getInstance();
-const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager });
+const userSettingsService = UserSettingsService.getInstance();
+const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager, userSettingsService });
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
 const telemetrySnapshotService = TelemetrySnapshotService.getInstance();
 const processProjectDashboardService = ProcessProjectDashboardService.getInstance({ pullRequestService, taskRecordService });
@@ -1453,7 +1454,6 @@ app.post('/api/claude-notification', express.json(), (req, res) => {
 });
 
 // Service instances
-const userSettingsService = UserSettingsService.getInstance();
 const gitUpdateService = GitUpdateService.getInstance();
 const taskTicketMoveService = TaskTicketMoveService.getInstance({
   taskRecordService,
@@ -2591,6 +2591,92 @@ app.get('/api/process/status', async (req, res) => {
   } catch (error) {
     logger.error('Failed to fetch process status', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch process status' });
+  }
+});
+
+app.get('/api/process/settings', (req, res) => {
+  try {
+    const defaults = userSettingsService.getDefaultSettings();
+    const current = userSettingsService.settings || {};
+
+    const defaultStatus = defaults?.global?.process?.status || {};
+    const currentStatus = current?.global?.process?.status || {};
+    const capsDefaults = (defaultStatus.caps && typeof defaultStatus.caps === 'object') ? defaultStatus.caps : {};
+    const capsCurrent = (currentStatus.caps && typeof currentStatus.caps === 'object') ? currentStatus.caps : {};
+
+    res.json({
+      lookbackHours: Number(currentStatus.lookbackHours ?? defaultStatus.lookbackHours ?? 24),
+      caps: {
+        wipMax: Number(capsCurrent.wipMax ?? capsDefaults.wipMax ?? 3),
+        q12: Number(capsCurrent.q12 ?? capsDefaults.q12 ?? 3),
+        q3: Number(capsCurrent.q3 ?? capsDefaults.q3 ?? 6),
+        q4: Number(capsCurrent.q4 ?? capsDefaults.q4 ?? 10)
+      }
+    });
+  } catch (error) {
+    logger.error('Failed to get process settings', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get process settings' });
+  }
+});
+
+app.post('/api/process/settings', express.json(), (req, res) => {
+  try {
+    const defaults = userSettingsService.getDefaultSettings();
+    const current = userSettingsService.settings || {};
+
+    const defaultStatus = defaults?.global?.process?.status || {};
+    const existingStatus = current?.global?.process?.status || {};
+    const capsDefaults = (defaultStatus.caps && typeof defaultStatus.caps === 'object') ? defaultStatus.caps : {};
+    const capsExisting = (existingStatus.caps && typeof existingStatus.caps === 'object') ? existingStatus.caps : {};
+
+    const parseIntOrNull = (v) => {
+      if (v === null || v === undefined || v === '') return null;
+      const n = Number(v);
+      if (!Number.isFinite(n)) return null;
+      return Math.round(n);
+    };
+
+    const next = {
+      lookbackHours: Number(existingStatus.lookbackHours ?? defaultStatus.lookbackHours ?? 24),
+      caps: {
+        wipMax: Number(capsExisting.wipMax ?? capsDefaults.wipMax ?? 3),
+        q12: Number(capsExisting.q12 ?? capsDefaults.q12 ?? 3),
+        q3: Number(capsExisting.q3 ?? capsDefaults.q3 ?? 6),
+        q4: Number(capsExisting.q4 ?? capsDefaults.q4 ?? 10)
+      }
+    };
+
+    const lh = parseIntOrNull(req.body?.lookbackHours);
+    if (lh !== null) {
+      if (lh < 1 || lh > 24 * 14) return res.status(400).json({ error: 'lookbackHours must be between 1 and 336' });
+      next.lookbackHours = lh;
+    }
+
+    const capsPatch = req.body?.caps && typeof req.body.caps === 'object' ? req.body.caps : null;
+    if (capsPatch) {
+      for (const key of ['wipMax', 'q12', 'q3', 'q4']) {
+        if (capsPatch[key] === undefined) continue;
+        const v = parseIntOrNull(capsPatch[key]);
+        if (v === null) continue;
+        if (v < 0 || v > 200) return res.status(400).json({ error: `${key} must be between 0 and 200` });
+        next.caps[key] = v;
+      }
+    }
+
+    if (!current.global) current.global = {};
+    if (!current.global.process) current.global.process = {};
+    current.global.process.status = next;
+    userSettingsService.settings = userSettingsService.mergeSettings(defaults, current);
+    const saved = userSettingsService.saveSettings();
+    if (!saved) return res.status(500).json({ error: 'Failed to save process settings' });
+
+    io.emit('user-settings-updated', userSettingsService.getAllSettings());
+    processStatusService.cache?.clear?.();
+
+    res.json(next);
+  } catch (error) {
+    logger.error('Failed to update process settings', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to update process settings' });
   }
 });
 
