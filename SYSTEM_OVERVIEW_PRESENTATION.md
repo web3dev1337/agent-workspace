@@ -1057,9 +1057,8 @@ Each switch < 5 seconds, full context preserved
 
 ### Phase 2: Enhancement (Q4 2025)
 
-- [ ] **AI-Powered Workspace Suggestions**
-  - Analyze git history to suggest optimal terminal configurations
-  - Auto-detect frequently used repo combinations
+- [x] **AI-Powered Workspace Suggestions**
+  - Shipped (v1): Dashboard → ✨ Suggestions shows frequent repo combos and recent-activity repos (best-effort).
 
 - [ ] **Cross-Workspace File Sync**
   - Share utility files between projects

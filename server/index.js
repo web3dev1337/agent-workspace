@@ -202,6 +202,7 @@ if (AUTH_TOKEN) {
 
 // Initialize services
 const workspaceManager = WorkspaceManager.getInstance();
+const { WorkspaceSuggestionService } = require('./workspaceSuggestionService');
 const agentManager = new AgentManager();
 const sessionManager = new SessionManager(io, agentManager);
 const statusDetector = new StatusDetector();
@@ -1145,6 +1146,18 @@ app.get('/api/workspaces/scan-repos', async (req, res) => {
   } catch (error) {
     logger.error('Failed to scan repositories', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to scan repositories' });
+  }
+});
+
+app.get('/api/workspaces/suggestions', async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(25, Number(req.query?.limit) || 8));
+    const service = new WorkspaceSuggestionService({ workspaceManager });
+    const data = await service.getSuggestions({ limit });
+    res.json(data);
+  } catch (error) {
+    logger.error('Failed to get workspace suggestions', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get workspace suggestions' });
   }
 });
 
