@@ -117,9 +117,10 @@ The diff engine categorizes changes as:
 
 ## Future Enhancements
 
-- [ ] AI-powered summaries using Claude API
-- [ ] Risk detection for security/performance issues
-- [ ] Multi-file search and replace
-- [ ] Integration with GitHub review comments
-- [ ] Export to PDF/Markdown
-- [ ] Collaborative review sessions
+Ideas (not in scope for the current orchestrator roadmap):
+- AI-powered summaries (API-based)
+- Risk detection for security/performance issues
+- Multi-file search and replace
+- Integration with GitHub review comments
+- Export to PDF/Markdown
+- Collaborative review sessions

@@ -34,7 +34,7 @@ Launches localhost:7655 → Fetches PR data → Shows semantic diff
 - [x] Implement basic tree-sitter AST parser for JS/TS
 - [x] Create React SPA with Monaco diff viewer
 - [x] Add "Advanced Diff" button to detected GitHub links
-- [ ] Test with real PRs from HyFire2 repo
+- Manual smoke test: open a real PR in the diff viewer UI and verify file list + diff render.
 
 #### What's Been Implemented:
 1. **Server Side (diff-viewer/server/)**:
