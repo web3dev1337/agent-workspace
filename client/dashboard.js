@@ -757,6 +757,7 @@ class Dashboard {
 		          </label>
 		          <div class="dashboard-telemetry-actions">
 		            <button class="btn-primary" type="button" id="dashboard-tests-run">Run</button>
+		            <button class="btn-secondary" type="button" id="dashboard-tests-cancel" disabled>Cancel</button>
 		            <button class="btn-secondary" type="button" id="dashboard-tests-refresh">Refresh</button>
 		          </div>
 		        </div>
@@ -787,6 +788,9 @@ class Dashboard {
 		      const script = String(scriptEl?.value || 'auto');
 		      const concurrency = Number(concurrencyEl?.value || 2);
 		      await this.startTestOrchestrationRun({ script, concurrency });
+		    });
+		    overlay.querySelector('#dashboard-tests-cancel')?.addEventListener('click', async () => {
+		      await this.cancelTestOrchestrationRun();
 		    });
 		    overlay.querySelector('#dashboard-tests-refresh')?.addEventListener('click', async () => {
 		      await this.loadLatestTestOrchestrationRunOrCurrent();
@@ -911,7 +915,7 @@ class Dashboard {
 		    const s = data.summary || {};
 		    bodyEl.innerHTML = `
 		      <div class="dashboard-telemetry-muted">Run: ${escapeHtml(data.runId)} • Workspace: ${escapeHtml(data.workspaceName || data.workspaceId || '')} • Script: ${escapeHtml(data.script)} • Concurrency: ${escapeHtml(String(data.concurrency || ''))} • Status: ${escapeHtml(data.status)}</div>
-		      <div class="dashboard-telemetry-muted">Total: ${escapeHtml(String(s.total || 0))} • Running: ${escapeHtml(String(s.running || 0))} • Passed: ${escapeHtml(String(s.passed || 0))} • Failed: ${escapeHtml(String(s.failed || 0))} • Unsupported: ${escapeHtml(String(s.unsupported || 0))}</div>
+		      <div class="dashboard-telemetry-muted">Total: ${escapeHtml(String(s.total || 0))} • Running: ${escapeHtml(String(s.running || 0))} • Passed: ${escapeHtml(String(s.passed || 0))} • Failed: ${escapeHtml(String(s.failed || 0))} • Cancelled: ${escapeHtml(String(s.cancelled || 0))} • Unsupported: ${escapeHtml(String(s.unsupported || 0))}</div>
 		      <table class="worktree-inspector-table" style="margin-top:10px;">
 		        <thead>
 		          <tr>
@@ -929,12 +933,32 @@ class Dashboard {
 		      </table>
 		    `;
 
+		    const cancelBtn = document.getElementById('dashboard-tests-cancel');
+		    if (cancelBtn) {
+		      const canCancel = String(data.status) === 'running' && !!data.runId;
+		      cancelBtn.disabled = !canCancel;
+		    }
+
 		    if (poll && String(data.status) === 'running') {
 		      if (this._testsPollTimer) clearTimeout(this._testsPollTimer);
 		      this._testsPollTimer = setTimeout(() => {
 		        try { this.loadTestOrchestrationRun(data.runId, { poll: true }); } catch {}
 		      }, 2000);
 		    }
+		  }
+
+		  async cancelTestOrchestrationRun() {
+		    const runId = String(this._testRunId || '').trim();
+		    if (!runId) return;
+
+		    const cancelBtn = document.getElementById('dashboard-tests-cancel');
+		    if (cancelBtn) cancelBtn.disabled = true;
+
+		    try {
+		      await fetch(`/api/process/tests/runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST' }).catch(() => null);
+		    } catch {}
+
+		    await this.loadTestOrchestrationRun(runId, { poll: true });
 		  }
 
 		  async showReadinessOverlay() {

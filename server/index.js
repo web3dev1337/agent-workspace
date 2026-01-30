@@ -3045,6 +3045,21 @@ app.get('/api/process/tests/runs/:runId', (req, res) => {
   }
 });
 
+app.post('/api/process/tests/runs/:runId/cancel', (req, res) => {
+  try {
+    const runId = String(req.params.runId || '').trim();
+    const result = testOrchestrationService.cancelRun(runId);
+    if (!result?.ok) {
+      res.status(400).json(result);
+      return;
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error('Failed to cancel test orchestration run', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to cancel test run' });
+  }
+});
+
 app.get('/api/process/status', async (req, res) => {
   try {
     const mode = req.query.mode || 'mine';
