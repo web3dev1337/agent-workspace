@@ -29,6 +29,30 @@ describe('SessionManager branch updates', () => {
     expect(updateSpy).toHaveBeenCalledWith('work1', '/tmp/repo-a/work1', true);
   });
 
+  test('startBranchRefresh also refreshes loose sessions (not in worktrees)', () => {
+    const io = { emit: jest.fn() };
+    const sessionManager = new SessionManager(io, null);
+    sessionManager.branchRefreshMs = 10;
+    sessionManager.worktrees = [];
+
+    sessionManager.sessions.set('adhoc-claude', {
+      id: 'adhoc-claude',
+      type: 'claude',
+      worktreeId: 'adhoc',
+      config: { cwd: '/tmp/repo-z/adhoc' },
+      branch: 'unknown'
+    });
+
+    const updateSpy = jest
+      .spyOn(sessionManager, 'updateGitBranch')
+      .mockImplementation(() => Promise.resolve());
+
+    sessionManager.startBranchRefresh();
+    jest.advanceTimersByTime(11);
+
+    expect(updateSpy).toHaveBeenCalledWith('adhoc', '/tmp/repo-z/adhoc', true);
+  });
+
   test('updateGitBranch falls back to matching by cwd path', async () => {
     const io = { emit: jest.fn() };
     const sessionManager = new SessionManager(io, null);
