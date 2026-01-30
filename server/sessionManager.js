@@ -455,57 +455,64 @@ class SessionManager extends EventEmitter {
     }
   }
   
-  setupGitWatchers() {
-    // Setup file watchers for each worktree's .git/HEAD file
-    this.worktrees.forEach(worktree => {
-      try {
-        // Find the actual HEAD file location (handles both regular repos and worktrees)
-        const headPath = this.findHeadFile(worktree.path);
-        
-        if (headPath) {
-          // Create a watcher for this HEAD file
-          const watcher = fs.watch(headPath, (eventType) => {
-            if (eventType === 'change' || eventType === 'rename') {
-              logger.info('👀 Detected .git/HEAD change', { 
-                worktree: worktree.id,
-                eventType,
-                headPath,
-                timestamp: new Date().toISOString()
-              });
-              
-              // Clear cache and update branch immediately
-              if (this.gitHelper) {
-                this.gitHelper.clearCacheForPath(worktree.path);
-              }
-              
-              // Small delay to ensure the file write is complete
-              setTimeout(() => {
-                logger.debug('File watcher triggered branch update', { worktree: worktree.id });
-                const worktreeIdForGit = worktree.worktreeId || worktree.id;
-                this.updateGitBranch(worktreeIdForGit, worktree.path, true);
-              }, 50);
-            }
-          });
-          
-          this.fileWatchers.set(worktree.id, watcher);
-          logger.info('Setup git watcher for worktree', { 
-            worktree: worktree.id,
-            headPath 
-          });
-        } else {
-          logger.warn('No .git/HEAD file found for worktree', { 
-            worktree: worktree.id,
-            searchedPaths: 'multiple locations' 
-          });
-        }
-      } catch (error) {
-        logger.error('Failed to setup git watcher', { 
-          worktree: worktree.id, 
-          error: error.message 
-        });
-      }
-    });
-  }
+	  setupGitWatchers() {
+	    // Setup file watchers for each worktree's .git/HEAD file
+	    this.worktrees.forEach(worktree => {
+	      this.setupGitWatcherForWorktree(worktree);
+	    });
+	  }
+
+	  setupGitWatcherForWorktree(worktree) {
+	    try {
+	      if (!worktree?.id || !worktree?.path) return;
+	      if (this.fileWatchers.has(worktree.id)) return;
+
+	      // Find the actual HEAD file location (handles both regular repos and worktrees)
+	      const headPath = this.findHeadFile(worktree.path);
+	      if (!headPath) {
+	        logger.warn('No .git/HEAD file found for worktree', {
+	          worktree: worktree.id,
+	          searchedPaths: 'multiple locations'
+	        });
+	        return;
+	      }
+
+	      // Create a watcher for this HEAD file
+	      const watcher = fs.watch(headPath, (eventType) => {
+	        if (eventType === 'change' || eventType === 'rename') {
+	          logger.info('👀 Detected .git/HEAD change', {
+	            worktree: worktree.id,
+	            eventType,
+	            headPath,
+	            timestamp: new Date().toISOString()
+	          });
+
+	          // Clear cache and update branch immediately
+	          if (this.gitHelper) {
+	            this.gitHelper.clearCacheForPath(worktree.path);
+	          }
+
+	          // Small delay to ensure the file write is complete
+	          setTimeout(() => {
+	            logger.debug('File watcher triggered branch update', { worktree: worktree.id });
+	            const worktreeIdForGit = worktree.worktreeId || worktree.id;
+	            this.updateGitBranch(worktreeIdForGit, worktree.path, true);
+	          }, 50);
+	        }
+	      });
+
+	      this.fileWatchers.set(worktree.id, watcher);
+	      logger.info('Setup git watcher for worktree', {
+	        worktree: worktree.id,
+	        headPath
+	      });
+	    } catch (error) {
+	      logger.error('Failed to setup git watcher', {
+	        worktree: worktree?.id || null,
+	        error: error.message
+	      });
+	    }
+	  }
   
   findHeadFile(repoPath) {
     // 1. Check for regular .git/HEAD (normal repository)
@@ -1924,16 +1931,37 @@ class SessionManager extends EventEmitter {
    * @param {string} [worktreeInfo.repositoryType] - For dynamic launch options
    * @returns {Object} Map of sessionId -> sessionState for the new sessions
    */
-  async createSessionsForWorktree(worktreeInfo) {
-    const { worktreeId, worktreePath, repositoryName, repositoryType } = worktreeInfo;
-    const newSessions = {};
+	  async createSessionsForWorktree(worktreeInfo) {
+	    const { worktreeId, worktreePath, repositoryName, repositoryType } = worktreeInfo;
+	    const newSessions = {};
 
-    logger.info('Creating sessions for new worktree', { worktreeId, worktreePath, repositoryName });
+	    logger.info('Creating sessions for new worktree', { worktreeId, worktreePath, repositoryName });
 
-    // Determine session IDs based on workspace type
-    let claudeSessionId, serverSessionId;
-    if (repositoryName) {
-      // Mixed-repo workspace
+	    // Ensure this worktree is tracked for branch refresh + HEAD watchers.
+	    // Otherwise, branch labels/colors may only update after a git command is run inside the Orchestrator terminal.
+	    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+	    const existingWorktree = this.worktrees.find(w => w.id === worktreeKey) || null;
+	    if (!existingWorktree) {
+	      this.worktrees.push({
+	        id: worktreeKey,
+	        worktreeId,
+	        repositoryName,
+	        repositoryType,
+	        path: worktreePath
+	      });
+	    } else if (existingWorktree.path !== worktreePath) {
+	      existingWorktree.path = worktreePath;
+	    }
+
+	    const trackedWorktree = this.worktrees.find(w => w.id === worktreeKey) || existingWorktree;
+	    if (trackedWorktree) {
+	      this.setupGitWatcherForWorktree(trackedWorktree);
+	    }
+
+	    // Determine session IDs based on workspace type
+	    let claudeSessionId, serverSessionId;
+	    if (repositoryName) {
+	      // Mixed-repo workspace
       claudeSessionId = `${repositoryName}-${worktreeId}-claude`;
       serverSessionId = `${repositoryName}-${worktreeId}-server`;
     } else {
@@ -2000,18 +2028,18 @@ class SessionManager extends EventEmitter {
       logger.error('Failed to create server session for worktree', { worktreeId, error: error.message });
     }
 
-    // Update git branch info for the new sessions
-    if (this.gitHelper) {
-      try {
-        await this.updateGitBranch(worktreeId, worktreePath, true);
-      } catch (error) {
-        logger.error('Failed to update git branch for new worktree', { worktreeId, error: error.message });
-      }
-    }
+	    // Update git branch info for the new sessions
+	    if (this.gitHelper) {
+	      try {
+	        await this.updateGitBranch(worktreeId, worktreePath, true);
+	      } catch (error) {
+	        logger.error('Failed to update git branch for new worktree', { worktreeId, error: error.message });
+	      }
+	    }
 
-    logger.info('Created sessions for worktree', { worktreeId, sessionCount: Object.keys(newSessions).length });
-    return newSessions;
-  }
+	    logger.info('Created sessions for worktree', { worktreeId, sessionCount: Object.keys(newSessions).length });
+	    return newSessions;
+	  }
   
   getIdleClaudeSessions() {
     const idle = [];
