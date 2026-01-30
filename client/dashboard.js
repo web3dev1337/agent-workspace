@@ -120,6 +120,7 @@ class Dashboard {
 	                <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
 	                <div class="dashboard-summary-actions">
 	                  <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
+	                  <button class="dashboard-topbar-btn" id="dashboard-open-performance" title="Per-terminal resource usage">⚙ Perf</button>
 	                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
 	                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
 	                </div>
@@ -196,6 +197,10 @@ class Dashboard {
 	    document.getElementById('dashboard-open-telemetry-details')?.addEventListener('click', (e) => {
 	      e.preventDefault();
 	      this.showTelemetryOverlay();
+	    });
+	    document.getElementById('dashboard-open-performance')?.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      this.showPerformanceOverlay();
 	    });
 		    document.getElementById('dashboard-export-telemetry')?.addEventListener('click', (e) => {
 		      e.preventDefault();
@@ -568,6 +573,135 @@ class Dashboard {
 	      overlay._escHandler = null;
 	    }
 	    overlay.remove();
+	  }
+
+	  async showPerformanceOverlay() {
+	    const existing = document.getElementById('dashboard-performance-overlay');
+	    if (existing) {
+	      existing.classList.remove('hidden');
+	      return;
+	    }
+
+	    const overlay = document.createElement('div');
+	    overlay.id = 'dashboard-performance-overlay';
+	    overlay.className = 'dashboard-telemetry-overlay';
+	    overlay.innerHTML = `
+	      <div class="dashboard-telemetry-panel" role="dialog" aria-label="Performance metrics">
+	        <div class="dashboard-telemetry-header">
+	          <div class="dashboard-telemetry-title">Performance — Sessions</div>
+	          <button class="dashboard-topbar-btn" id="dashboard-performance-close" title="Close (Esc)">✕</button>
+	        </div>
+	        <div class="dashboard-telemetry-controls">
+	          <div class="dashboard-telemetry-actions">
+	            <button class="btn-secondary" type="button" id="dashboard-performance-refresh">Refresh</button>
+	          </div>
+	        </div>
+	        <div id="dashboard-performance-body" class="dashboard-telemetry-body">Loading…</div>
+	      </div>
+	    `;
+
+	    document.body.appendChild(overlay);
+
+	    const close = () => this.hidePerformanceOverlay();
+	    overlay.addEventListener('click', (e) => {
+	      if (e.target === overlay) close();
+	    });
+	    overlay.querySelector('#dashboard-performance-close')?.addEventListener('click', close);
+
+	    const onKey = (e) => {
+	      if (e.key !== 'Escape') return;
+	      const el = document.getElementById('dashboard-performance-overlay');
+	      if (!el || el.classList.contains('hidden')) return;
+	      close();
+	    };
+	    overlay._escHandler = onKey;
+	    document.addEventListener('keydown', onKey);
+
+	    overlay.querySelector('#dashboard-performance-refresh')?.addEventListener('click', () => {
+	      this.loadPerformanceDetails();
+	    });
+
+	    await this.loadPerformanceDetails();
+	  }
+
+	  hidePerformanceOverlay() {
+	    const overlay = document.getElementById('dashboard-performance-overlay');
+	    if (!overlay) return;
+	    overlay.classList.add('hidden');
+	    const handler = overlay._escHandler;
+	    if (handler) {
+	      document.removeEventListener('keydown', handler);
+	      overlay._escHandler = null;
+	    }
+	    overlay.remove();
+	  }
+
+	  async loadPerformanceDetails() {
+	    const bodyEl = document.getElementById('dashboard-performance-body');
+	    if (bodyEl) bodyEl.textContent = 'Loading…';
+
+	    let data = null;
+	    try {
+	      const res = await fetch('/api/process/performance');
+	      data = res && res.ok ? await res.json().catch(() => null) : null;
+	    } catch {
+	      data = null;
+	    }
+
+	    if (!bodyEl) return;
+	    if (!data || !data.ok) {
+	      bodyEl.textContent = 'Failed to load.';
+	      return;
+	    }
+
+	    const escapeHtml = (value) => String(value ?? '')
+	      .replace(/&/g, '&amp;')
+	      .replace(/</g, '&lt;')
+	      .replace(/>/g, '&gt;');
+
+	    const fmtBytes = (b) => {
+	      const n = Number(b);
+	      if (!Number.isFinite(n) || n < 0) return '—';
+	      const mb = n / (1024 * 1024);
+	      if (mb < 1024) return `${mb.toFixed(1)} MB`;
+	      return `${(mb / 1024).toFixed(2)} GB`;
+	    };
+
+	    const fmtKb = (kb) => {
+	      const n = Number(kb);
+	      if (!Number.isFinite(n) || n < 0) return '—';
+	      return fmtBytes(n * 1024);
+	    };
+
+	    const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+	    const rows = sessions.map((s) => {
+	      const repo = s.repositoryName ? `${escapeHtml(s.repositoryName)}/` : '';
+	      const wt = escapeHtml(s.worktreeId || '');
+	      const label = `${repo}${wt || escapeHtml(s.sessionId)}`;
+	      const pid = s.pid ? escapeHtml(String(s.pid)) : '—';
+	      const mem = s.totalRssKb ? escapeHtml(fmtKb(s.totalRssKb)) : '—';
+	      const kids = escapeHtml(String(s.childCount ?? 0));
+	      return `<tr><td class="mono">${escapeHtml(s.sessionId)}</td><td>${label}</td><td>${escapeHtml(s.type || '')}</td><td class="mono">${pid}</td><td class="mono">${mem}</td><td class="mono">${kids}</td></tr>`;
+	    }).join('');
+
+	    bodyEl.innerHTML = `
+	      <div class="dashboard-telemetry-muted">Generated: ${escapeHtml(data.generatedAt)} • Node RSS: ${escapeHtml(fmtBytes(data?.node?.rssBytes))} • Uptime: ${escapeHtml(String(data?.node?.uptimeSeconds || 0))}s</div>
+	      <table class="worktree-inspector-table" style="margin-top:10px;">
+	        <thead>
+	          <tr>
+	            <th>Session</th>
+	            <th>Worktree</th>
+	            <th>Type</th>
+	            <th>PID</th>
+	            <th>Mem (RSS)</th>
+	            <th>Children</th>
+	          </tr>
+	        </thead>
+	        <tbody>
+	          ${rows || `<tr><td colspan="6" style="opacity:0.8;">No sessions.</td></tr>`}
+	        </tbody>
+	      </table>
+	    `;
 	  }
 
 	  async showReadinessOverlay() {
