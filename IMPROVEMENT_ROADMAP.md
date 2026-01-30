@@ -546,28 +546,28 @@ class VoiceCommandManager {
 ## Implementation Roadmap
 
 ### Phase 1: Stability (Week 1)
-- [ ] Fix cascaded config merging (prevents cache mutation)
-- [ ] Reduce console log spam (add LOG_LEVEL filtering)
-- [ ] Fix false positive notifications (improve status detection)
-- [ ] Fix refresh/restart buttons
+- ✅ Fix cascaded config merging (prevents cache mutation)
+- ✅ Reduce console log spam (LOG_LEVEL filtering + fewer hot-path logs)
+- ✅ Fix false positive notifications (status detection + hysteresis improvements)
+- ⚠️ Refresh/restart buttons: partially shipped (remaining edge-cases tracked in newer plans)
 
 ### Phase 2: Core Features (Week 2-3)
-- [ ] Implement Port Registry system
-- [ ] Add Quick Links Dashboard
-- [ ] Create Greenfield Project Wizard
-- [ ] Improve session recovery
+- ✅ Implement Port Registry system
+- ✅ Add Quick Links Dashboard
+- ✅ Create Greenfield Project Wizard
+- ✅ Improve session recovery
 
 ### Phase 3: Commander (Week 4-5)
-- [ ] Implement Commander Claude service
-- [ ] Add Claude API integration
-- [ ] Create tool definitions
-- [ ] Build Commander UI panel
+- ✅ Implement Commander service (CLI-driven)
+- ⏭️ Claude API integration: deferred (CLI-first approach; optional future)
+- ✅ Create tool definitions / command registry
+- ✅ Build Commander UI panel
 
 ### Phase 4: Polish (Week 6)
-- [ ] Add Voice Commands (Web Speech API)
-- [ ] Create Skills/Templates library
-- [ ] Performance optimization
-- [ ] Documentation
+- ✅ Add Voice Commands (rule-based voice → command registry)
+- ✅ Skills/Templates library (skills folder + installer/creator)
+- ✅ Performance optimization
+- ✅ Documentation
 
 ---
 
