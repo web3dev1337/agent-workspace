@@ -254,6 +254,17 @@ class CommandRegistry {
       }
     });
 
+    this.register('open-activity', {
+      category: 'process',
+      description: 'Open the Activity feed panel',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-activity' });
+        return { message: 'Opening Activity feed' };
+      }
+    });
+
     // ============ PROCESS / WORKFLOW COMMANDS ============
 
     this.register('open-queue', {

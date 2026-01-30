@@ -49,6 +49,9 @@ describe('VoiceCommandService (rule parsing)', () => {
     const telemetry = voiceCommandService.parseWithRules('open telemetry');
     expect(telemetry.command).toBe('open-telemetry');
 
+    const activity = voiceCommandService.parseWithRules('open activity');
+    expect(activity.command).toBe('open-activity');
+
     const advice = voiceCommandService.parseWithRules('open advisor');
     expect(advice.command).toBe('open-advice');
 
