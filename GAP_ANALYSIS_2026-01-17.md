@@ -292,6 +292,8 @@ Week 10: Phase 4 + Final polish
 - [ ] `client/workspace-wizard.js` - Lines 25, 445
 - [ ] `client/greenfield-wizard.js` - Lines 18-19
 - [ ] `client/commander-panel.js` - Line 13
+- [x] `scripts/migrate-to-workspaces.js` - HyFire2 repo path now derives from `os.homedir()` / config (no hardcoded `/home/ab`)
+- [x] `scripts/orchestrator-startup.sh` - now uses script-relative repo path (no hardcoded `/home/ab`) and updates from `origin/main`
 
 ### New Test Files
 - [ ] `tests/unit/sessionManager.test.js`
