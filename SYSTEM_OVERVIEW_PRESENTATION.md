@@ -1078,9 +1078,8 @@ Each switch < 5 seconds, full context preserved
   - Shipped (v1): Dashboard → 🎯 Distribution suggests a terminal per PR task (repo-match to active agent sessions; fallback to most-idle).
   - Supports `agents=claude,codex` (future agents can be added without changing the UI).
 
-- [ ] **Automated Testing Orchestration**
-  - Run tests across all worktrees in parallel
-  - Aggregate results dashboard
+- [x] **Automated Testing Orchestration**
+  - Shipped (v1): Dashboard → 🧪 Tests runs npm test scripts across active workspace worktrees with concurrency + live aggregated results.
 
 ---
 
