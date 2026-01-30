@@ -24,7 +24,7 @@ Notes:
 ### Process layer / workflow
 
 1) **Tier 4 “Overnight runner” preset (YOLO + run tests + leave summary/checklist)**
-   - Current: no “overnight runner” preset/command is present.
+   - Current: shipped (Queue PR detail includes 🌙 Overnight; enabled when Tier=4).
    - Source:
      - `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md` (Overnight runner preset)
 
@@ -90,7 +90,7 @@ Notes:
 
 #### `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md`
 - Template daily checklist items are intentionally unchecked (not backlog).
-- Remaining: item #1 above (overnight runner).
+- Remaining: none.
 
 #### `PLANS/2026-01-24/TASKS_TICKETING.md`
 - Remaining: item #9 above (persistent/stale-while-revalidate cache).

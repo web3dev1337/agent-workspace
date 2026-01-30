@@ -355,6 +355,20 @@ class TaskRecordService {
       }
     }
 
+    if (p.overnightSpawnedAt !== undefined) {
+      const dt = normalizeDateTime(p.overnightSpawnedAt);
+      if (dt) next.overnightSpawnedAt = dt;
+      else clear.add('overnightSpawnedAt');
+    }
+
+    if (p.overnightWorktreeId !== undefined) {
+      if (p.overnightWorktreeId === null || p.overnightWorktreeId === '') {
+        clear.add('overnightWorktreeId');
+      } else {
+        next.overnightWorktreeId = String(p.overnightWorktreeId || '').trim();
+      }
+    }
+
     // Optional external ticket/task link (v1: Trello)
     if (p.ticketProvider !== undefined) {
       if (p.ticketProvider === null || p.ticketProvider === '') {

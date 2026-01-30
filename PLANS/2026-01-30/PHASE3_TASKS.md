@@ -14,7 +14,7 @@ Guidelines:
   - Output shape: ranked pairs + reason codes (conflicts/context distance).
   - Sources: `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md`, `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md`
 
-- [ ] **P3-02 Overnight runner preset v1**: Tier 4 “overnight” preset (run tests + leave summary/checklist).
+- [x] **P3-02 Overnight runner preset v1**: Tier 4 “overnight” preset (run tests + leave summary/checklist).
   - Sources: `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md`
 
 ## Risk / conflicts
