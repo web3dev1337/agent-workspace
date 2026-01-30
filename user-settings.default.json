@@ -72,6 +72,10 @@
           "assigneesByBoard": {}
         }
       },
+      "identity": {
+        "claimName": "",
+        "saved": []
+      },
       "diffViewer": {
         "theme": "dark"
       }

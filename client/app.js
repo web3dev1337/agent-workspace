@@ -1043,6 +1043,10 @@ class ClaudeOrchestrator {
       'tasks-launch-global-prefix': null,
       'tasks-launch-include-title': null,
       'trello-me-username': null,
+      'identity-claim-name': null,
+      'identity-save': null,
+      'identity-clear': null,
+      'identity-saved-list': null,
       'global-skip-permissions': null,
       'reset-to-defaults': null,
       'save-as-default': null,
@@ -1233,6 +1237,75 @@ class ClaudeOrchestrator {
       trelloMeUsername.addEventListener('change', (e) => {
         const v = String(e.target.value || '').trim();
         this.updateGlobalUserSetting('ui.tasks.me.trelloUsername', v);
+      });
+    }
+
+    const identityClaimName = document.getElementById('identity-claim-name');
+    if (identityClaimName) {
+      identityClaimName.addEventListener('change', async (e) => {
+        const v = String(e.target.value || '').trim();
+        try {
+          if (v) localStorage.setItem('orchestrator-claim-name', v);
+          else localStorage.removeItem('orchestrator-claim-name');
+        } catch {
+          // ignore
+        }
+        await this.updateGlobalUserSetting('ui.identity.claimName', v);
+        this.buildSidebar();
+      });
+    }
+
+    const identitySaveBtn = document.getElementById('identity-save');
+    if (identitySaveBtn) {
+      identitySaveBtn.addEventListener('click', async () => {
+        const v = String(document.getElementById('identity-claim-name')?.value || '').trim();
+        if (!v) return;
+        const current = Array.isArray(this.userSettings?.global?.ui?.identity?.saved) ? this.userSettings.global.ui.identity.saved : [];
+        const next = Array.from(new Set([...(current || []).map((x) => String(x || '').trim()).filter(Boolean), v]));
+        await this.updateGlobalUserSetting('ui.identity.saved', next);
+        this.renderIdentitySavedList();
+      });
+    }
+
+    const identityClearBtn = document.getElementById('identity-clear');
+    if (identityClearBtn) {
+      identityClearBtn.addEventListener('click', async () => {
+        const input = document.getElementById('identity-claim-name');
+        if (input) input.value = '';
+        try { localStorage.removeItem('orchestrator-claim-name'); } catch {}
+        await this.updateGlobalUserSetting('ui.identity.claimName', '');
+        this.buildSidebar();
+      });
+    }
+
+    const identitySavedList = document.getElementById('identity-saved-list');
+    if (identitySavedList) {
+      identitySavedList.addEventListener('click', async (e) => {
+        const setBtn = e.target?.closest?.('button[data-identity-set]');
+        if (setBtn) {
+          e.preventDefault();
+          const raw = String(setBtn.getAttribute('data-identity-set') || '').trim();
+          let v = raw;
+          try { v = decodeURIComponent(raw); } catch {}
+          const input = document.getElementById('identity-claim-name');
+          if (input) input.value = v;
+          try { if (v) localStorage.setItem('orchestrator-claim-name', v); } catch {}
+          await this.updateGlobalUserSetting('ui.identity.claimName', v);
+          this.buildSidebar();
+          return;
+        }
+
+        const removeBtn = e.target?.closest?.('button[data-identity-remove]');
+        if (removeBtn) {
+          e.preventDefault();
+          const raw = String(removeBtn.getAttribute('data-identity-remove') || '').trim();
+          let v = raw;
+          try { v = decodeURIComponent(raw); } catch {}
+          const current = Array.isArray(this.userSettings?.global?.ui?.identity?.saved) ? this.userSettings.global.ui.identity.saved : [];
+          const next = (current || []).map((x) => String(x || '').trim()).filter(Boolean).filter((x) => x !== v);
+          await this.updateGlobalUserSetting('ui.identity.saved', next);
+          this.renderIdentitySavedList();
+        }
       });
     }
 
@@ -3419,6 +3492,41 @@ class ClaudeOrchestrator {
       colorize: cfg.colorize !== false,
       showAtInSidebar: !!cfg.showAtInSidebar
     };
+  }
+
+  getIdentityClaimName() {
+    const fromIdentity = String(this.userSettings?.global?.ui?.identity?.claimName || '').trim();
+    const fromTasksMe = String(this.userSettings?.global?.ui?.tasks?.me?.trelloUsername || '').trim();
+    let fromStorage = '';
+    try {
+      fromStorage = String(localStorage.getItem('orchestrator-claim-name') || '').trim();
+    } catch {
+      fromStorage = '';
+    }
+    return fromIdentity || fromTasksMe || fromStorage || 'me';
+  }
+
+  renderIdentitySavedList() {
+    const container = document.getElementById('identity-saved-list');
+    if (!container) return;
+
+    const saved = Array.isArray(this.userSettings?.global?.ui?.identity?.saved) ? this.userSettings.global.ui.identity.saved : [];
+    const entries = (saved || []).map((x) => String(x || '').trim()).filter(Boolean);
+    if (!entries.length) {
+      container.innerHTML = '<span style="color: var(--text-tertiary); font-size: 0.85em;">(none)</span>';
+      return;
+    }
+
+    container.innerHTML = entries.map((v) => {
+      const label = this.escapeHtml(v);
+      const encoded = (() => { try { return encodeURIComponent(v); } catch { return ''; } })();
+      return `
+        <span class="identity-chip" title="${label}">
+          <button type="button" data-identity-set="${this.escapeHtml(encoded)}" title="Use">${label}</button>
+          <button type="button" data-identity-remove="${this.escapeHtml(encoded)}" title="Remove">✕</button>
+        </span>
+      `;
+    }).join('');
   }
 
   classifyBranchType(rawBranch) {
@@ -8446,6 +8554,18 @@ class ClaudeOrchestrator {
     if (trelloMeUsername) {
       trelloMeUsername.value = this.userSettings.global?.ui?.tasks?.me?.trelloUsername || '';
     }
+
+    const identityClaimName = document.getElementById('identity-claim-name');
+    if (identityClaimName) {
+      const v = this.getIdentityClaimName();
+      identityClaimName.value = v === 'me' ? '' : v;
+      try {
+        if (v && v !== 'me') localStorage.setItem('orchestrator-claim-name', v);
+      } catch {
+        // ignore
+      }
+    }
+    this.renderIdentitySavedList();
 
     const tasksLaunchPrefix = document.getElementById('tasks-launch-global-prefix');
     if (tasksLaunchPrefix) {
@@ -15725,7 +15845,7 @@ class ClaudeOrchestrator {
         });
       };
 
-      const me = String(this.userSettings?.global?.ui?.tasks?.me?.trelloUsername || localStorage.getItem('orchestrator-claim-name') || 'me').trim() || 'me';
+      const me = this.getIdentityClaimName();
       const byClaim = (arr) => {
         const unclaimed = [];
         const mine = [];
@@ -17326,9 +17446,7 @@ class ClaudeOrchestrator {
       };
 
       const getClaimName = () => {
-        const fromSettings = String(this.userSettings?.global?.ui?.tasks?.me?.trelloUsername || '').trim();
-        const fromStorage = String(localStorage.getItem('orchestrator-claim-name') || '').trim();
-        return fromSettings || fromStorage || 'me';
+        return this.getIdentityClaimName();
       };
 
       const applyClaimUI = (rec) => {
