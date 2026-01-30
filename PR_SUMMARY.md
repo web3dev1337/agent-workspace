@@ -160,23 +160,23 @@ scripts/
 - [x] Sidebar shows only current workspace worktrees
 
 ### Advanced Mixed-Repo Features
-- [ ] Click "+ Add Worktree" shows categorized repository list
-- [ ] Can add HyFire work3 to Epic Survivors workspace
-- [ ] Mixed workspace shows terminals from multiple repos
-- [ ] Each terminal shows repo-appropriate buttons
-- [ ] Conflict detection shows worktree usage status
+- [x] Click "+ Add Worktree" shows categorized repository list
+- [x] Can add HyFire work3 to Epic Survivors workspace
+- [x] Mixed workspace shows terminals from multiple repos
+- [x] Each terminal shows repo-appropriate buttons
+- [x] Conflict detection shows worktree usage status
 
 ### Repository Discovery
-- [ ] Deep scan finds individual projects (HyFire2, epic-survivors, cb-fry-scripts)
-- [ ] Auto-type detection works from folder paths
-- [ ] Workspace wizard shows categorized project list
-- [ ] Can create workspace for any discovered project
+- [x] Deep scan finds individual projects (HyFire2, epic-survivors, cb-fry-scripts)
+- [x] Auto-type detection works from folder paths
+- [x] Workspace wizard shows categorized project list
+- [x] Can create workspace for any discovered project
 
 ### One-Click Startup
-- [ ] `orchestrator` command launches everything
-- [ ] Desktop shortcut works
-- [ ] Auto-update pulls latest changes
-- [ ] Browser opens automatically when ready
+- [x] `orchestrator` command launches everything
+- [x] Desktop shortcut works
+- [x] Auto-update pulls latest changes
+- [x] Browser opens automatically when ready
 
 ---
 
