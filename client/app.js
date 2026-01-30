@@ -9045,6 +9045,7 @@ class ClaudeOrchestrator {
 		              <select id="tasks-combined-preset" class="tasks-select tasks-select-inline" title="Combined preset"></select>
 		              <button class="btn-secondary" id="tasks-hotkeys" title="Hotkeys (?)">⌨</button>
 				          <select id="tasks-list" class="tasks-select" title="List"></select>
+				          <button class="btn-secondary" id="tasks-manage-lists" title="Manage lists (create/reorder)">🧱</button>
 	            <div class="tasks-launch-defaults" id="tasks-launch-defaults" title="Defaults used by 🚀 quick launch">
               <span class="tasks-launch-defaults-label">🚀</span>
               <div class="tasks-quick-tier-group tasks-launch-default-tier-group" id="tasks-launch-default-tier-group" title="Default tier">
@@ -9146,6 +9147,7 @@ class ClaudeOrchestrator {
 		      const combinedPresetEl = modal.querySelector('#tasks-combined-preset');
 		      const hotkeysBtn = modal.querySelector('#tasks-hotkeys');
 			    const listEl = modal.querySelector('#tasks-list');
+			    const manageListsBtn = modal.querySelector('#tasks-manage-lists');
     const searchEl = modal.querySelector('#tasks-search');
     const updatedEl = modal.querySelector('#tasks-updated');
     const sortEl = modal.querySelector('#tasks-sort');
@@ -9367,6 +9369,200 @@ class ClaudeOrchestrator {
       const closeNewCardOverlay = () => {
         const existing = modal.querySelector('#tasks-new-card-overlay');
         if (existing) existing.remove();
+      };
+
+      const closeListsManagerOverlay = () => {
+        const existing = modal.querySelector('#tasks-lists-manager-overlay');
+        if (existing) existing.remove();
+      };
+
+      const openListsManagerOverlay = async () => {
+        closeListsManagerOverlay();
+
+        const bid = String(state.boardId || '').trim();
+        if (!bid || bid === ALL_BOARDS_ID || bid === COMBINED_VIEW_ID) {
+          this.showToast('Select a single board first', 'warning');
+          return;
+        }
+
+        let lists = Array.isArray(state.lists) ? state.lists : [];
+        if (!lists.length) {
+          try {
+            lists = await fetchLists({ boardId: bid, refresh: true });
+          } catch {
+            lists = [];
+          }
+        }
+        lists = (Array.isArray(lists) ? lists : [])
+          .filter((l) => l?.id && l?.closed !== true)
+          .sort((a, b) => (Number(a?.pos ?? 0) - Number(b?.pos ?? 0)));
+
+        const applyLists = (nextLists) => {
+          const arr = (Array.isArray(nextLists) ? nextLists : [])
+            .filter((l) => l?.id && l?.closed !== true)
+            .sort((a, b) => (Number(a?.pos ?? 0) - Number(b?.pos ?? 0)));
+          state.lists = arr;
+          lists = arr;
+          try { state.boardMetaCache?.delete?.(bid); } catch {}
+
+          // Keep list selector in sync (list view only, single board).
+          if (state.view === 'list' && state.boardId && state.boardId !== ALL_BOARDS_ID && state.boardId !== COMBINED_VIEW_ID) {
+            setSelectOptions(listEl, arr, { placeholder: 'All lists', valueKey: 'id', labelKey: 'name' });
+            const allOpt = document.createElement('option');
+            allOpt.value = '__all__';
+            allOpt.textContent = 'All lists';
+            listEl.insertBefore(allOpt, listEl.firstChild);
+            if (state.listId) listEl.value = state.listId;
+          }
+
+          // Keep board snapshot ordering in sync (avoid full refresh).
+          if (state.view === 'board' && lastSnapshot && state.boardId === bid) {
+            lastSnapshot.lists = arr;
+            renderBoard(lastSnapshot);
+          }
+        };
+
+        const overlay = document.createElement('div');
+        overlay.id = 'tasks-lists-manager-overlay';
+        overlay.className = 'tasks-launch-popover-overlay';
+
+        const boardLabel = (() => {
+          const board = Array.isArray(state.boards) ? state.boards.find(b => b?.id === bid) : null;
+          return board?.name || bid;
+        })();
+
+        overlay.innerHTML = `
+          <div class="tasks-launch-popover" id="tasks-lists-manager-popover" role="dialog" aria-label="Manage lists" style="max-width: 760px;">
+            <div class="tasks-launch-popover-header">
+              <div class="tasks-launch-popover-title">🧱 Lists</div>
+              <button class="btn-secondary" id="tasks-lists-manager-close" type="button" title="Close (Esc)">×</button>
+            </div>
+            <div class="tasks-launch-popover-meta">${this.escapeHtml(boardLabel)}</div>
+            <div class="tasks-launch-popover-grid" style="grid-template-columns: 1fr;">
+              <div class="tasks-inline-row" style="margin-bottom: 10px;">
+                <input id="tasks-new-list-name" class="tasks-input" placeholder="New list name…" />
+                <button class="btn-secondary" id="tasks-new-list-btn" type="button">＋ Create</button>
+              </div>
+              <div id="tasks-lists-manager-list"></div>
+              <div class="tasks-detail-meta" style="opacity:0.85;">Tip: use ↑/↓ to reorder. (Trello uses numeric <code>pos</code>.)</div>
+            </div>
+          </div>
+        `;
+
+        modal.querySelector('.tasks-content')?.appendChild(overlay);
+
+        const popover = overlay.querySelector('#tasks-lists-manager-popover');
+        const closeBtn = overlay.querySelector('#tasks-lists-manager-close');
+        const nameEl = overlay.querySelector('#tasks-new-list-name');
+        const createBtn = overlay.querySelector('#tasks-new-list-btn');
+        const listWrap = overlay.querySelector('#tasks-lists-manager-list');
+
+        const close = () => overlay.remove();
+        closeBtn?.addEventListener('click', close);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+        const renderRows = () => {
+          if (!listWrap) return;
+          if (!lists.length) {
+            listWrap.innerHTML = `<div class="tasks-detail-empty">No lists.</div>`;
+            return;
+          }
+
+          listWrap.innerHTML = lists.map((l, idx) => {
+            const name = String(l?.name || '').trim() || l.id;
+            const id = String(l?.id || '').trim();
+            return `
+              <div class="tasks-list-manager-row" data-list-id="${this.escapeHtml(id)}">
+                <div class="tasks-list-manager-name">${this.escapeHtml(name)}</div>
+                <div class="tasks-list-manager-actions">
+                  <button class="btn-secondary" type="button" data-move-up="${this.escapeHtml(id)}" ${idx === 0 ? 'disabled' : ''} title="Move up">↑</button>
+                  <button class="btn-secondary" type="button" data-move-down="${this.escapeHtml(id)}" ${idx === lists.length - 1 ? 'disabled' : ''} title="Move down">↓</button>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+          listWrap.querySelectorAll('[data-move-up]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const listId = btn.getAttribute('data-move-up');
+              if (!listId) return;
+              const idx = lists.findIndex(x => String(x?.id || '') === listId);
+              if (idx <= 0) return;
+              const prev = lists[idx - 1];
+              const prevPrev = lists[idx - 2];
+              const prevPos = Number(prev?.pos ?? 0);
+              const prevPrevPos = prevPrev ? Number(prevPrev?.pos ?? (prevPos - 1)) : (prevPos - 1);
+              const newPos = prevPrev ? (prevPrevPos + prevPos) / 2 : (prevPos - 1);
+              try {
+                btn.disabled = true;
+                const updatedLists = await updateTaskList({ boardId: bid, listId, pos: newPos });
+                applyLists(updatedLists);
+                renderRows();
+              } catch (err) {
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+
+          listWrap.querySelectorAll('[data-move-down]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const listId = btn.getAttribute('data-move-down');
+              if (!listId) return;
+              const idx = lists.findIndex(x => String(x?.id || '') === listId);
+              if (idx < 0 || idx >= lists.length - 1) return;
+              const next = lists[idx + 1];
+              const nextNext = lists[idx + 2];
+              const nextPos = Number(next?.pos ?? 0);
+              const nextNextPos = nextNext ? Number(nextNext?.pos ?? (nextPos + 1)) : (nextPos + 1);
+              const newPos = nextNext ? (nextPos + nextNextPos) / 2 : (nextPos + 1);
+              try {
+                btn.disabled = true;
+                const updatedLists = await updateTaskList({ boardId: bid, listId, pos: newPos });
+                applyLists(updatedLists);
+                renderRows();
+              } catch (err) {
+                this.showToast(String(err?.message || err), 'error');
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+        };
+
+        createBtn?.addEventListener('click', async () => {
+          const name = String(nameEl?.value || '').trim();
+          if (!name) return;
+          try {
+            createBtn.disabled = true;
+            const updatedLists = await createTaskList({ boardId: bid, name });
+            applyLists(updatedLists);
+            renderRows();
+            if (nameEl) nameEl.value = '';
+            this.showToast('List created', 'success');
+          } catch (err) {
+            this.showToast(String(err?.message || err), 'error');
+          } finally {
+            createBtn.disabled = false;
+          }
+        });
+
+        nameEl?.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          createBtn?.click?.();
+        });
+
+        // Close with Esc while focused inside the popover.
+        popover?.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            close();
+          }
+        });
+
+        renderRows();
       };
 
       const openNewCardOverlay = async () => {
@@ -11841,6 +12037,32 @@ class ClaudeOrchestrator {
       return data.lists || [];
     };
 
+    const createTaskList = async ({ boardId, name, pos = null } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/boards/${encodeURIComponent(boardId)}/lists`);
+      url.searchParams.set('provider', state.provider);
+      const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, pos })
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || raw || 'Failed to create list');
+      return json.lists || [];
+    };
+
+    const updateTaskList = async ({ boardId, listId, name = null, pos = null } = {}) => {
+      const url = new URL(`${serverUrl}/api/tasks/lists/${encodeURIComponent(listId)}`);
+      url.searchParams.set('provider', state.provider);
+      const res = await fetch(url.toString(), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boardId, name, pos })
+      });
+      const { raw, json } = await parseResponseJson(res);
+      if (!res.ok) throw new Error(json?.error || raw || 'Failed to update list');
+      return json.lists || [];
+    };
+
     const loadBoardMeta = async ({ boardId, refresh = false } = {}) => {
       const bid = String(boardId || '').trim();
       if (!bid || bid === ALL_BOARDS_ID) {
@@ -13363,6 +13585,17 @@ class ClaudeOrchestrator {
         e.stopPropagation();
         openNewCardOverlay().catch((err) => {
           console.error('Failed to open new task overlay:', err);
+          this.showToast(String(err?.message || err), 'error');
+        });
+      });
+    }
+
+    if (manageListsBtn) {
+      manageListsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openListsManagerOverlay().catch((err) => {
+          console.error('Failed to open lists manager:', err);
           this.showToast(String(err?.message || err), 'error');
         });
       });

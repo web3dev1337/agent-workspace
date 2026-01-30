@@ -280,4 +280,33 @@ describe('TrelloTaskProvider', () => {
     expect(String(delItemUrl)).toContain('/checklists/cl1/checkItems/it1');
     expect(delItemOpts.method).toBe('DELETE');
   });
+
+  test('list create/update hits expected Trello endpoints and invalidates list cache', async () => {
+    const provider = new TrelloTaskProvider({ cache: null, logger: { warn: jest.fn() } });
+    provider.getCredentials = () => ({ apiKey: 'k', token: 't', source: 'test' });
+    provider._invalidateCacheKeys = jest.fn();
+
+    requestJson
+      .mockResolvedValueOnce({ id: 'l1', idBoard: 'b1' })
+      .mockResolvedValueOnce({ id: 'l1', pos: 12 });
+
+    await provider.createList({ boardId: 'b1', name: 'New List' });
+    await provider.updateList({ listId: 'l1', boardId: 'b1', pos: 12 });
+
+    expect(requestJson).toHaveBeenCalledTimes(2);
+
+    const [createUrl, createOpts] = requestJson.mock.calls[0];
+    expect(String(createUrl)).toContain('/boards/b1/lists');
+    expect(String(createUrl)).toContain('name=New+List');
+    expect(createOpts.method).toBe('POST');
+
+    const [updateUrl, updateOpts] = requestJson.mock.calls[1];
+    expect(String(updateUrl)).toContain('/lists/l1');
+    expect(String(updateUrl)).toContain('pos=12');
+    expect(updateOpts.method).toBe('PUT');
+
+    expect(provider._invalidateCacheKeys).toHaveBeenCalledTimes(2);
+    expect(provider._invalidateCacheKeys.mock.calls[0][0]).toEqual(['trello:lists:b1:open']);
+    expect(provider._invalidateCacheKeys.mock.calls[1][0]).toEqual(['trello:lists:b1:open']);
+  });
 });
