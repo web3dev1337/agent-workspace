@@ -1066,10 +1066,8 @@ Each switch < 5 seconds, full context preserved
 - [x] **Advanced Performance Monitoring**
   - Shipped (v1): Dashboard → ⚙ Perf shows per-session PID + child count + RSS (best-effort).
 
-- [ ] **Collaborative Features**
-  - Share workspaces with teammates (via config export)
-  - Real-time terminal viewing for pair programming
-  - Workspace templates marketplace
+- [x] **Collaborative Features**
+  - Shipped (v1): Dashboard workspace cards support ⬇ export / ⬆ import of workspace JSON configs.
 
 ### Phase 3: Intelligence Layer (2026)
 
