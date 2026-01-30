@@ -33,6 +33,24 @@ describe('ActivityFeedService', () => {
     nowSpy.mockRestore();
   });
 
+  test('ensureLoaded() loads recent events from existing JSONL file', async () => {
+    const filePath = nextTmpFile('activity.jsonl');
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, [
+      JSON.stringify({ id: 'a', ts: 1, kind: 'k1', data: { n: 1 } }),
+      JSON.stringify({ id: 'b', ts: 2, kind: 'k2', data: { n: 2 } })
+    ].join('\n') + '\n', 'utf8');
+
+    const svc = new ActivityFeedService({ filePath, maxEvents: 10 });
+    expect(svc.list({ limit: 10 })).toHaveLength(0);
+
+    await svc.ensureLoaded();
+    const list = svc.list({ limit: 10 });
+    expect(list).toHaveLength(2);
+    expect(list[0].id).toBe('b');
+    expect(list[1].id).toBe('a');
+  });
+
   test('track() caps in-memory events to maxEvents', () => {
     const svc = new ActivityFeedService({ filePath: nextTmpFile('activity.jsonl'), maxEvents: 2 });
     const nowSpy = jest.spyOn(Date, 'now');
@@ -74,4 +92,3 @@ describe('ActivityFeedService', () => {
     nowSpy.mockRestore();
   });
 });
-
