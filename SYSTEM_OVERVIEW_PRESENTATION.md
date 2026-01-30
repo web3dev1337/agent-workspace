@@ -1071,9 +1071,8 @@ Each switch < 5 seconds, full context preserved
 
 ### Phase 3: Intelligence Layer (2026)
 
-- [ ] **AI Workspace Optimizer**
-  - Machine learning to predict best workspace layouts
-  - Auto-create workspaces based on commit patterns
+- [x] **AI Workspace Optimizer**
+  - Shipped (v1): Dashboard → ✨ Suggestions includes “Create Recent Workspace” (auto-creates a mixed workspace from recent git activity; best-effort).
 
 - [ ] **Smart Task Distribution**
   - AI suggests which terminal for each task
