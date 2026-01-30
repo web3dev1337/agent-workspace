@@ -301,6 +301,18 @@ class ActivityFeedPanel {
     if (kind === 'git.pull') return `Git pull (${data.ok ? 'ok' : 'failed'})`;
     if (kind === 'pr.merge') return `PR merge ${data.ok ? 'ok' : 'failed'} (${data.repo || 'repo'} #${data.prNumber || '?'})`;
     if (kind === 'pr.review') return `PR review ${data.ok ? 'ok' : 'failed'} (${data.repo || 'repo'} #${data.prNumber || '?'})`;
+    if (kind === 'task-record.updated') {
+      const id = data.id || 'record';
+      const ch = data.changes && typeof data.changes === 'object' ? data.changes : {};
+      const tierTo = ch.tier?.to ?? null;
+      const riskTo = ch.risk?.to ?? null;
+      const doneTo = ch.doneAt?.to ?? null;
+      const parts = [];
+      if (tierTo) parts.push(`T${tierTo}`);
+      if (riskTo) parts.push(`risk:${riskTo}`);
+      if (doneTo) parts.push('done');
+      return `Task record updated (${id})${parts.length ? ` • ${parts.join(' • ')}` : ''}`;
+    }
     if (kind.startsWith('tests.')) return `${kind} (${data.ok ? 'ok' : 'running'})`;
     if (kind.startsWith('agent.start')) return `Start agent (${data.agent || 'agent'}) for ${data.sessionId || 'session'}`;
     if (kind.startsWith('session.')) return `${kind} (${data.sessionId || ''})`.trim();
