@@ -14641,6 +14641,44 @@ class ClaudeOrchestrator {
         return unblocked.concat(blocked);
       }
 
+      const riskToScore = (raw) => {
+        const r = String(raw || '').trim().toLowerCase();
+        if (r === 'low') return 1;
+        if (r === 'medium') return 2;
+        if (r === 'high') return 3;
+        if (r === 'critical') return 4;
+        return 0;
+      };
+
+      const parseVerifyMinutes = (t) => {
+        const n = Number(t?.record?.verifyMinutes);
+        if (!Number.isFinite(n) || n < 0) return Number.POSITIVE_INFINITY;
+        return Math.round(n);
+      };
+
+      const overallRiskScore = (t) => {
+        const impact = riskToScore(t?.record?.baseImpactRisk || t?.baseImpactRisk || 'low') || 1;
+        const change = riskToScore(t?.record?.changeRisk || 'low') || 1;
+        const pf = Number(t?.record?.pFailFirstPass);
+        const pFail = Number.isFinite(pf) ? Math.max(0, Math.min(1, pf)) : 0.5;
+        return impact * change * pFail;
+      };
+
+      const reviewSort = (arr) => {
+        return [...arr].sort((a, b) => {
+          const ra = overallRiskScore(a);
+          const rb = overallRiskScore(b);
+          if (rb !== ra) return rb - ra;
+          const va = parseVerifyMinutes(a);
+          const vb = parseVerifyMinutes(b);
+          if (va !== vb) return va - vb;
+          const at = parseUpdatedMs(a);
+          const bt = parseUpdatedMs(b);
+          if (bt !== at) return bt - at;
+          return String(a?.title || a?.id || '').localeCompare(String(b?.title || b?.id || ''));
+        });
+      };
+
       const me = String(this.userSettings?.global?.ui?.tasks?.me?.trelloUsername || localStorage.getItem('orchestrator-claim-name') || 'me').trim() || 'me';
       const byClaim = (arr) => {
         const unclaimed = [];
@@ -14652,7 +14690,7 @@ class ClaudeOrchestrator {
           else if (by === me) mine.push(x);
           else others.push(x);
         }
-        return unclaimed.concat(mine, others);
+        return reviewSort(unclaimed).concat(reviewSort(mine), reviewSort(others));
       };
 
       return byClaim(unblocked).concat(byClaim(blocked));
