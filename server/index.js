@@ -449,9 +449,23 @@ io.on('connection', (socket) => {
     const { spawn } = require('child_process');
     const fs = require('fs');
     const path = require('path');
+    const { resolveBuildProductionContext } = require('./buildProductionService');
     
-    // Construct the path to the build script
-    const scriptPath = `/home/anrokx/HyFire2-work${worktreeNum}/build-production-with-console.sh`;
+    let worktreePath;
+    let scriptPath;
+    try {
+      const ctx = resolveBuildProductionContext({ sessionManager, sessionId, worktreeNum });
+      worktreePath = ctx.worktreePath;
+      scriptPath = ctx.scriptPath;
+    } catch (error) {
+      logger.error('Failed to resolve build production context', { sessionId, worktreeNum, error: error.message });
+      socket.emit('build-failed', {
+        sessionId,
+        worktreeNum,
+        error: error.message
+      });
+      return;
+    }
     
     // Check if script exists
     if (!fs.existsSync(scriptPath)) {
@@ -469,7 +483,7 @@ io.on('connection', (socket) => {
     
     // Run the build script
     const buildProcess = spawn('bash', [scriptPath], {
-      cwd: `/home/anrokx/HyFire2-work${worktreeNum}`
+      cwd: worktreePath
     });
     
     let buildOutput = '';
@@ -497,7 +511,6 @@ io.on('connection', (socket) => {
     buildProcess.on('close', (code) => {
       if (code === 0) {
         // Build succeeded - find the created zip file in the worktree root
-        const worktreePath = `/home/anrokx/HyFire2-work${worktreeNum}`;
         
         // Look for the most recently created .zip file with console pattern
         try {

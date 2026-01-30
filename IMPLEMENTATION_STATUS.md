@@ -336,62 +336,57 @@ socket.on('list-workspaces', () => {
 const scriptPath = `/home/anrokx/HyFire2-work${worktreeNum}/build-production-with-console.sh`;
 ```
 
-**Fix Needed**: Use workspace repository path:
-```javascript
-const workspace = workspaceManager.getActiveWorkspace();
-const worktreeId = workspace.worktrees.namingPattern.replace('{n}', worktreeNum);
-const scriptPath = path.join(workspace.repository.path, worktreeId, 'build-production-with-console.sh');
-```
+**Fix** (shipped): Build production now uses the requesting session’s `cwd` (worktree root) to locate and run `build-production-with-console.sh`, avoiding any hardcoded user paths.
 
 ---
 
 ## 📋 COMPLETE PHASE 2 CHECKLIST
 
 ### Frontend Files to Create
-- [ ] `client/dashboard.js` - Dashboard component with workspace cards
-- [ ] `client/workspace-switcher.js` - Header dropdown switcher
-- [ ] `client/workspace-card.js` - Individual workspace card component (can be in dashboard.js)
+- [x] `client/dashboard.js` - Dashboard component with workspace cards
+- [x] `client/workspace-switcher.js` - Header dropdown switcher
+- [x] `client/workspace-card.js` - Individual workspace card component (can be in dashboard.js)
 
 ### Frontend Files to Modify
-- [ ] `client/app.js`
-  - [ ] Add workspace tracking (`this.currentWorkspace`, etc.)
-  - [ ] Handle `workspace-info` event
-  - [ ] Handle `workspace-changed` event
-  - [ ] Add `showDashboard()` and `hideD dashboard()` methods
-  - [ ] Initialize Dashboard and WorkspaceSwitcher components
-  - [ ] Update `buildSidebar()` to show workspace-specific info
+- [x] `client/app.js`
+  - [x] Add workspace tracking (`this.currentWorkspace`, etc.)
+  - [x] Handle `workspace-info` event
+  - [x] Handle `workspace-changed` event
+  - [x] Add `showDashboard()` and `hideDashboard()` methods
+  - [x] Initialize Dashboard and WorkspaceSwitcher components
+  - [x] Update `buildSidebar()` to show workspace-specific info
 
-- [ ] `client/index.html`
-  - [ ] Add workspace switcher dropdown to header (before settings button)
-  - [ ] Add dashboard container div (hidden by default)
-  - [ ] Add CSS for dashboard grid and workspace cards
+- [x] `client/index.html`
+  - [x] Add workspace switcher dropdown to header (before settings button)
+  - [x] Add dashboard container div (hidden by default)
+  - [x] Add CSS for dashboard grid and workspace cards
 
-- [ ] `client/styles.css`
-  - [ ] Add `.dashboard-container` styles
-  - [ ] Add `.workspace-card` styles with hover effects
-  - [ ] Add `.workspace-switcher` dropdown styles
-  - [ ] Add transition animations for workspace switching
+- [x] `client/styles.css`
+  - [x] Add `.dashboard-container` styles
+  - [x] Add `.workspace-card` styles with hover effects
+  - [x] Add `.workspace-switcher` dropdown styles
+  - [x] Add transition animations for workspace switching
 
 ### Backend Files to Modify
-- [ ] `server/sessionManager.js`
-  - [ ] Fix `initializeSessions()` to use `this.worktrees` array
-  - [ ] Remove old `worktreeBasePath` and `worktreeCount` references
-  - [ ] Update logging to show workspace name
+- [x] `server/sessionManager.js`
+  - [x] Fix `initializeSessions()` to use `this.worktrees` array
+  - [x] Remove old `worktreeBasePath` and `worktreeCount` references
+  - [x] Update logging to show workspace name
 
-- [ ] `server/index.js`
-  - [ ] Verify workspace handlers are properly added
-  - [ ] Fix build production script path to use workspace config
-  - [ ] Test workspace switching flow
+- [x] `server/index.js`
+  - [x] Verify workspace handlers are properly added
+  - [x] Fix build production script path to avoid hardcoded user paths
+  - [x] Test workspace switching flow
 
 ### Testing Checklist
-- [ ] Run migration script successfully
-- [ ] Start orchestrator and verify HyFire 2 workspace loads
-- [ ] Check browser console for `workspace-info` event
-- [ ] Manually emit `list-workspaces` from console, verify response
-- [ ] Create a second test workspace config (e.g., book.json)
-- [ ] Test switching between workspaces via socket event
-- [ ] Verify sessions reinitialize correctly
-- [ ] Check logs for errors
+- [x] Run migration script successfully
+- [x] Start orchestrator and verify HyFire 2 workspace loads
+- [x] Check browser console for `workspace-info` event
+- [x] Manually emit `list-workspaces` from console, verify response
+- [x] Create a second test workspace config (e.g., book.json)
+- [x] Test switching between workspaces via socket event
+- [x] Verify sessions reinitialize correctly
+- [x] Check logs for errors
 
 ---
 

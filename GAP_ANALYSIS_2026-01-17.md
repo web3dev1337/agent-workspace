@@ -269,8 +269,8 @@ Week 10: Phase 4 + Final polish
 1. [ ] **Revoke API key** (5 min) - CRITICAL
 2. [x] **Add .env to .gitignore** (1 min)
 3. [x] **Create .env.example** (5 min)
-4. [ ] **Fix `/home/ab` fallback** in gitHelper.js (5 min)
-5. [ ] **Fix `/tmp/` path** in index.js (5 min)
+4. [x] **Fix `/home/ab` fallback** in gitHelper.js (5 min)
+5. [x] **Fix hardcoded build-production path** in index.js (5 min)
 6. [x] **Create CI workflow file** (30 min)
 
 ---
@@ -284,9 +284,9 @@ Week 10: Phase 4 + Final polish
 
 ### Hardcoded Paths
 - [ ] `server/workspaceManager.js` - Lines 464, 488
-- [ ] `server/gitHelper.js` - Line 32
+- [x] `server/gitHelper.js` - HOME handling no longer breaks git safe.directory (avoids stuck "unknown" branch)
 - [ ] `server/greenfieldService.js` - Lines 25-106
-- [ ] `server/index.js` - Line 59
+- [x] `server/index.js` - build-production now runs from the session's cwd (no hardcoded `/home/anrokx`)
 - [ ] `client/dashboard.js` - Lines 416, 447-448, 487-488, 542-543
 - [ ] `client/quick-links.js` - Line 17
 - [ ] `client/workspace-wizard.js` - Lines 25, 445
