@@ -16009,6 +16009,9 @@ class ClaudeOrchestrator {
       const pFail = record.pFailFirstPass ?? '';
       const verify = record.verifyMinutes ?? '';
       const promptRef = record.promptRef || '';
+      const recordVisibility = String(record.recordVisibility || 'private').trim().toLowerCase() || 'private';
+      const recordRepoRoot = String(record.recordRepoRoot || '').trim();
+      const recordPath = String(record.recordPath || '').trim();
       const doneAt = record.doneAt || '';
       const reviewedAt = record.reviewedAt || '';
       const reviewOutcome = record.reviewOutcome || '';
@@ -16198,6 +16201,19 @@ class ClaudeOrchestrator {
 	          <div class="tasks-detail-meta">Saved locally in <code>~/.orchestrator/prompts</code>.</div>
 	        </div>
 
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Record store</div>
+	          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+	            <span class="tasks-detail-meta">
+	              store: <code>${escapeHtml(recordVisibility || 'private')}</code>
+	              ${(recordVisibility === 'shared' || recordVisibility === 'encrypted') ? `${recordPath ? ` • <code>${escapeHtml(recordPath)}</code>` : ''}` : ''}
+	            </span>
+	            <span style="flex:1"></span>
+	            <button class="btn-secondary" id="queue-record-store" title="Promote this task record into a repo (shared/encrypted)">📦 Store</button>
+	          </div>
+	          <div class="tasks-detail-meta">Promote this task’s tier/risk/dependencies to a repo file for team-visible shared/encrypted use.</div>
+	        </div>
+
 	        ${(hasPR || ticketCardId || ticketCardUrl) ? `
 	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Ticket (Trello)</div>
@@ -16326,6 +16342,7 @@ class ClaudeOrchestrator {
       const pfEl = detailEl.querySelector('#queue-pfail');
       const vEl = detailEl.querySelector('#queue-verify');
       const prEl = detailEl.querySelector('#queue-prompt-ref');
+      const recordStoreBtn = detailEl.querySelector('#queue-record-store');
       const claimMetaEl = detailEl.querySelector('#queue-claim-meta');
       const claimBtn = detailEl.querySelector('#queue-claim');
       const releaseBtn = detailEl.querySelector('#queue-release');
@@ -17133,6 +17150,140 @@ class ClaudeOrchestrator {
 		      openPromptBtn?.addEventListener('click', async () => {
 		        const pid = (prEl?.value || t.id).trim();
 		        await openPromptEditor(pid, { task: t });
+	      });
+
+	      recordStoreBtn?.addEventListener('click', async () => {
+	        const existing = document.getElementById('record-store-editor');
+	        if (existing) existing.remove();
+
+	        const editor = document.createElement('div');
+	        editor.id = 'record-store-editor';
+	        editor.className = 'modal tasks-modal';
+	        editor.classList.add(`tasks-theme-${resolvedTheme}`);
+
+	        const initialStore = String(recordVisibility || 'private').trim().toLowerCase() || 'private';
+	        const initialRepoRoot = recordRepoRoot || String(t?.worktreePath || '').trim() || String(record?.promptRepoRoot || '').trim();
+	        const initialRelPath = recordPath || '';
+
+	        editor.innerHTML = `
+	          <div class="modal-content tasks-content">
+	            <div class="modal-header">
+	              <h2>📦 Record store: ${escapeHtml(t.id)}</h2>
+	              <button class="close-btn tasks-close-btn" aria-label="Close" onclick="this.closest('.modal').remove()">×</button>
+	            </div>
+	            <div class="tasks-body" style="grid-template-columns: 1fr;">
+	              <div class="tasks-detail" style="overflow:auto;">
+	                <div class="tasks-inline-row" style="margin-bottom: 10px; gap: 8px;">
+	                  <label class="tasks-detail-meta" style="display:flex; align-items:center; gap:8px;">
+	                    store:
+	                    <select id="record-store" class="tasks-select tasks-select-inline" style="width: 140px;">
+	                      <option value="private">private</option>
+	                      <option value="shared">shared</option>
+	                      <option value="encrypted">encrypted</option>
+	                    </select>
+	                  </label>
+	                  <span style="flex:1"></span>
+	                  <button class="btn-secondary" id="record-detach" title="Switch back to local/private storage">↩ Detach</button>
+	                  <button class="btn-secondary" id="record-promote" title="Copy current task record into repo storage">⬆ Promote</button>
+	                </div>
+	                <div id="record-store-meta" class="tasks-detail-meta" style="margin-bottom: 10px; opacity:0.85;"></div>
+	                <div id="record-store-repo">
+	                  <div class="tasks-inline-row" style="margin-bottom: 10px;">
+	                    <input id="record-repo-root" class="tasks-input" value="${escapeHtml(initialRepoRoot || '')}" placeholder="/abs/path/to/repo root" />
+	                  </div>
+	                  <div class="tasks-inline-row" style="margin-bottom: 10px;">
+	                    <input id="record-rel-path" class="tasks-input" value="${escapeHtml(initialRelPath || '')}" placeholder="rel path (optional; leave blank for default)" />
+	                  </div>
+	                  <div class="tasks-detail-meta" style="opacity:0.85;">Default paths: <code>.orchestrator/task-records/&lt;id&gt;.json</code> (shared) or <code>.orchestrator/task-records/&lt;id&gt;.enc.json</code> (encrypted).</div>
+	                </div>
+	              </div>
+	            </div>
+	          </div>
+	        `;
+
+	        document.body.appendChild(editor);
+
+	        const storeEl = editor.querySelector('#record-store');
+	        const repoWrapEl = editor.querySelector('#record-store-repo');
+	        const repoRootEl = editor.querySelector('#record-repo-root');
+	        const relPathEl = editor.querySelector('#record-rel-path');
+	        const metaEl = editor.querySelector('#record-store-meta');
+	        const promoteBtn = editor.querySelector('#record-promote');
+	        const detachBtn = editor.querySelector('#record-detach');
+
+	        const storeNeedsRepo = (s) => s === 'shared' || s === 'encrypted';
+	        const setMeta = (html) => { if (metaEl) metaEl.innerHTML = html || ''; };
+	        const updateUI = () => {
+	          const store = String(storeEl?.value || 'private').trim().toLowerCase();
+	          if (storeEl) storeEl.value = store;
+	          const needs = storeNeedsRepo(store);
+	          if (repoWrapEl) repoWrapEl.style.display = needs ? '' : 'none';
+	          if (promoteBtn) promoteBtn.disabled = !needs;
+	          const rr = String(repoRootEl?.value || '').trim();
+	          const rp = String(relPathEl?.value || '').trim();
+	          if (!needs) {
+	            setMeta('store: <code>private</code>');
+	          } else {
+	            const info = [
+	              `store: <code>${escapeHtml(store)}</code>`,
+	              rr ? `repo: <code>${escapeHtml(rr)}</code>` : '<span style="color: var(--accent-danger);">repo root required</span>',
+	              rp ? `path: <code>${escapeHtml(rp)}</code>` : 'path: <span style="opacity:0.85;">(default)</span>'
+	            ].join(' • ');
+	            setMeta(info);
+	          }
+	        };
+
+	        if (storeEl) storeEl.value = initialStore;
+	        updateUI();
+	        storeEl?.addEventListener('change', updateUI);
+	        repoRootEl?.addEventListener('input', updateUI);
+	        relPathEl?.addEventListener('input', updateUI);
+
+	        detachBtn?.addEventListener('click', async () => {
+	          try {
+	            detachBtn.disabled = true;
+	            const rec = await upsertRecord(t.id, { recordVisibility: 'private', recordRepoRoot: null, recordPath: null });
+	            updateTaskRecordInState(t.id, rec);
+	            renderList();
+	            renderDetail(getTaskById(t.id));
+	            this.showToast('Record detached (private)', 'success');
+	            editor.remove();
+	          } catch (e) {
+	            this.showToast(String(e?.message || e), 'error');
+	          } finally {
+	            detachBtn.disabled = false;
+	          }
+	        });
+
+	        promoteBtn?.addEventListener('click', async () => {
+	          try {
+	            const store = String(storeEl?.value || '').trim().toLowerCase();
+	            if (!storeNeedsRepo(store)) return;
+	            const repoRoot = String(repoRootEl?.value || '').trim();
+	            const relPath = String(relPathEl?.value || '').trim();
+	            if (!repoRoot) throw new Error('Repo root is required for shared/encrypted records');
+
+	            promoteBtn.disabled = true;
+	            // Ensure record exists so promote has something to copy.
+	            await upsertRecord(t.id, {});
+	            const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/promote`, {
+	              method: 'POST',
+	              headers: { 'Content-Type': 'application/json' },
+	              body: JSON.stringify({ visibility: store, repoRoot, relPath: relPath || undefined })
+	            });
+	            const data = await res.json().catch(() => ({}));
+	            if (!res.ok) throw new Error(data?.error || 'Failed to promote task record');
+	            updateTaskRecordInState(t.id, data.record || {});
+	            renderList();
+	            renderDetail(getTaskById(t.id));
+	            this.showToast(`Record promoted (${store})`, 'success');
+	            editor.remove();
+	          } catch (e) {
+	            this.showToast(String(e?.message || e), 'error');
+	          } finally {
+	            promoteBtn.disabled = false;
+	          }
+	        });
 	      });
 
 	      openDiffBtn?.addEventListener('click', async () => {

@@ -2897,6 +2897,32 @@ app.put('/api/process/task-records/:id', express.json(), async (req, res) => {
   }
 });
 
+app.post('/api/process/task-records/:id/promote', express.json(), async (req, res) => {
+  try {
+    const id = req.params.id;
+    const visibility = String(req.body?.visibility || 'shared').trim().toLowerCase();
+    const repoRoot = String(req.body?.repoRoot || '').trim();
+    const relPath = req.body?.relPath ? String(req.body.relPath).trim() : '';
+    if (!repoRoot) return res.status(400).json({ error: 'repoRoot is required' });
+    if (!['shared', 'encrypted'].includes(visibility)) return res.status(400).json({ error: 'visibility must be shared|encrypted' });
+
+    const record = await taskRecordService.promoteToRepo({ id, repoRoot, relPath: relPath || undefined, visibility });
+    if (!record) return res.status(404).json({ error: 'Not found' });
+    res.json({
+      id,
+      record,
+      visibility,
+      repoRoot,
+      relPath: record?.recordPath || relPath || ''
+    });
+  } catch (error) {
+    const msg = error.message || 'Failed to promote task record';
+    const status = msg.includes('require') || msg.includes('must') || msg.includes('repoRoot') ? 400 : 500;
+    logger.error('Failed to promote task record', { error: error.message, stack: error.stack });
+    res.status(status).json({ error: msg });
+  }
+});
+
 app.delete('/api/process/task-records/:id', async (req, res) => {
   try {
     const id = req.params.id;
