@@ -123,6 +123,7 @@ class Dashboard {
 		                  <button class="dashboard-topbar-btn" id="dashboard-open-performance" title="Per-terminal resource usage">⚙ Perf</button>
                       <button class="dashboard-topbar-btn" id="dashboard-open-polecats" title="Manage sessions (restart/kill/logs)">🐾 Polecats</button>
                       <button class="dashboard-topbar-btn" id="dashboard-open-hooks" title="Hook browser (automations/webhooks)">🪝 Hooks</button>
+                      <button class="dashboard-topbar-btn" id="dashboard-open-deacon" title="Deacon monitor (health dashboard)">🛡 Deacon</button>
 		                  <button class="dashboard-topbar-btn" id="dashboard-open-tests" title="Run tests across worktrees">🧪 Tests</button>
 		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
 		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
@@ -223,6 +224,10 @@ class Dashboard {
         document.getElementById('dashboard-open-hooks')?.addEventListener('click', (e) => {
           e.preventDefault();
           this.showHooksOverlay().catch(() => {});
+        });
+        document.getElementById('dashboard-open-deacon')?.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.showDeaconOverlay().catch(() => {});
         });
         document.getElementById('dashboard-open-polecats-card')?.addEventListener('click', (e) => {
           e.preventDefault();
@@ -1428,6 +1433,177 @@ class Dashboard {
           if (out) out.textContent = `Failed: ${String(err?.message || err)}`;
         }
       });
+    }
+
+    async showDeaconOverlay() {
+      const existing = document.getElementById('dashboard-deacon-overlay');
+      if (existing) {
+        existing.classList.remove('hidden');
+        return;
+      }
+
+      const overlay = document.createElement('div');
+      overlay.id = 'dashboard-deacon-overlay';
+      overlay.className = 'dashboard-telemetry-overlay';
+      overlay.innerHTML = `
+        <div class="dashboard-telemetry-panel" role="dialog" aria-label="Deacon monitor">
+          <div class="dashboard-telemetry-header">
+            <div class="dashboard-telemetry-title">Deacon — Health</div>
+            <button class="dashboard-topbar-btn" id="dashboard-deacon-close" title="Close (Esc)">✕</button>
+          </div>
+          <div class="dashboard-telemetry-controls">
+            <div class="dashboard-telemetry-actions">
+              <button class="btn-secondary" type="button" id="dashboard-deacon-refresh">Refresh</button>
+            </div>
+          </div>
+          <div id="dashboard-deacon-body" class="dashboard-telemetry-body">Loading…</div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      const close = () => this.hideDeaconOverlay();
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+      });
+      overlay.querySelector('#dashboard-deacon-close')?.addEventListener('click', close);
+      overlay.querySelector('#dashboard-deacon-refresh')?.addEventListener('click', () => {
+        this.loadDeaconDetails().catch(() => {});
+      });
+
+      const onKey = (e) => {
+        if (e.key !== 'Escape') return;
+        const el = document.getElementById('dashboard-deacon-overlay');
+        if (!el || el.classList.contains('hidden')) return;
+        close();
+      };
+      overlay._escHandler = onKey;
+      document.addEventListener('keydown', onKey);
+
+      await this.loadDeaconDetails();
+    }
+
+    hideDeaconOverlay() {
+      const overlay = document.getElementById('dashboard-deacon-overlay');
+      if (!overlay) return;
+      overlay.classList.add('hidden');
+      const handler = overlay._escHandler;
+      if (handler) {
+        document.removeEventListener('keydown', handler);
+        overlay._escHandler = null;
+      }
+      overlay.remove();
+    }
+
+    async loadDeaconDetails() {
+      const bodyEl = document.getElementById('dashboard-deacon-body');
+      if (!bodyEl) return;
+      bodyEl.textContent = 'Loading…';
+
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      const check = async (path) => {
+        const started = performance.now();
+        try {
+          const res = await fetch(path);
+          const ms = Math.round(performance.now() - started);
+          const ok = !!res.ok;
+          return { path, ok, ms, status: res.status };
+        } catch (err) {
+          const ms = Math.round(performance.now() - started);
+          return { path, ok: false, ms, error: String(err?.message || err) };
+        }
+      };
+
+      const endpoints = [
+        '/api/user-settings',
+        '/api/workspaces',
+        '/api/process/status',
+        '/api/process/performance',
+        '/api/activity?limit=1'
+      ];
+
+      const results = await Promise.all(endpoints.map(check));
+
+      let perf = null;
+      try {
+        const res = await fetch('/api/process/performance');
+        perf = res && res.ok ? await res.json().catch(() => null) : null;
+      } catch {
+        perf = null;
+      }
+
+      let activity = null;
+      try {
+        const res = await fetch('/api/activity?limit=200');
+        activity = res && res.ok ? await res.json().catch(() => null) : null;
+      } catch {
+        activity = null;
+      }
+
+      const events = Array.isArray(activity?.events) ? activity.events : [];
+      const isErrorEvent = (ev) => {
+        const kind = String(ev?.kind || '');
+        const data = ev?.data && typeof ev.data === 'object' ? ev.data : {};
+        if (data.ok === false) return true;
+        if (kind.includes('failed')) return true;
+        if (kind.includes('.error')) return true;
+        if (kind.endsWith('.failed')) return true;
+        if (kind.includes('close.failed')) return true;
+        return false;
+      };
+      const errors = events.filter(isErrorEvent).slice(0, 20);
+
+      const fmtBytes = (b) => {
+        const n = Number(b);
+        if (!Number.isFinite(n) || n < 0) return '—';
+        const mb = n / (1024 * 1024);
+        if (mb < 1024) return `${mb.toFixed(1)} MB`;
+        return `${(mb / 1024).toFixed(2)} GB`;
+      };
+
+      const node = perf?.node || {};
+      const uptime = Number(node?.uptimeSeconds || 0);
+      const rss = fmtBytes(node?.rssBytes);
+
+      const rows = results.map((r) => {
+        const cls = r.ok ? 'process-chip ok' : 'process-chip danger';
+        const statusText = r.ok ? `HTTP ${r.status}` : (r.error ? `ERR ${r.error}` : 'ERR');
+        return `
+          <tr>
+            <td class="mono">${escapeHtml(r.path)}</td>
+            <td><span class="${cls}">${r.ok ? 'ok' : 'fail'}</span></td>
+            <td class="mono">${escapeHtml(String(r.ms))}ms</td>
+            <td class="mono" style="opacity:0.85;">${escapeHtml(statusText)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const errorRows = errors.map((e) => {
+        const t = escapeHtml(String(e?.time || e?.ts || ''));
+        const kind = escapeHtml(String(e?.kind || ''));
+        const data = escapeHtml(JSON.stringify(e?.data || {}));
+        return `<div style="margin:6px 0;"><span class="mono" style="opacity:0.85;">${t}</span> • <code>${kind}</code><div class="mono" style="opacity:0.8; margin-top:4px;">${data}</div></div>`;
+      }).join('');
+
+      bodyEl.innerHTML = `
+        <div class="dashboard-telemetry-muted">Node RSS: <code>${escapeHtml(rss)}</code> • Uptime: <code>${escapeHtml(String(uptime))}s</code></div>
+        <table class="worktree-inspector-table" style="margin-top:10px;">
+          <thead>
+            <tr><th>Endpoint</th><th>Status</th><th>Latency</th><th>Detail</th></tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+        <div style="margin-top:14px;">
+          <div style="font-weight:600; margin-bottom:6px;">Recent errors (Activity)</div>
+          ${errorRows || '<div style="opacity:0.8;">No recent error events.</div>'}
+        </div>
+      `;
     }
 
     hidePerformanceOverlay() {
