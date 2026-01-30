@@ -16072,11 +16072,12 @@ class ClaudeOrchestrator {
       const conflicts = conflictCount > 0 ? `⚠ conflicts:${conflictCount}` : '';
       const reviewed = t?.record?.reviewedAt ? 'reviewed' : '';
       const outcome = t?.record?.reviewOutcome ? `review:${t.record.reviewOutcome}` : '';
+      const assigned = t?.record?.assignedTo ? `assigned:${t.record.assignedTo}` : '';
       const claim = t?.record?.claimedBy ? `claimed:${t.record.claimedBy}` : '';
       const snoozedUntil = getSnoozeUntilMs(t?.id);
       const snoozed = state.triageMode && snoozedUntil && Date.now() < snoozedUntil ? 'snoozed' : '';
       const meta = [tier, risk].filter(Boolean).join(' • ');
-      const meta2 = [depTotal, depBlocked, conflicts, claim, reviewed, outcome, snoozed].filter(Boolean).join(' • ');
+      const meta2 = [depTotal, depBlocked, conflicts, assigned, claim, reviewed, outcome, snoozed].filter(Boolean).join(' • ');
       const selected = state.selectedId === t.id;
 
       const tags = [];
@@ -17066,6 +17067,8 @@ class ClaudeOrchestrator {
       const promptChars = record.promptChars ?? '';
       const claimedBy = record.claimedBy || '';
       const claimedAt = record.claimedAt || '';
+      const assignedTo = record.assignedTo || '';
+      const assignedAt = record.assignedAt || '';
       const ticketProvider = record.ticketProvider || '';
       const ticketCardId = record.ticketCardId || '';
       const ticketCardUrl = record.ticketCardUrl || '';
@@ -17118,6 +17121,18 @@ class ClaudeOrchestrator {
       };
       const nextAutoSnoozeMs = computeBackoffMs(snoozeCount + 1);
       const nextAutoSnoozeLabel = formatBackoff(nextAutoSnoozeMs);
+
+      const identitySaved = Array.isArray(this.userSettings?.global?.ui?.identity?.saved)
+        ? this.userSettings.global.ui.identity.saved
+        : [];
+      const identityOptions = Array.from(new Set([
+        ...identitySaved.map((x) => String(x || '').trim()),
+        this.getIdentityClaimName()
+      ].filter(Boolean)));
+      identityOptions.sort((a, b) => a.localeCompare(b));
+      const identityOptionsHtml = ['<option value="">(unassigned)</option>']
+        .concat(identityOptions.map((v) => `<option value="${escapeHtml(v)}" ${String(assignedTo || '') === String(v) ? 'selected' : ''}>${escapeHtml(v)}</option>`))
+        .join('');
 
 	      detailEl.innerHTML = `
 	        <div class="tasks-detail-header">
@@ -17235,6 +17250,21 @@ class ClaudeOrchestrator {
 	            <button class="btn-secondary" id="queue-claim" ${claimedBy ? 'disabled' : ''} title="Claim this item for review">🔒 Claim</button>
 	            <button class="btn-secondary" id="queue-release" ${claimedBy ? '' : 'disabled'} title="Release claim">🔓 Release</button>
 	          </div>
+	        </div>
+
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Assign</div>
+	          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+	            <span class="tasks-detail-meta" id="queue-assigned-meta">
+	              ${assignedTo ? `assignedTo: <code>${escapeHtml(assignedTo)}</code>${assignedAt ? ` • <span>${escapeHtml(assignedAt)}</span>` : ''}` : 'unassigned'}
+	            </span>
+	            <span style="flex:1"></span>
+	            <select id="queue-assign" class="tasks-select tasks-select-inline" style="width:min(220px, 45vw);">
+	              ${identityOptionsHtml}
+	            </select>
+	            <button class="btn-secondary" id="queue-unassign" ${assignedTo ? '' : 'disabled'} title="Clear assignment">✕</button>
+	          </div>
+	          <div class="tasks-detail-meta">Uses Settings → Identity saved list.</div>
 	        </div>
 
 	        <div class="tasks-detail-block">
@@ -17391,6 +17421,9 @@ class ClaudeOrchestrator {
       const claimMetaEl = detailEl.querySelector('#queue-claim-meta');
       const claimBtn = detailEl.querySelector('#queue-claim');
       const releaseBtn = detailEl.querySelector('#queue-release');
+      const assignedMetaEl = detailEl.querySelector('#queue-assigned-meta');
+      const assignEl = detailEl.querySelector('#queue-assign');
+      const unassignBtn = detailEl.querySelector('#queue-unassign');
       const ticketEl = detailEl.querySelector('#queue-ticket');
       const ticketOpenBtn = detailEl.querySelector('#queue-ticket-open');
       const doneEl = detailEl.querySelector('#queue-done');
@@ -17462,6 +17495,20 @@ class ClaudeOrchestrator {
       };
 
 	      applyClaimUI(record);
+
+      const applyAssignUI = (rec) => {
+        const by = String(rec?.assignedTo || '').trim();
+        const at = String(rec?.assignedAt || '').trim();
+        if (assignedMetaEl) {
+          assignedMetaEl.innerHTML = by
+            ? `assignedTo: <code>${escapeHtml(by)}</code>${at ? ` • <span>${escapeHtml(at)}</span>` : ''}`
+            : 'unassigned';
+        }
+        if (unassignBtn) unassignBtn.disabled = !by;
+        if (assignEl) assignEl.value = by || '';
+      };
+
+      applyAssignUI(record);
 
       const conflictTypeLabel = (type) => {
         const t2 = String(type || '').trim().toLowerCase();
@@ -18023,6 +18070,33 @@ class ClaudeOrchestrator {
         } finally {
           if (releaseBtn) releaseBtn.disabled = !getTaskById(t.id)?.record?.claimedBy;
         }
+      });
+
+      const saveAssignment = async (who) => {
+        try {
+          if (assignEl) assignEl.disabled = true;
+          if (unassignBtn) unassignBtn.disabled = true;
+          const patch = who ? { assignedTo: who } : { assignedTo: null };
+          const rec = await upsertRecord(t.id, patch);
+          updateTaskRecordInState(t.id, rec);
+          applyAssignUI(rec);
+          renderList();
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          if (assignEl) assignEl.disabled = false;
+          if (unassignBtn) unassignBtn.disabled = !getTaskById(t.id)?.record?.assignedTo;
+        }
+      };
+
+      assignEl?.addEventListener('change', async () => {
+        const who = String(assignEl.value || '').trim();
+        await saveAssignment(who);
+      });
+
+      unassignBtn?.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await saveAssignment('');
       });
 
       const saveNotes = async () => {
