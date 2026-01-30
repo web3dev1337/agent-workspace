@@ -68,8 +68,11 @@ class GitHelper {
         timeout: GIT_COMMAND_TIMEOUT_MS,
         env: {
           ...process.env,
-          GIT_CONFIG_NOSYSTEM: '1', // Ignore system git config for security
-          HOME: worktreePath // Limit git config search
+          // Ignore system git config for security, but do not override HOME:
+          // overriding HOME prevents reading user-level git config (e.g. safe.directory),
+          // which can cause branch detection to fail and leave UI stuck on "unknown".
+          GIT_CONFIG_NOSYSTEM: '1',
+          HOME: process.env.HOME || os.homedir()
         }
       });
       
@@ -223,7 +226,7 @@ class GitHelper {
         env: {
           ...process.env,
           GIT_CONFIG_NOSYSTEM: '1',
-          HOME: worktreePath
+          HOME: process.env.HOME || os.homedir()
         }
       });
       
