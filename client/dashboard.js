@@ -122,6 +122,7 @@ class Dashboard {
 		                  <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
 		                  <button class="dashboard-topbar-btn" id="dashboard-open-performance" title="Per-terminal resource usage">⚙ Perf</button>
                       <button class="dashboard-topbar-btn" id="dashboard-open-polecats" title="Manage sessions (restart/kill/logs)">🐾 Polecats</button>
+                      <button class="dashboard-topbar-btn" id="dashboard-open-hooks" title="Hook browser (automations/webhooks)">🪝 Hooks</button>
 		                  <button class="dashboard-topbar-btn" id="dashboard-open-tests" title="Run tests across worktrees">🧪 Tests</button>
 		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
 		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
@@ -218,6 +219,10 @@ class Dashboard {
         document.getElementById('dashboard-open-polecats')?.addEventListener('click', (e) => {
           e.preventDefault();
           this.showPolecatOverlay().catch(() => {});
+        });
+        document.getElementById('dashboard-open-hooks')?.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.showHooksOverlay().catch(() => {});
         });
         document.getElementById('dashboard-open-polecats-card')?.addEventListener('click', (e) => {
           e.preventDefault();
@@ -1256,6 +1261,172 @@ class Dashboard {
           } catch {}
           this.orchestrator?.showQueuePanel?.().catch?.(() => {});
         });
+      });
+    }
+
+    async showHooksOverlay() {
+      const existing = document.getElementById('dashboard-hooks-overlay');
+      if (existing) {
+        existing.classList.remove('hidden');
+        return;
+      }
+
+      const overlay = document.createElement('div');
+      overlay.id = 'dashboard-hooks-overlay';
+      overlay.className = 'dashboard-telemetry-overlay';
+      overlay.innerHTML = `
+        <div class="dashboard-telemetry-panel" role="dialog" aria-label="Hook browser">
+          <div class="dashboard-telemetry-header">
+            <div class="dashboard-telemetry-title">Hooks — Automations</div>
+            <button class="dashboard-topbar-btn" id="dashboard-hooks-close" title="Close (Esc)">✕</button>
+          </div>
+          <div class="dashboard-telemetry-controls">
+            <div class="dashboard-telemetry-actions">
+              <button class="btn-secondary" type="button" id="dashboard-hooks-refresh">Refresh</button>
+            </div>
+          </div>
+          <div id="dashboard-hooks-body" class="dashboard-telemetry-body">Loading…</div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      const close = () => this.hideHooksOverlay();
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+      });
+      overlay.querySelector('#dashboard-hooks-close')?.addEventListener('click', close);
+      overlay.querySelector('#dashboard-hooks-refresh')?.addEventListener('click', () => {
+        this.loadHooksDetails().catch(() => {});
+      });
+
+      const onKey = (e) => {
+        if (e.key !== 'Escape') return;
+        const el = document.getElementById('dashboard-hooks-overlay');
+        if (!el || el.classList.contains('hidden')) return;
+        close();
+      };
+      overlay._escHandler = onKey;
+      document.addEventListener('keydown', onKey);
+
+      await this.loadHooksDetails();
+    }
+
+    hideHooksOverlay() {
+      const overlay = document.getElementById('dashboard-hooks-overlay');
+      if (!overlay) return;
+      overlay.classList.add('hidden');
+      const handler = overlay._escHandler;
+      if (handler) {
+        document.removeEventListener('keydown', handler);
+        overlay._escHandler = null;
+      }
+      overlay.remove();
+    }
+
+    async loadHooksDetails() {
+      const bodyEl = document.getElementById('dashboard-hooks-body');
+      if (!bodyEl) return;
+      bodyEl.textContent = 'Loading…';
+
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      let automations = null;
+      try {
+        const res = await fetch('/api/process/automations');
+        automations = res && res.ok ? await res.json().catch(() => null) : null;
+      } catch {
+        automations = null;
+      }
+
+      const trelloCfg = this.orchestrator?.userSettings?.global?.ui?.tasks?.automations?.trello?.onPrMerged || {};
+      const enabled = trelloCfg.enabled !== false;
+      const pollEnabled = trelloCfg.pollEnabled !== false;
+      const webhookEnabled = !!trelloCfg.webhookEnabled;
+      const comment = trelloCfg.comment !== false;
+      const moveToDoneList = trelloCfg.moveToDoneList !== false;
+      const closeIfNoDoneList = !!trelloCfg.closeIfNoDoneList;
+      const pollMs = Number(trelloCfg.pollMs ?? 60000);
+
+      const prMergeCfg = automations?.prMerge || {};
+      const lastRunAt = automations?.lastRunAt || null;
+
+      bodyEl.innerHTML = `
+        <div style="display:grid; gap:14px;">
+          <div>
+            <div style="font-weight:600; margin-bottom:6px;">Trello hook (on PR merged)</div>
+            <div class="tasks-detail-meta" style="margin-bottom:10px; opacity:0.9;">
+              Stored in user settings: <code>ui.tasks.automations.trello.onPrMerged</code>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:10px;">
+              <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="hooks-trello-enabled" ${enabled ? 'checked' : ''}/> enabled</label>
+              <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="hooks-trello-poll" ${pollEnabled ? 'checked' : ''}/> poll</label>
+              <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="hooks-trello-webhook" ${webhookEnabled ? 'checked' : ''}/> webhook</label>
+              <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="hooks-trello-comment" ${comment ? 'checked' : ''}/> comment</label>
+              <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="hooks-trello-move" ${moveToDoneList ? 'checked' : ''}/> move card</label>
+              <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="hooks-trello-close" ${closeIfNoDoneList ? 'checked' : ''}/> close if no done list</label>
+            </div>
+            <div style="margin-top:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <span class="tasks-detail-meta">pollMs</span>
+              <input id="hooks-trello-pollms" type="number" min="5000" step="1000" value="${escapeHtml(String(Number.isFinite(pollMs) ? pollMs : 60000))}" style="width:140px;" />
+              <button class="btn-secondary" type="button" id="hooks-trello-save">Save</button>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-weight:600; margin-bottom:6px;">PR merge automation</div>
+            <div class="tasks-detail-meta" style="margin-bottom:8px; opacity:0.9;">
+              lastRunAt: ${lastRunAt ? `<code>${escapeHtml(lastRunAt)}</code>` : '—'}
+            </div>
+            <div class="tasks-detail-meta" style="margin-bottom:10px; opacity:0.9;">
+              Config: pollMs <code>${escapeHtml(String(prMergeCfg?.pollMs ?? '—'))}</code> • enabled <code>${escapeHtml(String(prMergeCfg?.enabled ?? '—'))}</code>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn-secondary" type="button" id="hooks-pr-merge-run">▶ Run once</button>
+            </div>
+            <div id="hooks-pr-merge-result" class="tasks-detail-meta" style="margin-top:10px; opacity:0.9;"></div>
+          </div>
+        </div>
+      `;
+
+      const update = async (path, value) => {
+        try {
+          await this.orchestrator?.updateGlobalUserSetting?.(path, value);
+        } catch {}
+      };
+
+      bodyEl.querySelector('#hooks-trello-save')?.addEventListener('click', async () => {
+        const next = {
+          enabled: !!bodyEl.querySelector('#hooks-trello-enabled')?.checked,
+          pollEnabled: !!bodyEl.querySelector('#hooks-trello-poll')?.checked,
+          webhookEnabled: !!bodyEl.querySelector('#hooks-trello-webhook')?.checked,
+          comment: !!bodyEl.querySelector('#hooks-trello-comment')?.checked,
+          moveToDoneList: !!bodyEl.querySelector('#hooks-trello-move')?.checked,
+          closeIfNoDoneList: !!bodyEl.querySelector('#hooks-trello-close')?.checked,
+          pollMs: Number(bodyEl.querySelector('#hooks-trello-pollms')?.value || 60000)
+        };
+        await update('ui.tasks.automations.trello.onPrMerged', next);
+        this.loadHooksDetails().catch(() => {});
+      });
+
+      bodyEl.querySelector('#hooks-pr-merge-run')?.addEventListener('click', async () => {
+        const out = bodyEl.querySelector('#hooks-pr-merge-result');
+        if (out) out.textContent = 'Running…';
+        try {
+          const res = await fetch('/api/process/automations/pr-merge/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ limit: 60 })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || 'Failed');
+          if (out) out.innerHTML = `ok: <code>${escapeHtml(String(!!data.ok))}</code> • processed: <code>${escapeHtml(String(data?.processed ?? 0))}</code> • moved: <code>${escapeHtml(String(data?.moved ?? 0))}</code>`;
+        } catch (err) {
+          if (out) out.textContent = `Failed: ${String(err?.message || err)}`;
+        }
       });
     }
 
