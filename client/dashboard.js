@@ -115,8 +115,8 @@ class Dashboard {
 	                <div class="dashboard-summary-title">Status</div>
 	                <div id="dashboard-status-summary" class="dashboard-summary-body">Loading…</div>
 	              </div>
-	              <div class="dashboard-summary-card">
-	                <div class="dashboard-summary-title">Telemetry</div>
+		              <div class="dashboard-summary-card">
+		                <div class="dashboard-summary-title">Telemetry</div>
 		                <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
 		                <div class="dashboard-summary-actions">
 		                  <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
@@ -127,6 +127,13 @@ class Dashboard {
 		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
 		                </div>
 		              </div>
+                <div class="dashboard-summary-card">
+                  <div class="dashboard-summary-title">Polecats</div>
+                  <div id="dashboard-polecats-summary" class="dashboard-summary-body">Loading…</div>
+                  <div class="dashboard-summary-actions">
+                    <button class="dashboard-topbar-btn" id="dashboard-open-polecats-card" title="Open Polecats panel">🐾 Manage</button>
+                  </div>
+                </div>
 	              <div class="dashboard-summary-card">
 	                <div class="dashboard-summary-title">Projects</div>
 	                <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
@@ -194,6 +201,7 @@ class Dashboard {
 	  async loadDashboardProcessSummary() {
 	    const statusEl = document.getElementById('dashboard-status-summary');
 	    const telemetryEl = document.getElementById('dashboard-telemetry-summary');
+      const polecatsEl = document.getElementById('dashboard-polecats-summary');
 	    const projectsEl = document.getElementById('dashboard-projects-summary');
 	    const adviceEl = document.getElementById('dashboard-advice-summary');
 	    const readinessEl = document.getElementById('dashboard-readiness-summary');
@@ -207,6 +215,10 @@ class Dashboard {
 		      this.showPerformanceOverlay();
 		    });
         document.getElementById('dashboard-open-polecats')?.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.showPolecatOverlay().catch(() => {});
+        });
+        document.getElementById('dashboard-open-polecats-card')?.addEventListener('click', (e) => {
           e.preventDefault();
           this.showPolecatOverlay().catch(() => {});
         });
@@ -270,6 +282,12 @@ class Dashboard {
         this.showDistributionOverlay();
       } catch {}
     });
+
+    try {
+      this.updatePolecatSummary(polecatsEl);
+    } catch {
+      // ignore
+    }
 
     const escapeHtml = (value) => String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -466,6 +484,56 @@ class Dashboard {
 	      await renderAdvice({ force: false });
 	    }
 	  }
+
+    updatePolecatSummary(targetEl = null) {
+      const el = targetEl || document.getElementById('dashboard-polecats-summary');
+      if (!el) return;
+
+      const sessionsMap = this.orchestrator?.sessions;
+      const sessions = sessionsMap && typeof sessionsMap.values === 'function'
+        ? Array.from(sessionsMap.values())
+        : [];
+
+      if (!sessions.length) {
+        el.textContent = 'No sessions.';
+        return;
+      }
+
+      const byType = { claude: 0, codex: 0, server: 0, other: 0 };
+      const byStatus = {};
+
+      for (const s of sessions) {
+        const type = String(s?.type || '').trim().toLowerCase();
+        if (type === 'claude') byType.claude += 1;
+        else if (type === 'codex') byType.codex += 1;
+        else if (type === 'server') byType.server += 1;
+        else byType.other += 1;
+
+        const status = String(s?.status || 'idle').trim().toLowerCase() || 'idle';
+        byStatus[status] = (byStatus[status] || 0) + 1;
+      }
+
+      const total = sessions.length;
+      const busy = byStatus.busy || 0;
+      const waiting = byStatus.waiting || 0;
+      const idle = byStatus.idle || 0;
+      const otherStatuses = Object.entries(byStatus)
+        .filter(([k]) => k !== 'busy' && k !== 'waiting' && k !== 'idle')
+        .sort((a, b) => (b[1] || 0) - (a[1] || 0))
+        .map(([k, v]) => `${k}:${v}`)
+        .slice(0, 4)
+        .join(' • ');
+
+      el.innerHTML = `
+        <div>Total <strong>${total}</strong></div>
+        <div style="opacity:0.85; margin-top:4px;">
+          Types: claude ${byType.claude} • codex ${byType.codex} • server ${byType.server}${byType.other ? ` • other ${byType.other}` : ''}
+        </div>
+        <div style="opacity:0.85; margin-top:4px;">
+          Status: busy ${busy} • waiting ${waiting} • idle ${idle}${otherStatuses ? ` • ${otherStatuses}` : ''}
+        </div>
+      `;
+    }
 
 	  downloadTelemetryCsv(lookbackHours) {
 	    const hours = Number(lookbackHours);
