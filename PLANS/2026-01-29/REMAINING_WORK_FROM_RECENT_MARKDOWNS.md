@@ -38,7 +38,7 @@ Notes:
 ### Dependencies
 
 3) **Shared/encrypted task records store + promote private → shared**
-   - Current: task records are local-only (`~/.orchestrator/task-records.json`).
+   - Current: shipped (task records can be promoted to repo-backed shared/encrypted store; Queue UI includes Record store modal).
    - Source:
      - `PLANS/2026-01-25/ORCHESTRATOR_NATIVE_DEPENDENCIES_PR.md` (Follow-ups)
 
