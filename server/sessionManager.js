@@ -2205,6 +2205,35 @@ class SessionManager extends EventEmitter {
     // Remove from sessions map
     sessionMap.delete(sessionId);
   }
+
+  getSessionById(sessionId) {
+    if (!sessionId) return null;
+    const direct = this.sessions.get(sessionId);
+    if (direct) return direct;
+    for (const map of this.workspaceSessionMaps.values()) {
+      const s = map.get(sessionId);
+      if (s) return s;
+    }
+    return null;
+  }
+
+  closeSession(sessionId, { clearRecovery = false } = {}) {
+    const session = this.getSessionById(sessionId);
+    if (!session) return false;
+
+    const workspaceId = session.workspace || null;
+    this.terminateSession(sessionId);
+
+    if (clearRecovery && workspaceId) {
+      try {
+        sessionRecoveryService.clearSession(workspaceId, sessionId);
+      } catch {
+        // best-effort
+      }
+    }
+
+    return true;
+  }
   
   restartSession(sessionId) {
     const session = this.sessions.get(sessionId);
