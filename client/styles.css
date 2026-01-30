@@ -328,9 +328,9 @@ body {
 }
 
 .worktree-branch.branch-type-other {
-  color: var(--accent-primary);
-  background: rgba(31, 111, 235, 0.14);
-  border-color: rgba(31, 111, 235, 0.4);
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.14);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 /* Agent status dots (waiting/busy/idle) */
@@ -792,9 +792,9 @@ header h1 {
 }
 
 .terminal-branch.branch-type-other {
-  color: var(--accent-primary);
-  background: rgba(31, 111, 235, 0.12);
-  border-color: rgba(31, 111, 235, 0.4);
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+  border-color: #3b82f6;
 }
 
 .terminal-controls {
