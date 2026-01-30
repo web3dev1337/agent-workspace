@@ -241,9 +241,11 @@ class TrelloTaskProvider {
   async getCard({ cardId, refresh = false } = {}) {
     if (!cardId) throw new Error('cardId is required');
     const url = this._buildUrl(`/cards/${encodeURIComponent(cardId)}`, {
-      fields: 'name,desc,url,dateLastActivity,closed,idList,idBoard,labels,due,dueComplete',
+      fields: 'name,desc,url,dateLastActivity,closed,idList,idBoard,labels,due,dueComplete,cover,idAttachmentCover',
       members: 'true',
       member_fields: 'fullName,username,avatarUrl',
+      attachments: 'true',
+      attachment_fields: 'name,url,previews,bytes,date,mimeType,isUpload',
       checklists: 'all',
       customFieldItems: 'true',
       actions: 'commentCard',
