@@ -68,7 +68,7 @@ Notes:
      - `PLANS/2026-01-25/TRELLO_PARITY_PR.md` (Follow-ups)
 
 8) **True within-list drag reorder (pos math), plus swimlanes/WIP limits**
-   - Current: Trello `pos` is supported at the API layer, but there’s no “perfect reorder” UI/logic, swimlanes, or WIP limits.
+   - Current: shipped (board view drag/drop computes Trello pos and supports within-list reorder; swimlanes/WIP limits deferred).
    - Sources:
      - `PLANS/2026-01-24/TRELLO_KANBAN_NEXT_PR.md` (Follow-ups)
      - `PLANS/2026-01-25/TRELLO_TASKS_NEXT_PR.md` (Out of scope)

@@ -12720,7 +12720,7 @@ class ClaudeOrchestrator {
 	                      `;
 
 			                    return `
-			                      <div class="task-card-row task-card-board" tabindex="-1" draggable="true" data-card-id="${c.id}" data-board-id="${escapeHtml(state.boardId)}" data-origin-list-id="${list.id}" data-url="${escapeHtml(c?.url || '')}">
+			                      <div class="task-card-row task-card-board" tabindex="-1" draggable="true" data-card-id="${c.id}" data-card-pos="${escapeHtml(String(c?.pos ?? ''))}" data-board-id="${escapeHtml(state.boardId)}" data-origin-list-id="${list.id}" data-url="${escapeHtml(c?.url || '')}">
 			                        <div class="task-card-top">
 			                          ${renderCompactLabels(labels)}
 			                          <div class="task-card-top-right">
@@ -14683,6 +14683,8 @@ class ClaudeOrchestrator {
     // Drag/drop (board view): inspired by Fizzy's simple DnD controller.
     let dragCardId = null;
     let dragFromListId = null;
+    let dragFromNextCardId = null;
+    let dragFromCardPos = null;
 
     cardsEl.addEventListener('dragstart', (e) => {
       if (state.view !== 'board') return;
@@ -14690,6 +14692,8 @@ class ClaudeOrchestrator {
       if (!row) return;
       dragCardId = row.dataset.cardId || null;
       dragFromListId = row.dataset.originListId || null;
+      dragFromNextCardId = row.nextElementSibling?.dataset?.cardId || null;
+      dragFromCardPos = row.dataset.cardPos || null;
       row.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.dropEffect = 'move';
@@ -14706,6 +14710,8 @@ class ClaudeOrchestrator {
       cardsEl.querySelectorAll('.tasks-column.hover').forEach(col => col.classList.remove('hover'));
       dragCardId = null;
       dragFromListId = null;
+      dragFromNextCardId = null;
+      dragFromCardPos = null;
     });
 
     cardsEl.addEventListener('dragover', (e) => {
@@ -14725,12 +14731,13 @@ class ClaudeOrchestrator {
       e.preventDefault();
 
       const toListId = column.dataset.listId;
-      if (!dragCardId || !toListId || toListId === dragFromListId) return;
+      if (!dragCardId || !toListId) return;
 
       const draggedEl = cardsEl.querySelector(`.task-card-board[data-card-id="${dragCardId}"]`);
       const targetContainer = column.querySelector('[data-dropzone]');
       const fromColumn = dragFromListId ? cardsEl.querySelector(`.tasks-column[data-list-id="${dragFromListId}"]`) : null;
       const fromContainer = fromColumn?.querySelector('[data-dropzone]') || null;
+      const dropOnCard = e.target.closest('.task-card-board');
 
       const updateCount = (col) => {
         if (!col) return;
@@ -14739,22 +14746,78 @@ class ClaudeOrchestrator {
         countEl.textContent = String(col.querySelectorAll('.task-card-board').length);
       };
 
-      // Optimistic DOM move: place at top of target column
+      const getCardPos = (el) => {
+        const raw = String(el?.dataset?.cardPos || '').trim();
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : null;
+      };
+
+      const computeNewPosForElement = (el) => {
+        if (!el || !el.parentElement) return 0;
+        const prev = el.previousElementSibling?.classList?.contains('task-card-board') ? el.previousElementSibling : el.previousElementSibling?.closest?.('.task-card-board');
+        const next = el.nextElementSibling?.classList?.contains('task-card-board') ? el.nextElementSibling : el.nextElementSibling?.closest?.('.task-card-board');
+        const prevPos = getCardPos(prev);
+        const nextPos = getCardPos(next);
+        if (prevPos !== null && nextPos !== null) return (prevPos + nextPos) / 2;
+        if (prevPos !== null) return prevPos + 1;
+        if (nextPos !== null) return nextPos - 1;
+        return 0;
+      };
+
+      const insertDraggedIntoTarget = () => {
+        if (!draggedEl || !targetContainer) return;
+        if (!dropOnCard || dropOnCard === draggedEl) {
+          targetContainer.appendChild(draggedEl);
+          return;
+        }
+        const rect = dropOnCard.getBoundingClientRect();
+        const before = e.clientY < rect.top + rect.height / 2;
+        if (before) {
+          targetContainer.insertBefore(draggedEl, dropOnCard);
+        } else {
+          targetContainer.insertBefore(draggedEl, dropOnCard.nextElementSibling);
+        }
+      };
+
+      // Optimistic DOM move: place relative to hovered card (or append).
       if (draggedEl && targetContainer) {
-        targetContainer.prepend(draggedEl);
+        insertDraggedIntoTarget();
         draggedEl.dataset.originListId = toListId;
+        const newPos = computeNewPosForElement(draggedEl);
+        draggedEl.dataset.cardPos = String(newPos);
       }
       updateCount(column);
       updateCount(fromColumn);
 
       try {
-        await updateCard({ cardId: dragCardId, fields: { idList: toListId, pos: 'top' } });
-        this.showToast('Moved', 'success');
+        const pos = draggedEl ? computeNewPosForElement(draggedEl) : 0;
+        await updateCard({ cardId: dragCardId, fields: { idList: toListId, pos } });
+        this.showToast((toListId === dragFromListId) ? 'Reordered' : 'Moved', 'success');
+
+        // Best-effort: keep cached snapshot order stable for future re-renders.
+        if (lastSnapshot && lastSnapshot.cardsByList) {
+          const nextCardsByList = lastSnapshot.cardsByList;
+          for (const [lid, arr] of Object.entries(nextCardsByList)) {
+            if (!Array.isArray(arr)) continue;
+            const idx = arr.findIndex(x => String(x?.id || '') === dragCardId);
+            if (idx >= 0) {
+              const [found] = arr.splice(idx, 1);
+              const updated = found ? { ...found, idList: toListId, pos } : { id: dragCardId, idList: toListId, pos };
+              if (!nextCardsByList[toListId]) nextCardsByList[toListId] = [];
+              nextCardsByList[toListId].push(updated);
+              nextCardsByList[toListId].sort((a, b) => (Number(a?.pos ?? 0) - Number(b?.pos ?? 0)));
+              break;
+            }
+          }
+        }
       } catch (err) {
         console.error('Move card failed:', err);
         if (draggedEl && fromContainer) {
-          fromContainer.appendChild(draggedEl);
+          const marker = dragFromNextCardId ? fromContainer.querySelector(`.task-card-board[data-card-id="${dragFromNextCardId}"]`) : null;
+          if (marker) fromContainer.insertBefore(draggedEl, marker);
+          else fromContainer.appendChild(draggedEl);
           draggedEl.dataset.originListId = dragFromListId || '';
+          draggedEl.dataset.cardPos = String(dragFromCardPos || draggedEl.dataset.cardPos || '');
         }
         updateCount(column);
         updateCount(fromColumn);
