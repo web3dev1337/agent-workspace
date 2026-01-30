@@ -9892,3 +9892,113 @@ header h1 {
   padding: var(--space-lg);
   color: var(--text-muted);
 }
+
+/* ============================================
+   Activity Feed Styles
+   ============================================ */
+
+.activity-feed-modal .activity-feed-content {
+  max-width: 1200px;
+  width: 94vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md) var(--space-lg);
+}
+
+.activity-empty {
+  padding: var(--space-lg);
+  color: var(--text-muted);
+}
+
+.activity-event {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.activity-meta {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.activity-time {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.activity-kind {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.activity-kind-agent {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: rgba(31, 111, 235, 0.12);
+}
+
+.activity-kind-session {
+  border-color: var(--accent-success);
+  color: var(--accent-success);
+  background: rgba(63, 185, 80, 0.12);
+}
+
+.activity-kind-server {
+  border-color: var(--accent-warning);
+  color: var(--accent-warning);
+  background: rgba(210, 153, 34, 0.12);
+}
+
+.activity-kind-git {
+  border-color: var(--accent-success);
+  color: var(--accent-success);
+  background: rgba(63, 185, 80, 0.12);
+}
+
+.activity-kind-pr {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: rgba(31, 111, 235, 0.12);
+}
+
+.activity-kind-tests {
+  border-color: var(--accent-warning);
+  color: var(--accent-warning);
+  background: rgba(210, 153, 34, 0.12);
+}
+
+.activity-kind-build {
+  border-color: var(--accent-warning);
+  color: var(--accent-warning);
+  background: rgba(210, 153, 34, 0.12);
+}
+
+.activity-summary {
+  margin-top: var(--space-sm);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.activity-data {
+  margin-top: var(--space-sm);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
