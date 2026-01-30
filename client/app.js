@@ -15817,16 +15817,17 @@ class ClaudeOrchestrator {
 	            <div class="pr-subtitle">${escapeHtml(t.title || t.id)}</div>
 	            <div class="tasks-detail-meta">${escapeHtml(t.id)}</div>
 	          </div>
-		          <div class="tasks-detail-actions">
-		            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
-		            ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
-		            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-inspector" title="Worktree files + commits">🗂 Inspect</button>` : ''}
-		            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-console" title="Review Console (docked)">🖥 Console</button>` : ''}
-		            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
-		            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
-		            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-recheck" title="Spawn a reviewer agent to recheck after fixes">🔁 Recheck</button>` : ''}
-		          </div>
-		        </div>
+			          <div class="tasks-detail-actions">
+			            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
+			            ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
+			            ${hasPR ? `<button class="btn-secondary" id="queue-merge-pr" ${t?.isDraft ? 'disabled' : ''} title="${t?.isDraft ? 'Draft PRs cannot be merged' : 'Merge PR'}">✅ Merge</button>` : ''}
+			            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-inspector" title="Worktree files + commits">🗂 Inspect</button>` : ''}
+			            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-console" title="Review Console (docked)">🖥 Console</button>` : ''}
+			            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
+			            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
+			            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-recheck" title="Spawn a reviewer agent to recheck after fixes">🔁 Recheck</button>` : ''}
+			          </div>
+			        </div>
 
         ${state.triageMode ? `
         <div class="tasks-detail-block">
@@ -16031,13 +16032,14 @@ class ClaudeOrchestrator {
       const doneEl = detailEl.querySelector('#queue-done');
       const reviewedEl = detailEl.querySelector('#queue-reviewed');
 		      const outcomeEl = detailEl.querySelector('#queue-review-outcome');
-		      const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
-		      const openDiffBtn = detailEl.querySelector('#queue-open-diff');
-		      const openInspectorBtn = detailEl.querySelector('#queue-open-inspector');
-		      const openConsoleBtn = detailEl.querySelector('#queue-open-console');
-		      const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
-		      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
-		      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
+			      const openPromptBtn = detailEl.querySelector('#queue-open-prompt');
+			      const openDiffBtn = detailEl.querySelector('#queue-open-diff');
+			      const mergePrBtn = detailEl.querySelector('#queue-merge-pr');
+			      const openInspectorBtn = detailEl.querySelector('#queue-open-inspector');
+			      const openConsoleBtn = detailEl.querySelector('#queue-open-console');
+			      const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
+			      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
+			      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
 		      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
 		      const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
       const notesEl = detailEl.querySelector('#queue-notes');
@@ -16583,19 +16585,43 @@ class ClaudeOrchestrator {
 		        await openPromptEditor(pid, { task: t });
 	      });
 
-      openDiffBtn?.addEventListener('click', async () => {
-        try {
-          if (!url) return;
-          await this.launchDiffViewer(url);
-        } catch {
-          window.open(url, '_blank', 'noreferrer');
-        }
-      });
+	      openDiffBtn?.addEventListener('click', async () => {
+	        try {
+	          if (!url) return;
+	          await this.launchDiffViewer(url);
+	        } catch {
+	          window.open(url, '_blank', 'noreferrer');
+	        }
+	      });
 
-      spawnReviewerBtn?.addEventListener('click', async () => {
-        try {
-          spawnReviewerBtn.disabled = true;
-          await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+	      mergePrBtn?.addEventListener('click', async () => {
+	        try {
+	          if (!url) return;
+	          if (t?.isDraft) return;
+	          if (!window.confirm(`Merge PR?\n${url}`)) return;
+
+	          mergePrBtn.disabled = true;
+	          this.showToast('Merging PR…', 'info');
+
+	          const res = await fetch('/api/prs/merge', {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ url, method: 'merge' })
+	          });
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to merge PR'));
+	          this.showToast('PR merged', 'success');
+	          await fetchTasks().catch(() => {});
+	        } catch (err) {
+	          this.showToast(String(err?.message || err), 'error');
+	          if (mergePrBtn) mergePrBtn.disabled = false;
+	        }
+	      });
+
+	      spawnReviewerBtn?.addEventListener('click', async () => {
+	        try {
+	          spawnReviewerBtn.disabled = true;
+	          await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
         } catch (e) {
           this.showToast(String(e?.message || e), 'error');
         } finally {
