@@ -14194,6 +14194,14 @@ class ClaudeOrchestrator {
 				      depGraphDepth: Math.max(1, Math.min(6, Number(localStorage.getItem('queue-dep-graph-depth') || 2) || 2)),
 				      depGraphView: (['tree', 'graph'].includes(String(localStorage.getItem('queue-dep-graph-view') || 'tree'))) ? String(localStorage.getItem('queue-dep-graph-view') || 'tree') : 'tree',
 			      depGraphShowSatisfied: localStorage.getItem('queue-dep-graph-show-satisfied') !== 'false',
+			      conflicts: {
+			        loading: false,
+			        error: '',
+			        byPath: {}, // worktreePath -> { count, entries: [{ type, otherPath, overlapFiles }] }
+			        lastKey: '',
+			        pathsCount: 0,
+			        updatedAtMs: 0
+			      },
 			      reviewActive: false,
 			      reviewTimer: { taskId: null, startedAtMs: null },
 			      reviewerSpawning: new Set(),
@@ -14698,6 +14706,97 @@ class ClaudeOrchestrator {
 
 	    const getTaskById = (id) => (Array.isArray(state.tasks) ? state.tasks : []).find(x => x.id === id) || null;
 
+	    const getQueueWorktreePaths = (tasks) => {
+	      const seen = new Set();
+	      const out = [];
+	      for (const t of (Array.isArray(tasks) ? tasks : [])) {
+	        const p = String(t?.worktreePath || '').trim();
+	        if (!p) continue;
+	        if (seen.has(p)) continue;
+	        seen.add(p);
+	        out.push(p);
+	      }
+	      return out;
+	    };
+
+	    const buildConflictIndex = (conflicts) => {
+	      const byPath = {};
+	      for (const c of (Array.isArray(conflicts) ? conflicts : [])) {
+	        const type = String(c?.type || '').trim() || 'conflict';
+	        const overlapFiles = Array.isArray(c?.overlapFiles) ? c.overlapFiles : [];
+	        const aPath = String(c?.a?.worktreePath || '').trim();
+	        const bPath = String(c?.b?.worktreePath || '').trim();
+
+	        const add = (selfPath, otherPath) => {
+	          if (!selfPath || !otherPath) return;
+	          if (!byPath[selfPath]) byPath[selfPath] = { count: 0, entries: [] };
+	          byPath[selfPath].count += 1;
+	          byPath[selfPath].entries.push({ type, otherPath, overlapFiles });
+	        };
+
+	        if (aPath && bPath) {
+	          add(aPath, bPath);
+	          add(bPath, aPath);
+	        }
+	      }
+
+	      for (const entry of Object.values(byPath)) {
+	        entry.entries.sort((x, y) => {
+	          if (x.type !== y.type) return String(x.type).localeCompare(String(y.type));
+	          return String(x.otherPath).localeCompare(String(y.otherPath));
+	        });
+	      }
+
+	      return byPath;
+	    };
+
+	    const refreshConflicts = async ({ force = false } = {}) => {
+	      const paths = getQueueWorktreePaths(state.tasks);
+	      const key = [...paths].sort().join('\n');
+	      state.conflicts.pathsCount = paths.length;
+
+	      if (paths.length < 2) {
+	        state.conflicts.loading = false;
+	        state.conflicts.error = '';
+	        state.conflicts.byPath = {};
+	        state.conflicts.lastKey = key;
+	        state.conflicts.updatedAtMs = Date.now();
+	        return;
+	      }
+
+	      if (!force) {
+	        if (state.conflicts.loading) return;
+	        if (state.conflicts.lastKey && state.conflicts.lastKey === key) return;
+	      }
+
+	      state.conflicts.loading = true;
+	      state.conflicts.error = '';
+	      state.conflicts.lastKey = key;
+	      state.conflicts.updatedAtMs = Date.now();
+	      renderList();
+	      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+
+	      try {
+	        const res = await fetch(`${serverUrl}/api/worktree-conflicts`, {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify({ paths })
+	        });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok) throw new Error(data?.error || 'Failed to analyze worktree conflicts');
+	        state.conflicts.byPath = buildConflictIndex(data?.conflicts);
+	        state.conflicts.error = '';
+	      } catch (err) {
+	        state.conflicts.byPath = {};
+	        state.conflicts.error = String(err?.message || err);
+	      } finally {
+	        state.conflicts.loading = false;
+	        state.conflicts.updatedAtMs = Date.now();
+	        renderList();
+	        if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+	      }
+	    };
+
 	    const maybeApplyTrelloNeedsFixLabel = async ({ taskId, outcome, notes = '' } = {}) => {
 	      const id = String(taskId || '').trim();
 	      const o = String(outcome || '').trim().toLowerCase();
@@ -14810,13 +14909,16 @@ class ClaudeOrchestrator {
       const risk = t?.record?.changeRisk ? `risk:${t.record.changeRisk}` : '';
       const depTotal = t?.dependencySummary?.total ? `deps:${t.dependencySummary.total}` : '';
       const depBlocked = t?.dependencySummary?.blocked ? `blocked:${t.dependencySummary.blocked}` : '';
+      const wtPathKey = String(t?.worktreePath || '').trim();
+      const conflictCount = wtPathKey ? Number(state.conflicts?.byPath?.[wtPathKey]?.count || 0) : 0;
+      const conflicts = conflictCount > 0 ? `⚠ conflicts:${conflictCount}` : '';
       const reviewed = t?.record?.reviewedAt ? 'reviewed' : '';
       const outcome = t?.record?.reviewOutcome ? `review:${t.record.reviewOutcome}` : '';
       const claim = t?.record?.claimedBy ? `claimed:${t.record.claimedBy}` : '';
       const snoozedUntil = getSnoozeUntilMs(t?.id);
       const snoozed = state.triageMode && snoozedUntil && Date.now() < snoozedUntil ? 'snoozed' : '';
       const meta = [tier, risk].filter(Boolean).join(' • ');
-      const meta2 = [depTotal, depBlocked, claim, reviewed, outcome, snoozed].filter(Boolean).join(' • ');
+      const meta2 = [depTotal, depBlocked, conflicts, claim, reviewed, outcome, snoozed].filter(Boolean).join(' • ');
       const selected = state.selectedId === t.id;
 
       const tags = [];
@@ -14859,6 +14961,7 @@ class ClaudeOrchestrator {
         state.selectedId = ordered[0]?.id || null;
       }
       renderList();
+      refreshConflicts().catch(() => {});
     };
 
     const upsertRecord = async (id, patch) => {
@@ -16053,6 +16156,17 @@ class ClaudeOrchestrator {
 		          <div id="queue-deps" class="tasks-detail-meta">Loading…</div>
 		        </div>
 
+          ${t?.worktreePath ? `
+	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Conflicts</div>
+	          <div class="tasks-inline-row" style="margin-bottom: 10px; gap: 8px;">
+	            <button class="btn-secondary" id="queue-conflicts-refresh" title="Re-scan worktree conflicts">🔄 Refresh</button>
+	            <span class="tasks-detail-meta" style="opacity:0.85;">Detects overlapping uncommitted files / parallel PRs within the same project.</span>
+	          </div>
+	          <div id="queue-conflicts" class="tasks-detail-meta">Loading…</div>
+	        </div>
+          ` : ''}
+
 	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Dependents</div>
 	          <div id="queue-reverse-deps" class="tasks-detail-meta">Loading…</div>
@@ -16090,6 +16204,8 @@ class ClaudeOrchestrator {
       const snooze1hBtn = detailEl.querySelector('#queue-snooze-1h');
       const unsnoozeBtn = detailEl.querySelector('#queue-unsnooze');
       const depsEl = detailEl.querySelector('#queue-deps');
+      const conflictsEl = detailEl.querySelector('#queue-conflicts');
+      const conflictsRefreshBtn = detailEl.querySelector('#queue-conflicts-refresh');
       const reverseDepsEl = detailEl.querySelector('#queue-reverse-deps');
       const depGraphBtn = detailEl.querySelector('#queue-dep-graph');
       const depGraphDepthEl = detailEl.querySelector('#queue-dep-graph-depth');
@@ -16132,6 +16248,91 @@ class ClaudeOrchestrator {
       };
 
 	      applyClaimUI(record);
+
+      const conflictTypeLabel = (type) => {
+        const t2 = String(type || '').trim().toLowerCase();
+        if (!t2) return 'conflict';
+        if (t2 === 'file-overlap') return 'file overlap';
+        if (t2 === 'parallel-prs') return 'parallel PRs';
+        if (t2 === 'parallel-uncommitted') return 'parallel uncommitted';
+        if (t2 === 'same-project') return 'same project';
+        return t2.replace(/_/g, ' ');
+      };
+
+      const findQueueIdByWorktreePath = (worktreePath) => {
+        const p = String(worktreePath || '').trim();
+        if (!p) return '';
+        const hit = (Array.isArray(state.tasks) ? state.tasks : []).find((x) => String(x?.worktreePath || '').trim() === p);
+        return hit?.id ? String(hit.id) : '';
+      };
+
+      const renderConflicts = () => {
+        if (!conflictsEl) return;
+        if (conflictsRefreshBtn) conflictsRefreshBtn.disabled = !!state.conflicts.loading;
+
+        const p = String(t?.worktreePath || '').trim();
+        if (!p) {
+          conflictsEl.textContent = 'No worktree path.';
+          return;
+        }
+
+        if ((state.conflicts?.pathsCount || 0) < 2) {
+          conflictsEl.textContent = 'Need 2+ worktrees in Queue to compare.';
+          return;
+        }
+
+        if (state.conflicts.loading) {
+          conflictsEl.textContent = 'Analyzing…';
+          return;
+        }
+
+        if (state.conflicts.error) {
+          conflictsEl.innerHTML = `<span style="color: var(--accent-danger);">Error:</span> ${escapeHtml(state.conflicts.error)}`;
+          return;
+        }
+
+        const info = state.conflicts?.byPath?.[p];
+        const entries = Array.isArray(info?.entries) ? info.entries : [];
+        if (!entries.length) {
+          conflictsEl.textContent = 'No conflicts detected.';
+          return;
+        }
+
+        conflictsEl.innerHTML = entries.map((entry) => {
+          const type = conflictTypeLabel(entry?.type);
+          const otherPath = String(entry?.otherPath || '').trim();
+          const otherId = findQueueIdByWorktreePath(otherPath);
+          const overlapFiles = Array.isArray(entry?.overlapFiles) ? entry.overlapFiles : [];
+          const overlap = overlapFiles.length ? `overlap:${overlapFiles.length}` : '';
+          const overlapPreview = overlapFiles.slice(0, 6).map((f) => String(f || '').trim()).filter(Boolean).join(' • ');
+          const hover = [otherPath, overlapPreview].filter(Boolean).join(' • ');
+          const title = escapeHtml(otherPath || '(unknown)');
+          const meta = [type, overlap].filter(Boolean).join(' • ');
+          return `
+            <div class="task-card-row" ${otherId ? `data-queue-jump="${escapeHtml(otherId)}"` : ''} style="margin:6px 0;${otherId ? 'cursor:pointer;' : ''}" ${hover ? `title="${escapeHtml(hover)}"` : ''}>
+              <div class="task-card-title">${title}</div>
+              ${meta ? `<div class="task-card-meta" style="opacity:0.8;">${escapeHtml(meta)}</div>` : ''}
+            </div>
+          `;
+        }).join('');
+
+        conflictsEl.querySelectorAll('[data-queue-jump]').forEach((row) => {
+          row.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = row.getAttribute('data-queue-jump');
+            if (!targetId) return;
+            state.selectedId = targetId;
+            renderList();
+            renderDetail(getTaskById(targetId));
+          });
+        });
+      };
+
+      conflictsRefreshBtn?.addEventListener('click', () => {
+        refreshConflicts({ force: true }).catch(() => {});
+      });
+
+      renderConflicts();
 
       const applySnooze = (msFromNow, { incrementCount = false } = {}) => {
           const id = String(t?.id || '').trim();
