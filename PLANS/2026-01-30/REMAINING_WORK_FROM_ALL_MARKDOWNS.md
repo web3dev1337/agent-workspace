@@ -1,4 +1,4 @@
-# Remaining work from markdowns (recent)
+# Remaining work from markdowns (all)
 
 Generated (UTC): 2026-01-30
 
@@ -8,12 +8,12 @@ Detection:
 - Unchecked task list items: `- [ ] ...` (and `* [ ] ...`)
 - `TODO` / `FIXME` tokens (case-insensitive)
 
-Scope: markdown files touched in the last 7 days via git history.
+Scope: all tracked markdown files (`git ls-files "*.md"`).
 
 ## Summary
-- Scanned: 46
+- Scanned: 70
 - With remaining markers: 4
-- With no remaining markers: 42
+- With no remaining markers: 66
 
 ## Files with remaining items
 
@@ -107,16 +107,28 @@ Scope: markdown files touched in the last 7 days via git history.
 - PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md:97 — Pick at most 1 Tier 4 overnight candidate (tests required).
 
 ## Files with no remaining items
+- `ADVANCED_DIFF_VIEWER_PLAN.md`
 - `CLAUDE.md`
+- `CODEBASE_DOCUMENTATION.md`
+- `COMMANDER_CLAUDE.md`
 - `COMPLETE_IMPLEMENTATION.md`
 - `COWORKER_SETUP_GUIDE.md`
 - `COWORKER_SETUP.md`
+- `DIFF_VIEWER_FEATURES.md`
+- `diff-viewer/ADVANCED_FEATURES_IMPLEMENTED.md`
+- `diff-viewer/DEBUG_STEPS.md`
+- `diff-viewer/ENHANCED_DIFF_FEATURES.md`
 - `diff-viewer/README.md`
+- `diff-viewer/START_HERE.md`
 - `DOCUMENTATION.md`
+- `FINAL_PLAN.md`
+- `GIT_STATUS_COMPARISON.md`
 - `IMPLEMENTATION_NOTES.md`
 - `IMPLEMENTATION_PLAN.md`
 - `IMPLEMENTATION_STATUS.md`
 - `IMPROVEMENT_ROADMAP.md`
+- `INSTALL_DIFF_VIEWER.md`
+- `PHASE2_IMPLEMENTATION_PLAN.md`
 - `PLANS/2026-01-20/IMPLEMENTATION_PLAN.md`
 - `PLANS/2026-01-20/REQUESTED_CHANGES.md`
 - `PLANS/2026-01-20/ROLLING_LOG.md`
@@ -142,10 +154,22 @@ Scope: markdown files touched in the last 7 days via git history.
 - `PLANS/2026-01-25/WORKFLOW_MODES_PR.md`
 - `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md`
 - `PLANS/2026-01-30/PHASE3_TASKS.md`
+- `PR_CLEANUP_PLAN.md`
 - `PR_SUMMARY.md`
+- `QUICK_START_SUMMARY.md`
 - `QUICK_START.md`
 - `README.md`
 - `REVISED_WORKSPACE_PLAN.md`
+- `scripts/README.md`
 - `scripts/windows-launchers/README.md`
+- `SETUP_INSTRUCTIONS.md`
+- `skills/public/orchestrator-worktree-conventions/references/layout.md`
+- `skills/public/orchestrator-worktree-conventions/SKILL.md`
 - `SYSTEM_OVERVIEW_PRESENTATION.md`
+- `templates/scaffolds/cli-tool/README.md`
+- `templates/scaffolds/generic/README.md`
+- `templates/scaffolds/hytopia-game/README.md`
+- `templates/scaffolds/website/README.md`
+- `thoughts/ledgers/CONTINUITY_CLAUDE-orchestrator.md`
+- `USAGE_CLARIFICATION.md`
 - `WORKSPACE_ANALYSIS.md`
