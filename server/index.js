@@ -2463,6 +2463,25 @@ app.post('/api/prs/merge', express.json(), async (req, res) => {
   }
 });
 
+app.post('/api/prs/review', express.json(), async (req, res) => {
+  try {
+    const url = String(req.body?.url || '').trim();
+    const action = String(req.body?.action || 'comment').trim().toLowerCase();
+    const body = req.body?.body ?? '';
+
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    if (!['approve', 'request_changes', 'request-changes', 'comment'].includes(action)) {
+      return res.status(400).json({ error: 'action must be approve|request_changes|comment' });
+    }
+
+    const result = await pullRequestService.reviewPullRequestByUrl(url, { action, body });
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to review PR', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to review PR' });
+  }
+});
+
 // ============================================
 // Process tasks API (PR/worktree/session unified list)
 // ============================================

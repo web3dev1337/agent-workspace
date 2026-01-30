@@ -93,6 +93,33 @@ class PullRequestService {
     return { ok: true, url: parsed.url, stdout: String(stdout || '') };
   }
 
+  async reviewPullRequestByUrl(prUrl, { action = 'comment', body = '' } = {}) {
+    const parsed = this.parsePullRequestUrl(prUrl);
+    if (!parsed?.url) throw new Error('Invalid PR URL');
+
+    const normalizedAction = String(action || 'comment').trim().toLowerCase().replace(/-/g, '_');
+    const flag = normalizedAction === 'approve'
+      ? '--approve'
+      : (normalizedAction === 'request_changes' ? '--request-changes' : '--comment');
+
+    const args = ['pr', 'review', parsed.url, flag];
+    const text = String(body || '').trim();
+    if (text) args.push('--body', text);
+
+    const { stdout } = await new Promise((resolve, reject) => {
+      execFile('gh', args, { timeout: 60000 }, (error, stdout, stderr) => {
+        if (error) {
+          logger.error('gh pr review failed', { error: error.message, stderr, url: parsed.url, action: normalizedAction });
+          reject(error);
+          return;
+        }
+        resolve({ stdout, stderr });
+      });
+    });
+
+    return { ok: true, url: parsed.url, action: normalizedAction, stdout: String(stdout || '') };
+  }
+
   normalizeListParams(params = {}) {
     const mode = String(params.mode || 'mine').toLowerCase(); // mine | involved | all
     const state = String(params.state || 'all').toLowerCase(); // all | open | closed | merged
