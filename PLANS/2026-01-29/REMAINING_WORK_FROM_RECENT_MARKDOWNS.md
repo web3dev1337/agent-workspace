@@ -2,7 +2,7 @@
 
 Generated: 2026-01-29  
 Last updated: 2026-01-30  
-Repo state (at generation time): `origin/main` @ `3966629`
+Repo state (at generation time): `origin/main` @ `9cebd5b`
 
 ## Scope + method
 
@@ -31,14 +31,7 @@ Notes:
      - `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md` (Conflict + context distance)
      - `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md` (ticket-level conflicts: “missing future work”)
 
-2) **Explicit “Four Queues” (B/W/Q/X) snapshot surfaced for diagnosis**
-   - Roadmap/spec describes a B/W/Q/X (“Backlog / In-flight / Review / Rework”) snapshot to explain overload states.
-   - Current: telemetry has created/done/outcomes, but there is no explicit B/W/Q/X breakdown surfaced as such.
-   - Sources:
-     - `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md` (PR 0.2)
-     - `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md` (Four Queues model)
-
-3) **Tier 4 “Overnight runner” preset (YOLO + run tests + leave summary/checklist)**
+2) **Tier 4 “Overnight runner” preset (YOLO + run tests + leave summary/checklist)**
    - Current: no “overnight runner” preset/command is present.
    - Source:
      - `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md` (Overnight runner preset)
@@ -101,11 +94,11 @@ Notes:
 ### Files with remaining work
 
 #### `PLANS/2026-01-24/IMPLEMENTATION_ROADMAP.md`
-- Remaining: items #1–#2 above (pairing heuristics + explicit B/W/Q/X snapshot).
+- Remaining: item #1 above (pairing heuristics).
 
 #### `PLANS/2026-01-24/OPTIMAL_ORCHESTRATOR_PROCESS.md`
 - Template daily checklist items are intentionally unchecked (not backlog).
-- Remaining: items #1–#3 above (pairing heuristics, four-queues snapshot surfacing, overnight runner).
+- Remaining: items #1–#2 above (pairing heuristics, overnight runner).
 
 #### `PLANS/2026-01-24/TASKS_TICKETING.md`
 - Remaining: item #11 above (persistent/stale-while-revalidate cache).
