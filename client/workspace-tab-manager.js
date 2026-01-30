@@ -686,7 +686,8 @@ class WorkspaceTabManager {
 
     // Tell backend to close all sessions for this tab
     if (this.orchestrator.socket) {
-      this.orchestrator.socket.emit('close-tab', { tabId: tabId });
+      const sessionIds = Array.from(tab.terminals.keys());
+      this.orchestrator.socket.emit('close-tab', { tabId: tabId, sessionIds });
     }
 
     // Remove DOM elements

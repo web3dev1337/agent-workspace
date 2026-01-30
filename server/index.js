@@ -728,17 +728,38 @@ io.on('connection', (socket) => {
   });
 
   // Handle tab closure - cleanup all sessions for the tab
-  socket.on('close-tab', ({ tabId }) => {
+  socket.on('close-tab', ({ tabId, sessionIds }) => {
     try {
       logger.info('Tab close requested', { tabId });
 
-      // Get all sessions and close those belonging to this tab
-      // Note: In the current implementation, we don't track tabId on the backend
-      // This would require backend changes to associate sessions with tabs
-      // For now, this event is acknowledged but sessions are managed by client
-      logger.info('Tab closed', { tabId });
+      // We don't track tabId on the backend; the client passes the sessions for that tab.
+      const ids = Array.isArray(sessionIds) ? sessionIds.map(String).filter(Boolean) : [];
+      let closed = 0;
+
+      for (const sessionId of ids) {
+        const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
+        if (!ok) continue;
+        closed += 1;
+        io.emit('session-closed', { sessionId });
+      }
+
+      logger.info('Tab closed', { tabId, closed });
     } catch (error) {
       logger.error('Failed to close tab', { tabId, error: error.message });
+    }
+  });
+
+  // Close a specific session (PTY) from the UI (keeps workspace config intact).
+  socket.on('destroy-session', ({ sessionId }) => {
+    try {
+      const id = String(sessionId || '').trim();
+      if (!id) return;
+      const ok = sessionManager.closeSession(id, { clearRecovery: true });
+      if (ok) {
+        io.emit('session-closed', { sessionId: id });
+      }
+    } catch (error) {
+      logger.error('Failed to destroy session', { sessionId, error: error.message });
     }
   });
 
@@ -1354,7 +1375,7 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
         // Close sessions for removed worktree
         const sessionsToClose = sessionManager.getSessionsForWorktree(worktreeId);
         sessionsToClose.forEach(sessionId => {
-          sessionManager.terminateSession(sessionId);
+          sessionManager.closeSession(sessionId, { clearRecovery: true });
           // Emit session-closed event to remove from client UI
           io.emit('session-closed', { sessionId });
         });

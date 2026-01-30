@@ -3588,10 +3588,12 @@ class ClaudeOrchestrator {
 	            ${this.getWorktreeInspectorButtonHTML(sessionId)}
 	            ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
 	            ${this.getGitHubButtons(sessionId)}
+	            ${this.getSessionCloseButtonHTML(sessionId)}
 	            ${this.getWorktreeRemoveButtonHTML(sessionId)}
 	          ` : ''}
 	          ${isServerSession ? `
 	            ${this.getServerControlsHTML(sessionId)}
+	            ${this.getSessionCloseButtonHTML(sessionId)}
 	            ${this.getWorktreeRemoveButtonHTML(sessionId)}
 	          ` : ''}
 	        </div>
@@ -4109,6 +4111,7 @@ class ClaudeOrchestrator {
 	        ${this.getWorktreeInspectorButtonHTML(sessionId)}
 	        ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
 	        ${this.getGitHubButtons(sessionId)}
+	        ${this.getSessionCloseButtonHTML(sessionId)}
 	        ${this.getWorktreeRemoveButtonHTML(sessionId)}
 	      `;
 	      return;
@@ -4117,6 +4120,7 @@ class ClaudeOrchestrator {
 	    // Server terminals: keep the existing launch controls.
 	    controlsDiv.innerHTML = `
 	      ${this.getServerControlsHTML(sessionId)}
+	      ${this.getSessionCloseButtonHTML(sessionId)}
 	      ${this.getWorktreeRemoveButtonHTML(sessionId)}
 	    `;
 	  }
@@ -4137,6 +4141,12 @@ class ClaudeOrchestrator {
 	    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
 	    const removeLabel = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId;
 	    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}')" title="Remove worktree from workspace (keeps files intact)">✕</button>`;
+	  }
+
+	  getSessionCloseButtonHTML(sessionId) {
+	    const sid = String(sessionId || '').trim();
+	    if (!sid) return '';
+	    return `<button class="control-btn danger terminal-session-close-btn" onclick="event.stopPropagation(); window.orchestrator.requestCloseSession('${sid}')" title="Close this terminal (kills processes; keeps workspace config)">×</button>`;
 	  }
   
   updateServerStatus(sessionId, output) {
@@ -7807,6 +7817,26 @@ class ClaudeOrchestrator {
       console.error('Error removing worktree from workspace:', error);
       this.showError('Failed to remove worktree from workspace');
     }
+  }
+
+  /**
+   * Close a specific terminal session (keeps the worktree in the workspace).
+   */
+  async requestCloseSession(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+    const session = this.sessions.get(sid);
+    const label = session?.worktreeId ? `${session.type === 'server' ? 'Server' : 'Agent'} ${session.worktreeId}` : sid;
+
+    const confirmed = await this.showConfirmationDialog(
+      'Close Terminal',
+      `Close "${label}"?\n\nThis will terminate the terminal process and any child processes.\nThe worktree stays in the workspace and can be re-opened later.`,
+      'Close terminal',
+      'Cancel'
+    );
+
+    if (!confirmed) return;
+    this.socket.emit('destroy-session', { sessionId: sid });
   }
 
   /**

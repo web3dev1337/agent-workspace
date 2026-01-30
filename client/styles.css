@@ -861,6 +861,11 @@ header h1 {
   border-color: var(--accent-danger);
 }
 
+.control-btn.terminal-session-close-btn {
+  font-weight: 700;
+  line-height: 1;
+}
+
 /* Environment select styles */
 .control-btn.env-select {
   min-width: auto;
