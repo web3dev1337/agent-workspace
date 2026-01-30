@@ -9157,6 +9157,32 @@ header h1 {
   margin-top: 8px;
 }
 
+.tasks-list-manager-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  margin-bottom: 8px;
+}
+
+.tasks-list-manager-name {
+  min-width: 0;
+  flex: 1;
+  color: var(--text-primary);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.tasks-list-manager-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .tasks-dep-row.done .tasks-dep-text {
   text-decoration: line-through;
 }
