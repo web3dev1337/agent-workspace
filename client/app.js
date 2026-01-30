@@ -16029,7 +16029,8 @@ class ClaudeOrchestrator {
       const reviewManualSteps = String(reviewChecklist?.manual?.steps || '');
 
       const url = t.url || '';
-      const hasPR = t.kind === 'pr' && url;
+	      const hasPR = t.kind === 'pr' && url;
+	      const canOvernight = hasPR && Number(tierValue || 0) === 4;
 
       const parseIso = (v) => {
         const ms = Date.parse(String(v || ''));
@@ -16076,18 +16077,19 @@ class ClaudeOrchestrator {
 	            <div class="pr-subtitle">${escapeHtml(t.title || t.id)}</div>
 	            <div class="tasks-detail-meta">${escapeHtml(t.id)}</div>
 	          </div>
-			          <div class="tasks-detail-actions">
-			            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
-			            ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
-			            ${hasPR ? `<button class="btn-secondary" id="queue-review-approve" title="Approve PR on GitHub">👍 Approve</button>` : ''}
-			            ${hasPR ? `<button class="btn-secondary" id="queue-review-request-changes" title="Request changes on GitHub (uses Notes as the review body)">🛑 Changes</button>` : ''}
-			            ${hasPR ? `<button class="btn-secondary" id="queue-merge-pr" ${t?.isDraft ? 'disabled' : ''} title="${t?.isDraft ? 'Draft PRs cannot be merged' : 'Merge PR'}">✅ Merge</button>` : ''}
-			            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-inspector" title="Worktree files + commits">🗂 Inspect</button>` : ''}
-			            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-console" title="Review Console (docked)">🖥 Console</button>` : ''}
-			            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
-			            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
-			            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-recheck" title="Spawn a reviewer agent to recheck after fixes">🔁 Recheck</button>` : ''}
-			          </div>
+				          <div class="tasks-detail-actions">
+				            ${hasPR ? `<a class="btn-secondary" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">↗ GitHub</a>` : ''}
+				            ${hasPR ? `<button class="btn-secondary" id="queue-open-diff">🔍 Diff</button>` : ''}
+				            ${hasPR ? `<button class="btn-secondary" id="queue-review-approve" title="Approve PR on GitHub">👍 Approve</button>` : ''}
+				            ${hasPR ? `<button class="btn-secondary" id="queue-review-request-changes" title="Request changes on GitHub (uses Notes as the review body)">🛑 Changes</button>` : ''}
+				            ${hasPR ? `<button class="btn-secondary" id="queue-merge-pr" ${t?.isDraft ? 'disabled' : ''} title="${t?.isDraft ? 'Draft PRs cannot be merged' : 'Merge PR'}">✅ Merge</button>` : ''}
+				            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-inspector" title="Worktree files + commits">🗂 Inspect</button>` : ''}
+				            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-console" title="Review Console (docked)">🖥 Console</button>` : ''}
+				            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-overnight" ${canOvernight ? '' : 'disabled'} title="${canOvernight ? 'Spawn Tier 4 overnight runner (runs tests + leaves summary)' : 'Set Tier=4 to enable overnight runner'}">🌙 Overnight</button>` : ''}
+				            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
+				            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
+				            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-recheck" title="Spawn a reviewer agent to recheck after fixes">🔁 Recheck</button>` : ''}
+				          </div>
 			        </div>
 
         ${state.triageMode ? `
@@ -16330,10 +16332,11 @@ class ClaudeOrchestrator {
 			      const requestChangesBtn = detailEl.querySelector('#queue-review-request-changes');
 			      const mergePrBtn = detailEl.querySelector('#queue-merge-pr');
 			      const openInspectorBtn = detailEl.querySelector('#queue-open-inspector');
-			      const openConsoleBtn = detailEl.querySelector('#queue-open-console');
-			      const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
-			      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
-			      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
+				      const openConsoleBtn = detailEl.querySelector('#queue-open-console');
+				      const spawnOvernightBtn = detailEl.querySelector('#queue-spawn-overnight');
+				      const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
+				      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
+				      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
 		      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
 		      const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
       const notesEl = detailEl.querySelector('#queue-notes');
@@ -17109,10 +17112,30 @@ class ClaudeOrchestrator {
 	        }
 	      });
 
-	      spawnReviewerBtn?.addEventListener('click', async () => {
-	        try {
-	          spawnReviewerBtn.disabled = true;
-	          await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+		      spawnOvernightBtn?.addEventListener('click', async () => {
+		        try {
+		          spawnOvernightBtn.disabled = true;
+		          const info = await this.spawnOvernightRunnerForPRTask(t, { tier: 4, agentId: 'claude', mode: 'fresh', yolo: true });
+		          if (info) {
+		            const rec = await upsertRecord(t.id, {
+		              overnightSpawnedAt: new Date().toISOString(),
+		              overnightWorktreeId: info.worktreeId || null
+		            });
+		            updateTaskRecordInState(t.id, rec);
+		            renderList();
+		            renderDetail(getTaskById(t.id));
+		          }
+		        } catch (e) {
+		          this.showToast(String(e?.message || e), 'error');
+		        } finally {
+		          spawnOvernightBtn.disabled = false;
+		        }
+		      });
+
+		      spawnReviewerBtn?.addEventListener('click', async () => {
+		        try {
+		          spawnReviewerBtn.disabled = true;
+		          await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
         } catch (e) {
           this.showToast(String(e?.message || e), 'error');
         } finally {
@@ -19786,7 +19809,7 @@ class ClaudeOrchestrator {
     return { agentId: 'claude', mode: m, flags };
   }
 
-  async spawnReviewAgentForPRTask(prTask, { tier = 3, agentId = 'claude', mode = 'fresh', yolo = true, worktreeId = null } = {}) {
+	  async spawnReviewAgentForPRTask(prTask, { tier = 3, agentId = 'claude', mode = 'fresh', yolo = true, worktreeId = null } = {}) {
     const t = prTask || {};
     if (t.kind !== 'pr') return;
 
@@ -19891,6 +19914,120 @@ class ClaudeOrchestrator {
     });
 
     this.showToast(`Spawned reviewer in ${repo.name} ${recommended.id}`, 'success');
+    return { worktreeId: recommended.id, worktreePath: recommended.path, repositoryRoot: repo.path, repositoryName: repo.name };
+  }
+
+  async spawnOvernightRunnerForPRTask(prTask, { tier = 4, agentId = 'claude', mode = 'fresh', yolo = true, worktreeId = null } = {}) {
+    const t = prTask || {};
+    if (t.kind !== 'pr') return null;
+
+    const url = String(t.url || '').trim();
+    const repoSlug = String(t.repository || '').trim();
+    if (!repoSlug) {
+      this.showToast('PR task is missing repository slug', 'error');
+      return null;
+    }
+
+    const repoName = repoSlug.split('/').filter(Boolean).slice(-1)[0] || repoSlug;
+    const repos = await this.getScannedRepos({ force: false });
+    const repo = repos.find((r) => String(r?.name || '').toLowerCase() === String(repoName).toLowerCase());
+    if (!repo) {
+      this.showToast(`Repo not found locally: ${repoName} (scan-repos)`, 'error');
+      return null;
+    }
+
+    const requestedWorktreeId = String(worktreeId || '').trim();
+    const requested = requestedWorktreeId
+      ? (Array.isArray(repo.worktrees) ? repo.worktrees.find((w) => String(w?.id || '') === requestedWorktreeId) : null)
+      : null;
+    const recommended = requested || this.getRecommendedWorktree(repo);
+
+    const prNum = t.prNumber ? Number(t.prNumber) : null;
+    const prHint = prNum ? `${repoSlug}#${prNum}` : repoSlug;
+
+    const prompt = [
+      `You are an overnight runner agent (Tier 4).`,
+      ``,
+      `Goal: make progress while I sleep, run tests, and leave a clear handoff summary.`,
+      ``,
+      `Target PR: ${url || prHint}`,
+      `Repo: ${repoSlug}`,
+      ``,
+      `Instructions:`,
+      `1) Checkout the PR branch (prefer: gh pr checkout if PR number is known).`,
+      `2) Read the PR description + diff and infer intent.`,
+      `3) Make safe, minimal improvements/fixes as needed.`,
+      `4) Run the repo's relevant unit tests (prefer fast tests).`,
+      `5) If tests fail, fix or clearly explain what failed + why.`,
+      `6) Push commits to the PR branch if you made changes.`,
+      ``,
+      `Handoff format (REQUIRED):`,
+      `- What changed (bullets)`,
+      `- Tests run (exact commands + pass/fail)`,
+      `- Remaining concerns / follow-ups`,
+      `- Next human actions (2-5 bullets)`,
+      ``,
+      `Suggested commands:`,
+      prNum ? `- gh pr checkout ${prNum}` : `- gh pr list --limit 20`,
+      prNum ? `- gh pr diff ${prNum}` : `- gh pr diff <PR_NUMBER>`,
+      `- npm test (or repo equivalent)`,
+      `- git status`,
+      `- git log -5 --oneline`,
+      ``
+    ].join('\n');
+
+    const startTier = Number(tier);
+    const startTierSafe = (startTier >= 1 && startTier <= 4) ? startTier : undefined;
+    const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
+
+    if (!recommended && this.autoCreateExtraWorktreesWhenBusy) {
+      const nextId = this.getNextWorktreeIdForRepo(repo);
+      this.pendingWorktreeLaunches.set(nextId, { promptText: prompt, autoSendPrompt: true, agentConfig });
+      try {
+        await this.autoCreateExtraWorktreeForRepo(repo, { startTier: startTierSafe, worktreeId: nextId });
+        this.showToast(`Creating ${repo.name} ${nextId} (work9+)`, 'success');
+        return { worktreeId: nextId, worktreePath: `${repo.path}/${nextId}`, repositoryRoot: repo.path, repositoryName: repo.name };
+      } catch (e) {
+        this.pendingWorktreeLaunches.delete(nextId);
+        this.clearWorktreeReservation(repo.path, nextId);
+        this.showToast(String(e?.message || e), 'error');
+      }
+    }
+
+    if (!recommended) {
+      this.showToast('All worktrees busy for this repo; open Quick Work to choose one', 'warning');
+      await this.showQuickWorktreeModal();
+      const modal = document.getElementById('quick-worktree-modal');
+      const input = modal?.querySelector('#quick-worktree-search');
+      if (input) {
+        input.value = String(repo?.name || '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return null;
+    }
+
+    this.pendingWorktreeLaunches.set(recommended.id, { promptText: prompt, autoSendPrompt: true, agentConfig });
+
+    if (!this.socket) {
+      this.pendingWorktreeLaunches.delete(recommended.id);
+      this.clearWorktreeReservation(repo.path, recommended.id);
+      this.showToast('Socket not available', 'error');
+      return null;
+    }
+    if (!this.socket.connected) {
+      this.showToast('Socket not connected (queued launch)', 'warning');
+    }
+
+    this.socket.emit('add-worktree-sessions', {
+      worktreeId: recommended.id,
+      worktreePath: recommended.path,
+      repositoryName: repo.name,
+      repositoryType: repo.type,
+      repositoryRoot: repo.path,
+      startTier: startTierSafe
+    });
+
+    this.showToast(`Spawned overnight runner in ${repo.name} ${recommended.id}`, 'success');
     return { worktreeId: recommended.id, worktreePath: recommended.path, repositoryRoot: repo.path, repositoryName: repo.name };
   }
 
