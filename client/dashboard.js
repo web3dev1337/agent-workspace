@@ -117,14 +117,15 @@ class Dashboard {
 	              </div>
 	              <div class="dashboard-summary-card">
 	                <div class="dashboard-summary-title">Telemetry</div>
-	                <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
-	                <div class="dashboard-summary-actions">
-	                  <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
-	                  <button class="dashboard-topbar-btn" id="dashboard-open-performance" title="Per-terminal resource usage">⚙ Perf</button>
-	                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
-	                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
-	                </div>
-	              </div>
+		                <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
+		                <div class="dashboard-summary-actions">
+		                  <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
+		                  <button class="dashboard-topbar-btn" id="dashboard-open-performance" title="Per-terminal resource usage">⚙ Perf</button>
+		                  <button class="dashboard-topbar-btn" id="dashboard-open-tests" title="Run tests across worktrees">🧪 Tests</button>
+		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
+		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
+		                </div>
+		              </div>
 	              <div class="dashboard-summary-card">
 	                <div class="dashboard-summary-title">Projects</div>
 	                <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
@@ -199,14 +200,20 @@ class Dashboard {
 	      e.preventDefault();
 	      this.showTelemetryOverlay();
 	    });
-	    document.getElementById('dashboard-open-performance')?.addEventListener('click', (e) => {
-	      e.preventDefault();
-	      this.showPerformanceOverlay();
-	    });
-		    document.getElementById('dashboard-export-telemetry')?.addEventListener('click', (e) => {
+		    document.getElementById('dashboard-open-performance')?.addEventListener('click', (e) => {
 		      e.preventDefault();
-		      const hours = Number(this._telemetrySummary?.lookbackHours ?? 24);
-		      this.downloadTelemetryCsv(hours);
+		      this.showPerformanceOverlay();
+		    });
+		    document.getElementById('dashboard-open-tests')?.addEventListener('click', (e) => {
+		      e.preventDefault();
+		      try {
+		        this.showTestOrchestrationOverlay();
+		      } catch {}
+		    });
+			    document.getElementById('dashboard-export-telemetry')?.addEventListener('click', (e) => {
+			      e.preventDefault();
+			      const hours = Number(this._telemetrySummary?.lookbackHours ?? 24);
+			      this.downloadTelemetryCsv(hours);
 		    });
 		    document.getElementById('dashboard-export-telemetry-json')?.addEventListener('click', (e) => {
 		      e.preventDefault();
@@ -643,9 +650,9 @@ class Dashboard {
 	    overlay.remove();
 	  }
 
-	  async loadPerformanceDetails() {
-	    const bodyEl = document.getElementById('dashboard-performance-body');
-	    if (bodyEl) bodyEl.textContent = 'Loading…';
+		  async loadPerformanceDetails() {
+		    const bodyEl = document.getElementById('dashboard-performance-body');
+		    if (bodyEl) bodyEl.textContent = 'Loading…';
 
 	    let data = null;
 	    try {
@@ -691,11 +698,11 @@ class Dashboard {
 	      return `<tr><td class="mono">${escapeHtml(s.sessionId)}</td><td>${label}</td><td>${escapeHtml(s.type || '')}</td><td class="mono">${pid}</td><td class="mono">${mem}</td><td class="mono">${kids}</td></tr>`;
 	    }).join('');
 
-	    bodyEl.innerHTML = `
-	      <div class="dashboard-telemetry-muted">Generated: ${escapeHtml(data.generatedAt)} • Node RSS: ${escapeHtml(fmtBytes(data?.node?.rssBytes))} • Uptime: ${escapeHtml(String(data?.node?.uptimeSeconds || 0))}s</div>
-	      <table class="worktree-inspector-table" style="margin-top:10px;">
-	        <thead>
-	          <tr>
+		    bodyEl.innerHTML = `
+		      <div class="dashboard-telemetry-muted">Generated: ${escapeHtml(data.generatedAt)} • Node RSS: ${escapeHtml(fmtBytes(data?.node?.rssBytes))} • Uptime: ${escapeHtml(String(data?.node?.uptimeSeconds || 0))}s</div>
+		      <table class="worktree-inspector-table" style="margin-top:10px;">
+		        <thead>
+		          <tr>
 	            <th>Session</th>
 	            <th>Worktree</th>
 	            <th>Type</th>
@@ -705,16 +712,235 @@ class Dashboard {
 	          </tr>
 	        </thead>
 	        <tbody>
-	          ${rows || `<tr><td colspan="6" style="opacity:0.8;">No sessions.</td></tr>`}
-	        </tbody>
-	      </table>
-	    `;
-	  }
+		          ${rows || `<tr><td colspan="6" style="opacity:0.8;">No sessions.</td></tr>`}
+		        </tbody>
+		      </table>
+		    `;
+		  }
 
-	  async showReadinessOverlay() {
-	    const existing = document.getElementById('dashboard-readiness-overlay');
-	    if (existing) {
-	      existing.classList.remove('hidden');
+		  async showTestOrchestrationOverlay() {
+		    const existing = document.getElementById('dashboard-tests-overlay');
+		    if (existing) {
+		      existing.classList.remove('hidden');
+		      return;
+		    }
+
+		    const overlay = document.createElement('div');
+		    overlay.id = 'dashboard-tests-overlay';
+		    overlay.className = 'dashboard-telemetry-overlay';
+		    overlay.innerHTML = `
+		      <div class="dashboard-telemetry-panel" role="dialog" aria-label="Test orchestration">
+		        <div class="dashboard-telemetry-header">
+		          <div class="dashboard-telemetry-title">Tests — Orchestration</div>
+		          <button class="dashboard-topbar-btn" id="dashboard-tests-close" title="Close (Esc)">✕</button>
+		        </div>
+		        <div class="dashboard-telemetry-controls">
+		          <label class="dashboard-telemetry-field">
+		            <span>Script</span>
+		            <select id="dashboard-tests-script">
+		              <option value="auto" selected>auto</option>
+		              <option value="test:unit">test:unit</option>
+		              <option value="test">test</option>
+		              <option value="test:ci">test:ci</option>
+		            </select>
+		          </label>
+		          <label class="dashboard-telemetry-field">
+		            <span>Concurrency</span>
+		            <select id="dashboard-tests-concurrency">
+		              <option value="1">1</option>
+		              <option value="2" selected>2</option>
+		              <option value="3">3</option>
+		              <option value="4">4</option>
+		              <option value="6">6</option>
+		              <option value="8">8</option>
+		            </select>
+		          </label>
+		          <div class="dashboard-telemetry-actions">
+		            <button class="btn-primary" type="button" id="dashboard-tests-run">Run</button>
+		            <button class="btn-secondary" type="button" id="dashboard-tests-refresh">Refresh</button>
+		          </div>
+		        </div>
+		        <div id="dashboard-tests-body" class="dashboard-telemetry-body">Loading…</div>
+		      </div>
+		    `;
+
+		    document.body.appendChild(overlay);
+
+		    const close = () => this.hideTestOrchestrationOverlay();
+		    overlay.addEventListener('click', (e) => {
+		      if (e.target === overlay) close();
+		    });
+		    overlay.querySelector('#dashboard-tests-close')?.addEventListener('click', close);
+
+		    const onKey = (e) => {
+		      if (e.key !== 'Escape') return;
+		      const el = document.getElementById('dashboard-tests-overlay');
+		      if (!el || el.classList.contains('hidden')) return;
+		      close();
+		    };
+		    overlay._escHandler = onKey;
+		    document.addEventListener('keydown', onKey);
+
+		    const scriptEl = overlay.querySelector('#dashboard-tests-script');
+		    const concurrencyEl = overlay.querySelector('#dashboard-tests-concurrency');
+		    overlay.querySelector('#dashboard-tests-run')?.addEventListener('click', async () => {
+		      const script = String(scriptEl?.value || 'auto');
+		      const concurrency = Number(concurrencyEl?.value || 2);
+		      await this.startTestOrchestrationRun({ script, concurrency });
+		    });
+		    overlay.querySelector('#dashboard-tests-refresh')?.addEventListener('click', async () => {
+		      await this.loadLatestTestOrchestrationRunOrCurrent();
+		    });
+
+		    await this.loadLatestTestOrchestrationRunOrCurrent();
+		  }
+
+		  hideTestOrchestrationOverlay() {
+		    const overlay = document.getElementById('dashboard-tests-overlay');
+		    if (!overlay) return;
+		    overlay.classList.add('hidden');
+		    const handler = overlay._escHandler;
+		    if (handler) {
+		      document.removeEventListener('keydown', handler);
+		      overlay._escHandler = null;
+		    }
+		    if (this._testsPollTimer) {
+		      clearTimeout(this._testsPollTimer);
+		      this._testsPollTimer = null;
+		    }
+		    overlay.remove();
+		  }
+
+		  async startTestOrchestrationRun({ script = 'auto', concurrency = 2 } = {}) {
+		    const bodyEl = document.getElementById('dashboard-tests-body');
+		    if (bodyEl) bodyEl.textContent = 'Starting…';
+		    if (this._testsPollTimer) {
+		      clearTimeout(this._testsPollTimer);
+		      this._testsPollTimer = null;
+		    }
+
+		    let data = null;
+		    try {
+		      const res = await fetch('/api/process/tests/run', {
+		        method: 'POST',
+		        headers: { 'Content-Type': 'application/json' },
+		        body: JSON.stringify({ script, concurrency, existingOnly: true })
+		      });
+		      data = res && res.ok ? await res.json().catch(() => null) : null;
+		    } catch {
+		      data = null;
+		    }
+
+		    if (!data || !data.ok || !data.runId) {
+		      if (bodyEl) bodyEl.textContent = 'Failed to start.';
+		      return;
+		    }
+
+		    this._testRunId = String(data.runId);
+		    await this.loadTestOrchestrationRun(this._testRunId, { poll: true });
+		  }
+
+		  async loadLatestTestOrchestrationRunOrCurrent() {
+		    if (this._testRunId) {
+		      await this.loadTestOrchestrationRun(this._testRunId, { poll: true });
+		      return;
+		    }
+
+		    const bodyEl = document.getElementById('dashboard-tests-body');
+		    if (bodyEl) bodyEl.textContent = 'Loading…';
+
+		    let data = null;
+		    try {
+		      const res = await fetch('/api/process/tests/runs?limit=1');
+		      data = res && res.ok ? await res.json().catch(() => null) : null;
+		    } catch {
+		      data = null;
+		    }
+
+		    const first = Array.isArray(data?.runs) ? data.runs[0] : null;
+		    if (!first?.runId) {
+		      if (bodyEl) bodyEl.textContent = 'No test runs yet.';
+		      return;
+		    }
+
+		    this._testRunId = String(first.runId);
+		    await this.loadTestOrchestrationRun(this._testRunId, { poll: true });
+		  }
+
+		  async loadTestOrchestrationRun(runId, { poll = false } = {}) {
+		    const bodyEl = document.getElementById('dashboard-tests-body');
+		    if (!bodyEl) return;
+
+		    let data = null;
+		    try {
+		      const url = `/api/process/tests/runs/${encodeURIComponent(String(runId || '').trim())}`;
+		      const res = await fetch(url);
+		      data = res && res.ok ? await res.json().catch(() => null) : null;
+		    } catch {
+		      data = null;
+		    }
+
+		    if (!data || !data.ok) {
+		      bodyEl.textContent = 'Failed to load.';
+		      return;
+		    }
+
+		    const escapeHtml = (value) => String(value ?? '')
+		      .replace(/&/g, '&amp;')
+		      .replace(/</g, '&lt;')
+		      .replace(/>/g, '&gt;');
+
+		    const results = Array.isArray(data.results) ? data.results : [];
+		    const rows = results.map((r) => {
+		      const output = String(r.outputTail || '');
+		      const tail = output.length > 2000 ? output.slice(output.length - 2000) : output;
+		      return `
+		        <tr>
+		          <td class="mono">${escapeHtml(r.worktreeId || '')}</td>
+		          <td class="mono">${escapeHtml(r.status || '')}</td>
+		          <td class="mono">${escapeHtml(r.command || '—')}</td>
+		          <td class="mono">${escapeHtml(r.durationMs != null ? String(r.durationMs) : '—')}</td>
+		          <td class="mono">${escapeHtml(r.exitCode != null ? String(r.exitCode) : '—')}</td>
+		          <td style="min-width: 340px;">
+		            <pre style="white-space: pre-wrap; margin: 0; max-height: 140px; overflow: auto;">${escapeHtml(tail || '')}</pre>
+		          </td>
+		        </tr>
+		      `;
+		    }).join('');
+
+		    const s = data.summary || {};
+		    bodyEl.innerHTML = `
+		      <div class="dashboard-telemetry-muted">Run: ${escapeHtml(data.runId)} • Workspace: ${escapeHtml(data.workspaceName || data.workspaceId || '')} • Script: ${escapeHtml(data.script)} • Concurrency: ${escapeHtml(String(data.concurrency || ''))} • Status: ${escapeHtml(data.status)}</div>
+		      <div class="dashboard-telemetry-muted">Total: ${escapeHtml(String(s.total || 0))} • Running: ${escapeHtml(String(s.running || 0))} • Passed: ${escapeHtml(String(s.passed || 0))} • Failed: ${escapeHtml(String(s.failed || 0))} • Unsupported: ${escapeHtml(String(s.unsupported || 0))}</div>
+		      <table class="worktree-inspector-table" style="margin-top:10px;">
+		        <thead>
+		          <tr>
+		            <th>Worktree</th>
+		            <th>Status</th>
+		            <th>Command</th>
+		            <th>ms</th>
+		            <th>Exit</th>
+		            <th>Output (tail)</th>
+		          </tr>
+		        </thead>
+		        <tbody>
+		          ${rows || `<tr><td colspan="6" style="opacity:0.8;">No worktrees.</td></tr>`}
+		        </tbody>
+		      </table>
+		    `;
+
+		    if (poll && String(data.status) === 'running') {
+		      if (this._testsPollTimer) clearTimeout(this._testsPollTimer);
+		      this._testsPollTimer = setTimeout(() => {
+		        try { this.loadTestOrchestrationRun(data.runId, { poll: true }); } catch {}
+		      }, 2000);
+		    }
+		  }
+
+		  async showReadinessOverlay() {
+		    const existing = document.getElementById('dashboard-readiness-overlay');
+		    if (existing) {
+		      existing.classList.remove('hidden');
 	      return;
 	    }
 

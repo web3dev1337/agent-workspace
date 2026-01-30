@@ -72,6 +72,7 @@ const { TaskTicketingService } = require('./taskTicketingService');
 const { TaskTicketMoveService } = require('./taskTicketMoveService');
 const { PrMergeAutomationService } = require('./prMergeAutomationService');
 const { GitHubRepoService } = require('./githubRepoService');
+const { TestOrchestrationService } = require('./testOrchestrationService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
@@ -241,6 +242,7 @@ const processReadinessService = ProcessReadinessService.getInstance();
 const githubRepoService = GitHubRepoService.getInstance();
 const { ProcessPairingService } = require('./processPairingService');
 const processPairingService = ProcessPairingService.getInstance({ processTaskService, taskRecordService, worktreeConflictService, projectMetadataService });
+const testOrchestrationService = TestOrchestrationService.getInstance({ sessionManager, workspaceManager });
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -2959,6 +2961,45 @@ app.get('/api/process/distribution', async (req, res) => {
   } catch (error) {
     logger.error('Failed to compute task distribution', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to compute task distribution' });
+  }
+});
+
+app.post('/api/process/tests/run', async (req, res) => {
+  try {
+    const script = typeof req.body?.script === 'string' ? req.body.script.trim() : 'auto';
+    const concurrency = req.body?.concurrency;
+    const existingOnly = String(req.body?.existingOnly ?? 'true').toLowerCase() !== 'false';
+
+    const run = await testOrchestrationService.startRun({ script, concurrency, existingOnly });
+    res.json(run);
+  } catch (error) {
+    logger.error('Failed to start test orchestration run', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to start test run' });
+  }
+});
+
+app.get('/api/process/tests/runs', (req, res) => {
+  try {
+    const limit = req.query.limit ? Number(req.query.limit) : 25;
+    res.json(testOrchestrationService.listRuns({ limit }));
+  } catch (error) {
+    logger.error('Failed to list test orchestration runs', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to list test runs' });
+  }
+});
+
+app.get('/api/process/tests/runs/:runId', (req, res) => {
+  try {
+    const runId = String(req.params.runId || '').trim();
+    const run = testOrchestrationService.getRun(runId);
+    if (!run) {
+      res.status(404).json({ ok: false, error: 'Run not found' });
+      return;
+    }
+    res.json(run);
+  } catch (error) {
+    logger.error('Failed to fetch test orchestration run', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to fetch test run' });
   }
 });
 
