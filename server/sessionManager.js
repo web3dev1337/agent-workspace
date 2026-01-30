@@ -1740,7 +1740,7 @@ class SessionManager extends EventEmitter {
       // Check for existing PR for this branch
       const existingPR = await this.gitHelper.checkForExistingPR(remoteUrl, branch);
       
-      // Update both claude and server sessions for this worktree
+      // Update claude/codex/server sessions for this worktree
       // For mixed-repo workspaces, session IDs have workspace prefix (e.g., "mixed-terminals-work1-claude")
       // For traditional workspaces, session IDs are just worktreeId-type (e.g., "work1-claude")
       // So we need to search through sessions to find matching ones
@@ -1748,8 +1748,10 @@ class SessionManager extends EventEmitter {
 
       // First try direct match (traditional workspaces)
       const claudeId = `${worktreeId}-claude`;
+      const codexId = `${worktreeId}-codex`;
       const serverId = `${worktreeId}-server`;
       if (this.sessions.has(claudeId)) sessionsToUpdate.add(claudeId);
+      if (this.sessions.has(codexId)) sessionsToUpdate.add(codexId);
       if (this.sessions.has(serverId)) sessionsToUpdate.add(serverId);
 
       // If no direct match, search by worktreeId AND path (mixed-repo workspaces)
@@ -1772,7 +1774,7 @@ class SessionManager extends EventEmitter {
         for (const [sessionId, session] of this.sessions) {
           if (!session?.config?.cwd) continue;
           if (!this.isSameOrSubpath(session.config.cwd, normalizedWorktreePath)) continue;
-          if (session.type !== 'claude' && session.type !== 'server') continue;
+          if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
           sessionsToUpdate.add(sessionId);
         }
       }
