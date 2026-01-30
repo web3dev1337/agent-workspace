@@ -3493,7 +3493,7 @@ app.put('/api/process/task-records/:id', express.json(), async (req, res) => {
     const before = taskRecordService.get(id) || null;
     const record = await taskRecordService.upsert(id, req.body || {});
     try {
-      const keys = ['tier', 'risk', 'pFail', 'doneAt', 'reviewedAt', 'reviewOutcome', 'claimedAt', 'claimedBy'];
+      const keys = ['tier', 'risk', 'pFail', 'doneAt', 'reviewedAt', 'reviewOutcome', 'claimedAt', 'claimedBy', 'assignedAt', 'assignedTo'];
       const changes = {};
       for (const k of keys) {
         const from = before?.[k] ?? null;

@@ -154,6 +154,12 @@ const normalizeClaimedBy = (v) => {
   return s.slice(0, 120);
 };
 
+const normalizeAssignedTo = (v) => {
+  const s = String(v || '').trim();
+  if (!s) return null;
+  return s.slice(0, 120);
+};
+
 const normalizeDependencies = (deps) => {
   if (deps === null) return [];
   if (!Array.isArray(deps)) return null;
@@ -558,6 +564,25 @@ class TaskRecordService {
       const dt = normalizeDateTime(p.claimedAt);
       if (dt) next.claimedAt = dt;
       else clear.add('claimedAt');
+    }
+
+    // Sling assignment (v1): assign a task record to an identity.
+    if (p.assignedTo !== undefined) {
+      if (p.assignedTo === null || p.assignedTo === '') {
+        clear.add('assignedTo');
+        clear.add('assignedAt');
+      } else {
+        const who = normalizeAssignedTo(p.assignedTo);
+        if (who !== null) {
+          next.assignedTo = who;
+          if (!next.assignedAt) next.assignedAt = new Date().toISOString();
+        }
+      }
+    }
+    if (p.assignedAt !== undefined) {
+      const dt = normalizeDateTime(p.assignedAt);
+      if (dt) next.assignedAt = dt;
+      else clear.add('assignedAt');
     }
 
     if (p.linked) {
