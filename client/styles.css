@@ -384,6 +384,10 @@ header {
   gap: var(--space-xl);
 }
 
+.sidebar-toggle {
+  display: none;
+}
+
 header h1 {
   font-size: 1.25rem;
   font-weight: 600;
@@ -3344,8 +3348,70 @@ header h1 {
 }
 
 @media (max-width: 768px) {
+  .sidebar-toggle {
+    display: inline-flex;
+  }
+
+  header {
+    padding: 0 var(--space-md);
+  }
+
+  .header-content {
+    gap: var(--space-md);
+  }
+
+  header h1 {
+    font-size: 1rem;
+    white-space: nowrap;
+  }
+
+  .header-actions {
+    gap: var(--space-sm);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 2px;
+  }
+
+  .header-actions > * {
+    flex-shrink: 0;
+  }
+
+  .header-btn {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+
   .sidebar {
-    width: 200px;
+    width: min(86vw, 320px);
+    position: fixed;
+    inset: 0 auto 0 0;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    z-index: 3000;
+  }
+
+  body.sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 2500;
+  }
+
+  body.sidebar-open .sidebar-backdrop {
+    display: block;
+  }
+
+  .sidebar-backdrop.hidden {
+    display: none;
+  }
+
+  .main-container {
+    width: 100%;
   }
 
   .terminal-grid:not([data-visible-count]) {
