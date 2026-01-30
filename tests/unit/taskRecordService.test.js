@@ -181,4 +181,25 @@ describe('TaskRecordService', () => {
     expect(rec2.claimedBy).toBeUndefined();
     expect(rec2.claimedAt).toBeUndefined();
   });
+
+  test('upsert supports review checklist fields', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
+    const filePath = path.join(tmp, 'task-records.json');
+    const svc = new TaskRecordService({ filePath });
+
+    const rec = await svc.upsert('pr:me/repo#777', {
+      reviewChecklist: {
+        tests: { done: true, command: 'npm run test:unit' },
+        manual: { done: false, steps: 'Open app and verify header' }
+      }
+    });
+
+    expect(rec.reviewChecklist).toEqual({
+      tests: { done: true, command: 'npm run test:unit' },
+      manual: { steps: 'Open app and verify header' }
+    });
+
+    const rec2 = await svc.upsert('pr:me/repo#777', { reviewChecklist: null });
+    expect(rec2.reviewChecklist).toBeUndefined();
+  });
 });

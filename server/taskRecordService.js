@@ -82,6 +82,34 @@ const normalizeDependencies = (deps) => {
   return [...new Set(cleaned)];
 };
 
+const normalizeReviewChecklist = (raw) => {
+  if (raw === null) return null;
+  if (!raw || typeof raw !== 'object') return null;
+
+  const out = {};
+
+  const tests = raw.tests && typeof raw.tests === 'object' ? raw.tests : {};
+  const manual = raw.manual && typeof raw.manual === 'object' ? raw.manual : {};
+
+  const testsDone = tests.done === undefined ? null : !!tests.done;
+  const testsCommand = tests.command === undefined ? null : String(tests.command || '').trim().slice(0, 300);
+  if (testsDone === true || (testsCommand !== null && testsCommand !== '')) {
+    out.tests = {};
+    if (testsDone === true) out.tests.done = true;
+    if (testsCommand !== null && testsCommand !== '') out.tests.command = testsCommand;
+  }
+
+  const manualDone = manual.done === undefined ? null : !!manual.done;
+  const manualSteps = manual.steps === undefined ? null : String(manual.steps || '').trim().slice(0, 2000);
+  if (manualDone === true || (manualSteps !== null && manualSteps !== '')) {
+    out.manual = {};
+    if (manualDone === true) out.manual.done = true;
+    if (manualSteps !== null && manualSteps !== '') out.manual.steps = manualSteps;
+  }
+
+  return Object.keys(out).length ? out : null;
+};
+
 class TaskRecordService {
   constructor({ filePath } = {}) {
     this.filePath = filePath || DEFAULT_PATH;
@@ -202,6 +230,15 @@ class TaskRecordService {
       } else {
         const normalized = normalizeDependencies(p.dependencies);
         if (normalized !== null) next.dependencies = normalized;
+      }
+    }
+
+    if (p.reviewChecklist !== undefined) {
+      if (p.reviewChecklist === null) {
+        clear.add('reviewChecklist');
+      } else {
+        const normalized = normalizeReviewChecklist(p.reviewChecklist);
+        if (normalized !== null) next.reviewChecklist = normalized;
       }
     }
 
