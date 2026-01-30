@@ -2,7 +2,7 @@
 
 Generated: 2026-01-29  
 Last updated: 2026-01-30  
-Repo state: `origin/main` @ `f56a170`
+Repo state (at generation time): `origin/main` @ `3966629`
 
 ## Scope + method
 
