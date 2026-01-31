@@ -6355,7 +6355,10 @@ class ClaudeOrchestrator {
     try { document.body.dataset.mode = mode; } catch {}
 
     const skin = String(this.settings.skin || 'default').trim().toLowerCase() || 'default';
-    document.body.classList.toggle('skin-blue', skin === 'blue');
+    const knownSkins = this.getKnownSkins();
+    for (const s of knownSkins) {
+      document.body.classList.toggle(`skin-${s}`, skin === s);
+    }
     try { document.body.dataset.skin = skin; } catch {}
 
     // Keep terminals visually consistent with UI theme.
@@ -6366,7 +6369,7 @@ class ClaudeOrchestrator {
     const userTheme = this.userSettings?.global?.ui?.theme;
     if (userTheme !== 'dark' && userTheme !== 'light') return;
     const userSkin = this.userSettings?.global?.ui?.skin;
-    const nextSkin = (userSkin === 'blue' || userSkin === 'default') ? userSkin : (this.settings.skin || 'default');
+    const nextSkin = this.getKnownSkins().includes(userSkin) ? userSkin : (this.settings.skin || 'default');
     if (this.settings.theme === userTheme && this.settings.skin === nextSkin) return;
 
     this.settings.theme = userTheme;
@@ -6378,6 +6381,10 @@ class ClaudeOrchestrator {
     if (themeSelect) themeSelect.value = userTheme;
     const skinSelect = document.getElementById('skin-select');
     if (skinSelect) skinSelect.value = nextSkin;
+  }
+
+  getKnownSkins() {
+    return ['default', 'blue', 'purple', 'emerald', 'amber'];
   }
   
   syncSettingsUI() {
@@ -9704,7 +9711,7 @@ class ClaudeOrchestrator {
     const skinSelect = document.getElementById('skin-select');
     if (skinSelect) {
       const skin = this.userSettings.global?.ui?.skin;
-      skinSelect.value = (skin === 'blue' || skin === 'default') ? skin : 'default';
+      skinSelect.value = this.getKnownSkins().includes(skin) ? skin : 'default';
     }
 
     const tasksThemeSelect = document.getElementById('tasks-theme-select');

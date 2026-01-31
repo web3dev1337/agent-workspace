@@ -8,6 +8,7 @@
   --text-primary: #c9d1d9;
   --text-secondary: #8b949e;
   --text-tertiary: #6e7681;
+  --text-on-accent: #ffffff;
   --border-color: #30363d;
   --accent-primary: #1f6feb;
   --accent-primary-hover: #388bfd;
@@ -58,6 +59,24 @@ body.skin-blue {
   --accent-primary: #0f67fd;
   --accent-primary-hover: #2b7cff;
   --accent-primary-pressed: #0b56d8;
+}
+
+body.skin-purple {
+  --accent-primary: #a855f7;
+  --accent-primary-hover: #c084fc;
+  --accent-primary-pressed: #9333ea;
+}
+
+body.skin-emerald {
+  --accent-primary: #10b981;
+  --accent-primary-hover: #34d399;
+  --accent-primary-pressed: #059669;
+}
+
+body.skin-amber {
+  --accent-primary: #f59e0b;
+  --accent-primary-hover: #fbbf24;
+  --accent-primary-pressed: #d97706;
 }
 
 /* Reset & Base */
@@ -122,7 +141,7 @@ body {
 
 .worktree-item.active {
   background: var(--accent-primary);
-  color: white;
+  color: var(--text-on-accent);
 }
 
 .worktree-header {
@@ -499,7 +518,7 @@ header h1 {
 
 .workflow-toggle .workflow-btn.active {
   background: var(--accent-primary);
-  color: #ffffff;
+  color: var(--text-on-accent);
 }
 
 #workflow-focus-tier2.hidden {
@@ -512,7 +531,7 @@ header h1 {
 
 .header-btn.focus-tier2-on {
   background: var(--accent-primary);
-  color: #ffffff;
+  color: var(--text-on-accent);
   border-color: var(--accent-primary);
 }
 
@@ -523,7 +542,7 @@ header h1 {
 
 .header-btn.focus-autoswap-on {
   background: var(--accent-primary);
-  color: #ffffff;
+  color: var(--text-on-accent);
   border-color: var(--accent-primary);
 }
 
@@ -3564,13 +3583,13 @@ header h1 {
 
 .control-btn.review-btn {
   background: var(--accent-primary);
-  color: white;
+  color: var(--text-on-accent);
   border-color: var(--accent-primary);
 }
 
 .control-btn.review-btn:hover {
-  background: #388bfd;
-  border-color: #388bfd;
+  background: var(--accent-primary-hover);
+  border-color: var(--accent-primary-hover);
 }
 
 .terminal-controls {
@@ -3579,14 +3598,14 @@ header h1 {
 
 .control-btn.diff-viewer-btn {
   background: var(--accent-primary);
-  color: white;
+  color: var(--text-on-accent);
   border-color: var(--accent-primary);
   font-weight: bold;
 }
 
 .control-btn.diff-viewer-btn:hover {
-  background: #388bfd;
-  border-color: #388bfd;
+  background: var(--accent-primary-hover);
+  border-color: var(--accent-primary-hover);
   transform: scale(1.05);
 }
 
@@ -5608,14 +5627,14 @@ header h1 {
   border: none;
   border-radius: var(--radius-sm);
   background: var(--accent-primary);
-  color: white;
+  color: var(--text-on-accent);
   font-size: 0.8rem;
   cursor: pointer;
   transition: background 0.2s ease;
 }
 
 .btn-small:hover {
-  background: #1a66d9;
+  background: var(--accent-primary-hover);
 }
 
 .btn-small.secondary {
@@ -7451,12 +7470,12 @@ header h1 {
 
 .conv-actions .btn-small.primary {
   background: var(--accent-primary);
-  color: white;
+  color: var(--text-on-accent);
   border: none;
 }
 
 .conv-actions .btn-small.primary:hover {
-  background: #1a66d9;
+  background: var(--accent-primary-hover);
 }
 
 .conv-actions .btn-small.secondary {
@@ -9950,11 +9969,11 @@ header h1 {
 
 .btn-recovery-selected {
   background: var(--accent-primary);
-  color: white;
+  color: var(--text-on-accent);
 }
 
 .btn-recovery-selected:hover {
-  background: #1a66d9;
+  background: var(--accent-primary-hover);
 }
 
 .btn-recovery-skip {
