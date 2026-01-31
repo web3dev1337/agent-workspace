@@ -408,10 +408,44 @@ class WorkspaceManager {
       for (const terminal of next.terminals) {
         if (!terminal || typeof terminal !== 'object') continue;
         if (terminal.repository && typeof terminal.repository === 'object') {
+          const beforeRepo = String(terminal.repository.path || '').trim();
           const fixedRepo = tryFixPath(terminal.repository.path);
           if (fixedRepo.changed) {
             terminal.repository.path = fixedRepo.value;
             changes.push({ field: `terminals[].repository.path`, terminalId: terminal.id, from: fixedRepo.from, to: fixedRepo.to, reason: fixedRepo.reason });
+          }
+
+          // If we migrated the repo root, keep worktreePath consistent even if the worktree folder
+          // doesn't exist yet (auto-create will create it later). This avoids storing a permanently
+          // broken worktreePath that prevents session startup/inspector.
+          const afterRepo = String(terminal.repository.path || '').trim();
+          const wtRaw = String(terminal.worktreePath || '').trim();
+          if (beforeRepo && afterRepo && wtRaw && fixedRepo.changed && wtRaw.startsWith(beforeRepo)) {
+            terminal.worktreePath = `${afterRepo}${wtRaw.slice(beforeRepo.length)}`;
+            changes.push({
+              field: `terminals[].worktreePath`,
+              terminalId: terminal.id,
+              from: wtRaw,
+              to: terminal.worktreePath,
+              reason: 'repo_prefix_migration'
+            });
+          }
+        }
+
+        // Worktree paths can also be stale even when repo root exists; fix when parent exists.
+        const wt = String(terminal.worktreePath || '').trim();
+        if (wt && wt.includes('/games/hytopia/games/')) {
+          const candidate = wt.replace('/games/hytopia/games/', '/games/hytopia/');
+          const parent = path.dirname(candidate);
+          if (candidate !== wt && fsSync.existsSync(parent)) {
+            terminal.worktreePath = candidate;
+            changes.push({
+              field: `terminals[].worktreePath`,
+              terminalId: terminal.id,
+              from: wt,
+              to: candidate,
+              reason: 'remove_extra_hytopia_games_segment_parent_exists'
+            });
           }
         }
 

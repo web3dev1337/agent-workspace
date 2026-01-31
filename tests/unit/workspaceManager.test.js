@@ -216,5 +216,31 @@ describe('WorkspaceManager', () => {
       expect(res.changed).toBe(false);
       expect(res.workspace.repository.path).toBe(repo);
     });
+
+    it('migrates worktreePath even when worktree folder is not created yet (parent exists)', () => {
+      const manager = new WorkspaceManager();
+
+      const base = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-ws-'));
+      const goodRepo = path.join(base, 'GitHub', 'games', 'hytopia', 'zoo-game');
+      fs.mkdirSync(goodRepo, { recursive: true });
+
+      const badRepo = path.join(base, 'GitHub', 'games', 'hytopia', 'games', 'zoo-game');
+      const badWt = path.join(badRepo, 'work9');
+      const expectedWt = path.join(goodRepo, 'work9');
+
+      const ws = {
+        id: 'x',
+        name: 'X',
+        type: 'hytopia-game',
+        terminals: [
+          { id: 'zoo-game-work9-claude', repository: { path: badRepo }, worktreePath: badWt, visible: true }
+        ]
+      };
+
+      const res = manager.normalizeWorkspacePaths(ws);
+      expect(res.changed).toBe(true);
+      expect(res.workspace.terminals[0].repository.path).toBe(goodRepo);
+      expect(res.workspace.terminals[0].worktreePath).toBe(expectedWt);
+    });
   });
 });
