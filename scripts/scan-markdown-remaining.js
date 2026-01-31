@@ -38,6 +38,14 @@ function parseArgs(argv) {
       args.out = a.split('=').slice(1).join('=').trim() || null;
       continue;
     }
+    if (a === '--output') {
+      args.out = String(argv[++i] || '').trim() || null;
+      continue;
+    }
+    if (a.startsWith('--output=')) {
+      args.out = a.split('=').slice(1).join('=').trim() || null;
+      continue;
+    }
   }
 
   if (!['all', 'recent', 'added'].includes(args.scope)) {
@@ -71,11 +79,31 @@ function listMarkdownFiles({ scope, sinceDays }) {
 function scanMarkdown(filePath, content) {
   const unchecked = [];
   const todoFixme = [];
+  const remainingSections = [];
 
   const lines = content.split('\n');
+  let inCodeBlock = false;
+
+  const headingRe = /^(#{1,6})\s+(.*)$/;
+  const remainingHeadingRe = /(what'?s\s+left|what\s+is\s+left|remaining|still\s+missing|open\s+items|next(\s+steps)?|to\s+do)\b/i;
+  const bulletRe = /^\s*[-*]\s+(.+)$/;
+  const numberedRe = /^\s*\d+[.)]\s+(.+)$/;
+
+  let activeSection = null;
+  const flushSection = () => {
+    if (activeSection && activeSection.items.length) remainingSections.push(activeSection);
+    activeSection = null;
+  };
+
   for (let idx = 0; idx < lines.length; idx++) {
     const lineNo = idx + 1;
     const line = lines[idx];
+    const trimmed = String(line || '').trim();
+
+    if (trimmed.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
 
     const m = line.match(/^\s*[-*]\s+\[ \]\s+(.*)$/);
     if (m) {
@@ -85,7 +113,40 @@ function scanMarkdown(filePath, content) {
     if (/\bTODO\b|\bFIXME\b/i.test(line)) {
       todoFixme.push({ line: lineNo, text: line.trim() });
     }
+
+    if (inCodeBlock) continue;
+
+    const headingMatch = headingRe.exec(line);
+    if (headingMatch) {
+      flushSection();
+      const level = headingMatch[1].length;
+      const headingText = String(headingMatch[2] || '').trim();
+      if (remainingHeadingRe.test(headingText)) {
+        activeSection = {
+          line: lineNo,
+          level,
+          heading: headingText,
+          items: []
+        };
+      }
+      continue;
+    }
+
+    if (activeSection) {
+      const bullet = bulletRe.exec(line);
+      const numbered = numberedRe.exec(line);
+      const itemText = bullet ? bullet[1] : (numbered ? numbered[1] : null);
+      if (itemText) {
+        const asText = String(itemText || '').trim();
+        // Don't double-count explicit checkbox items: those are tracked separately.
+        if (!/^\[ \]\s+/i.test(asText) && !/^\[x\]\s+/i.test(asText)) {
+          activeSection.items.push({ line: lineNo, text: asText });
+        }
+      }
+    }
   }
+
+  flushSection();
 
   const isTemplate =
     /\/CHECKLIST\.md$/i.test(filePath) ||
@@ -98,7 +159,8 @@ function scanMarkdown(filePath, content) {
     filePath,
     unchecked,
     todoFixme,
-    remainingCount: unchecked.length + todoFixme.length,
+    remainingSections,
+    remainingCount: unchecked.length + todoFixme.length + remainingSections.reduce((acc, s) => acc + (s?.items?.length || 0), 0),
     classification: isLikelyTemplate ? 'template/guide' : 'doc/backlog'
   };
 }
@@ -124,6 +186,7 @@ function renderReport({ scope, sinceDays, files }) {
   lines.push('Detection:');
   lines.push('- Unchecked task list items: `- [ ] ...` (and `* [ ] ...`)');
   lines.push('- `TODO` / `FIXME` tokens (case-insensitive)');
+  lines.push('- Heuristic “remaining” sections: headings like “What’s left / Remaining / Still missing / Next steps / To do”, followed by bullet/numbered items');
   lines.push('');
   if (scope !== 'all') {
     lines.push(`Scope: markdown files ${scope === 'added' ? 'added' : 'touched'} in the last ${sinceDays} days via git history.`);
@@ -167,6 +230,18 @@ function renderReport({ scope, sinceDays, files }) {
         lines.push('**TODO/FIXME**');
         for (const item of f.todoFixme) {
           lines.push(`- ${f.filePath}:${item.line} — ${mdEscape(item.text)}`);
+        }
+      }
+
+      if (Array.isArray(f.remainingSections) && f.remainingSections.some(s => s && Array.isArray(s.items) && s.items.length)) {
+        lines.push('');
+        lines.push('**Heuristic “Remaining” sections**');
+        for (const section of f.remainingSections) {
+          if (!section?.items?.length) continue;
+          lines.push(`- ${f.filePath}:${section.line} — ${mdEscape(section.heading)}`);
+          for (const item of section.items) {
+            lines.push(`  - ${f.filePath}:${item.line} — ${mdEscape(item.text)}`);
+          }
         }
       }
     }
