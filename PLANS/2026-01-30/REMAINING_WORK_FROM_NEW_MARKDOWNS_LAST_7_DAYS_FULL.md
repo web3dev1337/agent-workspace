@@ -1,6 +1,6 @@
 # Remaining work from markdowns (added, full)
 
-Generated (UTC): 2026-01-30
+Generated (UTC): 2026-01-31
 
 Goal: for markdown files **added to git in the last 7 days**, list anything that is **not explicitly marked done**.
 
@@ -22,12 +22,13 @@ git log --since="2026-01-23" --diff-filter=A --name-only -- ":(glob)**/*.md"
    - Unchecked task list items: `- [ ] ...` (and `* [ ] ...`)
    - `TODO` / `FIXME` tokens (case-insensitive)
 2) “Future/backlog docs” that intentionally avoid checkboxes
-   - If a file self-identifies as “future work/backlog” and says it intentionally has **no checkboxes**, we treat top-level bullet items as **unshipped work**, and list them here.
+   - If a file self-identifies as “future work/backlog” and says it intentionally has **no checkboxes**, we list it separately as a **future/backlog** doc (not “remaining work”), since it is explicitly not a promise of current implementation.
 
 ## Summary
 
 - Scanned (added .md files): 32
-- Files with actionable remaining work: 1
+- Files with actionable remaining work: 0
+- Files that are explicitly “future/backlog” (not remaining work): 1
 - Files with “unchecked” items that are templates (not backlog): 2
 - Files with no remaining work: 29
 
@@ -35,28 +36,23 @@ git log --since="2026-01-23" --diff-filter=A --name-only -- ":(glob)**/*.md"
 
 ## Files with actionable remaining work
 
+None.
+
+---
+
+## Files that are explicitly “future/backlog” (not remaining work)
+
 ### `PLANS/2026-01-30/GASTOWN_PARITY_BACKLOG.md`
 
 Classification: **future backlog (no checkboxes by design)**.
 
+This file explicitly says these are **future work** and are not a claim about current implementation.
+
+Tracking note:
+- These items were tracked in `PLANS/2026-01-30/GASTOWN_PARITY_TASKS.md` and are now all checked off as shipped.
+
 Status note:
-- “Activity feed: real-time event stream” is now shipped as **Activity Feed v1** (merged PRs #469–#476 on 2026-01-30).
-
-Remaining work (unshipped):
-
-**Phase 3A: Work distribution**
-- Convoy dashboard: create/view/track convoys
-- Sling interface: assign issues to agents
-- Work queue visualization
-
-**Phase 3B: Agent management**
-- Polecat management panel: spawn/kill/view logs
-- Polecat status dashboard
-- Agent identity management
-
-**Phase 3C: Monitoring**
-- Hook browser: view/edit/repair hooks
-- Deacon monitor: health dashboard
+- “Activity feed: real-time event stream” is shipped as **Activity Feed v1** (merged PRs #469–#476 on 2026-01-30).
 
 ---
 
@@ -99,4 +95,3 @@ These files intentionally contain unchecked lists as *process checklists*.
 - `PLANS/2026-01-30/REMAINING_WORK_FROM_LAST_7_DAYS_MARKDOWNS.md`
 - `PLANS/2026-01-30/REMAINING_WORK_FROM_NEW_MARKDOWNS_LAST_7_DAYS.md`
 - `PLANS/2026-01-30/REMAINING_WORK_SCAN_LAST_7_DAYS.md`
-
