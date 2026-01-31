@@ -502,13 +502,17 @@ class ClaudeOrchestrator {
 
         // Remove terminal wrapper from UI (scope to the active grid to avoid cross-tab collisions)
         const grid = this.getTerminalGrid();
-        const wrapper = grid ? grid.querySelector(`#wrapper-${sessionId}`) : document.getElementById(`wrapper-${sessionId}`);
+        const wrapperId = `wrapper-${sessionId}`;
+        let wrapper = document.getElementById(wrapperId);
+        if (wrapper && grid && !grid.contains(wrapper)) wrapper = null;
         if (wrapper) {
           console.log(`Removing terminal wrapper from DOM: ${sessionId}`);
           wrapper.remove();
         } else {
           // Fallback for older DOM shapes
-          const terminalElement = grid ? grid.querySelector(`#terminal-${sessionId}`) : document.getElementById(`terminal-${sessionId}`);
+          const terminalId = `terminal-${sessionId}`;
+          let terminalElement = document.getElementById(terminalId);
+          if (terminalElement && grid && !grid.contains(terminalElement)) terminalElement = null;
           if (terminalElement) {
             console.log(`Removing terminal element from DOM: ${sessionId}`);
             terminalElement.remove();
@@ -3336,7 +3340,8 @@ class ClaudeOrchestrator {
       const session = this.sessions.get(sessionId);
       const isVisible = this.isSessionVisibleInCurrentView(sessionId);
       const wrapperId = `wrapper-${sessionId}`;
-      let wrapper = grid.querySelector(`#${wrapperId}`);
+      let wrapper = document.getElementById(wrapperId);
+      if (wrapper && !grid.contains(wrapper)) wrapper = null;
 
       console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}, exists=${!!wrapper}`);
 
@@ -3351,8 +3356,9 @@ class ClaudeOrchestrator {
 
             // Initialize terminal for newly created element (scope query to wrapper/grid to avoid cross-tab collisions)
             setTimeout(() => {
-              const terminalEl = wrapper?.querySelector?.(`#terminal-${sessionId}`) || grid.querySelector(`#terminal-${sessionId}`);
-              if (terminalEl && !this.terminalManager.terminals.has(sessionId)) {
+              const terminalId = `terminal-${sessionId}`;
+              const terminalEl = document.getElementById(terminalId);
+              if (terminalEl && wrapper && wrapper.contains(terminalEl) && !this.terminalManager.terminals.has(sessionId)) {
                 this.terminalManager.createTerminal(sessionId, session);
               }
             }, 50);
@@ -3655,7 +3661,8 @@ class ClaudeOrchestrator {
   }
 
 	  updateTerminalBranchLabel(sessionId, branch) {
-	    const terminalElement = document.querySelector(`#wrapper-${sessionId} .terminal-branch`);
+	    const wrapper = document.getElementById(`wrapper-${sessionId}`);
+	    const terminalElement = wrapper ? wrapper.querySelector('.terminal-branch') : null;
 	    if (!terminalElement) return;
 	    const meta = this.formatBranchLabel(branch, { context: 'terminal' });
 	    terminalElement.textContent = meta.text || '';
@@ -4181,7 +4188,8 @@ class ClaudeOrchestrator {
     console.log(`Building production ZIP for worktree ${worktreeNum}`);
     
     // Disable the build button and show loading state
-    const buildBtn = document.querySelector(`#wrapper-${sessionId} button[onclick*="buildProduction"]`);
+    const wrapper = document.getElementById(`wrapper-${sessionId}`);
+    const buildBtn = wrapper ? wrapper.querySelector('button[onclick*="buildProduction"]') : null;
     if (buildBtn) {
       buildBtn.disabled = true;
       buildBtn.innerHTML = '<span class="loading-spinner"></span>';
