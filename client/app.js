@@ -7251,10 +7251,16 @@ class ClaudeOrchestrator {
 	        if (ahead > 0) parts.push(`<span class="worktree-inspector-chip">⇡${ahead}</span>`);
 	        parts.push(`<span class="worktree-inspector-chip">Δ files ${dirty}</span>`);
 
-	        const prChip = prUrl
-	          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-pr-url="${escapeHtml(prUrl)}" title="Open PR">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</button>`
-	          : `<span class="worktree-inspector-chip">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</span>`;
-	        parts.push(prChip);
+		        const prChip = prUrl
+		          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-pr-url="${escapeHtml(prUrl)}" title="Open PR">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</button>`
+		          : `<span class="worktree-inspector-chip">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</span>`;
+		        parts.push(prChip);
+
+		        if (prUrl) {
+		          parts.push(
+		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-pr-console="${escapeHtml(prUrl)}" title="Open PR Review Console (comments/files/commits)">🖥 PR Console</button>`
+		          );
+		        }
 
 		        const diffBtn = prUrl
 		          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff="${escapeHtml(prUrl)}" title="Open diff viewer for PR">🔍 Diff</button>`
@@ -8048,15 +8054,25 @@ class ClaudeOrchestrator {
 		        if (diffEmbedEnabled) embedDiff({ showToast: false });
 		      }
 
-		      bodyEl.querySelector('[data-open-diff-home]')?.addEventListener('click', () => this.openDiffViewerHome());
-		      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
-		        const url = e.target?.dataset?.openDiff;
-		        if (url) this.launchDiffViewer(url);
-		      });
-	      bodyEl.querySelector('[data-pr-merge]')?.addEventListener('click', async (e) => {
-	        const prUrl = e.target?.dataset?.prMerge;
-	        if (!prUrl) return;
-	        if (!window.confirm(`Merge PR?\n${prUrl}`)) return;
+			      bodyEl.querySelector('[data-open-diff-home]')?.addEventListener('click', () => this.openDiffViewerHome());
+			      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
+			        const url = e.target?.dataset?.openDiff;
+			        if (url) this.launchDiffViewer(url);
+			      });
+			      bodyEl.querySelector('[data-open-pr-console]')?.addEventListener('click', async (e) => {
+			        const url = String(e.target?.dataset?.openPrConsole || '').trim();
+			        if (!url) return;
+			        try {
+			          await this.openReviewConsoleForPRTask({ url });
+			        } catch (err) {
+			          console.error('Failed to open PR Review Console:', err);
+			          this.showToast?.(`Failed to open PR console: ${String(err?.message || err)}`, 'error');
+			        }
+			      });
+		      bodyEl.querySelector('[data-pr-merge]')?.addEventListener('click', async (e) => {
+		        const prUrl = e.target?.dataset?.prMerge;
+		        if (!prUrl) return;
+		        if (!window.confirm(`Merge PR?\n${prUrl}`)) return;
 
 	        const btn = e.target;
 	        btn.disabled = true;
