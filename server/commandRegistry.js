@@ -359,6 +359,167 @@ class CommandRegistry {
       }
     });
 
+    this.register('queue-prev', {
+      category: 'process',
+      description: 'Select the previous Queue item',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-prev' });
+        return { message: 'Queue: prev item' };
+      }
+    });
+
+    this.register('queue-open-inspector', {
+      category: 'process',
+      description: 'Open Worktree Inspector for the selected Queue item (when it has a session/worktree path)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-open-inspector' });
+        return { message: 'Queue: open inspector' };
+      }
+    });
+
+    this.register('queue-review-timer-start', {
+      category: 'process',
+      description: 'Start the review timer for the selected Queue item',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-review-timer-start' });
+        return { message: 'Queue: start review timer' };
+      }
+    });
+
+    this.register('queue-review-timer-stop', {
+      category: 'process',
+      description: 'Stop the review timer for the selected Queue item (if running)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-review-timer-stop' });
+        return { message: 'Queue: stop review timer' };
+      }
+    });
+
+    this.register('queue-set-tier', {
+      category: 'process',
+      description: 'Set tier for the selected Queue item',
+      params: [
+        { name: 'tier', required: true, description: '1|2|3|4|none' }
+      ],
+      examples: [
+        { params: { tier: 3 }, description: 'Set selected item to Tier 3' },
+        { params: { tier: 'none' }, description: 'Clear tier' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-set-tier', ...params });
+        return { message: 'Queue: set tier' };
+      }
+    });
+
+    this.register('queue-set-risk', {
+      category: 'process',
+      description: 'Set change risk for the selected Queue item',
+      params: [
+        { name: 'risk', required: true, description: 'low|medium|high|none' }
+      ],
+      examples: [
+        { params: { risk: 'high' }, description: 'Set risk to high' },
+        { params: { risk: 'none' }, description: 'Clear risk' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-set-risk', ...params });
+        return { message: 'Queue: set risk' };
+      }
+    });
+
+    this.register('queue-set-outcome', {
+      category: 'process',
+      description: 'Set review outcome for the selected Queue item',
+      params: [
+        { name: 'outcome', required: true, description: 'approved|needs_fix|done|skipped|none' }
+      ],
+      examples: [
+        { params: { outcome: 'needs_fix' }, description: 'Mark outcome as needs_fix' },
+        { params: { outcome: 'none' }, description: 'Clear outcome' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-set-outcome', ...params });
+        return { message: 'Queue: set outcome' };
+      }
+    });
+
+    this.register('queue-set-notes', {
+      category: 'process',
+      description: 'Set Notes/Fix Request for the selected Queue item',
+      params: [
+        { name: 'notes', required: true, description: 'Notes text (empty clears)' }
+      ],
+      examples: [
+        { params: { notes: 'Please add a test for X.' }, description: 'Set Notes' },
+        { params: { notes: '' }, description: 'Clear Notes' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-set-notes', ...params });
+        return { message: 'Queue: set notes' };
+      }
+    });
+
+    this.register('queue-claim', {
+      category: 'process',
+      description: 'Claim the selected Queue item for review',
+      params: [
+        { name: 'who', required: false, description: 'Claim name/identity (defaults to Settings → Identity)' }
+      ],
+      examples: [
+        { params: {}, description: 'Claim selected item using saved identity' },
+        { params: { who: 'alex' }, description: 'Claim selected item as alex' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-claim', ...params });
+        return { message: 'Queue: claim' };
+      }
+    });
+
+    this.register('queue-release', {
+      category: 'process',
+      description: 'Release claim for the selected Queue item',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-release' });
+        return { message: 'Queue: release claim' };
+      }
+    });
+
+    this.register('queue-assign', {
+      category: 'process',
+      description: 'Assign the selected Queue item',
+      params: [
+        { name: 'who', required: true, description: 'Assignee name/identity' }
+      ],
+      examples: [
+        { params: { who: 'alex' }, description: 'Assign selected item to alex' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-assign', ...params });
+        return { message: 'Queue: assign' };
+      }
+    });
+
+    this.register('queue-unassign', {
+      category: 'process',
+      description: 'Clear assignment for the selected Queue item',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-unassign' });
+        return { message: 'Queue: unassign' };
+      }
+    });
+
     this.register('queue-approve', {
       category: 'process',
       description: 'Approve the selected Queue PR on GitHub (optional body)',
