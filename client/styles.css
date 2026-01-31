@@ -4,11 +4,14 @@
   --bg-primary: #0d1117;
   --bg-secondary: #161b22;
   --bg-tertiary: #21262d;
+  --bg-hover: #2a313a;
   --text-primary: #c9d1d9;
   --text-secondary: #8b949e;
   --text-tertiary: #6e7681;
   --border-color: #30363d;
   --accent-primary: #1f6feb;
+  --accent-primary-hover: #388bfd;
+  --accent-primary-pressed: #1a66d9;
   --accent-success: #3fb950;
   --accent-warning: #d29922;
   --accent-danger: #f85149;
@@ -41,10 +44,20 @@ body.light-theme {
   --bg-primary: #ffffff;
   --bg-secondary: #f6f8fa;
   --bg-tertiary: #e6e8eb;
+  --bg-hover: #eef2f6;
   --text-primary: #24292f;
   --text-secondary: #57606a;
   --text-tertiary: #6e7781;
   --border-color: #d0d7de;
+  --accent-primary-hover: #0969da;
+  --accent-primary-pressed: #1a66d9;
+}
+
+/* Skins */
+body.skin-blue {
+  --accent-primary: #0f67fd;
+  --accent-primary-hover: #2b7cff;
+  --accent-primary-pressed: #0b56d8;
 }
 
 /* Reset & Base */
@@ -1063,7 +1076,7 @@ header h1 {
 }
 
 .button-primary:hover {
-  background: #388bfd;
+  background: var(--accent-primary-hover);
 }
 
 .button-secondary:hover {
@@ -1077,8 +1090,8 @@ header h1 {
 }
 
 .button-secondary.active:hover {
-  background: #388bfd;
-  border-color: #388bfd;
+  background: var(--accent-primary-hover);
+  border-color: var(--accent-primary-hover);
 }
 
 .icon-button {
@@ -3268,8 +3281,8 @@ header h1 {
 }
 
 .template-btn.primary:hover {
-  background: #0969da;
-  border-color: #0969da;
+  background: var(--accent-primary-hover);
+  border-color: var(--accent-primary-hover);
 }
 
 .template-btn.secondary {
@@ -4941,7 +4954,7 @@ header h1 {
 }
 
 .btn-primary:hover {
-  background: #1a66d9;
+  background: var(--accent-primary-hover);
 }
 
 .btn-primary:disabled {

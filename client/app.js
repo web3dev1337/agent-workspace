@@ -1229,6 +1229,16 @@ class ClaudeOrchestrator {
       this.updateGlobalUserSetting('ui.theme', e.target.value);
     });
 
+    const skinSelect = document.getElementById('skin-select');
+    if (skinSelect) {
+      skinSelect.addEventListener('change', (e) => {
+        this.settings.skin = e.target.value;
+        this.saveSettings();
+        this.applyTheme();
+        this.updateGlobalUserSetting('ui.skin', e.target.value);
+      });
+    }
+
     const tasksThemeSelect = document.getElementById('tasks-theme-select');
     if (tasksThemeSelect) {
       tasksThemeSelect.addEventListener('change', (e) => {
@@ -5568,7 +5578,8 @@ class ClaudeOrchestrator {
       notifications: true,
       sounds: true,
       autoScroll: true,
-      theme: 'dark'
+      theme: 'dark',
+      skin: 'default'
     };
 
     if (stored) {
@@ -6338,11 +6349,14 @@ class ClaudeOrchestrator {
   }
   
   applyTheme() {
-    if (this.settings.theme === 'light') {
-      document.body.classList.add('light-theme');
-    } else {
-      document.body.classList.remove('light-theme');
-    }
+    const mode = this.settings.theme === 'light' ? 'light' : 'dark';
+    document.body.classList.toggle('light-theme', mode === 'light');
+    document.body.classList.toggle('dark-theme', mode === 'dark');
+    try { document.body.dataset.mode = mode; } catch {}
+
+    const skin = String(this.settings.skin || 'default').trim().toLowerCase() || 'default';
+    document.body.classList.toggle('skin-blue', skin === 'blue');
+    try { document.body.dataset.skin = skin; } catch {}
 
     // Keep terminals visually consistent with UI theme.
     this.terminalManager?.updateTheme?.(this.settings.theme);
@@ -6351,14 +6365,19 @@ class ClaudeOrchestrator {
   applyThemeFromUserSettings() {
     const userTheme = this.userSettings?.global?.ui?.theme;
     if (userTheme !== 'dark' && userTheme !== 'light') return;
-    if (this.settings.theme === userTheme) return;
+    const userSkin = this.userSettings?.global?.ui?.skin;
+    const nextSkin = (userSkin === 'blue' || userSkin === 'default') ? userSkin : (this.settings.skin || 'default');
+    if (this.settings.theme === userTheme && this.settings.skin === nextSkin) return;
 
     this.settings.theme = userTheme;
+    this.settings.skin = nextSkin;
     this.saveSettings();
     this.applyTheme();
 
     const themeSelect = document.getElementById('theme-select');
     if (themeSelect) themeSelect.value = userTheme;
+    const skinSelect = document.getElementById('skin-select');
+    if (skinSelect) skinSelect.value = nextSkin;
   }
   
   syncSettingsUI() {
@@ -6367,6 +6386,8 @@ class ClaudeOrchestrator {
     document.getElementById('enable-sounds').checked = this.settings.sounds;
     document.getElementById('auto-scroll').checked = this.settings.autoScroll;
     document.getElementById('theme-select').value = this.settings.theme;
+    const skinSelect = document.getElementById('skin-select');
+    if (skinSelect) skinSelect.value = this.settings.skin || 'default';
     
     // Sync user settings UI if loaded
     if (this.userSettings) {
@@ -9678,6 +9699,12 @@ class ClaudeOrchestrator {
       if (theme === 'light' || theme === 'dark') {
         themeSelect.value = theme;
       }
+    }
+
+    const skinSelect = document.getElementById('skin-select');
+    if (skinSelect) {
+      const skin = this.userSettings.global?.ui?.skin;
+      skinSelect.value = (skin === 'blue' || skin === 'default') ? skin : 'default';
     }
 
     const tasksThemeSelect = document.getElementById('tasks-theme-select');
