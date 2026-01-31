@@ -8429,15 +8429,15 @@ class ClaudeOrchestrator {
     return '';
   }
 
-  async openReviewConsoleForPRTask(task) {
-    const t = task && typeof task === 'object' ? task : {};
-    const prUrl = String(t.url || '').trim();
-    if (!prUrl) {
-      this.showToast('No PR URL available for this item', 'warning');
-      return;
-    }
+	  async openReviewConsoleForPRTask(task) {
+	    const t = task && typeof task === 'object' ? task : {};
+	    const prUrl = String(t.url || '').trim();
+	    if (!prUrl) {
+	      this.showToast('No PR URL available for this item', 'warning');
+	      return;
+	    }
 
-    this.restoreReviewConsoleDockedTerminals();
+	    this.restoreReviewConsoleDockedTerminals();
 
     // Queue is a fullscreen overlay; close it so the console has the whole screen.
     if (document.getElementById('queue-panel')) {
@@ -8464,21 +8464,39 @@ class ClaudeOrchestrator {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
-    try {
-      const details = await this.fetchPullRequestDetails(prUrl, { maxFiles: 400, maxCommits: 200, maxComments: 60, maxReviews: 60 });
-      const pr = (details?.pr && typeof details.pr === 'object') ? details.pr : {};
-      const files = Array.isArray(details?.files) ? details.files : [];
-      const commits = Array.isArray(details?.commits) ? details.commits : [];
-      const conversation = (details?.conversation && typeof details.conversation === 'object') ? details.conversation : {};
-      const issueComments = Array.isArray(conversation.issueComments) ? conversation.issueComments : [];
-      const reviews = Array.isArray(conversation.reviews) ? conversation.reviews : [];
+	    try {
+	      const details = await this.fetchPullRequestDetails(prUrl, { maxFiles: 400, maxCommits: 200, maxComments: 60, maxReviews: 60 });
+	      const pr = (details?.pr && typeof details.pr === 'object') ? details.pr : {};
+	      const files = Array.isArray(details?.files) ? details.files : [];
+	      const commits = Array.isArray(details?.commits) ? details.commits : [];
+	      const conversation = (details?.conversation && typeof details.conversation === 'object') ? details.conversation : {};
+	      const issueComments = Array.isArray(conversation.issueComments) ? conversation.issueComments : [];
+	      const reviews = Array.isArray(conversation.reviews) ? conversation.reviews : [];
 
-      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
+	      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
+	      const normUrl = (u) => String(u || '').trim().replace(/\/+$/, '');
+	      const targetPrUrl = normUrl(pr.url || prUrl);
 
-      const statusLabel = (s) => {
-        const v = String(s || '').trim().toLowerCase();
-        if (v === 'added') return 'A';
-        if (v === 'modified') return 'M';
+	      const matchingSessionIds = [];
+	      for (const [sid, links] of this.githubLinks) {
+	        const link = links && typeof links === 'object' ? links : {};
+	        const linkedPr = normUrl(link.pr);
+	        if (!linkedPr) continue;
+	        if (linkedPr === targetPrUrl) matchingSessionIds.push(String(sid));
+	      }
+
+	      // Stable ordering: Agent terminals first, then servers.
+	      matchingSessionIds.sort((a, b) => {
+	        const aIsServer = a.includes('-server');
+	        const bIsServer = b.includes('-server');
+	        if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
+	        return a.localeCompare(b);
+	      });
+
+	      const statusLabel = (s) => {
+	        const v = String(s || '').trim().toLowerCase();
+	        if (v === 'added') return 'A';
+	        if (v === 'modified') return 'M';
         if (v === 'removed') return 'D';
         if (v === 'renamed') return 'R';
         if (v === 'changed') return 'M';
@@ -8523,11 +8541,11 @@ class ClaudeOrchestrator {
             </div>
           </div>
         `;
-      };
+	      };
 
-      bodyEl.innerHTML = `
-        <div class="worktree-inspector-header">
-          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
+	      bodyEl.innerHTML = `
+	        <div class="worktree-inspector-header">
+	          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
             <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
               <strong>PR #${escapeHtml(pr.number || '')}</strong>
               ${pr.state ? ` • <span style="opacity:0.85;">${escapeHtml(pr.state)}</span>` : ''}
@@ -8543,14 +8561,24 @@ class ClaudeOrchestrator {
             <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
             <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}">🔍 Diff</button>
             <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" ${pr.isDraft ? 'disabled' : ''}>✅ Merge</button>
-          </div>
-        </div>
+	          </div>
+	        </div>
 
-        <div class="worktree-inspector-grid" data-rc-grid="true">
-          <div class="worktree-inspector-panel worktree-inspector-files" data-rc-panel="files">
-            <div class="worktree-inspector-panel-title-row">
-              <div class="worktree-inspector-panel-title">Files</div>
-              <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
+	        <div class="worktree-inspector-grid" data-rc-grid="true">
+	          ${matchingSessionIds.length ? `
+	            <div class="worktree-inspector-panel worktree-inspector-terminals" data-rc-panel="terminals" style="grid-column: 1 / -1;">
+	              <div class="worktree-inspector-panel-title-row">
+	                <div class="worktree-inspector-panel-title">Terminals</div>
+	                <div class="worktree-inspector-subtle">${matchingSessionIds.length} linked</div>
+	              </div>
+	              <div data-pr-terminals="true"></div>
+	            </div>
+	          ` : ''}
+
+	          <div class="worktree-inspector-panel worktree-inspector-files" data-rc-panel="files">
+	            <div class="worktree-inspector-panel-title-row">
+	              <div class="worktree-inspector-panel-title">Files</div>
+	              <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
             </div>
             <div class="worktree-inspector-files-list">
               <table class="worktree-inspector-table">
@@ -8627,7 +8655,7 @@ class ClaudeOrchestrator {
         <div data-rc-empty="true" class="worktree-inspector-subtle hidden" style="padding:12px;">No sections enabled.</div>
       `;
 
-      // Diff controls (PR-only: default embed).
+	      // Diff controls (PR-only: default embed).
       const diffIframe = bodyEl.querySelector('[data-diff-iframe="true"]');
       const diffStatusEl = bodyEl.querySelector('[data-diff-status="true"]');
       const embedBtn = bodyEl.querySelector('[data-diff-embed="true"]');
@@ -8678,13 +8706,46 @@ class ClaudeOrchestrator {
         diffIframe.classList.add('hidden');
       });
 
-      // Default: embed (since there are no local terminals to show).
-      embed().catch(() => {});
+	      // Default: embed (since there are no local terminals to show).
+	      if (!matchingSessionIds.length) {
+	        embed().catch(() => {});
+	      }
 
-      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
-        const url = e.target?.dataset?.openDiff;
-        if (url) this.launchDiffViewer(url);
-      });
+	      // If we have terminals that are already linked to this PR, dock them into the PR console.
+	      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');
+	      if (matchingSessionIds.length && terminalsContainer) {
+	        terminalsContainer.innerHTML = '';
+	        for (const sessionId of matchingSessionIds) {
+	          const wrapper = document.getElementById(`wrapper-${sessionId}`);
+	          if (!wrapper) continue;
+
+	          // Remember original location so we can restore on close.
+	          if (!this.reviewConsoleDockedTerminals.has(sessionId)) {
+	            this.reviewConsoleDockedTerminals.set(sessionId, {
+	              wrapper,
+	              parent: wrapper.parentElement,
+	              nextSibling: wrapper.nextSibling
+	            });
+	          }
+
+	          wrapper.classList.remove('hidden');
+	          wrapper.classList.add('review-console-terminal');
+	          terminalsContainer.appendChild(wrapper);
+
+	          setTimeout(() => {
+	            try {
+	              this.terminalManager?.fitTerminal?.(sessionId);
+	            } catch {
+	              // ignore
+	            }
+	          }, 60);
+	        }
+	      }
+
+	      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
+	        const url = e.target?.dataset?.openDiff;
+	        if (url) this.launchDiffViewer(url);
+	      });
       bodyEl.querySelector('[data-pr-merge]')?.addEventListener('click', async (e) => {
         const u = e.target?.dataset?.prMerge;
         if (!u) return;
