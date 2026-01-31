@@ -75,6 +75,29 @@ class CommanderContextService {
       cleaned.selectedQueue = null;
     }
 
+    if (Array.isArray(next.queueSummary)) {
+      cleaned.queueSummary = next.queueSummary
+        .slice(0, 40)
+        .map((t) => ({
+          id: shallowClean(t?.id),
+          kind: shallowClean(t?.kind),
+          title: shallowClean(t?.title),
+          url: shallowClean(t?.url),
+          sessionId: shallowClean(t?.sessionId),
+          worktreePath: shallowClean(t?.worktreePath),
+          tier: shallowClean(t?.tier),
+          changeRisk: shallowClean(t?.changeRisk),
+          claimedBy: shallowClean(t?.claimedBy),
+          assignedTo: shallowClean(t?.assignedTo),
+          reviewed: shallowClean(t?.reviewed),
+          done: shallowClean(t?.done),
+          outcome: shallowClean(t?.outcome)
+        }))
+        .filter((t) => t.id);
+    } else {
+      cleaned.queueSummary = [];
+    }
+
     this.state = {
       updatedAt: new Date().toISOString(),
       source: String(source || 'unknown'),
@@ -134,4 +157,3 @@ class CommanderContextService {
 }
 
 module.exports = { CommanderContextService };
-
