@@ -7338,25 +7338,39 @@ class ClaudeOrchestrator {
 	        return `+${added}/-${deleted}`;
 	      };
 
-	      const fileRows = files.map((f) => {
-	        const status = `${String(f?.indexStatus || ' ')}${String(f?.worktreeStatus || ' ')}`.trim() || '·';
-	        const statusClass = this.getGitStatusClass(status);
-	        const staged = formatStat(f?.staged);
-	        const unstaged = formatStat(f?.unstaged);
-	        const path = escapeHtml(f?.path || '');
-	        const oldPath = f?.oldPath ? escapeHtml(f.oldPath) : '';
-	        const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
-	        const rawPath = escapeHtml(String(f?.path || '').replace(/\\/g, '/'));
-	        return `
-	          <tr>
-	            <td class="mono"><span class="worktree-inspector-tree-status ${statusClass}">${escapeHtml(status)}</span></td>
-	            <td class="mono">${path}${renameHint}</td>
-	            <td class="mono">${escapeHtml(staged)}</td>
-	            <td class="mono">${escapeHtml(unstaged)}</td>
-	            <td><button class="btn-secondary worktree-inspector-mini-btn" type="button" data-file-sync="${rawPath}" title="Copy this file to another worktree">Sync</button></td>
-	          </tr>
-	        `;
-	      }).join('');
+		      const statusMeta = (status) => {
+		        const s = String(status || '').trim() || '·';
+		        const cls = this.getGitStatusClass(s);
+		        const sUp = s.toUpperCase();
+		        if (!s || s === '·') return { cls, glyph: '·', title: 'clean' };
+		        if (s.includes('??') || s.includes('?')) return { cls, glyph: '●U', title: `untracked (${s})` };
+		        if (sUp.includes('U')) return { cls, glyph: '●C', title: `conflict (${s})` };
+		        if (sUp.includes('A')) return { cls, glyph: '●A', title: `added (${s})` };
+		        if (sUp.includes('D')) return { cls, glyph: '●D', title: `deleted (${s})` };
+		        if (sUp.includes('R')) return { cls, glyph: '●R', title: `renamed (${s})` };
+		        if (sUp.includes('M')) return { cls, glyph: '●M', title: `modified (${s})` };
+		        return { cls, glyph: '·', title: `unknown (${s})` };
+		      };
+
+		      const fileRows = files.map((f) => {
+		        const status = `${String(f?.indexStatus || ' ')}${String(f?.worktreeStatus || ' ')}`.trim() || '·';
+		        const { cls: statusClass, glyph: statusGlyph, title: statusTitle } = statusMeta(status);
+		        const staged = formatStat(f?.staged);
+		        const unstaged = formatStat(f?.unstaged);
+		        const path = escapeHtml(f?.path || '');
+		        const oldPath = f?.oldPath ? escapeHtml(f.oldPath) : '';
+		        const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
+		        const rawPath = escapeHtml(String(f?.path || '').replace(/\\/g, '/'));
+		        return `
+		          <tr>
+		            <td class="mono"><span class="worktree-inspector-tree-status ${statusClass}" title="${escapeHtml(statusTitle)}">${escapeHtml(statusGlyph)}</span></td>
+		            <td class="mono">${path}${renameHint}</td>
+		            <td class="mono">${escapeHtml(staged)}</td>
+		            <td class="mono">${escapeHtml(unstaged)}</td>
+		            <td><button class="btn-secondary worktree-inspector-mini-btn" type="button" data-file-sync="${rawPath}" title="Copy this file to another worktree">Sync</button></td>
+		          </tr>
+		        `;
+		      }).join('');
 
 	      const filesViewKey = 'worktree-inspector-files-view';
 	      const filesViewRaw = String(localStorage.getItem(filesViewKey) || '').trim().toLowerCase();
@@ -7458,21 +7472,21 @@ class ClaudeOrchestrator {
 	        return kids;
 	      };
 
-	      const renderTreeNode = (node, depth) => {
-	        const d = Math.max(0, Number(depth) || 0);
-	        if (node.type === 'file') {
-	          const statusClass = this.getGitStatusClass(String(node.status || '').trim());
-	          const oldPath = node.oldPath ? escapeHtml(node.oldPath) : '';
-	          const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
-	          return `
-	            <div class="worktree-inspector-tree-row" style="--indent:${d}">
-	              <div class="mono worktree-inspector-tree-status ${statusClass}">${escapeHtml(node.status || '·')}</div>
-	              <div class="mono worktree-inspector-tree-path">${escapeHtml(node.name || '')}${renameHint}</div>
-	              <div class="mono worktree-inspector-tree-stat">${escapeHtml(node.stagedLabel || '')}</div>
-	              <div class="mono worktree-inspector-tree-stat">${escapeHtml(node.unstagedLabel || '')}</div>
-	            </div>
-	          `;
-	        }
+		      const renderTreeNode = (node, depth) => {
+		        const d = Math.max(0, Number(depth) || 0);
+		        if (node.type === 'file') {
+		          const { cls: statusClass, glyph: statusGlyph, title: statusTitle } = statusMeta(String(node.status || '').trim());
+		          const oldPath = node.oldPath ? escapeHtml(node.oldPath) : '';
+		          const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
+		          return `
+		            <div class="worktree-inspector-tree-row" style="--indent:${d}">
+		              <div class="mono worktree-inspector-tree-status ${statusClass}" title="${escapeHtml(statusTitle)}">${escapeHtml(statusGlyph)}</div>
+		              <div class="mono worktree-inspector-tree-path">${escapeHtml(node.name || '')}${renameHint}</div>
+		              <div class="mono worktree-inspector-tree-stat">${escapeHtml(node.stagedLabel || '')}</div>
+		              <div class="mono worktree-inspector-tree-stat">${escapeHtml(node.unstagedLabel || '')}</div>
+		            </div>
+		          `;
+		        }
 
 	        const childrenHtml = sortChildren(node).map((child) => renderTreeNode(child, d + 1)).join('');
 	        const stagedLabel = formatAgg(node.staged);
