@@ -1,6 +1,21 @@
 const voiceCommandService = require('../../server/voiceCommandService');
+const commandRegistry = require('../../server/commandRegistry');
 
 describe('VoiceCommandService (rule parsing)', () => {
+  test('auto-parses exact command-name phrases for zero-param commands', () => {
+    commandRegistry.register('test-zero-param-command', {
+      category: 'test',
+      description: 'test',
+      params: [],
+      examples: [],
+      handler: () => ({})
+    });
+
+    const parsed = voiceCommandService.parseWithRules('test zero param command');
+    expect(parsed.command).toBe('test-zero-param-command');
+    expect(parsed.params).toEqual({});
+  });
+
   test('parses workflow mode commands', () => {
     const focus = voiceCommandService.parseWithRules('enter focus mode');
     expect(focus.command).toBe('set-workflow-mode');
