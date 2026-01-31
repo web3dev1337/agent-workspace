@@ -389,21 +389,22 @@ class GitHelper {
   isValidPath(worktreePath) {
     // Normalize path to prevent traversal attacks
     const normalized = path.resolve(worktreePath);
-    
-    // Check if path starts with base path
-    if (!normalized.startsWith(this.basePath)) {
-      return false;
-    }
-    
+
     // If a specific worktree pattern is configured, validate against it
     if (this.worktreePattern) {
       const pattern = new RegExp(this.worktreePattern);
       return pattern.test(normalized);
     }
-    
-    // Otherwise, allow any subdirectory under the base path
-    // Additional checks can be added here
-    return true;
+
+    // Otherwise, allow known project roots. Default to HOME, but also allow common
+    // dev roots used by this repo (e.g. legacy /games paths and /tmp test repos).
+    const prefixes = [
+      this.basePath,
+      '/games',
+      '/tmp'
+    ].filter(Boolean).map((p) => path.resolve(p));
+
+    return prefixes.some((prefix) => normalized === prefix || normalized.startsWith(prefix + path.sep));
   }
   
   isValidBranchName(branchName) {
