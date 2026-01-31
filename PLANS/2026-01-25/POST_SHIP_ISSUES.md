@@ -5,7 +5,7 @@ The 2026-01-25 brain-dump implementation plan is fully checked off; this file tr
 ## Bugs / regressions
 
 - [x] Mixed-repo: session IDs containing `/` (e.g. `hytopia/zoo-game-claude`) caused invalid `querySelector('#wrapper-...')` selectors, breaking terminal rendering + branch label updates and sometimes leaving the UI stuck on “Loading workspaces…”. (PR #531)
-- [x] Session recovery: terminals you explicitly closed (×) still showed up as “recoverable sessions” on the next boot; closing now clears that session’s recovery state. (PR TBD)
+- [x] Session recovery: terminals you explicitly closed (×) still showed up as “recoverable sessions” on the next boot; closing now clears that session’s recovery state. (PR #535)
 - [x] History: include Codex CLI sessions in Conversation Browser; add Source filter and Codex resume commands. (work/codex-history-2026-01-29)
 - [x] Status lights: avoid false “waiting” when output ends with a lone `>` line (prompt gating in `StatusDetector`). (PR #394)
 - [x] Status lights: investigate remaining green/orange/grey flicker for agent + worktree dots (esp. Codex sessions). (Mitigations: treat `*-claude` terminals as “busy” for longer quiet windows, PR #398; Codex prompt heuristic, PR #400)
