@@ -10425,6 +10425,14 @@ class ClaudeOrchestrator {
       worktrees: worktrees.sort(),
       activeSession,
       selectedQueue: selectedQueueTask,
+      queueSummary: (() => {
+        try {
+          const summary = this.queuePanelApi?.getVisibleTasksSummary?.({ limit: 12 });
+          return Array.isArray(summary) ? summary : [];
+        } catch {
+          return [];
+        }
+      })(),
       // Add branch info if available
       worktreeDetails: Array.from(this.sessions.entries())
         .filter(([id]) => id.includes('-claude'))
@@ -20338,6 +20346,32 @@ class ClaudeOrchestrator {
 	      getState: () => state,
 	      getSelectedId: () => state.selectedId,
 	      getSelectedTask: () => (state.selectedId ? getTaskById(state.selectedId) : null),
+	      getVisibleTasksSummary: ({ limit = 12 } = {}) => {
+	        const tasks = getOrderedTasks(getFilteredTasks());
+	        const bounded = Math.min(50, Math.max(1, Number(limit) || 12));
+	        return tasks.slice(0, bounded).map((t) => {
+	          const rec = (t && typeof t === 'object') ? (t.record && typeof t.record === 'object' ? t.record : {}) : {};
+	          const pick = (v) => {
+	            const s = String(v || '').trim();
+	            return s ? s.slice(0, 300) : '';
+	          };
+	          return {
+	            id: pick(t?.id) || null,
+	            kind: pick(t?.kind) || null,
+	            title: pick(t?.title) || null,
+	            url: pick(t?.url) || null,
+	            sessionId: pick(t?.sessionId) || null,
+	            worktreePath: pick(t?.worktreePath) || null,
+	            tier: rec?.tier ?? null,
+	            changeRisk: pick(rec?.changeRisk) || null,
+	            claimedBy: pick(rec?.claimedBy) || null,
+	            assignedTo: pick(rec?.assignedTo) || null,
+	            reviewed: !!rec?.reviewedAt,
+	            done: !!rec?.doneAt,
+	            outcome: pick(rec?.reviewOutcome) || null
+	          };
+	        });
+	      },
 	      selectById: (id, options) => selectById(id, options || {}),
         refresh: async () => {
           try {
