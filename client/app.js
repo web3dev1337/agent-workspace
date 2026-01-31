@@ -4368,8 +4368,11 @@ class ClaudeOrchestrator {
 	  getWorktreeInspectorButtonHTML(sessionId) {
     const session = this.sessions.get(sessionId);
     const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
-	    const disabled = worktreePath ? '' : 'disabled';
-	    return `<button class="control-btn" onclick="window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${disabled}>🗂</button>`;
+	    const links = this.githubLinks.get(sessionId) || {};
+	    const prUrl = String(links.pr || '').trim();
+	    const canOpen = !!(worktreePath || prUrl);
+	    const ariaDisabled = canOpen ? '' : 'aria-disabled="true"';
+	    return `<button class="control-btn" onclick="event.stopPropagation(); window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${ariaDisabled}>🗂</button>`;
 	  }
 
 	  getWorktreeRemoveButtonHTML(sessionId) {
