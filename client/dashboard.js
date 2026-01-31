@@ -136,6 +136,15 @@ class Dashboard {
                     <button class="dashboard-topbar-btn" id="dashboard-open-polecats-card" title="Open Polecats panel">🐾 Manage</button>
                   </div>
                 </div>
+                <div class="dashboard-summary-card">
+                  <div class="dashboard-summary-title">Discord</div>
+                  <div id="dashboard-discord-summary" class="dashboard-summary-body">Loading…</div>
+                  <div class="dashboard-summary-actions">
+                    <button class="dashboard-topbar-btn" id="dashboard-discord-ensure" title="Create/ensure Services workspace + terminals">🧰 Ensure</button>
+                    <button class="dashboard-topbar-btn" id="dashboard-discord-process" title="Trigger Discord queue processing">📥 Process</button>
+                    <button class="dashboard-topbar-btn" id="dashboard-discord-open-services" title="Open Services workspace">↗ Services</button>
+                  </div>
+                </div>
 	              <div class="dashboard-summary-card">
 	                <div class="dashboard-summary-title">Projects</div>
 	                <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
@@ -205,6 +214,7 @@ class Dashboard {
 	    const statusEl = document.getElementById('dashboard-status-summary');
 	    const telemetryEl = document.getElementById('dashboard-telemetry-summary');
       const polecatsEl = document.getElementById('dashboard-polecats-summary');
+      const discordEl = document.getElementById('dashboard-discord-summary');
 	    const projectsEl = document.getElementById('dashboard-projects-summary');
 	    const adviceEl = document.getElementById('dashboard-advice-summary');
 	    const readinessEl = document.getElementById('dashboard-readiness-summary');
@@ -232,6 +242,20 @@ class Dashboard {
         document.getElementById('dashboard-open-polecats-card')?.addEventListener('click', (e) => {
           e.preventDefault();
           this.showPolecatOverlay().catch(() => {});
+        });
+        document.getElementById('dashboard-discord-ensure')?.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await this.ensureDiscordServices();
+          await this.loadDashboardDiscordSummary(discordEl);
+        });
+        document.getElementById('dashboard-discord-process')?.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await this.processDiscordQueue();
+          await this.loadDashboardDiscordSummary(discordEl);
+        });
+        document.getElementById('dashboard-discord-open-services')?.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await this.openDiscordServicesWorkspace();
         });
 		    document.getElementById('dashboard-open-tests')?.addEventListener('click', (e) => {
 		      e.preventDefault();
@@ -490,15 +514,89 @@ class Dashboard {
         }
       }
 
+      await this.loadDashboardDiscordSummary(discordEl);
       await renderAdvice({ force: false });
-	    } catch (error) {
-	      if (statusEl) statusEl.textContent = 'Failed to load.';
-	      if (telemetryEl) telemetryEl.textContent = 'Failed to load.';
-	      if (projectsEl) projectsEl.textContent = 'Failed to load.';
-	      if (readinessEl) readinessEl.textContent = 'Failed to load.';
-	      await renderAdvice({ force: false });
-	    }
-	  }
+		    } catch (error) {
+		      if (statusEl) statusEl.textContent = 'Failed to load.';
+		      if (telemetryEl) telemetryEl.textContent = 'Failed to load.';
+		      if (projectsEl) projectsEl.textContent = 'Failed to load.';
+		      if (readinessEl) readinessEl.textContent = 'Failed to load.';
+          if (discordEl) discordEl.textContent = 'Failed to load.';
+		      await renderAdvice({ force: false });
+		    }
+		  }
+
+      async ensureDiscordServices() {
+        try {
+          const res = await fetch('/api/discord/ensure-services', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          }).catch(() => null);
+          if (!res || !res.ok) {
+            this.orchestrator?.showTemporaryMessage?.('Failed to ensure Discord services', 'error');
+            return null;
+          }
+          const data = await res.json().catch(() => ({}));
+          this.orchestrator?.showTemporaryMessage?.('Discord services ensured', 'success');
+          return data;
+        } catch {
+          this.orchestrator?.showTemporaryMessage?.('Failed to ensure Discord services', 'error');
+          return null;
+        }
+      }
+
+      async processDiscordQueue() {
+        try {
+          const res = await fetch('/api/discord/process-queue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          }).catch(() => null);
+          const data = res ? await res.json().catch(() => ({})) : {};
+          if (!res || !res.ok || data.ok === false) {
+            this.orchestrator?.showTemporaryMessage?.(data?.message || 'Failed to process Discord queue', 'error');
+            return null;
+          }
+          this.orchestrator?.showTemporaryMessage?.('Discord queue processing triggered', 'success');
+          return data;
+        } catch {
+          this.orchestrator?.showTemporaryMessage?.('Failed to process Discord queue', 'error');
+          return null;
+        }
+      }
+
+      async openDiscordServicesWorkspace() {
+        const status = await this.ensureDiscordServices();
+        const workspaceId = status?.servicesWorkspaceId || 'services';
+        return this.openWorkspace(workspaceId);
+      }
+
+      async loadDashboardDiscordSummary(el) {
+        if (!el) return;
+        el.textContent = 'Loading…';
+        try {
+          const res = await fetch('/api/discord/status').catch(() => null);
+          const data = res ? await res.json().catch(() => ({})) : {};
+          if (!res || !res.ok || data.ok === false) {
+            el.textContent = 'Unavailable.';
+            return;
+          }
+
+          const pending = Number(data?.queue?.pendingCount || 0);
+          const pendingAt = data?.queue?.pendingUpdatedAt ? new Date(data.queue.pendingUpdatedAt).toLocaleString() : '—';
+          const bot = data?.sessions?.botRunning ? 'running' : 'stopped';
+          const proc = data?.sessions?.processorRunning ? 'running' : 'stopped';
+          const ws = data?.workspace?.exists ? 'ok' : 'missing';
+
+          el.innerHTML = `
+            <div>Services workspace: <strong>${ws}</strong></div>
+            <div>Bot: <strong>${bot}</strong> • Processor: <strong>${proc}</strong></div>
+            <div>Queue: <strong>${pending}</strong> pending</div>
+            <div style="opacity:0.75;">updated: ${pendingAt}</div>
+          `;
+        } catch {
+          el.textContent = 'Unavailable.';
+        }
+      }
 
     updatePolecatSummary(targetEl = null) {
       const el = targetEl || document.getElementById('dashboard-polecats-summary');
