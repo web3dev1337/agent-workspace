@@ -4596,6 +4596,101 @@ class ClaudeOrchestrator {
         }
         break;
 
+      case 'open-history': {
+        const source = String(params?.source || '').trim().toLowerCase();
+        const query = String(params?.query || '').trim();
+        const repo = String(params?.repo || '').trim();
+        const branch = String(params?.branch || '').trim();
+        const dateFilter = String(params?.dateFilter || '').trim();
+
+        if (!this.conversationBrowser) {
+          this.showToast?.('Conversation history not available', 'error');
+          break;
+        }
+
+        this.conversationBrowser.show()
+          .then(() => setTimeout(() => {
+            // Apply filters after render + initial load.
+            if (source) {
+              const v = source === 'all' ? 'all' : source;
+              const el = document.getElementById('conv-source-filter');
+              if (el) el.value = v;
+              this.conversationBrowser.applyFilter('source', v);
+            }
+
+            if (repo) {
+              const el = document.getElementById('conv-repo-filter');
+              if (el) el.value = repo;
+              this.conversationBrowser.applyFilter('repo', repo);
+            }
+
+            if (branch) {
+              const el = document.getElementById('conv-branch-filter');
+              if (el) el.value = branch;
+              this.conversationBrowser.applyFilter('branch', branch);
+            }
+
+            if (dateFilter) {
+              const el = document.getElementById('conv-date-filter');
+              if (el) el.value = dateFilter;
+              this.conversationBrowser.applyDateFilter(dateFilter);
+            }
+
+            if (query) {
+              const el = document.getElementById('conv-search');
+              if (el) el.value = query;
+              this.conversationBrowser.handleSearch(query);
+            }
+          }, 50))
+          .catch?.((err) => console.error('Failed to open history:', err));
+
+        break;
+      }
+
+      case 'resume-history': {
+        const id = String(params?.id || '').trim();
+        const source = String(params?.source || '').trim().toLowerCase();
+        const project = String(params?.project || '').trim();
+        if (!id) break;
+
+        if (!this.conversationBrowser) {
+          this.showToast?.('Conversation history not available', 'error');
+          break;
+        }
+
+        (async () => {
+          try {
+            const serverUrl = window.location.origin;
+            const qs = new URLSearchParams();
+            if (source) qs.set('source', source);
+            if (project) qs.set('project', project);
+
+            const url = `${serverUrl}/api/conversations/${encodeURIComponent(id)}${qs.toString() ? `?${qs}` : ''}`;
+            const res = await fetch(url);
+            if (!res.ok) {
+              const msg = await res.text().catch(() => '');
+              this.showToast?.(`Failed to load conversation (${res.status})`, 'error');
+              console.error('resume-history failed:', res.status, msg);
+              return;
+            }
+
+            const conv = await res.json();
+            const cwd = String(conv?.cwd || '').trim();
+            const proj = String(conv?.project || '').trim();
+            const src = String(conv?.source || source || 'claude').trim();
+
+            // Bring up the browser (so user sees what’s happening), then resume.
+            await this.conversationBrowser.show();
+            await this.conversationBrowser.resumeConversation(id, proj, cwd, src);
+          } catch (err) {
+            console.error('Failed to resume history:', err);
+            this.showToast?.('Failed to resume conversation', 'error');
+          }
+        })();
+
+        break;
+      }
+
       case 'open-queue':
         this.showQueuePanel?.().catch?.((err) => console.error('Failed to open queue:', err));
         break;

@@ -40,6 +40,17 @@ describe('VoiceCommandService (rule parsing)', () => {
     const tasks = voiceCommandService.parseWithRules('open tasks');
     expect(tasks.command).toBe('open-tasks');
 
+    const history = voiceCommandService.parseWithRules('open history');
+    expect(history.command).toBe('open-history');
+
+    const codexHistory = voiceCommandService.parseWithRules('open codex history');
+    expect(codexHistory.command).toBe('open-history');
+    expect(codexHistory.params).toEqual({ source: 'codex' });
+
+    const searchHistory = voiceCommandService.parseWithRules('search history for 409 conflict');
+    expect(searchHistory.command).toBe('open-history');
+    expect(searchHistory.params).toEqual({ query: '409 conflict' });
+
     const dash = voiceCommandService.parseWithRules('open dashboard');
     expect(dash.command).toBe('open-dashboard');
 
@@ -191,5 +202,15 @@ describe('VoiceCommandService (rule parsing)', () => {
 
     const openTicket = voiceCommandService.parseWithRules('open ticket');
     expect(openTicket.command).toBe('queue-open-ticket');
+  });
+
+  test('parses history resume commands', () => {
+    const resume = voiceCommandService.parseWithRules('resume conversation abc123');
+    expect(resume.command).toBe('resume-history');
+    expect(resume.params).toEqual({ id: 'abc123' });
+
+    const resumeCodex = voiceCommandService.parseWithRules('resume codex sess_123');
+    expect(resumeCodex.command).toBe('resume-history');
+    expect(resumeCodex.params).toEqual({ source: 'codex', id: 'sess_123' });
   });
 });

@@ -443,6 +443,59 @@ class VoiceCommandService {
         command: 'open-tasks',
         extractParams: () => ({})
       },
+      // Open History (Conversation Browser)
+      {
+        patterns: [
+          /open\s+codex\s+history/i,
+          /show\s+codex\s+history/i,
+          /codex\s+history/i,
+        ],
+        command: 'open-history',
+        extractParams: () => ({ source: 'codex' })
+      },
+      {
+        patterns: [
+          /open\s+claude\s+history/i,
+          /show\s+claude\s+history/i,
+          /claude\s+history/i,
+        ],
+        command: 'open-history',
+        extractParams: () => ({ source: 'claude' })
+      },
+      {
+        patterns: [
+          /search\s+history\s+(?:for\s+)?(.+)/i,
+          /find\s+in\s+history\s+(.+)/i,
+          /search\s+conversations?\s+(?:for\s+)?(.+)/i,
+        ],
+        command: 'open-history',
+        extractParams: (match) => ({ query: String(match?.[1] || '').trim() })
+      },
+      {
+        patterns: [
+          /open\s+(?:conversation\s+)?history/i,
+          /show\s+(?:conversation\s+)?history/i,
+          /open\s+conversations/i,
+          /show\s+conversations/i,
+        ],
+        command: 'open-history',
+        extractParams: () => ({})
+      },
+      // Resume history item by id
+      {
+        patterns: [
+          /^(?:resume|open)\s+(?:conversation|history)\s+([^\s]+)$/i,
+          /^(?:resume)\s+(codex|claude)\s+([^\s]+)$/i,
+        ],
+        command: 'resume-history',
+        extractParams: (match) => {
+          const hasSource = match.length >= 3 && /^(codex|claude)$/i.test(match[1]);
+          if (hasSource) {
+            return { source: String(match[1]).toLowerCase(), id: String(match[2] || '').trim() };
+          }
+          return { id: String(match?.[1] || '').trim() };
+        }
+      },
       // Open Advisor
       {
         patterns: [

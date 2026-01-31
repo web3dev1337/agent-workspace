@@ -199,6 +199,46 @@ class CommandRegistry {
       }
     });
 
+    // ============ HISTORY / CONVERSATIONS ============
+
+    this.register('open-history', {
+      category: 'history',
+      description: 'Open conversation history (Claude + Codex) with optional filters',
+      params: [
+        { name: 'source', required: false, description: 'Filter by source: "all", "claude", or "codex"' },
+        { name: 'query', required: false, description: 'Search query text' },
+        { name: 'repo', required: false, description: 'Repo/project filter (as shown in the history UI)' },
+        { name: 'branch', required: false, description: 'Branch filter (e.g. "main", "work2", "feature/foo")' },
+        { name: 'dateFilter', required: false, description: 'Date filter: "1h", "24h", "3d", "7d", "30d", "90d"' }
+      ],
+      examples: [
+        { params: { source: 'codex' }, description: 'Show Codex session history' },
+        { params: { query: '409 conflict add-mixed-worktree', source: 'all' }, description: 'Search all history for an error message' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-history', ...params });
+        return { message: 'Opening history' };
+      }
+    });
+
+    this.register('resume-history', {
+      category: 'history',
+      description: 'Resume a specific conversation/session by id (Claude or Codex)',
+      params: [
+        { name: 'id', required: true, description: 'Conversation/session id to resume' },
+        { name: 'source', required: false, description: 'Optional source hint: "claude" or "codex"' },
+        { name: 'project', required: false, description: 'Optional project/repo hint (helps disambiguate)' }
+      ],
+      examples: [
+        { params: { id: 'e0b1c2d3-....', source: 'claude' }, description: 'Resume a Claude conversation by id' },
+        { params: { id: 'codex-session-id', source: 'codex' }, description: 'Resume a Codex session by id' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'resume-history', ...params });
+        return { message: `Resuming ${params.id}` };
+      }
+    });
+
     this.register('open-new-project', {
       category: 'ui',
       description: 'Open the New Project / Greenfield wizard',
