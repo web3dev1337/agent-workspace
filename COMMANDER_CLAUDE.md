@@ -16,6 +16,18 @@ The Command Registry provides semantic, self-documenting commands. **This is the
 curl -s http://localhost:4000/api/commander/capabilities | jq
 ```
 
+### Get Live Context (Recommended)
+```bash
+# See current UI/session context (selected queue item, sessions, workspace, etc.)
+curl -s http://localhost:4000/api/commander/context | jq
+```
+
+### Get Runtime Help Prompt (Self-Updating)
+```bash
+# Plain-text prompt generated from the command registry + current context
+curl -s http://localhost:4000/api/commander/prompt
+```
+
 ### Execute Commands
 ```bash
 # General syntax

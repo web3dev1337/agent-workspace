@@ -4625,6 +4625,35 @@ class ClaudeOrchestrator {
           .catch?.((err) => console.error('Failed to open queue conveyor t2:', err));
         break;
 
+      case 'queue-select':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.selectById?.(String(params?.id || '').trim()), 50))
+          .catch?.((err) => console.error('Failed to select queue item:', err));
+        break;
+
+      case 'queue-open-console': {
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => {
+            const t = this.queuePanelApi?.getSelectedTask?.();
+            if (t) this.openReviewConsoleForTask(t);
+            else this.showToast?.('No queue item selected', 'warning');
+          }, 50))
+          .catch?.((err) => console.error('Failed to open queue console:', err));
+        break;
+      }
+
+      case 'queue-open-diff': {
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => {
+            const t = this.queuePanelApi?.getSelectedTask?.();
+            const url = String(t?.url || '').trim();
+            if (url) this.launchDiffViewer(url);
+            else this.showToast?.('Selected item has no PR URL', 'warning');
+          }, 50))
+          .catch?.((err) => console.error('Failed to open queue diff:', err));
+        break;
+      }
+
       case 'open-tasks':
         this.showTasksPanel?.().catch?.((err) => console.error('Failed to open tasks:', err));
         break;
@@ -8519,6 +8548,20 @@ class ClaudeOrchestrator {
   }
 
   /**
+   * Commander/voice-friendly stop: closes the session immediately (no confirmation).
+   * This matches the semantic "stop-session" command intent.
+   */
+  stopSession(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+    if (!this.socket || !this.socket.connected) {
+      this.showToast?.('Not connected to server', 'warning');
+      return;
+    }
+    this.socket.emit('destroy-session', { sessionId: sid });
+  }
+
+  /**
    * Close all sessions associated with a worktree
    */
   closeWorktreeSessions(worktreeIdOrKey) {
@@ -9371,10 +9414,31 @@ class ClaudeOrchestrator {
     }
 
     // Build context
+    const selectedQueueTask = (() => {
+      try {
+        const t = this.queuePanelApi?.getSelectedTask?.();
+        if (!t || typeof t !== 'object') return null;
+        return {
+          id: String(t.id || '').trim() || null,
+          kind: String(t.kind || '').trim() || null,
+          title: String(t.title || '').trim() || null,
+          url: String(t.url || '').trim() || null,
+          sessionId: String(t.sessionId || '').trim() || null,
+          worktreePath: String(t.worktreePath || '').trim() || null
+        };
+      } catch {
+        return null;
+      }
+    })();
+
+    const activeSession = String(this.focusedTerminalInfo?.sessionId || this.lastInteractedSessionId || '').trim() || null;
+
     const context = {
       currentWorkspace: this.currentWorkspace?.name || null,
       workspaces: this.availableWorkspaces?.map(w => w.name) || [],
       worktrees: worktrees.sort(),
+      activeSession,
+      selectedQueue: selectedQueueTask,
       // Add branch info if available
       worktreeDetails: Array.from(this.sessions.entries())
         .filter(([id]) => id.includes('-claude'))
@@ -19164,6 +19228,8 @@ class ClaudeOrchestrator {
 		      const t = getTaskById(id);
 		      renderList();
 		      renderDetail(t);
+          // Keep server-side voice/commander context aligned with what the user is looking at.
+          this.updateVoiceContext();
 		      if (state.reviewActive && t?.id) {
 		        startReviewTimer(t.id).catch(() => {});
 		      }
