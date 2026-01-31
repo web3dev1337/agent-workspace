@@ -36,6 +36,13 @@ Example sources of hard-coded colors:
 
 Until these are migrated to tokens, any “Blue mode” will be partial / inconsistent.
 
+## Color inventory (“note of ALL COLORS”)
+
+To keep this maintainable (and to avoid missing colors when the UI evolves), we generate a
+repo-local audit report:
+- Generator: `scripts/audit-ui-colors.js` (scans `client/**/*.css|js|html`)
+- Output: `PLANS/2026-01-31/UI_COLOR_AUDIT.md`
+
 ## Proposed Architecture
 
 Separate two concepts:
@@ -127,4 +134,3 @@ Manual:
 
 Automated (optional):
 - Add a small UI smoke test that toggles theme settings and asserts the `body` attributes update.
-
