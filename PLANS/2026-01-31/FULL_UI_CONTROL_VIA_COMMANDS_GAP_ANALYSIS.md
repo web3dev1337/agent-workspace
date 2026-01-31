@@ -343,9 +343,10 @@ Add optional `aliases` to command definitions and generate `patterns` for exact 
 
 ### P4-CMD-08 — Provider-agnostic History/Resume commands (Claude/Codex/future)
 Commands:
-- `history/open { providerIds? }`
-- `history/search { query, providerIds? }`
-- `history/resume { providerId?, resumeId }`
+- `open-history { source?, query?, repo?, branch?, dateFilter? }`
+- `resume-history { id, source?, project? }`
+
+Status: ✅ shipped (2026-01-31) via `server/commandRegistry.js` + `client/app.js` + `server/voiceCommandService.js`.
 
 ---
 
