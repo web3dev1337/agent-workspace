@@ -137,6 +137,113 @@ class VoiceCommandService {
         command: 'queue-open-diff',
         extractParams: () => ({})
       },
+      // Queue: prev item
+      {
+        patterns: [
+          /^(?:prev|previous)(?:\s+(?:item|one|pr))?$/i,
+          /go\s+back/i,
+        ],
+        command: 'queue-prev',
+        extractParams: () => ({})
+      },
+      // Queue: open inspector
+      {
+        patterns: [
+          /open\s+(?:the\s+)?inspector/i,
+          /open\s+(?:the\s+)?worktree\s+inspector/i,
+          /inspect\s+(?:files|worktree)/i,
+        ],
+        command: 'queue-open-inspector',
+        extractParams: () => ({})
+      },
+      // Queue: review timer
+      {
+        patterns: [
+          /^(?:start|begin)\s+(?:the\s+)?review\s+timer$/i,
+          /^(?:start|begin)\s+(?:timer)$/i,
+        ],
+        command: 'queue-review-timer-start',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /^(?:stop|end)\s+(?:the\s+)?review\s+timer$/i,
+          /^(?:stop|end)\s+(?:timer)$/i,
+        ],
+        command: 'queue-review-timer-stop',
+        extractParams: () => ({})
+      },
+      // Queue: set tier
+      {
+        patterns: [
+          /^(?:set\s+)?tier\s+(?:to\s+)?(1|2|3|4|none)$/i,
+          /^t(1|2|3|4)$/i,
+        ],
+        command: 'queue-set-tier',
+        extractParams: (match) => ({ tier: String(match?.[1] || '').trim().toLowerCase() })
+      },
+      // Queue: set risk
+      {
+        patterns: [
+          /^(?:set\s+)?risk\s+(?:to\s+)?(low|medium|high|none)$/i,
+        ],
+        command: 'queue-set-risk',
+        extractParams: (match) => ({ risk: String(match?.[1] || '').trim().toLowerCase() })
+      },
+      // Queue: set outcome
+      {
+        patterns: [
+          /^(?:set\s+)?outcome\s+(?:to\s+)?([a-zA-Z0-9_\\-]+)$/i,
+          /^(?:mark|set)\s+needs\s+fix$/i,
+          /^(?:mark|set)\s+approved$/i,
+        ],
+        command: 'queue-set-outcome',
+        extractParams: (match) => {
+          if (/needs\s+fix/i.test(match?.[0] || '')) return { outcome: 'needs_fix' };
+          if (/approved/i.test(match?.[0] || '')) return { outcome: 'approved' };
+          return { outcome: String(match?.[1] || '').trim() };
+        }
+      },
+      // Queue: set notes
+      {
+        patterns: [
+          /^(?:set\s+)?notes\s*[:,-]?\s*(.+)$/i,
+          /^(?:set\s+)?fix\s+request\s*[:,-]?\s*(.+)$/i,
+        ],
+        command: 'queue-set-notes',
+        extractParams: (match) => ({ notes: String(match?.[1] || '').trim() })
+      },
+      // Queue: claim/release/assign
+      {
+        patterns: [
+          /^claim(?:\s+(?:as\s+)?(.+))?$/i,
+        ],
+        command: 'queue-claim',
+        extractParams: (match) => ({ who: String(match?.[1] || '').trim() || undefined })
+      },
+      {
+        patterns: [
+          /^release(?:\s+claim)?$/i,
+          /^unclaim$/i,
+        ],
+        command: 'queue-release',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /^assign\s+to\s+(.+)$/i,
+        ],
+        command: 'queue-assign',
+        extractParams: (match) => ({ who: String(match?.[1] || '').trim() })
+      },
+      {
+        patterns: [
+          /^unassign$/i,
+          /^clear\s+assignee$/i,
+        ],
+        command: 'queue-unassign',
+        extractParams: () => ({})
+      },
       // Queue: approve selected PR
       {
         patterns: [
