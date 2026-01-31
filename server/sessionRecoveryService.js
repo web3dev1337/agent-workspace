@@ -34,6 +34,26 @@ class SessionRecoveryService {
     this.initialized = false;
   }
 
+  saveWorkspaceStateSync(workspaceId) {
+    try {
+      const sessions = this.states.get(workspaceId);
+      if (!sessions) return;
+
+      const state = {
+        workspaceId,
+        savedAt: new Date().toISOString(),
+        sessions: Object.fromEntries(sessions)
+      };
+
+      const filePath = this.getRecoveryPath(workspaceId);
+      const fsSync = require('fs');
+      fsSync.mkdirSync(RECOVERY_DIR, { recursive: true });
+      fsSync.writeFileSync(filePath, JSON.stringify(state, null, 2));
+    } catch (error) {
+      logger.error('Failed to save recovery state (sync)', { workspaceId, error: error.message });
+    }
+  }
+
   async init() {
     try {
       await fs.mkdir(RECOVERY_DIR, { recursive: true });
@@ -364,7 +384,16 @@ class SessionRecoveryService {
     const sessions = this.states.get(workspaceId);
     if (sessions) {
       sessions.delete(sessionId);
-      this.saveWorkspaceState(workspaceId);
+
+      // Clear any pending debounced write and persist immediately, so explicit user closes
+      // don't keep showing up as "recoverable" if the server exits soon after.
+      const existing = this.saveDebounce.get(workspaceId);
+      if (existing) {
+        clearTimeout(existing);
+        this.saveDebounce.delete(workspaceId);
+      }
+
+      this.saveWorkspaceStateSync(workspaceId);
     }
   }
 
@@ -373,6 +402,11 @@ class SessionRecoveryService {
    */
   async clearWorkspace(workspaceId) {
     this.states.delete(workspaceId);
+    const existing = this.saveDebounce.get(workspaceId);
+    if (existing) {
+      clearTimeout(existing);
+      this.saveDebounce.delete(workspaceId);
+    }
     try {
       const filePath = this.getRecoveryPath(workspaceId);
       await fs.unlink(filePath);
