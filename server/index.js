@@ -2356,6 +2356,18 @@ app.get('/api/recovery/:workspaceId/:sessionId', async (req, res) => {
   }
 });
 
+app.delete('/api/recovery/:workspaceId/:sessionId', async (req, res) => {
+  try {
+    const { workspaceId, sessionId } = req.params;
+    await sessionRecoveryService.loadWorkspaceState(workspaceId);
+    sessionRecoveryService.clearSession(workspaceId, String(sessionId || '').trim());
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to clear session recovery state', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.delete('/api/recovery/:workspaceId', async (req, res) => {
   try {
     const { workspaceId } = req.params;

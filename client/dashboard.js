@@ -3105,7 +3105,28 @@ class Dashboard {
     if (recoveryEnabled) {
       const recoveryInfo = await this.checkRecoveryState(workspaceId);
       if (recoveryInfo && recoveryInfo.recoverableSessions > 0) {
-        if (recoveryMode === 'auto') {
+        // If the user previously dismissed this exact snapshot, don't nag again.
+        const savedAt = String(recoveryInfo.savedAt || '').trim();
+        const dismissKey = `orchestrator-recovery-dismissed:${workspaceId}`;
+        let dismissedSnapshot = false;
+        if (savedAt) {
+          try {
+            const dismissedAt = String(localStorage.getItem(dismissKey) || '').trim();
+            if (dismissedAt && dismissedAt === savedAt) {
+              console.log('Skipping recovery dialog - dismissed for this snapshot');
+              dismissedSnapshot = true;
+            } else {
+              // Clear stale dismiss markers when the snapshot changes.
+              if (dismissedAt) localStorage.removeItem(dismissKey);
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        if (dismissedSnapshot) {
+          // Do nothing: proceed to open workspace with no recovery.
+        } else if (recoveryMode === 'auto') {
           // Auto-recover all sessions
           this.pendingRecovery = { mode: 'all', sessions: recoveryInfo.sessions };
           console.log('Auto-recovering all sessions');
@@ -3552,6 +3573,7 @@ class Dashboard {
 
       const sessions = recoveryInfo.sessions || [];
       const savedAt = recoveryInfo.savedAt ? new Date(recoveryInfo.savedAt).toLocaleString() : 'Unknown';
+      const savedAtRaw = String(recoveryInfo.savedAt || '').trim();
 
       const modal = document.createElement('div');
       modal.id = 'recovery-dialog';
@@ -3582,10 +3604,13 @@ class Dashboard {
               `).join('')}
           </div>
           <div class="recovery-footer">
-            <button class="btn-recovery btn-recovery-skip" id="recovery-skip">
-              Skip Recovery
+            <button class="btn-recovery btn-recovery-skip" id="recovery-skip" title="Hide this prompt (does not delete recovery info)">
+              Skip (hide)
             </button>
             <div class="recovery-actions">
+              <button class="btn-recovery btn-recovery-clear" id="recovery-clear" title="Delete stored recovery info for this workspace (won't kill processes)">
+                Clear
+              </button>
               <button class="btn-recovery btn-recovery-selected" id="recovery-selected">
                 Recover Selected
               </button>
@@ -3599,6 +3624,28 @@ class Dashboard {
 
       document.body.appendChild(modal);
 
+      const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' :
+                        window.location.port === '2081' ? 'http://localhost:4000' :
+                        window.location.origin;
+
+      const setButtonsDisabled = (disabled) => {
+        modal.querySelectorAll('button').forEach((btn) => { btn.disabled = !!disabled; });
+      };
+
+      const clearRecoverySessions = async (sessionIds) => {
+        const ids = Array.isArray(sessionIds)
+          ? sessionIds.map((s) => String(s || '').trim()).filter(Boolean)
+          : [];
+        if (!ids.length) return;
+        await Promise.all(ids.map(async (id) => {
+          try {
+            await fetch(`${serverUrl}/api/recovery/${encodeURIComponent(workspaceId)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          } catch {
+            // best-effort
+          }
+        }));
+      };
+
       // Event handlers
       modal.querySelector('.close-btn').onclick = () => {
         modal.remove();
@@ -3606,11 +3653,30 @@ class Dashboard {
       };
 
       modal.querySelector('#recovery-skip').onclick = () => {
+        if (savedAtRaw) {
+          try {
+            localStorage.setItem(`orchestrator-recovery-dismissed:${workspaceId}`, savedAtRaw);
+          } catch {
+            // ignore
+          }
+        }
         modal.remove();
         resolve({ mode: 'skip', sessions: [] });
       };
 
-      modal.querySelector('#recovery-selected').onclick = () => {
+      modal.querySelector('#recovery-clear').onclick = async () => {
+        setButtonsDisabled(true);
+        try {
+          await fetch(`${serverUrl}/api/recovery/${encodeURIComponent(workspaceId)}`, { method: 'DELETE' });
+        } catch (error) {
+          console.error('Failed to clear recovery state:', error);
+        } finally {
+          modal.remove();
+          resolve({ mode: 'skip', sessions: [] });
+        }
+      };
+
+      modal.querySelector('#recovery-selected').onclick = async () => {
         const selected = [];
         modal.querySelectorAll('.recovery-session').forEach(el => {
           const checkbox = el.querySelector('.recovery-checkbox');
@@ -3618,13 +3684,23 @@ class Dashboard {
             selected.push(sessions.find(s => s.sessionId === el.dataset.sessionId));
           }
         });
-        modal.remove();
-        resolve({ mode: 'selected', sessions: selected });
+        setButtonsDisabled(true);
+        try {
+          await clearRecoverySessions(selected.map((s) => s?.sessionId));
+        } finally {
+          modal.remove();
+          resolve({ mode: 'selected', sessions: selected });
+        }
       };
 
-      modal.querySelector('#recovery-all').onclick = () => {
-        modal.remove();
-        resolve({ mode: 'all', sessions: sessions });
+      modal.querySelector('#recovery-all').onclick = async () => {
+        setButtonsDisabled(true);
+        try {
+          await clearRecoverySessions(sessions.map((s) => s?.sessionId));
+        } finally {
+          modal.remove();
+          resolve({ mode: 'all', sessions: sessions });
+        }
       };
 
       // Toggle selection on row click
