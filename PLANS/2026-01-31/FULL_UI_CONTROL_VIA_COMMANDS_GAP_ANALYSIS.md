@@ -341,7 +341,7 @@ Commands:
 Acceptance:
 - Voice parsing can reliably resolve “this PR / current item / next item”.
 
-Status: ✅ shipped (context endpoints exist; voice context is pushed and used in the LLM prompt).
+Status: ✅ shipped (context endpoints exist; voice context is pushed and used in the LLM prompt; Queue “top items” summary included in context, PR #534).
 
 ### P4-CMD-07 — Auto-generate Voice rule patterns (optional, but reduces drift)
 Add optional `aliases` to command definitions and generate `patterns` for exact matching from those aliases.
