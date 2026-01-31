@@ -7194,6 +7194,8 @@ class ClaudeOrchestrator {
 
 		    try {
 		      const summary = await this.fetchWorktreeGitSummary(p, { maxFiles: 300, maxCommits: 25 });
+		      const gitDetected = summary?.gitDetected === true;
+		      const gitError = summary?.gitError ? String(summary.gitError) : '';
 		      const pr = summary?.pr || {};
 		      const reviewTask = task && typeof task === 'object' ? task : null;
 		      const reviewRecord = reviewTask && typeof reviewTask.record === 'object' ? reviewTask.record : null;
@@ -7239,7 +7241,7 @@ class ClaudeOrchestrator {
 		      const diffViewerPath = prUrl ? getDiffViewerPathForGitHubUrl(prUrl) : '';
 
 		      const header = (() => {
-		        const branch = escapeHtml(summary?.branch || 'unknown');
+		        const branch = gitDetected ? escapeHtml(summary?.branch || 'unknown') : 'no-git';
 		        const ahead = Number(summary?.ahead || 0);
 		        const behind = Number(summary?.behind || 0);
 	        const dirty = Array.isArray(summary?.files) ? summary.files.length : 0;
@@ -7247,6 +7249,7 @@ class ClaudeOrchestrator {
 	        const parts = [];
 	        parts.push(`<span class="worktree-inspector-chip" title="${escapeHtml(p)}">📁 ${escapeHtml(p)}</span>`);
 	        parts.push(`<span class="worktree-inspector-chip">🌿 ${branch}</span>`);
+	        if (!gitDetected) parts.push(`<span class="worktree-inspector-chip" title="${escapeHtml(gitError || 'Not a git repo')}">⚠ no git</span>`);
 	        if (behind > 0) parts.push(`<span class="worktree-inspector-chip">⇣${behind}</span>`);
 	        if (ahead > 0) parts.push(`<span class="worktree-inspector-chip">⇡${ahead}</span>`);
 	        parts.push(`<span class="worktree-inspector-chip">Δ files ${dirty}</span>`);
@@ -7569,9 +7572,11 @@ class ClaudeOrchestrator {
 	        `;
 	      };
 
-	      const treeHtml = files.length
-	        ? `<div class="worktree-inspector-tree">${sortChildren(treeRoot).map((n) => renderTreeNode(n, 0)).join('')}</div>`
-	        : `<div style="opacity:0.8;">No changes.</div>`;
+	      const treeHtml = !gitDetected
+	        ? `<div style="opacity:0.8;">Git not detected for this path.</div>${gitError ? `<div class="worktree-inspector-subtle mono">${escapeHtml(gitError)}</div>` : ''}`
+	        : (files.length
+	          ? `<div class="worktree-inspector-tree">${sortChildren(treeRoot).map((n) => renderTreeNode(n, 0)).join('')}</div>`
+	          : `<div style="opacity:0.8;">No changes.</div>`);
 
 	      const commits = Array.isArray(summary?.unpushedCommits) && summary.unpushedCommits.length
 	        ? summary.unpushedCommits
@@ -7648,7 +7653,9 @@ class ClaudeOrchestrator {
 		                    </tr>
 		                  </thead>
 		                  <tbody>
-		                    ${fileRows || `<tr><td colspan="5" style="opacity:0.8;">No changes.</td></tr>`}
+		                    ${fileRows || (gitDetected
+		                      ? `<tr><td colspan="5" style="opacity:0.8;">No changes.</td></tr>`
+		                      : `<tr><td colspan="5" style="opacity:0.8;">Git not detected for this path.</td></tr>`)}
 		                  </tbody>
 		                </table>
 		              </div>
@@ -7657,7 +7664,9 @@ class ClaudeOrchestrator {
 		          <div class="worktree-inspector-panel worktree-inspector-commits-panel ${commitsPanelHiddenClass}" data-rc-panel="commits">
 		            <div class="worktree-inspector-panel-title">${escapeHtml(commitsTitle)}</div>
 		            <div class="worktree-inspector-commits">
-	              ${commitRows || `<div style="opacity:0.8;">No commits found.</div>`}
+	              ${commitRows || (gitDetected
+	                ? `<div style="opacity:0.8;">No commits found.</div>`
+	                : `<div style="opacity:0.8;">Git not detected for this path.</div>${gitError ? `<div class="worktree-inspector-subtle mono">${escapeHtml(gitError)}</div>` : ''}`)}
 	            </div>
 	          </div>
 	          ${diffPanelHtml}
