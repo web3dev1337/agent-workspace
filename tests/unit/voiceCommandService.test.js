@@ -130,4 +130,33 @@ describe('VoiceCommandService (rule parsing)', () => {
     const unassign = voiceCommandService.parseWithRules('unassign');
     expect(unassign.command).toBe('queue-unassign');
   });
+
+  test('parses queue deps/select actions', () => {
+    const refresh = voiceCommandService.parseWithRules('refresh queue');
+    expect(refresh.command).toBe('queue-refresh');
+
+    const selTicket = voiceCommandService.parseWithRules('select ticket trello:abc123');
+    expect(selTicket.command).toBe('queue-select-by-ticket');
+    expect(selTicket.params).toEqual({ ticket: 'trello:abc123' });
+
+    const openPrompt = voiceCommandService.parseWithRules('open prompt artifact');
+    expect(openPrompt.command).toBe('queue-open-prompt');
+
+    const addDep = voiceCommandService.parseWithRules('add dependency pr:web3dev1337/repo#123');
+    expect(addDep.command).toBe('queue-deps-add');
+    expect(addDep.params).toEqual({ dependencyIds: 'pr:web3dev1337/repo#123' });
+
+    const removeDep = voiceCommandService.parseWithRules('remove dep trello:abc123');
+    expect(removeDep.command).toBe('queue-deps-remove');
+    expect(removeDep.params).toEqual({ dependencyIds: 'trello:abc123' });
+
+    const depGraph = voiceCommandService.parseWithRules('open dependency graph');
+    expect(depGraph.command).toBe('queue-deps-graph');
+
+    const pairing = voiceCommandService.parseWithRules('open pairing');
+    expect(pairing.command).toBe('queue-pairing');
+
+    const conflicts = voiceCommandService.parseWithRules('refresh conflicts');
+    expect(conflicts.command).toBe('queue-conflicts-refresh');
+  });
 });
