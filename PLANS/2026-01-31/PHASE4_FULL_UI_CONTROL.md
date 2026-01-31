@@ -33,3 +33,6 @@ Shipped (merged to `main`):
 
 Next:
 - Keep expanding command coverage until “everything clickable in the UI” is commandable (see the gap analysis doc).
+
+Related:
+- `PLANS/2026-01-31/DISCORD_BOT_INTEGRATION_PLAN.md`
