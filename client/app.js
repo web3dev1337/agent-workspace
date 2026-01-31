@@ -5160,7 +5160,11 @@ class ClaudeOrchestrator {
         // Treat as an immediate close (no confirm).
         const sid = String(params?.sessionId || '').trim();
         if (!sid) break;
-        this.stopSession(sid);
+        if (typeof this.stopSession === 'function') {
+          this.stopSession(sid);
+        } else {
+          this.socket?.emit?.('destroy-session', { sessionId: sid });
+        }
         break;
       }
 
@@ -7227,28 +7231,37 @@ class ClaudeOrchestrator {
 		        const behind = Number(summary?.behind || 0);
 	        const dirty = Array.isArray(summary?.files) ? summary.files.length : 0;
 
-        const parts = [];
-        parts.push(`<span class="worktree-inspector-chip" title="${escapeHtml(p)}">📁 ${escapeHtml(p)}</span>`);
-        parts.push(`<span class="worktree-inspector-chip">🌿 ${branch}</span>`);
-        if (behind > 0) parts.push(`<span class="worktree-inspector-chip">⇣${behind}</span>`);
-        if (ahead > 0) parts.push(`<span class="worktree-inspector-chip">⇡${ahead}</span>`);
-        parts.push(`<span class="worktree-inspector-chip">Δ files ${dirty}</span>`);
+	        const parts = [];
+	        parts.push(`<span class="worktree-inspector-chip" title="${escapeHtml(p)}">📁 ${escapeHtml(p)}</span>`);
+	        parts.push(`<span class="worktree-inspector-chip">🌿 ${branch}</span>`);
+	        if (behind > 0) parts.push(`<span class="worktree-inspector-chip">⇣${behind}</span>`);
+	        if (ahead > 0) parts.push(`<span class="worktree-inspector-chip">⇡${ahead}</span>`);
+	        parts.push(`<span class="worktree-inspector-chip">Δ files ${dirty}</span>`);
 
 	        const prChip = prUrl
 	          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-pr-url="${escapeHtml(prUrl)}" title="Open PR">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</button>`
 	          : `<span class="worktree-inspector-chip">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</span>`;
 	        parts.push(prChip);
 
-	        const diffBtn = prUrl
-	          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff="${escapeHtml(prUrl)}" title="Open diff viewer for PR">🔍 Diff</button>`
-	          : `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff-home="true" title="Open diff viewer">🔍 Diff</button>`;
-	        parts.push(diffBtn);
+		        const diffBtn = prUrl
+		          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff="${escapeHtml(prUrl)}" title="Open diff viewer for PR">🔍 Diff</button>`
+		          : `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff-home="true" title="Open diff viewer">🔍 Diff</button>`;
+		        parts.push(diffBtn);
 
-	        if (ticketUrl) {
-	          parts.push(
-	            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-ticket-open="${escapeHtml(ticketUrl)}" title="Open ticket">🎫 Ticket</button>`
-	          );
-	        }
+		        if (reviewConsole) {
+		          parts.push(
+		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-review-window="fullscreen" title="Fullscreen Review Console">🖥 Full</button>`
+		          );
+		          parts.push(
+		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-review-window="docked" title="Dock Review Console">📌 Dock</button>`
+		          );
+		        }
+
+		        if (ticketUrl) {
+		          parts.push(
+		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-ticket-open="${escapeHtml(ticketUrl)}" title="Open ticket">🎫 Ticket</button>`
+		          );
+		        }
 
 	        if (reviewTaskId && (ticketCardId || ticketCardUrl)) {
 	          parts.push(
