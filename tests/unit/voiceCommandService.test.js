@@ -86,4 +86,48 @@ describe('VoiceCommandService (rule parsing)', () => {
     expect(squash.command).toBe('queue-merge');
     expect(squash.params).toEqual({ method: 'squash' });
   });
+
+  test('parses queue navigation + metadata actions', () => {
+    const prev = voiceCommandService.parseWithRules('prev');
+    expect(prev.command).toBe('queue-prev');
+
+    const inspect = voiceCommandService.parseWithRules('open inspector');
+    expect(inspect.command).toBe('queue-open-inspector');
+
+    const timerStart = voiceCommandService.parseWithRules('start review timer');
+    expect(timerStart.command).toBe('queue-review-timer-start');
+
+    const timerStop = voiceCommandService.parseWithRules('stop review timer');
+    expect(timerStop.command).toBe('queue-review-timer-stop');
+
+    const tier = voiceCommandService.parseWithRules('tier 3');
+    expect(tier.command).toBe('queue-set-tier');
+    expect(tier.params).toEqual({ tier: '3' });
+
+    const risk = voiceCommandService.parseWithRules('risk high');
+    expect(risk.command).toBe('queue-set-risk');
+    expect(risk.params).toEqual({ risk: 'high' });
+
+    const outcome = voiceCommandService.parseWithRules('set outcome needs_fix');
+    expect(outcome.command).toBe('queue-set-outcome');
+    expect(outcome.params).toEqual({ outcome: 'needs_fix' });
+
+    const notes = voiceCommandService.parseWithRules('notes: please add a test');
+    expect(notes.command).toBe('queue-set-notes');
+    expect(notes.params).toEqual({ notes: 'please add a test' });
+
+    const claim = voiceCommandService.parseWithRules('claim as alex');
+    expect(claim.command).toBe('queue-claim');
+    expect(claim.params).toEqual({ who: 'alex' });
+
+    const release = voiceCommandService.parseWithRules('release claim');
+    expect(release.command).toBe('queue-release');
+
+    const assign = voiceCommandService.parseWithRules('assign to alex');
+    expect(assign.command).toBe('queue-assign');
+    expect(assign.params).toEqual({ who: 'alex' });
+
+    const unassign = voiceCommandService.parseWithRules('unassign');
+    expect(unassign.command).toBe('queue-unassign');
+  });
 });

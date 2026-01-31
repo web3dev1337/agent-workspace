@@ -4659,6 +4659,78 @@ class ClaudeOrchestrator {
         break;
       }
 
+      case 'queue-prev':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.prev?.(), 50))
+          .catch?.((err) => console.error('Failed to open queue prev:', err));
+        break;
+
+      case 'queue-open-inspector':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.openInspectorSelected?.(), 50))
+          .catch?.((err) => console.error('Failed to open queue inspector:', err));
+        break;
+
+      case 'queue-review-timer-start':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.startTimerSelected?.(), 50))
+          .catch?.((err) => console.error('Failed to start queue review timer:', err));
+        break;
+
+      case 'queue-review-timer-stop':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.stopTimerSelected?.(), 50))
+          .catch?.((err) => console.error('Failed to stop queue review timer:', err));
+        break;
+
+      case 'queue-set-tier':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.setTierSelected?.({ tier: params?.tier }), 50))
+          .catch?.((err) => console.error('Failed to set queue tier:', err));
+        break;
+
+      case 'queue-set-risk':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.setRiskSelected?.({ risk: params?.risk }), 50))
+          .catch?.((err) => console.error('Failed to set queue risk:', err));
+        break;
+
+      case 'queue-set-outcome':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.setOutcomeSelected?.({ outcome: params?.outcome }), 50))
+          .catch?.((err) => console.error('Failed to set queue outcome:', err));
+        break;
+
+      case 'queue-set-notes':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.setNotesSelected?.({ notes: params?.notes }), 50))
+          .catch?.((err) => console.error('Failed to set queue notes:', err));
+        break;
+
+      case 'queue-claim':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.claimSelected?.({ who: params?.who }), 50))
+          .catch?.((err) => console.error('Failed to claim queue item:', err));
+        break;
+
+      case 'queue-release':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.releaseSelected?.(), 50))
+          .catch?.((err) => console.error('Failed to release queue item:', err));
+        break;
+
+      case 'queue-assign':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.assignSelected?.({ who: params?.who }), 50))
+          .catch?.((err) => console.error('Failed to assign queue item:', err));
+        break;
+
+      case 'queue-unassign':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.unassignSelected?.(), 50))
+          .catch?.((err) => console.error('Failed to unassign queue item:', err));
+        break;
+
       case 'queue-approve': {
         this.showQueuePanel?.()
           .then(() => setTimeout(() => {
@@ -19694,6 +19766,339 @@ class ClaudeOrchestrator {
 	      getSelectedId: () => state.selectedId,
 	      getSelectedTask: () => (state.selectedId ? getTaskById(state.selectedId) : null),
 	      selectById: (id, options) => selectById(id, options || {}),
+        openInspectorSelected: () => {
+          try {
+            const ensureSelected = () => {
+              const ok = !!(state.selectedId && getTaskById(state.selectedId));
+              if (ok) return;
+              const ordered = getOrderedTasks(getFilteredTasks());
+              state.selectedId = ordered[0]?.id || null;
+            };
+
+            ensureSelected();
+            const t = state.selectedId ? getTaskById(state.selectedId) : null;
+            if (!t) {
+              this.showToast?.('No queue item selected', 'warning');
+              return false;
+            }
+            if (t.sessionId) return this.openWorktreeInspector(t.sessionId);
+            if (t.worktreePath) return this.openWorktreeInspectorForPath(t.worktreePath, { label: t.worktree || t.id || '' });
+            this.showToast?.('Selected item has no worktree/session', 'warning');
+            return false;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        startTimerSelected: async () => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            await startReviewTimer(t.id);
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        stopTimerSelected: async () => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            if (state.reviewTimer?.taskId === t.id) {
+              await stopReviewTimer({ reason: 'manual', nudge: true });
+            }
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        setTierSelected: async ({ tier } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          const parseTier = (value) => {
+            const raw = String(value ?? '').trim().toLowerCase();
+            if (!raw || raw === 'none' || raw === 'null') return null;
+            const n = Number(raw);
+            if (!Number.isFinite(n)) return null;
+            if (n >= 1 && n <= 4) return n;
+            return null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            const nextTier = parseTier(tier);
+            const rec = await upsertRecord(t.id, { tier: nextTier });
+            updateTaskRecordInState(t.id, rec);
+            await fetchTasks().catch(() => {});
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        setRiskSelected: async ({ risk } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          const parseRisk = (value) => {
+            const raw = String(value ?? '').trim().toLowerCase();
+            if (!raw || raw === 'none' || raw === 'null') return null;
+            if (raw === 'low' || raw === 'medium' || raw === 'high') return raw;
+            return raw;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            const nextRisk = parseRisk(risk);
+            const rec = await upsertRecord(t.id, { changeRisk: nextRisk });
+            updateTaskRecordInState(t.id, rec);
+            await fetchTasks().catch(() => {});
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        setNotesSelected: async ({ notes } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            const nextNotes = String(notes ?? '');
+            const rec = await upsertRecord(t.id, { notes: nextNotes });
+            updateTaskRecordInState(t.id, rec);
+            renderList();
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        setOutcomeSelected: async ({ outcome } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          const parseOutcome = (value) => {
+            const raw = String(value ?? '').trim();
+            const low = raw.toLowerCase();
+            if (!raw || low === 'none' || low === 'null') return '';
+            return raw;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+
+          try {
+            const value = parseOutcome(outcome);
+            let nudged = false;
+            if (value && state.reviewTimer?.taskId === t.id) {
+              await stopReviewTimer({ reason: 'outcome', nudge: true });
+              nudged = true;
+            }
+
+            const patch = { reviewOutcome: value || null };
+            if (value) patch.reviewEndedAt = new Date().toISOString();
+            if (value) {
+              patch.claimedBy = null;
+              patch.claimedAt = null;
+            }
+
+            const rec = await upsertRecord(t.id, patch);
+            updateTaskRecordInState(t.id, rec);
+            if (value === 'needs_fix') {
+              await maybeApplyTrelloNeedsFixLabel({ taskId: t.id, outcome: value, notes: String(getTaskById(t.id)?.record?.notes || '') });
+            }
+
+            await fetchTasks().catch(() => {});
+            renderDetail(getTaskById(t.id));
+            if (value && !nudged) {
+              maybeNudgeReviewComplete(t.id, { reason: 'outcome' });
+            }
+            if (value) {
+              maybeAutoAdvanceAfterReview(t.id);
+            }
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        claimSelected: async ({ who } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            const identity = String(who || this.getIdentityClaimName() || '').trim();
+            if (!identity) {
+              this.showToast?.('No identity available (Settings → Identity)', 'warning');
+              return false;
+            }
+            const rec = await upsertRecord(t.id, { claimedBy: identity, claimedAt: new Date().toISOString() });
+            updateTaskRecordInState(t.id, rec);
+            renderList();
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        releaseSelected: async () => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            const rec = await upsertRecord(t.id, { claimedBy: null, claimedAt: null });
+            updateTaskRecordInState(t.id, rec);
+            renderList();
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        assignSelected: async ({ who } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            const identity = String(who || '').trim();
+            if (!identity) {
+              this.showToast?.('Missing assignee name', 'warning');
+              return false;
+            }
+            const rec = await upsertRecord(t.id, { assignedTo: identity });
+            updateTaskRecordInState(t.id, rec);
+            renderList();
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        unassignSelected: async () => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            const rec = await upsertRecord(t.id, { assignedTo: null });
+            updateTaskRecordInState(t.id, rec);
+            renderList();
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
         approveSelectedPr: async ({ body } = {}) => {
           const ensureSelected = () => {
             const ok = !!(state.selectedId && getTaskById(state.selectedId));
