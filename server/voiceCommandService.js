@@ -244,6 +244,84 @@ class VoiceCommandService {
         command: 'queue-unassign',
         extractParams: () => ({})
       },
+      // Queue: refresh
+      {
+        patterns: [
+          /^refresh\s+queue$/i,
+          /^refresh$/i,
+        ],
+        command: 'queue-refresh',
+        extractParams: () => ({})
+      },
+      // Queue: select by PR URL
+      {
+        patterns: [
+          /^select\s+pr\s+(https?:\/\/\\S+)$/i,
+        ],
+        command: 'queue-select-by-pr-url',
+        extractParams: (match) => ({ url: String(match?.[1] || '').trim() })
+      },
+      // Queue: select by ticket (trello)
+      {
+        patterns: [
+          /^select\s+ticket\s+(.+)$/i,
+          /^select\s+trello\s+(.+)$/i,
+        ],
+        command: 'queue-select-by-ticket',
+        extractParams: (match) => ({ ticket: String(match?.[1] || '').trim() })
+      },
+      // Queue: prompt artifact
+      {
+        patterns: [
+          /^open\s+prompt$/i,
+          /^open\s+prompt\s+artifact$/i,
+        ],
+        command: 'queue-open-prompt',
+        extractParams: () => ({})
+      },
+      // Queue: dependencies
+      {
+        patterns: [
+          /^add\s+dep(?:endency)?\s+(.+)$/i,
+          /^add\s+dependency\s+(.+)$/i,
+        ],
+        command: 'queue-deps-add',
+        extractParams: (match) => ({ dependencyIds: String(match?.[1] || '').trim() })
+      },
+      {
+        patterns: [
+          /^remove\s+dep(?:endency)?\s+(.+)$/i,
+          /^remove\s+dependency\s+(.+)$/i,
+        ],
+        command: 'queue-deps-remove',
+        extractParams: (match) => ({ dependencyIds: String(match?.[1] || '').trim() })
+      },
+      {
+        patterns: [
+          /^open\s+dep(?:endency)?\s+graph$/i,
+          /^open\s+dependencies$/i,
+        ],
+        command: 'queue-deps-graph',
+        extractParams: () => ({})
+      },
+      // Queue: pairing
+      {
+        patterns: [
+          /^pairing$/i,
+          /^open\s+pairing$/i,
+        ],
+        command: 'queue-pairing',
+        extractParams: () => ({})
+      },
+      // Queue: conflicts refresh
+      {
+        patterns: [
+          /^refresh\s+conflicts$/i,
+          /^scan\s+conflicts$/i,
+        ],
+        command: 'queue-conflicts-refresh',
+        extractParams: () => ({})
+      },
       // Queue: approve selected PR
       {
         patterns: [

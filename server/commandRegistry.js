@@ -520,6 +520,126 @@ class CommandRegistry {
       }
     });
 
+    this.register('queue-refresh', {
+      category: 'process',
+      description: 'Refresh Queue data (re-fetch tasks)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-refresh' });
+        return { message: 'Queue: refresh' };
+      }
+    });
+
+    this.register('queue-select-by-pr-url', {
+      category: 'process',
+      description: 'Select a Queue item by PR URL',
+      params: [
+        { name: 'url', required: true, description: 'GitHub PR URL' }
+      ],
+      examples: [
+        { params: { url: 'https://github.com/owner/repo/pull/123' }, description: 'Select PR in Queue by URL' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-select-by-pr-url', ...params });
+        return { message: 'Queue: select by PR URL' };
+      }
+    });
+
+    this.register('queue-select-by-ticket', {
+      category: 'process',
+      description: 'Select a Queue item by ticket reference (trello URL / trello:<shortLink> / <shortLink>)',
+      params: [
+        { name: 'ticket', required: true, description: 'Ticket reference' }
+      ],
+      examples: [
+        { params: { ticket: 'trello:abc123' }, description: 'Select by Trello shortLink' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-select-by-ticket', ...params });
+        return { message: 'Queue: select by ticket' };
+      }
+    });
+
+    this.register('queue-open-prompt', {
+      category: 'process',
+      description: 'Open the Prompt Artifact editor for the selected Queue item',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-open-prompt' });
+        return { message: 'Queue: open prompt artifact' };
+      }
+    });
+
+    this.register('queue-deps-add', {
+      category: 'process',
+      description: 'Add dependency id(s) to the selected Queue item',
+      params: [
+        { name: 'dependencyIds', required: true, description: 'Array (or comma/newline string) of dependency IDs (e.g. pr:owner/repo#123, trello:abc123)' }
+      ],
+      examples: [
+        { params: { dependencyIds: ['pr:web3dev1337/repo#123', 'trello:abc123'] }, description: 'Add two dependencies' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-deps-add', ...params });
+        return { message: 'Queue: add dependencies' };
+      }
+    });
+
+    this.register('queue-deps-remove', {
+      category: 'process',
+      description: 'Remove dependency id(s) from the selected Queue item',
+      params: [
+        { name: 'dependencyIds', required: true, description: 'Array (or comma/newline string) of dependency IDs' }
+      ],
+      examples: [
+        { params: { dependencyIds: ['pr:web3dev1337/repo#123'] }, description: 'Remove one dependency' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-deps-remove', ...params });
+        return { message: 'Queue: remove dependencies' };
+      }
+    });
+
+    this.register('queue-deps-graph', {
+      category: 'process',
+      description: 'Open the dependency graph for the selected Queue item',
+      params: [
+        { name: 'depth', required: false, description: 'Depth (1-6)' },
+        { name: 'view', required: false, description: 'tree|graph' }
+      ],
+      examples: [
+        { params: { depth: 3, view: 'graph' }, description: 'Open dep graph (depth 3) in graph view' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-deps-graph', ...params });
+        return { message: 'Queue: open dependency graph' };
+      }
+    });
+
+    this.register('queue-pairing', {
+      category: 'process',
+      description: 'Open the Queue pairing recommendations modal',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-pairing' });
+        return { message: 'Queue: pairing' };
+      }
+    });
+
+    this.register('queue-conflicts-refresh', {
+      category: 'process',
+      description: 'Refresh worktree conflicts analysis in Queue (best-effort)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-conflicts-refresh' });
+        return { message: 'Queue: refresh conflicts' };
+      }
+    });
+
     this.register('queue-approve', {
       category: 'process',
       description: 'Approve the selected Queue PR on GitHub (optional body)',
