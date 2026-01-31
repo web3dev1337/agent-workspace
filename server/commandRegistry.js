@@ -131,11 +131,12 @@ class CommandRegistry {
         { params: { sessionId: 'work1-claude', input: 'git status\n' }, description: 'Run git status in work1 claude' }
       ],
       handler: async (params, { sessionManager }) => {
-        const session = sessionManager.getSession(params.sessionId);
+        const session = sessionManager.getSessionById(params.sessionId);
         if (!session) {
           throw new Error(`Session not found: ${params.sessionId}`);
         }
-        session.write(params.input);
+        const ok = sessionManager.writeToSession(params.sessionId, params.input);
+        if (!ok) throw new Error(`Failed to write to session: ${params.sessionId}`);
         return { message: `Sent to ${params.sessionId}` };
       }
     });
@@ -1110,11 +1111,12 @@ class CommandRegistry {
         { params: { sessionId: 'work1-server', command: 'npm test' }, description: 'Run tests in work1 server' }
       ],
       handler: async (params, { sessionManager }) => {
-        const session = sessionManager.getSession(params.sessionId);
+        const session = sessionManager.getSessionById(params.sessionId);
         if (!session) {
           throw new Error(`Session not found: ${params.sessionId}`);
         }
-        session.write(params.command + '\n');
+        const ok = sessionManager.writeToSession(params.sessionId, params.command + '\n');
+        if (!ok) throw new Error(`Failed to write to session: ${params.sessionId}`);
         return { message: `Running: ${params.command}` };
       }
     });
@@ -1129,7 +1131,7 @@ class CommandRegistry {
       ],
       examples: [],
       handler: async (params, { sessionManager }) => {
-        const session = sessionManager.getSession(params.sessionId);
+        const session = sessionManager.getSessionById(params.sessionId);
         if (!session) {
           throw new Error(`Session not found: ${params.sessionId}`);
         }
@@ -1157,9 +1159,13 @@ class CommandRegistry {
       handler: async (params, { sessionManager }) => {
         const results = [];
         for (const sessionId of params.sessionIds) {
-          const session = sessionManager.getSession(sessionId);
+          const session = sessionManager.getSessionById(sessionId);
           if (session) {
-            session.write(params.input);
+            const ok = sessionManager.writeToSession(sessionId, params.input);
+            if (!ok) {
+              results.push({ sessionId, sent: false, error: 'Write failed' });
+              continue;
+            }
             results.push({ sessionId, sent: true });
           } else {
             results.push({ sessionId, sent: false, error: 'Not found' });

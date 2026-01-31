@@ -86,8 +86,13 @@ const MIXED_REPO_SCHEMA = {
             }
           },
           worktree: { type: 'string' }, // e.g., "work1", "work2"
+          worktreePath: { type: 'string' }, // Optional override for cwd/worktree path
           terminalType: { type: 'string', enum: ['claude', 'server'] },
-          visible: { type: 'boolean', default: true }
+          visible: { type: 'boolean', default: true },
+          // Optional: run a command immediately on terminal spawn (service-style terminals)
+          startCommand: { type: 'string' },
+          // Optional: override inactivity timeout for this session (ms). 0 disables timeout.
+          timeoutMs: { type: 'number' }
         }
       }
     },
