@@ -127,6 +127,8 @@ class WorktreeGitService {
 
     const cacheKey = `git-summary:${p}:${Number(maxFiles) || 0}:${Number(maxCommits) || 0}`;
     return this.cache.getOrCompute(cacheKey, async () => {
+      let gitDetected = false;
+      let gitError = null;
       let branch = null;
       let ahead = 0;
       let behind = 0;
@@ -135,6 +137,28 @@ class WorktreeGitService {
       let diffStaged = '';
       let commitsOutput = '';
       let unpushedOutput = '';
+
+      try {
+        const { stdout } = await execAsync('git rev-parse --is-inside-work-tree', { cwd: p, timeout: 3000 });
+        gitDetected = String(stdout || '').trim() === 'true';
+      } catch (error) {
+        gitDetected = false;
+        gitError = error?.message ? String(error.message) : 'git rev-parse failed';
+      }
+
+      if (!gitDetected) {
+        return {
+          path: p,
+          gitDetected: false,
+          gitError,
+          branch,
+          ahead,
+          behind,
+          files: [],
+          commits: [],
+          unpushedCommits: []
+        };
+      }
 
       try {
         const { stdout } = await execAsync('git branch --show-current', { cwd: p, timeout: 7000 });
@@ -211,6 +235,8 @@ class WorktreeGitService {
 
       return {
         path: p,
+        gitDetected: true,
+        gitError: null,
         branch,
         ahead,
         behind,
@@ -223,4 +249,3 @@ class WorktreeGitService {
 }
 
 module.exports = { WorktreeGitService, parsePorcelainStatus, parseNumstat, normalizeRenamePath };
-
