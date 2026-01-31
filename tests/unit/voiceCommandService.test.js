@@ -159,4 +159,37 @@ describe('VoiceCommandService (rule parsing)', () => {
     const conflicts = voiceCommandService.parseWithRules('refresh conflicts');
     expect(conflicts.command).toBe('queue-conflicts-refresh');
   });
+
+  test('parses queue spawn + extra fields', () => {
+    const reviewer = voiceCommandService.parseWithRules('spawn reviewer');
+    expect(reviewer.command).toBe('queue-spawn-reviewer');
+
+    const fixer = voiceCommandService.parseWithRules('spawn fixer');
+    expect(fixer.command).toBe('queue-spawn-fixer');
+
+    const recheck = voiceCommandService.parseWithRules('spawn recheck');
+    expect(recheck.command).toBe('queue-spawn-recheck');
+
+    const overnight = voiceCommandService.parseWithRules('spawn overnight');
+    expect(overnight.command).toBe('queue-spawn-overnight');
+
+    const pfail = voiceCommandService.parseWithRules('pfail 0.3');
+    expect(pfail.command).toBe('queue-set-pfail');
+    expect(pfail.params).toEqual({ pFailFirstPass: '0.3' });
+
+    const verify = voiceCommandService.parseWithRules('verify 10');
+    expect(verify.command).toBe('queue-set-verify');
+    expect(verify.params).toEqual({ verifyMinutes: '10' });
+
+    const pref = voiceCommandService.parseWithRules('prompt ref: pr:web3dev1337/repo#123');
+    expect(pref.command).toBe('queue-set-prompt-ref');
+    expect(pref.params).toEqual({ promptRef: 'pr:web3dev1337/repo#123' });
+
+    const ticket = voiceCommandService.parseWithRules('ticket: trello:abc123');
+    expect(ticket.command).toBe('queue-set-ticket');
+    expect(ticket.params).toEqual({ ticket: 'trello:abc123' });
+
+    const openTicket = voiceCommandService.parseWithRules('open ticket');
+    expect(openTicket.command).toBe('queue-open-ticket');
+  });
 });
