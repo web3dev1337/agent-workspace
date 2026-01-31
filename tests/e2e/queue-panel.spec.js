@@ -278,13 +278,14 @@ test.describe('Queue Panel', () => {
     await page.locator('#queue-list .task-card-row[data-queue-id=\"worktree:/tmp/demo/work2\"]').click();
     await expect(page.locator('#queue-open-console')).toBeVisible();
     await page.locator('#queue-open-console').click();
-    await expect(page.locator('#worktree-inspector-modal.docked')).toBeVisible({ timeout: 10000 });
+    // Review Console defaults to fullscreen.
+    await expect(page.locator('#worktree-inspector-modal.fullscreen')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#worktree-inspector-title')).toContainText('Review Console');
 
     // Merge PR should call /api/prs/merge.
     page.once('dialog', async (dialog) => dialog.accept());
     const mergeReq = page.waitForRequest((req) => req.method() === 'POST' && req.url().includes('/api/prs/merge'), { timeout: 5000 });
-    await page.locator('#worktree-inspector-modal.docked [data-pr-merge]').click();
+    await page.locator('#worktree-inspector-modal.fullscreen [data-pr-merge]').click();
     const req = await mergeReq;
     expect(req.postDataJSON()).toMatchObject({
       url: 'https://github.com/web3dev1337/incremental-game/pull/4',

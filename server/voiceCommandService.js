@@ -137,6 +137,33 @@ class VoiceCommandService {
         command: 'queue-open-diff',
         extractParams: () => ({})
       },
+      // Queue: approve selected PR
+      {
+        patterns: [
+          /^(?:approve|lgtm)(?:\s+(?:this|the)\s+(?:pr|pull\s+request))?(?:\s*[:,-]?\s*(.+))?$/i,
+          /approve\s+(?:this|the)\s+(?:pr|pull\s+request)(?:\s*[:,-]?\s*(.+))?$/i,
+        ],
+        command: 'queue-approve',
+        extractParams: (match) => ({ body: String(match?.[1] || '').trim() || undefined })
+      },
+      // Queue: request changes for selected PR
+      {
+        patterns: [
+          /^(?:request|ask\s+for)\s+changes(?:\s+(?:on\s+)?(?:this|the)\s+(?:pr|pull\s+request))?(?:\s*[:,-]?\s*(.+))?$/i,
+          /changes\s+requested(?:\s*[:,-]?\s*(.+))?$/i,
+        ],
+        command: 'queue-request-changes',
+        extractParams: (match) => ({ body: String(match?.[1] || '').trim() || undefined })
+      },
+      // Queue: merge selected PR (merge|squash|rebase)
+      {
+        patterns: [
+          /^(squash|rebase)\s+merge(?:\s+(?:this|the)\s+(?:pr|pull\s+request))?$/i,
+          /^(?:merge|ship)(?:\s+(?:this|the)\s+(?:pr|pull\s+request))?$/i,
+        ],
+        command: 'queue-merge',
+        extractParams: (match) => ({ method: String(match?.[1] || '').trim().toLowerCase() || undefined })
+      },
       // Open Queue
       {
         patterns: [

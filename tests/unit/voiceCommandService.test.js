@@ -66,4 +66,24 @@ describe('VoiceCommandService (rule parsing)', () => {
     const diffCmd = voiceCommandService.parseWithRules('open diff');
     expect(diffCmd.command).toBe('queue-open-diff');
   });
+
+  test('parses queue review lifecycle actions', () => {
+    const approve = voiceCommandService.parseWithRules('approve this pr');
+    expect(approve.command).toBe('queue-approve');
+
+    const approveWithBody = voiceCommandService.parseWithRules('approve: lgtm ✅');
+    expect(approveWithBody.command).toBe('queue-approve');
+    expect(approveWithBody.params).toEqual({ body: 'lgtm ✅' });
+
+    const changes = voiceCommandService.parseWithRules('request changes: please add a test');
+    expect(changes.command).toBe('queue-request-changes');
+    expect(changes.params).toEqual({ body: 'please add a test' });
+
+    const merge = voiceCommandService.parseWithRules('merge this pr');
+    expect(merge.command).toBe('queue-merge');
+
+    const squash = voiceCommandService.parseWithRules('squash merge');
+    expect(squash.command).toBe('queue-merge');
+    expect(squash.params).toEqual({ method: 'squash' });
+  });
 });
