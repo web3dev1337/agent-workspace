@@ -1,6 +1,7 @@
 # Phase 4 — Full UI Control (Voice + Commander)
 
 Date: 2026-01-31
+Updated: 2026-02-01
 
 ## Goal
 
@@ -30,6 +31,8 @@ This Phase 4 doc is intentionally short; the gap analysis doc is the implementat
 
 Shipped (merged to `main`):
 - PR #496–#501 (Phase 4 foundations + Queue review lifecycle commands).
+- PR #515 + #517 (Discord services workspace + dashboard controls + voice/commander commands).
+- PR #528 (Voice: auto exact-match parsing for new no-param CommandRegistry commands).
 
 Next:
 - Keep expanding command coverage until “everything clickable in the UI” is commandable (see the gap analysis doc).

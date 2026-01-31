@@ -7,19 +7,24 @@ This doc is **implementation-oriented**: it enumerates the missing pieces, propo
 
 ---
 
-## Status (as of 2026-01-31)
+## Status (updated 2026-02-01)
 
 Shipped (merged to `main`):
 - Command registry + commander execute/capabilities endpoints (Phase 4 foundation).
 - UI action coverage: every `commander-action` emitted by `server/commandRegistry.js` is handled in `client/app.js#handleCommanderAction` (guarded by `tests/unit/commanderActionCoverage.test.js`).
-- Queue review lifecycle commands (approve / request-changes / merge) available to Commander + Voice.
-- Review Console default window = fullscreen (configurable), with Queue e2e updated accordingly.
+- Queue parity for the main review workflow:
+  - Navigation/selection helpers (`queue-prev/next/select/...`)
+  - Review lifecycle (approve / request-changes / merge)
+  - Metadata edits (tier/risk/outcome/notes/claim/assign)
+  - Dependencies/pairing/conflicts (deps add/remove/graph, pairing view, conflicts refresh)
+  - Spawn automations (reviewer/fixer/recheck/overnight)
+- Review Console controls (layout presets + section toggles + fullscreen/docked + diff open/embed).
+- Provider-agnostic History surface (Claude + Codex) including resume.
+- Voice improvement: exact-match parsing auto-supports any new **no-required-param** CommandRegistry commands by name (PR #528).
 
-Still missing (next items):
-- Queue metadata editing commands (tier/risk/claim/assign/outcome/notes/etc.).
-- Queue dependency commands (deps add/remove/graph/conflicts/pairing).
-- Queue navigation parity (e.g. `queue-prev`) and “select by PR URL/# / ticket”.
-- Provider-agnostic history/resume command surface (Claude/Codex/future).
+Remaining (current known):
+- Expand the Commander/voice “context snapshot” to include richer Queue summaries (top-N visible items + tiers/claims) for better “this/next PR” disambiguation.
+- Continue migrating any remaining “UI-only” actions into the semantic command surface as they are identified.
 
 Related plan (separate track):
 - `PLANS/2026-01-31/DISCORD_BOT_INTEGRATION_PLAN.md`
