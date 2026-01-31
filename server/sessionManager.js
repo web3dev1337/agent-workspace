@@ -774,6 +774,7 @@ class SessionManager extends EventEmitter {
       // Handle exit
       ptyProcess.onExit(({ exitCode, signal }) => {
         logger.info('Session exited', { sessionId, exitCode, signal });
+        const workspaceId = session.workspace || this.workspace?.id || null;
         
         clearTimeout(session.inactivityTimer);
         if (session.pendingStatusTimer) {
@@ -831,6 +832,14 @@ class SessionManager extends EventEmitter {
           }, 500);
         } else {
           // For non-Claude sessions, just remove as before
+          // Also clear recovery state: if the PTY exited normally, it should not keep showing up as "recoverable".
+          if (workspaceId) {
+            try {
+              sessionRecoveryService.clearSession(workspaceId, sessionId);
+            } catch {
+              // best-effort
+            }
+          }
           this.sessions.delete(sessionId);
         }
       });
