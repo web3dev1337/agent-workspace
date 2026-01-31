@@ -18272,8 +18272,44 @@ class ClaudeOrchestrator {
       const reviewManualDone = !!reviewChecklist?.manual?.done;
       const reviewManualSteps = String(reviewChecklist?.manual?.steps || '');
 
-      const url = t.url || '';
-	      const hasPR = t.kind === 'pr' && url;
+	      const normalizePrUrl = (value) => {
+	        const raw = String(value || '').trim();
+	        if (!raw) return '';
+
+	        // Already a URL.
+	        if (/^https?:\/\//i.test(raw)) return raw;
+
+	        // "pr:https://..." (some workflows store this prefix)
+	        if (/^pr:https?:\/\//i.test(raw)) return raw.replace(/^pr:/i, '');
+
+	        // "pr:owner/repo#123"
+	        const mTask = raw.match(/^pr:([^/]+)\/([^#]+)#(\d+)$/i);
+	        if (mTask) {
+	          const owner = mTask[1];
+	          const repo = mTask[2];
+	          const num = mTask[3];
+	          return `https://github.com/${owner}/${repo}/pull/${num}`;
+	        }
+
+	        // "owner/repo#123"
+	        const mLoose = raw.match(/^([^/]+)\/([^#]+)#(\d+)$/i);
+	        if (mLoose) {
+	          const owner = mLoose[1];
+	          const repo = mLoose[2];
+	          const num = mLoose[3];
+	          return `https://github.com/${owner}/${repo}/pull/${num}`;
+	        }
+
+	        // GitHub PR URL without protocol
+	        if (/^github\.com\//i.test(raw)) return `https://${raw}`;
+
+	        return raw;
+	      };
+
+	      const url = t.kind === 'pr'
+	        ? (normalizePrUrl(t.url) || normalizePrUrl(t.id) || '')
+	        : String(t.url || '').trim();
+		      const hasPR = t.kind === 'pr' && !!url;
 	      const canOvernight = hasPR && Number(tierValue || 0) === 4;
 
       const parseIso = (v) => {
