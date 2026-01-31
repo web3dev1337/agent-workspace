@@ -951,6 +951,40 @@ class VoiceCommandService {
         command: 'refresh-all',
         extractParams: () => ({})
       },
+      // Discord queue processing
+      {
+        patterns: [
+          /process\s+discord/i,
+          /discord\s+process/i,
+          /process\s+discord\s+queue/i,
+          /discord\s+queue/i,
+          /claudesworth\s+process/i,
+        ],
+        command: 'discord-process-queue',
+        extractParams: () => ({})
+      },
+      // Discord services workspace
+      {
+        patterns: [
+          /open\s+services/i,
+          /open\s+discord\s+services/i,
+          /show\s+services/i,
+          /open\s+claudesworth/i,
+          /show\s+claudesworth/i,
+        ],
+        command: 'discord-open-services',
+        extractParams: () => ({})
+      },
+      // Discord status
+      {
+        patterns: [
+          /discord\s+status/i,
+          /claudesworth\s+status/i,
+          /discord\s+queue\s+status/i,
+        ],
+        command: 'discord-status',
+        extractParams: () => ({})
+      },
     ];
 
     const skipAutoCheck = process.env.NODE_ENV === 'test'

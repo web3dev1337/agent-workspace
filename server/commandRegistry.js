@@ -200,6 +200,57 @@ class CommandRegistry {
       }
     });
 
+    // ============ DISCORD / SERVICES ============
+
+    this.register('discord-status', {
+      category: 'discord',
+      description: 'Get Discord bot + queue status',
+      params: [],
+      examples: [],
+      handler: async (params, { sessionManager, workspaceManager }) => {
+        const discord = require('./discordIntegrationService');
+        return await discord.getDiscordStatus({ sessionManager, workspaceManager });
+      }
+    });
+
+    this.register('discord-ensure-services', {
+      category: 'discord',
+      description: 'Ensure Services workspace + Discord terminals exist',
+      params: [],
+      examples: [],
+      handler: async (params, { sessionManager, workspaceManager }) => {
+        const discord = require('./discordIntegrationService');
+        return await discord.ensureDiscordServices({ sessionManager, workspaceManager });
+      }
+    });
+
+    this.register('discord-process-queue', {
+      category: 'discord',
+      description: 'Trigger Discord queue processing in the dedicated processor session',
+      params: [],
+      examples: [],
+      handler: async (params, { sessionManager, workspaceManager }) => {
+        const discord = require('./discordIntegrationService');
+        return await discord.processDiscordQueue({ sessionManager, workspaceManager });
+      }
+    });
+
+    this.register('discord-open-services', {
+      category: 'discord',
+      description: 'Ensure and open the Services workspace',
+      params: [],
+      examples: [],
+      handler: async (params, { io, sessionManager, workspaceManager }) => {
+        const discord = require('./discordIntegrationService');
+        const status = await discord.ensureDiscordServices({ sessionManager, workspaceManager });
+        const wsId = status?.servicesWorkspaceId || process.env.DISCORD_SERVICES_WORKSPACE_ID || 'services';
+        const ws = workspaceManager.getWorkspace(wsId);
+        const wsName = ws?.name || 'Services';
+        io.emit('commander-action', { action: 'switch-workspace', workspaceName: wsName });
+        return { message: `Opening ${wsName}` };
+      }
+    });
+
     // ============ HISTORY / CONVERSATIONS ============
 
     this.register('open-history', {
