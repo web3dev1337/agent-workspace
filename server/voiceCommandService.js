@@ -1209,6 +1209,19 @@ class VoiceCommandService {
       worktreeList ? `Available worktrees:\n${worktreeList}` : null,
       ctx.activeSession ? `Active session: ${ctx.activeSession}` : null,
       ctx.selectedQueue?.id ? `Selected queue item: ${ctx.selectedQueue.id}${ctx.selectedQueue.title ? ` (${ctx.selectedQueue.title})` : ''}` : null,
+      (Array.isArray(ctx.queueSummary) && ctx.queueSummary.length)
+        ? `Queue (top ${Math.min(12, ctx.queueSummary.length)}):\n` + ctx.queueSummary.slice(0, 12).map((t) => {
+          const id = String(t?.id || '').trim();
+          const title = String(t?.title || '').trim();
+          const tier = String(t?.tier ?? '').trim();
+          const claim = String(t?.claimedBy || '').trim();
+          const bits = [];
+          if (tier) bits.push(`T${tier}`);
+          if (claim) bits.push(`claimed:${claim}`);
+          const meta = bits.length ? ` (${bits.join(', ')})` : '';
+          return `  ${id}${meta}${title ? ` — ${title}` : ''}`;
+        }).join('\n')
+        : null,
     ].filter(Boolean).join('\n');
 
     return `Classify this voice command for a developer orchestrator tool.

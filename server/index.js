@@ -4926,6 +4926,21 @@ app.get('/api/commander/prompt', (req, res) => {
       ? `Selected queue item: ${selected.id}${selected.title ? ` (${selected.title})` : ''}${selected.url ? ` • ${selected.url}` : ''}`
       : 'Selected queue item: (none)';
 
+    const queueSummary = Array.isArray(snapshot?.context?.queueSummary) ? snapshot.context.queueSummary : [];
+    const queueLines = queueSummary.length
+      ? ['Queue (top):', ...queueSummary.slice(0, 10).map((t) => {
+        const id = String(t?.id || '').trim();
+        const title = String(t?.title || '').trim();
+        const tier = String(t?.tier ?? '').trim();
+        const claim = String(t?.claimedBy || '').trim();
+        const bits = [];
+        if (tier) bits.push(`T${tier}`);
+        if (claim) bits.push(`claimed:${claim}`);
+        const meta = bits.length ? ` (${bits.join(', ')})` : '';
+        return `- ${id}${meta}${title ? ` — ${title}` : ''}`;
+      })]
+      : [];
+
     const lines = [
       'You are Commander Claude. You can control the Orchestrator by calling its HTTP APIs.',
       '',
@@ -4934,6 +4949,7 @@ app.get('/api/commander/prompt', (req, res) => {
       'Context: GET /api/commander/context.',
       '',
       selectedLine,
+      ...(queueLines.length ? ['', ...queueLines] : []),
       '',
       'Available commands (summary):',
       ...flatten.map((c) => `- [${c.category}] ${c.name}${c.required?.length ? ` (required: ${c.required.join(', ')})` : ''}: ${c.description}`)
