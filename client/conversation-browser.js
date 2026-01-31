@@ -431,7 +431,7 @@ class ConversationBrowser {
       const params = new URLSearchParams();
       if (this.filters.query) params.append('q', this.filters.query);
       if (this.filters.source && this.filters.source !== 'all') params.append('source', this.filters.source);
-      if (this.filters.project) params.append('project', this.filters.project);
+      if (this.filters.repo) params.append('project', this.filters.repo);
       if (this.filters.branch) params.append('branch', this.filters.branch);
       if (this.filters.folder) params.append('folder', this.filters.folder);
       params.append('limit', '100');
