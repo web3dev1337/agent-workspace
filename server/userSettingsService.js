@@ -57,6 +57,7 @@ class UserSettingsService {
         },
         ui: {
           theme: 'dark',
+          skin: 'default',
           branches: {
             // Branch label rendering in Worktree list and terminal headers.
             hidePrefixes: true,
@@ -352,6 +353,9 @@ class UserSettingsService {
 
         if (typeof ui.theme === 'string') {
           merged.global.ui.theme = ui.theme;
+        }
+        if (typeof ui.skin === 'string') {
+          merged.global.ui.skin = ui.skin;
         }
 
         if (ui.diffViewer) {
