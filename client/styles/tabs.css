@@ -2,7 +2,7 @@
 
 .workspace-tabs-container {
   background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-primary);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: stretch;
   height: 48px;
@@ -27,7 +27,7 @@
   gap: 8px;
   padding: 8px 16px;
   background: var(--bg-tertiary);
-  border: 1px solid var(--border-primary);
+  border: 1px solid var(--border-color);
   border-bottom: none;
   border-radius: 6px 6px 0 0;
   cursor: pointer;
@@ -89,7 +89,7 @@
   height: 20px;
   padding: 0 6px;
   background: var(--accent-primary);
-  color: white;
+  color: var(--text-on-accent);
   border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
@@ -108,7 +108,7 @@
 
 @keyframes tab-flash-error {
   0%, 100% { background: var(--bg-tertiary); }
-  50% { background: #e74c3c; opacity: 0.4; }
+  50% { background: var(--accent-danger); opacity: 0.35; }
 }
 
 .workspace-tab.tab-flash {
@@ -146,8 +146,8 @@
 }
 
 .workspace-tab.active .tab-close:hover {
-  background: var(--danger-color);
-  color: white;
+  background: var(--accent-danger);
+  color: var(--text-on-accent);
 }
 
 /* New Tab Button */
@@ -159,7 +159,7 @@
   height: 40px;
   margin: 4px;
   background: var(--bg-tertiary);
-  border: 1px solid var(--border-primary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   color: var(--text-secondary);
   font-size: 20px;
@@ -209,7 +209,7 @@
   display: inline-block;
   width: 12px;
   height: 12px;
-  border: 2px solid var(--border-primary);
+  border: 2px solid var(--border-color);
   border-top-color: var(--accent-primary);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
@@ -239,7 +239,7 @@
 }
 
 .workspace-tabs-container::-webkit-scrollbar-thumb {
-  background: var(--border-primary);
+  background: var(--border-color);
   border-radius: 2px;
 }
 
