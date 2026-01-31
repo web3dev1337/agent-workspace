@@ -21,6 +21,9 @@ Still missing (next items):
 - Queue navigation parity (e.g. `queue-prev`) and “select by PR URL/# / ticket”.
 - Provider-agnostic history/resume command surface (Claude/Codex/future).
 
+Related plan (separate track):
+- `PLANS/2026-01-31/DISCORD_BOT_INTEGRATION_PLAN.md`
+
 ## Ground truth / current state (already shipped)
 
 ### Shared command surface (exists)
