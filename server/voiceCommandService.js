@@ -127,6 +127,69 @@ class VoiceCommandService {
         command: 'queue-open-console',
         extractParams: () => ({})
       },
+      // Review Console: layout/window controls (assumes console is open)
+      {
+        patterns: [
+          /^(?:preset|layout)\s+(default|review|deep|terminals|code)$/i,
+          /^(?:set\s+)?review\s+console\s+preset\s+(default|review|deep|terminals|code)$/i,
+        ],
+        command: 'review-console-set-preset',
+        extractParams: (match) => ({ preset: String(match?.[1] || '').trim().toLowerCase() })
+      },
+      {
+        patterns: [
+          /^(?:fullscreen|full\s*screen)\s+console$/i,
+          /^(?:fullscreen|full\s*screen)\s+review\s+console$/i,
+        ],
+        command: 'review-console-set-window',
+        extractParams: () => ({ mode: 'fullscreen' })
+      },
+      {
+        patterns: [
+          /^(?:dock|docked)\s+console$/i,
+          /^(?:dock|docked)\s+review\s+console$/i,
+        ],
+        command: 'review-console-set-window',
+        extractParams: () => ({ mode: 'docked' })
+      },
+      {
+        patterns: [
+          /^(?:toggle|show|hide)\s+(terminals|files|commits|diff)$/i,
+        ],
+        command: 'review-console-toggle-section',
+        extractParams: (match) => ({ section: String(match?.[1] || '').trim().toLowerCase() })
+      },
+      {
+        patterns: [
+          /^(?:files)\s+(tree|list)$/i,
+          /^(?:set\s+)?files\s+view\s+(tree|list)$/i,
+        ],
+        command: 'review-console-files-view',
+        extractParams: (match) => ({ view: String(match?.[1] || '').trim().toLowerCase() })
+      },
+      {
+        patterns: [
+          /^(?:embed)\s+diff$/i,
+          /^(?:embed)\s+review\s+diff$/i,
+        ],
+        command: 'review-console-diff-embed',
+        extractParams: () => ({ enabled: true })
+      },
+      {
+        patterns: [
+          /^(?:close)\s+diff$/i,
+        ],
+        command: 'review-console-diff-embed',
+        extractParams: () => ({ enabled: false })
+      },
+      {
+        patterns: [
+          /^(?:open)\s+diff\s+viewer$/i,
+          /^(?:open)\s+advanced\s+diff$/i,
+        ],
+        command: 'review-console-diff-open',
+        extractParams: () => ({})
+      },
       // Queue: open diff for selected item
       {
         patterns: [

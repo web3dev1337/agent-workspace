@@ -357,6 +357,16 @@ If you have a Queue item selected and it’s linked to a local session/worktree:
 - Or click **🗂 Inspect** for the modal Worktree Inspector.
 - Inside the Review Console, use **Layout** to toggle sections (Terminals/Files/Commits/Diff) and presets.
 
+Phase 4 note (2026-01-31): Review Console controls are now commandable via Commander/Voice:
+- `open-review-console { sessionId? | worktreePath? }`
+- `review-console-set-preset { preset }`
+- `review-console-set-window { mode }`
+- `review-console-toggle-section { section }`
+- `review-console-files-view { view }`
+- `review-console-diff-open`
+- `review-console-diff-embed { enabled }`
+- `close-review-console`
+
 If those buttons are missing or “do nothing”:
 - The queue item likely has no `sessionId`/`worktreePath`, *or* the stored path is stale.
 - Recent fixes auto-migrate stale paths when the repo root moved (see `server/workspaceManager.js#normalizeWorkspacePaths`).
