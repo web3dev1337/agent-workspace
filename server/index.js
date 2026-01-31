@@ -228,6 +228,8 @@ const worktreeMetadataService = WorktreeMetadataService.getInstance();
 const worktreeGitService = WorktreeGitService.getInstance();
 const projectMetadataService = ProjectMetadataService.getInstance();
 const worktreeConflictService = new WorktreeConflictService({ projectMetadataService, worktreeMetadataService });
+const { CommanderContextService } = require('./commanderContextService');
+const commanderContextService = CommanderContextService.getInstance();
 const worktreeTagService = WorktreeTagService.getInstance();
 const diffViewerService = DiffViewerService.getInstance();
 const pullRequestService = PullRequestService.getInstance();
@@ -4874,6 +4876,64 @@ app.post('/api/commander/execute', async (req, res) => {
   }
 });
 
+// Commander context (UI state + sessions + workspace info)
+app.get('/api/commander/context', (req, res) => {
+  try {
+    const snapshot = commanderContextService.getSnapshot({ workspaceManager, commanderService, commandRegistry });
+    res.json(snapshot);
+  } catch (error) {
+    logger.error('Failed to get commander context', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get commander context' });
+  }
+});
+
+// Lightweight bootstrap/help prompt for Commander Claude (generated from command registry + context)
+app.get('/api/commander/prompt', (req, res) => {
+  try {
+    const snapshot = commanderContextService.getSnapshot({ workspaceManager, commanderService, commandRegistry });
+    const capabilities = commandRegistry.getCapabilities();
+
+    const flatten = [];
+    for (const [category, cmds] of Object.entries(capabilities || {})) {
+      (cmds || []).forEach((c) => {
+        const params = Array.isArray(c.params) ? c.params : [];
+        const required = params.filter(p => p && p.required).map(p => p.name).filter(Boolean);
+        flatten.push({
+          category,
+          name: c.name,
+          description: c.description,
+          required
+        });
+      });
+    }
+    flatten.sort((a, b) => (a.category + a.name).localeCompare(b.category + b.name));
+
+    const selected = snapshot?.context?.selectedQueue || null;
+    const selectedLine = selected?.id
+      ? `Selected queue item: ${selected.id}${selected.title ? ` (${selected.title})` : ''}${selected.url ? ` • ${selected.url}` : ''}`
+      : 'Selected queue item: (none)';
+
+    const lines = [
+      'You are Commander Claude. You can control the Orchestrator by calling its HTTP APIs.',
+      '',
+      'Preferred control surface: POST /api/commander/execute with { "command": "...", "params": {...} }.',
+      'Discovery: GET /api/commander/capabilities.',
+      'Context: GET /api/commander/context.',
+      '',
+      selectedLine,
+      '',
+      'Available commands (summary):',
+      ...flatten.map((c) => `- [${c.category}] ${c.name}${c.required?.length ? ` (required: ${c.required.join(', ')})` : ''}: ${c.description}`)
+    ];
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(lines.join('\n'));
+  } catch (error) {
+    logger.error('Failed to build commander prompt', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to build commander prompt' });
+  }
+});
+
 // ============ VOICE COMMAND ENDPOINTS ============
 
 // Process voice command (parse + execute)
@@ -4944,6 +5004,11 @@ app.post('/api/voice/context', (req, res) => {
   try {
     const { context } = req.body;
     voiceCommandService.setContext(context);
+    try {
+      commanderContextService.setContext(context, { source: 'voice.context' });
+    } catch {
+      // ignore
+    }
     res.json({ success: true, context: voiceCommandService.context });
   } catch (error) {
     logger.error('Failed to update voice context', { error: error.message });

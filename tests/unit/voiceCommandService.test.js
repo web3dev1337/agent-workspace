@@ -58,4 +58,12 @@ describe('VoiceCommandService (rule parsing)', () => {
     const adviceNext = voiceCommandService.parseWithRules('what should i do next');
     expect(adviceNext.command).toBe('open-advice');
   });
+
+  test('parses queue review surface helpers', () => {
+    const consoleCmd = voiceCommandService.parseWithRules('open review console');
+    expect(consoleCmd.command).toBe('queue-open-console');
+
+    const diffCmd = voiceCommandService.parseWithRules('open diff');
+    expect(diffCmd.command).toBe('queue-open-diff');
+  });
 });
