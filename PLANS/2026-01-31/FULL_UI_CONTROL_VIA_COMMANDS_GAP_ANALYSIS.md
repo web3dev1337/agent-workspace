@@ -167,21 +167,31 @@ This was the original biggest drift risk; it is now fixed and guarded by unit te
 ### Gap 2 — Queue + Review Console operations are not exposed as commands
 
 Even though Queue/Review Console features exist, there are still missing semantic commands for:
-- Selecting items by PR URL / PR number / ticket URL
-- Editing Queue metadata (tier/risk/claim/assign/outcome/notes/etc.)
-- Dependency operations (deps add/remove/suggest/graph)
+- Selecting items by PR *number* (without needing full URL), and richer “select by …” helpers (repo aliases, short PR refs, etc.)
+- Editing remaining Queue metadata fields (pFailFirstPass / verifyMinutes / promptRef / ticket link / done/reviewed toggles / etc.)
 - Spawning reviewer/fixer/recheck/overnight for the selected item
+- Record store actions (private/shared/encrypted promotion)
 
 Already shipped (baseline Queue control):
 - `open-queue`, `queue-next`, `queue-blockers`, `queue-triage`, `queue-conveyor-t2`
-- `queue-select { id }`, `queue-open-console`, `queue-open-diff`
-- `queue-approve`, `queue-request-changes`, `queue-merge`
+- Navigation/selection helpers:
+  - `queue-prev`, `queue-select { id }`
+  - `queue-select-by-pr-url { url }`, `queue-select-by-ticket { ticket }`
+  - `queue-refresh`
+- Review surface:
+  - `queue-open-console`, `queue-open-inspector`, `queue-open-diff`
+  - `queue-open-prompt`
+- Review lifecycle:
+  - `queue-review-timer-start`, `queue-review-timer-stop`
+  - `queue-approve`, `queue-request-changes`, `queue-merge`
+- Metadata:
+  - `queue-set-tier { tier }`, `queue-set-risk { risk }`, `queue-set-outcome { outcome }`, `queue-set-notes { notes }`
+  - `queue-claim { who? }`, `queue-release`, `queue-assign { who }`, `queue-unassign`
+- Dependencies/pairing/conflicts:
+  - `queue-deps-add { dependencyIds }`, `queue-deps-remove { dependencyIds }`, `queue-deps-graph { depth?, view? }`
+  - `queue-pairing`, `queue-conflicts-refresh`
 
-Still missing (Queue review flow parity):
-- `queue-prev`
-- `queue-open-inspector`
-
-**Impact:** voice/Commander can open Queue, but cannot actually *operate* the review workflow without manual clicking.
+**Impact:** voice/Commander can run most of the review workflow, but there are still “last mile” gaps for full parity (spawn automations, a few metadata fields, and richer selection helpers).
 
 ### Gap 3 — Missing a “Commander Context” endpoint for LLM/automation routing
 
