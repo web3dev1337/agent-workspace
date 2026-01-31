@@ -359,6 +359,123 @@ class CommandRegistry {
       }
     });
 
+    this.register('queue-spawn-reviewer', {
+      category: 'process',
+      description: 'Spawn a reviewer agent for the selected Queue PR (Tier 3 reviewer)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-spawn-reviewer' });
+        return { message: 'Queue: spawn reviewer' };
+      }
+    });
+
+    this.register('queue-spawn-fixer', {
+      category: 'process',
+      description: 'Spawn a fixer agent for the selected Queue PR (Tier 2 fixer; uses Notes as fix request)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-spawn-fixer' });
+        return { message: 'Queue: spawn fixer' };
+      }
+    });
+
+    this.register('queue-spawn-recheck', {
+      category: 'process',
+      description: 'Spawn a recheck/reviewer agent for the selected Queue PR (Tier 3 recheck)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-spawn-recheck' });
+        return { message: 'Queue: spawn recheck' };
+      }
+    });
+
+    this.register('queue-spawn-overnight', {
+      category: 'process',
+      description: 'Spawn an overnight runner for the selected Queue PR (Tier 4; long-running)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-spawn-overnight' });
+        return { message: 'Queue: spawn overnight' };
+      }
+    });
+
+    this.register('queue-set-pfail', {
+      category: 'process',
+      description: 'Set pFailFirstPass for the selected Queue item',
+      params: [
+        { name: 'pFailFirstPass', required: true, description: 'Number (0..1) or "none" to clear' }
+      ],
+      examples: [
+        { params: { pFailFirstPass: 0.3 }, description: 'Set pFailFirstPass to 0.3' },
+        { params: { pFailFirstPass: 'none' }, description: 'Clear pFailFirstPass' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-set-pfail', ...params });
+        return { message: 'Queue: set pFailFirstPass' };
+      }
+    });
+
+    this.register('queue-set-verify', {
+      category: 'process',
+      description: 'Set verifyMinutes for the selected Queue item',
+      params: [
+        { name: 'verifyMinutes', required: true, description: 'Minutes (number) or "none" to clear' }
+      ],
+      examples: [
+        { params: { verifyMinutes: 10 }, description: 'Set verifyMinutes to 10' },
+        { params: { verifyMinutes: 'none' }, description: 'Clear verifyMinutes' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-set-verify', ...params });
+        return { message: 'Queue: set verifyMinutes' };
+      }
+    });
+
+    this.register('queue-set-prompt-ref', {
+      category: 'process',
+      description: 'Set promptRef (prompt artifact id) for the selected Queue item',
+      params: [
+        { name: 'promptRef', required: true, description: 'Prompt artifact reference (e.g. pr:owner/repo#123) or empty/none to clear' }
+      ],
+      examples: [
+        { params: { promptRef: 'pr:web3dev1337/repo#123' }, description: 'Set promptRef' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-set-prompt-ref', ...params });
+        return { message: 'Queue: set promptRef' };
+      }
+    });
+
+    this.register('queue-set-ticket', {
+      category: 'process',
+      description: 'Set Trello ticket for the selected Queue item (URL or trello:<shortLink>)',
+      params: [
+        { name: 'ticket', required: true, description: 'Ticket reference (Trello URL / trello:<shortLink> / empty/none to clear)' }
+      ],
+      examples: [
+        { params: { ticket: 'trello:abc123' }, description: 'Set ticket from shortLink' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-set-ticket', ...params });
+        return { message: 'Queue: set ticket' };
+      }
+    });
+
+    this.register('queue-open-ticket', {
+      category: 'process',
+      description: 'Open the selected Queue item ticket in a new tab (if present)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-open-ticket' });
+        return { message: 'Queue: open ticket' };
+      }
+    });
+
     this.register('queue-prev', {
       category: 'process',
       description: 'Select the previous Queue item',
