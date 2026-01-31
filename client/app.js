@@ -1836,6 +1836,10 @@ class ClaudeOrchestrator {
         })
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        // Idempotent: already exists in workspace config.
+        return { id: nextId, path: `${repo.path}/${nextId}`, alreadyExists: true };
+      }
       if (!res.ok) throw new Error(data?.error || 'Failed to auto-create worktree');
       return { id: nextId, path: `${repo.path}/${nextId}` };
     }
@@ -6260,6 +6264,18 @@ class ClaudeOrchestrator {
     return data;
   }
 
+  getGitStatusClass(status) {
+    const s = String(status || '').trim();
+    if (!s || s === '·') return 'status-clean';
+    if (s.includes('??') || s.includes('?')) return 'status-untracked';
+    if (s.includes('U')) return 'status-conflict';
+    if (s.includes('A')) return 'status-added';
+    if (s.includes('D')) return 'status-removed';
+    if (s.includes('R')) return 'status-renamed';
+    if (s.includes('M')) return 'status-modified';
+    return 'status-unknown';
+  }
+
   ensureWorktreeInspectorModal() {
     let modal = document.getElementById('worktree-inspector-modal');
     if (modal) return modal;
@@ -6532,6 +6548,7 @@ class ClaudeOrchestrator {
 
 	      const fileRows = files.map((f) => {
 	        const status = `${String(f?.indexStatus || ' ')}${String(f?.worktreeStatus || ' ')}`.trim() || '·';
+	        const statusClass = this.getGitStatusClass(status);
 	        const staged = formatStat(f?.staged);
 	        const unstaged = formatStat(f?.unstaged);
 	        const path = escapeHtml(f?.path || '');
@@ -6540,7 +6557,7 @@ class ClaudeOrchestrator {
 	        const rawPath = escapeHtml(String(f?.path || '').replace(/\\/g, '/'));
 	        return `
 	          <tr>
-	            <td class="mono">${escapeHtml(status)}</td>
+	            <td class="mono"><span class="worktree-inspector-tree-status ${statusClass}">${escapeHtml(status)}</span></td>
 	            <td class="mono">${path}${renameHint}</td>
 	            <td class="mono">${escapeHtml(staged)}</td>
 	            <td class="mono">${escapeHtml(unstaged)}</td>
@@ -6652,11 +6669,12 @@ class ClaudeOrchestrator {
 	      const renderTreeNode = (node, depth) => {
 	        const d = Math.max(0, Number(depth) || 0);
 	        if (node.type === 'file') {
+	          const statusClass = this.getGitStatusClass(String(node.status || '').trim());
 	          const oldPath = node.oldPath ? escapeHtml(node.oldPath) : '';
 	          const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
 	          return `
 	            <div class="worktree-inspector-tree-row" style="--indent:${d}">
-	              <div class="mono worktree-inspector-tree-status">${escapeHtml(node.status || '·')}</div>
+	              <div class="mono worktree-inspector-tree-status ${statusClass}">${escapeHtml(node.status || '·')}</div>
 	              <div class="mono worktree-inspector-tree-path">${escapeHtml(node.name || '')}${renameHint}</div>
 	              <div class="mono worktree-inspector-tree-stat">${escapeHtml(node.stagedLabel || '')}</div>
 	              <div class="mono worktree-inspector-tree-stat">${escapeHtml(node.unstagedLabel || '')}</div>
@@ -7451,10 +7469,7 @@ class ClaudeOrchestrator {
     const session = sessionId ? this.sessions.get(sessionId) : null;
 
     const worktreePath = String(session?.config?.cwd || session?.cwd || session?.worktreePath || t.worktreePath || '').trim();
-    if (!worktreePath) {
-      this.showToast('No worktree path available for this task', 'warning');
-      return;
-    }
+    if (!worktreePath) return this.openReviewConsoleForPRTask(t);
 
     const rc = this.getReviewConsoleConfig();
     const rcShowTerminals = rc?.sections?.terminals !== false;
@@ -7468,6 +7483,10 @@ class ClaudeOrchestrator {
     ).trim();
 
     if (rcShowTerminals && inferredWorktreeId) {
+      // Queue panel is a fullscreen overlay; if we want terminals visible, close Queue.
+      if (document.getElementById('queue-panel')) {
+        document.getElementById('queue-close-btn')?.click?.();
+      }
       this.showOnlyWorktree(inferredWorktreeId);
     }
 
@@ -7480,6 +7499,322 @@ class ClaudeOrchestrator {
         const wrapper = document.getElementById(`wrapper-${preferredSessionId}`);
         wrapper?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
       }
+    }
+  }
+
+  async fetchPullRequestDetails(prUrl, { maxFiles = 300, maxCommits = 200, maxComments = 50, maxReviews = 50 } = {}) {
+    const url = new URL('/api/prs/details', window.location.origin);
+    url.searchParams.set('url', String(prUrl || '').trim());
+    if (Number.isFinite(Number(maxFiles))) url.searchParams.set('maxFiles', String(Math.max(1, Math.round(Number(maxFiles)))));
+    if (Number.isFinite(Number(maxCommits))) url.searchParams.set('maxCommits', String(Math.max(1, Math.round(Number(maxCommits)))));
+    if (Number.isFinite(Number(maxComments))) url.searchParams.set('maxComments', String(Math.max(0, Math.round(Number(maxComments)))));
+    if (Number.isFinite(Number(maxReviews))) url.searchParams.set('maxReviews', String(Math.max(0, Math.round(Number(maxReviews)))));
+
+    const res = await fetch(url.toString());
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = String(data?.error || data?.message || res.statusText || 'Failed to load PR details');
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  getDiffViewerPathForGitHubUrl(githubUrl) {
+    const raw = String(githubUrl || '').trim();
+    if (!raw) return '';
+    const prMatch = raw.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
+    if (prMatch) {
+      const [, owner, repo, pr] = prMatch;
+      return `/pr/${owner}/${repo}/${pr}`;
+    }
+    const commitMatch = raw.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/);
+    if (commitMatch) {
+      const [, owner, repo, sha] = commitMatch;
+      return `/commit/${owner}/${repo}/${sha}`;
+    }
+    return '';
+  }
+
+  async openReviewConsoleForPRTask(task) {
+    const t = task && typeof task === 'object' ? task : {};
+    const prUrl = String(t.url || '').trim();
+    if (!prUrl) {
+      this.showToast('No PR URL available for this item', 'warning');
+      return;
+    }
+
+    // Queue is a fullscreen overlay; close it so the console has the whole screen.
+    if (document.getElementById('queue-panel')) {
+      document.getElementById('queue-close-btn')?.click?.();
+    }
+
+    const modal = this.ensureWorktreeInspectorModal();
+    modal.classList.remove('hidden');
+    modal.classList.remove('docked');
+    modal.classList.add('fullscreen');
+
+    const titleEl = modal.querySelector('#worktree-inspector-title');
+    if (titleEl) {
+      const label = t.title ? String(t.title) : String(t.id || '').trim();
+      titleEl.textContent = `Review Console • ${label || 'PR'}`;
+    }
+
+    const bodyEl = modal.querySelector('#worktree-inspector-body');
+    if (!bodyEl) return;
+    bodyEl.innerHTML = '<div style="opacity:0.8;">Loading…</div>';
+
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    try {
+      const details = await this.fetchPullRequestDetails(prUrl, { maxFiles: 400, maxCommits: 200, maxComments: 60, maxReviews: 60 });
+      const pr = (details?.pr && typeof details.pr === 'object') ? details.pr : {};
+      const files = Array.isArray(details?.files) ? details.files : [];
+      const commits = Array.isArray(details?.commits) ? details.commits : [];
+      const conversation = (details?.conversation && typeof details.conversation === 'object') ? details.conversation : {};
+      const issueComments = Array.isArray(conversation.issueComments) ? conversation.issueComments : [];
+      const reviews = Array.isArray(conversation.reviews) ? conversation.reviews : [];
+
+      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
+
+      const statusLabel = (s) => {
+        const v = String(s || '').trim().toLowerCase();
+        if (v === 'added') return 'A';
+        if (v === 'modified') return 'M';
+        if (v === 'removed') return 'D';
+        if (v === 'renamed') return 'R';
+        if (v === 'changed') return 'M';
+        return v ? v.slice(0, 1).toUpperCase() : '?';
+      };
+      const statusClass = (s) => {
+        const v = String(s || '').trim().toLowerCase();
+        if (v === 'added') return 'status-added';
+        if (v === 'modified' || v === 'changed') return 'status-modified';
+        if (v === 'removed') return 'status-removed';
+        if (v === 'renamed') return 'status-renamed';
+        return 'status-unknown';
+      };
+
+      const commentItems = []
+        .concat(reviews.map(r => ({ kind: 'review', ...r })))
+        .concat(issueComments.map(c => ({ kind: 'comment', ...c })))
+        .filter(x => x)
+        .sort((a, b) => {
+          const ta = Date.parse(String(a.submittedAt || a.createdAt || '')) || 0;
+          const tb = Date.parse(String(b.submittedAt || b.createdAt || '')) || 0;
+          return ta - tb;
+        });
+
+      const renderComment = (c) => {
+        const who = escapeHtml(String(c.user || ''));
+        const when = escapeHtml(String(c.submittedAt || c.createdAt || ''));
+        const state = c.kind === 'review' ? escapeHtml(String(c.state || '')) : '';
+        const body = String(c.body || '').trim();
+        const preview = escapeHtml(body.length > 600 ? `${body.slice(0, 600)}…` : body);
+        const badge = c.kind === 'review'
+          ? `<span class="worktree-inspector-chip ${String(c.state || '').toUpperCase() === 'APPROVED' ? 'status-added' : 'status-modified'}" style="padding:2px 6px;">${state}</span>`
+          : '';
+        return `
+          <div class="worktree-inspector-commit" style="gap:10px;">
+            <div style="flex:1; min-width:0;">
+              <div class="worktree-inspector-panel-title-row" style="margin-bottom:6px;">
+                <div class="worktree-inspector-commit-msg" style="margin:0;">${badge} <span style="opacity:0.85;">${who}</span></div>
+                <div class="worktree-inspector-commit-date" style="margin-left:auto;">${when}</div>
+              </div>
+              <div class="worktree-inspector-subtle" style="white-space:pre-wrap;">${preview || '<span style="opacity:0.6;">(no body)</span>'}</div>
+            </div>
+          </div>
+        `;
+      };
+
+      bodyEl.innerHTML = `
+        <div class="worktree-inspector-header">
+          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
+            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
+              <strong>PR #${escapeHtml(pr.number || '')}</strong>
+              ${pr.state ? ` • <span style="opacity:0.85;">${escapeHtml(pr.state)}</span>` : ''}
+              ${pr.isDraft ? ' • <span style="opacity:0.85;">draft</span>' : ''}
+              ${pr.headRefName ? ` • <span style="opacity:0.85;">${escapeHtml(pr.headRefName)}</span>` : ''}
+            </div>
+            <div class="worktree-inspector-subtle" style="opacity:0.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              ${escapeHtml(pr.title || t.title || '')}
+            </div>
+          </div>
+          <span style="flex:1"></span>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+            <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
+            <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}">🔍 Diff</button>
+            <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" ${pr.isDraft ? 'disabled' : ''}>✅ Merge</button>
+          </div>
+        </div>
+
+        <div class="worktree-inspector-grid" data-rc-grid="true">
+          <div class="worktree-inspector-panel worktree-inspector-files" data-rc-panel="files">
+            <div class="worktree-inspector-panel-title-row">
+              <div class="worktree-inspector-panel-title">Files</div>
+              <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
+            </div>
+            <div class="worktree-inspector-files-list">
+              <table class="worktree-inspector-table">
+                <thead>
+                  <tr>
+                    <th style="width:60px;">Δ</th>
+                    <th>path</th>
+                    <th style="width:80px;">+ / -</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${files.map((f) => {
+                    const st = statusLabel(f.status);
+                    const cls = statusClass(f.status);
+                    const adds = Number.isFinite(Number(f.additions)) ? Number(f.additions) : null;
+                    const dels = Number.isFinite(Number(f.deletions)) ? Number(f.deletions) : null;
+                    const delta = (adds != null && dels != null) ? `${adds} / ${dels}` : '';
+                    const name = escapeHtml(f.filename || '');
+                    const prev = f.previousFilename ? ` <span style="opacity:0.65;">(was ${escapeHtml(f.previousFilename)})</span>` : '';
+                    return `<tr>
+                      <td><span class="worktree-inspector-tree-status ${cls}">${escapeHtml(st)}</span></td>
+                      <td style="font-family:var(--font-mono); font-size:0.9rem;">${name}${prev}</td>
+                      <td style="opacity:0.85;">${escapeHtml(delta)}</td>
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+              ${files.length === 0 ? '<div class="worktree-inspector-subtle">No files found.</div>' : ''}
+            </div>
+          </div>
+
+          <div class="worktree-inspector-panel worktree-inspector-commits" data-rc-panel="commits">
+            <div class="worktree-inspector-panel-title-row">
+              <div class="worktree-inspector-panel-title">Commits</div>
+              <div class="worktree-inspector-subtle">count ${commits.length}</div>
+            </div>
+            <div>
+              ${commits.map((c) => `
+                <div class="worktree-inspector-commit">
+                  <code class="worktree-inspector-commit-hash">${escapeHtml(String(c.sha || '').slice(0, 7))}</code>
+                  <div class="worktree-inspector-commit-msg">${escapeHtml(c.message || '')}</div>
+                  <div class="worktree-inspector-commit-date">${escapeHtml(c.author || '')}${c.date ? ` • ${escapeHtml(String(c.date).replace('T', ' ').replace('Z', ''))}` : ''}</div>
+                </div>
+              `).join('')}
+              ${commits.length === 0 ? '<div class="worktree-inspector-subtle">No commits found.</div>' : ''}
+            </div>
+
+            <div style="margin-top:12px;">
+              <div class="worktree-inspector-panel-title-row">
+                <div class="worktree-inspector-panel-title">Conversation</div>
+                <div class="worktree-inspector-subtle">reviews ${reviews.length} • comments ${issueComments.length}</div>
+              </div>
+              <div>
+                ${commentItems.length ? commentItems.slice(-15).map(renderComment).join('') : '<div class="worktree-inspector-subtle">No recent comments/reviews found.</div>'}
+              </div>
+            </div>
+          </div>
+
+          <div class="worktree-inspector-panel worktree-inspector-diff-panel" data-rc-panel="diff">
+            <div class="worktree-inspector-panel-title-row">
+              <div class="worktree-inspector-panel-title">Diff</div>
+              <div class="worktree-inspector-subtle worktree-inspector-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)')}</div>
+            </div>
+            <div class="worktree-inspector-diff-controls">
+              <button class="btn-secondary" type="button" data-diff-embed="true">Embed</button>
+              <button class="btn-secondary" type="button" data-diff-open="true">Open</button>
+              <button class="btn-secondary" type="button" data-diff-refresh="true">Refresh</button>
+              <button class="btn-secondary" type="button" data-diff-close="true">Close</button>
+            </div>
+            <iframe class="worktree-inspector-diff-iframe hidden" data-diff-iframe="true" title="Diff Viewer"></iframe>
+          </div>
+        </div>
+
+        <div data-rc-empty="true" class="worktree-inspector-subtle hidden" style="padding:12px;">No sections enabled.</div>
+      `;
+
+      // Diff controls (PR-only: default embed).
+      const diffIframe = bodyEl.querySelector('[data-diff-iframe="true"]');
+      const diffStatusEl = bodyEl.querySelector('[data-diff-status="true"]');
+      const embedBtn = bodyEl.querySelector('[data-diff-embed="true"]');
+      const openBtn = bodyEl.querySelector('[data-diff-open="true"]');
+      const refreshBtn = bodyEl.querySelector('[data-diff-refresh="true"]');
+      const closeBtn = bodyEl.querySelector('[data-diff-close="true"]');
+
+      let baseUrl = 'http://localhost:7655';
+      const ensureDiffViewer = async () => {
+        const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(String(data?.message || data?.error || 'Failed to start diff viewer'));
+        if (data?.baseUrl) baseUrl = data.baseUrl;
+        if (!data?.running) {
+          const start = Date.now();
+          const timeoutMs = 120000;
+          while (Date.now() - start < timeoutMs) {
+            await new Promise(r => setTimeout(r, 1000));
+            const statusResp = await fetch('/api/diff-viewer/status');
+            const status = await statusResp.json().catch(() => ({}));
+            if (status?.baseUrl) baseUrl = status.baseUrl;
+            if (status?.running) break;
+          }
+        }
+      };
+
+      const embed = async () => {
+        if (!diffIframe) return;
+        await ensureDiffViewer();
+        const target = diffViewerPath || '';
+        diffIframe.src = target ? `${baseUrl}${target}` : `${baseUrl}/`;
+        diffIframe.classList.remove('hidden');
+        if (diffStatusEl) diffStatusEl.textContent = target ? `Target: ${target}` : 'Target: (diff viewer home)';
+      };
+
+      embedBtn?.addEventListener('click', () => {
+        embed().catch((e) => this.showToast(String(e?.message || e), 'error'));
+      });
+      openBtn?.addEventListener('click', () => this.launchDiffViewer(prUrl));
+      refreshBtn?.addEventListener('click', () => {
+        if (!diffIframe) return;
+        if (!diffIframe.src) return embed().catch(() => {});
+        try { diffIframe.contentWindow?.location?.reload?.(); } catch { diffIframe.src = diffIframe.src; }
+      });
+      closeBtn?.addEventListener('click', () => {
+        if (!diffIframe) return;
+        diffIframe.src = 'about:blank';
+        diffIframe.classList.add('hidden');
+      });
+
+      // Default: embed (since there are no local terminals to show).
+      embed().catch(() => {});
+
+      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
+        const url = e.target?.dataset?.openDiff;
+        if (url) this.launchDiffViewer(url);
+      });
+      bodyEl.querySelector('[data-pr-merge]')?.addEventListener('click', async (e) => {
+        const u = e.target?.dataset?.prMerge;
+        if (!u) return;
+        if (!window.confirm(`Merge PR?\n${u}`)) return;
+        const btn = e.target;
+        btn.disabled = true;
+        this.showToast('Merging PR…', 'info');
+        try {
+          const res = await fetch('/api/prs/merge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: u, method: 'merge' })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to merge PR'));
+          this.showToast('PR merged', 'success');
+        } catch (err) {
+          this.showToast(String(err?.message || err), 'error');
+          btn.disabled = false;
+        }
+      });
+    } catch (err) {
+      bodyEl.innerHTML = `
+        <div style="opacity:0.9; margin-bottom:10px;">Failed to load PR details.</div>
+        <div style="opacity:0.7;" class="mono">${escapeHtml(String(err?.message || err))}</div>
+      `;
     }
   }
 
@@ -17158,7 +17493,7 @@ class ClaudeOrchestrator {
 				            ${hasPR ? `<button class="btn-secondary" id="queue-review-request-changes" title="Request changes on GitHub (uses Notes as the review body)">🛑 Changes</button>` : ''}
 				            ${hasPR ? `<button class="btn-secondary" id="queue-merge-pr" ${t?.isDraft ? 'disabled' : ''} title="${t?.isDraft ? 'Draft PRs cannot be merged' : 'Merge PR'}">✅ Merge</button>` : ''}
 				            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-inspector" title="Worktree files + commits">🗂 Inspect</button>` : ''}
-				            ${(t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-console" title="Review Console (docked)">🖥 Console</button>` : ''}
+				            ${(hasPR || t.sessionId || t.worktreePath) ? `<button class="btn-secondary" id="queue-open-console" title="Review Console (PR-only works too)">🖥 Console</button>` : ''}
 				            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-overnight" ${canOvernight ? '' : 'disabled'} title="${canOvernight ? 'Spawn Tier 4 overnight runner (runs tests + leaves summary)' : 'Set Tier=4 to enable overnight runner'}">🌙 Overnight</button>` : ''}
 				            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
 				            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
@@ -21112,8 +21447,13 @@ class ClaudeOrchestrator {
         })
       });
 
+      const data = await response.json().catch(() => ({}));
       if (response.ok) {
-        this.showTemporaryMessage(`Added ${repoName} ${worktreeId} to workspace!`, 'success');
+        const alreadyExists = !!data?.alreadyExists;
+        this.showTemporaryMessage(
+          alreadyExists ? `${repoName} ${worktreeId} is already in this workspace` : `Added ${repoName} ${worktreeId} to workspace!`,
+          'success'
+        );
         if (!keepOpen) {
           document.getElementById('add-worktree-modal')?.remove();
           document.getElementById('quick-worktree-modal')?.remove();
@@ -21121,7 +21461,7 @@ class ClaudeOrchestrator {
 
         // Server will emit 'worktree-sessions-added' which is handled by our socket listener
       } else {
-        const error = await response.text();
+        const error = typeof data?.error === 'string' ? data.error : JSON.stringify(data || {});
         this.clearWorktreeReservation(repoPath, worktreeId);
         this.showTemporaryMessage('Failed to add worktree: ' + error, 'error');
       }

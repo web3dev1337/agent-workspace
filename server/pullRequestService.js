@@ -67,6 +67,133 @@ class PullRequestService {
     return JSON.parse(stdout || '{}');
   }
 
+  async ghApi(path, { paginate = false, timeoutMs = 20000 } = {}) {
+    const rawPath = String(path || '').trim().replace(/^\//, '');
+    if (!rawPath) throw new Error('Invalid gh api path');
+
+    const args = ['api', rawPath];
+    if (paginate) args.push('--paginate', '--slurp');
+
+    const { stdout } = await new Promise((resolve, reject) => {
+      execFile('gh', args, { timeout: timeoutMs }, (error, stdout, stderr) => {
+        if (error) {
+          logger.error('gh api failed', { error: error.message, stderr, path: rawPath });
+          reject(error);
+          return;
+        }
+        resolve({ stdout, stderr });
+      });
+    });
+
+    const text = String(stdout || '').trim();
+    if (!text) return null;
+    const parsed = JSON.parse(text);
+    if (paginate && Array.isArray(parsed) && parsed.every(Array.isArray)) {
+      return parsed.flat();
+    }
+    return parsed;
+  }
+
+  async getPullRequestDetailsByUrl(prUrl, {
+    maxFiles = 300,
+    maxCommits = 200,
+    maxComments = 100,
+    maxReviews = 100
+  } = {}) {
+    const parsed = this.parsePullRequestUrl(prUrl);
+    if (!parsed?.owner || !parsed?.repo || !parsed?.number) throw new Error('Invalid PR URL');
+
+    const o = parsed.owner;
+    const r = parsed.repo;
+    const n = parsed.number;
+
+    const clamp = (value, { min, max, fallback }) => {
+      const v = Number(value);
+      if (!Number.isFinite(v)) return fallback;
+      return Math.min(Math.max(v, min), max);
+    };
+
+    const filesLimit = clamp(maxFiles, { min: 1, max: 2000, fallback: 300 });
+    const commitsLimit = clamp(maxCommits, { min: 1, max: 2000, fallback: 200 });
+    const commentsLimit = clamp(maxComments, { min: 0, max: 2000, fallback: 100 });
+    const reviewsLimit = clamp(maxReviews, { min: 0, max: 2000, fallback: 100 });
+
+    const [pr, filesRaw, commitsRaw, issueCommentsRaw, reviewsRaw] = await Promise.all([
+      this.ghApi(`repos/${o}/${r}/pulls/${n}`, { paginate: false, timeoutMs: 20000 }).catch(() => null),
+      this.ghApi(`repos/${o}/${r}/pulls/${n}/files`, { paginate: true, timeoutMs: 30000 }).catch(() => []),
+      this.ghApi(`repos/${o}/${r}/pulls/${n}/commits`, { paginate: true, timeoutMs: 30000 }).catch(() => []),
+      commentsLimit > 0
+        ? this.ghApi(`repos/${o}/${r}/issues/${n}/comments`, { paginate: true, timeoutMs: 30000 }).catch(() => [])
+        : Promise.resolve([]),
+      reviewsLimit > 0
+        ? this.ghApi(`repos/${o}/${r}/pulls/${n}/reviews`, { paginate: true, timeoutMs: 30000 }).catch(() => [])
+        : Promise.resolve([])
+    ]);
+
+    const files = Array.isArray(filesRaw) ? filesRaw.slice(0, filesLimit).map((f) => ({
+      filename: String(f?.filename || ''),
+      previousFilename: f?.previous_filename ? String(f.previous_filename) : null,
+      status: String(f?.status || ''),
+      additions: Number.isFinite(Number(f?.additions)) ? Number(f.additions) : null,
+      deletions: Number.isFinite(Number(f?.deletions)) ? Number(f.deletions) : null,
+      changes: Number.isFinite(Number(f?.changes)) ? Number(f.changes) : null
+    })).filter(f => f.filename) : [];
+
+    const commits = Array.isArray(commitsRaw) ? commitsRaw.slice(0, commitsLimit).map((c) => ({
+      sha: String(c?.sha || ''),
+      message: String(c?.commit?.message || '').split('\n')[0] || '',
+      author: c?.author?.login ? String(c.author.login) : (c?.commit?.author?.name ? String(c.commit.author.name) : ''),
+      date: String(c?.commit?.author?.date || c?.commit?.committer?.date || '')
+    })).filter(c => c.sha) : [];
+
+    const issueComments = Array.isArray(issueCommentsRaw) ? issueCommentsRaw.slice(-commentsLimit).map((c) => ({
+      id: c?.id,
+      user: c?.user?.login ? String(c.user.login) : '',
+      createdAt: String(c?.created_at || ''),
+      updatedAt: String(c?.updated_at || ''),
+      body: String(c?.body || '')
+    })) : [];
+
+    const reviews = Array.isArray(reviewsRaw) ? reviewsRaw.slice(-reviewsLimit).map((rv) => ({
+      id: rv?.id,
+      user: rv?.user?.login ? String(rv.user.login) : '',
+      state: String(rv?.state || ''),
+      submittedAt: String(rv?.submitted_at || ''),
+      body: String(rv?.body || '')
+    })) : [];
+
+    const prSummary = pr && typeof pr === 'object' ? {
+      number: pr.number,
+      title: pr.title,
+      state: pr.state,
+      url: pr.html_url || parsed.url,
+      isDraft: !!pr.draft,
+      createdAt: pr.created_at,
+      updatedAt: pr.updated_at,
+      mergedAt: pr.merged_at,
+      closedAt: pr.closed_at,
+      mergeable: pr.mergeable,
+      baseRefName: pr.base?.ref,
+      headRefName: pr.head?.ref,
+      author: pr.user?.login || null
+    } : {
+      number: n,
+      title: null,
+      state: null,
+      url: parsed.url
+    };
+
+    return {
+      pr: prSummary,
+      files,
+      commits,
+      conversation: {
+        issueComments,
+        reviews
+      }
+    };
+  }
+
   async mergePullRequestByUrl(prUrl, { method = 'merge', auto = false } = {}) {
     const parsed = this.parsePullRequestUrl(prUrl);
     if (!parsed?.url) throw new Error('Invalid PR URL');

@@ -1657,14 +1657,17 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
     ];
 
     // Guard: don't double-add the same worktree terminals
+    let alreadyExists = false;
     if (Array.isArray(updatedWorkspace.terminals)) {
       const existingIds = new Set(updatedWorkspace.terminals.map(t => t.id));
       if (existingIds.has(newTerminals[0].id) || existingIds.has(newTerminals[1].id)) {
-        return res.status(409).json({ error: 'Worktree already exists in workspace' });
+        alreadyExists = true;
       }
     }
 
-    updatedWorkspace.terminals = updatedWorkspace.terminals.concat(newTerminals);
+    if (!alreadyExists) {
+      updatedWorkspace.terminals = updatedWorkspace.terminals.concat(newTerminals);
+    }
 
     // Ensure the worktree exists
     const tempWorkspace = {
@@ -1673,8 +1676,10 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
     };
     await worktreeHelper.createWorktree(tempWorkspace, worktreeId);
 
-    // Save updated workspace
-    await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+    // Save updated workspace (only if we changed it: conversion or new terminals)
+    if (updatedWorkspace !== workspace || !alreadyExists) {
+      await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+    }
 
     // Update the SessionManager workspace reference and rebuild worktrees list
     const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
@@ -1711,13 +1716,15 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
     }
 
     logger.info('New worktree sessions initialized (additive)', {
-      totalNewSessions: Object.keys(newSessions).length
+      totalNewSessions: Object.keys(newSessions).length,
+      alreadyExists
     });
 
     const tier = Number(startTier);
     res.json({
       success: true,
-      terminalIds: newTerminals.map(t => t.id),
+      alreadyExists,
+      terminalIds: alreadyExists ? [] : newTerminals.map(t => t.id),
       sessions: newSessions,
       startTier: (tier >= 1 && tier <= 4) ? tier : undefined
     });
@@ -2961,6 +2968,29 @@ app.post('/api/prs/review', express.json(), async (req, res) => {
     activityFeed.track('pr.review', { url: String(req.body?.url || '').trim() || null, action: String(req.body?.action || '').trim() || null, ok: false, error: error.message });
     logger.error('Failed to review PR', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to review PR' });
+  }
+});
+
+app.get('/api/prs/details', async (req, res) => {
+  try {
+    const url = typeof req.query.url === 'string' ? req.query.url.trim() : '';
+    if (!url) return res.status(400).json({ error: 'url is required' });
+
+    const maxFiles = req.query.maxFiles ? Number(req.query.maxFiles) : undefined;
+    const maxCommits = req.query.maxCommits ? Number(req.query.maxCommits) : undefined;
+    const maxComments = req.query.maxComments ? Number(req.query.maxComments) : undefined;
+    const maxReviews = req.query.maxReviews ? Number(req.query.maxReviews) : undefined;
+
+    const details = await pullRequestService.getPullRequestDetailsByUrl(url, {
+      maxFiles,
+      maxCommits,
+      maxComments,
+      maxReviews
+    });
+    res.json(details);
+  } catch (error) {
+    logger.error('Failed to get PR details', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to get PR details' });
   }
 });
 
