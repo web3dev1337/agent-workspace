@@ -74,6 +74,8 @@ class SessionManager extends EventEmitter {
   // Determine effective inactivity timeout per session (ms)
   getSessionTimeout(session) {
     if (!session) return this.sessionTimeout;
+    const override = session.config?.timeoutMs;
+    if (Number.isFinite(override)) return override;
     if (session.type === 'claude') return this.claudeSessionTimeout;
     if (session.type === 'server') return this.serverSessionTimeout;
     return this.sessionTimeout;
@@ -310,14 +312,23 @@ class SessionManager extends EventEmitter {
               return;
             }
             let command, args;
+            const startCommand = String(terminal.startCommand || '').trim();
+            const timeoutMs = Number.isFinite(terminal.timeoutMs) ? terminal.timeoutMs : undefined;
 
             if (terminal.terminalType === 'claude') {
               command = 'bash';
-              args = ['-c', `cd "${worktree.path}" && exec bash`];
+              args = ['-c', startCommand
+                ? `cd "${worktree.path}" && exec ${startCommand}`
+                : `cd "${worktree.path}" && exec bash`
+              ];
             } else {
               // Server terminal
               command = 'bash';
-              args = ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${terminal.repository.name}/${terminal.worktree} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`];
+              const header = `=== ${terminal.repository.name}/${terminal.worktree} (${terminal.id}) ===`;
+              args = ['-c', startCommand
+                ? `cd "${worktree.path}" && echo "${header}" && echo "Directory: $(pwd)" && echo "" && exec ${startCommand}`
+                : `cd "${worktree.path}" && echo "=== Server Terminal for ${terminal.repository.name}/${terminal.worktree} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`
+              ];
             }
 
             this.createSession(sessionId, {
@@ -327,7 +338,8 @@ class SessionManager extends EventEmitter {
               type: terminal.terminalType,
               worktreeId: terminal.worktree,
               repositoryName: terminal.repository.name,
-              repositoryType: terminal.repository.type  // Add repository type for dynamic launch options
+              repositoryType: terminal.repository.type,  // Add repository type for dynamic launch options
+              timeoutMs
             });
           }).catch(error => {
             logger.error(`Failed to initialize ${terminal.terminalType} session`, {
@@ -1615,7 +1627,7 @@ class SessionManager extends EventEmitter {
   }
 
   writeToSession(sessionId, data) {
-    const session = this.sessions.get(sessionId);
+    const session = this.getSessionById(sessionId);
     if (!session || !session.pty) {
       logger.warn('Attempted to write to invalid session', { sessionId });
       return false;
@@ -1681,6 +1693,46 @@ class SessionManager extends EventEmitter {
       });
       return false;
     }
+  }
+
+  /**
+   * Ensure sessions exist for a workspace without switching the active UI tab.
+   * Used for background/service workspaces (e.g., Discord bot + processors).
+   */
+  async ensureWorkspaceSessions(workspace) {
+    if (!workspace?.id) {
+      throw new Error('Workspace missing id');
+    }
+
+    const workspaceId = workspace.id;
+    if (!this.workspaceSessionMaps.has(workspaceId)) {
+      this.workspaceSessionMaps.set(workspaceId, new Map());
+    }
+
+    const targetMap = this.workspaceSessionMaps.get(workspaceId);
+    const previous = {
+      workspace: this.workspace,
+      worktrees: this.worktrees,
+      sessions: this.sessions,
+      isWorkspaceSwitching: this.isWorkspaceSwitching
+    };
+
+    try {
+      this.sessions = targetMap;
+      this.workspace = workspace;
+      this.buildWorktreesFromWorkspace();
+      await this.initializeSessions({ preserveExisting: true });
+    } finally {
+      this.workspace = previous.workspace;
+      this.worktrees = previous.worktrees;
+      this.sessions = previous.sessions;
+      this.isWorkspaceSwitching = previous.isWorkspaceSwitching;
+    }
+
+    return {
+      workspaceId,
+      sessionIds: Array.from(targetMap.keys())
+    };
   }
   
   resizeSession(sessionId, cols, rows) {
@@ -2133,13 +2185,13 @@ class SessionManager extends EventEmitter {
     
     // Don't set new timer if session is being terminated or timeout is disabled  
     const timeout = this.getSessionTimeout(session);
-    if (!this.sessions.has(session.id) || timeout <= 0) {
+    if (!this.getSessionById(session.id) || timeout <= 0) {
       return null;
     }
 
     session.inactivityTimer = setTimeout(() => {
       // Double-check session still exists before terminating
-      if (!this.sessions.has(session.id)) {
+      if (!this.getSessionById(session.id)) {
         return;
       }
       

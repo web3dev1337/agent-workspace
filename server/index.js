@@ -75,6 +75,7 @@ const { GitHubRepoService } = require('./githubRepoService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
 const { sanitizeFilename, formatConversationAsMarkdown } = require('./conversationExportService');
 const { ActivityFeedService } = require('./activityFeedService');
+const discordIntegrationService = require('./discordIntegrationService');
 const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
@@ -4931,6 +4932,40 @@ app.get('/api/commander/prompt', (req, res) => {
   } catch (error) {
     logger.error('Failed to build commander prompt', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to build commander prompt' });
+  }
+});
+
+// =====================================
+// Discord Bot (Claudesworth) Integration
+// =====================================
+
+app.get('/api/discord/status', async (req, res) => {
+  try {
+    const status = await discordIntegrationService.getDiscordStatus({ sessionManager, workspaceManager });
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to get Discord status', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get Discord status' });
+  }
+});
+
+app.post('/api/discord/ensure-services', async (req, res) => {
+  try {
+    const status = await discordIntegrationService.ensureDiscordServices({ sessionManager, workspaceManager });
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to ensure Discord services', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to ensure Discord services', message: error.message });
+  }
+});
+
+app.post('/api/discord/process-queue', async (req, res) => {
+  try {
+    const result = await discordIntegrationService.processDiscordQueue({ sessionManager, workspaceManager });
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to process Discord queue', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to process Discord queue', message: error.message });
   }
 });
 
