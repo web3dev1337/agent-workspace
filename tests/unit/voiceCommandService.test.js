@@ -78,6 +78,28 @@ describe('VoiceCommandService (rule parsing)', () => {
     expect(diffCmd.command).toBe('queue-open-diff');
   });
 
+  test('parses review console layout controls', () => {
+    const preset = voiceCommandService.parseWithRules('preset review');
+    expect(preset.command).toBe('review-console-set-preset');
+    expect(preset.params).toEqual({ preset: 'review' });
+
+    const full = voiceCommandService.parseWithRules('fullscreen console');
+    expect(full.command).toBe('review-console-set-window');
+    expect(full.params).toEqual({ mode: 'fullscreen' });
+
+    const toggle = voiceCommandService.parseWithRules('toggle diff');
+    expect(toggle.command).toBe('review-console-toggle-section');
+    expect(toggle.params).toEqual({ section: 'diff' });
+
+    const files = voiceCommandService.parseWithRules('files tree');
+    expect(files.command).toBe('review-console-files-view');
+    expect(files.params).toEqual({ view: 'tree' });
+
+    const embed = voiceCommandService.parseWithRules('embed diff');
+    expect(embed.command).toBe('review-console-diff-embed');
+    expect(embed.params).toEqual({ enabled: true });
+  });
+
   test('parses queue review lifecycle actions', () => {
     const approve = voiceCommandService.parseWithRules('approve this pr');
     expect(approve.command).toBe('queue-approve');
