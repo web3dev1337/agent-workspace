@@ -11,6 +11,8 @@
 
 const commandRegistry = require('./commandRegistry');
 
+const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 class VoiceCommandService {
   constructor() {
     // Ollama config (local LLM)
@@ -987,6 +989,12 @@ class VoiceCommandService {
       },
     ];
 
+    // Keep a stable copy of the manually-authored rules and prepend auto-generated
+    // exact-match patterns from CommandRegistry at runtime.
+    this.manualPatterns = this.patterns;
+    this.patterns = [...this.manualPatterns];
+    this.autoPatternSignature = '';
+
     const skipAutoCheck = process.env.NODE_ENV === 'test'
       || process.env.JEST_WORKER_ID !== undefined
       || String(process.env.VOICE_SKIP_LLM_CHECK || '').toLowerCase() === 'true';
@@ -1098,7 +1106,54 @@ class VoiceCommandService {
   /**
    * Rule-based command parsing
    */
+  ensureAutoCommandNamePatterns() {
+    // In tests, CommandRegistry is not always initialized, so this must be resilient.
+    const caps = (() => {
+      try {
+        return commandRegistry.getCapabilities();
+      } catch {
+        return {};
+      }
+    })();
+
+    const flat = [];
+    for (const commands of Object.values(caps || {})) {
+      if (!Array.isArray(commands)) continue;
+      for (const c of commands) {
+        const name = String(c?.name || '').trim();
+        if (!name) continue;
+        flat.push({
+          name,
+          params: Array.isArray(c?.params) ? c.params : []
+        });
+      }
+    }
+
+    const signature = flat.map((c) => c.name).sort().join('|');
+    if (signature === this.autoPatternSignature) return;
+    this.autoPatternSignature = signature;
+
+    const auto = [];
+    for (const c of flat) {
+      const required = c.params.some((p) => p && p.required);
+      if (required) continue;
+
+      const tokens = c.name.split('-').map((t) => t.trim()).filter(Boolean);
+      if (tokens.length === 0) continue;
+
+      const re = new RegExp(`^${tokens.map(escapeRegex).join('(?:\\s|-)+')}$`, 'i');
+      auto.push({
+        patterns: [re],
+        command: c.name,
+        extractParams: () => ({})
+      });
+    }
+
+    this.patterns = [...auto, ...this.manualPatterns];
+  }
+
   parseWithRules(text) {
+    this.ensureAutoCommandNamePatterns();
     for (const rule of this.patterns) {
       for (const pattern of rule.patterns) {
         const match = text.match(pattern);
