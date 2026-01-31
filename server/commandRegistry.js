@@ -322,6 +322,43 @@ class CommandRegistry {
       }
     });
 
+    this.register('queue-select', {
+      category: 'process',
+      description: 'Select a specific Queue item by id (e.g. pr:owner/repo#123)',
+      params: [
+        { name: 'id', required: true, description: 'Queue item id (task record id)' }
+      ],
+      examples: [
+        { params: { id: 'pr:web3dev1337/repo#123' }, description: 'Select PR #123 in Queue' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-select', id: params.id });
+        return { message: `Queue: select ${params.id}` };
+      }
+    });
+
+    this.register('queue-open-console', {
+      category: 'process',
+      description: 'Open the Review Console for the currently selected Queue item (PR-only supported)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-open-console' });
+        return { message: 'Queue: open console' };
+      }
+    });
+
+    this.register('queue-open-diff', {
+      category: 'process',
+      description: 'Open the diff viewer for the currently selected Queue item (when it has a PR)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-open-diff' });
+        return { message: 'Queue: open diff' };
+      }
+    });
+
     this.register('open-tasks', {
       category: 'process',
       description: 'Open the Tasks panel (Trello provider UI)',

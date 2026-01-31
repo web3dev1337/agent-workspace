@@ -116,6 +116,27 @@ class VoiceCommandService {
         command: 'queue-conveyor-t2',
         extractParams: () => ({})
       },
+      // Queue: open console (review console)
+      {
+        patterns: [
+          /open\s+(?:the\s+)?console/i,
+          /open\s+review\s+console/i,
+          /show\s+review\s+console/i,
+          /open\s+inspector\s+console/i,
+        ],
+        command: 'queue-open-console',
+        extractParams: () => ({})
+      },
+      // Queue: open diff for selected item
+      {
+        patterns: [
+          /open\s+diff/i,
+          /show\s+diff/i,
+          /open\s+pr\s+diff/i,
+        ],
+        command: 'queue-open-diff',
+        extractParams: () => ({})
+      },
       // Open Queue
       {
         patterns: [
@@ -665,11 +686,20 @@ class VoiceCommandService {
   buildLLMPrompt(text) {
     const capabilities = commandRegistry.getCapabilities();
 
-    // Build command list with descriptions
+    // Build command list (include required params + 1 example if present)
     const commandList = Object.entries(capabilities)
-      .map(([category, commands]) =>
-        commands.map(c => `${c.name}: ${c.description}`).join('\n')
-      ).join('\n');
+      .map(([category, commands]) => {
+        const lines = (commands || []).map((c) => {
+          const params = Array.isArray(c.params) ? c.params : [];
+          const required = params.filter(p => p && p.required).map(p => p.name).filter(Boolean);
+          const example = Array.isArray(c.examples) && c.examples.length ? c.examples[0] : null;
+          const exampleLine = example?.params ? ` e.g. ${JSON.stringify(example.params)}` : '';
+          return `${c.name}${required.length ? ` (required: ${required.join(', ')})` : ''}: ${c.description}${exampleLine}`;
+        });
+        return lines.length ? [`[${category}]`, ...lines].join('\n') : '';
+      })
+      .filter(Boolean)
+      .join('\n\n');
 
     // Build context string with detailed worktree info
     const ctx = this.context;
@@ -688,6 +718,8 @@ class VoiceCommandService {
       ctx.currentWorkspace ? `Current workspace: ${ctx.currentWorkspace}` : null,
       ctx.workspaces?.length ? `Available workspaces: ${ctx.workspaces.join(', ')}` : null,
       worktreeList ? `Available worktrees:\n${worktreeList}` : null,
+      ctx.activeSession ? `Active session: ${ctx.activeSession}` : null,
+      ctx.selectedQueue?.id ? `Selected queue item: ${ctx.selectedQueue.id}${ctx.selectedQueue.title ? ` (${ctx.selectedQueue.title})` : ''}` : null,
     ].filter(Boolean).join('\n');
 
     return `Classify this voice command for a developer orchestrator tool.

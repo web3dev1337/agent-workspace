@@ -148,6 +148,24 @@ class CommanderService {
     logger.info('Starting Claude in Commander', { mode, yolo, cmd });
     this.sendInput(cmd + '\n');
 
+    // Always provide a stable, self-updating control surface pointer so Commander
+    // never needs manual prompt edits when new commands are added.
+    setTimeout(() => {
+      try {
+        const port = process.env.ORCHESTRATOR_PORT || 3000;
+        const baseUrl = `http://localhost:${port}`;
+        this.sendInput(
+          `\n# Orchestrator control (self-updating)\n` +
+          `# - Commands: curl -s ${baseUrl}/api/commander/capabilities | jq\n` +
+          `# - Execute:  curl -s ${baseUrl}/api/commander/execute -H 'Content-Type: application/json' -d '{\"command\":\"...\",\"params\":{...}}'\n` +
+          `# - Context:  curl -s ${baseUrl}/api/commander/context | jq\n` +
+          `# - Help:     curl -s ${baseUrl}/api/commander/prompt\n\n`
+        );
+      } catch {
+        // ignore
+      }
+    }, 1200);
+
     // For fresh starts, send greeting after Claude initializes
     if (mode === 'fresh') {
       setTimeout(() => {
