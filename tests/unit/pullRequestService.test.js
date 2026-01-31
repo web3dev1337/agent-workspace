@@ -128,4 +128,104 @@ describe('PullRequestService', () => {
     expect(args).toEqual(expect.arrayContaining(['--state', 'closed']));
     expect(args).toEqual(expect.arrayContaining(['--', '-is:merged']));
   });
+
+  test('ghApi adds --paginate --slurp and flattens paginated arrays', async () => {
+    execFile.mockImplementation((cmd, args, opts, cb) => {
+      expect(cmd).toBe('gh');
+      expect(args).toEqual(['api', 'repos/o/r/pulls/1/files', '--paginate', '--slurp']);
+      cb(null, JSON.stringify([[{ filename: 'a' }], [{ filename: 'b' }]]), '');
+    });
+
+    const service = PullRequestService.getInstance();
+    const result = await service.ghApi('repos/o/r/pulls/1/files', { paginate: true });
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toEqual([{ filename: 'a' }, { filename: 'b' }]);
+  });
+
+  test('getPullRequestDetailsByUrl aggregates PR metadata, files, commits, and conversation', async () => {
+    execFile.mockImplementation((cmd, args, opts, cb) => {
+      const path = args[1];
+      if (args[0] !== 'api') throw new Error('Unexpected gh invocation');
+
+      if (path === 'repos/web3dev1337/repo/pulls/123') {
+        cb(null, JSON.stringify({
+          number: 123,
+          title: 'Hello',
+          state: 'open',
+          html_url: 'https://github.com/web3dev1337/repo/pull/123',
+          draft: false,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-02T00:00:00Z',
+          merged_at: null,
+          closed_at: null,
+          mergeable: true,
+          user: { login: 'me' },
+          base: { ref: 'main' },
+          head: { ref: 'feature/x' }
+        }), '');
+        return;
+      }
+
+      if (path === 'repos/web3dev1337/repo/pulls/123/files') {
+        cb(null, JSON.stringify([[{
+          filename: 'src/a.js',
+          status: 'modified',
+          additions: 1,
+          deletions: 2,
+          changes: 3
+        }]]), '');
+        return;
+      }
+
+      if (path === 'repos/web3dev1337/repo/pulls/123/commits') {
+        cb(null, JSON.stringify([[{
+          sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          commit: { message: 'feat: x\n\nbody', author: { name: 'Me', date: '2026-01-02T00:00:00Z' } },
+          author: { login: 'me' }
+        }]]), '');
+        return;
+      }
+
+      if (path === 'repos/web3dev1337/repo/issues/123/comments') {
+        cb(null, JSON.stringify([[{
+          id: 1,
+          user: { login: 'reviewer' },
+          created_at: '2026-01-02T01:00:00Z',
+          updated_at: '2026-01-02T01:00:00Z',
+          body: 'Looks good'
+        }]]), '');
+        return;
+      }
+
+      if (path === 'repos/web3dev1337/repo/pulls/123/reviews') {
+        cb(null, JSON.stringify([[{
+          id: 2,
+          user: { login: 'reviewer' },
+          state: 'APPROVED',
+          submitted_at: '2026-01-02T02:00:00Z',
+          body: 'Approved'
+        }]]), '');
+        return;
+      }
+
+      cb(new Error(`Unexpected gh api path: ${path}`));
+    });
+
+    const service = PullRequestService.getInstance();
+    const result = await service.getPullRequestDetailsByUrl('https://github.com/web3dev1337/repo/pull/123', {
+      maxFiles: 50,
+      maxCommits: 50,
+      maxComments: 50,
+      maxReviews: 50
+    });
+
+    expect(execFile).toHaveBeenCalledTimes(5);
+    expect(result.pr.number).toBe(123);
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0].filename).toBe('src/a.js');
+    expect(result.commits).toHaveLength(1);
+    expect(result.commits[0].sha).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(result.conversation.issueComments).toHaveLength(1);
+    expect(result.conversation.reviews).toHaveLength(1);
+  });
 });
