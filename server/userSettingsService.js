@@ -58,6 +58,11 @@ class UserSettingsService {
         ui: {
           theme: 'dark',
           skin: 'default',
+          discord: {
+            // If enabled, the server will call POST /api/discord/ensure-services on startup
+            // (via internal service call) to keep Claudesworth online after restarts.
+            autoEnsureServicesAtStartup: false
+          },
           branches: {
             // Branch label rendering in Worktree list and terminal headers.
             hidePrefixes: true,
