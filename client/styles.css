@@ -1356,6 +1356,12 @@ header h1 {
   background: var(--bg-secondary);
 }
 
+.worktree-inspector-chip-btn.active {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+
 .worktree-inspector-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
