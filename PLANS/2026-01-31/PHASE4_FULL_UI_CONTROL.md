@@ -26,3 +26,10 @@ See:
 
 This Phase 4 doc is intentionally short; the gap analysis doc is the implementation map.
 
+## Status (as of 2026-01-31)
+
+Shipped (merged to `main`):
+- PR #496–#501 (Phase 4 foundations + Queue review lifecycle commands).
+
+Next:
+- Keep expanding command coverage until “everything clickable in the UI” is commandable (see the gap analysis doc).
