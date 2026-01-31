@@ -9982,6 +9982,17 @@ header h1 {
   background: var(--accent-primary-hover);
 }
 
+.btn-recovery-clear {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-recovery-clear:hover {
+  border-color: var(--accent-danger);
+  background: rgba(248, 81, 73, 0.14);
+}
+
 .btn-recovery-skip {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
