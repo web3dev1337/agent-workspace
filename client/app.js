@@ -4337,11 +4337,11 @@ class ClaudeOrchestrator {
     return buttons;
   }
   
-	  updateTerminalControls(sessionId) {
-	    const wrapper = document.getElementById(`wrapper-${sessionId}`);
-	    if (!wrapper) return;
-	    const controlsDiv = wrapper.querySelector('.terminal-controls');
-    if (!controlsDiv) return;
+		  updateTerminalControls(sessionId) {
+		    const wrapper = document.getElementById(`wrapper-${sessionId}`);
+		    if (!wrapper) return;
+		    const controlsDiv = wrapper.querySelector('.terminal-controls');
+	    if (!controlsDiv) return;
 
 	    if (sessionId.includes('-claude')) {
 	      controlsDiv.innerHTML = `
@@ -4354,15 +4354,16 @@ class ClaudeOrchestrator {
 	        ${this.getWorktreeRemoveButtonHTML(sessionId)}
 	      `;
 	      return;
-	    }
+		    }
 
-	    // Server terminals: keep the existing launch controls.
-	    controlsDiv.innerHTML = `
-	      ${this.getServerControlsHTML(sessionId)}
-	      ${this.getSessionCloseButtonHTML(sessionId)}
-	      ${this.getWorktreeRemoveButtonHTML(sessionId)}
-	    `;
-	  }
+		    // Server terminals: keep the existing launch controls.
+		    controlsDiv.innerHTML = `
+		      ${this.getServerControlsHTML(sessionId)}
+		      ${this.getWorktreeInspectorButtonHTML(sessionId)}
+		      ${this.getSessionCloseButtonHTML(sessionId)}
+		      ${this.getWorktreeRemoveButtonHTML(sessionId)}
+		    `;
+		  }
 
 	  getWorktreeInspectorButtonHTML(sessionId) {
     const session = this.sessions.get(sessionId);
@@ -7130,18 +7131,30 @@ class ClaudeOrchestrator {
     }
   }
 
-  async openWorktreeInspector(sessionId) {
-    const sid = String(sessionId || '').trim();
-    const session = this.sessions.get(sid);
-    const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
-    if (!worktreePath) {
-      this.showToast('No worktree path found for this session', 'warning');
-      return;
-    }
+	  async openWorktreeInspector(sessionId) {
+	    const sid = String(sessionId || '').trim();
+	    try {
+	      const session = this.sessions.get(sid);
+	      const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
 
-    const label = session?.worktreeId ? `${session.worktreeId}` : sid;
-    return this.openWorktreeInspectorForPath(worktreePath, { label });
-  }
+	      if (!worktreePath) {
+	        const links = this.githubLinks.get(sid) || {};
+	        const prUrl = String(links.pr || '').trim();
+	        if (prUrl) {
+	          await this.openReviewConsoleForPRTask({ url: prUrl, title: `PR (${sid})` });
+	          return;
+	        }
+	        this.showToast('No worktree path found for this terminal', 'warning');
+	        return;
+	      }
+
+	      const label = session?.worktreeId ? `${session.worktreeId}` : sid;
+	      await this.openWorktreeInspectorForPath(worktreePath, { label });
+	    } catch (err) {
+	      console.error('openWorktreeInspector failed:', err);
+	      this.showToast?.(`Inspector failed: ${String(err?.message || err)}`, 'error');
+	    }
+	  }
 
   async openWorktreeInspectorForPath(worktreePath, { label = '', task = null, reviewConsole = false } = {}) {
     const p = String(worktreePath || '').trim();
