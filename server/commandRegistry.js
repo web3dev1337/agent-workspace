@@ -239,6 +239,124 @@ class CommandRegistry {
       }
     });
 
+    // ============ REVIEW CONSOLE (WORKTREE INSPECTOR) ============
+
+    this.register('open-review-console', {
+      category: 'review-console',
+      description: 'Open the Review Console (terminals/files/commits/diff) for a session or worktree path',
+      params: [
+        { name: 'sessionId', required: false, description: 'Optional sessionId (uses its cwd)' },
+        { name: 'worktreePath', required: false, description: 'Optional worktree path (if no sessionId)' },
+        { name: 'label', required: false, description: 'Optional label to display in the header' }
+      ],
+      examples: [
+        { params: { sessionId: 'work2-claude' }, description: 'Open Review Console for a worktree session' },
+        { params: { worktreePath: '/home/user/repo/work2', label: 'work2' }, description: 'Open Review Console for a path' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-review-console', ...params });
+        return { message: 'Opening Review Console' };
+      }
+    });
+
+    this.register('close-review-console', {
+      category: 'review-console',
+      description: 'Close the Review Console',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'close-review-console' });
+        return { message: 'Closing Review Console' };
+      }
+    });
+
+    this.register('review-console-set-preset', {
+      category: 'review-console',
+      description: 'Set Review Console preset layout (Default/Review/Deep/Terminals/Code)',
+      params: [
+        { name: 'preset', required: true, description: 'Preset: default|review|deep|terminals|code' }
+      ],
+      examples: [
+        { params: { preset: 'review' }, description: 'Terminals + Files + Diff' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'review-console-set-preset', ...params });
+        return { message: `Preset: ${params.preset}` };
+      }
+    });
+
+    this.register('review-console-set-window', {
+      category: 'review-console',
+      description: 'Set Review Console window mode (fullscreen or docked)',
+      params: [
+        { name: 'mode', required: true, description: 'Mode: fullscreen|docked' }
+      ],
+      examples: [
+        { params: { mode: 'fullscreen' }, description: 'Fullscreen Review Console' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'review-console-set-window', ...params });
+        return { message: `Window: ${params.mode}` };
+      }
+    });
+
+    this.register('review-console-toggle-section', {
+      category: 'review-console',
+      description: 'Toggle a Review Console section',
+      params: [
+        { name: 'section', required: true, description: 'Section: terminals|files|commits|diff' }
+      ],
+      examples: [
+        { params: { section: 'diff' }, description: 'Toggle diff panel on/off' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'review-console-toggle-section', ...params });
+        return { message: `Toggling ${params.section}` };
+      }
+    });
+
+    this.register('review-console-files-view', {
+      category: 'review-console',
+      description: 'Switch Files panel view (tree or list)',
+      params: [
+        { name: 'view', required: true, description: 'View: tree|list' }
+      ],
+      examples: [
+        { params: { view: 'tree' }, description: 'Folder tree view' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'review-console-files-view', ...params });
+        return { message: `Files view: ${params.view}` };
+      }
+    });
+
+    this.register('review-console-diff-open', {
+      category: 'review-console',
+      description: 'Open Advanced Diff Viewer (new tab) from the Review Console',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'review-console-diff-open' });
+        return { message: 'Opening diff viewer' };
+      }
+    });
+
+    this.register('review-console-diff-embed', {
+      category: 'review-console',
+      description: 'Embed/close the Advanced Diff Viewer iframe in the Review Console',
+      params: [
+        { name: 'enabled', required: true, description: 'true to embed, false to close' }
+      ],
+      examples: [
+        { params: { enabled: true }, description: 'Embed diff viewer' },
+        { params: { enabled: false }, description: 'Close embedded diff viewer' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'review-console-diff-embed', ...params });
+        return { message: `Diff embed: ${params.enabled}` };
+      }
+    });
+
     this.register('open-new-project', {
       category: 'ui',
       description: 'Open the New Project / Greenfield wizard',
