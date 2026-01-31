@@ -203,9 +203,10 @@ class SessionRecoveryService {
    * Get recovery info for display
    * Validates that conversation files exist and have content before including
    */
-  async getRecoveryInfo(workspaceId) {
+  async getRecoveryInfo(workspaceId, { allowSessionIds = null, pruneMissing = false } = {}) {
     const state = await this.loadWorkspaceState(workspaceId);
     const sessions = state.sessions || {};
+    const allowSet = Array.isArray(allowSessionIds) ? new Set(allowSessionIds.map(s => String(s || '').trim()).filter(Boolean)) : null;
     const fsSync = require('fs');
     const candidateRoots = (cwd) => {
       const roots = [];
@@ -214,9 +215,30 @@ class SessionRecoveryService {
       return roots;
     };
 
+    // If a workspace has changed its terminal list, session recovery can accumulate stale entries.
+    // Filter (and optionally prune) to only sessions still present in the workspace config.
+    if (allowSet) {
+      const keys = Object.keys(sessions);
+      const stale = keys.filter((k) => !allowSet.has(String(k || '').trim()));
+      if (stale.length && pruneMissing) {
+        try {
+          const map = this.states.get(workspaceId);
+          if (map) {
+            stale.forEach((k) => map.delete(String(k || '').trim()));
+            this.saveWorkspaceState(workspaceId);
+          }
+        } catch {
+          // best-effort
+        }
+      }
+    }
+
     // Build recovery info for each session - validate conversations exist
     const recoveryData = [];
-    for (const s of Object.values(sessions)) {
+    for (const [id, s0] of Object.entries(sessions)) {
+      const sid = String(id || '').trim();
+      if (allowSet && !allowSet.has(sid)) continue;
+      const s = s0 || {};
       // Skip if no worktree path and no server command
       if (!s.worktreePath && !s.lastServerCommand) {
         continue;
@@ -364,3 +386,4 @@ class SessionRecoveryService {
 const sessionRecoveryService = new SessionRecoveryService();
 
 module.exports = sessionRecoveryService;
+module.exports.SessionRecoveryService = SessionRecoveryService;

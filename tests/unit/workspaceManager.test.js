@@ -3,6 +3,8 @@
  */
 
 const path = require('path');
+const os = require('os');
+const fs = require('fs');
 const { WorkspaceManager } = require('../../server/workspaceManager');
 
 describe('WorkspaceManager', () => {
@@ -162,6 +164,57 @@ describe('WorkspaceManager', () => {
       );
       expect(result).toHaveProperty('lastAccess');
       expect(manager.activeWorkspace).toHaveProperty('lastAccess', result.lastAccess);
+    });
+  });
+
+  describe('normalizeWorkspacePaths', () => {
+    it('migrates stale /games/hytopia/games/* paths when target exists', () => {
+      const manager = new WorkspaceManager();
+
+      const base = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-ws-'));
+      const goodRepo = path.join(base, 'GitHub', 'games', 'hytopia', 'zoo-game');
+      const goodWt = path.join(goodRepo, 'work9');
+      fs.mkdirSync(goodWt, { recursive: true });
+
+      const badRepo = path.join(base, 'GitHub', 'games', 'hytopia', 'games', 'zoo-game');
+      const badWt = path.join(badRepo, 'work9');
+
+      const ws = {
+        id: 'x',
+        name: 'X',
+        type: 'hytopia-game',
+        repository: { path: badRepo, masterBranch: 'master' },
+        terminals: [
+          { id: 'zoo-game-work9-claude', repository: { path: badRepo }, worktreePath: badWt, visible: true }
+        ]
+      };
+
+      const res = manager.normalizeWorkspacePaths(ws);
+
+      expect(res.changed).toBe(true);
+      expect(res.workspace.repository.path).toBe(goodRepo);
+      expect(res.workspace.terminals[0].repository.path).toBe(goodRepo);
+      expect(res.workspace.terminals[0].worktreePath).toBe(goodWt);
+    });
+
+    it('leaves existing paths unchanged', () => {
+      const manager = new WorkspaceManager();
+
+      const base = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-ws-'));
+      const repo = path.join(base, 'GitHub', 'games', 'hytopia', 'zoo-game');
+      fs.mkdirSync(repo, { recursive: true });
+
+      const ws = {
+        id: 'x',
+        name: 'X',
+        type: 'hytopia-game',
+        repository: { path: repo, masterBranch: 'master' },
+        terminals: [{ id: 't', repository: { path: repo }, worktreePath: repo, visible: true }]
+      };
+
+      const res = manager.normalizeWorkspacePaths(ws);
+      expect(res.changed).toBe(false);
+      expect(res.workspace.repository.path).toBe(repo);
     });
   });
 });
