@@ -1841,12 +1841,13 @@ class ClaudeOrchestrator {
         })
       });
       const data = await res.json().catch(() => ({}));
+      const alreadyExists = !!data?.alreadyExists;
       if (res.status === 409) {
         // Idempotent: already exists in workspace config.
         return { id: nextId, path: `${repo.path}/${nextId}`, alreadyExists: true };
       }
       if (!res.ok) throw new Error(data?.error || 'Failed to auto-create worktree');
-      return { id: nextId, path: `${repo.path}/${nextId}` };
+      return { id: nextId, path: `${repo.path}/${nextId}`, alreadyExists };
     }
 
     // Single-repo workspace: only if the repo matches the current workspace repo.
@@ -23331,8 +23332,8 @@ class ClaudeOrchestrator {
       });
 
       const data = await response.json().catch(() => ({}));
-      if (response.ok) {
-        const alreadyExists = !!data?.alreadyExists;
+      if (response.ok || response.status === 409) {
+        const alreadyExists = response.status === 409 ? true : !!data?.alreadyExists;
         this.showTemporaryMessage(
           alreadyExists ? `${repoName} ${worktreeId} is already in this workspace` : `Added ${repoName} ${worktreeId} to workspace!`,
           'success'
