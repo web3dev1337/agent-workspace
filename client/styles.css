@@ -1342,6 +1342,17 @@ header h1 {
   overflow: hidden;
 }
 
+.worktree-inspector-terminals {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.worktree-inspector-terminals .terminal-wrapper.review-console-terminal {
+  height: clamp(220px, 32vh, 360px);
+  min-height: 220px;
+}
+
 .worktree-inspector-layout-panel {
   padding: 10px 12px;
   margin-bottom: 16px;
