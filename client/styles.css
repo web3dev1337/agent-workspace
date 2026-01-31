@@ -2836,6 +2836,8 @@ header h1 {
   transform: translateX(100%);
   transition: transform 0.3s;
   z-index: 100;
+  display: flex;
+  flex-direction: column;
 }
 
 .settings-panel:not(.hidden) {
@@ -2858,6 +2860,9 @@ header h1 {
 
 .settings-content {
   padding: var(--space-md);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .setting-group {
