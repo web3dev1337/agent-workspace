@@ -7245,6 +7245,7 @@ class ClaudeOrchestrator {
 		        const ahead = Number(summary?.ahead || 0);
 		        const behind = Number(summary?.behind || 0);
 	        const dirty = Array.isArray(summary?.files) ? summary.files.length : 0;
+	        const rcFullscreen = reviewConsole ? (reviewConsoleConfig?.fullscreen !== false) : false;
 
 	        const parts = [];
 	        parts.push(`<span class="worktree-inspector-chip" title="${escapeHtml(p)}">📁 ${escapeHtml(p)}</span>`);
@@ -7272,10 +7273,10 @@ class ClaudeOrchestrator {
 
 		        if (reviewConsole) {
 		          parts.push(
-		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-review-window="fullscreen" title="Fullscreen Review Console">🖥 Full</button>`
+		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn ${rcFullscreen ? 'active' : ''}" type="button" data-review-window="fullscreen" title="Fullscreen Review Console">🖥 Full</button>`
 		          );
 		          parts.push(
-		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-review-window="docked" title="Dock Review Console">📌 Dock</button>`
+		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn ${!rcFullscreen ? 'active' : ''}" type="button" data-review-window="docked" title="Dock Review Console (narrow)">📌 Dock</button>`
 		          );
 		        }
 
