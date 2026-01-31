@@ -76,6 +76,11 @@ class ClaudeOrchestrator {
     // Button registry - all available buttons with their implementations
     this.buttonRegistry = this.initButtonRegistry();
 
+    // Review Console: when terminals are embedded into the console, we temporarily
+    // move existing terminal wrappers into the modal and restore them on close.
+    this.reviewConsoleDockedTerminals = new Map(); // sessionId -> { wrapper, parent, nextSibling }
+    this.reviewConsoleDockedWorktreePath = null;
+
     this.init();
   }
 
@@ -6011,7 +6016,9 @@ class ClaudeOrchestrator {
       ? { ...presets[preset] }
       : { ...storedSections };
 
-    const fullscreen = cfg.fullscreen === true || appliedSections.terminals === false;
+    // Default to fullscreen for Review Console: it's meant to be a proper "review surface".
+    // Users can explicitly dock it via Settings → Review Console → Fullscreen (off).
+    const fullscreen = cfg.fullscreen !== false;
     const diffEmbed = cfg.diffEmbed === true;
 
     return {
@@ -6344,9 +6351,136 @@ class ClaudeOrchestrator {
   closeWorktreeInspector() {
     const modal = document.getElementById('worktree-inspector-modal');
     if (!modal) return;
+    this.restoreReviewConsoleDockedTerminals();
     modal.classList.remove('docked');
     modal.classList.remove('fullscreen');
     modal.classList.add('hidden');
+  }
+
+  restoreReviewConsoleDockedTerminals() {
+    try {
+      if (!this.reviewConsoleDockedTerminals || this.reviewConsoleDockedTerminals.size === 0) {
+        this.reviewConsoleDockedWorktreePath = null;
+        return;
+      }
+      const grid = this.getTerminalGrid?.() || document.getElementById('terminal-grid');
+
+      for (const [sessionId, info] of this.reviewConsoleDockedTerminals.entries()) {
+        const wrapper = info?.wrapper || document.getElementById(`wrapper-${sessionId}`);
+        if (!wrapper) continue;
+
+        wrapper.classList.remove('review-console-terminal');
+
+        const parent = info?.parent;
+        const nextSibling = info?.nextSibling;
+        if (parent && parent.isConnected) {
+          try {
+            if (nextSibling && nextSibling.isConnected && nextSibling.parentElement === parent) {
+              parent.insertBefore(wrapper, nextSibling);
+            } else {
+              parent.appendChild(wrapper);
+            }
+          } catch {
+            if (grid) grid.appendChild(wrapper);
+          }
+        } else if (grid) {
+          grid.appendChild(wrapper);
+        }
+
+        try {
+          this.terminalManager?.fitTerminal?.(sessionId);
+        } catch {
+          // ignore
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      try {
+        this.reviewConsoleDockedTerminals?.clear?.();
+        this.reviewConsoleDockedWorktreePath = null;
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  dockReviewConsoleTerminals(worktreePath, containerEl) {
+    const container = containerEl || null;
+    if (!container) return;
+
+    const norm = (value) => String(value || '').replace(/\\/g, '/').replace(/\/+$/, '');
+    const target = norm(worktreePath);
+    if (!target) return;
+
+    // If we're already docked for this same worktree, avoid doing heavy DOM moves.
+    if (this.reviewConsoleDockedWorktreePath === target && this.reviewConsoleDockedTerminals?.size) {
+      return;
+    }
+
+    // Ensure we never strand wrappers from a previous console view.
+    this.restoreReviewConsoleDockedTerminals();
+    this.reviewConsoleDockedWorktreePath = target;
+
+    const overlaps = (a0, b0) => {
+      const a = norm(a0);
+      const b = norm(b0);
+      if (!a || !b) return false;
+      if (a === b) return true;
+      return a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+    };
+
+    const sessionIds = [];
+    for (const [sessionId, session] of this.sessions) {
+      if (!sessionId || !session) continue;
+      if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
+      const cwd = session?.config?.cwd || session?.cwd || '';
+      if (!cwd) continue;
+      if (!overlaps(cwd, target)) continue;
+      sessionIds.push(String(sessionId));
+    }
+
+    // Stable ordering: Agent terminals first, then servers.
+    sessionIds.sort((a, b) => {
+      const aIsServer = a.includes('-server');
+      const bIsServer = b.includes('-server');
+      if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
+      return a.localeCompare(b);
+    });
+
+    if (sessionIds.length === 0) {
+      container.innerHTML = `<div class="worktree-inspector-subtle">No terminals found for this worktree.</div>`;
+      return;
+    }
+
+    container.innerHTML = '';
+
+    for (const sessionId of sessionIds) {
+      const wrapper = document.getElementById(`wrapper-${sessionId}`);
+      if (!wrapper) continue;
+
+      // Remember original location so we can restore on close.
+      if (!this.reviewConsoleDockedTerminals.has(sessionId)) {
+        this.reviewConsoleDockedTerminals.set(sessionId, {
+          wrapper,
+          parent: wrapper.parentElement,
+          nextSibling: wrapper.nextSibling
+        });
+      }
+
+      wrapper.classList.remove('hidden');
+      wrapper.classList.add('review-console-terminal');
+      container.appendChild(wrapper);
+
+      // Let layout settle, then fit.
+      setTimeout(() => {
+        try {
+          this.terminalManager?.fitTerminal?.(sessionId);
+        } catch {
+          // ignore
+        }
+      }, 60);
+    }
   }
 
   async openWorktreeInspector(sessionId) {
@@ -6368,6 +6502,8 @@ class ClaudeOrchestrator {
       this.showToast('No worktree path provided', 'warning');
       return;
     }
+
+    this.restoreReviewConsoleDockedTerminals();
 
     const modal = this.ensureWorktreeInspectorModal();
     modal.classList.remove('hidden');
@@ -6497,6 +6633,11 @@ class ClaudeOrchestrator {
 			          const active = rcPreset === key;
 			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-preset="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title || '')}">${escapeHtml(text)}</button>`;
 			        };
+			        const windowBtn = (key, text, title) => {
+			          const wantsFullscreen = key === 'fullscreen';
+			          const active = wantsFullscreen ? !!rc?.fullscreen : !rc?.fullscreen;
+			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-window="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title || '')}">${escapeHtml(text)}</button>`;
+			        };
 			        const sectionBtn = (key, text, title) => {
 			          const active = rcSections[key] !== false;
 			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-section="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title || '')}">${escapeHtml(text)}</button>`;
@@ -6515,9 +6656,16 @@ class ClaudeOrchestrator {
 			              </div>
 			            </div>
 			            <div class="worktree-inspector-layout-row">
+			              <div class="worktree-inspector-layout-label">Window</div>
+			              <div class="worktree-inspector-layout-buttons">
+			                ${windowBtn('fullscreen', 'Full', 'Fullscreen Review Console')}
+			                ${windowBtn('docked', 'Docked', 'Dock on the right (narrow)')}
+			              </div>
+			            </div>
+			            <div class="worktree-inspector-layout-row">
 			              <div class="worktree-inspector-layout-label">Sections</div>
 			              <div class="worktree-inspector-layout-buttons">
-			                ${sectionBtn('terminals', 'Terminals', 'Docked view: show terminals outside the console')}
+			                ${sectionBtn('terminals', 'Terminals', 'Embed terminals into the console')}
 			                ${sectionBtn('files', 'Files', 'Changed files')}
 			                ${sectionBtn('commits', 'Commits', 'Recent/unpushed commits')}
 			                ${sectionBtn('diff', 'Diff', 'Advanced Diff Viewer (embed or open in new tab)')}
@@ -6747,12 +6895,23 @@ class ClaudeOrchestrator {
 	        return `<div class="worktree-inspector-commit mono"><span class="worktree-inspector-commit-hash">${hash}</span><span class="worktree-inspector-commit-date">${date}</span><span class="worktree-inspector-commit-msg">${msg}</span></div>`;
 	      }).join('');
 
-		      const visibleSections = (rcShowFiles ? 1 : 0) + (rcShowCommits ? 1 : 0) + (rcShowDiff ? 1 : 0);
+		      const rcEmbedTerminals = reviewConsole && rcShowTerminals;
+		      const visibleSections = (rcEmbedTerminals ? 1 : 0) + (rcShowFiles ? 1 : 0) + (rcShowCommits ? 1 : 0) + (rcShowDiff ? 1 : 0);
 		      const gridClass = visibleSections === 1 ? 'one-column' : '';
 		      const gridHiddenClass = visibleSections === 0 ? 'hidden' : '';
+		      const terminalsPanelHiddenClass = rcEmbedTerminals ? '' : 'hidden';
 		      const filesPanelHiddenClass = rcShowFiles ? '' : 'hidden';
 		      const commitsPanelHiddenClass = rcShowCommits ? '' : 'hidden';
 		      const diffPanelHiddenClass = rcShowDiff ? '' : 'hidden';
+		      const terminalsPanelHtml = reviewConsole ? `
+		        <div class="worktree-inspector-panel worktree-inspector-terminals-panel ${terminalsPanelHiddenClass}" data-rc-panel="terminals">
+		          <div class="worktree-inspector-panel-title-row">
+		            <div class="worktree-inspector-panel-title">Terminals</div>
+		            <div class="worktree-inspector-subtle">Live terminals for this worktree</div>
+		          </div>
+		          <div class="worktree-inspector-terminals" data-rc-terminals="true"></div>
+		        </div>
+		      ` : '';
 		      const diffPanelHtml = reviewConsole ? `
 		        <div class="worktree-inspector-panel worktree-inspector-diff-panel ${diffPanelHiddenClass}" data-rc-panel="diff">
 		          <div class="worktree-inspector-panel-title-row">
@@ -6773,8 +6932,9 @@ class ClaudeOrchestrator {
 			        ${header}
 			        ${layoutPanel}
 			        ${reviewPanel}
-			        <div class="worktree-inspector-subtle ${visibleSections === 0 ? '' : 'hidden'}" data-rc-empty="true">Enable Files/Commits/Diff sections to see context.</div>
+			        <div class="worktree-inspector-subtle ${visibleSections === 0 ? '' : 'hidden'}" data-rc-empty="true">${reviewConsole ? 'Enable Terminals/Files/Commits/Diff sections to see context.' : 'No context available.'}</div>
 			        <div class="worktree-inspector-grid ${gridClass} ${gridHiddenClass}" data-rc-grid="true">
+			          ${terminalsPanelHtml}
 			          <div class="worktree-inspector-panel worktree-inspector-files-panel ${filesPanelHiddenClass}" data-rc-panel="files">
 			            <div class="worktree-inspector-panel-title-row">
 			              <div class="worktree-inspector-panel-title">Files</div>
@@ -6958,29 +7118,12 @@ class ClaudeOrchestrator {
 
 		      if (reviewConsole) {
 		        let currentPreset = rcPreset;
+		        let currentFullscreen = !!rc?.fullscreen;
 		        let currentSections = {
 		          terminals: rcSections.terminals !== false,
 		          files: rcSections.files !== false,
 		          commits: rcSections.commits !== false,
 		          diff: rcSections.diff !== false
-		        };
-
-		        const focusWorktreeId = String(
-		          (reviewTask?.sessionId ? String(reviewTask.sessionId).split('-')[0] : '')
-		          || this.extractWorktreeLabel(p)
-		          || ''
-		        ).trim();
-		        const focusSessionId = String(
-		          (reviewTask?.sessionId ? String(reviewTask.sessionId) : '')
-		          || (focusWorktreeId ? `${focusWorktreeId}-claude` : '')
-		        ).trim();
-		        const focusTerminals = () => {
-		          if (!focusWorktreeId) return;
-		          this.showOnlyWorktree(focusWorktreeId);
-		          if (focusSessionId) {
-		            const wrapper = document.getElementById(`wrapper-${focusSessionId}`);
-		            wrapper?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-		          }
 		        };
 
 		        const presets = {
@@ -6993,12 +7136,14 @@ class ClaudeOrchestrator {
 
 		        const gridEl = bodyEl.querySelector('[data-rc-grid="true"]');
 		        const emptyEl = bodyEl.querySelector('[data-rc-empty="true"]');
+		        const terminalsPanelEl = bodyEl.querySelector('[data-rc-panel="terminals"]');
+		        const terminalsContainerEl = bodyEl.querySelector('[data-rc-terminals="true"]');
 		        const filesPanelEl = bodyEl.querySelector('[data-rc-panel="files"]');
 		        const commitsPanelEl = bodyEl.querySelector('[data-rc-panel="commits"]');
 		        const diffPanelEl = bodyEl.querySelector('[data-rc-panel="diff"]');
 
 		        const updateGrid = () => {
-		          const visible = [filesPanelEl, commitsPanelEl, diffPanelEl]
+		          const visible = [terminalsPanelEl, filesPanelEl, commitsPanelEl, diffPanelEl]
 		            .filter(Boolean)
 		            .filter(el => !el.classList.contains('hidden')).length;
 		          if (gridEl) {
@@ -7009,20 +7154,34 @@ class ClaudeOrchestrator {
 		        };
 
 		        const applyLayout = () => {
-		          const showTerminals = currentSections.terminals !== false;
 		          modal.classList.remove('docked');
 		          modal.classList.remove('fullscreen');
-		          if (showTerminals) modal.classList.add('docked');
-		          else modal.classList.add('fullscreen');
+		          if (currentFullscreen) modal.classList.add('fullscreen');
+		          else modal.classList.add('docked');
 
+		          if (terminalsPanelEl) terminalsPanelEl.classList.toggle('hidden', currentSections.terminals === false);
 		          if (filesPanelEl) filesPanelEl.classList.toggle('hidden', currentSections.files === false);
 		          if (commitsPanelEl) commitsPanelEl.classList.toggle('hidden', currentSections.commits === false);
 		          if (diffPanelEl) diffPanelEl.classList.toggle('hidden', currentSections.diff === false);
 		          updateGrid();
 
+		          if (currentSections.terminals !== false && terminalsContainerEl) {
+		            this.dockReviewConsoleTerminals(p, terminalsContainerEl);
+		          } else {
+		            this.restoreReviewConsoleDockedTerminals();
+		          }
+
 		          bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
 		            const key = String(btn?.dataset?.reviewPreset || '').trim().toLowerCase();
 		            const active = key && key === currentPreset;
+		            btn.classList.toggle('active', active);
+		            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+		          });
+
+		          bodyEl.querySelectorAll('[data-review-window]').forEach((btn) => {
+		            const key = String(btn?.dataset?.reviewWindow || '').trim().toLowerCase();
+		            const wantsFullscreen = key === 'fullscreen';
+		            const active = wantsFullscreen ? !!currentFullscreen : !currentFullscreen;
 		            btn.classList.toggle('active', active);
 		            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
 		          });
@@ -7043,6 +7202,7 @@ class ClaudeOrchestrator {
 		          const nextCfg = {
 		            ...existing,
 		            preset: currentPreset,
+		            fullscreen: !!currentFullscreen,
 		            sections: { ...existingSections, ...currentSections }
 		          };
 		          await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
@@ -7164,15 +7324,24 @@ class ClaudeOrchestrator {
 
 		            const next = presets[key];
 		            if (!next) return;
-		            const prevTerminals = currentSections.terminals !== false;
 		            currentPreset = key;
 		            currentSections = { ...currentSections, ...next };
 		            applyLayout();
-		            const nextTerminals = currentSections.terminals !== false;
-		            if (!prevTerminals && nextTerminals) focusTerminals();
 		            try { await persist(); } catch {}
 		            updateDiffControls();
 		            if (diffEmbedEnabled) await embedDiff({ showToast: false });
+		          });
+		        });
+
+		        bodyEl.querySelectorAll('[data-review-window]').forEach((btn) => {
+		          btn.addEventListener('click', async () => {
+		            const key = String(btn?.dataset?.reviewWindow || '').trim().toLowerCase();
+		            if (key !== 'fullscreen' && key !== 'docked') return;
+		            const nextFullscreen = key === 'fullscreen';
+		            if (nextFullscreen === currentFullscreen) return;
+		            currentFullscreen = nextFullscreen;
+		            applyLayout();
+		            try { await persist(); } catch {}
 		          });
 		        });
 
@@ -7182,12 +7351,9 @@ class ClaudeOrchestrator {
 		            if (!key) return;
 		            if (!(key in currentSections)) return;
 
-		            const prevTerminals = currentSections.terminals !== false;
 		            currentPreset = 'custom';
 		            currentSections = { ...currentSections, [key]: !(currentSections[key] !== false) };
 		            applyLayout();
-		            const nextTerminals = currentSections.terminals !== false;
-		            if (key === 'terminals' && !prevTerminals && nextTerminals) focusTerminals();
 		            try { await persist(); } catch {}
 		            updateDiffControls();
 		            if (key === 'diff' && diffEmbedEnabled) await embedDiff({ showToast: false });
@@ -7571,6 +7737,8 @@ class ClaudeOrchestrator {
       this.showToast('No PR URL available for this item', 'warning');
       return;
     }
+
+    this.restoreReviewConsoleDockedTerminals();
 
     // Queue is a fullscreen overlay; close it so the console has the whole screen.
     if (document.getElementById('queue-panel')) {
