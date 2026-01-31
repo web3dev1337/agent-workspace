@@ -8,6 +8,13 @@ describe('UserSettingsService defaults', () => {
     expect(typeof defaults.global.ui.tasks.boardMappings).toBe('object');
   });
 
+  test('includes ui.skin defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    expect(defaults?.global?.ui).toBeTruthy();
+    expect(typeof defaults.global.ui.skin).toBe('string');
+    expect(defaults.global.ui.skin).toBeTruthy();
+  });
+
   test('includes ui.tasks.launch defaults', () => {
     const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
     const launch = defaults?.global?.ui?.tasks?.launch;
@@ -70,6 +77,7 @@ describe('UserSettingsService defaults', () => {
           status: { caps: { wipMax: 9 } }
         },
         ui: {
+          skin: 'blue',
           workflow: {
             mode: 'focus'
           },
@@ -119,6 +127,8 @@ describe('UserSettingsService defaults', () => {
     // Does not drop workflow defaults when only mode is provided.
     expect(merged.global.ui.workflow.focus).toBeTruthy();
     expect(merged.global.ui.workflow.notifications).toBeTruthy();
+    // Keeps ui.skin when provided.
+    expect(merged.global.ui.skin).toBe('blue');
 
     // Does not drop process.status defaults when only one cap is provided.
     expect(merged.global.process.status.lookbackHours).toBeTruthy();
