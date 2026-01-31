@@ -9504,11 +9504,11 @@ class ClaudeOrchestrator {
   /**
    * Close a specific terminal session (keeps the worktree in the workspace).
    */
-  async requestCloseSession(sessionId) {
-    const sid = String(sessionId || '').trim();
-    if (!sid) return;
-    const session = this.sessions.get(sid);
-    const label = session?.worktreeId ? `${session.type === 'server' ? 'Server' : 'Agent'} ${session.worktreeId}` : sid;
+	  async requestCloseSession(sessionId) {
+	    const sid = String(sessionId || '').trim();
+	    if (!sid) return;
+	    const session = this.sessions.get(sid);
+	    const label = session?.worktreeId ? `${session.type === 'server' ? 'Server' : 'Agent'} ${session.worktreeId}` : sid;
 
     const confirmed = await this.showConfirmationDialog(
       'Close Terminal',
@@ -9517,23 +9517,36 @@ class ClaudeOrchestrator {
       'Cancel'
     );
 
-    if (!confirmed) return;
-    this.socket.emit('destroy-session', { sessionId: sid });
-  }
+	    if (!confirmed) return;
+	    this.clearRecoveryForSessionClose(sid);
+	    this.socket.emit('destroy-session', { sessionId: sid });
+	  }
 
-  /**
-   * Commander/voice-friendly stop: closes the session immediately (no confirmation).
-   * This matches the semantic "stop-session" command intent.
-   */
-  stopSession(sessionId) {
-    const sid = String(sessionId || '').trim();
-    if (!sid) return;
-    if (!this.socket || !this.socket.connected) {
-      this.showToast?.('Not connected to server', 'warning');
-      return;
-    }
-    this.socket.emit('destroy-session', { sessionId: sid });
-  }
+	  clearRecoveryForSessionClose(sessionId) {
+	    const sid = String(sessionId || '').trim();
+	    if (!sid) return;
+	    const session = this.sessions.get(sid);
+	    const workspaceId = String(session?.workspace || this.currentWorkspace?.id || '').trim();
+	    if (!workspaceId) return;
+	    // Best-effort: if the user explicitly closes a terminal, don't offer it as "recoverable" later.
+	    fetch(`/api/recovery/${encodeURIComponent(workspaceId)}/${encodeURIComponent(sid)}`, { method: 'DELETE' })
+	      .catch(() => {});
+	  }
+
+	  /**
+	   * Commander/voice-friendly stop: closes the session immediately (no confirmation).
+	   * This matches the semantic "stop-session" command intent.
+	   */
+	  stopSession(sessionId) {
+	    const sid = String(sessionId || '').trim();
+	    if (!sid) return;
+	    if (!this.socket || !this.socket.connected) {
+	      this.showToast?.('Not connected to server', 'warning');
+	      return;
+	    }
+	    this.clearRecoveryForSessionClose(sid);
+	    this.socket.emit('destroy-session', { sessionId: sid });
+	  }
 
   /**
    * Close all sessions associated with a worktree
