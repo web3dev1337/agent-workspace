@@ -1,6 +1,7 @@
 # Discord Bot (Claudesworth) Integration Plan
 
 Date: 2026-01-31
+Updated: 2026-02-01
 
 ## Overview
 
@@ -8,6 +9,20 @@ Integrate the Discord Task Bot "Claudesworth" into the Claude Orchestrator so th
 1. The bot runs as a managed terminal/service within the orchestrator
 2. A dedicated Claude Code session processes queued tasks
 3. The orchestrator UI shows Discord bot status
+
+## Status (updated 2026-02-01)
+
+Shipped in the orchestrator repo (merged to `main`):
+- `server/discordIntegrationService.js` (status + ensure-services + process-queue)
+- API endpoints:
+  - `GET /api/discord/status`
+  - `POST /api/discord/ensure-services`
+  - `POST /api/discord/process-queue`
+- Dashboard summary + controls (ensure services / process queue / open Services workspace)
+- Voice + Commander commands for Discord (e.g. “process discord queue”, “open services”, “discord status”)
+
+Still external (optional / depends on your bot implementation):
+- If you want the Discord bot itself to call the orchestrator’s dedicated endpoints, update the bot repo to hit `/api/discord/*` (it can continue using `send-to-session` if you prefer).
 
 ## Current State
 
@@ -63,6 +78,8 @@ Create a new terminal type or workspace entry for the Discord bot:
 - Contains: Claudesworth bot, future services
 - Separate from project worktrees
 
+Status: **Shipped** (Services workspace auto-created on demand via `POST /api/discord/ensure-services`).
+
 ### 2. Add Dedicated Claude Code Session for Queue Processing
 
 Create a Claude Code terminal that:
@@ -91,6 +108,8 @@ Ensure there's a session available. Options:
 - Bot finds any available Claude session (current behavior)
 - Bot targets a specific session ID (e.g., `discord-queue-processor`)
 - New endpoint: `POST /api/discord/process-queue` that handles session selection
+
+Status: **Shipped** (`POST /api/discord/process-queue`).
 
 ### 4. UI Updates (Optional)
 
@@ -200,4 +219,3 @@ curl -X POST http://localhost:3000/api/terminals/start \
 | `~/GitHub/tools/discord-task-bot/.env` | Bot credentials (gitignored) |
 | `~/.claude/discord-queue/pending-tasks.json` | Queued tasks |
 | `~/.claude/discord-queue/recent-messages.json` | Dumped messages |
-
