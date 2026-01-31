@@ -7,6 +7,20 @@ This doc is **implementation-oriented**: it enumerates the missing pieces, propo
 
 ---
 
+## Status (as of 2026-01-31)
+
+Shipped (merged to `main`):
+- Command registry + commander execute/capabilities endpoints (Phase 4 foundation).
+- UI action coverage: every `commander-action` emitted by `server/commandRegistry.js` is handled in `client/app.js#handleCommanderAction` (guarded by `tests/unit/commanderActionCoverage.test.js`).
+- Queue review lifecycle commands (approve / request-changes / merge) available to Commander + Voice.
+- Review Console default window = fullscreen (configurable), with Queue e2e updated accordingly.
+
+Still missing (next items):
+- Queue metadata editing commands (tier/risk/claim/assign/outcome/notes/etc.).
+- Queue dependency commands (deps add/remove/graph/conflicts/pairing).
+- Queue navigation parity (e.g. `queue-prev`) and “select by PR URL/# / ticket”.
+- Provider-agnostic history/resume command surface (Claude/Codex/future).
+
 ## Ground truth / current state (already shipped)
 
 ### Shared command surface (exists)
@@ -17,10 +31,10 @@ This doc is **implementation-oriented**: it enumerates the missing pieces, propo
   - Rule-based parse first, then LLM fallback (Ollama/Claude)
   - LLM prompt already includes `commandRegistry.getCapabilities()`, so the *LLM path* stays automatically up to date as commands are added.
 
-### UI control bridge (partial)
+### UI control bridge (shipped)
 - Commands that are “UI intents” currently emit socket events: `io.emit('commander-action', { action: '...' })`
 - Client receives these actions in `client/app.js` → `handleCommanderAction(...)`
-- **Gap:** the handler supports only a subset of actions the registry emits.
+- This is enforced by `tests/unit/commanderActionCoverage.test.js` to prevent drift.
 
 ### Review surface (exists)
 - Review Console (docked) + Worktree Inspector (modal) already support:
@@ -146,46 +160,26 @@ At minimum, these should be settable/readable via commands:
 
 ## Concrete gaps (what’s missing today)
 
-### Gap 1 — Command registry emits actions the UI does not handle
+### Gap 1 — CLOSED: registry-emitted UI actions are all handled
 
-`server/commandRegistry.js` emits these actions that are **not currently implemented** in `client/app.js#handleCommanderAction`:
-
-- `add-worktree`
-- `remove-worktree`
-- `new-tab`
-- `close-tab`
-- `open-folder`
-- `open-diff-viewer`
-- `scroll-to-top`
-- `scroll-to-bottom`
-- `clear-terminal`
-- `restart-session`
-- `kill-session`
-- `destroy-session`
-- `server-control` (stop/restart/kill)
-- `build-production`
-- `start-agent`
-- `git-pull-all`
-- `git-status-all`
-- `stop-all-claudes`
-- `start-all-claudes`
-- `refresh-all`
-
-**Impact:** Commander/voice can “successfully execute” commands server-side, but the UI does nothing (or logs “Unknown commander action”).
-
-**Fix approach (recommended):**
-- Add full handler coverage in the client (one PR; easy, high leverage).
-- Add a unit test that ensures “all registry-emitted `action`s are handled client-side”.
+This was the original biggest drift risk; it is now fixed and guarded by unit test coverage.
 
 ### Gap 2 — Queue + Review Console operations are not exposed as commands
 
-Even though Queue/Review Console features exist, there are no semantic commands for:
+Even though Queue/Review Console features exist, there are still missing semantic commands for:
 - Selecting items by PR URL / PR number / ticket URL
-- Approve/request-changes/merge via Queue
-- Open Review Console / Inspector for the currently selected queue item
-- Editing any Queue metadata (tier/risk/claim/assign/outcome/notes/etc.)
+- Editing Queue metadata (tier/risk/claim/assign/outcome/notes/etc.)
 - Dependency operations (deps add/remove/suggest/graph)
 - Spawning reviewer/fixer/recheck/overnight for the selected item
+
+Already shipped (baseline Queue control):
+- `open-queue`, `queue-next`, `queue-blockers`, `queue-triage`, `queue-conveyor-t2`
+- `queue-select { id }`, `queue-open-console`, `queue-open-diff`
+- `queue-approve`, `queue-request-changes`, `queue-merge`
+
+Still missing (Queue review flow parity):
+- `queue-prev`
+- `queue-open-inspector`
 
 **Impact:** voice/Commander can open Queue, but cannot actually *operate* the review workflow without manual clicking.
 
@@ -196,12 +190,14 @@ Voice LLM fallback needs **current UI state** to resolve ambiguous intents:
 - currently selected queue item ID + label + kind (pr/worktree/session)
 - currently focused worktree/session
 - lists of visible worktrees + their branches + tags
-- queue list summary (top N items + tiers + claimed/assigned state)
+- queue list summary (top N visible items + tiers + claimed/assigned state)
 
-Right now voice has a `setContext(...)` method, but there is no canonical “context feed” and no endpoint like:
-- `GET /api/commander/context`
+Status:
+- `GET /api/commander/context` exists (for Commander + automation visibility).
+- Voice context is pushed from the client via `POST /api/voice/context` (and included in the LLM prompt).
 
-**Impact:** “do X for *this* PR / the one I’m looking at” is hard to interpret reliably.
+Remaining:
+- Expand commander context payload to include richer queue summaries and per-worktree metadata to improve “this PR / next PR” resolution.
 
 ### Gap 4 — No single “semantic command model” for future providers
 
@@ -269,19 +265,19 @@ Then:
 
 ---
 
-## Phase 3 implementation plan (PR-sized tasks, in priority order)
+## Phase 4 implementation plan (PR-sized tasks, in priority order)
 
-### P3-CMD-01 — Implement missing `handleCommanderAction` cases (high leverage)
+### P4-CMD-01 — Implement missing `handleCommanderAction` cases (high leverage)
 **Goal:** every command in `server/commandRegistry.js` causes the intended UI behavior.
 
-Implement client-side actions for the missing list in **Gap 1**.
+Status: ✅ shipped (guarded by unit test).
 
 Acceptance:
 - executing each command via `POST /api/commander/execute` produces visible UI change or expected terminal behavior.
 - add a unit test that compares:
   - actions emitted by `commandRegistry` vs actions implemented in client.
 
-### P3-CMD-02 — Add “Queue operations” commands (select/next/prev/open console/diff)
+### P4-CMD-02 — Add “Queue operations” commands (select/next/prev/open console/diff)
 Add semantic commands like:
 - `queue/open`
 - `queue/select` `{ id }`
@@ -291,14 +287,18 @@ Add semantic commands like:
 - `queue/open-console` (Review Console)
 - `queue/open-inspector`
 
-### P3-CMD-03 — Add “Queue review outcome” commands (approve/changes/merge)
+Status: 🟡 partially shipped (missing `queue-prev` + `queue-open-inspector`).
+
+### P4-CMD-03 — Add “Queue review outcome” commands (approve/changes/merge)
 Commands (server or UI-driven depending on architecture):
 - `queue/review/approve`
 - `queue/review/request-changes`
 - `queue/review/merge`
 - `queue/review/start-timer`, `queue/review/stop-timer`
 
-### P3-CMD-04 — Add “Queue metadata editing” commands (tier/risk/claim/assign/etc.)
+Status: 🟡 partially shipped (approve/request-changes/merge shipped; timers remain).
+
+### P4-CMD-04 — Add “Queue metadata editing” commands (tier/risk/claim/assign/etc.)
 Commands:
 - `queue/set-tier { tier }`
 - `queue/set-risk { risk }`
@@ -310,7 +310,7 @@ Commands:
 - `queue/open-prompt` (local prompt artifact)
 - `queue/record-store { visibility }`
 
-### P3-CMD-05 — Add dependency commands (deps/graph/conflicts/pairing)
+### P4-CMD-05 — Add dependency commands (deps/graph/conflicts/pairing)
 Commands:
 - `queue/deps/add { depIds[] }`
 - `queue/deps/remove { depIds[] }`
@@ -319,14 +319,16 @@ Commands:
 - `queue/conflicts/open`, `queue/conflicts/refresh`
 - `queue/pairing/open`
 
-### P3-CMD-06 — Add `GET /api/commander/context` and feed it to voice LLM
+### P4-CMD-06 — Add `GET /api/commander/context` and feed it to voice LLM
 Acceptance:
 - Voice parsing can reliably resolve “this PR / current item / next item”.
 
-### P3-CMD-07 — Auto-generate Voice rule patterns (optional, but reduces drift)
+Status: ✅ shipped (context endpoints exist; voice context is pushed and used in the LLM prompt).
+
+### P4-CMD-07 — Auto-generate Voice rule patterns (optional, but reduces drift)
 Add optional `aliases` to command definitions and generate `patterns` for exact matching from those aliases.
 
-### P3-CMD-08 — Provider-agnostic History/Resume commands (Claude/Codex/future)
+### P4-CMD-08 — Provider-agnostic History/Resume commands (Claude/Codex/future)
 Commands:
 - `history/open { providerIds? }`
 - `history/search { query, providerIds? }`
