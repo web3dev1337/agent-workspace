@@ -301,7 +301,10 @@ class GreenfieldService {
       // Step 4: Initialize git in master
       await execAsync('git init', { cwd: masterPath });
       await execAsync('git add .', { cwd: masterPath });
-      await execAsync('git commit -m "Initial commit"', { cwd: masterPath });
+      await execAsync(
+        'git -c user.name="Claude Orchestrator" -c user.email="orchestrator@local" commit -m "Initial commit"',
+        { cwd: masterPath }
+      );
       logger.info('Git initialized in master');
 
       // Step 5: Create GitHub remote and push
@@ -633,7 +636,10 @@ Start by understanding the requirements, then design and implement the solution.
 
     await execAsync('git init', { cwd: projectPath });
     await execAsync('git add .', { cwd: projectPath });
-    await execAsync('git commit -m "Initial commit"', { cwd: projectPath });
+    await execAsync(
+      'git -c user.name="Claude Orchestrator" -c user.email="orchestrator@local" commit -m "Initial commit"',
+      { cwd: projectPath }
+    );
 
     logger.info('Git repository initialized');
   }
