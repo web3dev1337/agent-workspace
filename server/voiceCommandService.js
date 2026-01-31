@@ -156,6 +156,39 @@ class VoiceCommandService {
         command: 'queue-open-inspector',
         extractParams: () => ({})
       },
+      // Queue: spawn agents
+      {
+        patterns: [
+          /^(?:spawn|start|run)\s+reviewer$/i,
+          /^(?:spawn|start|run)\s+review\s+agent$/i,
+        ],
+        command: 'queue-spawn-reviewer',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /^(?:spawn|start|run)\s+fixer$/i,
+          /^(?:spawn|start|run)\s+fix\s+agent$/i,
+        ],
+        command: 'queue-spawn-fixer',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /^(?:spawn|start|run)\s+recheck$/i,
+          /^(?:spawn|start|run)\s+recheck\s+agent$/i,
+        ],
+        command: 'queue-spawn-recheck',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /^(?:spawn|start|run)\s+overnight$/i,
+          /^(?:spawn|start|run)\s+overnight\s+runner$/i,
+        ],
+        command: 'queue-spawn-overnight',
+        extractParams: () => ({})
+      },
       // Queue: review timer
       {
         patterns: [
@@ -189,6 +222,45 @@ class VoiceCommandService {
         ],
         command: 'queue-set-risk',
         extractParams: (match) => ({ risk: String(match?.[1] || '').trim().toLowerCase() })
+      },
+      // Queue: pFail / verify / promptRef / ticket
+      {
+        patterns: [
+          /^(?:set\s+)?pfail\s+(?:to\s+)?([0-9.]+|none)$/i,
+          /^(?:set\s+)?p\s*fail\s+(?:to\s+)?([0-9.]+|none)$/i,
+        ],
+        command: 'queue-set-pfail',
+        extractParams: (match) => ({ pFailFirstPass: String(match?.[1] || '').trim().toLowerCase() })
+      },
+      {
+        patterns: [
+          /^(?:set\s+)?verify\s+(?:to\s+)?([0-9]+|none)$/i,
+          /^(?:set\s+)?verify\s+minutes\s+(?:to\s+)?([0-9]+|none)$/i,
+        ],
+        command: 'queue-set-verify',
+        extractParams: (match) => ({ verifyMinutes: String(match?.[1] || '').trim().toLowerCase() })
+      },
+      {
+        patterns: [
+          /^(?:set\s+)?prompt\s*ref\s*[:,-]?\s*(.+)$/i,
+          /^(?:set\s+)?prompt\s+artifact\s*[:,-]?\s*(.+)$/i,
+        ],
+        command: 'queue-set-prompt-ref',
+        extractParams: (match) => ({ promptRef: String(match?.[1] || '').trim() })
+      },
+      {
+        patterns: [
+          /^(?:set\s+)?ticket\s*[:,-]?\s*(.+)$/i,
+        ],
+        command: 'queue-set-ticket',
+        extractParams: (match) => ({ ticket: String(match?.[1] || '').trim() })
+      },
+      {
+        patterns: [
+          /^open\s+ticket$/i,
+        ],
+        command: 'queue-open-ticket',
+        extractParams: () => ({})
       },
       // Queue: set outcome
       {

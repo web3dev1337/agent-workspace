@@ -4785,6 +4785,60 @@ class ClaudeOrchestrator {
           .catch?.((err) => console.error('Failed to refresh conflicts:', err));
         break;
 
+      case 'queue-spawn-reviewer':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.spawnReviewerSelected?.(), 50))
+          .catch?.((err) => console.error('Failed to spawn reviewer:', err));
+        break;
+
+      case 'queue-spawn-fixer':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.spawnFixerSelected?.(), 50))
+          .catch?.((err) => console.error('Failed to spawn fixer:', err));
+        break;
+
+      case 'queue-spawn-recheck':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.spawnRecheckSelected?.(), 50))
+          .catch?.((err) => console.error('Failed to spawn recheck:', err));
+        break;
+
+      case 'queue-spawn-overnight':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.spawnOvernightSelected?.(), 50))
+          .catch?.((err) => console.error('Failed to spawn overnight:', err));
+        break;
+
+      case 'queue-set-pfail':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.setPfailSelected?.({ pFailFirstPass: params?.pFailFirstPass }), 50))
+          .catch?.((err) => console.error('Failed to set pFailFirstPass:', err));
+        break;
+
+      case 'queue-set-verify':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.setVerifySelected?.({ verifyMinutes: params?.verifyMinutes }), 50))
+          .catch?.((err) => console.error('Failed to set verifyMinutes:', err));
+        break;
+
+      case 'queue-set-prompt-ref':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.setPromptRefSelected?.({ promptRef: params?.promptRef }), 50))
+          .catch?.((err) => console.error('Failed to set promptRef:', err));
+        break;
+
+      case 'queue-set-ticket':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.setTicketSelected?.({ ticket: params?.ticket }), 50))
+          .catch?.((err) => console.error('Failed to set ticket:', err));
+        break;
+
+      case 'queue-open-ticket':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.openTicketSelected?.(), 50))
+          .catch?.((err) => console.error('Failed to open ticket:', err));
+        break;
+
       case 'queue-approve': {
         this.showQueuePanel?.()
           .then(() => setTimeout(() => {
@@ -19466,7 +19520,15 @@ class ClaudeOrchestrator {
 		      spawnReviewerBtn?.addEventListener('click', async () => {
 		        try {
 		          spawnReviewerBtn.disabled = true;
-		          await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+		          const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+              if (info) {
+                const patch = { reviewerSpawnedAt: new Date().toISOString() };
+                if (info.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
+                const rec = await upsertRecord(t.id, patch);
+                updateTaskRecordInState(t.id, rec);
+                renderList();
+                renderDetail(getTaskById(t.id));
+              }
         } catch (e) {
           this.showToast(String(e?.message || e), 'error');
         } finally {
@@ -20089,6 +20151,271 @@ class ClaudeOrchestrator {
           } catch {
             return false;
           }
+        },
+        spawnReviewerSelected: async () => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+            if (info) {
+              const patch = { reviewerSpawnedAt: new Date().toISOString() };
+              if (info.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
+              const rec = await upsertRecord(t.id, patch);
+              updateTaskRecordInState(t.id, rec);
+              renderList();
+              renderDetail(getTaskById(t.id));
+            }
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        spawnFixerSelected: async () => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            const info = await this.spawnFixAgentForPRTask(t, { tier: 2, agentId: 'claude', mode: 'fresh', yolo: true, notes: String(getTaskById(t.id)?.record?.notes || '') });
+            if (info) {
+              const rec = await upsertRecord(t.id, {
+                fixerSpawnedAt: new Date().toISOString(),
+                fixerWorktreeId: info.worktreeId || null
+              });
+              updateTaskRecordInState(t.id, rec);
+              renderList();
+              renderDetail(getTaskById(t.id));
+            }
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        spawnRecheckSelected: async () => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+            if (info) {
+              const rec = await upsertRecord(t.id, {
+                recheckSpawnedAt: new Date().toISOString(),
+                recheckWorktreeId: info.worktreeId || null
+              });
+              updateTaskRecordInState(t.id, rec);
+              renderList();
+              renderDetail(getTaskById(t.id));
+            }
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        spawnOvernightSelected: async () => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          try {
+            const info = await this.spawnOvernightRunnerForPRTask(t, { tier: 4, agentId: 'claude', mode: 'fresh', yolo: true });
+            if (info) {
+              const rec = await upsertRecord(t.id, {
+                overnightSpawnedAt: new Date().toISOString(),
+                overnightWorktreeId: info.worktreeId || null
+              });
+              updateTaskRecordInState(t.id, rec);
+              renderList();
+              renderDetail(getTaskById(t.id));
+            }
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        setPfailSelected: async ({ pFailFirstPass } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+          const parse = (v) => {
+            const raw = String(v ?? '').trim().toLowerCase();
+            if (!raw || raw === 'none' || raw === 'null') return null;
+            const n = Number(raw);
+            return Number.isFinite(n) ? n : null;
+          };
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) return false;
+          try {
+            const rec = await upsertRecord(t.id, { pFailFirstPass: parse(pFailFirstPass) });
+            updateTaskRecordInState(t.id, rec);
+            await fetchTasks().catch(() => {});
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        setVerifySelected: async ({ verifyMinutes } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+          const parse = (v) => {
+            const raw = String(v ?? '').trim().toLowerCase();
+            if (!raw || raw === 'none' || raw === 'null') return null;
+            const n = Number(raw);
+            return Number.isFinite(n) ? n : null;
+          };
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) return false;
+          try {
+            const rec = await upsertRecord(t.id, { verifyMinutes: parse(verifyMinutes) });
+            updateTaskRecordInState(t.id, rec);
+            await fetchTasks().catch(() => {});
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        setPromptRefSelected: async ({ promptRef } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+          const norm = (v) => {
+            const s = String(v ?? '').trim();
+            const low = s.toLowerCase();
+            if (!s || low === 'none' || low === 'null') return null;
+            return s;
+          };
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) return false;
+          try {
+            const rec = await upsertRecord(t.id, { promptRef: norm(promptRef) });
+            updateTaskRecordInState(t.id, rec);
+            await fetchTasks().catch(() => {});
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        setTicketSelected: async ({ ticket } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+          const parseTicket = (raw) => {
+            const s = String(raw || '').trim();
+            const low = s.toLowerCase();
+            if (!s || low === 'none' || low === 'null') return { clear: true };
+            const mUrl = s.match(/https?:\/\/trello\.com\/c\/([a-zA-Z0-9]+)(?:\/|\b)/i);
+            if (mUrl?.[1]) return { provider: 'trello', cardId: String(mUrl[1]), cardUrl: s };
+            const mTag = s.match(/^trello:([a-zA-Z0-9]+)$/i);
+            if (mTag?.[1]) return { provider: 'trello', cardId: String(mTag[1]), cardUrl: `https://trello.com/c/${String(mTag[1])}` };
+            if (/^[a-zA-Z0-9]{6,}$/.test(s)) return { provider: 'trello', cardId: s, cardUrl: `https://trello.com/c/${s}` };
+            return null;
+          };
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) return false;
+          const parsed = parseTicket(ticket);
+          if (!parsed) {
+            this.showToast?.('Invalid ticket format (paste Trello URL or trello:<shortLink>)', 'warning');
+            return false;
+          }
+          try {
+            const patch = parsed.clear
+              ? { ticketProvider: null, ticketCardId: null, ticketCardUrl: null, ticketBoardId: null }
+              : { ticketProvider: parsed.provider, ticketCardId: parsed.cardId, ticketCardUrl: parsed.cardUrl || null };
+            const rec = await upsertRecord(t.id, patch);
+            updateTaskRecordInState(t.id, rec);
+            await fetchTasks().catch(() => {});
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        openTicketSelected: async () => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) return false;
+          const rec = t?.record && typeof t.record === 'object' ? t.record : {};
+          const cardUrl = String(rec.ticketCardUrl || '').trim();
+          const cardId = String(rec.ticketCardId || '').trim();
+          const url2 = cardUrl || (cardId ? `https://trello.com/c/${cardId}` : '');
+          if (!url2) {
+            this.showToast?.('No ticket set for this item', 'warning');
+            return false;
+          }
+          window.open(url2, '_blank', 'noreferrer');
+          return true;
         },
         openInspectorSelected: () => {
           try {
