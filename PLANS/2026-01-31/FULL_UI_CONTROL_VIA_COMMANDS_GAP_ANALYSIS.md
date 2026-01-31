@@ -300,7 +300,7 @@ Add semantic commands like:
 - `queue/open-console` (Review Console)
 - `queue/open-inspector`
 
-Status: 🟡 partially shipped (missing `queue-prev` + `queue-open-inspector`).
+Status: ✅ shipped (Queue control surface is commandable end-to-end).
 
 ### P4-CMD-03 — Add “Queue review outcome” commands (approve/changes/merge)
 Commands (server or UI-driven depending on architecture):
@@ -309,7 +309,7 @@ Commands (server or UI-driven depending on architecture):
 - `queue/review/merge`
 - `queue/review/start-timer`, `queue/review/stop-timer`
 
-Status: 🟡 partially shipped (approve/request-changes/merge shipped; timers remain).
+Status: ✅ shipped (approve/request-changes/merge + review timers are commandable).
 
 ### P4-CMD-04 — Add “Queue metadata editing” commands (tier/risk/claim/assign/etc.)
 Commands:
@@ -374,3 +374,4 @@ If those buttons are missing or “do nothing”:
 Quick sanity checks:
 - Open DevTools → Network and click **🗂 Inspect** again; you should see a request to `/api/worktree-git-summary?...`.
 - If you are running an older orchestrator checkout, update to the latest `main` before debugging UI behavior (several “Inspect does nothing” root causes were fixed on 2026-01-31).
+Status: ✅ shipped (deps add/remove/graph + conflicts refresh + pairing open are commandable).
