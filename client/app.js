@@ -4691,6 +4691,122 @@ class ClaudeOrchestrator {
         break;
       }
 
+      case 'open-review-console': {
+        const sessionId = String(params?.sessionId || '').trim();
+        const worktreePath = String(params?.worktreePath || '').trim();
+        const label = String(params?.label || '').trim();
+
+        (async () => {
+          try {
+            if (sessionId) {
+              const session = this.sessions.get(sessionId);
+              const p = String(session?.config?.cwd || session?.cwd || session?.worktreePath || '').trim();
+              if (!p) {
+                this.showToast?.('No worktree path found for session', 'warning');
+                return;
+              }
+              await this.openWorktreeInspectorForPath(p, { label: label || session?.worktreeId || sessionId, reviewConsole: true });
+              return;
+            }
+
+            if (worktreePath) {
+              await this.openWorktreeInspectorForPath(worktreePath, { label: label || worktreePath, reviewConsole: true });
+              return;
+            }
+
+            this.showToast?.('Provide sessionId or worktreePath', 'warning');
+          } catch (e) {
+            console.error('Failed to open review console:', e);
+            this.showToast?.(String(e?.message || e), 'error');
+          }
+        })();
+
+        break;
+      }
+
+      case 'close-review-console':
+        this.closeWorktreeInspector?.();
+        break;
+
+      case 'review-console-set-preset': {
+        const preset = String(params?.preset || '').trim().toLowerCase();
+        const modal = document.getElementById('worktree-inspector-modal');
+        if (!modal || modal.classList.contains('hidden')) {
+          this.showToast?.('Review Console is not open', 'warning');
+          break;
+        }
+        const btn = modal.querySelector(`[data-review-preset="${preset}"]`);
+        if (btn && typeof btn.click === 'function') btn.click();
+        else this.showToast?.(`Unknown preset: ${preset || '(empty)'}`, 'warning');
+        break;
+      }
+
+      case 'review-console-set-window': {
+        const mode = String(params?.mode || '').trim().toLowerCase();
+        const key = mode === 'fullscreen' ? 'fullscreen' : mode === 'docked' ? 'docked' : '';
+        const modal = document.getElementById('worktree-inspector-modal');
+        if (!modal || modal.classList.contains('hidden')) {
+          this.showToast?.('Review Console is not open', 'warning');
+          break;
+        }
+        const btn = key ? modal.querySelector(`[data-review-window="${key}"]`) : null;
+        if (btn && typeof btn.click === 'function') btn.click();
+        else this.showToast?.(`Unknown window mode: ${mode || '(empty)'}`, 'warning');
+        break;
+      }
+
+      case 'review-console-toggle-section': {
+        const section = String(params?.section || '').trim().toLowerCase();
+        const modal = document.getElementById('worktree-inspector-modal');
+        if (!modal || modal.classList.contains('hidden')) {
+          this.showToast?.('Review Console is not open', 'warning');
+          break;
+        }
+        const btn = modal.querySelector(`[data-review-section="${section}"]`);
+        if (btn && typeof btn.click === 'function') btn.click();
+        else this.showToast?.(`Unknown section: ${section || '(empty)'}`, 'warning');
+        break;
+      }
+
+      case 'review-console-files-view': {
+        const view = String(params?.view || '').trim().toLowerCase();
+        const modal = document.getElementById('worktree-inspector-modal');
+        if (!modal || modal.classList.contains('hidden')) {
+          this.showToast?.('Review Console is not open', 'warning');
+          break;
+        }
+        const btn = modal.querySelector(`[data-files-view-btn="${view}"]`);
+        if (btn && typeof btn.click === 'function') btn.click();
+        else this.showToast?.(`Unknown files view: ${view || '(empty)'}`, 'warning');
+        break;
+      }
+
+      case 'review-console-diff-open': {
+        const modal = document.getElementById('worktree-inspector-modal');
+        if (!modal || modal.classList.contains('hidden')) {
+          this.showToast?.('Review Console is not open', 'warning');
+          break;
+        }
+        const btn = modal.querySelector('[data-diff-open="true"]');
+        btn?.click?.();
+        break;
+      }
+
+      case 'review-console-diff-embed': {
+        const enabled = params?.enabled;
+        const modal = document.getElementById('worktree-inspector-modal');
+        if (!modal || modal.classList.contains('hidden')) {
+          this.showToast?.('Review Console is not open', 'warning');
+          break;
+        }
+        if (enabled === true || String(enabled).toLowerCase() === 'true') {
+          modal.querySelector('[data-diff-embed="true"]')?.click?.();
+        } else {
+          modal.querySelector('[data-diff-close="true"]')?.click?.();
+        }
+        break;
+      }
+
       case 'open-queue':
         this.showQueuePanel?.().catch?.((err) => console.error('Failed to open queue:', err));
         break;
