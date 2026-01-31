@@ -5241,9 +5241,29 @@ httpServer.listen(PORT, HOST, () => {
   }
   
   // Initialize sessions
-  sessionManager.initializeSessions().catch(error => {
-    logger.error('Failed to initialize sessions', { error: error.message, stack: error.stack });
-  });
+  const shouldAutoEnsureDiscordServices = (() => {
+    const envRaw = String(process.env.DISCORD_AUTO_ENSURE_SERVICES ?? '').trim().toLowerCase();
+    if (envRaw) return !['0', 'false', 'no'].includes(envRaw);
+
+    try {
+      const cfg = userSettingsService?.settings?.global?.ui?.discord || {};
+      return cfg.autoEnsureServicesAtStartup === true;
+    } catch {
+      return false;
+    }
+  })();
+
+  sessionManager.initializeSessions()
+    .then(() => {
+      if (!shouldAutoEnsureDiscordServices) return;
+      // Don’t block server startup; just best-effort keep Services running after restarts.
+      return discordIntegrationService.ensureDiscordServices({ sessionManager, workspaceManager })
+        .then(() => logger.info('Discord services ensured on startup'))
+        .catch((error) => logger.warn('Failed to ensure Discord services on startup', { error: error.message }));
+    })
+    .catch((error) => {
+      logger.error('Failed to initialize sessions', { error: error.message, stack: error.stack });
+    });
 });
 
 // Graceful shutdown

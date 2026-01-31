@@ -1504,6 +1504,31 @@ class ClaudeOrchestrator {
       });
     }
 
+    // Discord services auto-start (server-persisted)
+    const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
+    if (discordAutoEnsure) {
+      discordAutoEnsure.addEventListener('change', async (e) => {
+        const enabled = !!e.target.checked;
+        await this.updateGlobalUserSetting('ui.discord.autoEnsureServicesAtStartup', enabled);
+        if (enabled) {
+          try {
+            const res = await fetch('/api/discord/ensure-services', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data?.ok === false) {
+              this.showToast?.(data?.message || 'Failed to start Discord services', 'error');
+            } else {
+              this.showToast?.('Discord services ensured', 'success');
+            }
+          } catch (err) {
+            this.showToast?.(`Failed to start Discord services: ${String(err?.message || err)}`, 'error');
+          }
+        }
+      });
+    }
+
     // Notifications panel
     const notificationsPanel = document.getElementById('notifications-panel');
     const toggleNotificationsPanel = () => {
@@ -9881,6 +9906,12 @@ class ClaudeOrchestrator {
     if (branchesShowAtSidebar) {
       const cfg = this.userSettings.global?.ui?.branches || {};
       branchesShowAtSidebar.checked = !!cfg.showAtInSidebar;
+    }
+
+    const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
+    if (discordAutoEnsure) {
+      const cfg = this.userSettings.global?.ui?.discord || {};
+      discordAutoEnsure.checked = cfg.autoEnsureServicesAtStartup === true;
     }
 
     const trelloMeUsername = document.getElementById('trello-me-username');
