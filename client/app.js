@@ -4659,6 +4659,42 @@ class ClaudeOrchestrator {
         break;
       }
 
+      case 'queue-approve': {
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => {
+            const body = params?.body;
+            const fn = this.queuePanelApi?.approveSelectedPr;
+            if (typeof fn === 'function') fn({ body });
+            else document.getElementById('queue-review-approve')?.click?.();
+          }, 50))
+          .catch?.((err) => console.error('Failed to approve selected PR:', err));
+        break;
+      }
+
+      case 'queue-request-changes': {
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => {
+            const body = params?.body;
+            const fn = this.queuePanelApi?.requestChangesSelectedPr;
+            if (typeof fn === 'function') fn({ body });
+            else document.getElementById('queue-review-request-changes')?.click?.();
+          }, 50))
+          .catch?.((err) => console.error('Failed to request changes for selected PR:', err));
+        break;
+      }
+
+      case 'queue-merge': {
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => {
+            const method = params?.method;
+            const fn = this.queuePanelApi?.mergeSelectedPr;
+            if (typeof fn === 'function') fn({ method });
+            else document.getElementById('queue-merge-pr')?.click?.();
+          }, 50))
+          .catch?.((err) => console.error('Failed to merge selected PR:', err));
+        break;
+      }
+
       case 'open-tasks':
         this.showTasksPanel?.().catch?.((err) => console.error('Failed to open tasks:', err));
         break;
@@ -19658,6 +19694,165 @@ class ClaudeOrchestrator {
 	      getSelectedId: () => state.selectedId,
 	      getSelectedTask: () => (state.selectedId ? getTaskById(state.selectedId) : null),
 	      selectById: (id, options) => selectById(id, options || {}),
+        approveSelectedPr: async ({ body } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          const url = String(t?.url || '').trim();
+          const comment = String(body || '').trim();
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          if (!url) {
+            this.showToast?.('Selected item has no PR URL', 'warning');
+            return false;
+          }
+
+          try {
+            this.showToast?.('Submitting approval…', 'info');
+            const res = await fetch('/api/prs/review', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url, action: 'approve', body: comment || undefined })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to submit PR approval'));
+
+            let nudged = false;
+            if (state.reviewTimer?.taskId === t.id) {
+              await stopReviewTimer({ reason: 'outcome', nudge: true });
+              nudged = true;
+            }
+
+            const patch = { reviewed: true, reviewOutcome: 'approved', reviewEndedAt: new Date().toISOString(), claimedBy: null, claimedAt: null };
+            const rec = await upsertRecord(t.id, patch);
+            updateTaskRecordInState(t.id, rec);
+
+            await fetchTasks().catch(() => {});
+            renderDetail(getTaskById(t.id));
+
+            if (!nudged) maybeNudgeReviewComplete(t.id, { reason: 'outcome' });
+            maybeAutoAdvanceAfterReview(t.id);
+            this.showToast?.('Approved', 'success');
+            return true;
+          } catch (err) {
+            this.showToast?.(String(err?.message || err), 'error');
+            return false;
+          }
+        },
+        requestChangesSelectedPr: async ({ body } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          const url = String(t?.url || '').trim();
+          const nextBody = String(body || '').trim();
+          const existingNotes = String(t?.record?.notes || '').trim();
+          const reviewBody = nextBody || existingNotes;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          if (!url) {
+            this.showToast?.('Selected item has no PR URL', 'warning');
+            return false;
+          }
+
+          try {
+            // If caller supplied a body, persist it as Notes (so Fixer and history have it).
+            if (nextBody) {
+              const rec0 = await upsertRecord(t.id, { notes: nextBody });
+              updateTaskRecordInState(t.id, rec0);
+            }
+
+            this.showToast?.('Requesting changes…', 'info');
+            const res = await fetch('/api/prs/review', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url, action: 'request_changes', body: reviewBody || '' })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to request changes'));
+
+            let nudged = false;
+            if (state.reviewTimer?.taskId === t.id) {
+              await stopReviewTimer({ reason: 'outcome', nudge: true });
+              nudged = true;
+            }
+
+            const patch = { reviewed: true, reviewOutcome: 'needs_fix', reviewEndedAt: new Date().toISOString(), claimedBy: null, claimedAt: null };
+            const rec = await upsertRecord(t.id, patch);
+            updateTaskRecordInState(t.id, rec);
+            await maybeApplyTrelloNeedsFixLabel({ taskId: t.id, outcome: 'needs_fix', notes: reviewBody }).catch(() => {});
+
+            await fetchTasks().catch(() => {});
+            renderDetail(getTaskById(t.id));
+
+            if (!nudged) maybeNudgeReviewComplete(t.id, { reason: 'outcome' });
+            maybeAutoAdvanceAfterReview(t.id);
+            this.showToast?.('Requested changes', 'success');
+            return true;
+          } catch (err) {
+            this.showToast?.(String(err?.message || err), 'error');
+            return false;
+          }
+        },
+        mergeSelectedPr: async ({ method } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          const url = String(t?.url || '').trim();
+          const m = String(method || 'merge').trim().toLowerCase();
+          const mergeMethod = ['merge', 'squash', 'rebase'].includes(m) ? m : 'merge';
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+          if (!url) {
+            this.showToast?.('Selected item has no PR URL', 'warning');
+            return false;
+          }
+          if (t?.isDraft) {
+            this.showToast?.('Cannot merge a draft PR', 'warning');
+            return false;
+          }
+
+          try {
+            this.showToast?.(`Merging PR (${mergeMethod})…`, 'info');
+            const res = await fetch('/api/prs/merge', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url, method: mergeMethod })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to merge PR'));
+            this.showToast?.('PR merged', 'success');
+            await fetchTasks().catch(() => {});
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (err) {
+            this.showToast?.(String(err?.message || err), 'error');
+            return false;
+          }
+        },
 	      next: () => navigate(1),
 	      prev: () => navigate(-1)
 	    };

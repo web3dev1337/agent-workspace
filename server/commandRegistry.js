@@ -359,6 +359,53 @@ class CommandRegistry {
       }
     });
 
+    this.register('queue-approve', {
+      category: 'process',
+      description: 'Approve the selected Queue PR on GitHub (optional body)',
+      params: [
+        { name: 'body', required: false, description: 'Optional review body/comment text' }
+      ],
+      examples: [
+        { params: {}, description: 'Approve selected PR' },
+        { params: { body: 'LGTM ✅' }, description: 'Approve selected PR with a short comment' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-approve', ...params });
+        return { message: 'Queue: approve PR' };
+      }
+    });
+
+    this.register('queue-request-changes', {
+      category: 'process',
+      description: 'Request changes for the selected Queue PR on GitHub (uses Notes/body)',
+      params: [
+        { name: 'body', required: false, description: 'Review body (if omitted, UI Notes will be used as-is)' }
+      ],
+      examples: [
+        { params: { body: 'Please fix X and add a test.' }, description: 'Request changes with review body' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-request-changes', ...params });
+        return { message: 'Queue: request changes' };
+      }
+    });
+
+    this.register('queue-merge', {
+      category: 'process',
+      description: 'Merge the selected Queue PR (merge|squash|rebase)',
+      params: [
+        { name: 'method', required: false, description: 'merge | squash | rebase (default: merge)' }
+      ],
+      examples: [
+        { params: {}, description: 'Merge selected PR (merge)' },
+        { params: { method: 'squash' }, description: 'Squash-merge selected PR' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-merge', ...params });
+        return { message: 'Queue: merge PR' };
+      }
+    });
+
     this.register('open-tasks', {
       category: 'process',
       description: 'Open the Tasks panel (Trello provider UI)',
