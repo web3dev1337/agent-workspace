@@ -4731,6 +4731,60 @@ class ClaudeOrchestrator {
           .catch?.((err) => console.error('Failed to unassign queue item:', err));
         break;
 
+      case 'queue-refresh':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.refresh?.(), 50))
+          .catch?.((err) => console.error('Failed to refresh queue:', err));
+        break;
+
+      case 'queue-select-by-pr-url':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.selectByPrUrl?.({ url: params?.url }), 50))
+          .catch?.((err) => console.error('Failed to select queue item by PR URL:', err));
+        break;
+
+      case 'queue-select-by-ticket':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.selectByTicket?.({ ticket: params?.ticket }), 50))
+          .catch?.((err) => console.error('Failed to select queue item by ticket:', err));
+        break;
+
+      case 'queue-open-prompt':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.openPromptSelected?.(), 50))
+          .catch?.((err) => console.error('Failed to open prompt artifact:', err));
+        break;
+
+      case 'queue-deps-add':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.depsAddSelected?.({ dependencyIds: params?.dependencyIds }), 50))
+          .catch?.((err) => console.error('Failed to add dependencies:', err));
+        break;
+
+      case 'queue-deps-remove':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.depsRemoveSelected?.({ dependencyIds: params?.dependencyIds }), 50))
+          .catch?.((err) => console.error('Failed to remove dependencies:', err));
+        break;
+
+      case 'queue-deps-graph':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.depsGraphSelected?.({ depth: params?.depth, view: params?.view }), 50))
+          .catch?.((err) => console.error('Failed to open dependency graph:', err));
+        break;
+
+      case 'queue-pairing':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.openPairing?.(), 50))
+          .catch?.((err) => console.error('Failed to open queue pairing modal:', err));
+        break;
+
+      case 'queue-conflicts-refresh':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.refreshConflicts?.(), 50))
+          .catch?.((err) => console.error('Failed to refresh conflicts:', err));
+        break;
+
       case 'queue-approve': {
         this.showQueuePanel?.()
           .then(() => setTimeout(() => {
@@ -19766,6 +19820,276 @@ class ClaudeOrchestrator {
 	      getSelectedId: () => state.selectedId,
 	      getSelectedTask: () => (state.selectedId ? getTaskById(state.selectedId) : null),
 	      selectById: (id, options) => selectById(id, options || {}),
+        refresh: async () => {
+          try {
+            await fetchTasks();
+            if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        selectByPrUrl: async ({ url } = {}) => {
+          try {
+            const raw = String(url || '').trim();
+            if (!raw) {
+              this.showToast?.('Missing PR URL', 'warning');
+              return false;
+            }
+            if (!Array.isArray(state.tasks) || state.tasks.length === 0) {
+              await fetchTasks();
+            }
+            const hit = (state.tasks || []).find((t) => String(t?.url || '').trim() === raw);
+            if (!hit?.id) {
+              this.showToast?.('PR not found in Queue (by URL)', 'warning');
+              return false;
+            }
+            selectById(String(hit.id), { allowAutoOpenDiff: true });
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        selectByTicket: async ({ ticket } = {}) => {
+          try {
+            const raw = String(ticket || '').trim();
+            if (!raw) {
+              this.showToast?.('Missing ticket reference', 'warning');
+              return false;
+            }
+
+            const parseTrello = (value) => {
+              const s = String(value || '').trim();
+              if (!s) return null;
+              const mUrl = s.match(/https?:\/\/trello\.com\/c\/([a-zA-Z0-9]+)(?:\/|\b)/i);
+              if (mUrl?.[1]) return String(mUrl[1]);
+              const mTag = s.match(/^trello:([a-zA-Z0-9]+)$/i);
+              if (mTag?.[1]) return String(mTag[1]);
+              if (/^[a-zA-Z0-9]{6,}$/.test(s)) return s;
+              return null;
+            };
+
+            const short = parseTrello(raw);
+            if (!short) {
+              this.showToast?.('Invalid ticket reference (use Trello URL or trello:<shortLink>)', 'warning');
+              return false;
+            }
+
+            if (!Array.isArray(state.tasks) || state.tasks.length === 0) {
+              await fetchTasks();
+            }
+
+            const hit = (state.tasks || []).find((t) => {
+              const rec = t?.record && typeof t.record === 'object' ? t.record : {};
+              const id = String(rec.ticketCardId || '').trim();
+              const url2 = String(rec.ticketCardUrl || '').trim();
+              return id === short || url2.includes(`/c/${short}`);
+            });
+
+            if (!hit?.id) {
+              this.showToast?.('Ticket not found in Queue', 'warning');
+              return false;
+            }
+            selectById(String(hit.id), { allowAutoOpenDiff: true });
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        openPromptSelected: async () => {
+          try {
+            const ensureSelected = () => {
+              const ok = !!(state.selectedId && getTaskById(state.selectedId));
+              if (ok) return;
+              const ordered = getOrderedTasks(getFilteredTasks());
+              state.selectedId = ordered[0]?.id || null;
+            };
+
+            ensureSelected();
+            const t = state.selectedId ? getTaskById(state.selectedId) : null;
+            if (!t) {
+              this.showToast?.('No queue item selected', 'warning');
+              return false;
+            }
+            const rec = t?.record && typeof t.record === 'object' ? t.record : {};
+            const promptId = String(rec.promptRef || t.id || '').trim();
+            if (!promptId) {
+              this.showToast?.('No prompt id available', 'warning');
+              return false;
+            }
+            await openPromptEditor(promptId, { task: t });
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        depsAddSelected: async ({ dependencyIds } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          const split = (raw) => {
+            if (Array.isArray(raw)) return raw.map((x) => String(x || '').trim()).filter(Boolean);
+            return String(raw || '')
+              .split(/[\n,]+/g)
+              .map((x) => String(x || '').trim())
+              .filter(Boolean);
+          };
+
+          const normalize = (raw) => {
+            const s = String(raw || '').trim();
+            if (!s) return '';
+            const mUrl = s.match(/https?:\/\/trello\.com\/c\/([a-zA-Z0-9]+)(?:\/|\b)/i);
+            if (mUrl?.[1]) return `trello:${String(mUrl[1])}`;
+            const mTag = s.match(/^trello:([a-zA-Z0-9]+)$/i);
+            if (mTag?.[1]) return `trello:${String(mTag[1])}`;
+            return s;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+
+          const ids = [...new Set(split(dependencyIds).map(normalize).filter(Boolean))];
+          if (!ids.length) {
+            this.showToast?.('No dependency ids provided', 'warning');
+            return false;
+          }
+
+          try {
+            for (const depId of ids) {
+              // eslint-disable-next-line no-await-in-loop
+              const res = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dependencyId: depId })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data?.error || `Failed to add dependency: ${depId}`);
+            }
+            await fetchTasks();
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        depsRemoveSelected: async ({ dependencyIds } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          const split = (raw) => {
+            if (Array.isArray(raw)) return raw.map((x) => String(x || '').trim()).filter(Boolean);
+            return String(raw || '')
+              .split(/[\n,]+/g)
+              .map((x) => String(x || '').trim())
+              .filter(Boolean);
+          };
+
+          const normalize = (raw) => {
+            const s = String(raw || '').trim();
+            if (!s) return '';
+            const mUrl = s.match(/https?:\/\/trello\.com\/c\/([a-zA-Z0-9]+)(?:\/|\b)/i);
+            if (mUrl?.[1]) return `trello:${String(mUrl[1])}`;
+            const mTag = s.match(/^trello:([a-zA-Z0-9]+)$/i);
+            if (mTag?.[1]) return `trello:${String(mTag[1])}`;
+            return s;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+
+          const ids = [...new Set(split(dependencyIds).map(normalize).filter(Boolean))];
+          if (!ids.length) {
+            this.showToast?.('No dependency ids provided', 'warning');
+            return false;
+          }
+
+          try {
+            for (const depId of ids) {
+              // eslint-disable-next-line no-await-in-loop
+              const del = await fetch(`${serverUrl}/api/process/task-records/${encodeURIComponent(t.id)}/dependencies/${encodeURIComponent(depId)}`, { method: 'DELETE' });
+              const delData = await del.json().catch(() => ({}));
+              if (!del.ok) throw new Error(delData?.error || `Failed to remove dependency: ${depId}`);
+            }
+            await fetchTasks();
+            renderDetail(getTaskById(t.id));
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        depsGraphSelected: async ({ depth, view } = {}) => {
+          const ensureSelected = () => {
+            const ok = !!(state.selectedId && getTaskById(state.selectedId));
+            if (ok) return;
+            const ordered = getOrderedTasks(getFilteredTasks());
+            state.selectedId = ordered[0]?.id || null;
+          };
+
+          ensureSelected();
+          const t = state.selectedId ? getTaskById(state.selectedId) : null;
+          if (!t) {
+            this.showToast?.('No queue item selected', 'warning');
+            return false;
+          }
+
+          try {
+            const d = Number(depth);
+            if (Number.isFinite(d)) {
+              const next = Math.max(1, Math.min(6, Math.round(d)));
+              state.depGraphDepth = next;
+              localStorage.setItem('queue-dep-graph-depth', String(next));
+            }
+            const v = String(view || '').trim().toLowerCase();
+            if (v === 'tree' || v === 'graph') {
+              state.depGraphView = v;
+              localStorage.setItem('queue-dep-graph-view', v);
+            }
+            await openDependencyGraphModal(t.id);
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        openPairing: async () => {
+          try {
+            await showPairingModal();
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        refreshConflicts: async () => {
+          try {
+            await refreshConflicts({ force: true });
+            return true;
+          } catch {
+            return false;
+          }
+        },
         openInspectorSelected: () => {
           try {
             const ensureSelected = () => {
