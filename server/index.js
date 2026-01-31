@@ -2316,7 +2316,17 @@ app.post('/api/startup/install-windows', async (req, res) => {
 app.get('/api/recovery/:workspaceId', async (req, res) => {
   try {
     const { workspaceId } = req.params;
-    const recoveryInfo = await sessionRecoveryService.getRecoveryInfo(workspaceId);
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    const terminals = workspace && Array.isArray(workspace.terminals) ? workspace.terminals : [];
+    const allowSessionIds = terminals
+      .filter((t) => t && typeof t === 'object' && t.visible !== false)
+      .map((t) => String(t.id || '').trim())
+      .filter(Boolean);
+
+    const recoveryInfo = await sessionRecoveryService.getRecoveryInfo(workspaceId, {
+      allowSessionIds: allowSessionIds.length ? allowSessionIds : null,
+      pruneMissing: true
+    });
     res.json(recoveryInfo);
   } catch (error) {
     logger.error('Failed to get recovery info', { error: error.message });

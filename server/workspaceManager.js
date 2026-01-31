@@ -306,26 +306,44 @@ class WorkspaceManager {
           const stats = await fs.stat(filePath).catch(() => null);
           const content = await fs.readFile(filePath, 'utf8');
           const workspace = JSON.parse(content);
+          const normalize = this.normalizeWorkspacePaths(workspace);
+          const normalizedWorkspace = normalize.workspace;
+          if (normalize.changed) {
+            try {
+              await fs.writeFile(filePath, JSON.stringify(normalizedWorkspace, null, 2));
+              logger.info('Normalized workspace paths (auto-migration)', {
+                workspaceId: normalizedWorkspace.id,
+                file,
+                changes: normalize.changes
+              });
+            } catch (error) {
+              logger.warn('Failed to persist normalized workspace paths (continuing with normalized in-memory config)', {
+                workspaceId: normalizedWorkspace.id,
+                file,
+                error: error.message
+              });
+            }
+          }
 
           // Backfill lastAccess for older configs so the dashboard has something meaningful to show.
           // We use the config file mtime as a reasonable approximation until the user opens a workspace.
-          if (!workspace.lastAccess && stats?.mtime) {
-            workspace.lastAccess = new Date(stats.mtime).toISOString();
+          if (!normalizedWorkspace.lastAccess && stats?.mtime) {
+            normalizedWorkspace.lastAccess = new Date(stats.mtime).toISOString();
           }
 
           // Validate workspace
-          const validation = validateWorkspace(workspace);
+          const validation = validateWorkspace(normalizedWorkspace);
           if (!validation.valid) {
             logger.error(`Invalid workspace config: ${file}`, { errors: validation.errors });
             continue;
           }
 
           // Enrich workspace with missing repository types (for old configs)
-          await this.enrichWorkspaceRepositoryTypes(workspace);
+          await this.enrichWorkspaceRepositoryTypes(normalizedWorkspace);
 
           // Add to workspaces map
-          this.workspaces.set(workspace.id, workspace);
-          logger.info(`Loaded workspace: ${workspace.name} (${workspace.id})`);
+          this.workspaces.set(normalizedWorkspace.id, normalizedWorkspace);
+          logger.info(`Loaded workspace: ${normalizedWorkspace.name} (${normalizedWorkspace.id})`);
         } catch (error) {
           logger.error(`Failed to load workspace config: ${file}`, { error: error.message, stack: error.stack });
         }
@@ -336,6 +354,76 @@ class WorkspaceManager {
       logger.error('Failed to read workspaces directory', { error: error.message, stack: error.stack });
       return 0;
     }
+  }
+
+  /**
+   * Normalize workspace repo/worktree paths for older/misconfigured mixed-repo workspaces.
+   *
+   * Current heuristic: if a stored path doesn't exist, and it contains `/games/hytopia/games/`,
+   * try a best-effort migration to `/games/hytopia/` (removes the extra `games/` segment).
+   *
+   * This fixes common "Worktree Inspector does nothing" cases where worktreePath points at a non-existent directory.
+   */
+  normalizeWorkspacePaths(workspace) {
+    const ws = workspace && typeof workspace === 'object' ? workspace : {};
+    const changes = [];
+
+    const tryFixPath = (p) => {
+      const raw = String(p || '').trim();
+      if (!raw) return { value: raw, changed: false, from: raw, to: raw, reason: null };
+      if (fsSync.existsSync(raw)) {
+        return { value: raw, changed: false, from: raw, to: raw, reason: null };
+      }
+
+      const variants = [];
+      if (raw.includes('/games/hytopia/games/')) {
+        variants.push({
+          candidate: raw.replace('/games/hytopia/games/', '/games/hytopia/'),
+          reason: 'remove_extra_hytopia_games_segment'
+        });
+      }
+
+      for (const v of variants) {
+        if (!v?.candidate) continue;
+        if (v.candidate === raw) continue;
+        if (fsSync.existsSync(v.candidate)) {
+          return { value: v.candidate, changed: true, from: raw, to: v.candidate, reason: v.reason };
+        }
+      }
+
+      return { value: raw, changed: false, from: raw, to: raw, reason: null };
+    };
+
+    const next = JSON.parse(JSON.stringify(ws || {}));
+
+    if (next.repository && typeof next.repository === 'object') {
+      const fixed = tryFixPath(next.repository.path);
+      if (fixed.changed) {
+        next.repository.path = fixed.value;
+        changes.push({ field: 'repository.path', from: fixed.from, to: fixed.to, reason: fixed.reason });
+      }
+    }
+
+    if (Array.isArray(next.terminals)) {
+      for (const terminal of next.terminals) {
+        if (!terminal || typeof terminal !== 'object') continue;
+        if (terminal.repository && typeof terminal.repository === 'object') {
+          const fixedRepo = tryFixPath(terminal.repository.path);
+          if (fixedRepo.changed) {
+            terminal.repository.path = fixedRepo.value;
+            changes.push({ field: `terminals[].repository.path`, terminalId: terminal.id, from: fixedRepo.from, to: fixedRepo.to, reason: fixedRepo.reason });
+          }
+        }
+
+        const fixedWt = tryFixPath(terminal.worktreePath);
+        if (fixedWt.changed) {
+          terminal.worktreePath = fixedWt.value;
+          changes.push({ field: `terminals[].worktreePath`, terminalId: terminal.id, from: fixedWt.from, to: fixedWt.to, reason: fixedWt.reason });
+        }
+      }
+    }
+
+    return { workspace: next, changed: changes.length > 0, changes };
   }
 
   /**
