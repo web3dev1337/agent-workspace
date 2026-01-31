@@ -5011,7 +5011,13 @@ class ClaudeOrchestrator {
         break;
 
       case 'stop-session':
-        this.stopSession(params.sessionId);
+        // Be defensive: older builds may not have stopSession() (avoid breaking commander-action handler).
+        if (typeof this.stopSession === 'function') {
+          this.stopSession(params?.sessionId);
+        } else {
+          const sid = String(params?.sessionId || '').trim();
+          if (sid) this.socket?.emit?.('destroy-session', { sessionId: sid });
+        }
         break;
 
       case 'restart-session': {
