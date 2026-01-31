@@ -4694,12 +4694,193 @@ class ClaudeOrchestrator {
       }
 
       case 'start-claude':
-        this.startClaudeInSession(params.sessionId, params.yolo !== false);
+        // Semantic Commander action: start Claude in a session.
+        // We default to "continue" since that matches most quick workflows.
+        this.startClaudeWithOptions(String(params?.sessionId || '').trim(), 'continue', params?.yolo !== false);
         break;
 
       case 'stop-session':
         this.stopSession(params.sessionId);
         break;
+
+      case 'restart-session': {
+        const sid = String(params?.sessionId || '').trim();
+        if (!sid) break;
+        this.socket?.emit?.('restart-session', { sessionId: sid });
+        this.updateSessionStatus?.(sid, 'restarting');
+        break;
+      }
+
+      case 'kill-session':
+      case 'destroy-session': {
+        // Treat as an immediate close (no confirm).
+        const sid = String(params?.sessionId || '').trim();
+        if (!sid) break;
+        this.stopSession(sid);
+        break;
+      }
+
+      case 'server-control': {
+        const sid = String(params?.sessionId || '').trim();
+        const controlAction = String(params?.controlAction || '').trim().toLowerCase();
+        if (!sid) break;
+        if (!['stop', 'restart', 'kill'].includes(controlAction)) {
+          this.showToast?.(`Unknown server-control action: ${controlAction || '(empty)'}`, 'warning');
+          break;
+        }
+        this.socket?.emit?.('server-control', { sessionId: sid, action: controlAction });
+        break;
+      }
+
+      case 'build-production': {
+        const sid = String(params?.sessionId || '').trim();
+        if (!sid) break;
+        this.buildProduction?.(sid);
+        break;
+      }
+
+      case 'start-agent': {
+        // Minimal implementation: support Claude/Codex by name; otherwise show a toast.
+        const sid = String(params?.sessionId || '').trim();
+        const agentType = String(params?.agentType || '').trim().toLowerCase();
+        if (!sid) break;
+        if (!agentType || agentType === 'claude') {
+          this.startClaudeWithOptions(sid, 'continue', true);
+          break;
+        }
+        if (agentType === 'codex') {
+          this.startAgentWithConfig?.(sid, { agentId: 'codex', mode: 'continue', flags: ['yolo'] });
+          break;
+        }
+        this.showToast?.(`Unsupported agentType: ${agentType}`, 'warning');
+        break;
+      }
+
+      case 'add-worktree':
+        this.showAddWorktreeModal?.();
+        break;
+
+      case 'remove-worktree': {
+        const id = String(params?.worktreeId || '').trim();
+        if (!id) break;
+        this.deleteWorktree?.(id, id);
+        break;
+      }
+
+      case 'new-tab':
+        this.tabManager?.showWorkspaceWizard?.();
+        break;
+
+      case 'close-tab': {
+        const tabId = String(params?.tabId || this.currentTabId || '').trim();
+        if (!tabId) break;
+        this.tabManager?.closeTab?.(tabId);
+        break;
+      }
+
+      case 'open-folder': {
+        const explicitPath = String(params?.path || '').trim();
+        const sid = String(params?.sessionId || '').trim();
+        const fromSession = sid ? this.sessions.get(sid) : null;
+        const p = explicitPath || String(fromSession?.config?.cwd || fromSession?.cwd || fromSession?.worktreePath || '').trim();
+        const fallbackSid = String(this.lastInteractedSessionId || '').trim();
+        const fallbackSession = fallbackSid ? this.sessions.get(fallbackSid) : null;
+        const fallbackPath = String(fallbackSession?.config?.cwd || fallbackSession?.cwd || fallbackSession?.worktreePath || '').trim();
+        const finalPath = p || fallbackPath;
+        if (!finalPath) {
+          this.showToast?.('No path available to open', 'warning');
+          break;
+        }
+        this.socket?.emit?.('reveal-in-explorer', { path: finalPath });
+        break;
+      }
+
+      case 'open-diff-viewer': {
+        const sid = String(params?.sessionId || '').trim();
+        if (sid) {
+          const links = this.githubLinks.get(sid) || {};
+          const url = String(links.pr || links.commit || '').trim();
+          if (url) {
+            this.launchDiffViewer(url);
+            break;
+          }
+        }
+        this.openDiffViewerFromCurrentContext?.();
+        break;
+      }
+
+      case 'scroll-to-top': {
+        const sid = String(params?.sessionId || '').trim();
+        const term = sid ? this.terminalManager?.terminals?.get?.(sid) : null;
+        if (term?.scrollToTop) term.scrollToTop();
+        else if (term?.scroll) term.scroll(0);
+        break;
+      }
+
+      case 'scroll-to-bottom': {
+        const sid = String(params?.sessionId || '').trim();
+        const term = sid ? this.terminalManager?.terminals?.get?.(sid) : null;
+        if (term?.scrollToBottom) term.scrollToBottom();
+        break;
+      }
+
+      case 'clear-terminal': {
+        const sid = String(params?.sessionId || '').trim();
+        if (!sid) break;
+        this.terminalManager?.clearTerminal?.(sid);
+        break;
+      }
+
+      case 'git-pull-all': {
+        for (const [sid, session] of this.sessions) {
+          if (!session || session.type !== 'server') continue;
+          this.sendTerminalInput?.(sid, 'git pull --ff-only\n');
+        }
+        this.showToast?.('git pull --ff-only (all servers)', 'info');
+        break;
+      }
+
+      case 'git-status-all': {
+        for (const [sid, session] of this.sessions) {
+          if (!session || session.type !== 'server') continue;
+          this.sendTerminalInput?.(sid, 'git status --porcelain=v1 -b\n');
+        }
+        this.showToast?.('git status (all servers)', 'info');
+        break;
+      }
+
+      case 'stop-all-claudes': {
+        for (const [sid, session] of this.sessions) {
+          if (!session || session.type !== 'claude') continue;
+          this.stopSession?.(sid);
+        }
+        this.showToast?.('Stopped all Claude sessions', 'info');
+        break;
+      }
+
+      case 'start-all-claudes': {
+        const yolo = params?.yolo !== false;
+        for (const [sid, session] of this.sessions) {
+          if (!session || session.type !== 'claude') continue;
+          this.startClaudeWithOptions?.(sid, 'continue', yolo);
+        }
+        this.showToast?.('Starting all Claude sessions…', 'info');
+        break;
+      }
+
+      case 'refresh-all': {
+        try {
+          this.refreshBranchLabels?.();
+        } catch {}
+        try {
+          this.refreshSidebarPorts?.();
+        } catch {}
+        try {
+          this.updateTerminalGrid?.();
+        } catch {}
+        this.showToast?.('Refreshed', 'success');
+        break;
+      }
 
       case 'focus-worktree':
         this.showOnlyWorktree(params.worktreeId);
