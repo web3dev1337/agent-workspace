@@ -9,6 +9,7 @@
   --text-secondary: #8b949e;
   --text-tertiary: #6e7681;
   --text-on-accent: #ffffff;
+  --focus-ring: rgba(31, 111, 235, 0.35);
   --border-color: #30363d;
   --accent-primary: #1f6feb;
   --accent-primary-hover: #388bfd;
@@ -49,6 +50,7 @@ body.light-theme {
   --text-primary: #24292f;
   --text-secondary: #57606a;
   --text-tertiary: #6e7781;
+  --focus-ring: rgba(9, 105, 218, 0.35);
   --border-color: #d0d7de;
   --accent-primary-hover: #0969da;
   --accent-primary-pressed: #1a66d9;
@@ -59,6 +61,22 @@ body.skin-blue {
   --accent-primary: #0f67fd;
   --accent-primary-hover: #2b7cff;
   --accent-primary-pressed: #0b56d8;
+  --focus-ring: rgba(15, 103, 253, 0.4);
+
+  /* Dark mode: subtle blue-tinted neutrals */
+  --bg-secondary: #0f1624;
+  --bg-tertiary: #17233a;
+  --bg-hover: #1d2c48;
+  --border-color: #2a3b63;
+}
+
+body.light-theme.skin-blue {
+  /* Light mode: keep it clean, just a hint of blue */
+  --bg-secondary: #f2f7ff;
+  --bg-tertiary: #e8f0ff;
+  --bg-hover: #dbe8ff;
+  --border-color: #c6d8ff;
+  --focus-ring: rgba(15, 103, 253, 0.35);
 }
 
 body.skin-purple {
@@ -1229,7 +1247,7 @@ header h1 {
 }
 
 .close-btn:focus-visible {
-  outline: 2px solid var(--accent-primary);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -1257,7 +1275,7 @@ header h1 {
 
 .preset-btn:hover {
   background: var(--accent-primary);
-  color: white;
+  color: var(--text-on-accent);
   border-color: var(--accent-primary);
 }
 
