@@ -1253,7 +1253,7 @@ header h1 {
   left: auto;
   right: 0;
   bottom: 0;
-  width: min(720px, 48vw);
+  width: min(980px, 62vw);
   justify-content: flex-end;
   align-items: stretch;
   z-index: 2100;
@@ -1502,6 +1502,29 @@ header h1 {
 }
 
 .worktree-inspector-tree-status {
+  color: var(--text-secondary);
+}
+
+.worktree-inspector-tree-status.status-added {
+  color: var(--accent-success);
+}
+
+.worktree-inspector-tree-status.status-modified {
+  color: var(--accent-warning);
+}
+
+.worktree-inspector-tree-status.status-removed,
+.worktree-inspector-tree-status.status-conflict {
+  color: var(--accent-danger);
+}
+
+.worktree-inspector-tree-status.status-renamed,
+.worktree-inspector-tree-status.status-untracked {
+  color: var(--accent-primary);
+}
+
+.worktree-inspector-tree-status.status-clean,
+.worktree-inspector-tree-status.status-unknown {
   color: var(--text-secondary);
 }
 
