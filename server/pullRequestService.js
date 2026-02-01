@@ -72,7 +72,7 @@ class PullRequestService {
     if (!rawPath) throw new Error('Invalid gh api path');
 
     const args = ['api', rawPath];
-    if (paginate) args.push('--paginate', '--slurp');
+    if (paginate) args.push('--paginate');
 
     const { stdout } = await new Promise((resolve, reject) => {
       execFile('gh', args, { timeout: timeoutMs }, (error, stdout, stderr) => {
@@ -87,11 +87,30 @@ class PullRequestService {
 
     const text = String(stdout || '').trim();
     if (!text) return null;
-    const parsed = JSON.parse(text);
-    if (paginate && Array.isArray(parsed) && parsed.every(Array.isArray)) {
-      return parsed.flat();
+
+    const tryParse = (t) => {
+      try {
+        return { ok: true, value: JSON.parse(t) };
+      } catch {
+        return { ok: false, value: null };
+      }
+    };
+
+    const direct = tryParse(text);
+    if (direct.ok) return direct.value;
+
+    // `gh api --paginate` prints each page's JSON response sequentially (often one JSON value per line).
+    // To support older gh versions that lack `--slurp`, parse newline-delimited JSON and merge arrays.
+    const lines = text.split('\n').map((l) => String(l || '').trim()).filter(Boolean);
+    const parsedLines = lines.map(tryParse).filter((r) => r.ok).map((r) => r.value);
+    if (!parsedLines.length) {
+      throw new Error('Failed to parse gh api output');
     }
-    return parsed;
+    if (parsedLines.every(Array.isArray)) {
+      return parsedLines.flat();
+    }
+    // Fallback: return the last successfully parsed value.
+    return parsedLines[parsedLines.length - 1];
   }
 
   async getPullRequestDetailsByUrl(prUrl, {
