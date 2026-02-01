@@ -129,11 +129,11 @@ describe('PullRequestService', () => {
     expect(args).toEqual(expect.arrayContaining(['--', '-is:merged']));
   });
 
-  test('ghApi adds --paginate --slurp and flattens paginated arrays', async () => {
+  test('ghApi adds --paginate and flattens paginated arrays', async () => {
     execFile.mockImplementation((cmd, args, opts, cb) => {
       expect(cmd).toBe('gh');
-      expect(args).toEqual(['api', 'repos/o/r/pulls/1/files', '--paginate', '--slurp']);
-      cb(null, JSON.stringify([[{ filename: 'a' }], [{ filename: 'b' }]]), '');
+      expect(args).toEqual(['api', 'repos/o/r/pulls/1/files', '--paginate']);
+      cb(null, JSON.stringify([{ filename: 'a' }]) + '\n' + JSON.stringify([{ filename: 'b' }]) + '\n', '');
     });
 
     const service = PullRequestService.getInstance();
@@ -167,44 +167,44 @@ describe('PullRequestService', () => {
       }
 
       if (path === 'repos/web3dev1337/repo/pulls/123/files') {
-        cb(null, JSON.stringify([[{
+        cb(null, JSON.stringify([{
           filename: 'src/a.js',
           status: 'modified',
           additions: 1,
           deletions: 2,
           changes: 3
-        }]]), '');
+        }]), '');
         return;
       }
 
       if (path === 'repos/web3dev1337/repo/pulls/123/commits') {
-        cb(null, JSON.stringify([[{
+        cb(null, JSON.stringify([{
           sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           commit: { message: 'feat: x\n\nbody', author: { name: 'Me', date: '2026-01-02T00:00:00Z' } },
           author: { login: 'me' }
-        }]]), '');
+        }]), '');
         return;
       }
 
       if (path === 'repos/web3dev1337/repo/issues/123/comments') {
-        cb(null, JSON.stringify([[{
+        cb(null, JSON.stringify([{
           id: 1,
           user: { login: 'reviewer' },
           created_at: '2026-01-02T01:00:00Z',
           updated_at: '2026-01-02T01:00:00Z',
           body: 'Looks good'
-        }]]), '');
+        }]), '');
         return;
       }
 
       if (path === 'repos/web3dev1337/repo/pulls/123/reviews') {
-        cb(null, JSON.stringify([[{
+        cb(null, JSON.stringify([{
           id: 2,
           user: { login: 'reviewer' },
           state: 'APPROVED',
           submitted_at: '2026-01-02T02:00:00Z',
           body: 'Approved'
-        }]]), '');
+        }]), '');
         return;
       }
 
