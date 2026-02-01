@@ -3857,18 +3857,16 @@ class ClaudeOrchestrator {
 		            ${this.getTierDropdownHTML(sessionId)}
 	            ${this.getServerQuickControlsHTMLForClaude(sessionId)}
 	            ${this.getWorktreeInspectorButtonHTML(sessionId)}
-	            ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
-	            ${this.getGitHubButtons(sessionId)}
-	            ${this.getSessionCloseButtonHTML(sessionId)}
-	            ${this.getWorktreeRemoveButtonHTML(sessionId)}
-	          ` : ''}
-	          ${isServerSession ? `
-	            ${this.getServerControlsHTML(sessionId)}
-	            ${this.getSessionCloseButtonHTML(sessionId)}
-	            ${this.getWorktreeRemoveButtonHTML(sessionId)}
-	          ` : ''}
-	        </div>
-	      </div>
+		            ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
+		            ${this.getGitHubButtons(sessionId)}
+		            ${this.getSessionCloseButtonHTML(sessionId)}
+		          ` : ''}
+		          ${isServerSession ? `
+		            ${this.getServerControlsHTML(sessionId)}
+		            ${this.getSessionCloseButtonHTML(sessionId)}
+		          ` : ''}
+		        </div>
+		      </div>
       <div class="terminal-body">
         <div class="terminal" id="terminal-${sessionId}"></div>
         ${isClaudeSession ? `
@@ -4379,26 +4377,24 @@ class ClaudeOrchestrator {
 	    if (sessionId.includes('-claude')) {
 	      controlsDiv.innerHTML = `
 	        ${this.getTierDropdownHTML(sessionId)}
-	        ${this.getServerQuickControlsHTMLForClaude(sessionId)}
-	        ${this.getWorktreeInspectorButtonHTML(sessionId)}
-	        ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
-	        ${this.getGitHubButtons(sessionId)}
-	        ${this.getSessionCloseButtonHTML(sessionId)}
-	        ${this.getWorktreeRemoveButtonHTML(sessionId)}
-	      `;
-	      return;
-		    }
-
-		    // Server terminals: keep the existing launch controls.
-		    controlsDiv.innerHTML = `
-		      ${this.getServerControlsHTML(sessionId)}
+		      ${this.getServerQuickControlsHTMLForClaude(sessionId)}
 		      ${this.getWorktreeInspectorButtonHTML(sessionId)}
+		      ${this.getButtonsForSession(sessionId, 'claude').join('\n')}
+		      ${this.getGitHubButtons(sessionId)}
 		      ${this.getSessionCloseButtonHTML(sessionId)}
-		      ${this.getWorktreeRemoveButtonHTML(sessionId)}
 		    `;
-		  }
+		    return;
+			    }
 
-	  getWorktreeInspectorButtonHTML(sessionId) {
+			    // Server terminals: keep the existing launch controls.
+			    controlsDiv.innerHTML = `
+			      ${this.getServerControlsHTML(sessionId)}
+			      ${this.getWorktreeInspectorButtonHTML(sessionId)}
+			      ${this.getSessionCloseButtonHTML(sessionId)}
+			    `;
+			  }
+
+		  getWorktreeInspectorButtonHTML(sessionId) {
     const session = this.sessions.get(sessionId);
     const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
 	    const links = this.githubLinks.get(sessionId) || {};
@@ -4408,10 +4404,10 @@ class ClaudeOrchestrator {
 	    return `<button class="control-btn" onclick="event.stopPropagation(); window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${ariaDisabled}>🗂</button>`;
 	  }
 
-		  getWorktreeRemoveButtonHTML(sessionId) {
-		    const session = this.sessions.get(sessionId);
-		    const worktreeId = session?.worktreeId || String(sessionId || '').split('-')[0];
-		    if (!worktreeId) return '';
+			  getWorktreeRemoveButtonHTML(sessionId) {
+			    const session = this.sessions.get(sessionId);
+			    const worktreeId = session?.worktreeId || String(sessionId || '').split('-')[0];
+			    if (!worktreeId) return '';
 
 	    const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
 	    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
@@ -4419,11 +4415,11 @@ class ClaudeOrchestrator {
 	    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}')" title="Remove worktree from workspace (keeps files intact)">✕</button>`;
 	  }
 
-		  getSessionCloseButtonHTML(sessionId) {
-		    const sid = String(sessionId || '').trim();
-		    if (!sid) return '';
-		    return `<button class="control-btn danger terminal-session-close-btn" onclick="event.stopPropagation(); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove this worktree from the workspace (kills agent+server; keeps files)">×</button>`;
-		  }
+			  getSessionCloseButtonHTML(sessionId) {
+			    const sid = String(sessionId || '').trim();
+			    if (!sid) return '';
+			    return `<button class="control-btn danger terminal-session-close-btn" onclick="event.stopPropagation(); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove worktree from workspace (kills agent+server; keeps files)">✕</button>`;
+			  }
   
   updateServerStatus(sessionId, output) {
     // Check if server started - look for various startup messages
