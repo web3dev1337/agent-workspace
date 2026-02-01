@@ -85,10 +85,12 @@ const MinifiedDiffView = ({ file, diff }) => {
           <span className="label">Tokens Added:</span>
           <span className="value additions">+{diff.tokenDiff.stats.tokensAdded}</span>
         </div>
-        <div className="stat">
-          <span className="label">Tokens Removed:</span>
-          <span className="value deletions">-{diff.tokenDiff.stats.tokensRemoved}</span>
-        </div>
+        {diff.tokenDiff.stats.tokensRemoved > 0 && (
+          <div className="stat">
+            <span className="label">Tokens Removed:</span>
+            <span className="value deletions">-{diff.tokenDiff.stats.tokensRemoved}</span>
+          </div>
+        )}
         <div className="stat">
           <span className="label">Total Tokens:</span>
           <span className="value">{diff.tokenDiff.stats.totalNewTokens}</span>
