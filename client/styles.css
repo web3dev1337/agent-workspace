@@ -2878,6 +2878,16 @@ header h1 {
   overflow-y: auto;
 }
 
+/* Review Console */
+.review-console-warning {
+  margin: 10px 12px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-left: 4px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.10);
+  border-radius: 10px;
+}
+
 .setting-group {
   margin-bottom: var(--space-md);
 }

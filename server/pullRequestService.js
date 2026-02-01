@@ -21,6 +21,60 @@ class PullRequestService {
     return PullRequestService.instance;
   }
 
+  splitJsonStream(text) {
+    const s = String(text || '');
+    const out = [];
+
+    let start = -1;
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+
+      if (start === -1) {
+        if (ch === '{' || ch === '[') {
+          start = i;
+          depth = 1;
+          inString = false;
+          escape = false;
+        }
+        continue;
+      }
+
+      if (inString) {
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (ch === '\\') {
+          escape = true;
+          continue;
+        }
+        if (ch === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (ch === '{' || ch === '[') depth++;
+      else if (ch === '}' || ch === ']') depth--;
+
+      if (depth === 0) {
+        out.push(s.slice(start, i + 1));
+        start = -1;
+      }
+    }
+
+    return out;
+  }
+
   parsePullRequestUrl(prUrl) {
     const raw = String(prUrl || '').trim();
     if (!raw) return null;
@@ -99,18 +153,13 @@ class PullRequestService {
     const direct = tryParse(text);
     if (direct.ok) return direct.value;
 
-    // `gh api --paginate` prints each page's JSON response sequentially (often one JSON value per line).
-    // To support older gh versions that lack `--slurp`, parse newline-delimited JSON and merge arrays.
-    const lines = text.split('\n').map((l) => String(l || '').trim()).filter(Boolean);
-    const parsedLines = lines.map(tryParse).filter((r) => r.ok).map((r) => r.value);
-    if (!parsedLines.length) {
-      throw new Error('Failed to parse gh api output');
-    }
-    if (parsedLines.every(Array.isArray)) {
-      return parsedLines.flat();
-    }
-    // Fallback: return the last successfully parsed value.
-    return parsedLines[parsedLines.length - 1];
+    // `gh api --paginate` prints each page's JSON response sequentially.
+    // On some installs it may be pretty-printed and/or not strictly newline-delimited, so parse it as a JSON stream.
+    const chunks = this.splitJsonStream(text);
+    const parsed = chunks.map(tryParse).filter((r) => r.ok).map((r) => r.value);
+    if (!parsed.length) throw new Error('Failed to parse gh api output');
+    if (parsed.every(Array.isArray)) return parsed.flat();
+    return parsed[parsed.length - 1];
   }
 
   async getPullRequestDetailsByUrl(prUrl, {
@@ -137,17 +186,38 @@ class PullRequestService {
     const commentsLimit = clamp(maxComments, { min: 0, max: 2000, fallback: 100 });
     const reviewsLimit = clamp(maxReviews, { min: 0, max: 2000, fallback: 100 });
 
-    const [pr, filesRaw, commitsRaw, issueCommentsRaw, reviewsRaw] = await Promise.all([
-      this.ghApi(`repos/${o}/${r}/pulls/${n}`, { paginate: false, timeoutMs: 20000 }).catch(() => null),
-      this.ghApi(`repos/${o}/${r}/pulls/${n}/files`, { paginate: true, timeoutMs: 30000 }).catch(() => []),
-      this.ghApi(`repos/${o}/${r}/pulls/${n}/commits`, { paginate: true, timeoutMs: 30000 }).catch(() => []),
+    const safe = async (endpoint, fn, fallback) => {
+      try {
+        const value = await fn();
+        return { ok: true, value, endpoint, error: null };
+      } catch (e) {
+        const msg = String(e?.message || e || 'Unknown error');
+        logger.warn('PR details fetch failed', { endpoint, error: msg, owner: o, repo: r, number: n });
+        return { ok: false, value: fallback, endpoint, error: msg };
+      }
+    };
+
+    const [prRes, filesRes, commitsRes, issueCommentsRes, reviewsRes] = await Promise.all([
+      safe(`repos/${o}/${r}/pulls/${n}`, () => this.ghApi(`repos/${o}/${r}/pulls/${n}`, { paginate: false, timeoutMs: 20000 }), null),
+      safe(`repos/${o}/${r}/pulls/${n}/files`, () => this.ghApi(`repos/${o}/${r}/pulls/${n}/files`, { paginate: true, timeoutMs: 30000 }), []),
+      safe(`repos/${o}/${r}/pulls/${n}/commits`, () => this.ghApi(`repos/${o}/${r}/pulls/${n}/commits`, { paginate: true, timeoutMs: 30000 }), []),
       commentsLimit > 0
-        ? this.ghApi(`repos/${o}/${r}/issues/${n}/comments`, { paginate: true, timeoutMs: 30000 }).catch(() => [])
-        : Promise.resolve([]),
+        ? safe(`repos/${o}/${r}/issues/${n}/comments`, () => this.ghApi(`repos/${o}/${r}/issues/${n}/comments`, { paginate: true, timeoutMs: 30000 }), [])
+        : Promise.resolve({ ok: true, value: [], endpoint: null, error: null }),
       reviewsLimit > 0
-        ? this.ghApi(`repos/${o}/${r}/pulls/${n}/reviews`, { paginate: true, timeoutMs: 30000 }).catch(() => [])
-        : Promise.resolve([])
+        ? safe(`repos/${o}/${r}/pulls/${n}/reviews`, () => this.ghApi(`repos/${o}/${r}/pulls/${n}/reviews`, { paginate: true, timeoutMs: 30000 }), [])
+        : Promise.resolve({ ok: true, value: [], endpoint: null, error: null })
     ]);
+
+    const pr = prRes.value;
+    const filesRaw = filesRes.value;
+    const commitsRaw = commitsRes.value;
+    const issueCommentsRaw = issueCommentsRes.value;
+    const reviewsRaw = reviewsRes.value;
+
+    const warnings = [prRes, filesRes, commitsRes, issueCommentsRes, reviewsRes]
+      .filter((x) => x && x.ok === false)
+      .map((x) => ({ endpoint: x.endpoint, error: x.error }));
 
     const files = Array.isArray(filesRaw) ? filesRaw.slice(0, filesLimit).map((f) => ({
       filename: String(f?.filename || ''),
@@ -209,7 +279,8 @@ class PullRequestService {
       conversation: {
         issueComments,
         reviews
-      }
+      },
+      warnings
     };
   }
 
