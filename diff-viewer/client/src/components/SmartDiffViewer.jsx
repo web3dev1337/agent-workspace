@@ -307,7 +307,9 @@ const SmartDiffViewer = ({ data }) => {
                 </div>
                 <div className="file-header-meta">
                   <span className="file-header-badge additions">+{selectedFile.additions || 0}</span>
-                  <span className="file-header-badge deletions">-{selectedFile.deletions || 0}</span>
+                  {(selectedFile.deletions || 0) > 0 && (
+                    <span className="file-header-badge deletions">-{selectedFile.deletions}</span>
+                  )}
                   <button
                     type="button"
                     className="file-header-badge file-header-review"
