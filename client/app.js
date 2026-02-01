@@ -4408,10 +4408,10 @@ class ClaudeOrchestrator {
 	    return `<button class="control-btn" onclick="event.stopPropagation(); window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${ariaDisabled}>🗂</button>`;
 	  }
 
-	  getWorktreeRemoveButtonHTML(sessionId) {
-	    const session = this.sessions.get(sessionId);
-	    const worktreeId = session?.worktreeId || String(sessionId || '').split('-')[0];
-	    if (!worktreeId) return '';
+		  getWorktreeRemoveButtonHTML(sessionId) {
+		    const session = this.sessions.get(sessionId);
+		    const worktreeId = session?.worktreeId || String(sessionId || '').split('-')[0];
+		    if (!worktreeId) return '';
 
 	    const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
 	    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
@@ -4419,11 +4419,11 @@ class ClaudeOrchestrator {
 	    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}')" title="Remove worktree from workspace (keeps files intact)">✕</button>`;
 	  }
 
-	  getSessionCloseButtonHTML(sessionId) {
-	    const sid = String(sessionId || '').trim();
-	    if (!sid) return '';
-	    return `<button class="control-btn danger terminal-session-close-btn" onclick="event.stopPropagation(); window.orchestrator.requestCloseSession('${sid}')" title="Close this terminal (kills processes; keeps workspace config)">×</button>`;
-	  }
+		  getSessionCloseButtonHTML(sessionId) {
+		    const sid = String(sessionId || '').trim();
+		    if (!sid) return '';
+		    return `<button class="control-btn danger terminal-session-close-btn" onclick="event.stopPropagation(); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove this worktree from the workspace (kills agent+server; keeps files)">×</button>`;
+		  }
   
   updateServerStatus(sessionId, output) {
     // Check if server started - look for various startup messages
@@ -9499,10 +9499,10 @@ class ClaudeOrchestrator {
     this.sessionAgentPreferences.set(sessionId, { agentId, powerful });
   }
 
-  /**
-   * Delete worktree from workspace with confirmation
-   */
-  async deleteWorktree(worktreeId, displayName) {
+	  /**
+	   * Delete worktree from workspace with confirmation
+	   */
+	  async deleteWorktree(worktreeId, displayName) {
     // Show confirmation dialog with clear messaging about what gets deleted
     const confirmed = await this.showConfirmationDialog(
       'Remove Worktree from Workspace',
@@ -9549,12 +9549,28 @@ class ClaudeOrchestrator {
       console.error('Error removing worktree from workspace:', error);
       this.showError('Failed to remove worktree from workspace');
     }
-  }
+	  }
 
-  /**
-   * Close a specific terminal session (keeps the worktree in the workspace).
-   */
-	  async requestCloseSession(sessionId) {
+	  async removeWorktreeForSession(sessionId) {
+	    const sid = String(sessionId || '').trim();
+	    if (!sid) return;
+	    const session = this.sessions.get(sid);
+	    if (!session) {
+	      this.showToast?.('Session not found', 'warning');
+	      return;
+	    }
+
+	    const worktreeId = String(session?.worktreeId || '').trim() || String(sid).split('-')[0];
+	    const repositoryName = String(session?.repositoryName || this.extractRepositoryName(sid) || '').trim();
+	    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+	    const display = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId;
+	    await this.deleteWorktree?.(worktreeKey, display);
+	  }
+
+	  /**
+	   * Close a specific terminal session (keeps the worktree in the workspace).
+	   */
+		  async requestCloseSession(sessionId) {
 	    const sid = String(sessionId || '').trim();
 	    if (!sid) return;
 	    const session = this.sessions.get(sid);
