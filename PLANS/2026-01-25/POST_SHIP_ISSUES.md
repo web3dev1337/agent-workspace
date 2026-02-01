@@ -6,7 +6,7 @@ The 2026-01-25 brain-dump implementation plan is fully checked off; this file tr
 
 - [x] Mixed-repo: session IDs containing `/` (e.g. `hytopia/zoo-game-claude`) caused invalid `querySelector('#wrapper-...')` selectors, breaking terminal rendering + branch label updates and sometimes leaving the UI stuck on “Loading workspaces…”. (PR #531)
 - [x] Session recovery: terminals you explicitly closed (×) still showed up as “recoverable sessions” on the next boot; closing now clears that session’s recovery state. (PR #535)
-- [x] Review Console: PR files/commits/comments showed as empty because `gh api --paginate --slurp` is unsupported on older `gh` versions; now paginated responses parse correctly without `--slurp`. (PR #538)
+- [x] Review Console: PR files/commits/comments could show as empty due to `gh api --paginate --slurp` being unsupported on older `gh` versions and/or paginated output parsing; now paginated responses parse correctly without `--slurp` (including multi-page JSON streams) and warnings are surfaced in the UI when GitHub calls fail. (PR #538, PR #545)
 - [x] History: include Codex CLI sessions in Conversation Browser; add Source filter and Codex resume commands. (work/codex-history-2026-01-29)
 - [x] Status lights: avoid false “waiting” when output ends with a lone `>` line (prompt gating in `StatusDetector`). (PR #394)
 - [x] Status lights: investigate remaining green/orange/grey flicker for agent + worktree dots (esp. Codex sessions). (Mitigations: treat `*-claude` terminals as “busy” for longer quiet windows, PR #398; Codex prompt heuristic, PR #400)
