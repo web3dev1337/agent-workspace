@@ -1390,6 +1390,19 @@ header h1 {
   grid-template-columns: 1fr;
 }
 
+/* Review Console / Inspector responsiveness:
+   - Docked mode can become narrow; force a single column so panels don't get squished.
+   - Fullscreen mode should also collapse on small screens. */
+.worktree-inspector-modal.docked .worktree-inspector-grid {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 1100px) {
+  .worktree-inspector-modal.fullscreen .worktree-inspector-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .worktree-inspector-panel {
   border: 1px solid var(--border-color);
   background: rgba(0, 0, 0, 0.06);
