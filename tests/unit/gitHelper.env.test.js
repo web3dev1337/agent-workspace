@@ -1,4 +1,6 @@
 const util = require('util');
+const fs = require('fs');
+const path = require('path');
 
 let mockExec;
 jest.mock('child_process', () => ({
@@ -30,13 +32,15 @@ describe('GitHelper environment', () => {
     const { GitHelper } = require('../../server/gitHelper');
     const helper = new GitHelper();
 
-    const branch = await helper.getCurrentBranch('/tmp/repo-a/work1', true);
+    const worktreePath = '/tmp/repo-a/work1';
+    fs.mkdirSync(worktreePath, { recursive: true });
+    const branch = await helper.getCurrentBranch(worktreePath, true);
     expect(branch).toBe('main');
 
     const call = calls.find(c => String(c.cmd).includes('git rev-parse'));
     expect(call).toBeTruthy();
     const opts = call.options;
-    expect(opts.cwd).toBe('/tmp/repo-a/work1');
+    expect(opts.cwd).toBe(worktreePath);
     expect(opts.env.GIT_CONFIG_NOSYSTEM).toBe('1');
     expect(opts.env.HOME).toBe(process.env.HOME);
   });
@@ -52,14 +56,51 @@ describe('GitHelper environment', () => {
     const { GitHelper } = require('../../server/gitHelper');
     const helper = new GitHelper();
 
-    const url = await helper.getRemoteUrl('/tmp/repo-a/work1');
+    const worktreePath = '/tmp/repo-a/work1';
+    fs.mkdirSync(worktreePath, { recursive: true });
+    const url = await helper.getRemoteUrl(worktreePath);
     expect(url).toBe('https://github.com/owner/repo');
 
     const call = calls.find(c => String(c.cmd).includes('git remote get-url origin'));
     expect(call).toBeTruthy();
     const opts = call.options;
-    expect(opts.cwd).toBe('/tmp/repo-a/work1');
+    expect(opts.cwd).toBe(worktreePath);
     expect(opts.env.GIT_CONFIG_NOSYSTEM).toBe('1');
     expect(opts.env.HOME).toBe(process.env.HOME);
+  });
+
+  test('invalid worktree path does not throw and returns sentinel', async () => {
+    const calls = [];
+    mockExec = jest.fn();
+    mockExec[util.promisify.custom] = async (cmd, options) => {
+      calls.push({ cmd, options });
+      return { stdout: 'main\n', stderr: '' };
+    };
+
+    const { GitHelper } = require('../../server/gitHelper');
+    const helper = new GitHelper();
+
+    // WORKTREE_BASE_PATH is /tmp in this test; /home/ab is invalid.
+    const branch = await helper.getCurrentBranch('/home/ab/not-allowed', true);
+    expect(branch).toBe('invalid-path');
+    expect(calls.length).toBe(0);
+  });
+
+  test('missing worktree path does not throw and returns sentinel', async () => {
+    const calls = [];
+    mockExec = jest.fn();
+    mockExec[util.promisify.custom] = async (cmd, options) => {
+      calls.push({ cmd, options });
+      return { stdout: 'main\n', stderr: '' };
+    };
+
+    const { GitHelper } = require('../../server/gitHelper');
+    const helper = new GitHelper();
+
+    const missing = path.join('/tmp', 'repo-missing', 'work1');
+    try { fs.rmSync(path.join('/tmp', 'repo-missing'), { recursive: true, force: true }); } catch {}
+    const branch = await helper.getCurrentBranch(missing, true);
+    expect(branch).toBe('missing');
+    expect(calls.length).toBe(0);
   });
 });

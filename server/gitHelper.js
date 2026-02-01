@@ -1,5 +1,6 @@
 const { exec } = require('child_process');
 const util = require('util');
+const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const winston = require('winston');
@@ -37,6 +38,45 @@ class GitHelper {
 
     // If specific worktree pattern is needed, it can be configured
     this.worktreePattern = process.env.WORKTREE_PATTERN || null;
+
+    // Throttle noisy path validation logs (keyed by `${reason}:${normalizedPath}`)
+    this.pathWarnedAt = new Map();
+    this.pathWarnThrottleMs = 5 * 60 * 1000; // 5 minutes
+  }
+
+  warnPathOnce(reason, worktreePath, extra = {}) {
+    const normalized = (() => {
+      try { return path.resolve(String(worktreePath || '').trim()); } catch { return String(worktreePath || ''); }
+    })();
+    const key = `${String(reason || 'unknown')}:${normalized}`;
+    const now = Date.now();
+    const last = this.pathWarnedAt.get(key) || 0;
+    if (now - last < this.pathWarnThrottleMs) return;
+    this.pathWarnedAt.set(key, now);
+    logger.warn('Worktree path not usable for git operations', { reason, path: worktreePath, ...extra });
+  }
+
+  getPathState(worktreePath) {
+    const raw = String(worktreePath || '').trim();
+    if (!raw) return { ok: false, reason: 'empty', normalized: '' };
+
+    let normalized = raw;
+    try { normalized = path.resolve(raw); } catch {}
+
+    if (!this.isValidPath(normalized)) {
+      return { ok: false, reason: 'invalid', normalized };
+    }
+
+    // Avoid spawning `/bin/sh` when cwd doesn't exist (Node reports ENOENT as "spawn /bin/sh ENOENT").
+    try {
+      if (!fs.existsSync(normalized)) {
+        return { ok: false, reason: 'missing', normalized };
+      }
+    } catch {
+      return { ok: false, reason: 'missing', normalized };
+    }
+
+    return { ok: true, reason: null, normalized };
   }
   
   async getCurrentBranch(worktreePath, skipCache = false) {
@@ -46,10 +86,11 @@ class GitHelper {
       timestamp: new Date().toISOString()
     });
     
-    // Security: Validate path to prevent directory traversal
-    if (!this.isValidPath(worktreePath)) {
-      logger.error('Invalid worktree path attempted', { path: worktreePath });
-      throw new Error('Invalid worktree path');
+    const state = this.getPathState(worktreePath);
+    if (!state.ok) {
+      this.warnPathOnce(state.reason, worktreePath);
+      // Return a stable sentinel so callers stop retrying forever.
+      return state.reason === 'invalid' ? 'invalid-path' : (state.reason === 'missing' ? 'missing' : 'unknown');
     }
     
     // Check cache first (unless explicitly skipped)
@@ -64,7 +105,7 @@ class GitHelper {
     try {
       // Use git to get current branch
       const { stdout, stderr } = await execAsync('git rev-parse --abbrev-ref HEAD', {
-        cwd: worktreePath,
+        cwd: state.normalized,
         timeout: GIT_COMMAND_TIMEOUT_MS,
         env: {
           ...process.env,
@@ -100,12 +141,12 @@ class GitHelper {
       }
       
       // Cache the result
-      this.setCachedBranch(worktreePath, branch);
+      this.setCachedBranch(state.normalized, branch);
       return branch;
       
     } catch (error) {
       logger.error('Failed to get git branch', { 
-        path: worktreePath, 
+        path: state.normalized || worktreePath,
         error: error.message 
       });
       
@@ -119,13 +160,15 @@ class GitHelper {
   }
   
   async getStatus(worktreePath) {
-    if (!this.isValidPath(worktreePath)) {
-      throw new Error('Invalid worktree path');
+    const state = this.getPathState(worktreePath);
+    if (!state.ok) {
+      this.warnPathOnce(state.reason, worktreePath);
+      return null;
     }
     
     try {
       const { stdout } = await execAsync('git status --porcelain', {
-        cwd: worktreePath,
+        cwd: state.normalized,
         timeout: 5000
       });
       
@@ -150,15 +193,17 @@ class GitHelper {
   }
   
   async getRecentCommits(worktreePath, count = 5) {
-    if (!this.isValidPath(worktreePath)) {
-      throw new Error('Invalid worktree path');
+    const state = this.getPathState(worktreePath);
+    if (!state.ok) {
+      this.warnPathOnce(state.reason, worktreePath);
+      return [];
     }
     
     try {
       const { stdout } = await execAsync(
         `git log --oneline -${count}`,
         {
-          cwd: worktreePath,
+          cwd: state.normalized,
           timeout: 5000
         }
       );
@@ -183,8 +228,10 @@ class GitHelper {
   }
   
   async switchBranch(worktreePath, branchName) {
-    if (!this.isValidPath(worktreePath)) {
-      throw new Error('Invalid worktree path');
+    const state = this.getPathState(worktreePath);
+    if (!state.ok) {
+      this.warnPathOnce(state.reason, worktreePath);
+      throw new Error(state.reason === 'invalid' ? 'Invalid worktree path' : 'Worktree path missing');
     }
     
     // Sanitize branch name
@@ -194,12 +241,12 @@ class GitHelper {
     
     try {
       await execAsync(`git checkout ${branchName}`, {
-        cwd: worktreePath,
+        cwd: state.normalized,
         timeout: 10000
       });
       
       // Clear cache for this path
-      this.branchCache.delete(worktreePath);
+      this.branchCache.delete(state.normalized);
       
       logger.info('Switched branch', { path: worktreePath, branch: branchName });
       return true;
@@ -215,13 +262,15 @@ class GitHelper {
   }
   
   async getRemoteUrl(worktreePath) {
-    if (!this.isValidPath(worktreePath)) {
-      throw new Error('Invalid worktree path');
+    const state = this.getPathState(worktreePath);
+    if (!state.ok) {
+      this.warnPathOnce(state.reason, worktreePath);
+      return null;
     }
     
     try {
       const { stdout } = await execAsync('git remote get-url origin', {
-        cwd: worktreePath,
+        cwd: state.normalized,
         timeout: GIT_COMMAND_TIMEOUT_MS,
         env: {
           ...process.env,
@@ -242,12 +291,12 @@ class GitHelper {
         httpUrl = remoteUrl.replace(/\.git$/, '');
       }
       
-      logger.info('Retrieved remote URL', { path: worktreePath, url: httpUrl });
+      logger.info('Retrieved remote URL', { path: state.normalized, url: httpUrl });
       return httpUrl;
       
     } catch (error) {
       logger.error('Failed to get remote URL', { 
-        path: worktreePath, 
+        path: state.normalized || worktreePath,
         error: error.message 
       });
       return null;
@@ -355,27 +404,29 @@ class GitHelper {
   }
   
   async getDefaultBranch(worktreePath) {
-    if (!this.isValidPath(worktreePath)) {
-      throw new Error('Invalid worktree path');
+    const state = this.getPathState(worktreePath);
+    if (!state.ok) {
+      this.warnPathOnce(state.reason, worktreePath);
+      return null;
     }
     
     try {
       // Try to get the default branch from remote
       const { stdout } = await execAsync('git symbolic-ref refs/remotes/origin/HEAD', {
-        cwd: worktreePath,
+        cwd: state.normalized,
         timeout: 5000
       });
       
       // Extract branch name from refs/remotes/origin/main or refs/remotes/origin/master
       const defaultBranch = stdout.trim().replace('refs/remotes/origin/', '');
-      logger.info('Retrieved default branch', { path: worktreePath, branch: defaultBranch });
+      logger.info('Retrieved default branch', { path: state.normalized, branch: defaultBranch });
       return defaultBranch;
       
     } catch (error) {
       // If that fails, try to check if main or master exists
       try {
         await execAsync('git show-ref --verify --quiet refs/heads/main', {
-          cwd: worktreePath,
+          cwd: state.normalized,
           timeout: 5000
         });
         return 'main';
