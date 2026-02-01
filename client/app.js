@@ -8519,22 +8519,41 @@ class ClaudeOrchestrator {
 	      const issueComments = Array.isArray(conversation.issueComments) ? conversation.issueComments : [];
 	      const reviews = Array.isArray(conversation.reviews) ? conversation.reviews : [];
 
-	      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
-	      const normUrl = (u) => String(u || '').trim().replace(/\/+$/, '');
-	      const targetPrUrl = normUrl(pr.url || prUrl);
+		      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
+		      const normUrl = (u) => String(u || '').trim().replace(/\/+$/, '');
+		      const targetPrUrl = normUrl(pr.url || prUrl);
 
-	      const matchingSessionIds = [];
-	      for (const [sid, links] of this.githubLinks) {
-	        const link = links && typeof links === 'object' ? links : {};
-	        const linkedPr = normUrl(link.pr);
-	        if (!linkedPr) continue;
-	        if (linkedPr === targetPrUrl) matchingSessionIds.push(String(sid));
-	      }
+		      const matchingSessionIds = [];
+		      for (const [sid, links] of this.githubLinks) {
+		        const link = links && typeof links === 'object' ? links : {};
+		        const linkedPr = normUrl(link.pr);
+		        if (!linkedPr) continue;
+		        if (linkedPr === targetPrUrl) matchingSessionIds.push(String(sid));
+		      }
 
-	      // Stable ordering: Agent terminals first, then servers.
-	      matchingSessionIds.sort((a, b) => {
-	        const aIsServer = a.includes('-server');
-	        const bIsServer = b.includes('-server');
+		      // If we found any linked sessions, also include their paired terminal (agent <-> server)
+		      // so Review Console can show the server window too.
+		      if (matchingSessionIds.length) {
+		        const withPairs = new Set(matchingSessionIds.map((x) => String(x)));
+		        for (const sid0 of matchingSessionIds) {
+		          const sid = String(sid0 || '').trim();
+		          if (!sid) continue;
+		          if (sid.endsWith('-claude')) {
+		            const paired = sid.replace(/-claude$/, '-server');
+		            if (this.sessions.has(paired)) withPairs.add(paired);
+		          } else if (sid.endsWith('-server')) {
+		            const paired = sid.replace(/-server$/, '-claude');
+		            if (this.sessions.has(paired)) withPairs.add(paired);
+		          }
+		        }
+		        matchingSessionIds.length = 0;
+		        matchingSessionIds.push(...Array.from(withPairs));
+		      }
+
+		      // Stable ordering: Agent terminals first, then servers.
+		      matchingSessionIds.sort((a, b) => {
+		        const aIsServer = a.includes('-server');
+		        const bIsServer = b.includes('-server');
 	        if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
 	        return a.localeCompare(b);
 	      });
@@ -8757,36 +8776,67 @@ class ClaudeOrchestrator {
 	        embed().catch(() => {});
 	      }
 
-	      // If we have terminals that are already linked to this PR, dock them into the PR console.
-	      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');
-	      if (matchingSessionIds.length && terminalsContainer) {
-	        terminalsContainer.innerHTML = '';
-	        for (const sessionId of matchingSessionIds) {
-	          const wrapper = document.getElementById(`wrapper-${sessionId}`);
-	          if (!wrapper) continue;
+		      // If we have terminals that are already linked to this PR, dock them into the PR console.
+		      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');
+		      if (matchingSessionIds.length && terminalsContainer) {
+		        terminalsContainer.innerHTML = '';
+		        for (const sessionId of matchingSessionIds) {
+		          const sid = String(sessionId || '').trim();
+		          if (!sid) continue;
 
-	          // Remember original location so we can restore on close.
-	          if (!this.reviewConsoleDockedTerminals.has(sessionId)) {
-	            this.reviewConsoleDockedTerminals.set(sessionId, {
-	              wrapper,
-	              parent: wrapper.parentElement,
-	              nextSibling: wrapper.nextSibling
-	            });
-	          }
+		          // In normal grid view, server terminals may not exist in the DOM (e.g. viewMode=claude).
+		          // For Review Console, force-create them if we have the session object.
+		          const wrapperId = `wrapper-${sid}`;
+		          let wrapper = document.getElementById(wrapperId);
+		          if (!wrapper) {
+		            const session = this.sessions.get(sid);
+		            const grid = this.getTerminalGrid?.() || document.getElementById('terminal-grid');
+		            if (session && grid) {
+		              try {
+		                wrapper = this.createTerminalElement(sid, session);
+		                if (wrapper) {
+		                  grid.appendChild(wrapper);
+		                  setTimeout(() => {
+		                    try {
+		                      const terminalEl = document.getElementById(`terminal-${sid}`);
+		                      if (terminalEl && wrapper && wrapper.contains(terminalEl) && !this.terminalManager.terminals.has(sid)) {
+		                        this.terminalManager.createTerminal(sid, session);
+		                      }
+		                    } catch {
+		                      // ignore
+		                    }
+		                  }, 50);
+		                }
+		              } catch {
+		                wrapper = null;
+		              }
+		            }
+		          }
+		          if (!wrapper) continue;
 
-	          wrapper.classList.remove('hidden');
-	          wrapper.classList.add('review-console-terminal');
-	          terminalsContainer.appendChild(wrapper);
+		          // Remember original location so we can restore on close.
+		          if (!this.reviewConsoleDockedTerminals.has(sid)) {
+		            this.reviewConsoleDockedTerminals.set(sid, {
+		              wrapper,
+		              parent: wrapper.parentElement,
+		              nextSibling: wrapper.nextSibling
+		            });
+		          }
 
-	          setTimeout(() => {
-	            try {
-	              this.terminalManager?.fitTerminal?.(sessionId);
-	            } catch {
-	              // ignore
-	            }
-	          }, 60);
-	        }
-	      }
+		          wrapper.classList.remove('hidden');
+		          wrapper.style.display = '';
+		          wrapper.classList.add('review-console-terminal');
+		          terminalsContainer.appendChild(wrapper);
+
+		          setTimeout(() => {
+		            try {
+		              this.terminalManager?.fitTerminal?.(sid);
+		            } catch {
+		              // ignore
+		            }
+		          }, 60);
+		        }
+		      }
 
 	      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
 	        const url = e.target?.dataset?.openDiff;
