@@ -18,10 +18,12 @@ const DiffStats = ({ stats }) => {
         <span className="stat-value">+{additions}</span>
         <span className="stat-label">additions</span>
       </div>
-      <div className="stat-item deletions">
-        <span className="stat-value">-{deletions}</span>
-        <span className="stat-label">deletions</span>
-      </div>
+      {deletions > 0 && (
+        <div className="stat-item deletions">
+          <span className="stat-value">-{deletions}</span>
+          <span className="stat-label">deletions</span>
+        </div>
+      )}
       {stats.semanticReduction && (
         <div className="stat-item reduction">
           <span className="stat-value">{stats.semanticReduction}%</span>
@@ -33,10 +35,12 @@ const DiffStats = ({ stats }) => {
           className="diff-bar-additions" 
           style={{ width: `${additionPercent}%` }}
         ></div>
-        <div 
-          className="diff-bar-deletions" 
-          style={{ width: `${100 - additionPercent}%` }}
-        ></div>
+        {deletions > 0 && (
+          <div 
+            className="diff-bar-deletions" 
+            style={{ width: `${100 - additionPercent}%` }}
+          ></div>
+        )}
       </div>
     </div>
   );
