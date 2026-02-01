@@ -227,5 +227,7 @@ describe('PullRequestService', () => {
     expect(result.commits[0].sha).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
     expect(result.conversation.issueComments).toHaveLength(1);
     expect(result.conversation.reviews).toHaveLength(1);
+    expect(Array.isArray(result.warnings)).toBe(true);
+    expect(result.warnings).toHaveLength(0);
   });
 });

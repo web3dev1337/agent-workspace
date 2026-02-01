@@ -8507,13 +8507,14 @@ class ClaudeOrchestrator {
       .replace(/>/g, '&gt;');
 
 	    try {
-	      const details = await this.fetchPullRequestDetails(prUrl, { maxFiles: 400, maxCommits: 200, maxComments: 60, maxReviews: 60 });
-	      const pr = (details?.pr && typeof details.pr === 'object') ? details.pr : {};
-	      const files = Array.isArray(details?.files) ? details.files : [];
-	      const commits = Array.isArray(details?.commits) ? details.commits : [];
-	      const conversation = (details?.conversation && typeof details.conversation === 'object') ? details.conversation : {};
-	      const issueComments = Array.isArray(conversation.issueComments) ? conversation.issueComments : [];
-	      const reviews = Array.isArray(conversation.reviews) ? conversation.reviews : [];
+		      const details = await this.fetchPullRequestDetails(prUrl, { maxFiles: 400, maxCommits: 200, maxComments: 60, maxReviews: 60 });
+		      const pr = (details?.pr && typeof details.pr === 'object') ? details.pr : {};
+		      const files = Array.isArray(details?.files) ? details.files : [];
+		      const commits = Array.isArray(details?.commits) ? details.commits : [];
+		      const conversation = (details?.conversation && typeof details.conversation === 'object') ? details.conversation : {};
+		      const issueComments = Array.isArray(conversation.issueComments) ? conversation.issueComments : [];
+		      const reviews = Array.isArray(conversation.reviews) ? conversation.reviews : [];
+		      const warnings = Array.isArray(details?.warnings) ? details.warnings : [];
 
 		      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
 		      const normUrl = (u) => String(u || '').trim().replace(/\/+$/, '');
@@ -8604,10 +8605,10 @@ class ClaudeOrchestrator {
         `;
 	      };
 
-	      bodyEl.innerHTML = `
-	        <div class="worktree-inspector-header">
-	          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
-            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
+		      bodyEl.innerHTML = `
+		        <div class="worktree-inspector-header">
+		          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
+	            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
               <strong>PR #${escapeHtml(pr.number || '')}</strong>
               ${pr.state ? ` • <span style="opacity:0.85;">${escapeHtml(pr.state)}</span>` : ''}
               ${pr.isDraft ? ' • <span style="opacity:0.85;">draft</span>' : ''}
@@ -8622,13 +8623,28 @@ class ClaudeOrchestrator {
             <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
             <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}">🔍 Diff</button>
             <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" ${pr.isDraft ? 'disabled' : ''}>✅ Merge</button>
-	          </div>
-	        </div>
+		          </div>
+		        </div>
 
-	        <div class="worktree-inspector-grid" data-rc-grid="true">
-	          ${matchingSessionIds.length ? `
-	            <div class="worktree-inspector-panel worktree-inspector-terminals" data-rc-panel="terminals" style="grid-column: 1 / -1;">
-	              <div class="worktree-inspector-panel-title-row">
+		        ${warnings.length ? `
+		          <div class="review-console-warning">
+		            <div style="font-weight:600; margin-bottom:6px;">GitHub details may be incomplete</div>
+		            <div style="opacity:0.9;">Some GitHub API calls failed, so Files/Commits/Conversation can appear empty.</div>
+		            <div style="margin-top:6px; opacity:0.85; font-family:var(--font-mono); font-size:0.85rem;">
+		              ${warnings.slice(0, 6).map((w) => {
+		                const ep = escapeHtml(String(w?.endpoint || '(unknown endpoint)'));
+		                const err = escapeHtml(String(w?.error || '(unknown error)'));
+		                return `<div>• ${ep}: ${err}</div>`;
+		              }).join('')}
+		              ${warnings.length > 6 ? `<div>• …and ${warnings.length - 6} more</div>` : ''}
+		            </div>
+		          </div>
+		        ` : ''}
+
+		        <div class="worktree-inspector-grid" data-rc-grid="true">
+		          ${matchingSessionIds.length ? `
+		            <div class="worktree-inspector-panel worktree-inspector-terminals" data-rc-panel="terminals" style="grid-column: 1 / -1;">
+		              <div class="worktree-inspector-panel-title-row">
 	                <div class="worktree-inspector-panel-title">Terminals</div>
 	                <div class="worktree-inspector-subtle">${matchingSessionIds.length} linked</div>
 	              </div>
