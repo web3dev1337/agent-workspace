@@ -74,9 +74,23 @@ curl -sS -X POST http://localhost:3000/api/workspaces/add-mixed-worktree \
     "repositoryType": "hytopia-game",
     "repositoryName": "zoo-game",
     "worktreeId": "work1",
-    "startTier": 2
+    "startTier": 3
   }'
 # startTier: 1=T1 (focus), 2=T2 (review), 3=T3 (background), 4=T4 (lowest)
+```
+
+**Link Trello card to session (task record):**
+```bash
+curl -sS -X PUT "http://localhost:3000/api/process/task-records/session:zoo-game-work1-claude" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tier": 3,
+    "ticketProvider": "trello",
+    "ticketCardId": "CARD_ID",
+    "ticketBoardId": "BOARD_ID",
+    "ticketCardUrl": "https://trello.com/c/SHORTLINK",
+    "ticketTitle": "Card title here"
+  }'
 ```
 
 **Common mistakes to avoid:**
