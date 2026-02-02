@@ -10,7 +10,7 @@ class Dashboard {
     this._escHandler = null;
   }
 
-  async show() {
+	  async show() {
     console.log('Showing dashboard...');
 
     // Initialize Quick Links if available
@@ -32,16 +32,24 @@ class Dashboard {
     // Request workspaces from server (with refresh to reload from disk)
     this.orchestrator.socket.emit('list-workspaces', { refresh: true });
 
-    // Wait for workspace data
-    this.orchestrator.socket.once('workspaces-list', (workspaces) => {
-      console.log('Received workspaces:', workspaces);
-      this.workspaces = workspaces;
-      // Also update orchestrator's cached list
-      this.orchestrator.availableWorkspaces = workspaces;
-      this.render();
-      this.isVisible = true;
-    });
-  }
+	    // Wait for workspace data
+	    this.orchestrator.socket.once('workspaces-list', (workspaces) => {
+	      console.log('Received workspaces:', workspaces);
+	      this.workspaces = workspaces;
+	      // Also update orchestrator's cached list
+	      this.orchestrator.availableWorkspaces = workspaces;
+	      try {
+	        const withHealth = Array.isArray(workspaces) ? workspaces : [];
+	        const noisy = withHealth.filter((w) => (w?.health && (w.health.removedTerminals?.length || w.health.dedupedTerminalIds?.length)));
+	        if (noisy.length) {
+	          const count = noisy.reduce((sum, w) => sum + Number(w.health?.removedTerminals?.length || 0), 0);
+	          this.orchestrator.showToast?.(`Cleaned ${count} stale terminal entries from workspace configs`, 'info');
+	        }
+	      } catch {}
+	      this.render();
+	      this.isVisible = true;
+	    });
+	  }
 
   hide() {
     const dashboard = document.getElementById('dashboard-container');
@@ -2913,20 +2921,30 @@ class Dashboard {
     const terminalPairs = Array.isArray(workspace.terminals)
       ? Math.floor(workspace.terminals.length / 2)
       : (workspace.terminals?.pairs ?? 0);
-    const access = (workspace.access || 'unknown').toLowerCase();
+	    const access = (workspace.access || 'unknown').toLowerCase();
+	    const health = workspace?.health && typeof workspace.health === 'object' ? workspace.health : null;
+	    const staleCount = Number(health?.staleCandidates?.length || 0);
+	    const removedCount = Number(health?.removedTerminals?.length || 0);
+	    const dedupedCount = Number(health?.dedupedTerminalIds?.length || 0);
+	    const fixedCount = Number(health?.fixedWorktreePaths?.length || 0);
+	    const warnCount = staleCount + removedCount + dedupedCount;
+	    const warnChip = warnCount
+	      ? `<span class="process-chip level-warn" title="Workspace has stale/invalid terminal entries">⚠ ${warnCount}</span>`
+	      : '';
 
-    return `
-      <div class="workspace-card ${isActive ? 'active' : ''}" data-workspace-id="${workspace.id}">
-        <div class="workspace-card-header">
-          <span class="workspace-icon">${workspace.icon}</span>
-          <div class="workspace-info">
-            <h3>${workspace.name}</h3>
-            <p class="workspace-type">${this.getWorkspaceTypeLabel(workspace.type)}</p>
-          </div>
-        </div>
+	    return `
+	      <div class="workspace-card ${isActive ? 'active' : ''}" data-workspace-id="${workspace.id}">
+	        <div class="workspace-card-header">
+	          <span class="workspace-icon">${workspace.icon}</span>
+	          <div class="workspace-info">
+	            <h3>${workspace.name}</h3>
+	            <p class="workspace-type">${this.getWorkspaceTypeLabel(workspace.type)}</p>
+	          </div>
+	          ${warnChip}
+	        </div>
 
-        <div class="workspace-card-body">
-          <div class="workspace-stats">
+	        <div class="workspace-card-body">
+	          <div class="workspace-stats">
             <div class="stat">
               <span class="stat-value">${activityCount}</span>
               <span class="stat-label">active</span>
@@ -2937,26 +2955,44 @@ class Dashboard {
             </div>
           </div>
 
-          <div class="workspace-meta">
-            <p class="last-used">${lastUsed}</p>
-            <p class="access-level">${this.getAccessLevelIcon(access)} ${access}</p>
-          </div>
-        </div>
+	          <div class="workspace-meta">
+	            <p class="last-used">${lastUsed}</p>
+	            <p class="access-level">${this.getAccessLevelIcon(access)} ${access}</p>
+	          </div>
 
-        <div class="workspace-card-footer">
-          <button class="btn-primary workspace-open-btn">
-            Open Workspace
-          </button>
-          <button class="btn-secondary workspace-export-btn" title="Export workspace config (JSON)">
-            ⬇
-          </button>
-          <button class="btn-danger workspace-delete-btn" title="Delete workspace (keeps worktrees)">
-            🗑️
-          </button>
-        </div>
-      </div>
-    `;
-  }
+	          ${warnCount ? `
+	            <div class="workspace-health" style="margin-top:10px; padding:8px 10px; border:1px solid var(--border-color); border-radius:10px; background: rgba(245, 158, 11, 0.08);">
+	              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+	                <div style="opacity:0.9;">
+	                  <strong>Workspace cleanup</strong>
+	                  <span style="opacity:0.85; margin-left:8px;">
+	                    ${removedCount ? `${removedCount} removed` : ''}${removedCount && dedupedCount ? ' • ' : ''}${dedupedCount ? `${dedupedCount} deduped` : ''}${(removedCount || dedupedCount) && staleCount ? ' • ' : ''}${staleCount ? `${staleCount} stale` : ''}
+	                  </span>
+	                </div>
+	                <button class="btn-secondary workspace-cleanup-btn" type="button" title="Remove stale/invalid terminals from this workspace config">🧹 Clean</button>
+	              </div>
+	              ${fixedCount ? `<div style="margin-top:6px; opacity:0.85;">Fixed ${fixedCount} worktree path${fixedCount === 1 ? '' : 's'}.</div>` : ''}
+	            </div>
+	          ` : ''}
+	        </div>
+
+	        <div class="workspace-card-footer">
+	          <button class="btn-primary workspace-open-btn">
+	            Open Workspace
+	          </button>
+	          <button class="btn-secondary workspace-export-btn" title="Export workspace config (JSON)">
+	            ⬇
+	          </button>
+	          <button class="btn-secondary workspace-cleanup-btn" title="Remove stale/invalid terminals from this workspace config">
+	            🧹
+	          </button>
+	          <button class="btn-danger workspace-delete-btn" title="Delete workspace (keeps worktrees)">
+	            🗑️
+	          </button>
+	        </div>
+	      </div>
+	    `;
+	  }
 
   generateCreateWorkspaceCard() {
     return `
@@ -3037,6 +3073,16 @@ class Dashboard {
       });
     });
 
+    document.querySelectorAll('.workspace-cleanup-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const card = e.target.closest('.workspace-card');
+        const workspaceId = card?.dataset?.workspaceId;
+        if (!workspaceId) return;
+        await this.cleanupWorkspaceTerminals(workspaceId);
+      });
+    });
+
     // Workspace delete handlers
     document.querySelectorAll('.workspace-delete-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -3091,6 +3137,39 @@ class Dashboard {
       }
     };
     document.addEventListener('keydown', this._escHandler);
+  }
+
+  async cleanupWorkspaceTerminals(workspaceId) {
+    const id = String(workspaceId || '').trim();
+    if (!id) return;
+    try {
+      this.orchestrator?.showToast?.('Cleaning workspace terminals…', 'info');
+      const res = await fetch(`/api/workspaces/${encodeURIComponent(id)}/cleanup-terminals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        throw new Error(String(data?.error || data?.message || 'Cleanup failed'));
+      }
+      const removed = Number(data?.health?.removedTerminals?.length || 0);
+      const deduped = Number(data?.health?.dedupedTerminalIds?.length || 0);
+      const msg = (removed || deduped)
+        ? `Cleaned ${removed} removed • ${deduped} deduped`
+        : 'No stale terminals found';
+      this.orchestrator?.showToast?.(msg, 'success');
+
+      // Refresh workspace list (from disk) so cards update.
+      this.orchestrator.socket.emit('list-workspaces', { refresh: true });
+      this.orchestrator.socket.once('workspaces-list', (workspaces) => {
+        this.workspaces = workspaces;
+        this.orchestrator.availableWorkspaces = workspaces;
+        this.render();
+      });
+    } catch (err) {
+      this.orchestrator?.showToast?.(`Cleanup failed: ${String(err?.message || err)}`, 'error');
+    }
   }
 
   async openWorkspace(workspaceId) {

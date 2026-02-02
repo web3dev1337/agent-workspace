@@ -902,6 +902,39 @@ app.get('/api/workspaces', (req, res) => {
   }
 });
 
+app.post('/api/workspaces/:id/cleanup-terminals', async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+
+    const ws = workspaceManager.getWorkspace(workspaceId);
+    if (!ws) return res.status(404).json({ ok: false, error: 'Workspace not found' });
+
+    const filePath = require('path').join(require('os').homedir(), '.orchestrator', 'workspaces', `${workspaceId}.json`);
+    const sanitize = workspaceManager.sanitizeWorkspaceTerminals(ws);
+    if (sanitize.changed) {
+      try {
+        await require('fs').promises.writeFile(filePath, JSON.stringify(sanitize.workspace, null, 2));
+      } catch (e) {
+        logger.warn('Failed to persist terminal cleanup', { workspaceId, error: e.message });
+      }
+      workspaceManager.workspaces.set(workspaceId, sanitize.workspace);
+      if (sanitize.health) workspaceManager.workspaceHealth.set(workspaceId, sanitize.health);
+    }
+
+    res.json({
+      ok: true,
+      changed: sanitize.changed,
+      changes: sanitize.changes,
+      health: sanitize.health || null,
+      workspace: workspaceManager.getWorkspace(workspaceId)
+    });
+  } catch (error) {
+    logger.error('Failed to cleanup terminals', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to cleanup terminals', message: error.message });
+  }
+});
+
 // Get dynamic workspace types for frontend
 app.get('/api/workspace-types', (req, res) => {
   try {
