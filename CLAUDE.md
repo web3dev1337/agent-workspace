@@ -55,6 +55,21 @@ curl -sS "https://api.trello.com/1/cards/CARD_ID/customFieldItems?key=$KEY&token
 - Codex: `codex --dangerously-bypass-approvals-and-sandbox`
 - Claude: `claude --dangerously-skip-permissions`
 
+**Launch sequence (MUST follow):**
+1. Remove all worktrees: `POST /api/workspaces/remove-worktree` for each
+2. Re-add worktrees: `POST /api/workspaces/add-mixed-worktree` for each
+3. Start agent: send launch command + `\r`
+4. Wait 3 seconds
+5. Send FULL prompt (title + ENTIRE description + workflow)
+6. Send `\r` to submit
+7. Move Trello card to Doing list
+
+**Common mistakes to avoid:**
+- NEVER truncate/summarize descriptions - user wrote detailed prompts!
+- ALWAYS check agent field BEFORE launching (Codex vs Claude)
+- Stop-session doesn't fully clear - use remove-worktree + re-add
+- Sessions are paired (claude+server) - remove both via worktree
+
 ## 🚨 STOP! DO THIS FIRST BEFORE ANYTHING ELSE! 🚨
 
 ### THE VERY FIRST THING YOU MUST DO (NO EXCEPTIONS):
