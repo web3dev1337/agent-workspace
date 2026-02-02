@@ -14,7 +14,7 @@ const isMarkdownFile = (path) => {
   return lower.endsWith('.md') || lower.endsWith('.markdown');
 };
 
-const SmartDiffViewer = ({ data }) => {
+const SmartDiffViewer = ({ data, initialFilePath = '' }) => {
   const { theme, setTheme } = useTheme();
   const [selectedFile, setSelectedFile] = useState(null);
   const [reviewState, setReviewState] = useState({});
@@ -89,15 +89,24 @@ const SmartDiffViewer = ({ data }) => {
     };
   }) || [];
 
-  // Auto-select first file
+  // Auto-select initial file (URL deep link), else first file
   useEffect(() => {
     if (files.length > 0 && !selectedFile) {
+      const target = String(initialFilePath || '').trim();
+      if (target) {
+        const match = files.find((f) => f?.path === target || f?.filename === target);
+        if (match) {
+          setSelectedFile(match);
+          return;
+        }
+      }
+
       console.log('🔍 First file structure:', files[0]);
       console.log('🔍 Has analysis?', !!files[0].analysis);
       console.log('🔍 Has patch?', !!files[0].patch);
       setSelectedFile(files[0]);
     }
-  }, [files]);
+  }, [files, initialFilePath]);
 
   // When switching files via wheel navigation, adjust scroll to the correct edge.
   useEffect(() => {
