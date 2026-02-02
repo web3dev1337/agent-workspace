@@ -1,11 +1,20 @@
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const util = require('util');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const winston = require('winston');
 
-const execAsync = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
+
+const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024; // 10MB
+
+async function execFileSafe(command, args, options = {}) {
+  return execFileAsync(command, args, {
+    ...options,
+    maxBuffer: options.maxBuffer ?? DEFAULT_MAX_BUFFER
+  });
+}
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -78,6 +87,34 @@ class GitHelper {
 
     return { ok: true, reason: null, normalized };
   }
+
+  gitEnv(extraEnv = {}) {
+    return {
+      ...process.env,
+      // Ignore system git config for security, but do not override HOME:
+      // overriding HOME prevents reading user-level git config (e.g. safe.directory),
+      // which can cause branch detection to fail and leave UI stuck on "unknown".
+      GIT_CONFIG_NOSYSTEM: '1',
+      HOME: process.env.HOME || os.homedir(),
+      ...extraEnv
+    };
+  }
+
+  async execGit(args, { cwd, timeout } = {}) {
+    return execFileSafe('git', args, {
+      cwd,
+      timeout: timeout ?? GIT_COMMAND_TIMEOUT_MS,
+      env: this.gitEnv()
+    });
+  }
+
+  async execGh(args, { cwd, timeout, env } = {}) {
+    return execFileSafe('gh', args, {
+      cwd,
+      timeout: timeout ?? GIT_LONG_COMMAND_TIMEOUT_MS,
+      env: { ...process.env, ...(env || {}) }
+    });
+  }
   
   async getCurrentBranch(worktreePath, skipCache = false) {
     logger.info('🔍 getCurrentBranch called', { 
@@ -95,7 +132,7 @@ class GitHelper {
     
     // Check cache first (unless explicitly skipped)
     if (!skipCache) {
-      const cached = this.getCachedBranch(worktreePath);
+      const cached = this.getCachedBranch(state.normalized);
       if (cached) {
         logger.debug('Using cached branch', { path: worktreePath, branch: cached });
         return cached;
@@ -104,17 +141,9 @@ class GitHelper {
     
     try {
       // Use git to get current branch
-      const { stdout, stderr } = await execAsync('git rev-parse --abbrev-ref HEAD', {
+      const { stdout, stderr } = await this.execGit(['rev-parse', '--abbrev-ref', 'HEAD'], {
         cwd: state.normalized,
-        timeout: GIT_COMMAND_TIMEOUT_MS,
-        env: {
-          ...process.env,
-          // Ignore system git config for security, but do not override HOME:
-          // overriding HOME prevents reading user-level git config (e.g. safe.directory),
-          // which can cause branch detection to fail and leave UI stuck on "unknown".
-          GIT_CONFIG_NOSYSTEM: '1',
-          HOME: process.env.HOME || os.homedir()
-        }
+        timeout: GIT_COMMAND_TIMEOUT_MS
       });
       
       if (stderr) {
@@ -130,13 +159,13 @@ class GitHelper {
       // Handle detached HEAD state
       if (branch === 'HEAD') {
         // Try to get commit hash instead
-        const { stdout: commitHash } = await execAsync('git rev-parse --short HEAD', {
-          cwd: worktreePath,
+        const { stdout: commitHash } = await this.execGit(['rev-parse', '--short', 'HEAD'], {
+          cwd: state.normalized,
           timeout: 5000
         });
         
         const shortHash = commitHash.trim();
-        this.setCachedBranch(worktreePath, `detached@${shortHash}`);
+        this.setCachedBranch(state.normalized, `detached@${shortHash}`);
         return `detached@${shortHash}`;
       }
       
@@ -151,7 +180,7 @@ class GitHelper {
       });
       
       // Check if it's not a git repository
-      if (error.message.includes('not a git repository')) {
+      if (String(error?.message || '').includes('not a git repository')) {
         return 'no-git';
       }
       
@@ -167,10 +196,7 @@ class GitHelper {
     }
     
     try {
-      const { stdout } = await execAsync('git status --porcelain', {
-        cwd: state.normalized,
-        timeout: 5000
-      });
+      const { stdout } = await this.execGit(['status', '--porcelain'], { cwd: state.normalized, timeout: 5000 });
       
       const lines = stdout.trim().split('\n').filter(line => line.length > 0);
       
@@ -200,13 +226,8 @@ class GitHelper {
     }
     
     try {
-      const { stdout } = await execAsync(
-        `git log --oneline -${count}`,
-        {
-          cwd: state.normalized,
-          timeout: 5000
-        }
-      );
+      const safeCount = Math.max(1, Math.min(Number(count) || 5, 50));
+      const { stdout } = await this.execGit(['log', '--oneline', `-${safeCount}`], { cwd: state.normalized, timeout: 5000 });
       
       const commits = stdout.trim().split('\n').map(line => {
         const [hash, ...messageParts] = line.split(' ');
@@ -240,10 +261,7 @@ class GitHelper {
     }
     
     try {
-      await execAsync(`git checkout ${branchName}`, {
-        cwd: state.normalized,
-        timeout: 10000
-      });
+      await this.execGit(['checkout', branchName], { cwd: state.normalized, timeout: 10000 });
       
       // Clear cache for this path
       this.branchCache.delete(state.normalized);
@@ -269,15 +287,7 @@ class GitHelper {
     }
     
     try {
-      const { stdout } = await execAsync('git remote get-url origin', {
-        cwd: state.normalized,
-        timeout: GIT_COMMAND_TIMEOUT_MS,
-        env: {
-          ...process.env,
-          GIT_CONFIG_NOSYSTEM: '1',
-          HOME: process.env.HOME || os.homedir()
-        }
-      });
+      const { stdout } = await this.execGit(['remote', 'get-url', 'origin'], { cwd: state.normalized, timeout: GIT_COMMAND_TIMEOUT_MS });
       
       const remoteUrl = stdout.trim();
       
@@ -332,13 +342,10 @@ class GitHelper {
       
       // Use GitHub CLI if available, otherwise use GitHub API directly
       try {
-        const { stdout } = await execAsync(`gh pr list --head ${branch} --json url --jq '.[0].url'`, {
-          timeout: GIT_LONG_COMMAND_TIMEOUT_MS,
-          env: {
-            ...process.env,
-            GH_REPO: `${owner}/${repo}`
-          }
-        });
+        const { stdout } = await this.execGh(
+          ['pr', 'list', '--head', branch, '--json', 'url', '--jq', '.[0].url'],
+          { timeout: GIT_LONG_COMMAND_TIMEOUT_MS, env: { GH_REPO: `${owner}/${repo}` } }
+        );
         
         const prUrl = stdout.trim();
         if (prUrl && prUrl !== 'null' && prUrl.startsWith('https://github.com')) {
@@ -412,10 +419,7 @@ class GitHelper {
     
     try {
       // Try to get the default branch from remote
-      const { stdout } = await execAsync('git symbolic-ref refs/remotes/origin/HEAD', {
-        cwd: state.normalized,
-        timeout: 5000
-      });
+      const { stdout } = await this.execGit(['symbolic-ref', 'refs/remotes/origin/HEAD'], { cwd: state.normalized, timeout: 5000 });
       
       // Extract branch name from refs/remotes/origin/main or refs/remotes/origin/master
       const defaultBranch = stdout.trim().replace('refs/remotes/origin/', '');
@@ -425,10 +429,7 @@ class GitHelper {
     } catch (error) {
       // If that fails, try to check if main or master exists
       try {
-        await execAsync('git show-ref --verify --quiet refs/heads/main', {
-          cwd: state.normalized,
-          timeout: 5000
-        });
+        await this.execGit(['show-ref', '--verify', '--quiet', 'refs/heads/main'], { cwd: state.normalized, timeout: 5000 });
         return 'main';
       } catch {
         // Default to master if main doesn't exist
