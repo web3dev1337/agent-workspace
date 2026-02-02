@@ -128,12 +128,13 @@ class UserSettingsService {
             // Local-only by default (stored in user-settings.json).
             boardMappings: {},
             // Keyed by `${provider}:${boardId}` -> conventions/config:
-	            // {
-	            //   doneListId?: string,
-	            //   mergedCommentTemplate?: string,
-	            //   mergedLabelNames?: string,
-	            //   mergedChecklistName?: string,
-	            //   mergedChecklistItemTemplate?: string,
+		            // {
+		            //   doneListId?: string,
+		            //   forTestListId?: string,
+		            //   mergedCommentTemplate?: string,
+		            //   mergedLabelNames?: string,
+		            //   mergedChecklistName?: string,
+		            //   mergedChecklistItemTemplate?: string,
 	            //   dependencyChecklistName?: string,
 	            //   tierFromLabels?: boolean,
 	            //   tierByLabelColor?: { [color: string]: 1|2|3|4 },
@@ -150,21 +151,23 @@ class UserSettingsService {
               // Which preset is currently active (purely for UI convenience).
               activePresetId: ''
             },
-	            automations: {
-	              trello: {
-	                onPrMerged: {
-	                  enabled: false,
-	                  pollEnabled: true,
-	                  webhookEnabled: false,
-	                  comment: true,
-	                  // Supports placeholders like {prUrl}, {mergedAt}, {reviewOutcome}, {verifyMinutes}, {notes}, {promptRef}.
-	                  commentTemplate: 'Merged ✅\nPR: {prUrl}',
-	                  moveToDoneList: true,
-	                  closeIfNoDoneList: false,
-	                  pollMs: 60_000
-	                }
-	              }
-	            },
+		            automations: {
+		              trello: {
+		                onPrMerged: {
+		                  enabled: false,
+		                  pollEnabled: true,
+		                  webhookEnabled: false,
+		                  comment: true,
+		                  // Supports placeholders like {prUrl}, {mergedAt}, {reviewOutcome}, {verifyMinutes}, {notes}, {promptRef}.
+		                  commentTemplate: 'Merged ✅\nPR: {prUrl}',
+		                  moveToDoneList: true,
+		                  // Optional: override list choice (defaults to done list). Values: 'done' | 'for_test' | 'none'
+		                  moveTarget: 'done',
+		                  closeIfNoDoneList: false,
+		                  pollMs: 60_000
+		                }
+		              }
+		            },
             kanban: {
               // Persist kanban UI state server-side (survives refresh and works across ports/origins).
               // Keyed by `${provider}:${boardId}` -> string[] listIds

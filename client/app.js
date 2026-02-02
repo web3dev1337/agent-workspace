@@ -12892,7 +12892,7 @@ class ClaudeOrchestrator {
 		      });
 		    };
 
-			    const renderBoardConventions = async ({ boardId } = {}) => {
+				    const renderBoardConventions = async ({ boardId } = {}) => {
 			      const effectiveBoardId = String(boardId || state.boardId || '').trim();
 			      if (!effectiveBoardId || effectiveBoardId === ALL_BOARDS_ID || effectiveBoardId === COMBINED_VIEW_ID) {
 			        detailEl.innerHTML = `<div class="tasks-detail-empty">Select a board to edit conventions.</div>`;
@@ -12904,14 +12904,15 @@ class ClaudeOrchestrator {
 			      const boardName = ((Array.isArray(state.boards) ? state.boards : []).find(b => b.id === effectiveBoardId)?.name) || effectiveBoardId;
 			      const conv = getBoardConventions(state.provider, effectiveBoardId) || {};
 
-			      const safeChecklistName = String(conv?.dependencyChecklistName || '').trim() || 'Dependencies';
-			      const doneListId = String(conv?.doneListId || '').trim();
-            const mergedCommentTemplate = String(conv?.mergedCommentTemplate || '').trim();
-            const mergedLabelNames = String(conv?.mergedLabelNames || '').trim();
-            const mergedChecklistName = String(conv?.mergedChecklistName || '').trim();
-            const mergedChecklistItemTemplate = String(conv?.mergedChecklistItemTemplate || '').trim();
-			      const tierFromLabels = conv?.tierFromLabels === true;
-			      const needsFixLabelName = String(conv?.needsFixLabelName || '').trim();
+				      const safeChecklistName = String(conv?.dependencyChecklistName || '').trim() || 'Dependencies';
+				      const doneListId = String(conv?.doneListId || '').trim();
+              const forTestListId = String(conv?.forTestListId || '').trim();
+	            const mergedCommentTemplate = String(conv?.mergedCommentTemplate || '').trim();
+	            const mergedLabelNames = String(conv?.mergedLabelNames || '').trim();
+	            const mergedChecklistName = String(conv?.mergedChecklistName || '').trim();
+	            const mergedChecklistItemTemplate = String(conv?.mergedChecklistItemTemplate || '').trim();
+				      const tierFromLabels = conv?.tierFromLabels === true;
+				      const needsFixLabelName = String(conv?.needsFixLabelName || '').trim();
 			      const tierByLabelColor = conv?.tierByLabelColor && typeof conv.tierByLabelColor === 'object' && !Array.isArray(conv.tierByLabelColor)
 			        ? conv.tierByLabelColor
 			        : {};
@@ -12925,21 +12926,34 @@ class ClaudeOrchestrator {
 		        <option value="4" ${selected === '4' ? 'selected' : ''}>T4</option>
 		      `;
 
-		      const suggestDoneListId = (lists) => {
-		        const arr = Array.isArray(lists) ? lists : [];
-		        const norm = (s) => String(s || '').trim().toLowerCase();
-		        const scored = arr
-		          .map((l) => ({ id: l?.id || '', name: norm(l?.name || '') }))
-		          .filter((l) => !!l.id && !!l.name);
-		        const firstMatch = (re) => scored.find((l) => re.test(l.name))?.id || null;
-		        return (
-		          firstMatch(/\\b(merged|shipped|released)\\b/) ||
-		          firstMatch(/\\b(done|complete|completed)\\b/) ||
-		          null
-		        );
-		      };
+			      const suggestDoneListId = (lists) => {
+			        const arr = Array.isArray(lists) ? lists : [];
+			        const norm = (s) => String(s || '').trim().toLowerCase();
+			        const scored = arr
+			          .map((l) => ({ id: l?.id || '', name: norm(l?.name || '') }))
+			          .filter((l) => !!l.id && !!l.name);
+			        const firstMatch = (re) => scored.find((l) => re.test(l.name))?.id || null;
+			        return (
+			          firstMatch(/\\b(merged|shipped|released)\\b/) ||
+			          firstMatch(/\\b(done|complete|completed)\\b/) ||
+			          null
+			        );
+			      };
 
-		      detailEl.innerHTML = `
+            const suggestForTestListId = (lists) => {
+              const arr = Array.isArray(lists) ? lists : [];
+              const norm = (s) => String(s || '').trim().toLowerCase();
+              const scored = arr
+                .map((l) => ({ id: l?.id || '', name: norm(l?.name || '') }))
+                .filter((l) => !!l.id && !!l.name);
+              const firstMatch = (re) => scored.find((l) => re.test(l.name))?.id || null;
+              return (
+                firstMatch(/\\b(for\\s*test|for\\s*qa|qa|test|testing|verify|verification)\\b/) ||
+                null
+              );
+            };
+
+			      detailEl.innerHTML = `
 		        <div class="tasks-detail-header">
 		          <div class="tasks-detail-title">Board Conventions</div>
 		          <div class="tasks-detail-actions">
@@ -12948,18 +12962,31 @@ class ClaudeOrchestrator {
 		        </div>
 		        <div class="tasks-detail-meta">${this.escapeHtml(boardName)}</div>
 
-		        <div class="tasks-detail-block">
-		          <div class="tasks-detail-block-title">PR-merge “Done” list</div>
-		          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
-		            <select id="tasks-conv-done-list" class="tasks-select tasks-select-inline" title="List to move cards to when PR merges">
-		              <option value="">(auto-detect)</option>
-		            </select>
-		            <button class="btn-secondary" id="tasks-conv-done-suggest" type="button" title="Pick a suggested Done list from current board lists">Suggest</button>
-		          </div>
-		          <div class="tasks-detail-meta" style="margin-top:8px">
-		            Used by PR-merge automation when moving Trello cards. If unset, the server uses name heuristics (merged/shipped/done).
-		          </div>
-		        </div>
+			        <div class="tasks-detail-block">
+			          <div class="tasks-detail-block-title">PR-merge “Done” list</div>
+			          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+			            <select id="tasks-conv-done-list" class="tasks-select tasks-select-inline" title="List to move cards to when PR merges">
+			              <option value="">(auto-detect)</option>
+			            </select>
+			            <button class="btn-secondary" id="tasks-conv-done-suggest" type="button" title="Pick a suggested Done list from current board lists">Suggest</button>
+			          </div>
+			          <div class="tasks-detail-meta" style="margin-top:8px">
+			            Used by PR-merge automation when moving Trello cards. If unset, the server uses name heuristics (merged/shipped/done).
+			          </div>
+			        </div>
+
+              <div class="tasks-detail-block">
+                <div class="tasks-detail-block-title">PR-merge “For Test” list (optional)</div>
+                <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
+                  <select id="tasks-conv-for-test-list" class="tasks-select tasks-select-inline" title="List to move cards to when PR merges (For Test)">
+                    <option value="">(auto-detect)</option>
+                  </select>
+                  <button class="btn-secondary" id="tasks-conv-for-test-suggest" type="button" title="Pick a suggested For Test list from current board lists">Suggest</button>
+                </div>
+                <div class="tasks-detail-meta" style="margin-top:8px">
+                  If configured, you can choose to move merged cards to “For Test” instead of Done via Settings → Automations.
+                </div>
+              </div>
 
 		        <div class="tasks-detail-block">
 		          <div class="tasks-detail-block-title">PR-merge comment template</div>
@@ -13049,9 +13076,11 @@ class ClaudeOrchestrator {
 		        renderBoardSettings({ boardId: effectiveBoardId });
 		      });
 
-		      const doneSelect = detailEl.querySelector('#tasks-conv-done-list');
-		      const suggestBtn = detailEl.querySelector('#tasks-conv-done-suggest');
-		      const saveBtn = detailEl.querySelector('#tasks-conv-save');
+			      const doneSelect = detailEl.querySelector('#tasks-conv-done-list');
+			      const suggestBtn = detailEl.querySelector('#tasks-conv-done-suggest');
+            const forTestSelect = detailEl.querySelector('#tasks-conv-for-test-list');
+            const forTestSuggestBtn = detailEl.querySelector('#tasks-conv-for-test-suggest');
+			      const saveBtn = detailEl.querySelector('#tasks-conv-save');
 
 		      let lists = [];
 		      try {
@@ -13061,32 +13090,50 @@ class ClaudeOrchestrator {
 		        lists = [];
 		      }
 
-		      if (doneSelect) {
-		        for (const l of lists) {
-		          if (!l?.id) continue;
-		          const opt = document.createElement('option');
-		          opt.value = l.id;
-		          opt.textContent = l.name || l.id;
-		          doneSelect.appendChild(opt);
-		        }
-		        if (doneListId) doneSelect.value = doneListId;
-		      }
+			      if (doneSelect) {
+			        for (const l of lists) {
+			          if (!l?.id) continue;
+			          const opt = document.createElement('option');
+			          opt.value = l.id;
+			          opt.textContent = l.name || l.id;
+			          doneSelect.appendChild(opt);
+			        }
+			        if (doneListId) doneSelect.value = doneListId;
+			      }
 
-		      suggestBtn?.addEventListener('click', () => {
-		        const suggested = suggestDoneListId(lists);
-		        if (doneSelect && suggested) doneSelect.value = suggested;
-		        if (!suggested) this.showToast('No Done list suggestion found', 'info');
-		      });
+            if (forTestSelect) {
+              for (const l of lists) {
+                if (!l?.id) continue;
+                const opt = document.createElement('option');
+                opt.value = l.id;
+                opt.textContent = l.name || l.id;
+                forTestSelect.appendChild(opt);
+              }
+              if (forTestListId) forTestSelect.value = forTestListId;
+            }
 
-			      saveBtn?.addEventListener('click', async () => {
+			      suggestBtn?.addEventListener('click', () => {
+			        const suggested = suggestDoneListId(lists);
+			        if (doneSelect && suggested) doneSelect.value = suggested;
+			        if (!suggested) this.showToast('No Done list suggestion found', 'info');
+			      });
+
+            forTestSuggestBtn?.addEventListener('click', () => {
+              const suggested = suggestForTestListId(lists);
+              if (forTestSelect && suggested) forTestSelect.value = suggested;
+              if (!suggested) this.showToast('No For Test list suggestion found', 'info');
+            });
+
+				      saveBtn?.addEventListener('click', async () => {
 			        try {
 			          if (saveBtn) saveBtn.disabled = true;
 
-			          const doneListIdNext = String(doneSelect?.value || '').trim() || null;
-                const mergedCommentTemplateNext = String(detailEl.querySelector('#tasks-conv-merged-comment-template')?.value || '').trim() || null;
-                const mergedLabelNamesNext = String(detailEl.querySelector('#tasks-conv-merged-label-names')?.value || '').trim() || null;
-                const mergedChecklistNameNext = String(detailEl.querySelector('#tasks-conv-merged-checklist-name')?.value || '').trim() || null;
-                const mergedChecklistItemTemplateNext = String(detailEl.querySelector('#tasks-conv-merged-checklist-item-template')?.value || '').trim() || null;
+				          const doneListIdNext = String(doneSelect?.value || '').trim() || null;
+                  const forTestListIdNext = String(forTestSelect?.value || '').trim() || null;
+	                const mergedCommentTemplateNext = String(detailEl.querySelector('#tasks-conv-merged-comment-template')?.value || '').trim() || null;
+	                const mergedLabelNamesNext = String(detailEl.querySelector('#tasks-conv-merged-label-names')?.value || '').trim() || null;
+	                const mergedChecklistNameNext = String(detailEl.querySelector('#tasks-conv-merged-checklist-name')?.value || '').trim() || null;
+	                const mergedChecklistItemTemplateNext = String(detailEl.querySelector('#tasks-conv-merged-checklist-item-template')?.value || '').trim() || null;
 			          const depsNameNext = String(detailEl.querySelector('#tasks-conv-deps-name')?.value || '').trim() || null;
 			          const tierFromLabelsNext = !!detailEl.querySelector('#tasks-conv-tier-from-labels')?.checked;
 			          const needsFixLabelNameNext = String(detailEl.querySelector('#tasks-conv-needs-fix-label')?.value || '').trim() || null;
@@ -13099,13 +13146,14 @@ class ClaudeOrchestrator {
 		            if (v >= 1 && v <= 4) nextMap[color] = v;
 		          });
 
-			          await updateBoardConventions(state.provider, effectiveBoardId, {
-			            doneListId: doneListIdNext,
-                  mergedCommentTemplate: mergedCommentTemplateNext,
-                  mergedLabelNames: mergedLabelNamesNext,
-                  mergedChecklistName: mergedChecklistNameNext,
-                  mergedChecklistItemTemplate: mergedChecklistItemTemplateNext,
-			            dependencyChecklistName: depsNameNext,
+				          await updateBoardConventions(state.provider, effectiveBoardId, {
+				            doneListId: doneListIdNext,
+                    forTestListId: forTestListIdNext,
+	                  mergedCommentTemplate: mergedCommentTemplateNext,
+	                  mergedLabelNames: mergedLabelNamesNext,
+	                  mergedChecklistName: mergedChecklistNameNext,
+	                  mergedChecklistItemTemplate: mergedChecklistItemTemplateNext,
+				            dependencyChecklistName: depsNameNext,
 			            tierFromLabels: tierFromLabelsNext,
 			            tierByLabelColor: nextMap,
 			            needsFixLabelName: needsFixLabelNameNext

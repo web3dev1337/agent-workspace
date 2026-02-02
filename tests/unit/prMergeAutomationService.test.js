@@ -1,4 +1,4 @@
-const { PrMergeAutomationService, extractTrelloShortLinks, pickDoneListId } = require('../../server/prMergeAutomationService');
+const { PrMergeAutomationService, extractTrelloShortLinks, pickDoneListId, pickForTestListId } = require('../../server/prMergeAutomationService');
 
 describe('PrMergeAutomationService helpers', () => {
   test('extractTrelloShortLinks finds trello.com/c URLs and trello: tags', () => {
@@ -18,6 +18,16 @@ describe('PrMergeAutomationService helpers', () => {
       { id: '3', name: 'Merged' }
     ];
     expect(pickDoneListId(lists)).toBe('3');
+  });
+
+  test('pickForTestListId prefers for test/qa style lists', () => {
+    const lists = [
+      { id: '1', name: 'In Progress' },
+      { id: '2', name: 'Done' },
+      { id: '3', name: 'For Test' },
+      { id: '4', name: 'QA' }
+    ];
+    expect(pickForTestListId(lists)).toBe('3');
   });
 });
 
@@ -212,5 +222,84 @@ describe('PrMergeAutomationService webhook flow', () => {
     expect(String(comment.text || '')).toContain('Outcome: approved');
     expect(String(comment.text || '')).toContain('Verify: 12m');
     expect(String(comment.text || '')).toContain('Notes: Ran tests');
+  });
+
+  test('processMergedPullRequest can move to board For Test list when configured', async () => {
+    const records = new Map();
+    const taskRecordService = {
+      get: (id) => records.get(id) || null,
+      upsert: async (id, patch) => {
+        const prev = records.get(id) || { id };
+        records.set(id, { ...prev, ...(patch || {}), id });
+        return records.get(id);
+      }
+    };
+
+    const calls = [];
+    const provider = {
+      getCard: async ({ cardId }) => ({ id: cardId, idBoard: 'board1', url: `https://trello.com/c/${cardId}` }),
+      listLists: async () => ([
+        { id: 'lTest', name: 'For Test' },
+        { id: 'lDone', name: 'Done' }
+      ]),
+      updateCard: async ({ cardId, fields }) => {
+        calls.push({ type: 'updateCard', cardId, fields });
+        return { id: cardId };
+      },
+      addComment: async () => ({ id: 'c1' })
+    };
+
+    const taskTicketingService = { getProvider: () => provider };
+    const userSettingsService = {
+      settings: {
+        global: {
+          ui: {
+            tasks: {
+              boardConventions: {
+                'trello:board1': {
+                  doneListId: 'lDone',
+                  forTestListId: 'lTest'
+                }
+              },
+              automations: {
+                trello: {
+                  onPrMerged: {
+                    enabled: true,
+                    webhookEnabled: true,
+                    pollEnabled: false,
+                    comment: false,
+                    moveToDoneList: true,
+                    moveTarget: 'for_test',
+                    closeIfNoDoneList: false,
+                    pollMs: 60_000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    records.set('pr:acme/demo#123', {
+      id: 'pr:acme/demo#123',
+      ticketProvider: 'trello',
+      ticketCardId: 'AbC123',
+      ticketCardUrl: 'https://trello.com/c/AbC123'
+    });
+
+    const svc = new PrMergeAutomationService({ taskRecordService, taskTicketingService, userSettingsService });
+    await svc.processMergedPullRequest({
+      owner: 'acme',
+      repo: 'demo',
+      number: 123,
+      body: 'Trello: https://trello.com/c/AbC123/something',
+      mergedAt: '2026-01-27T00:00:00.000Z',
+      url: 'https://github.com/acme/demo/pull/123'
+    });
+
+    const move = calls.find((c) => c.type === 'updateCard');
+    expect(move).toBeTruthy();
+    expect(move.fields.idList).toBe('lTest');
   });
 });
