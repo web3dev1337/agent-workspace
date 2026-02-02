@@ -418,12 +418,13 @@ class ClaudeOrchestrator {
       // Hook panels that depend on socket events
       this.activityFeedPanel?.onSocketConnected?.(this.socket);
       
-      // Load user settings from server
-      await this.loadUserSettings();
-      this.syncTerminalFiltersFromUserSettings();
-      this.syncWorkflowModeFromUserSettings();
-      this.syncFocusBehaviorFromUserSettings();
-      this.syncWorktreeCreationFromUserSettings();
+	      // Load user settings from server
+	      await this.loadUserSettings();
+	      this.refreshLicenseStatus?.().catch(() => {});
+	      this.syncTerminalFiltersFromUserSettings();
+	      this.syncWorkflowModeFromUserSettings();
+	      this.syncFocusBehaviorFromUserSettings();
+	      this.syncWorktreeCreationFromUserSettings();
 
       // Load worktree tags (ready-for-review, etc.)
       await this.loadWorktreeTags();
@@ -1623,8 +1624,8 @@ class ClaudeOrchestrator {
 
     // Discord services auto-start (server-persisted)
     const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
-    if (discordAutoEnsure) {
-      discordAutoEnsure.addEventListener('change', async (e) => {
+	    if (discordAutoEnsure) {
+	      discordAutoEnsure.addEventListener('change', async (e) => {
         const enabled = !!e.target.checked;
         await this.updateGlobalUserSetting('ui.discord.autoEnsureServicesAtStartup', enabled);
         if (enabled) {
@@ -1644,11 +1645,52 @@ class ClaudeOrchestrator {
           }
         }
       });
-    }
+	    }
 
-    // Notifications panel
-    const notificationsPanel = document.getElementById('notifications-panel');
-    const toggleNotificationsPanel = () => {
+	    // License controls
+	    const licenseReload = document.getElementById('license-reload');
+	    if (licenseReload) {
+	      licenseReload.addEventListener('click', async () => {
+	        try {
+	          await fetch('/api/license/reload', {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' }
+	          });
+	        } catch {
+	          // ignore
+	        }
+	        await this.refreshLicenseStatus?.();
+	      });
+	    }
+	    const licenseSave = document.getElementById('license-save');
+	    if (licenseSave) {
+	      licenseSave.addEventListener('click', async () => {
+	        const textarea = document.getElementById('license-json');
+	        const text = String(textarea?.value || '').trim();
+	        if (!text) return;
+	        try {
+	          const res = await fetch('/api/license/set', {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ text })
+	          });
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok || data?.ok === false) {
+	            this.showToast?.(String(data?.error || data?.message || 'Failed to save license'), 'error');
+	          } else {
+	            if (textarea) textarea.value = '';
+	            this.showToast?.('License saved', 'success');
+	          }
+	        } catch (err) {
+	          this.showToast?.(`Failed to save license: ${String(err?.message || err)}`, 'error');
+	        }
+	        await this.refreshLicenseStatus?.();
+	      });
+	    }
+
+	    // Notifications panel
+	    const notificationsPanel = document.getElementById('notifications-panel');
+	    const toggleNotificationsPanel = () => {
       if (!notificationsPanel) return;
       // Only one side panel open at a time.
       document.getElementById('settings-panel')?.classList.add('hidden');
@@ -9323,7 +9365,7 @@ class ClaudeOrchestrator {
     }
   }
 
-	  getAuthToken() {
+  getAuthToken() {
     // Check URL params first
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('token');
@@ -9337,12 +9379,45 @@ class ClaudeOrchestrator {
     }
     
 	    // Check localStorage
-	    return localStorage.getItem('claude-orchestrator-token');
-	  }
+    return localStorage.getItem('claude-orchestrator-token');
+  }
 
-	  installAuthFetchShim() {
-	    if (window.__claudeOrchestratorFetchAuthInstalled) return;
-	    if (typeof window.fetch !== 'function') return;
+  async refreshLicenseStatus() {
+    const el = document.getElementById('license-status');
+    if (!el) return;
+    el.textContent = 'Loading…';
+    try {
+      const res = await fetch('/api/license/status');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        el.textContent = `License: error (${res.status})`;
+        return;
+      }
+
+      const status = data?.status || {};
+      const entitlements = data?.entitlements || {};
+      const required = data?.required === true;
+
+      const plan = String(entitlements?.plan || status?.plan || 'free');
+      const state = String(status?.status || (status?.ok ? 'active' : 'missing'));
+      const expiresAt = status?.expiresAt ? String(status.expiresAt) : '';
+
+      const bits = [
+        `Plan: ${plan}`,
+        `Status: ${state}`,
+        expiresAt ? `Expires: ${expiresAt}` : null,
+        required ? 'Required: yes' : null
+      ].filter(Boolean);
+
+      el.textContent = bits.join(' • ');
+    } catch (err) {
+      el.textContent = `License: error (${String(err?.message || err)})`;
+    }
+  }
+  
+  installAuthFetchShim() {
+    if (window.__claudeOrchestratorFetchAuthInstalled) return;
+    if (typeof window.fetch !== 'function') return;
 
 	    const originalFetch = window.fetch.bind(window);
 	    const getToken = () => {
