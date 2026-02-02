@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Claude Orchestrator</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+          "Apple Color Emoji", "Segoe UI Emoji";
+        background: #0b0f16;
+        color: rgba(255, 255, 255, 0.92);
+        display: grid;
+        place-items: center;
+        height: 100vh;
+      }
+      .card {
+        width: min(720px, calc(100vw - 48px));
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        padding: 18px 18px 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 8px;
+        font-weight: 650;
+      }
+      p {
+        margin: 0;
+        opacity: 0.85;
+        line-height: 1.5;
+      }
+      .hint {
+        margin-top: 12px;
+        opacity: 0.7;
+        font-size: 12.5px;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+          "Courier New", monospace;
+        background: rgba(255, 255, 255, 0.08);
+        padding: 2px 6px;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Starting Claude Orchestrator…</h1>
+      <p>Launching the local backend and connecting to your workspace.</p>
+      <p class="hint">
+        If this screen doesn’t advance within ~20 seconds, ensure Node is available or set
+        <code>ORCHESTRATOR_NODE_PATH</code>.
+      </p>
+    </div>
+  </body>
+</html>
+

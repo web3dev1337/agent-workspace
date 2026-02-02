@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.claude.orchestrator",
   "build": {
-    "frontendDist": "../client",
+    "frontendDist": "bootstrap",
     "devUrl": "http://localhost:2080",
     "beforeDevCommand": "",
     "beforeBuildCommand": ""
