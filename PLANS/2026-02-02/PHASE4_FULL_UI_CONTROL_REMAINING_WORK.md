@@ -8,6 +8,12 @@ This doc is the “what’s left” list after the last ~10 days of changes. Som
 
 ---
 
+## Shipped since this doc
+
+- PR #587: Review Console docks hidden terminals reliably; Diff embed defaults on; session recovery clearing fixed.
+- PR #588: Worktree Inspector 🗂 button resolves worktreePath from workspace config (mixed-repo) and falls back to PR console with a clear toast.
+- PR #589: PR Review Console Files list supports click-to-open the embedded diff viewer for that file (via `?file=...`), and “-0” is never shown for deletions.
+
 ## 0) Definitions / mental model gaps (needs UI+docs)
 
 - **Workspace** = a UI container + config (which repos/worktrees exist, which terminals/pairs exist, settings).
@@ -49,7 +55,7 @@ Work needed:
 Current state is usable, but not “one-screen batch reviewing”.
 
 Work needed:
-- Make **Diff embed always on by default**, and treat “Open in new tab” as secondary.
+- Make **Diff embed always on by default**, and treat “Open in new tab” as secondary. (DONE: PR #587)
 - Add **filter/sort controls inside Review Console** (not just Queue):
   - by tier/risk/verifyMinutes/blocked/unreviewed
   - quick “next unreviewed tier 3” navigation.
@@ -60,8 +66,8 @@ Work needed:
 - Show “PR summary” in a compact strip:
   - title, repo, branch, checks status, draft, changed files count, additions/deletions.
 - Improve file list:
-  - render +/− with consistent colors, never show “-0”
-  - add quick open-to-diff for a file (deep link into embedded diff viewer).
+  - render +/− with consistent colors, never show “-0” (DONE: PR #589)
+  - add quick open-to-diff for a file (deep link into embedded diff viewer) (DONE: PR #589)
 
 ---
 
@@ -90,11 +96,11 @@ Symptoms:
 - Button appears to do nothing in some cases.
 
 Work needed:
-- If session has no `cwd/worktreePath`, try resolving via workspace config:
+- If session has no `cwd/worktreePath`, try resolving via workspace config: (DONE: PR #588)
   - mixed-repo terminal entry path
   - inferred repo root + worktreeId.
-- When a PR exists but no local worktree exists, “Inspector” should fall back to PR console seamlessly.
-- Add a toast that explains *why* it can’t open (missing path/PR link) instead of failing silently.
+- When a PR exists but no local worktree exists, “Inspector” should fall back to PR console seamlessly. (DONE: PR #588)
+- Add a toast that explains *why* it can’t open (missing path/PR link) instead of failing silently. (DONE: PR #588)
 
 ---
 
@@ -148,4 +154,3 @@ Work needed:
 - Reduce or eliminate multiple “✕” close buttons that do different things without clarity.
 - Ensure Queue action bar never hides buttons off-screen (wrap/overflow).
 - Ensure settings panel always stays usable on short viewports.
-
