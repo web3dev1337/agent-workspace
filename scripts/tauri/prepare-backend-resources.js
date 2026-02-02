@@ -46,6 +46,10 @@ function main() {
   const srcLock = path.join(repoRoot, 'package-lock.json');
   const srcConfig = path.join(repoRoot, 'config.json');
   const srcUserDefaults = path.join(repoRoot, 'user-settings.default.json');
+  const srcLicensePublicKey =
+    process.env.ORCHESTRATOR_LICENSE_PUBLIC_KEY_PATH
+    || process.env.TAURI_LICENSE_PUBLIC_KEY_PATH
+    || path.join(repoRoot, 'license-public-key.pem');
 
   if (clean && fs.existsSync(outDir)) {
     fs.rmSync(outDir, { recursive: true, force: true });
@@ -58,6 +62,9 @@ function main() {
   if (fs.existsSync(srcLock)) copyFile(srcLock, path.join(outDir, 'package-lock.json'));
   if (fs.existsSync(srcConfig)) copyFile(srcConfig, path.join(outDir, 'config.json'));
   if (fs.existsSync(srcUserDefaults)) copyFile(srcUserDefaults, path.join(outDir, 'user-settings.default.json'));
+  if (srcLicensePublicKey && fs.existsSync(srcLicensePublicKey)) {
+    copyFile(srcLicensePublicKey, path.join(outDir, 'license-public-key.pem'));
+  }
 
   if (installProd) {
     const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';

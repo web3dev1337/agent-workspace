@@ -34,6 +34,8 @@ Thumbs.db
 
 # Security config
 config/security.json
+license-private-key.pem
+license.json
 
 # User-specific settings
 user-settings.json
