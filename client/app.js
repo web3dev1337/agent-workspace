@@ -6884,13 +6884,13 @@ class ClaudeOrchestrator {
   }
 
 	  getReviewConsoleConfig() {
-	    const cfg = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
-	      ? this.userSettings.global.ui.reviewConsole
-	      : {};
+		    const cfg = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+		      ? this.userSettings.global.ui.reviewConsole
+		      : {};
 
-	    const presetRaw = String(cfg.preset || 'review').trim().toLowerCase();
-	    const allowedPresets = new Set(['default', 'review', 'deep', 'code', 'terminals', 'custom']);
-	    const preset = allowedPresets.has(presetRaw) ? presetRaw : 'default';
+		    const presetRaw = String(cfg.preset || 'default').trim().toLowerCase();
+		    const allowedPresets = new Set(['default', 'review', 'deep', 'code', 'terminals', 'custom']);
+		    const preset = allowedPresets.has(presetRaw) ? presetRaw : 'default';
 
     const rawSections = (cfg.sections && typeof cfg.sections === 'object') ? cfg.sections : {};
     const storedSections = {
@@ -6900,14 +6900,14 @@ class ClaudeOrchestrator {
       diff: rawSections.diff !== false
     };
 
-	    const presets = {
-	      default: { terminals: true, files: true, commits: true, diff: true },
-	      // Batch-review first: terminals + diff. Files/commits are still available via toggles.
-	      review: { terminals: true, files: false, commits: false, diff: true },
-	      deep: { terminals: true, files: true, commits: true, diff: true },
-	      code: { terminals: false, files: true, commits: true, diff: true },
-	      terminals: { terminals: true, files: false, commits: false, diff: false }
-	    };
+		    const presets = {
+		      default: { terminals: true, files: true, commits: true, diff: true },
+		      // Review-focused: terminals + files + diff. Commits still available via toggles.
+		      review: { terminals: true, files: true, commits: false, diff: true },
+		      deep: { terminals: true, files: true, commits: true, diff: true },
+		      code: { terminals: false, files: true, commits: true, diff: true },
+		      terminals: { terminals: true, files: false, commits: false, diff: false }
+		    };
 
     const appliedSections = (preset !== 'custom' && presets[preset])
       ? { ...presets[preset] }
@@ -7565,8 +7565,9 @@ class ClaudeOrchestrator {
 	          );
 	        }
 
-			        return `<div class="worktree-inspector-header">${parts.join('')}</div>`;
-			      })();
+				        const headerClass = reviewConsole ? 'worktree-inspector-header review-console-header' : 'worktree-inspector-header';
+				        return `<div class="${headerClass}">${parts.join('')}</div>`;
+				      })();
 
 			      const layoutPanel = reviewConsole ? (() => {
 			        const presetBtn = (key, text, title) => {
@@ -7617,7 +7618,6 @@ class ClaudeOrchestrator {
 
 			      const reviewPanel = reviewTaskId ? `
 			        <div class="worktree-inspector-panel worktree-inspector-review-panel">
-			          <div class="worktree-inspector-panel-title">Review</div>
 			          <div class="worktree-inspector-review-controls">
 			            <button class="btn-secondary" type="button" data-review-start="true" title="Start review timer">⏱ Start</button>
 			            <button class="btn-secondary" type="button" data-review-stop="true" title="Stop review timer">⏹ Stop</button>
@@ -7628,27 +7628,30 @@ class ClaudeOrchestrator {
 			              <option value="commented" ${reviewOutcomeValue === 'commented' ? 'selected' : ''}>commented</option>
 			              <option value="skipped" ${reviewOutcomeValue === 'skipped' ? 'selected' : ''}>skipped</option>
 			            </select>
+			            <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-review-toggle-details="true" title="Show/hide notes and ticket actions">📝 Notes</button>
 			            ${reviewConsole ? `
 			              <span style="flex:1"></span>
 			              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-queue-nav="prev" title="Queue: previous item">◀ Prev</button>
 			              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-queue-nav="next" title="Queue: next item">Next ▶</button>
 			            ` : ''}
 			          </div>
-			          <div class="worktree-inspector-review-meta">
-			            <div><span style="opacity:0.8;">started:</span> <span id="worktree-inspector-review-started" class="mono">${escapeHtml(reviewStartedAt || '—')}</span></div>
-			            <div><span style="opacity:0.8;">ended:</span> <span id="worktree-inspector-review-ended" class="mono">${escapeHtml(reviewEndedAt || (reviewStartedAt ? 'running…' : '—'))}</span></div>
-			            <div><span style="opacity:0.8;">reviewed:</span> <span id="worktree-inspector-review-reviewed" class="mono">${escapeHtml(reviewedAt || '—')}</span></div>
-			          </div>
-			          <textarea class="tasks-textarea" rows="3" data-review-notes="true" placeholder="Notes / fix request…">${escapeHtml(reviewNotes)}</textarea>
-			          ${(ticketCardId || ticketCardUrl) ? `
-			            <div class="worktree-inspector-ticket-controls">
-			              <select class="tasks-select tasks-select-inline" data-ticket-list="true" disabled style="flex:1;min-width:0;">
-			                <option value="">Ticket lists…</option>
-			              </select>
-			              <button class="btn-secondary" type="button" data-ticket-move-list="true" disabled title="Move ticket to selected list">➡ Move</button>
+			          <div class="worktree-inspector-review-details ${reviewConsole ? 'hidden' : ''}" data-review-details="true">
+			            <div class="worktree-inspector-review-meta">
+			              <div><span style="opacity:0.8;">started:</span> <span id="worktree-inspector-review-started" class="mono">${escapeHtml(reviewStartedAt || '—')}</span></div>
+			              <div><span style="opacity:0.8;">ended:</span> <span id="worktree-inspector-review-ended" class="mono">${escapeHtml(reviewEndedAt || (reviewStartedAt ? 'running…' : '—'))}</span></div>
+			              <div><span style="opacity:0.8;">reviewed:</span> <span id="worktree-inspector-review-reviewed" class="mono">${escapeHtml(reviewedAt || '—')}</span></div>
 			            </div>
-			            <div class="worktree-inspector-subtle" id="worktree-inspector-ticket-status">Loading ticket lists…</div>
-			          ` : ''}
+			            <textarea class="tasks-textarea" rows="2" data-review-notes="true" placeholder="Notes / fix request…">${escapeHtml(reviewNotes)}</textarea>
+			            ${(ticketCardId || ticketCardUrl) ? `
+			              <div class="worktree-inspector-ticket-controls">
+			                <select class="tasks-select tasks-select-inline" data-ticket-list="true" disabled style="flex:1;min-width:0;">
+			                  <option value="">Ticket lists…</option>
+			                </select>
+			                <button class="btn-secondary" type="button" data-ticket-move-list="true" disabled title="Move ticket to selected list">➡ Move</button>
+			              </div>
+			              <div class="worktree-inspector-subtle" id="worktree-inspector-ticket-status">Loading ticket lists…</div>
+			            ` : ''}
+			          </div>
 			        </div>
 			      ` : '';
 
@@ -8537,14 +8540,29 @@ class ClaudeOrchestrator {
 		        if (ticketStatusEl) ticketStatusEl.textContent = String(e?.message || e);
 		      });
 
-			      const reviewStartBtn = bodyEl.querySelector('[data-review-start]');
-			      const reviewStopBtn = bodyEl.querySelector('[data-review-stop]');
-			      const reviewOutcomeEl = bodyEl.querySelector('[data-review-outcome]');
-			      const reviewNotesEl = bodyEl.querySelector('[data-review-notes]');
+				      const reviewStartBtn = bodyEl.querySelector('[data-review-start]');
+				      const reviewStopBtn = bodyEl.querySelector('[data-review-stop]');
+				      const reviewOutcomeEl = bodyEl.querySelector('[data-review-outcome]');
+				      const reviewNotesEl = bodyEl.querySelector('[data-review-notes]');
+				      const reviewToggleDetailsBtn = bodyEl.querySelector('[data-review-toggle-details]');
+				      const reviewDetailsEl = bodyEl.querySelector('[data-review-details="true"]');
 
-		      const updateTaskRecord = async (patch) => {
-		        if (!reviewTaskId) throw new Error('No task id available');
-		        const res = await fetch(`/api/process/task-records/${encodeURIComponent(reviewTaskId)}`, {
+				      if (reviewToggleDetailsBtn && reviewDetailsEl) {
+				        const sync = () => {
+				          const open = !reviewDetailsEl.classList.contains('hidden');
+				          reviewToggleDetailsBtn.classList.toggle('active', open);
+				          reviewToggleDetailsBtn.setAttribute('aria-pressed', open ? 'true' : 'false');
+				        };
+				        sync();
+				        reviewToggleDetailsBtn.addEventListener('click', () => {
+				          reviewDetailsEl.classList.toggle('hidden');
+				          sync();
+				        });
+				      }
+
+			      const updateTaskRecord = async (patch) => {
+			        if (!reviewTaskId) throw new Error('No task id available');
+			        const res = await fetch(`/api/process/task-records/${encodeURIComponent(reviewTaskId)}`, {
 		          method: 'PUT',
 		          headers: { 'Content-Type': 'application/json' },
 		          body: JSON.stringify(patch || {})
@@ -8893,9 +8911,9 @@ class ClaudeOrchestrator {
         `;
 	      };
 
-			      const rcCfg = this.getReviewConsoleConfig();
-			      let currentPreset = String(rcCfg?.preset || 'review').trim().toLowerCase();
-			      if (!['default', 'review', 'deep', 'code', 'terminals', 'custom'].includes(currentPreset)) currentPreset = 'review';
+				      const rcCfg = this.getReviewConsoleConfig();
+				      let currentPreset = String(rcCfg?.preset || 'default').trim().toLowerCase();
+				      if (!['default', 'review', 'deep', 'code', 'terminals', 'custom'].includes(currentPreset)) currentPreset = 'default';
 			      let currentFullscreen = rcCfg?.fullscreen !== false;
 			      const currentSections = {
 			        terminals: rcCfg?.sections?.terminals !== false,
@@ -8904,13 +8922,13 @@ class ClaudeOrchestrator {
 			        diff: rcCfg?.sections?.diff !== false
 			      };
 
-			      const presets = {
-			        default: { terminals: true, files: true, commits: true, diff: true },
-			        review: { terminals: true, files: false, commits: false, diff: true },
-			        deep: { terminals: true, files: true, commits: true, diff: true },
-			        code: { terminals: false, files: true, commits: true, diff: true },
-			        terminals: { terminals: true, files: false, commits: false, diff: false }
-			      };
+				      const presets = {
+				        default: { terminals: true, files: true, commits: true, diff: true },
+				        review: { terminals: true, files: true, commits: false, diff: true },
+				        deep: { terminals: true, files: true, commits: true, diff: true },
+				        code: { terminals: false, files: true, commits: true, diff: true },
+				        terminals: { terminals: true, files: false, commits: false, diff: false }
+				      };
 
 			      const layoutPanel = (() => {
 			        const btn = (key, text, title = '') => {
@@ -8929,14 +8947,14 @@ class ClaudeOrchestrator {
 			        return `
 			          <div class="worktree-inspector-panel worktree-inspector-layout-panel">
 			            <div class="worktree-inspector-layout-row">
-			              <div class="worktree-inspector-layout-label">Preset</div>
-			              <div class="worktree-inspector-layout-buttons">
-			                ${btn('review', 'Review', 'Batch review: terminals + diff')}
-			                ${btn('default', 'Default')}
-			                ${btn('deep', 'Deep')}
-			                ${btn('code', 'Code')}
-			                ${btn('terminals', 'Terminals')}
-			              </div>
+				              <div class="worktree-inspector-layout-label">Preset</div>
+				              <div class="worktree-inspector-layout-buttons">
+				                ${btn('review', 'Review', 'Batch review: terminals + files + diff')}
+				                ${btn('default', 'Default')}
+				                ${btn('deep', 'Deep')}
+				                ${btn('code', 'Code')}
+				                ${btn('terminals', 'Terminals')}
+				              </div>
 			            </div>
 			            <div class="worktree-inspector-layout-row">
 			              <div class="worktree-inspector-layout-label">Window</div>
@@ -8963,12 +8981,12 @@ class ClaudeOrchestrator {
 			      const commitsPanelHiddenClass = currentSections.commits === false ? 'hidden' : '';
 			      const diffPanelHiddenClass = currentSections.diff === false ? 'hidden' : '';
 
-			      bodyEl.innerHTML = `
-			        <div class="worktree-inspector-header">
-			          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
-		            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
-	              <strong>PR #${escapeHtml(pr.number || '')}</strong>
-              ${pr.state ? ` • <span style="opacity:0.85;">${escapeHtml(pr.state)}</span>` : ''}
+				      bodyEl.innerHTML = `
+				        <div class="worktree-inspector-header review-console-header">
+				          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
+			            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
+		              <strong>PR #${escapeHtml(pr.number || '')}</strong>
+	              ${pr.state ? ` • <span style="opacity:0.85;">${escapeHtml(pr.state)}</span>` : ''}
               ${pr.isDraft ? ' • <span style="opacity:0.85;">draft</span>' : ''}
               ${pr.headRefName ? ` • <span style="opacity:0.85;">${escapeHtml(pr.headRefName)}</span>` : ''}
             </div>
