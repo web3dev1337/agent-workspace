@@ -1787,11 +1787,15 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
 
     // Remove terminals associated with this worktree from configuration
     const updatedWorkspace = { ...workspace };
-    const originalTerminalCount = updatedWorkspace.terminals.length;
+    const originalTerminals = Array.isArray(updatedWorkspace.terminals) ? updatedWorkspace.terminals : [];
+    const originalTerminalCount = originalTerminals.length;
+    const removedTerminalIds = [];
 
-    updatedWorkspace.terminals = updatedWorkspace.terminals.filter(terminal => {
+    updatedWorkspace.terminals = originalTerminals.filter(terminal => {
       // Remove terminals that match this worktree ID (case-insensitive comparison)
-      return !terminal.id.toLowerCase().includes(worktreeId.toLowerCase());
+      const keep = !String(terminal?.id || '').toLowerCase().includes(String(worktreeId || '').toLowerCase());
+      if (!keep && terminal?.id) removedTerminalIds.push(String(terminal.id));
+      return keep;
     });
 
     const removedCount = originalTerminalCount - updatedWorkspace.terminals.length;
@@ -1811,6 +1815,17 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
     // Save updated workspace configuration
     await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
 
+    // Always clear recovery entries for removed terminals (even if the workspace isn't active).
+    try {
+      await sessionRecoveryService.loadWorkspaceState(workspaceId);
+      for (const sid of removedTerminalIds) {
+        if (!sid) continue;
+        sessionRecoveryService.clearSession(workspaceId, sid);
+      }
+    } catch {
+      // best-effort
+    }
+
     // If this is the active workspace, close sessions but DON'T reinitialize all
     if (workspaceManager.getActiveWorkspace()?.id === workspaceId) {
       // Set flag to prevent auto-restart of Claude sessions during deletion
@@ -1818,12 +1833,14 @@ app.post('/api/workspaces/remove-worktree', async (req, res) => {
       sessionManager.isWorkspaceSwitching = true;
 
       try {
-        // Close sessions for removed worktree
-        const sessionsToClose = sessionManager.getSessionsForWorktree(worktreeId);
-        sessionsToClose.forEach(sessionId => {
-          sessionManager.closeSession(sessionId, { clearRecovery: true });
-          // Emit session-closed event to remove from client UI
-          io.emit('session-closed', { sessionId });
+        // Close sessions for removed terminals by ID.
+        // Mixed-repo worktrees often use a key like `${repoName}-${worktreeId}` for config removal,
+        // while the session's internal `worktreeId` is just `workN`. Closing by removed terminal IDs
+        // prevents "agent closed but server orphaned" drift.
+        const uniqueSessionIds = Array.from(new Set(removedTerminalIds));
+        uniqueSessionIds.forEach((sessionId) => {
+          const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
+          if (ok) io.emit('session-closed', { sessionId });
         });
 
         // Update the SessionManager workspace reference without reinitializing all sessions
