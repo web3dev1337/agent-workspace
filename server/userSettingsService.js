@@ -55,10 +55,12 @@ class UserSettingsService {
             }
           }
         },
-	        ui: {
-	          theme: 'dark',
-	          skin: 'default',
-	          reviewConsole: {
+        ui: {
+          theme: 'dark',
+          skin: 'default',
+          // 0..100 (applied as 0..1 multiplier for skin tint in CSS)
+          skinIntensity: 100,
+          reviewConsole: {
 	            // Default layout intent: a batch-review surface. Keep it fullscreen and show diff by default.
 	            preset: 'review', // default | review | deep | code | terminals | custom
 	            fullscreen: true,
@@ -70,10 +72,10 @@ class UserSettingsService {
 	              diff: true
 	            }
 	          },
-	          discord: {
-	            // If enabled, the server will call POST /api/discord/ensure-services on startup
-	            // (via internal service call) to keep Claudesworth online after restarts.
-	            autoEnsureServicesAtStartup: false
+          discord: {
+            // If enabled, the server will call POST /api/discord/ensure-services on startup
+            // (via internal service call) to keep Claudesworth online after restarts.
+            autoEnsureServicesAtStartup: false
           },
           branches: {
             // Branch label rendering in Worktree list and terminal headers.

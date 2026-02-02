@@ -1301,15 +1301,33 @@ class ClaudeOrchestrator {
       this.updateGlobalUserSetting('ui.theme', e.target.value);
     });
 
-    const skinSelect = document.getElementById('skin-select');
-    if (skinSelect) {
-      skinSelect.addEventListener('change', (e) => {
-        this.settings.skin = e.target.value;
-        this.saveSettings();
-        this.applyTheme();
-        this.updateGlobalUserSetting('ui.skin', e.target.value);
-      });
-    }
+	    const skinSelect = document.getElementById('skin-select');
+	    if (skinSelect) {
+	      skinSelect.addEventListener('change', (e) => {
+	        this.settings.skin = e.target.value;
+	        this.saveSettings();
+	        this.applyTheme();
+	        this.updateGlobalUserSetting('ui.skin', e.target.value);
+	      });
+	    }
+
+	    const skinIntensityRange = document.getElementById('skin-intensity-range');
+	    const skinIntensityValue = document.getElementById('skin-intensity-value');
+	    if (skinIntensityRange) {
+	      let t = null;
+	      const apply = (raw) => {
+	        const v0 = Number(raw);
+	        const v = Number.isFinite(v0) ? Math.min(100, Math.max(0, Math.round(v0))) : 100;
+	        this.settings.skinIntensity = v;
+	        this.saveSettings();
+	        if (skinIntensityValue) skinIntensityValue.textContent = `${v}%`;
+	        this.applyTheme();
+	        if (t) clearTimeout(t);
+	        t = setTimeout(() => this.updateGlobalUserSetting('ui.skinIntensity', v), 250);
+	      };
+	      skinIntensityRange.addEventListener('input', (e) => apply(e.target.value));
+	      skinIntensityRange.addEventListener('change', (e) => apply(e.target.value));
+	    }
 
     const tasksThemeSelect = document.getElementById('tasks-theme-select');
     if (tasksThemeSelect) {
@@ -6500,59 +6518,86 @@ class ClaudeOrchestrator {
     localStorage.setItem('claude-orchestrator-settings', JSON.stringify(this.settings));
   }
   
-  applyTheme() {
-    const mode = this.settings.theme === 'light' ? 'light' : 'dark';
-    document.body.classList.toggle('light-theme', mode === 'light');
-    document.body.classList.toggle('dark-theme', mode === 'dark');
-    try { document.body.dataset.mode = mode; } catch {}
+	  applyTheme() {
+	    const mode = this.settings.theme === 'light' ? 'light' : 'dark';
+	    document.body.classList.toggle('light-theme', mode === 'light');
+	    document.body.classList.toggle('dark-theme', mode === 'dark');
+	    try { document.body.dataset.mode = mode; } catch {}
 
-    const skin = String(this.settings.skin || 'default').trim().toLowerCase() || 'default';
-    const knownSkins = this.getKnownSkins();
-    for (const s of knownSkins) {
-      document.body.classList.toggle(`skin-${s}`, skin === s);
-    }
-    try { document.body.dataset.skin = skin; } catch {}
+	    const skin = String(this.settings.skin || 'default').trim().toLowerCase() || 'default';
+	    const knownSkins = this.getKnownSkins();
+	    for (const s of knownSkins) {
+	      document.body.classList.toggle(`skin-${s}`, skin === s);
+	    }
+	    try { document.body.dataset.skin = skin; } catch {}
 
-    // Keep terminals visually consistent with UI theme.
-    this.terminalManager?.updateTheme?.(this.settings.theme);
-  }
+	    const intensityRaw = Number(
+	      this.settings.skinIntensity
+	      ?? this.userSettings?.global?.ui?.skinIntensity
+	      ?? 100
+	    );
+	    const intensity = Number.isFinite(intensityRaw) ? Math.min(100, Math.max(0, Math.round(intensityRaw))) : 100;
+	    const scalar = Math.min(1, Math.max(0, intensity / 100));
+	    try {
+	      document.body.style.setProperty('--skin-intensity', String(scalar));
+	      document.body.dataset.skinIntensity = String(intensity);
+	    } catch {}
 
-  applyThemeFromUserSettings() {
-    const userTheme = this.userSettings?.global?.ui?.theme;
-    if (userTheme !== 'dark' && userTheme !== 'light') return;
-    const userSkin = this.userSettings?.global?.ui?.skin;
-    const nextSkin = this.getKnownSkins().includes(userSkin) ? userSkin : (this.settings.skin || 'default');
-    if (this.settings.theme === userTheme && this.settings.skin === nextSkin) return;
+	    // Keep terminals visually consistent with UI theme.
+	    this.terminalManager?.updateTheme?.(this.settings.theme);
+	  }
 
-    this.settings.theme = userTheme;
-    this.settings.skin = nextSkin;
-    this.saveSettings();
-    this.applyTheme();
+	  applyThemeFromUserSettings() {
+	    const userTheme = this.userSettings?.global?.ui?.theme;
+	    if (userTheme !== 'dark' && userTheme !== 'light') return;
+	    const userSkin = this.userSettings?.global?.ui?.skin;
+	    const nextSkin = this.getKnownSkins().includes(userSkin) ? userSkin : (this.settings.skin || 'default');
+	    const rawIntensity = Number(this.userSettings?.global?.ui?.skinIntensity);
+	    const nextIntensity = Number.isFinite(rawIntensity) ? Math.min(100, Math.max(0, Math.round(rawIntensity))) : (Number(this.settings.skinIntensity) || 100);
+	    if (this.settings.theme === userTheme && this.settings.skin === nextSkin && Number(this.settings.skinIntensity || 100) === nextIntensity) return;
 
-    const themeSelect = document.getElementById('theme-select');
-    if (themeSelect) themeSelect.value = userTheme;
-    const skinSelect = document.getElementById('skin-select');
-    if (skinSelect) skinSelect.value = nextSkin;
-  }
+	    this.settings.theme = userTheme;
+	    this.settings.skin = nextSkin;
+	    this.settings.skinIntensity = nextIntensity;
+	    this.saveSettings();
+	    this.applyTheme();
+
+	    const themeSelect = document.getElementById('theme-select');
+	    if (themeSelect) themeSelect.value = userTheme;
+	    const skinSelect = document.getElementById('skin-select');
+	    if (skinSelect) skinSelect.value = nextSkin;
+	    const skinIntensityRange = document.getElementById('skin-intensity-range');
+	    if (skinIntensityRange) skinIntensityRange.value = String(nextIntensity);
+	    const skinIntensityValue = document.getElementById('skin-intensity-value');
+	    if (skinIntensityValue) skinIntensityValue.textContent = `${nextIntensity}%`;
+	  }
 
   getKnownSkins() {
     return ['default', 'blue', 'purple', 'emerald', 'amber'];
   }
   
-  syncSettingsUI() {
-    // Sync checkbox states with settings
-    document.getElementById('enable-notifications').checked = this.settings.notifications;
-    document.getElementById('enable-sounds').checked = this.settings.sounds;
-    document.getElementById('auto-scroll').checked = this.settings.autoScroll;
-    document.getElementById('theme-select').value = this.settings.theme;
-    const skinSelect = document.getElementById('skin-select');
-    if (skinSelect) skinSelect.value = this.settings.skin || 'default';
-    
-    // Sync user settings UI if loaded
-    if (this.userSettings) {
-      this.syncUserSettingsUI();
-    }
-  }
+	  syncSettingsUI() {
+	    // Sync checkbox states with settings
+	    document.getElementById('enable-notifications').checked = this.settings.notifications;
+	    document.getElementById('enable-sounds').checked = this.settings.sounds;
+	    document.getElementById('auto-scroll').checked = this.settings.autoScroll;
+	    document.getElementById('theme-select').value = this.settings.theme;
+	    const skinSelect = document.getElementById('skin-select');
+	    if (skinSelect) skinSelect.value = this.settings.skin || 'default';
+	    const skinIntensityRange = document.getElementById('skin-intensity-range');
+	    if (skinIntensityRange) {
+	      const v0 = Number(this.settings.skinIntensity);
+	      const v = Number.isFinite(v0) ? Math.min(100, Math.max(0, Math.round(v0))) : 100;
+	      skinIntensityRange.value = String(v);
+	      const label = document.getElementById('skin-intensity-value');
+	      if (label) label.textContent = `${v}%`;
+	    }
+	    
+	    // Sync user settings UI if loaded
+	    if (this.userSettings) {
+	      this.syncUserSettingsUI();
+	    }
+	  }
   
 	  showCodeReviewDropdown(sessionId) {
     // Close any existing dropdowns
@@ -10335,11 +10380,20 @@ class ClaudeOrchestrator {
       }
     }
 
-    const skinSelect = document.getElementById('skin-select');
-    if (skinSelect) {
-      const skin = this.userSettings.global?.ui?.skin;
-      skinSelect.value = this.getKnownSkins().includes(skin) ? skin : 'default';
-    }
+	    const skinSelect = document.getElementById('skin-select');
+	    if (skinSelect) {
+	      const skin = this.userSettings.global?.ui?.skin;
+	      skinSelect.value = this.getKnownSkins().includes(skin) ? skin : 'default';
+	    }
+
+	    const skinIntensityRange = document.getElementById('skin-intensity-range');
+	    const skinIntensityValue = document.getElementById('skin-intensity-value');
+	    if (skinIntensityRange) {
+	      const raw = Number(this.userSettings.global?.ui?.skinIntensity);
+	      const v = Number.isFinite(raw) ? Math.min(100, Math.max(0, Math.round(raw))) : 100;
+	      skinIntensityRange.value = String(v);
+	      if (skinIntensityValue) skinIntensityValue.textContent = `${v}%`;
+	    }
 
     const tasksThemeSelect = document.getElementById('tasks-theme-select');
     if (tasksThemeSelect) {
