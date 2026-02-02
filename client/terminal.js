@@ -94,6 +94,22 @@ class TerminalManager {
     };
   }
 
+  getDomId(prefix, sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return `${prefix}-`;
+    if (this.orchestrator && typeof this.orchestrator.getSessionDomId === 'function') {
+      return this.orchestrator.getSessionDomId(prefix, sid);
+    }
+    // Fallback: keep legacy behavior (may include selector-hostile chars, but works for getElementById).
+    return `${prefix}-${sid}`;
+  }
+
+  getContainerElement(sessionId) {
+    const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
+    if (!terminalElement) return null;
+    return terminalElement.closest('.terminal-body') || terminalElement.closest('.terminal-wrapper') || terminalElement;
+  }
+
   shouldLogFit(sessionId, key) {
     const now = Date.now();
     const mapKey = `${sessionId}:${key}`;
@@ -219,7 +235,7 @@ class TerminalManager {
       return this.terminals.get(sessionId);
     }
     
-    const terminalElement = document.getElementById(`terminal-${sessionId}`);
+    const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
     if (!terminalElement) {
       console.error(`Terminal element not found for ${sessionId}`);
       return null;
@@ -582,12 +598,12 @@ class TerminalManager {
   }
 
   setupResizeObserver(sessionId) {
-    const terminalElement = document.getElementById(`terminal-${sessionId}`);
+    const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
     if (!terminalElement) return;
 
     // Observe the element whose size actually changes with layout.
     // In practice, the `.terminal-body` resizes with grid/sidebar/tab changes.
-    const wrapper = document.getElementById(`wrapper-${sessionId}`);
+    const wrapper = document.getElementById(this.getDomId('wrapper', sessionId));
     const observeTarget = wrapper || terminalElement.closest('.terminal-body') || terminalElement;
 
     const resizeObserver = new ResizeObserver(() => {
@@ -620,7 +636,7 @@ class TerminalManager {
         if (!terminal || terminal._core?.disposed) return;
 
         // Check that container has valid dimensions before fitting
-        const terminalElement = document.getElementById(`terminal-${sessionId}`);
+        const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
         if (!terminalElement) {
           // Terminal DOM may not be mounted yet (e.g., tab switching before wrappers are rendered).
           // Avoid fitting (and noisy retries) until the element exists.
@@ -634,7 +650,7 @@ class TerminalManager {
           return;
         }
         const terminalBody = terminalElement?.closest('.terminal-body');
-        const wrapper = document.getElementById(`wrapper-${sessionId}`);
+        const wrapper = document.getElementById(this.getDomId('wrapper', sessionId));
 
         // If the terminal isn't visible (hidden tab/dashboard, hidden worktree, etc), NEVER fit.
         // Fitting while hidden can shrink the PTY to tiny dimensions and cause hard-wrapped output.
@@ -770,7 +786,7 @@ class TerminalManager {
     const terminal = this.terminals.get(sessionId);
     if (!terminal) {
       // Check if DOM element exists before trying to create terminal
-      const terminalElement = document.getElementById(`terminal-${sessionId}`);
+      const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
       if (!terminalElement) {
         // Buffer early output instead of ignoring it
         if (!this.pendingOutput) this.pendingOutput = new Map();
@@ -877,7 +893,7 @@ class TerminalManager {
     // Check for error patterns
     if (/error|failed|exception/i.test(data)) {
       // Could highlight the terminal or show a visual indicator
-      const container = document.getElementById(`container-${sessionId}`);
+      const container = this.getContainerElement(sessionId);
       if (container) {
         container.classList.add('has-error');
         setTimeout(() => {
@@ -894,11 +910,11 @@ class TerminalManager {
     if (!searchAddon || !terminal) return;
     
     // Create search UI if it doesn't exist
-    let searchBar = document.getElementById(`search-${sessionId}`);
+    let searchBar = document.getElementById(this.getDomId('search', sessionId));
     if (!searchBar) {
       searchBar = this.createSearchBar(sessionId);
-      const container = document.getElementById(`container-${sessionId}`);
-      container.appendChild(searchBar);
+      const container = this.getContainerElement(sessionId);
+      container?.appendChild(searchBar);
     }
     
     // Show search bar
@@ -910,7 +926,7 @@ class TerminalManager {
   
   createSearchBar(sessionId) {
     const searchBar = document.createElement('div');
-    searchBar.id = `search-${sessionId}`;
+    searchBar.id = this.getDomId('search', sessionId);
     searchBar.className = 'terminal-search-bar hidden';
     searchBar.innerHTML = `
       <input type="text" placeholder="Search..." class="search-input" />
@@ -1038,7 +1054,7 @@ class TerminalManager {
   }
   
   hideSearch(sessionId) {
-    const searchBar = document.getElementById(`search-${sessionId}`);
+    const searchBar = document.getElementById(this.getDomId('search', sessionId));
     if (searchBar) {
       searchBar.classList.add('hidden');
     }
@@ -1080,7 +1096,7 @@ class TerminalManager {
     this.webLinksAddons.delete(sessionId);
     
     // Clean up resize observer
-    const terminalElement = document.getElementById(`terminal-${sessionId}`);
+    const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
     if (terminalElement) {
       // Disconnect any observer (may be stored on terminal body or on terminal element)
       const terminalBody = terminalElement.closest('.terminal-body');
