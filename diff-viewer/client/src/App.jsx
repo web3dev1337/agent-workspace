@@ -13,6 +13,9 @@ axios.defaults.baseURL = '/api';
 
 function DiffViewerRoute() {
   const { owner, repo, pr, sha } = useParams();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search || '');
+  const initialFilePath = String(searchParams.get('file') || '').trim();
   const [diffData, setDiffData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -92,7 +95,7 @@ function DiffViewerRoute() {
 
   // Use SmartDiffViewer for enhanced features or fallback to regular DiffViewer
   if (diffData.diff && diffData.diff.files) {
-    return <SmartDiffViewer data={diffData} />;
+    return <SmartDiffViewer data={diffData} initialFilePath={initialFilePath} />;
   } else {
     // Fallback to original DiffViewer if data structure is different
     return <DiffViewer data={diffData} />;
