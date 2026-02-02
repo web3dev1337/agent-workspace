@@ -73,3 +73,22 @@ These are “investigate if reproducible” items (not confirmed open work if yo
   - Identify source-of-truth per UI surface (workspace config `terminals[]` vs runtime `sessions`) and unify.
 - Review Console layout polish: if any panels still feel cramped/“micro”, capture screenshot + viewport size.
 - Workspace cleanup UX: confirm the dashboard 🧹 button is enough; add a detail view of removed entries if needed.
+
+---
+
+## 5) Ticket move semantics (post-merge → “For Test” and other workflows)
+
+Status:
+- ✅ PR merge automation exists (can move/comment when enabled in settings).
+- ✅ Orchestrator already stores per-board automation settings in `ui.tasks.automations.trello.onPrMerged`.
+
+Remaining work:
+- Add an optional **post-merge target list** concept (e.g. “For Test”) so merges don’t always go straight to Done/Shipped.
+  - UI: Board Settings → Automations should allow selecting a target list for “on merged”.
+  - Behavior: on PR merge, move card to that list; if not configured, keep current behavior.
+- Add a **manual “Move ticket” control** directly inside Review Console (and optionally on server/agent tiles) so you can move to:
+  - For Test / QA / Done / Shipped (whatever lists exist for that board)
+  - Keep it provider-agnostic (Trello now; future providers later).
+- Decide defaults and document:
+  - default list mapping if a board has “For Test” vs “QA” vs “Ready to Test”
+  - whether “Merge” should move by default (recommended: only if explicitly configured)
