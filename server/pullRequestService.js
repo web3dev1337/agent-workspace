@@ -121,12 +121,16 @@ class PullRequestService {
     return JSON.parse(stdout || '{}');
   }
 
-  async ghApi(path, { paginate = false, timeoutMs = 20000 } = {}) {
+  async ghApi(path, { paginate = false, timeoutMs = 20000, params = null } = {}) {
     const rawPath = String(path || '').trim().replace(/^\//, '');
     if (!rawPath) throw new Error('Invalid gh api path');
 
     const args = ['api', rawPath];
     if (paginate) args.push('--paginate');
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      args.push('-f', `${key}=${value}`);
+    });
 
     const { stdout } = await new Promise((resolve, reject) => {
       execFile('gh', args, { timeout: timeoutMs }, (error, stdout, stderr) => {
@@ -162,6 +166,31 @@ class PullRequestService {
     return parsed[parsed.length - 1];
   }
 
+  async ghApiGetAllPages(path, { params = {}, perPage = 100, maxPages = 25, timeoutMs = 20000 } = {}) {
+    const rawPath = String(path || '').trim().replace(/^\//, '');
+    if (!rawPath) throw new Error('Invalid gh api path');
+
+    const p = Number(perPage);
+    const per = Number.isFinite(p) ? Math.min(Math.max(p, 1), 100) : 100;
+    const m = Number(maxPages);
+    const pages = Number.isFinite(m) ? Math.min(Math.max(m, 1), 50) : 25;
+
+    const all = [];
+    for (let page = 1; page <= pages; page += 1) {
+      const pageData = await this.ghApi(rawPath, {
+        paginate: false,
+        timeoutMs,
+        params: { ...(params || {}), per_page: per, page }
+      });
+      if (!Array.isArray(pageData)) {
+        throw new Error(`Expected array from gh api (${rawPath}), got ${typeof pageData}`);
+      }
+      all.push(...pageData);
+      if (pageData.length < per) break;
+    }
+    return all;
+  }
+
   async getPullRequestDetailsByUrl(prUrl, {
     maxFiles = 300,
     maxCommits = 200,
@@ -186,6 +215,12 @@ class PullRequestService {
     const commentsLimit = clamp(maxComments, { min: 0, max: 2000, fallback: 100 });
     const reviewsLimit = clamp(maxReviews, { min: 0, max: 2000, fallback: 100 });
 
+    const maxPagesFor = (limit, perPage = 100) => {
+      const l = Number(limit);
+      if (!Number.isFinite(l) || l <= 0) return 1;
+      return Math.min(Math.ceil(l / perPage) + 1, 50);
+    };
+
     const safe = async (endpoint, fn, fallback) => {
       try {
         const value = await fn();
@@ -199,13 +234,13 @@ class PullRequestService {
 
     const [prRes, filesRes, commitsRes, issueCommentsRes, reviewsRes] = await Promise.all([
       safe(`repos/${o}/${r}/pulls/${n}`, () => this.ghApi(`repos/${o}/${r}/pulls/${n}`, { paginate: false, timeoutMs: 20000 }), null),
-      safe(`repos/${o}/${r}/pulls/${n}/files`, () => this.ghApi(`repos/${o}/${r}/pulls/${n}/files`, { paginate: true, timeoutMs: 30000 }), []),
-      safe(`repos/${o}/${r}/pulls/${n}/commits`, () => this.ghApi(`repos/${o}/${r}/pulls/${n}/commits`, { paginate: true, timeoutMs: 30000 }), []),
+      safe(`repos/${o}/${r}/pulls/${n}/files`, () => this.ghApiGetAllPages(`repos/${o}/${r}/pulls/${n}/files`, { timeoutMs: 30000, maxPages: maxPagesFor(filesLimit, 100) }), []),
+      safe(`repos/${o}/${r}/pulls/${n}/commits`, () => this.ghApiGetAllPages(`repos/${o}/${r}/pulls/${n}/commits`, { timeoutMs: 30000, maxPages: maxPagesFor(commitsLimit, 100) }), []),
       commentsLimit > 0
-        ? safe(`repos/${o}/${r}/issues/${n}/comments`, () => this.ghApi(`repos/${o}/${r}/issues/${n}/comments`, { paginate: true, timeoutMs: 30000 }), [])
+        ? safe(`repos/${o}/${r}/issues/${n}/comments`, () => this.ghApiGetAllPages(`repos/${o}/${r}/issues/${n}/comments`, { timeoutMs: 30000, maxPages: maxPagesFor(commentsLimit, 100) }), [])
         : Promise.resolve({ ok: true, value: [], endpoint: null, error: null }),
       reviewsLimit > 0
-        ? safe(`repos/${o}/${r}/pulls/${n}/reviews`, () => this.ghApi(`repos/${o}/${r}/pulls/${n}/reviews`, { paginate: true, timeoutMs: 30000 }), [])
+        ? safe(`repos/${o}/${r}/pulls/${n}/reviews`, () => this.ghApiGetAllPages(`repos/${o}/${r}/pulls/${n}/reviews`, { timeoutMs: 30000, maxPages: maxPagesFor(reviewsLimit, 100) }), [])
         : Promise.resolve({ ok: true, value: [], endpoint: null, error: null })
     ]);
 
