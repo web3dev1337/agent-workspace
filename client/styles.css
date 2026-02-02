@@ -17,6 +17,7 @@
   --accent-success: #3fb950;
   --accent-warning: #d29922;
   --accent-danger: #f85149;
+  --accent-danger-hover: color-mix(in srgb, var(--accent-danger) 82%, #ffffff 18%);
 
   /* Skin mixing (0..1). Skins can override `--skin-*` targets; we blend against `*-base`. */
   --skin-intensity: 1;
@@ -64,6 +65,20 @@
   /* Typography */
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* Surfaces / overlays */
+  --overlay-backdrop: rgba(0, 0, 0, 0.8);
+  --overlay-backdrop-soft: rgba(0, 0, 0, 0.45);
+  --overlay-backdrop-faint: rgba(0, 0, 0, 0.25);
+  --overlay-hint-bg: rgba(0, 0, 0, 0.8);
+  --overlay-hint-text: rgba(255, 255, 255, 0.82);
+  --overlay-hint-border: rgba(255, 255, 255, 0.12);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --shadow-overlay: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  --shadow-popover: 0 10px 25px rgba(0, 0, 0, 0.2);
+  --shadow-float: 0 18px 40px rgba(0, 0, 0, 0.45);
+  --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --focus-terminal-bg: color-mix(in srgb, var(--bg-primary) 72%, #000000 28%);
 }
 
 /* Light Theme */
@@ -79,6 +94,19 @@ body.light-theme {
   --border-color-base: #d0d7de;
   --accent-primary-hover: #0969da;
   --accent-primary-pressed: #1a66d9;
+
+  --overlay-backdrop: rgba(0, 0, 0, 0.55);
+  --overlay-backdrop-soft: rgba(0, 0, 0, 0.35);
+  --overlay-backdrop-faint: rgba(0, 0, 0, 0.18);
+  --overlay-hint-bg: rgba(0, 0, 0, 0.6);
+  --overlay-hint-text: rgba(255, 255, 255, 0.9);
+  --overlay-hint-border: rgba(255, 255, 255, 0.18);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.28);
+  --shadow-overlay: 0 25px 50px -12px rgba(0, 0, 0, 0.22);
+  --shadow-popover: 0 10px 25px rgba(0, 0, 0, 0.16);
+  --shadow-float: 0 18px 40px rgba(0, 0, 0, 0.22);
+  --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --focus-terminal-bg: color-mix(in srgb, var(--bg-primary) 94%, #000000 6%);
 }
 
 /* Skins */
@@ -275,8 +303,8 @@ body {
 }
 
 .button-danger:hover {
-  background: #ff4444;
-  border-color: #ff4444;
+  background: var(--accent-danger-hover);
+  border-color: var(--accent-danger-hover);
 }
 
 .worktree-title {
@@ -1484,7 +1512,7 @@ header h1 {
 
 .worktree-inspector-panel {
   border: 1px solid var(--border-color);
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--bg-secondary);
   border-radius: var(--radius-md);
   padding: 12px;
   overflow: hidden;
@@ -2747,7 +2775,7 @@ header h1 {
   padding: var(--space-md);  /* Reduced from lg to md for smaller screens */
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-popover);
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);  /* Reduced from md to sm */
@@ -2832,7 +2860,7 @@ header h1 {
   padding: var(--space-xl);
   background: var(--bg-tertiary);
   border-radius: var(--radius-lg);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-popover);
 }
 
 .startup-buttons-inline {
@@ -3228,7 +3256,7 @@ header h1 {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--overlay-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3242,7 +3270,7 @@ header h1 {
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-modal);
 }
 
 #launch-settings-modal .modal-header {
@@ -3562,7 +3590,7 @@ header h1 {
   color: white;
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-soft);
   z-index: 1000;
   animation: slideInRight 0.3s ease-out, fadeOutRight 0.3s ease-in 2.7s forwards;
 }
@@ -3662,7 +3690,7 @@ header h1 {
   .sidebar-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: var(--overlay-backdrop-soft);
     z-index: 2500;
   }
 
@@ -3691,7 +3719,7 @@ header h1 {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-soft);
   z-index: 1000;
   min-width: 200px;
   padding: var(--space-sm);
@@ -3803,7 +3831,7 @@ header h1 {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay-backdrop-soft);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -3835,12 +3863,12 @@ header h1 {
 
 /* Focused terminal header */
 .focused-terminal-header {
-  background: linear-gradient(to right, var(--bg-secondary), rgba(30, 41, 59, 0.95));
+  background: var(--bg-secondary);
   padding: 1rem 1.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border-color);
   backdrop-filter: blur(10px);
 }
 
@@ -3881,8 +3909,8 @@ header h1 {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   color: var(--text-primary);
   display: flex;
   align-items: center;
@@ -3893,16 +3921,16 @@ header h1 {
 }
 
 .focus-close-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--bg-hover);
   transform: scale(1.1);
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+  box-shadow: var(--shadow-soft);
 }
 
 /* Focused terminal body */
 .focused-terminal-body {
   height: calc(100% - 65px);
   position: relative;
-  background: #0a0e1a;
+  background: var(--focus-terminal-bg);
   padding: 10px;
   box-sizing: border-box;
 }
@@ -3932,15 +3960,15 @@ header h1 {
 .control-btn.focus-btn {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1));
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-secondary) 88%);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, var(--border-color) 65%);
   transition: all 0.3s ease;
 }
 
 .control-btn.focus-btn:hover {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(147, 51, 234, 0.2));
-  border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  background: color-mix(in srgb, var(--accent-primary) 18%, var(--bg-secondary) 82%);
+  border-color: color-mix(in srgb, var(--accent-primary) 55%, var(--border-color) 45%);
+  box-shadow: 0 0 0 2px var(--focus-ring);
   transform: scale(1.1);
 }
 
@@ -4004,13 +4032,13 @@ header h1 {
   bottom: 2rem;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: rgba(255, 255, 255, 0.8);
+  background: var(--overlay-hint-bg);
+  color: var(--overlay-hint-text);
   padding: 0.5rem 1rem;
   border-radius: 2rem;
   font-size: 0.875rem;
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--overlay-hint-border);
   opacity: 0;
   animation: fadeInUp 0.5s ease-out 0.5s forwards;
 }
@@ -4838,7 +4866,7 @@ header h1 {
 .dashboard-telemetry-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--overlay-backdrop);
   z-index: 1100;
   display: flex;
   align-items: center;
@@ -4853,7 +4881,7 @@ header h1 {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-overlay);
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -5314,7 +5342,7 @@ header h1 {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-overlay);
   z-index: 1001;
   overflow: hidden;
 }
@@ -5734,7 +5762,7 @@ header h1 {
   border-left: 4px solid var(--accent-warning);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-md);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-soft);
   pointer-events: auto;
   animation: slideInRight 0.3s ease-out;
 }
@@ -6487,7 +6515,7 @@ header h1 {
 }
 
 .button-danger:hover {
-  background: #dc2626;
+  background: var(--accent-danger-hover);
 }
 
 /* Commander Panel Styles - Draggable Floating Window */
@@ -8389,7 +8417,7 @@ header h1 {
 .tasks-hotkeys-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--overlay-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8400,7 +8428,7 @@ header h1 {
 .tasks-launch-popover-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--overlay-backdrop-faint);
   z-index: 19;
 }
 
@@ -8410,7 +8438,7 @@ header h1 {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-float);
   padding: 12px;
 }
 
@@ -9777,7 +9805,7 @@ header h1 {
 .port-dashboard-card:hover {
   background: var(--bg-tertiary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-soft);
 }
 
 .port-dashboard-card.orchestrator { border-left-color: #9f7aea; }
