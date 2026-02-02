@@ -57,12 +57,27 @@ curl -sS "https://api.trello.com/1/cards/CARD_ID/customFieldItems?key=$KEY&token
 
 **Launch sequence (MUST follow):**
 1. Remove all worktrees: `POST /api/workspaces/remove-worktree` for each
-2. Re-add worktrees: `POST /api/workspaces/add-mixed-worktree` for each
+2. Re-add worktrees with tier: `POST /api/workspaces/add-mixed-worktree` (include `startTier`)
 3. Start agent: send launch command + `\r`
 4. Wait 3 seconds
 5. Send FULL prompt (title + ENTIRE description + workflow)
 6. Send `\r` to submit
 7. Move Trello card to Doing list
+
+**Add worktree with tier:**
+```bash
+curl -sS -X POST http://localhost:3000/api/workspaces/add-mixed-worktree \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workspaceId": "zoo-shrimp-game",
+    "repositoryPath": "/path/to/repo",
+    "repositoryType": "hytopia-game",
+    "repositoryName": "zoo-game",
+    "worktreeId": "work1",
+    "startTier": 2
+  }'
+# startTier: 1=T1 (focus), 2=T2 (review), 3=T3 (background), 4=T4 (lowest)
+```
 
 **Common mistakes to avoid:**
 - NEVER truncate/summarize descriptions - user wrote detailed prompts!
