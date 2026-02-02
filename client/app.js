@@ -8204,27 +8204,35 @@ class ClaudeOrchestrator {
 		          await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
 		        };
 
-		        const ensureDiffViewerBaseUrl = async () => {
-		          let baseUrl = 'http://localhost:7655';
-		          const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
-		          const data = await resp.json().catch(() => ({}));
-		          if (!resp.ok) throw new Error(String(data?.message || data?.error || 'Failed to start diff viewer'));
-		          if (data?.baseUrl) baseUrl = String(data.baseUrl);
+			        const ensureDiffViewerBaseUrl = async () => {
+			          let baseUrl = 'http://localhost:7655';
+			          let running = false;
+			          const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
+			          const data = await resp.json().catch(() => ({}));
+			          if (!resp.ok) throw new Error(String(data?.message || data?.error || 'Failed to start diff viewer'));
+			          if (data?.baseUrl) baseUrl = String(data.baseUrl);
+			          running = !!data?.running;
 
-		          if (!data?.running) {
-		            const start = Date.now();
-		            const timeoutMs = 120000;
-		            while (Date.now() - start < timeoutMs) {
-		              await new Promise(r => setTimeout(r, 1000));
-		              const statusResp = await fetch('/api/diff-viewer/status');
-		              const status = await statusResp.json().catch(() => ({}));
-		              if (status?.baseUrl) baseUrl = String(status.baseUrl);
-		              if (status?.running) break;
-		            }
-		          }
+			          if (!running) {
+			            const start = Date.now();
+			            const timeoutMs = 120000;
+			            while (Date.now() - start < timeoutMs) {
+			              await new Promise(r => setTimeout(r, 1000));
+			              const statusResp = await fetch('/api/diff-viewer/status');
+			              const status = await statusResp.json().catch(() => ({}));
+			              if (status?.baseUrl) baseUrl = String(status.baseUrl);
+			              if (status?.running) {
+			                running = true;
+			                break;
+			              }
+			            }
+			          }
 
-		          return baseUrl;
-		        };
+			          if (!running) {
+			            throw new Error('Diff Viewer did not start (timed out).');
+			          }
+			          return baseUrl;
+			        };
 
 		        const embedDiff = async ({ showToast = false } = {}) => {
 		          if (!diffIframeEl || !diffStatusEl) return;
@@ -9217,45 +9225,61 @@ class ClaudeOrchestrator {
 	        if (closeBtn) closeBtn.disabled = !embedded;
 	      };
 
-      let baseUrl = 'http://localhost:7655';
-      const ensureDiffViewer = async () => {
-        const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(String(data?.message || data?.error || 'Failed to start diff viewer'));
-        if (data?.baseUrl) baseUrl = data.baseUrl;
-        if (!data?.running) {
-          const start = Date.now();
-          const timeoutMs = 120000;
-          while (Date.now() - start < timeoutMs) {
-            await new Promise(r => setTimeout(r, 1000));
-            const statusResp = await fetch('/api/diff-viewer/status');
-            const status = await statusResp.json().catch(() => ({}));
-            if (status?.baseUrl) baseUrl = status.baseUrl;
-            if (status?.running) break;
-          }
-        }
-      };
+	      let baseUrl = 'http://localhost:7655';
+	      const ensureDiffViewer = async () => {
+	        const resp = await fetch('/api/diff-viewer/ensure', { method: 'POST' });
+	        const data = await resp.json().catch(() => ({}));
+	        if (!resp.ok) throw new Error(String(data?.message || data?.error || 'Failed to start diff viewer'));
+	        if (data?.baseUrl) baseUrl = data.baseUrl;
+	        let running = !!data?.running;
+	        if (!running) {
+	          const start = Date.now();
+	          const timeoutMs = 120000;
+	          while (Date.now() - start < timeoutMs) {
+	            await new Promise(r => setTimeout(r, 1000));
+	            const statusResp = await fetch('/api/diff-viewer/status');
+	            const status = await statusResp.json().catch(() => ({}));
+	            if (status?.baseUrl) baseUrl = status.baseUrl;
+	            if (status?.running) {
+	              running = true;
+	              break;
+	            }
+	          }
+	        }
+	        if (!running) {
+	          throw new Error('Diff Viewer did not start (timed out).');
+	        }
+	      };
 
-		      const embed = async () => {
-		        if (!diffIframe) return;
-		        if (currentSections.diff === false) return;
-		        await ensureDiffViewer();
-		        const target = diffViewerPath || '';
-		        diffIframe.src = target ? `${baseUrl}${target}` : `${baseUrl}/`;
-		        diffIframe.classList.remove('hidden');
-		        if (diffStatusEl) diffStatusEl.textContent = target ? `Target: ${target}` : 'Target: (diff viewer home)';
-		        syncDiffButtons();
-		      };
+			      const embed = async ({ showToast = false } = {}) => {
+			        if (!diffIframe) return;
+			        if (currentSections.diff === false) return;
+			        try {
+			          if (diffStatusEl) diffStatusEl.textContent = 'Starting Diff Viewer…';
+			          await ensureDiffViewer();
+			        } catch (err) {
+			          const msg = String(err?.message || err);
+			          if (diffStatusEl) diffStatusEl.textContent = `Diff Viewer failed to start: ${msg}`;
+			          if (showToast) this.showToast(`Diff Viewer failed to start: ${msg}`, 'error');
+			          syncDiffButtons();
+			          throw err;
+			        }
+			        const target = diffViewerPath || '';
+			        diffIframe.src = target ? `${baseUrl}${target}` : `${baseUrl}/`;
+			        diffIframe.classList.remove('hidden');
+			        if (diffStatusEl) diffStatusEl.textContent = target ? `Target: ${target}` : 'Target: (diff viewer home)';
+			        syncDiffButtons();
+			      };
 
-      embedBtn?.addEventListener('click', () => {
-        embed().catch((e) => this.showToast(String(e?.message || e), 'error'));
-      });
-      openBtn?.addEventListener('click', () => this.launchDiffViewer(prUrl));
-	      refreshBtn?.addEventListener('click', () => {
-	        if (!diffIframe) return;
-	        if (!diffIframe.src) return embed().catch(() => {});
-	        try { diffIframe.contentWindow?.location?.reload?.(); } catch { diffIframe.src = diffIframe.src; }
+	      embedBtn?.addEventListener('click', () => {
+	        embed({ showToast: true }).catch(() => {});
 	      });
+	      openBtn?.addEventListener('click', () => this.launchDiffViewer(prUrl));
+		      refreshBtn?.addEventListener('click', () => {
+		        if (!diffIframe) return;
+		        if (!diffIframe.src) return embed({ showToast: true }).catch(() => {});
+		        try { diffIframe.contentWindow?.location?.reload?.(); } catch { diffIframe.src = diffIframe.src; }
+		      });
 	      closeBtn?.addEventListener('click', () => {
 	        if (!diffIframe) return;
 	        diffIframe.src = 'about:blank';
@@ -9263,12 +9287,12 @@ class ClaudeOrchestrator {
 	        syncDiffButtons();
 	      });
 
-			      // Default: embed when enabled in Review Console settings (terminals or not).
-			      let diffEmbedEnabled = rcCfg?.diffEmbed !== false;
-				      if (diffEmbedEnabled && currentSections.diff !== false) {
-				        embed().catch(() => {});
-				      }
-			      syncDiffButtons();
+				      // Default: embed when enabled in Review Console settings (terminals or not).
+				      let diffEmbedEnabled = rcCfg?.diffEmbed !== false;
+					      if (diffEmbedEnabled && currentSections.diff !== false) {
+					        embed({ showToast: false }).catch(() => {});
+					      }
+				      syncDiffButtons();
 
 		      // If we have terminals that are already linked to this PR, dock them into the PR console.
 		      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');
