@@ -24,6 +24,7 @@ class WorkspaceManager {
   constructor() {
     this.workspaces = new Map();
     this.activeWorkspace = null;
+    this.workspaceHealth = new Map();
     this.configPath = path.join(os.homedir(), '.orchestrator');
     this.workspacesPath = path.join(this.configPath, 'workspaces');
     this.templatesPath = path.join(this.configPath, 'templates');
@@ -308,17 +309,28 @@ class WorkspaceManager {
           const workspace = JSON.parse(content);
           const normalize = this.normalizeWorkspacePaths(workspace);
           const normalizedWorkspace = normalize.workspace;
-          if (normalize.changed) {
+
+          const sanitize = this.sanitizeWorkspaceTerminals(normalizedWorkspace);
+          const sanitizedWorkspace = sanitize.workspace;
+
+          const migrationChanges = []
+            .concat(normalize.changed ? [{ kind: 'normalize', changes: normalize.changes }] : [])
+            .concat(sanitize.changed ? [{ kind: 'sanitize', changes: sanitize.changes }] : []);
+
+          if (migrationChanges.length) {
             try {
-              await fs.writeFile(filePath, JSON.stringify(normalizedWorkspace, null, 2));
-              logger.info('Normalized workspace paths (auto-migration)', {
-                workspaceId: normalizedWorkspace.id,
+              await fs.writeFile(filePath, JSON.stringify(sanitizedWorkspace, null, 2));
+              logger.info('Auto-migrated workspace config', {
+                workspaceId: sanitizedWorkspace.id,
                 file,
-                changes: normalize.changes
+                normalizeChanged: normalize.changed,
+                sanitizeChanged: sanitize.changed,
+                normalizeChanges: normalize.changes,
+                sanitizeChanges: sanitize.changes
               });
             } catch (error) {
-              logger.warn('Failed to persist normalized workspace paths (continuing with normalized in-memory config)', {
-                workspaceId: normalizedWorkspace.id,
+              logger.warn('Failed to persist auto-migration (continuing with in-memory config)', {
+                workspaceId: sanitizedWorkspace.id,
                 file,
                 error: error.message
               });
@@ -327,23 +339,26 @@ class WorkspaceManager {
 
           // Backfill lastAccess for older configs so the dashboard has something meaningful to show.
           // We use the config file mtime as a reasonable approximation until the user opens a workspace.
-          if (!normalizedWorkspace.lastAccess && stats?.mtime) {
-            normalizedWorkspace.lastAccess = new Date(stats.mtime).toISOString();
+          if (!sanitizedWorkspace.lastAccess && stats?.mtime) {
+            sanitizedWorkspace.lastAccess = new Date(stats.mtime).toISOString();
           }
 
           // Validate workspace
-          const validation = validateWorkspace(normalizedWorkspace);
+          const validation = validateWorkspace(sanitizedWorkspace);
           if (!validation.valid) {
             logger.error(`Invalid workspace config: ${file}`, { errors: validation.errors });
             continue;
           }
 
           // Enrich workspace with missing repository types (for old configs)
-          await this.enrichWorkspaceRepositoryTypes(normalizedWorkspace);
+          await this.enrichWorkspaceRepositoryTypes(sanitizedWorkspace);
 
           // Add to workspaces map
-          this.workspaces.set(normalizedWorkspace.id, normalizedWorkspace);
-          logger.info(`Loaded workspace: ${normalizedWorkspace.name} (${normalizedWorkspace.id})`);
+          this.workspaces.set(sanitizedWorkspace.id, sanitizedWorkspace);
+          if (sanitize.health) {
+            this.workspaceHealth.set(sanitizedWorkspace.id, sanitize.health);
+          }
+          logger.info(`Loaded workspace: ${sanitizedWorkspace.name} (${sanitizedWorkspace.id})`);
         } catch (error) {
           logger.error(`Failed to load workspace config: ${file}`, { error: error.message, stack: error.stack });
         }
@@ -354,6 +369,94 @@ class WorkspaceManager {
       logger.error('Failed to read workspaces directory', { error: error.message, stack: error.stack });
       return 0;
     }
+  }
+
+  sanitizeWorkspaceTerminals(ws) {
+    const changes = [];
+    const health = {
+      cleanedAt: new Date().toISOString(),
+      removedTerminals: [],
+      dedupedTerminalIds: [],
+      fixedWorktreePaths: [],
+      staleCandidates: []
+    };
+
+    const next = JSON.parse(JSON.stringify(ws || {}));
+    if (!Array.isArray(next.terminals)) {
+      return { workspace: next, changed: false, changes: [], health: null };
+    }
+
+    const seenIds = new Set();
+    const deduped = [];
+
+    const shouldKeepMissingWorktree = (terminal) => {
+      const wt = String(terminal?.worktree || '').trim();
+      if (/^work\\d+$/i.test(wt)) return true;
+      const wtPath = String(terminal?.worktreePath || '').trim();
+      if (/\\bwork\\d+\\b/i.test(path.basename(wtPath))) return true;
+      return false;
+    };
+
+    for (const terminal of next.terminals) {
+      if (!terminal || typeof terminal !== 'object') continue;
+
+      const id = String(terminal.id || '').trim();
+      if (!id) continue;
+
+      if (seenIds.has(id)) {
+        health.dedupedTerminalIds.push(id);
+        changes.push({ field: 'terminals[]', terminalId: id, reason: 'duplicate_id_removed' });
+        continue;
+      }
+      seenIds.add(id);
+
+      const repoPath = String(terminal?.repository?.path || '').trim();
+      const repoName = String(terminal?.repository?.name || '').trim();
+      const worktree = String(terminal?.worktree || '').trim();
+      const explicitWorktreePath = String(terminal?.worktreePath || '').trim();
+      const derived = (repoPath && worktree) ? path.join(repoPath, worktree) : '';
+
+      // If repo path itself is missing, it's almost certainly stale (e.g. old /home/test references).
+      if (repoPath && !fsSync.existsSync(repoPath)) {
+        health.removedTerminals.push({ id, repoName, repoPath, worktree, worktreePath: explicitWorktreePath || derived, reason: 'repo_path_missing' });
+        changes.push({ field: 'terminals[]', terminalId: id, reason: 'repo_path_missing_removed', repoPath });
+        continue;
+      }
+
+      // Fix common “repo root terminal” mis-shape: repoPath=/home/ab/GitHub, worktree=GitHub → joined /home/ab/GitHub/GitHub (missing)
+      if (!explicitWorktreePath && repoPath && worktree) {
+        const joined = derived;
+        if (!fsSync.existsSync(joined) && fsSync.existsSync(repoPath) && path.basename(repoPath) === worktree) {
+          terminal.worktreePath = repoPath;
+          health.fixedWorktreePaths.push({ id, from: joined, to: repoPath, reason: 'worktree_equals_repo_basename_use_repo_root' });
+          changes.push({ field: 'terminals[].worktreePath', terminalId: id, from: joined, to: repoPath, reason: 'worktree_equals_repo_basename_use_repo_root' });
+        }
+      }
+
+      const wtPath = String(terminal.worktreePath || '').trim() || derived;
+      if (wtPath) {
+        const exists = fsSync.existsSync(wtPath);
+        if (!exists && !shouldKeepMissingWorktree(terminal)) {
+          // Keep it as a candidate (UI can remove); also auto-remove to stop log spam.
+          health.removedTerminals.push({ id, repoName, repoPath, worktree, worktreePath: wtPath, reason: 'worktree_path_missing' });
+          changes.push({ field: 'terminals[]', terminalId: id, reason: 'worktree_path_missing_removed', worktreePath: wtPath });
+          continue;
+        }
+        if (!exists && shouldKeepMissingWorktree(terminal)) {
+          health.staleCandidates.push({ id, repoName, repoPath, worktree, worktreePath: wtPath, reason: 'worktree_missing_but_looks_createable' });
+        }
+      }
+
+      deduped.push(terminal);
+    }
+
+    if (deduped.length !== next.terminals.length) {
+      next.terminals = deduped;
+    }
+
+    const changed = changes.length > 0;
+    const hasHealth = health.removedTerminals.length || health.dedupedTerminalIds.length || health.fixedWorktreePaths.length || health.staleCandidates.length;
+    return { workspace: next, changed, changes, health: hasHealth ? health : null };
   }
 
   /**
@@ -702,7 +805,11 @@ class WorkspaceManager {
       });
     }
 
-    return workspaces;
+    // Attach any recent health/cleanup info (best-effort; not persisted).
+    return workspaces.map((ws) => {
+      const health = this.workspaceHealth.get(ws.id) || null;
+      return health ? { ...ws, health } : ws;
+    });
   }
 
   async listWorkspacesEnriched(requestingUser = null) {
