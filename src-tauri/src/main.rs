@@ -154,6 +154,52 @@ async fn navigate_window(window: tauri::WebviewWindow, url: String) {
     }
 }
 
+fn append_tauri_bootstrap_log(data_dir: &std::path::Path, message: &str) {
+    let logs_dir = data_dir.join("logs");
+    if std::fs::create_dir_all(&logs_dir).is_err() {
+        return;
+    }
+    let log_path = logs_dir.join("tauri-bootstrap.log");
+    let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+    else {
+        return;
+    };
+    use std::io::Write;
+    let _ = writeln!(file, "{}", message);
+}
+
+async fn show_bootstrap_error(
+    window: tauri::WebviewWindow,
+    title: &str,
+    message: &str,
+    details: Option<String>,
+    hint_html: Option<String>,
+) {
+    let title_json = serde_json::to_string(title).unwrap_or_else(|_| "\"Failed to start\"".to_string());
+    let message_json = serde_json::to_string(message)
+        .unwrap_or_else(|_| "\"The backend did not start.\"".to_string());
+    let details_json = details
+        .map(|v| serde_json::to_string(&v).unwrap_or_else(|_| "null".to_string()))
+        .unwrap_or_else(|| "null".to_string());
+    let hint_json = hint_html
+        .map(|v| serde_json::to_string(&v).unwrap_or_else(|_| "null".to_string()))
+        .unwrap_or_else(|| "null".to_string());
+
+    let js = format!(
+        "window.__orchestrator_bootstrap_error && window.__orchestrator_bootstrap_error({}, {}, {}, {});",
+        title_json, message_json, details_json, hint_json
+    );
+    for _ in 0..60 {
+        if window.eval(&js).is_ok() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(150)).await;
+    }
+}
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn show_notification(title: String, body: String) -> Result<(), String> {
@@ -329,17 +375,34 @@ fn main() {
                 let node_cmd = resolve_node_command(&app_handle);
                 let server_entry = resolve_server_entry(&app_handle);
 
+                let data_dir = app_handle
+                    .path()
+                    .app_data_dir()
+                    .unwrap_or_else(|_| {
+                        std::env::current_dir()
+                            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                    });
+                let _ = std::fs::create_dir_all(&data_dir);
+
                 match server_entry {
                     None => {
-                        eprintln!("Unable to locate server/index.js; backend will not start.");
+                        let message = "Unable to locate the backend entrypoint (server/index.js).";
+                        append_tauri_bootstrap_log(&data_dir, message);
+                        if let Some(window) = window.clone() {
+                            let hint = "Rebuild the app so backend resources are bundled. If you’re running a dev build, set <code>TAURI_SPAWN_BACKEND=true</code> and ensure <code>node</code> is on PATH (or set <code>ORCHESTRATOR_NODE_PATH</code>).".to_string();
+                            tauri::async_runtime::spawn(async move {
+                                show_bootstrap_error(
+                                    window,
+                                    "Backend missing",
+                                    "The packaged backend could not be found, so the app can’t start.",
+                                    Some(message.to_string()),
+                                    Some(hint),
+                                )
+                                .await;
+                            });
+                        }
                     }
                     Some(entry) => {
-                        let data_dir = app_handle
-                            .path()
-                            .app_data_dir()
-                            .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
-                        let _ = std::fs::create_dir_all(&data_dir);
-
                         let mut cmd = Command::new(node_cmd);
                         cmd.arg(entry);
                         cmd.current_dir(&data_dir);
@@ -356,16 +419,59 @@ fn main() {
 
                         match cmd.spawn() {
                             Err(err) => {
-                                eprintln!("Failed to spawn backend: {}", err);
+                                let details = format!(
+                                    "Failed to spawn backend process.\n\nnode: {}\nentry: {}\ndata: {}\nport: {}\n\nerror: {}",
+                                    cmd.get_program().to_string_lossy(),
+                                    cmd.get_args()
+                                        .next()
+                                        .map(|v| v.to_string_lossy().to_string())
+                                        .unwrap_or_else(|| "<missing entry>".to_string()),
+                                    data_dir.to_string_lossy(),
+                                    port,
+                                    err
+                                );
+                                append_tauri_bootstrap_log(&data_dir, &details);
+                                if let Some(window) = window.clone() {
+                                    let hint = "If Node is missing, set <code>ORCHESTRATOR_NODE_PATH</code> (or bundle Node into the app resources). Then restart the app.".to_string();
+                                    tauri::async_runtime::spawn(async move {
+                                        show_bootstrap_error(
+                                            window,
+                                            "Failed to launch backend",
+                                            "The local server process could not be started.",
+                                            Some(details),
+                                            Some(hint),
+                                        )
+                                        .await;
+                                    });
+                                }
                             }
                             Ok(child) => {
                                 app_handle.state::<BackendProcess>().set_child(child);
 
                                 if let Some(window) = window {
                                     let url = format!("http://127.0.0.1:{}/?token={}", port, token);
+                                    let data_dir_for_wait = data_dir.clone();
                                     tauri::async_runtime::spawn(async move {
                                         if wait_for_port(port, Duration::from_secs(20)).await {
                                             navigate_window(window, url).await;
+                                        } else {
+                                            let details = format!(
+                                                "Backend did not become ready within 20s.\n\nport: {}\ndata dir: {}\n\nCheck logs:\n- {}/logs/combined.log\n- {}/logs/error.log\n- {}/logs/tauri-bootstrap.log",
+                                                port,
+                                                data_dir_for_wait.to_string_lossy(),
+                                                data_dir_for_wait.to_string_lossy(),
+                                                data_dir_for_wait.to_string_lossy(),
+                                                data_dir_for_wait.to_string_lossy()
+                                            );
+                                            append_tauri_bootstrap_log(&data_dir_for_wait, &details);
+                                            show_bootstrap_error(
+                                                window,
+                                                "Backend did not become ready",
+                                                "The local server started, but never opened its port.",
+                                                Some(details),
+                                                None,
+                                            )
+                                            .await;
                                         }
                                     });
                                 }

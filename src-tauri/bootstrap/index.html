@@ -41,6 +41,21 @@
         opacity: 0.7;
         font-size: 12.5px;
       }
+      pre {
+        margin: 12px 0 0;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.28);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        overflow: auto;
+        max-height: 220px;
+        font-size: 12px;
+        line-height: 1.45;
+        opacity: 0.9;
+      }
+      .hidden {
+        display: none;
+      }
       code {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
           "Courier New", monospace;
@@ -52,13 +67,43 @@
   </head>
   <body>
     <div class="card">
-      <h1>Starting Claude Orchestrator…</h1>
-      <p>Launching the local backend and connecting to your workspace.</p>
-      <p class="hint">
+      <h1 id="bootstrap-title">Starting Claude Orchestrator…</h1>
+      <p id="bootstrap-message">Launching the local backend and connecting to your workspace.</p>
+      <pre id="bootstrap-details" class="hidden"></pre>
+      <p class="hint" id="bootstrap-hint">
         If this screen doesn’t advance within ~20 seconds, ensure Node is available or set
         <code>ORCHESTRATOR_NODE_PATH</code>.
       </p>
     </div>
+
+    <script>
+      window.__orchestrator_bootstrap_error = function (title, message, details, hint) {
+        try {
+          const titleEl = document.getElementById('bootstrap-title');
+          const msgEl = document.getElementById('bootstrap-message');
+          const detailsEl = document.getElementById('bootstrap-details');
+          const hintEl = document.getElementById('bootstrap-hint');
+
+          if (titleEl) titleEl.textContent = title || 'Failed to start';
+          if (msgEl) msgEl.textContent = message || 'The backend did not start.';
+          if (detailsEl) {
+            if (details) {
+              detailsEl.textContent = String(details);
+              detailsEl.classList.remove('hidden');
+            } else {
+              detailsEl.textContent = '';
+              detailsEl.classList.add('hidden');
+            }
+          }
+          if (hintEl) {
+            hintEl.innerHTML = hint
+              ? String(hint)
+              : 'Check logs in <code>ORCHESTRATOR_DATA_DIR</code> (look for <code>logs/combined.log</code>).';
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      };
+    </script>
   </body>
 </html>
-
