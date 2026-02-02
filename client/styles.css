@@ -1453,7 +1453,7 @@ header h1 {
 
 .review-console-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 0.42fr) minmax(0, 1fr);
+  grid-template-columns: minmax(340px, 0.35fr) minmax(0, 1fr);
   gap: 14px;
   flex: 1 1 auto;
   min-height: 0;
@@ -9155,6 +9155,8 @@ header h1 {
   display: flex;
   gap: var(--space-sm);
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   flex-shrink: 0;
 }
 
