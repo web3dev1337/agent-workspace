@@ -9895,14 +9895,19 @@ class ClaudeOrchestrator {
 	  /**
 	   * Delete worktree from workspace with confirmation
 	   */
-	  async deleteWorktree(worktreeId, displayName) {
-    // Show confirmation dialog with clear messaging about what gets deleted
-    const confirmed = await this.showConfirmationDialog(
-      'Remove Worktree from Workspace',
-      `Are you sure you want to remove "${displayName}" from this workspace?\n\nThis will:\n✅ Remove the worktree from the workspace configuration\n✅ Close any active terminals for this worktree\n✅ Keep all git worktree files and folders intact\n\nℹ️ Your code and git history will NOT be deleted.\nYou can add this worktree back to the workspace later.`,
-      'Remove from Workspace',
-      'Cancel'
-    );
+		  async deleteWorktree(worktreeId, displayName, { workspaceId = null } = {}) {
+	    const wsId = String(workspaceId || this.currentWorkspace?.id || '').trim();
+	    if (!wsId) {
+	      this.showToast?.('No workspace selected for removal', 'warning');
+	      return;
+	    }
+	    // Show confirmation dialog with clear messaging about what gets deleted
+	    const confirmed = await this.showConfirmationDialog(
+	      'Remove Worktree from Workspace',
+	      `Are you sure you want to remove "${displayName}" from this workspace?\n\nThis will:\n✅ Remove the worktree from the workspace configuration\n✅ Close any active terminals for this worktree\n✅ Keep all git worktree files and folders intact\n\nℹ️ Your code and git history will NOT be deleted.\nYou can add this worktree back to the workspace later.`,
+	      'Remove from Workspace',
+	      'Cancel'
+	    );
 
     if (!confirmed) {
       return;
@@ -9913,23 +9918,23 @@ class ClaudeOrchestrator {
 
       // Call backend API to remove from workspace configuration only
       // Backend will handle closing sessions and emitting session-closed events
-      const response = await fetch('/api/workspaces/remove-worktree', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workspaceId: this.currentWorkspace.id,
-          worktreeId: worktreeId
-        })
-      });
+	      const response = await fetch('/api/workspaces/remove-worktree', {
+	        method: 'POST',
+	        headers: { 'Content-Type': 'application/json' },
+	        body: JSON.stringify({
+	          workspaceId: wsId,
+	          worktreeId: worktreeId
+	        })
+	      });
 
       if (response.ok) {
         const result = await response.json();
         this.showTemporaryMessage(`Removed "${displayName}" from workspace (files preserved)`, 'success');
 
         // Update local workspace reference with the updated configuration
-        if (result.updatedWorkspace) {
-          this.currentWorkspace = result.updatedWorkspace;
-        }
+	        if (result.updatedWorkspace && this.currentWorkspace?.id === wsId) {
+	          this.currentWorkspace = result.updatedWorkspace;
+	        }
 
         // Rebuild sidebar to reflect removal (without clearing terminal content)
         this.buildSidebar();
@@ -9944,10 +9949,10 @@ class ClaudeOrchestrator {
     }
 	  }
 
-	  async removeWorktreeForSession(sessionId) {
-	    const sid = String(sessionId || '').trim();
-	    if (!sid) return;
-	    const session = this.sessions.get(sid);
+		  async removeWorktreeForSession(sessionId) {
+		    const sid = String(sessionId || '').trim();
+		    if (!sid) return;
+		    const session = this.sessions.get(sid);
 	    if (!session) {
 	      this.showToast?.('Session not found', 'warning');
 	      return;
@@ -9955,10 +9960,11 @@ class ClaudeOrchestrator {
 
 	    const worktreeId = String(session?.worktreeId || '').trim() || String(sid).split('-')[0];
 	    const repositoryName = String(session?.repositoryName || this.extractRepositoryName(sid) || '').trim();
-	    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
-	    const display = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId;
-	    await this.deleteWorktree?.(worktreeKey, display);
-	  }
+		    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+		    const display = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId;
+		    const wsId = String(session?.workspace || this.currentWorkspace?.id || '').trim() || null;
+		    await this.deleteWorktree?.(worktreeKey, display, { workspaceId: wsId });
+		  }
 
 	  /**
 	   * Close a specific terminal session (keeps the worktree in the workspace).
