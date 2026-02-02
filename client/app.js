@@ -1267,22 +1267,31 @@ class ClaudeOrchestrator {
 	    // Grid layout dropdown removed - using dynamic layout now
     
 	    // Settings
-	    const settingsToggle = document.getElementById('settings-toggle');
-	    if (settingsToggle) {
-	      settingsToggle.addEventListener('click', () => {
-	        const panel = document.getElementById('settings-panel');
-	        if (panel) {
-	          panel.classList.toggle('hidden');
-	          console.log('Settings panel toggled');
-	        }
-	      });
-	    } else {
-	      console.error('Settings toggle button not found!');
-	    }
-    
-    document.getElementById('close-settings').addEventListener('click', () => {
-      document.getElementById('settings-panel').classList.add('hidden');
-    });
+		    const settingsToggle = document.getElementById('settings-toggle');
+		    if (settingsToggle) {
+		      settingsToggle.addEventListener('click', () => {
+		        const panel = document.getElementById('settings-panel');
+		        if (panel) {
+		          panel.classList.toggle('hidden');
+		          if (!panel.classList.contains('hidden')) {
+		            // Convenience: put cursor in search so you can type immediately.
+		            setTimeout(() => document.getElementById('settings-search')?.focus?.(), 0);
+		          }
+		          console.log('Settings panel toggled');
+		        }
+		      });
+		    } else {
+		      console.error('Settings toggle button not found!');
+		    }
+	    
+	    document.getElementById('close-settings').addEventListener('click', () => {
+	      document.getElementById('settings-panel').classList.add('hidden');
+	      const searchEl = document.getElementById('settings-search');
+	      if (searchEl && searchEl.value) {
+	        searchEl.value = '';
+	        document.querySelectorAll('.settings-filter-hidden').forEach((el) => el.classList.remove('settings-filter-hidden'));
+	      }
+	    });
     
     // Settings inputs
     document.getElementById('enable-notifications').addEventListener('change', (e) => {
@@ -1321,29 +1330,32 @@ class ClaudeOrchestrator {
 	      });
 	    }
 
-	    const skinIntensityRange = document.getElementById('skin-intensity-range');
-	    const skinIntensityValue = document.getElementById('skin-intensity-value');
-	    if (skinIntensityRange) {
-	      let t = null;
-	      const apply = (raw) => {
-	        const v0 = Number(raw);
-	        const v = Number.isFinite(v0) ? Math.min(100, Math.max(0, Math.round(v0))) : 100;
-	        this.settings.skinIntensity = v;
-	        this.saveSettings();
-	        if (skinIntensityValue) skinIntensityValue.textContent = `${v}%`;
-	        this.applyTheme();
-	        if (t) clearTimeout(t);
-	        t = setTimeout(() => this.updateGlobalUserSetting('ui.skinIntensity', v), 250);
-	      };
-	      skinIntensityRange.addEventListener('input', (e) => apply(e.target.value));
-	      skinIntensityRange.addEventListener('change', (e) => apply(e.target.value));
-	    }
+		    const skinIntensityRange = document.getElementById('skin-intensity-range');
+		    const skinIntensityValue = document.getElementById('skin-intensity-value');
+		    if (skinIntensityRange) {
+		      let t = null;
+		      const apply = (raw) => {
+		        const v0 = Number(raw);
+		        const v = Number.isFinite(v0) ? Math.min(100, Math.max(0, Math.round(v0))) : 100;
+		        this.settings.skinIntensity = v;
+		        this.saveSettings();
+		        if (skinIntensityValue) skinIntensityValue.textContent = `${v}%`;
+		        this.applyTheme();
+		        if (t) clearTimeout(t);
+		        t = setTimeout(() => this.updateGlobalUserSetting('ui.skinIntensity', v), 250);
+		      };
+		      skinIntensityRange.addEventListener('input', (e) => apply(e.target.value));
+		      skinIntensityRange.addEventListener('change', (e) => apply(e.target.value));
+		    }
 
-    const tasksThemeSelect = document.getElementById('tasks-theme-select');
-    if (tasksThemeSelect) {
-      tasksThemeSelect.addEventListener('change', (e) => {
-        const next = e.target.value;
-        this.updateGlobalUserSetting('ui.tasks.theme', next);
+		    // Settings UI helpers: search + section jump so the panel doesn’t feel like an endless scroll.
+		    this.setupSettingsPanelNavigation();
+
+	    const tasksThemeSelect = document.getElementById('tasks-theme-select');
+	    if (tasksThemeSelect) {
+	      tasksThemeSelect.addEventListener('change', (e) => {
+	        const next = e.target.value;
+	        this.updateGlobalUserSetting('ui.tasks.theme', next);
       });
     }
 
@@ -6883,10 +6895,10 @@ class ClaudeOrchestrator {
     };
   }
 
-	  getReviewConsoleConfig() {
-		    const cfg = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
-		      ? this.userSettings.global.ui.reviewConsole
-		      : {};
+		  getReviewConsoleConfig() {
+			    const cfg = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+			      ? this.userSettings.global.ui.reviewConsole
+			      : {};
 
 		    const presetRaw = String(cfg.preset || 'default').trim().toLowerCase();
 		    const allowedPresets = new Set(['default', 'review', 'deep', 'code', 'terminals', 'custom']);
@@ -6919,17 +6931,89 @@ class ClaudeOrchestrator {
 	    // Default to embedded diff (you can still Close it).
 	    const diffEmbed = cfg.diffEmbed !== false;
 
-	    return {
-	      preset,
-	      sections: appliedSections,
-	      fullscreen,
-      diffEmbed
-    };
-  }
+		    return {
+		      preset,
+		      sections: appliedSections,
+		      fullscreen,
+	      diffEmbed
+	    };
+	  }
 
-  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {
-    const msg = String(message || '').trim();
-    if (!msg) return;
+	  setupSettingsPanelNavigation() {
+	    const panel = document.getElementById('settings-panel');
+	    if (!panel) return;
+	    const content = panel.querySelector('.settings-content');
+	    if (!content) return;
+
+	    const searchEl = document.getElementById('settings-search');
+	    const jumpEl = document.getElementById('settings-jump');
+
+	    const sections = Array.from(content.querySelectorAll('.setting-section'));
+	    const titleForSection = (sectionEl) => {
+	      const h = sectionEl.querySelector('h4, h5');
+	      const title = String(h?.textContent || '').trim();
+	      return title || 'Section';
+	    };
+
+	    if (jumpEl) {
+	      try {
+	        const opts = sections.map((sectionEl, idx) => {
+	          const title = this.escapeHtml(titleForSection(sectionEl));
+	          return `<option value="${idx}">${title}</option>`;
+	        }).join('');
+	        jumpEl.innerHTML = `<option value="">Jump to…</option>${opts}`;
+	      } catch {
+	        // ignore
+	      }
+
+	      jumpEl.addEventListener('change', () => {
+	        const raw = String(jumpEl.value || '').trim();
+	        if (!raw) return;
+	        const idx = Number(raw);
+	        const target = Number.isFinite(idx) ? sections[idx] : null;
+	        if (target) {
+	          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	        }
+	        jumpEl.value = '';
+	      });
+	    }
+
+	    if (searchEl) {
+	      const applyFilter = () => {
+	        const query = String(searchEl.value || '').trim().toLowerCase();
+	        const groups = Array.from(content.querySelectorAll('.setting-group'));
+
+	        if (!query) {
+	          content.querySelectorAll('.settings-filter-hidden').forEach((el) => el.classList.remove('settings-filter-hidden'));
+	          return;
+	        }
+
+	        groups.forEach((groupEl) => {
+	          const text = String(groupEl.textContent || '').toLowerCase();
+	          groupEl.classList.toggle('settings-filter-hidden', !text.includes(query));
+	        });
+
+	        sections.forEach((sectionEl) => {
+	          const title = String(titleForSection(sectionEl)).toLowerCase();
+	          const anyVisibleGroup = Array.from(sectionEl.querySelectorAll('.setting-group')).some((groupEl) => !groupEl.classList.contains('settings-filter-hidden'));
+	          const show = title.includes(query) || anyVisibleGroup;
+	          sectionEl.classList.toggle('settings-filter-hidden', !show);
+	        });
+	      };
+
+	      searchEl.addEventListener('input', applyFilter);
+	      searchEl.addEventListener('keydown', (e) => {
+	        if (e.key !== 'Escape') return;
+	        if (!searchEl.value) return;
+	        searchEl.value = '';
+	        applyFilter();
+	      });
+	    }
+	  }
+
+	  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {
+	    const msg = String(message || '').trim();
+	    if (!msg) return;
 
     const cfg = this.getWorkflowNotificationConfig();
 
