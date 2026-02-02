@@ -15,6 +15,9 @@ class CommanderPanel {
     this.fitAddon = null;
     this.lastPasteAt = 0;
     this.pasteCooldownMs = 200;
+    this.commandModeEnabled = this.loadCommanderCommandModePreference();
+    this.commandCapture = null; // { display: string, text: string }
+    this.lineBuffer = '';
   }
 
   /**
@@ -23,6 +26,7 @@ class CommanderPanel {
   async init() {
     this.createPanelHTML();
     this.attachEventListeners();
+    this.updateCommanderCmdModeButton();
     this.setupSocketListeners();
     await this.fetchStatus();
   }
@@ -59,6 +63,9 @@ class CommanderPanel {
         <button id="commander-start" class="commander-btn" title="Start terminal">▶️ Start</button>
         <button id="commander-stop" class="commander-btn" title="Stop terminal">⏹️ Stop</button>
         <div class="commander-toolbar-divider"></div>
+        <button id="commander-cmdmode" class="commander-btn" title="Command mode: type / then a natural-language command to control the UI">
+          ⌨️ Cmd:on
+        </button>
         <button id="commander-start-claude" class="commander-btn" title="Start Claude Code">
           Start Claude
         </button>
@@ -155,9 +162,9 @@ class CommanderPanel {
       this.fetchInitialOutput();
     });
 
-    // Handle input - send to Commander service
-    this.terminal.onData(data => {
-      this.sendInput(data);
+    // Handle input - send to Commander service (with optional command-mode interception)
+    this.terminal.onData((data) => {
+      this.handleTerminalData(data);
     });
 
     // Clipboard shortcuts (Commander terminal is not managed by TerminalManager)
@@ -243,6 +250,16 @@ class CommanderPanel {
     document.getElementById('commander-start-claude')?.addEventListener('click', () => {
       const mode = document.getElementById('commander-mode')?.value || 'fresh';
       this.startClaude(mode);
+    });
+
+    // Command mode toggle
+    document.getElementById('commander-cmdmode')?.addEventListener('click', () => {
+      this.commandModeEnabled = !this.commandModeEnabled;
+      this.saveCommanderCommandModePreference(this.commandModeEnabled);
+      this.updateCommanderCmdModeButton();
+      if (this.terminal) {
+        this.terminal.writeln(`\r\n[cmd] command mode ${this.commandModeEnabled ? 'enabled' : 'disabled'}\r`);
+      }
     });
 
     // Sessions button
@@ -587,6 +604,135 @@ class CommanderPanel {
     } catch (error) {
       console.error('Failed to start Claude:', error);
     }
+  }
+
+  loadCommanderCommandModePreference() {
+    try {
+      const raw = localStorage.getItem('orchestrator-commander-command-mode');
+      if (raw == null) return true;
+      return String(raw).toLowerCase() !== 'false';
+    } catch {
+      return true;
+    }
+  }
+
+  saveCommanderCommandModePreference(enabled) {
+    try {
+      localStorage.setItem('orchestrator-commander-command-mode', enabled ? 'true' : 'false');
+    } catch {
+      // ignore
+    }
+  }
+
+  updateCommanderCmdModeButton() {
+    const btn = document.getElementById('commander-cmdmode');
+    if (!btn) return;
+    btn.textContent = this.commandModeEnabled ? '⌨️ Cmd:on' : '⌨️ Cmd:off';
+  }
+
+  isPrintableChar(data) {
+    if (!data) return false;
+    if (data === '\r' || data === '\n' || data === '\x7f') return false;
+    if (String(data).startsWith('\x1b')) return false; // escape sequences (arrows, etc.)
+    return true;
+  }
+
+  resetLocalLineBuffer() {
+    this.lineBuffer = '';
+  }
+
+  updateLocalLineBufferFromData(data) {
+    if (!data) return;
+    if (data === '\r' || data === '\n') {
+      this.resetLocalLineBuffer();
+      return;
+    }
+    if (data === '\x7f') {
+      this.lineBuffer = this.lineBuffer.slice(0, -1);
+      return;
+    }
+    if (this.isPrintableChar(data)) {
+      this.lineBuffer += data;
+    }
+  }
+
+  async executeTextCommand(text) {
+    const input = String(text || '').trim();
+    if (!input) return;
+    try {
+      const response = await fetch(`${this.serverUrl}/api/commander/execute-text`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: input })
+      });
+      const data = await response.json().catch(() => ({}));
+
+      const ok = response.ok && data && data.ok === true;
+      const parsed = data?.parsed;
+      const result = data?.result;
+      const cmdName = parsed?.success ? String(parsed.command || '').trim() : '';
+
+      if (this.terminal) {
+        const header = cmdName ? `[cmd] ${cmdName}` : '[cmd]';
+        if (!ok) {
+          const err = String(parsed?.error || data?.error || 'Could not understand command');
+          this.terminal.writeln(`\r\n${header} ✗ ${err}\r`);
+          return;
+        }
+        const msg = String(result?.message || '').trim();
+        this.terminal.writeln(`\r\n${header} ✓${msg ? ` ${msg}` : ''}\r`);
+      }
+    } catch (error) {
+      if (this.terminal) {
+        this.terminal.writeln(`\r\n[cmd] ✗ ${String(error?.message || error)}\r`);
+      }
+    }
+  }
+
+  handleTerminalData(data) {
+    // If we're currently capturing a command, don't forward to Commander PTY.
+    if (this.commandCapture) {
+      if (data === '\r' || data === '\n') {
+        const text = String(this.commandCapture.text || '').trim();
+        this.commandCapture = null;
+        this.resetLocalLineBuffer();
+        if (this.terminal) this.terminal.write('\r\n');
+        this.executeTextCommand(text);
+        return;
+      }
+      if (data === '\x03') {
+        // Ctrl+C cancels command capture.
+        this.commandCapture = null;
+        this.resetLocalLineBuffer();
+        if (this.terminal) this.terminal.write('^C\r\n');
+        return;
+      }
+      if (data === '\x7f') {
+        if (this.commandCapture.display.length > 1) {
+          this.commandCapture.display = this.commandCapture.display.slice(0, -1);
+          this.commandCapture.text = this.commandCapture.text.slice(0, -1);
+          if (this.terminal) this.terminal.write('\b \b');
+        }
+        return;
+      }
+      if (this.isPrintableChar(data)) {
+        this.commandCapture.display += data;
+        this.commandCapture.text += data;
+        if (this.terminal) this.terminal.write(data);
+      }
+      return;
+    }
+
+    // Start command capture only on a single "/" at the beginning of the current line buffer.
+    if (this.commandModeEnabled && data === '/' && (this.lineBuffer || '') === '') {
+      this.commandCapture = { display: '/', text: '' };
+      if (this.terminal) this.terminal.write('/');
+      return;
+    }
+
+    // Normal mode: forward to Commander PTY and keep a best-effort local line buffer.
+    this.updateLocalLineBufferFromData(data);
+    this.sendInput(data);
   }
 
   /**
