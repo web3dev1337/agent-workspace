@@ -9063,10 +9063,14 @@ class ClaudeOrchestrator {
 			        `;
 			      })();
 
-			      const terminalsPanelHiddenClass = (!matchingSessionIds.length || currentSections.terminals === false) ? 'hidden' : '';
-			      const filesPanelHiddenClass = currentSections.files === false ? 'hidden' : '';
-			      const commitsPanelHiddenClass = currentSections.commits === false ? 'hidden' : '';
-			      const diffPanelHiddenClass = currentSections.diff === false ? 'hidden' : '';
+				      const terminalsPanelHiddenClass = (!matchingSessionIds.length || currentSections.terminals === false) ? 'hidden' : '';
+				      const filesPanelHiddenClass = currentSections.files === false ? 'hidden' : '';
+				      const commitsPanelHiddenClass = currentSections.commits === false ? 'hidden' : '';
+				      const diffPanelHiddenClass = currentSections.diff === false ? 'hidden' : '';
+
+				      const terminalsColumnHiddenClass = (!matchingSessionIds.length || currentSections.terminals === false) ? 'hidden' : '';
+				      const metaColumnHiddenClass = (currentSections.files === false && currentSections.commits === false) ? 'hidden' : '';
+				      const diffColumnHiddenClass = currentSections.diff === false ? 'hidden' : '';
 
 	      bodyEl.innerHTML = `
 	        <div class="worktree-inspector-header review-console-header">
@@ -9107,23 +9111,25 @@ class ClaudeOrchestrator {
 
 			        ${layoutPanel}
 
-				        <div class="review-console-grid" data-rc-grid="true">
-				          <div class="review-console-left" data-rc-column="left">
-				            ${matchingSessionIds.length ? `
-				              <div class="worktree-inspector-panel worktree-inspector-terminals-panel ${terminalsPanelHiddenClass}" data-rc-panel="terminals">
-				                <div class="worktree-inspector-panel-title-row">
-				                  <div class="worktree-inspector-panel-title">Terminals</div>
-				                  <div class="worktree-inspector-subtle">${matchingSessionIds.length} linked</div>
-				                </div>
-				                <div class="worktree-inspector-terminals" data-pr-terminals="true"></div>
-				              </div>
-				            ` : ''}
+					        <div class="review-console-grid" data-rc-grid="true">
+					          <div class="review-console-col review-console-col-terminals ${terminalsColumnHiddenClass}" data-rc-column="terminals">
+					            ${matchingSessionIds.length ? `
+					              <div class="worktree-inspector-panel worktree-inspector-terminals-panel ${terminalsPanelHiddenClass}" data-rc-panel="terminals">
+					                <div class="worktree-inspector-panel-title-row">
+					                  <div class="worktree-inspector-panel-title">Terminals</div>
+					                  <div class="worktree-inspector-subtle">${matchingSessionIds.length} linked</div>
+					                </div>
+					                <div class="worktree-inspector-terminals" data-pr-terminals="true"></div>
+					              </div>
+					            ` : ''}
+					          </div>
 
-				            <div class="worktree-inspector-panel worktree-inspector-files ${filesPanelHiddenClass}" data-rc-panel="files">
-				              <div class="worktree-inspector-panel-title-row">
-				                <div class="worktree-inspector-panel-title">Files</div>
-				                <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
-				              </div>
+					          <div class="review-console-col review-console-col-meta ${metaColumnHiddenClass}" data-rc-column="meta">
+					            <div class="worktree-inspector-panel worktree-inspector-files ${filesPanelHiddenClass}" data-rc-panel="files">
+					              <div class="worktree-inspector-panel-title-row">
+					                <div class="worktree-inspector-panel-title">Files</div>
+					                <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
+					              </div>
 				              <div class="worktree-inspector-files-list">
 				                <table class="worktree-inspector-table">
 				                  <thead>
@@ -9151,12 +9157,12 @@ class ClaudeOrchestrator {
 				                      </tr>`;
 				                    }).join('')}
 				                  </tbody>
-				                </table>
-				                ${files.length === 0 ? '<div class="worktree-inspector-subtle">No files found.</div>' : ''}
-				              </div>
-				            </div>
+					                </table>
+					                ${files.length === 0 ? '<div class="worktree-inspector-subtle">No files found.</div>' : ''}
+					              </div>
+					            </div>
 
-				            <div class="worktree-inspector-panel worktree-inspector-commits ${commitsPanelHiddenClass}" data-rc-panel="commits">
+					            <div class="worktree-inspector-panel worktree-inspector-commits ${commitsPanelHiddenClass}" data-rc-panel="commits">
 				              <div class="worktree-inspector-panel-title-row">
 				                <div class="worktree-inspector-panel-title">Commits</div>
 				                <div class="worktree-inspector-subtle">count ${commits.length}</div>
@@ -9178,58 +9184,63 @@ class ClaudeOrchestrator {
 				                  <div class="worktree-inspector-subtle">reviews ${reviews.length} • comments ${issueComments.length}</div>
 				                </div>
 				                <div>
-				                  ${commentItems.length ? commentItems.slice(-15).map(renderComment).join('') : '<div class="worktree-inspector-subtle">No recent comments/reviews found.</div>'}
-				                </div>
-				              </div>
-				            </div>
-				          </div>
+					                  ${commentItems.length ? commentItems.slice(-15).map(renderComment).join('') : '<div class="worktree-inspector-subtle">No recent comments/reviews found.</div>'}
+					                </div>
+					              </div>
+					            </div>
+					          </div>
 
-				          <div class="review-console-right" data-rc-column="right">
-				            <div class="worktree-inspector-panel worktree-inspector-diff-panel ${diffPanelHiddenClass}" data-rc-panel="diff">
-				              <div class="worktree-inspector-panel-title-row">
-				                <div class="worktree-inspector-panel-title">Diff</div>
-				                <div class="worktree-inspector-subtle worktree-inspector-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)')}</div>
-				              </div>
+					          <div class="review-console-col review-console-col-diff ${diffColumnHiddenClass}" data-rc-column="diff">
+					            <div class="worktree-inspector-panel worktree-inspector-diff-panel ${diffPanelHiddenClass}" data-rc-panel="diff">
+					              <div class="worktree-inspector-panel-title-row">
+					                <div class="worktree-inspector-panel-title">Diff</div>
+					                <div class="worktree-inspector-subtle worktree-inspector-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)')}</div>
+					              </div>
 				              <div class="worktree-inspector-diff-controls">
 				                <button class="btn-secondary" type="button" data-diff-embed="true">Embed</button>
 				                <button class="btn-secondary" type="button" data-diff-open="true">Open</button>
 				                <button class="btn-secondary" type="button" data-diff-refresh="true">Refresh</button>
 				                <button class="btn-secondary" type="button" data-diff-close="true">Close</button>
 				              </div>
-				              <iframe class="worktree-inspector-diff-iframe hidden" data-diff-iframe="true" title="Diff Viewer"></iframe>
-				            </div>
-				          </div>
-				        </div>
+					              <iframe class="worktree-inspector-diff-iframe hidden" data-diff-iframe="true" title="Diff Viewer"></iframe>
+					            </div>
+					          </div>
+					        </div>
 
 	        <div data-rc-empty="true" class="worktree-inspector-subtle hidden" style="padding:12px;">No sections enabled.</div>
 	      `;
 
 		      const terminalsPanelEl = bodyEl.querySelector('[data-rc-panel="terminals"]');
 		      const filesPanelEl = bodyEl.querySelector('[data-rc-panel="files"]');
-		      const commitsPanelEl = bodyEl.querySelector('[data-rc-panel="commits"]');
-		      const diffPanelEl = bodyEl.querySelector('[data-rc-panel="diff"]');
-		      const gridEl = bodyEl.querySelector('[data-rc-grid="true"]');
-		      const emptyEl = bodyEl.querySelector('[data-rc-empty="true"]');
-		      const leftColEl = bodyEl.querySelector('[data-rc-column="left"]');
-		      const rightColEl = bodyEl.querySelector('[data-rc-column="right"]');
+			      const commitsPanelEl = bodyEl.querySelector('[data-rc-panel="commits"]');
+			      const diffPanelEl = bodyEl.querySelector('[data-rc-panel="diff"]');
+			      const gridEl = bodyEl.querySelector('[data-rc-grid="true"]');
+			      const emptyEl = bodyEl.querySelector('[data-rc-empty="true"]');
+			      const terminalsColEl = bodyEl.querySelector('[data-rc-column="terminals"]');
+			      const metaColEl = bodyEl.querySelector('[data-rc-column="meta"]');
+			      const diffColEl = bodyEl.querySelector('[data-rc-column="diff"]');
 
-		      const updateGrid = () => {
-		        if (!gridEl || !emptyEl) return;
-		        const terminalsVisible = !!(terminalsPanelEl && !terminalsPanelEl.classList.contains('hidden'));
-		        const filesVisible = !!(filesPanelEl && !filesPanelEl.classList.contains('hidden'));
-		        const commitsVisible = !!(commitsPanelEl && !commitsPanelEl.classList.contains('hidden'));
-		        const diffVisible = !!(diffPanelEl && !diffPanelEl.classList.contains('hidden'));
+			      const updateGrid = () => {
+			        if (!gridEl || !emptyEl) return;
+			        const terminalsVisible = !!(terminalsPanelEl && !terminalsPanelEl.classList.contains('hidden'));
+			        const filesVisible = !!(filesPanelEl && !filesPanelEl.classList.contains('hidden'));
+			        const commitsVisible = !!(commitsPanelEl && !commitsPanelEl.classList.contains('hidden'));
+			        const diffVisible = !!(diffPanelEl && !diffPanelEl.classList.contains('hidden'));
 
-		        const leftVisible = terminalsVisible || filesVisible || commitsVisible;
-		        if (leftColEl) leftColEl.classList.toggle('hidden', !leftVisible);
-		        if (rightColEl) rightColEl.classList.toggle('hidden', !diffVisible);
+			        const metaVisible = filesVisible || commitsVisible;
 
-		        const visibleCount = [terminalsVisible, filesVisible, commitsVisible, diffVisible].filter(Boolean).length;
-		        emptyEl.classList.toggle('hidden', visibleCount > 0);
-		        gridEl.classList.toggle('hidden', visibleCount === 0);
-		        // If only one column has visible content, collapse to a single column layout.
-		        gridEl.classList.toggle('one-column', !leftVisible || !diffVisible);
-		      };
+			        if (terminalsColEl) terminalsColEl.classList.toggle('hidden', !terminalsVisible);
+			        if (metaColEl) metaColEl.classList.toggle('hidden', !metaVisible);
+			        if (diffColEl) diffColEl.classList.toggle('hidden', !diffVisible);
+
+			        const visiblePanels = [terminalsVisible, filesVisible, commitsVisible, diffVisible].filter(Boolean).length;
+			        emptyEl.classList.toggle('hidden', visiblePanels > 0);
+			        gridEl.classList.toggle('hidden', visiblePanels === 0);
+
+			        const visibleCols = [terminalsVisible, metaVisible, diffVisible].filter(Boolean).length;
+			        gridEl.classList.toggle('one-column', visibleCols === 1);
+			        gridEl.classList.toggle('two-column', visibleCols === 2);
+			      };
 
 	      const persist = async () => {
 	        const existing = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
