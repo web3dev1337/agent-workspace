@@ -6702,14 +6702,14 @@ class ClaudeOrchestrator {
     };
   }
 
-  getReviewConsoleConfig() {
-    const cfg = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
-      ? this.userSettings.global.ui.reviewConsole
-      : {};
+	  getReviewConsoleConfig() {
+	    const cfg = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+	      ? this.userSettings.global.ui.reviewConsole
+	      : {};
 
-    const presetRaw = String(cfg.preset || 'default').trim().toLowerCase();
-    const allowedPresets = new Set(['default', 'review', 'deep', 'code', 'terminals', 'custom']);
-    const preset = allowedPresets.has(presetRaw) ? presetRaw : 'default';
+	    const presetRaw = String(cfg.preset || 'review').trim().toLowerCase();
+	    const allowedPresets = new Set(['default', 'review', 'deep', 'code', 'terminals', 'custom']);
+	    const preset = allowedPresets.has(presetRaw) ? presetRaw : 'default';
 
     const rawSections = (cfg.sections && typeof cfg.sections === 'object') ? cfg.sections : {};
     const storedSections = {
@@ -6719,27 +6719,29 @@ class ClaudeOrchestrator {
       diff: rawSections.diff !== false
     };
 
-    const presets = {
-      default: { terminals: true, files: true, commits: true, diff: true },
-      review: { terminals: true, files: true, commits: false, diff: true },
-      deep: { terminals: true, files: true, commits: true, diff: true },
-      code: { terminals: false, files: true, commits: true, diff: true },
-      terminals: { terminals: true, files: false, commits: false, diff: false }
-    };
+	    const presets = {
+	      default: { terminals: true, files: true, commits: true, diff: true },
+	      // Batch-review first: terminals + diff. Files/commits are still available via toggles.
+	      review: { terminals: true, files: false, commits: false, diff: true },
+	      deep: { terminals: true, files: true, commits: true, diff: true },
+	      code: { terminals: false, files: true, commits: true, diff: true },
+	      terminals: { terminals: true, files: false, commits: false, diff: false }
+	    };
 
     const appliedSections = (preset !== 'custom' && presets[preset])
       ? { ...presets[preset] }
       : { ...storedSections };
 
-    // Default to fullscreen for Review Console: it's meant to be a proper "review surface".
-    // Users can explicitly dock it via Settings → Review Console → Fullscreen (off).
-    const fullscreen = cfg.fullscreen !== false;
-    const diffEmbed = cfg.diffEmbed === true;
+	    // Default to fullscreen for Review Console: it's meant to be a proper "review surface".
+	    // Users can explicitly dock it via Settings → Review Console → Fullscreen (off).
+	    const fullscreen = cfg.fullscreen !== false;
+	    // Default to embedded diff (you can still Close it).
+	    const diffEmbed = cfg.diffEmbed !== false;
 
-    return {
-      preset,
-      sections: appliedSections,
-      fullscreen,
+	    return {
+	      preset,
+	      sections: appliedSections,
+	      fullscreen,
       diffEmbed
     };
   }
@@ -7459,15 +7461,27 @@ class ClaudeOrchestrator {
 			      ` : '';
 
 		      const files = Array.isArray(summary?.files) ? summary.files : [];
-		      const formatStat = (s) => {
-		        const stat = s && typeof s === 'object' ? s : null;
-		        if (!stat) return '';
-	        if (stat.binary) return 'bin';
-	        const added = Number(stat.added || 0);
-	        const deleted = Number(stat.deleted || 0);
-	        if (!added && !deleted) return '';
-	        return `+${added}/-${deleted}`;
-	      };
+			      const statParts = (s) => {
+			        const stat = s && typeof s === 'object' ? s : null;
+			        if (!stat) return { binary: false, added: 0, deleted: 0 };
+			        if (stat.binary) return { binary: true, added: 0, deleted: 0 };
+			        return {
+			          binary: false,
+			          added: Number(stat.added || 0) || 0,
+			          deleted: Number(stat.deleted || 0) || 0
+			        };
+			      };
+
+			      const renderStat = (parts) => {
+			        const p0 = parts && typeof parts === 'object' ? parts : { binary: false, added: 0, deleted: 0 };
+			        if (p0.binary) return '<span class="diff-binary">bin</span>';
+			        const added = Number(p0.added || 0) || 0;
+			        const deleted = Number(p0.deleted || 0) || 0;
+			        if (!added && !deleted) return '';
+			        const plus = added ? `<span class="diff-plus">+${added}</span>` : '';
+			        const minus = deleted ? `<span class="diff-minus">-${deleted}</span>` : '';
+			        return [plus, minus].filter(Boolean).join(' ');
+			      };
 
 		      const statusMeta = (status) => {
 		        const s = String(status || '').trim() || '·';
@@ -7483,25 +7497,25 @@ class ClaudeOrchestrator {
 		        return { cls, glyph: '·', title: `unknown (${s})` };
 		      };
 
-		      const fileRows = files.map((f) => {
-		        const status = `${String(f?.indexStatus || ' ')}${String(f?.worktreeStatus || ' ')}`.trim() || '·';
-		        const { cls: statusClass, glyph: statusGlyph, title: statusTitle } = statusMeta(status);
-		        const staged = formatStat(f?.staged);
-		        const unstaged = formatStat(f?.unstaged);
-		        const path = escapeHtml(f?.path || '');
-		        const oldPath = f?.oldPath ? escapeHtml(f.oldPath) : '';
-		        const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
-		        const rawPath = escapeHtml(String(f?.path || '').replace(/\\/g, '/'));
-		        return `
-		          <tr>
-		            <td class="mono"><span class="worktree-inspector-tree-status ${statusClass}" title="${escapeHtml(statusTitle)}">${escapeHtml(statusGlyph)}</span></td>
-		            <td class="mono">${path}${renameHint}</td>
-		            <td class="mono">${escapeHtml(staged)}</td>
-		            <td class="mono">${escapeHtml(unstaged)}</td>
-		            <td><button class="btn-secondary worktree-inspector-mini-btn" type="button" data-file-sync="${rawPath}" title="Copy this file to another worktree">Sync</button></td>
-		          </tr>
-		        `;
-		      }).join('');
+			      const fileRows = files.map((f) => {
+			        const status = `${String(f?.indexStatus || ' ')}${String(f?.worktreeStatus || ' ')}`.trim() || '·';
+			        const { cls: statusClass, glyph: statusGlyph, title: statusTitle } = statusMeta(status);
+			        const staged = renderStat(statParts(f?.staged));
+			        const unstaged = renderStat(statParts(f?.unstaged));
+			        const path = escapeHtml(f?.path || '');
+			        const oldPath = f?.oldPath ? escapeHtml(f.oldPath) : '';
+			        const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
+			        const rawPath = escapeHtml(String(f?.path || '').replace(/\\/g, '/'));
+			        return `
+			          <tr>
+			            <td class="mono"><span class="worktree-inspector-tree-status ${statusClass}" title="${escapeHtml(statusTitle)}">${escapeHtml(statusGlyph)}</span></td>
+			            <td class="mono">${path}${renameHint}</td>
+			            <td class="mono">${staged}</td>
+			            <td class="mono">${unstaged}</td>
+			            <td><button class="btn-secondary worktree-inspector-mini-btn" type="button" data-file-sync="${rawPath}" title="Copy this file to another worktree">Sync</button></td>
+			          </tr>
+			        `;
+			      }).join('');
 
 	      const filesViewKey = 'worktree-inspector-files-view';
 	      const filesViewRaw = String(localStorage.getItem(filesViewKey) || '').trim().toLowerCase();
@@ -8705,17 +8719,19 @@ class ClaudeOrchestrator {
                   ${files.map((f) => {
                     const st = statusLabel(f.status);
                     const cls = statusClass(f.status);
-                    const adds = Number.isFinite(Number(f.additions)) ? Number(f.additions) : null;
-                    const dels = Number.isFinite(Number(f.deletions)) ? Number(f.deletions) : null;
-                    const delta = (adds != null && dels != null) ? `${adds} / ${dels}` : '';
-                    const name = escapeHtml(f.filename || '');
-                    const prev = f.previousFilename ? ` <span style="opacity:0.65;">(was ${escapeHtml(f.previousFilename)})</span>` : '';
-                    return `<tr>
-                      <td><span class="worktree-inspector-tree-status ${cls}">${escapeHtml(st)}</span></td>
-                      <td style="font-family:var(--font-mono); font-size:0.9rem;">${name}${prev}</td>
-                      <td style="opacity:0.85;">${escapeHtml(delta)}</td>
-                    </tr>`;
-                  }).join('')}
+	                    const adds = Number.isFinite(Number(f.additions)) ? Number(f.additions) : null;
+	                    const dels = Number.isFinite(Number(f.deletions)) ? Number(f.deletions) : null;
+	                    const plus = (adds != null && adds > 0) ? `<span class="diff-plus">+${adds}</span>` : '';
+	                    const minus = (dels != null && dels > 0) ? `<span class="diff-minus">-${dels}</span>` : '';
+	                    const delta = [plus, minus].filter(Boolean).join(' ');
+	                    const name = escapeHtml(f.filename || '');
+	                    const prev = f.previousFilename ? ` <span style="opacity:0.65;">(was ${escapeHtml(f.previousFilename)})</span>` : '';
+	                    return `<tr>
+	                      <td><span class="worktree-inspector-tree-status ${cls}">${escapeHtml(st)}</span></td>
+	                      <td style="font-family:var(--font-mono); font-size:0.9rem;">${name}${prev}</td>
+	                      <td style="opacity:0.9;">${delta}</td>
+	                    </tr>`;
+	                  }).join('')}
                 </tbody>
               </table>
               ${files.length === 0 ? '<div class="worktree-inspector-subtle">No files found.</div>' : ''}
@@ -8818,10 +8834,11 @@ class ClaudeOrchestrator {
         diffIframe.classList.add('hidden');
       });
 
-	      // Default: embed (since there are no local terminals to show).
-	      if (!matchingSessionIds.length) {
-	        embed().catch(() => {});
-	      }
+		      // Default: embed when enabled in Review Console settings (terminals or not).
+		      const rcCfg = this.getReviewConsoleConfig();
+		      if (rcCfg?.diffEmbed !== false) {
+		        embed().catch(() => {});
+		      }
 
 		      // If we have terminals that are already linked to this PR, dock them into the PR console.
 		      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');

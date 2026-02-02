@@ -55,13 +55,25 @@ class UserSettingsService {
             }
           }
         },
-        ui: {
-          theme: 'dark',
-          skin: 'default',
-          discord: {
-            // If enabled, the server will call POST /api/discord/ensure-services on startup
-            // (via internal service call) to keep Claudesworth online after restarts.
-            autoEnsureServicesAtStartup: false
+	        ui: {
+	          theme: 'dark',
+	          skin: 'default',
+	          reviewConsole: {
+	            // Default layout intent: a batch-review surface. Keep it fullscreen and show diff by default.
+	            preset: 'review', // default | review | deep | code | terminals | custom
+	            fullscreen: true,
+	            diffEmbed: true,
+	            sections: {
+	              terminals: true,
+	              files: false,
+	              commits: false,
+	              diff: true
+	            }
+	          },
+	          discord: {
+	            // If enabled, the server will call POST /api/discord/ensure-services on startup
+	            // (via internal service call) to keep Claudesworth online after restarts.
+	            autoEnsureServicesAtStartup: false
           },
           branches: {
             // Branch label rendering in Worktree list and terminal headers.
@@ -363,17 +375,36 @@ class UserSettingsService {
           merged.global.ui.skin = ui.skin;
         }
 
-        if (ui.diffViewer) {
-          merged.global.ui.diffViewer = {
-            ...(merged.global.ui.diffViewer || {}),
-            ...(ui.diffViewer || {})
-          };
-        }
+	        if (ui.diffViewer) {
+	          merged.global.ui.diffViewer = {
+	            ...(merged.global.ui.diffViewer || {}),
+	            ...(ui.diffViewer || {})
+	          };
+	        }
 
-        if (ui.workflow) {
-          const defaultsWorkflow = (uiDefaults.workflow || {});
-          const wf = ui.workflow || {};
-          merged.global.ui.workflow = {
+	        if (ui.reviewConsole) {
+	          const defaultsReviewConsole = (uiDefaults.reviewConsole && typeof uiDefaults.reviewConsole === 'object')
+	            ? uiDefaults.reviewConsole
+	            : {};
+	          const rc = ui.reviewConsole || {};
+	          const defaultsSections = (defaultsReviewConsole.sections && typeof defaultsReviewConsole.sections === 'object')
+	            ? defaultsReviewConsole.sections
+	            : {};
+	          const rcSections = (rc.sections && typeof rc.sections === 'object') ? rc.sections : {};
+	          merged.global.ui.reviewConsole = {
+	            ...defaultsReviewConsole,
+	            ...rc,
+	            sections: {
+	              ...defaultsSections,
+	              ...rcSections
+	            }
+	          };
+	        }
+
+	        if (ui.workflow) {
+	          const defaultsWorkflow = (uiDefaults.workflow || {});
+	          const wf = ui.workflow || {};
+	          merged.global.ui.workflow = {
             ...defaultsWorkflow,
             ...wf,
             focus: {

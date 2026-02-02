@@ -1344,11 +1344,21 @@ header h1 {
   padding-right: 2px;
 }
 
+/* Review Console is intended as a single-screen review surface:
+   keep scrolling inside panels (diff/terminals/files/commits), not the outer modal. */
+.worktree-inspector-modal.fullscreen .worktree-inspector-body,
+.worktree-inspector-modal.docked .worktree-inspector-body {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .worktree-inspector-header {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .worktree-inspector-chip {
@@ -1384,6 +1394,9 @@ header h1 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .worktree-inspector-grid.one-column {
@@ -1411,20 +1424,41 @@ header h1 {
   overflow: hidden;
 }
 
+.worktree-inspector-modal.fullscreen .worktree-inspector-panel,
+.worktree-inspector-modal.docked .worktree-inspector-panel {
+  overflow: auto;
+}
+
 .worktree-inspector-terminals {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
 .worktree-inspector-terminals .terminal-wrapper.review-console-terminal {
-  height: clamp(220px, 32vh, 360px);
-  min-height: 220px;
+  height: clamp(260px, 38vh, 520px);
+  min-height: 260px;
 }
 
 .worktree-inspector-layout-panel {
   padding: 10px 12px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
+}
+
+/* Diff stats inline colors */
+.diff-plus {
+  color: var(--accent-success);
+  font-weight: 600;
+}
+
+.diff-minus {
+  color: var(--accent-danger);
+  font-weight: 600;
+}
+
+.diff-binary {
+  opacity: 0.8;
+  font-style: italic;
 }
 
 .worktree-inspector-layout-row {
