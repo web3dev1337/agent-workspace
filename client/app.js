@@ -127,6 +127,38 @@ class ClaudeOrchestrator {
     return key ? `${prefix}-${key}` : `${prefix}-`;
   }
 
+  cssEscape(value) {
+    const s = String(value ?? '');
+    try {
+      if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(s);
+    } catch {
+      // ignore
+    }
+    // Minimal fallback: escape anything that would break selectors (e.g. `/` in mixed-repo ids).
+    return s.replace(/[^a-zA-Z0-9_-]/g, (ch) => `\\${ch}`);
+  }
+
+  getSessionWrapperElement(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return null;
+    const wrapperId = this.getSessionDomId('wrapper', sid);
+    let wrapper = document.getElementById(wrapperId);
+    if (wrapper) return wrapper;
+
+    // Back-compat: older DOM nodes may have non-DOM-safe ids (e.g. `wrapper-owner/repo-claude`).
+    // Find them via data attr and then re-id them to the safe id.
+    const grid = this.getTerminalGrid?.() || document;
+    try {
+      wrapper = grid.querySelector(`.terminal-wrapper[data-session-id="${this.cssEscape(sid)}"]`);
+    } catch {
+      wrapper = null;
+    }
+    if (wrapper && wrapper.id !== wrapperId) {
+      try { wrapper.id = wrapperId; } catch {}
+    }
+    return wrapper || null;
+  }
+
   syncSidebarBackdrop() {
     const backdrop = document.getElementById('sidebar-backdrop');
     if (!backdrop) return;
@@ -3447,7 +3479,7 @@ class ClaudeOrchestrator {
       const session = this.sessions.get(sessionId);
       const isVisible = this.isSessionVisibleInCurrentView(sessionId);
       const wrapperId = this.getSessionDomId('wrapper', sessionId);
-      let wrapper = document.getElementById(wrapperId);
+      let wrapper = this.getSessionWrapperElement(sessionId);
       if (wrapper && !grid.contains(wrapper)) wrapper = null;
 
       console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}, exists=${!!wrapper}`);
@@ -3768,7 +3800,7 @@ class ClaudeOrchestrator {
   }
 
 	  updateTerminalBranchLabel(sessionId, branch) {
-	    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
+	    const wrapper = this.getSessionWrapperElement(sessionId);
 	    const terminalElement = wrapper ? wrapper.querySelector('.terminal-branch') : null;
 	    if (!terminalElement) return;
 	    const meta = this.formatBranchLabel(branch, { context: 'terminal' });
@@ -3832,7 +3864,7 @@ class ClaudeOrchestrator {
 		    const sid = String(sessionId || '').trim();
 		    if (!sid) return;
 		
-		    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sid));
+		    const wrapper = this.getSessionWrapperElement(sid);
 		    if (!wrapper) return;
 	
 	    const titleRow = wrapper.querySelector('.terminal-title');
@@ -3908,6 +3940,7 @@ class ClaudeOrchestrator {
     const wrapper = document.createElement('div');
     wrapper.className = 'terminal-wrapper';
     wrapper.id = this.getSessionDomId('wrapper', sessionId);
+    wrapper.dataset.sessionId = String(sessionId || '');
     wrapper.addEventListener('mousedown', () => {
       this.lastInteractedSessionId = sessionId;
     });
@@ -4599,9 +4632,9 @@ class ClaudeOrchestrator {
     return '<option value="development">Dev</option><option value="production">Prod</option>';
   }
 
-	  updateServerControls(sessionId) {
-	    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
-	    if (!wrapper) return;
+		  updateServerControls(sessionId) {
+		    const wrapper = this.getSessionWrapperElement(sessionId);
+		    if (!wrapper) return;
 
     const controlsDiv = wrapper.querySelector('.terminal-controls');
     if (!controlsDiv) return;
@@ -8859,118 +8892,129 @@ class ClaudeOrchestrator {
 
 			        ${layoutPanel}
 
-			        <div class="worktree-inspector-grid" data-rc-grid="true">
-			          ${matchingSessionIds.length ? `
-			            <div class="worktree-inspector-panel worktree-inspector-terminals-panel ${terminalsPanelHiddenClass}" data-rc-panel="terminals">
-			              <div class="worktree-inspector-panel-title-row">
-		                <div class="worktree-inspector-panel-title">Terminals</div>
-		                <div class="worktree-inspector-subtle">${matchingSessionIds.length} linked</div>
-		              </div>
-		              <div class="worktree-inspector-terminals" data-pr-terminals="true"></div>
-		            </div>
-		          ` : ''}
+				        <div class="review-console-grid" data-rc-grid="true">
+				          <div class="review-console-left" data-rc-column="left">
+				            ${matchingSessionIds.length ? `
+				              <div class="worktree-inspector-panel worktree-inspector-terminals-panel ${terminalsPanelHiddenClass}" data-rc-panel="terminals">
+				                <div class="worktree-inspector-panel-title-row">
+				                  <div class="worktree-inspector-panel-title">Terminals</div>
+				                  <div class="worktree-inspector-subtle">${matchingSessionIds.length} linked</div>
+				                </div>
+				                <div class="worktree-inspector-terminals" data-pr-terminals="true"></div>
+				              </div>
+				            ` : ''}
 
-		          <div class="worktree-inspector-panel worktree-inspector-files ${filesPanelHiddenClass}" data-rc-panel="files">
-		            <div class="worktree-inspector-panel-title-row">
-		              <div class="worktree-inspector-panel-title">Files</div>
-		              <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
-	            </div>
-            <div class="worktree-inspector-files-list">
-              <table class="worktree-inspector-table">
-                <thead>
-                  <tr>
-                    <th style="width:60px;">Δ</th>
-                    <th>path</th>
-                    <th style="width:80px;">+ / -</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${files.map((f) => {
-                    const st = statusLabel(f.status);
-                    const cls = statusClass(f.status);
-	                    const adds = Number.isFinite(Number(f.additions)) ? Number(f.additions) : null;
-	                    const dels = Number.isFinite(Number(f.deletions)) ? Number(f.deletions) : null;
-	                    const plus = (adds != null && adds > 0) ? `<span class="diff-plus">+${adds}</span>` : '';
-	                    const minus = (dels != null && dels > 0) ? `<span class="diff-minus">-${dels}</span>` : '';
-	                    const delta = [plus, minus].filter(Boolean).join(' ');
-	                    const name = escapeHtml(f.filename || '');
-	                    const prev = f.previousFilename ? ` <span style="opacity:0.65;">(was ${escapeHtml(f.previousFilename)})</span>` : '';
-	                    return `<tr>
-	                      <td><span class="worktree-inspector-tree-status ${cls}">${escapeHtml(st)}</span></td>
-	                      <td style="font-family:var(--font-mono); font-size:0.9rem;">${name}${prev}</td>
-	                      <td style="opacity:0.9;">${delta}</td>
-	                    </tr>`;
-	                  }).join('')}
-                </tbody>
-              </table>
-              ${files.length === 0 ? '<div class="worktree-inspector-subtle">No files found.</div>' : ''}
-            </div>
-	          </div>
+				            <div class="worktree-inspector-panel worktree-inspector-files ${filesPanelHiddenClass}" data-rc-panel="files">
+				              <div class="worktree-inspector-panel-title-row">
+				                <div class="worktree-inspector-panel-title">Files</div>
+				                <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
+				              </div>
+				              <div class="worktree-inspector-files-list">
+				                <table class="worktree-inspector-table">
+				                  <thead>
+				                    <tr>
+				                      <th style="width:60px;">Δ</th>
+				                      <th>path</th>
+				                      <th style="width:80px;">+ / -</th>
+				                    </tr>
+				                  </thead>
+				                  <tbody>
+				                    ${files.map((f) => {
+				                      const st = statusLabel(f.status);
+				                      const cls = statusClass(f.status);
+				                      const adds = Number.isFinite(Number(f.additions)) ? Number(f.additions) : null;
+				                      const dels = Number.isFinite(Number(f.deletions)) ? Number(f.deletions) : null;
+				                      const plus = (adds != null && adds > 0) ? `<span class="diff-plus">+${adds}</span>` : '';
+				                      const minus = (dels != null && dels > 0) ? `<span class="diff-minus">-${dels}</span>` : '';
+				                      const delta = [plus, minus].filter(Boolean).join(' ');
+				                      const name = escapeHtml(f.filename || '');
+				                      const prev = f.previousFilename ? ` <span style="opacity:0.65;">(was ${escapeHtml(f.previousFilename)})</span>` : '';
+				                      return `<tr>
+				                        <td><span class="worktree-inspector-tree-status ${cls}">${escapeHtml(st)}</span></td>
+				                        <td style="font-family:var(--font-mono); font-size:0.9rem;">${name}${prev}</td>
+				                        <td style="opacity:0.9;">${delta}</td>
+				                      </tr>`;
+				                    }).join('')}
+				                  </tbody>
+				                </table>
+				                ${files.length === 0 ? '<div class="worktree-inspector-subtle">No files found.</div>' : ''}
+				              </div>
+				            </div>
 
-	          <div class="worktree-inspector-panel worktree-inspector-commits ${commitsPanelHiddenClass}" data-rc-panel="commits">
-	            <div class="worktree-inspector-panel-title-row">
-	              <div class="worktree-inspector-panel-title">Commits</div>
-	              <div class="worktree-inspector-subtle">count ${commits.length}</div>
-	            </div>
-            <div>
-              ${commits.map((c) => `
-                <div class="worktree-inspector-commit">
-                  <code class="worktree-inspector-commit-hash">${escapeHtml(String(c.sha || '').slice(0, 7))}</code>
-                  <div class="worktree-inspector-commit-msg">${escapeHtml(c.message || '')}</div>
-                  <div class="worktree-inspector-commit-date">${escapeHtml(c.author || '')}${c.date ? ` • ${escapeHtml(String(c.date).replace('T', ' ').replace('Z', ''))}` : ''}</div>
-                </div>
-              `).join('')}
-              ${commits.length === 0 ? '<div class="worktree-inspector-subtle">No commits found.</div>' : ''}
-            </div>
+				            <div class="worktree-inspector-panel worktree-inspector-commits ${commitsPanelHiddenClass}" data-rc-panel="commits">
+				              <div class="worktree-inspector-panel-title-row">
+				                <div class="worktree-inspector-panel-title">Commits</div>
+				                <div class="worktree-inspector-subtle">count ${commits.length}</div>
+				              </div>
+				              <div>
+				                ${commits.map((c) => `
+				                  <div class="worktree-inspector-commit">
+				                    <code class="worktree-inspector-commit-hash">${escapeHtml(String(c.sha || '').slice(0, 7))}</code>
+				                    <div class="worktree-inspector-commit-msg">${escapeHtml(c.message || '')}</div>
+				                    <div class="worktree-inspector-commit-date">${escapeHtml(c.author || '')}${c.date ? ` • ${escapeHtml(String(c.date).replace('T', ' ').replace('Z', ''))}` : ''}</div>
+				                  </div>
+				                `).join('')}
+				                ${commits.length === 0 ? '<div class="worktree-inspector-subtle">No commits found.</div>' : ''}
+				              </div>
 
-            <div style="margin-top:12px;">
-              <div class="worktree-inspector-panel-title-row">
-                <div class="worktree-inspector-panel-title">Conversation</div>
-                <div class="worktree-inspector-subtle">reviews ${reviews.length} • comments ${issueComments.length}</div>
-              </div>
-              <div>
-                ${commentItems.length ? commentItems.slice(-15).map(renderComment).join('') : '<div class="worktree-inspector-subtle">No recent comments/reviews found.</div>'}
-              </div>
-            </div>
-	          </div>
+				              <div style="margin-top:12px;">
+				                <div class="worktree-inspector-panel-title-row">
+				                  <div class="worktree-inspector-panel-title">Conversation</div>
+				                  <div class="worktree-inspector-subtle">reviews ${reviews.length} • comments ${issueComments.length}</div>
+				                </div>
+				                <div>
+				                  ${commentItems.length ? commentItems.slice(-15).map(renderComment).join('') : '<div class="worktree-inspector-subtle">No recent comments/reviews found.</div>'}
+				                </div>
+				              </div>
+				            </div>
+				          </div>
 
-	          <div class="worktree-inspector-panel worktree-inspector-diff-panel ${diffPanelHiddenClass}" data-rc-panel="diff">
-	            <div class="worktree-inspector-panel-title-row">
-	              <div class="worktree-inspector-panel-title">Diff</div>
-	              <div class="worktree-inspector-subtle worktree-inspector-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)')}</div>
-	            </div>
-            <div class="worktree-inspector-diff-controls">
-              <button class="btn-secondary" type="button" data-diff-embed="true">Embed</button>
-              <button class="btn-secondary" type="button" data-diff-open="true">Open</button>
-              <button class="btn-secondary" type="button" data-diff-refresh="true">Refresh</button>
-              <button class="btn-secondary" type="button" data-diff-close="true">Close</button>
-            </div>
-	            <iframe class="worktree-inspector-diff-iframe hidden" data-diff-iframe="true" title="Diff Viewer"></iframe>
-	          </div>
-	        </div>
+				          <div class="review-console-right" data-rc-column="right">
+				            <div class="worktree-inspector-panel worktree-inspector-diff-panel ${diffPanelHiddenClass}" data-rc-panel="diff">
+				              <div class="worktree-inspector-panel-title-row">
+				                <div class="worktree-inspector-panel-title">Diff</div>
+				                <div class="worktree-inspector-subtle worktree-inspector-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)')}</div>
+				              </div>
+				              <div class="worktree-inspector-diff-controls">
+				                <button class="btn-secondary" type="button" data-diff-embed="true">Embed</button>
+				                <button class="btn-secondary" type="button" data-diff-open="true">Open</button>
+				                <button class="btn-secondary" type="button" data-diff-refresh="true">Refresh</button>
+				                <button class="btn-secondary" type="button" data-diff-close="true">Close</button>
+				              </div>
+				              <iframe class="worktree-inspector-diff-iframe hidden" data-diff-iframe="true" title="Diff Viewer"></iframe>
+				            </div>
+				          </div>
+				        </div>
 
 	        <div data-rc-empty="true" class="worktree-inspector-subtle hidden" style="padding:12px;">No sections enabled.</div>
 	      `;
 
-	      const terminalsPanelEl = bodyEl.querySelector('[data-rc-panel="terminals"]');
-	      const filesPanelEl = bodyEl.querySelector('[data-rc-panel="files"]');
-	      const commitsPanelEl = bodyEl.querySelector('[data-rc-panel="commits"]');
-	      const diffPanelEl = bodyEl.querySelector('[data-rc-panel="diff"]');
-	      const gridEl = bodyEl.querySelector('[data-rc-grid="true"]');
-	      const emptyEl = bodyEl.querySelector('[data-rc-empty="true"]');
+		      const terminalsPanelEl = bodyEl.querySelector('[data-rc-panel="terminals"]');
+		      const filesPanelEl = bodyEl.querySelector('[data-rc-panel="files"]');
+		      const commitsPanelEl = bodyEl.querySelector('[data-rc-panel="commits"]');
+		      const diffPanelEl = bodyEl.querySelector('[data-rc-panel="diff"]');
+		      const gridEl = bodyEl.querySelector('[data-rc-grid="true"]');
+		      const emptyEl = bodyEl.querySelector('[data-rc-empty="true"]');
+		      const leftColEl = bodyEl.querySelector('[data-rc-column="left"]');
+		      const rightColEl = bodyEl.querySelector('[data-rc-column="right"]');
 
-	      const updateGrid = () => {
-	        if (!gridEl || !emptyEl) return;
-	        const visibleCount = [
-	          (terminalsPanelEl && !terminalsPanelEl.classList.contains('hidden')) ? 1 : 0,
-	          (filesPanelEl && !filesPanelEl.classList.contains('hidden')) ? 1 : 0,
-	          (commitsPanelEl && !commitsPanelEl.classList.contains('hidden')) ? 1 : 0,
-	          (diffPanelEl && !diffPanelEl.classList.contains('hidden')) ? 1 : 0
-	        ].reduce((a, b) => a + b, 0);
-	        emptyEl.classList.toggle('hidden', visibleCount > 0);
-	        gridEl.classList.toggle('hidden', visibleCount === 0);
-	        gridEl.classList.toggle('one-column', visibleCount <= 1);
-	      };
+		      const updateGrid = () => {
+		        if (!gridEl || !emptyEl) return;
+		        const terminalsVisible = !!(terminalsPanelEl && !terminalsPanelEl.classList.contains('hidden'));
+		        const filesVisible = !!(filesPanelEl && !filesPanelEl.classList.contains('hidden'));
+		        const commitsVisible = !!(commitsPanelEl && !commitsPanelEl.classList.contains('hidden'));
+		        const diffVisible = !!(diffPanelEl && !diffPanelEl.classList.contains('hidden'));
+
+		        const leftVisible = terminalsVisible || filesVisible || commitsVisible;
+		        if (leftColEl) leftColEl.classList.toggle('hidden', !leftVisible);
+		        if (rightColEl) rightColEl.classList.toggle('hidden', !diffVisible);
+
+		        const visibleCount = [terminalsVisible, filesVisible, commitsVisible, diffVisible].filter(Boolean).length;
+		        emptyEl.classList.toggle('hidden', visibleCount > 0);
+		        gridEl.classList.toggle('hidden', visibleCount === 0);
+		        // If only one column has visible content, collapse to a single column layout.
+		        gridEl.classList.toggle('one-column', !leftVisible || !diffVisible);
+		      };
 
 	      const persist = async () => {
 	        const existing = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
@@ -9059,12 +9103,18 @@ class ClaudeOrchestrator {
 	      applyLayout();
 
 		      // Diff controls (PR-only: default embed).
-	      const diffIframe = bodyEl.querySelector('[data-diff-iframe="true"]');
-	      const diffStatusEl = bodyEl.querySelector('[data-diff-status="true"]');
-	      const embedBtn = bodyEl.querySelector('[data-diff-embed="true"]');
-      const openBtn = bodyEl.querySelector('[data-diff-open="true"]');
-      const refreshBtn = bodyEl.querySelector('[data-diff-refresh="true"]');
-      const closeBtn = bodyEl.querySelector('[data-diff-close="true"]');
+		      const diffIframe = bodyEl.querySelector('[data-diff-iframe="true"]');
+		      const diffStatusEl = bodyEl.querySelector('[data-diff-status="true"]');
+		      const embedBtn = bodyEl.querySelector('[data-diff-embed="true"]');
+	      const openBtn = bodyEl.querySelector('[data-diff-open="true"]');
+	      const refreshBtn = bodyEl.querySelector('[data-diff-refresh="true"]');
+	      const closeBtn = bodyEl.querySelector('[data-diff-close="true"]');
+	      const syncDiffButtons = () => {
+	        const embedded = !!(diffIframe && diffIframe.src && diffIframe.src !== 'about:blank' && !diffIframe.classList.contains('hidden'));
+	        if (embedBtn) embedBtn.disabled = embedded;
+	        if (refreshBtn) refreshBtn.disabled = !embedded;
+	        if (closeBtn) closeBtn.disabled = !embedded;
+	      };
 
       let baseUrl = 'http://localhost:7655';
       const ensureDiffViewer = async () => {
@@ -9085,36 +9135,39 @@ class ClaudeOrchestrator {
         }
       };
 
-	      const embed = async () => {
-	        if (!diffIframe) return;
-	        if (currentSections.diff === false) return;
-	        await ensureDiffViewer();
-	        const target = diffViewerPath || '';
-	        diffIframe.src = target ? `${baseUrl}${target}` : `${baseUrl}/`;
-	        diffIframe.classList.remove('hidden');
-	        if (diffStatusEl) diffStatusEl.textContent = target ? `Target: ${target}` : 'Target: (diff viewer home)';
-	      };
+		      const embed = async () => {
+		        if (!diffIframe) return;
+		        if (currentSections.diff === false) return;
+		        await ensureDiffViewer();
+		        const target = diffViewerPath || '';
+		        diffIframe.src = target ? `${baseUrl}${target}` : `${baseUrl}/`;
+		        diffIframe.classList.remove('hidden');
+		        if (diffStatusEl) diffStatusEl.textContent = target ? `Target: ${target}` : 'Target: (diff viewer home)';
+		        syncDiffButtons();
+		      };
 
       embedBtn?.addEventListener('click', () => {
         embed().catch((e) => this.showToast(String(e?.message || e), 'error'));
       });
       openBtn?.addEventListener('click', () => this.launchDiffViewer(prUrl));
-      refreshBtn?.addEventListener('click', () => {
-        if (!diffIframe) return;
-        if (!diffIframe.src) return embed().catch(() => {});
-        try { diffIframe.contentWindow?.location?.reload?.(); } catch { diffIframe.src = diffIframe.src; }
-      });
-      closeBtn?.addEventListener('click', () => {
-        if (!diffIframe) return;
-        diffIframe.src = 'about:blank';
-        diffIframe.classList.add('hidden');
-      });
+	      refreshBtn?.addEventListener('click', () => {
+	        if (!diffIframe) return;
+	        if (!diffIframe.src) return embed().catch(() => {});
+	        try { diffIframe.contentWindow?.location?.reload?.(); } catch { diffIframe.src = diffIframe.src; }
+	      });
+	      closeBtn?.addEventListener('click', () => {
+	        if (!diffIframe) return;
+	        diffIframe.src = 'about:blank';
+	        diffIframe.classList.add('hidden');
+	        syncDiffButtons();
+	      });
 
 			      // Default: embed when enabled in Review Console settings (terminals or not).
 			      let diffEmbedEnabled = rcCfg?.diffEmbed !== false;
-			      if (diffEmbedEnabled && currentSections.diff !== false) {
-			        embed().catch(() => {});
-			      }
+				      if (diffEmbedEnabled && currentSections.diff !== false) {
+				        embed().catch(() => {});
+				      }
+			      syncDiffButtons();
 
 		      // If we have terminals that are already linked to this PR, dock them into the PR console.
 		      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');
