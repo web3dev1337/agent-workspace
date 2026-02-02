@@ -4591,15 +4591,15 @@ class ClaudeOrchestrator {
 			    `;
 			  }
 
-		  getWorktreeInspectorButtonHTML(sessionId) {
-    const session = this.sessions.get(sessionId);
-    const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
-		    const links = this.githubLinks.get(sessionId) || {};
-		    const prUrl = String(links.pr || '').trim();
-		    const canOpen = !!(worktreePath || prUrl);
-		    const ariaDisabled = canOpen ? '' : 'aria-disabled="true"';
-		    return `<button class="control-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${ariaDisabled}>🗂</button>`;
-		  }
+			  getWorktreeInspectorButtonHTML(sessionId) {
+	    const session = this.sessions.get(sessionId);
+	    const worktreePath = this.resolveWorktreePathForSession(sessionId, session) || null;
+			    const links = this.githubLinks.get(sessionId) || {};
+			    const prUrl = String(links.pr || '').trim();
+			    const canOpen = !!(worktreePath || prUrl);
+			    const ariaDisabled = canOpen ? '' : 'aria-disabled="true"';
+			    return `<button class="control-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${ariaDisabled}>🗂</button>`;
+			  }
 
 			  getWorktreeRemoveButtonHTML(sessionId) {
 				    const session = this.sessions.get(sessionId);
@@ -7504,27 +7504,64 @@ class ClaudeOrchestrator {
         }
       }, 60);
     }
-  }
+	  }
 
-	  async openWorktreeInspector(sessionId) {
+	  resolveWorktreePathForSession(sessionId, sessionOverride = null) {
 	    const sid = String(sessionId || '').trim();
-	    try {
-	      const session = this.sessions.get(sid);
-	      const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
+	    if (!sid) return '';
+	    const session = sessionOverride || this.sessions.get(sid) || null;
 
-	      if (!worktreePath) {
-	        const links = this.githubLinks.get(sid) || {};
-	        const prUrl = String(links.pr || '').trim();
-	        if (prUrl) {
-	          await this.openReviewConsoleForPRTask({ url: prUrl, title: `PR (${sid})` });
-	          return;
-	        }
-	        this.showToast('No worktree path found for this terminal', 'warning');
-	        return;
-	      }
+	    const direct = String(session?.config?.cwd || session?.cwd || session?.worktreePath || '').trim();
+	    if (direct) return direct;
 
-	      const label = session?.worktreeId ? `${session.worktreeId}` : sid;
-	      await this.openWorktreeInspectorForPath(worktreePath, { label });
+	    const workspaceId = String(session?.workspace || this.currentWorkspace?.id || '').trim();
+	    const workspace = workspaceId
+	      ? ((this.currentWorkspace?.id === workspaceId ? this.currentWorkspace : null)
+	        || (Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces.find(w => w && w.id === workspaceId) : null)
+	        || this.currentWorkspace)
+	      : this.currentWorkspace;
+
+	    if (!workspace) return '';
+
+	    // Mixed-repo style workspaces store per-terminal worktreePath.
+	    const terminals = Array.isArray(workspace.terminals) ? workspace.terminals : null;
+	    if (Array.isArray(terminals) && terminals.length) {
+	      const t = terminals.find(x => String(x?.id || '').trim() === sid) || null;
+	      const fromTerminal = String(t?.worktreePath || t?.cwd || '').trim();
+	      if (fromTerminal) return fromTerminal;
+
+	      const repoPath = String(t?.repository?.path || '').trim().replace(/\\/g, '/').replace(/\/+$/, '');
+	      const worktree = String(t?.worktree || t?.worktreeId || '').trim();
+	      if (repoPath && worktree) return `${repoPath}/${worktree}`;
+	    }
+
+	    // Legacy single-repo workspaces can derive from repo path + worktreeId.
+	    const repoPath = String(workspace?.repository?.path || '').trim().replace(/\\/g, '/').replace(/\/+$/, '');
+	    const inferredWorktreeId = String(session?.worktreeId || sid.split('-')[0] || '').trim();
+	    if (repoPath && inferredWorktreeId) return `${repoPath}/${inferredWorktreeId}`;
+
+	    return '';
+	  }
+
+		  async openWorktreeInspector(sessionId) {
+		    const sid = String(sessionId || '').trim();
+		    try {
+		      const session = this.sessions.get(sid);
+		      const worktreePath = this.resolveWorktreePathForSession(sid, session) || null;
+
+		      if (!worktreePath) {
+		        const links = this.githubLinks.get(sid) || {};
+		        const prUrl = String(links.pr || '').trim();
+		        if (prUrl) {
+		          await this.openReviewConsoleForPRTask({ url: prUrl, title: `PR (${sid})` });
+		          return;
+		        }
+		        this.showToast('No worktree path or PR link found for this terminal', 'warning');
+		        return;
+		      }
+
+		      const label = session?.worktreeId ? `${session.worktreeId}` : sid;
+		      await this.openWorktreeInspectorForPath(worktreePath, { label });
 	    } catch (err) {
 	      console.error('openWorktreeInspector failed:', err);
 	      this.showToast?.(`Inspector failed: ${String(err?.message || err)}`, 'error');
