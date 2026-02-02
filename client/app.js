@@ -316,7 +316,8 @@ class ClaudeOrchestrator {
       });
       document.getElementById('workflow-review')?.addEventListener('click', () => {
         this.setWorkflowMode('review');
-        this.queuePanelPreset = { reviewTier: 3, unreviewedOnly: true, autoOpenDiff: true };
+        // Batch review defaults (Tier 3, unreviewed, console+diff ready).
+        this.queuePanelPreset = { reviewTier: 3, unreviewedOnly: true, autoOpenDiff: true, autoConsole: true, autoAdvance: true, reviewActive: true };
         this.showQueuePanel();
       });
       document.getElementById('workflow-background')?.addEventListener('click', () => {
@@ -8520,25 +8521,28 @@ class ClaudeOrchestrator {
     return '';
   }
 
-	  async openReviewConsoleForPRTask(task) {
-	    const t = task && typeof task === 'object' ? task : {};
-	    const prUrl = String(t.url || '').trim();
-	    if (!prUrl) {
-	      this.showToast('No PR URL available for this item', 'warning');
-	      return;
+		  async openReviewConsoleForPRTask(task) {
+		    const t = task && typeof task === 'object' ? task : {};
+		    const prUrl = String(t.url || '').trim();
+		    if (!prUrl) {
+		      this.showToast('No PR URL available for this item', 'warning');
+		      return;
+		    }
+
+		    this.restoreReviewConsoleDockedTerminals();
+
+	    // Queue is a fullscreen overlay; close it so the console has the whole screen.
+	    if (document.getElementById('queue-panel')) {
+	      document.getElementById('queue-close-btn')?.click?.();
 	    }
 
-	    this.restoreReviewConsoleDockedTerminals();
-
-    // Queue is a fullscreen overlay; close it so the console has the whole screen.
-    if (document.getElementById('queue-panel')) {
-      document.getElementById('queue-close-btn')?.click?.();
-    }
-
-    const modal = this.ensureWorktreeInspectorModal();
-    modal.classList.remove('hidden');
-    modal.classList.remove('docked');
-    modal.classList.add('fullscreen');
+	    const modal = this.ensureWorktreeInspectorModal();
+	    modal.classList.remove('hidden');
+	    modal.classList.remove('docked');
+	    modal.classList.remove('fullscreen');
+	    const rcCfgInit = this.getReviewConsoleConfig();
+	    if (rcCfgInit?.fullscreen !== false) modal.classList.add('fullscreen');
+	    else modal.classList.add('docked');
 
     const titleEl = modal.querySelector('#worktree-inspector-title');
     if (titleEl) {
@@ -8555,8 +8559,8 @@ class ClaudeOrchestrator {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
-	    try {
-		      const details = await this.fetchPullRequestDetails(prUrl, { maxFiles: 400, maxCommits: 200, maxComments: 60, maxReviews: 60 });
+		    try {
+			      const details = await this.fetchPullRequestDetails(prUrl, { maxFiles: 400, maxCommits: 200, maxComments: 60, maxReviews: 60 });
 		      const pr = (details?.pr && typeof details.pr === 'object') ? details.pr : {};
 		      const files = Array.isArray(details?.files) ? details.files : [];
 		      const commits = Array.isArray(details?.commits) ? details.commits : [];
@@ -8654,11 +8658,81 @@ class ClaudeOrchestrator {
         `;
 	      };
 
-		      bodyEl.innerHTML = `
-		        <div class="worktree-inspector-header">
-		          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
-	            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
-              <strong>PR #${escapeHtml(pr.number || '')}</strong>
+			      const rcCfg = this.getReviewConsoleConfig();
+			      let currentPreset = String(rcCfg?.preset || 'review').trim().toLowerCase();
+			      if (!['default', 'review', 'deep', 'code', 'terminals', 'custom'].includes(currentPreset)) currentPreset = 'review';
+			      let currentFullscreen = rcCfg?.fullscreen !== false;
+			      const currentSections = {
+			        terminals: rcCfg?.sections?.terminals !== false,
+			        files: rcCfg?.sections?.files !== false,
+			        commits: rcCfg?.sections?.commits !== false,
+			        diff: rcCfg?.sections?.diff !== false
+			      };
+
+			      const presets = {
+			        default: { terminals: true, files: true, commits: true, diff: true },
+			        review: { terminals: true, files: false, commits: false, diff: true },
+			        deep: { terminals: true, files: true, commits: true, diff: true },
+			        code: { terminals: false, files: true, commits: true, diff: true },
+			        terminals: { terminals: true, files: false, commits: false, diff: false }
+			      };
+
+			      const layoutPanel = (() => {
+			        const btn = (key, text, title = '') => {
+			          const active = key === currentPreset;
+			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-preset="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title)}">${escapeHtml(text)}</button>`;
+			        };
+			        const windowBtn = (key, text, title = '') => {
+			          const wantsFullscreen = key === 'fullscreen';
+			          const active = wantsFullscreen ? !!currentFullscreen : !currentFullscreen;
+			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-window="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title)}">${escapeHtml(text)}</button>`;
+			        };
+			        const sectionBtn = (key, text, title = '') => {
+			          const active = currentSections[key] !== false;
+			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-section="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title)}">${escapeHtml(text)}</button>`;
+			        };
+			        return `
+			          <div class="worktree-inspector-panel worktree-inspector-layout-panel">
+			            <div class="worktree-inspector-layout-row">
+			              <div class="worktree-inspector-layout-label">Preset</div>
+			              <div class="worktree-inspector-layout-buttons">
+			                ${btn('review', 'Review', 'Batch review: terminals + diff')}
+			                ${btn('default', 'Default')}
+			                ${btn('deep', 'Deep')}
+			                ${btn('code', 'Code')}
+			                ${btn('terminals', 'Terminals')}
+			              </div>
+			            </div>
+			            <div class="worktree-inspector-layout-row">
+			              <div class="worktree-inspector-layout-label">Window</div>
+			              <div class="worktree-inspector-layout-buttons">
+			                ${windowBtn('fullscreen', 'Full', 'Fullscreen Review Console')}
+			                ${windowBtn('docked', 'Dock', 'Dock Review Console')}
+			              </div>
+			            </div>
+			            <div class="worktree-inspector-layout-row">
+			              <div class="worktree-inspector-layout-label">Sections</div>
+			              <div class="worktree-inspector-layout-buttons">
+			                ${sectionBtn('terminals', 'Terminals')}
+			                ${sectionBtn('files', 'Files')}
+			                ${sectionBtn('commits', 'Commits')}
+			                ${sectionBtn('diff', 'Diff')}
+			              </div>
+			            </div>
+			          </div>
+			        `;
+			      })();
+
+			      const terminalsPanelHiddenClass = (!matchingSessionIds.length || currentSections.terminals === false) ? 'hidden' : '';
+			      const filesPanelHiddenClass = currentSections.files === false ? 'hidden' : '';
+			      const commitsPanelHiddenClass = currentSections.commits === false ? 'hidden' : '';
+			      const diffPanelHiddenClass = currentSections.diff === false ? 'hidden' : '';
+
+			      bodyEl.innerHTML = `
+			        <div class="worktree-inspector-header">
+			          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
+		            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
+	              <strong>PR #${escapeHtml(pr.number || '')}</strong>
               ${pr.state ? ` • <span style="opacity:0.85;">${escapeHtml(pr.state)}</span>` : ''}
               ${pr.isDraft ? ' • <span style="opacity:0.85;">draft</span>' : ''}
               ${pr.headRefName ? ` • <span style="opacity:0.85;">${escapeHtml(pr.headRefName)}</span>` : ''}
@@ -8672,10 +8746,10 @@ class ClaudeOrchestrator {
             <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
             <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}">🔍 Diff</button>
             <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" ${pr.isDraft ? 'disabled' : ''}>✅ Merge</button>
-		          </div>
-		        </div>
+			          </div>
+			        </div>
 
-		        ${warnings.length ? `
+			        ${warnings.length ? `
 		          <div class="review-console-warning">
 		            <div style="font-weight:600; margin-bottom:6px;">GitHub details may be incomplete</div>
 		            <div style="opacity:0.9;">Some GitHub API calls failed, so Files/Commits/Conversation can appear empty.</div>
@@ -8688,24 +8762,26 @@ class ClaudeOrchestrator {
 		              ${warnings.length > 6 ? `<div>• …and ${warnings.length - 6} more</div>` : ''}
 		            </div>
 		          </div>
-		        ` : ''}
+			        ` : ''}
 
-		        <div class="worktree-inspector-grid" data-rc-grid="true">
-		          ${matchingSessionIds.length ? `
-		            <div class="worktree-inspector-panel worktree-inspector-terminals" data-rc-panel="terminals" style="grid-column: 1 / -1;">
-		              <div class="worktree-inspector-panel-title-row">
-	                <div class="worktree-inspector-panel-title">Terminals</div>
-	                <div class="worktree-inspector-subtle">${matchingSessionIds.length} linked</div>
-	              </div>
-	              <div data-pr-terminals="true"></div>
+			        ${layoutPanel}
+
+			        <div class="worktree-inspector-grid" data-rc-grid="true">
+			          ${matchingSessionIds.length ? `
+			            <div class="worktree-inspector-panel worktree-inspector-terminals-panel ${terminalsPanelHiddenClass}" data-rc-panel="terminals">
+			              <div class="worktree-inspector-panel-title-row">
+		                <div class="worktree-inspector-panel-title">Terminals</div>
+		                <div class="worktree-inspector-subtle">${matchingSessionIds.length} linked</div>
+		              </div>
+		              <div class="worktree-inspector-terminals" data-pr-terminals="true"></div>
+		            </div>
+		          ` : ''}
+
+		          <div class="worktree-inspector-panel worktree-inspector-files ${filesPanelHiddenClass}" data-rc-panel="files">
+		            <div class="worktree-inspector-panel-title-row">
+		              <div class="worktree-inspector-panel-title">Files</div>
+		              <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
 	            </div>
-	          ` : ''}
-
-	          <div class="worktree-inspector-panel worktree-inspector-files" data-rc-panel="files">
-	            <div class="worktree-inspector-panel-title-row">
-	              <div class="worktree-inspector-panel-title">Files</div>
-	              <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
-            </div>
             <div class="worktree-inspector-files-list">
               <table class="worktree-inspector-table">
                 <thead>
@@ -8736,13 +8812,13 @@ class ClaudeOrchestrator {
               </table>
               ${files.length === 0 ? '<div class="worktree-inspector-subtle">No files found.</div>' : ''}
             </div>
-          </div>
+	          </div>
 
-          <div class="worktree-inspector-panel worktree-inspector-commits" data-rc-panel="commits">
-            <div class="worktree-inspector-panel-title-row">
-              <div class="worktree-inspector-panel-title">Commits</div>
-              <div class="worktree-inspector-subtle">count ${commits.length}</div>
-            </div>
+	          <div class="worktree-inspector-panel worktree-inspector-commits ${commitsPanelHiddenClass}" data-rc-panel="commits">
+	            <div class="worktree-inspector-panel-title-row">
+	              <div class="worktree-inspector-panel-title">Commits</div>
+	              <div class="worktree-inspector-subtle">count ${commits.length}</div>
+	            </div>
             <div>
               ${commits.map((c) => `
                 <div class="worktree-inspector-commit">
@@ -8763,30 +8839,136 @@ class ClaudeOrchestrator {
                 ${commentItems.length ? commentItems.slice(-15).map(renderComment).join('') : '<div class="worktree-inspector-subtle">No recent comments/reviews found.</div>'}
               </div>
             </div>
-          </div>
+	          </div>
 
-          <div class="worktree-inspector-panel worktree-inspector-diff-panel" data-rc-panel="diff">
-            <div class="worktree-inspector-panel-title-row">
-              <div class="worktree-inspector-panel-title">Diff</div>
-              <div class="worktree-inspector-subtle worktree-inspector-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)')}</div>
-            </div>
+	          <div class="worktree-inspector-panel worktree-inspector-diff-panel ${diffPanelHiddenClass}" data-rc-panel="diff">
+	            <div class="worktree-inspector-panel-title-row">
+	              <div class="worktree-inspector-panel-title">Diff</div>
+	              <div class="worktree-inspector-subtle worktree-inspector-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)')}</div>
+	            </div>
             <div class="worktree-inspector-diff-controls">
               <button class="btn-secondary" type="button" data-diff-embed="true">Embed</button>
               <button class="btn-secondary" type="button" data-diff-open="true">Open</button>
               <button class="btn-secondary" type="button" data-diff-refresh="true">Refresh</button>
               <button class="btn-secondary" type="button" data-diff-close="true">Close</button>
             </div>
-            <iframe class="worktree-inspector-diff-iframe hidden" data-diff-iframe="true" title="Diff Viewer"></iframe>
-          </div>
-        </div>
+	            <iframe class="worktree-inspector-diff-iframe hidden" data-diff-iframe="true" title="Diff Viewer"></iframe>
+	          </div>
+	        </div>
 
-        <div data-rc-empty="true" class="worktree-inspector-subtle hidden" style="padding:12px;">No sections enabled.</div>
-      `;
+	        <div data-rc-empty="true" class="worktree-inspector-subtle hidden" style="padding:12px;">No sections enabled.</div>
+	      `;
 
-	      // Diff controls (PR-only: default embed).
-      const diffIframe = bodyEl.querySelector('[data-diff-iframe="true"]');
-      const diffStatusEl = bodyEl.querySelector('[data-diff-status="true"]');
-      const embedBtn = bodyEl.querySelector('[data-diff-embed="true"]');
+	      const terminalsPanelEl = bodyEl.querySelector('[data-rc-panel="terminals"]');
+	      const filesPanelEl = bodyEl.querySelector('[data-rc-panel="files"]');
+	      const commitsPanelEl = bodyEl.querySelector('[data-rc-panel="commits"]');
+	      const diffPanelEl = bodyEl.querySelector('[data-rc-panel="diff"]');
+	      const gridEl = bodyEl.querySelector('[data-rc-grid="true"]');
+	      const emptyEl = bodyEl.querySelector('[data-rc-empty="true"]');
+
+	      const updateGrid = () => {
+	        if (!gridEl || !emptyEl) return;
+	        const visibleCount = [
+	          (terminalsPanelEl && !terminalsPanelEl.classList.contains('hidden')) ? 1 : 0,
+	          (filesPanelEl && !filesPanelEl.classList.contains('hidden')) ? 1 : 0,
+	          (commitsPanelEl && !commitsPanelEl.classList.contains('hidden')) ? 1 : 0,
+	          (diffPanelEl && !diffPanelEl.classList.contains('hidden')) ? 1 : 0
+	        ].reduce((a, b) => a + b, 0);
+	        emptyEl.classList.toggle('hidden', visibleCount > 0);
+	        gridEl.classList.toggle('hidden', visibleCount === 0);
+	        gridEl.classList.toggle('one-column', visibleCount <= 1);
+	      };
+
+	      const persist = async () => {
+	        const existing = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+	          ? this.userSettings.global.ui.reviewConsole
+	          : {};
+	        const existingSections = (existing.sections && typeof existing.sections === 'object') ? existing.sections : {};
+	        const nextCfg = {
+	          ...existing,
+	          preset: currentPreset,
+	          fullscreen: !!currentFullscreen,
+	          sections: { ...existingSections, ...currentSections }
+	        };
+	        await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
+	      };
+
+	      const applyLayout = () => {
+	        modal.classList.remove('docked');
+	        modal.classList.remove('fullscreen');
+	        if (currentFullscreen) modal.classList.add('fullscreen');
+	        else modal.classList.add('docked');
+
+	        if (terminalsPanelEl) terminalsPanelEl.classList.toggle('hidden', currentSections.terminals === false || !matchingSessionIds.length);
+	        if (filesPanelEl) filesPanelEl.classList.toggle('hidden', currentSections.files === false);
+	        if (commitsPanelEl) commitsPanelEl.classList.toggle('hidden', currentSections.commits === false);
+	        if (diffPanelEl) diffPanelEl.classList.toggle('hidden', currentSections.diff === false);
+	        updateGrid();
+
+	        bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
+	          const key = String(btn?.dataset?.reviewPreset || '').trim().toLowerCase();
+	          const active = key && key === currentPreset;
+	          btn.classList.toggle('active', active);
+	          btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+	        });
+
+	        bodyEl.querySelectorAll('[data-review-window]').forEach((btn) => {
+	          const key = String(btn?.dataset?.reviewWindow || '').trim().toLowerCase();
+	          const wantsFullscreen = key === 'fullscreen';
+	          const active = wantsFullscreen ? !!currentFullscreen : !currentFullscreen;
+	          btn.classList.toggle('active', active);
+	          btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+	        });
+
+	        bodyEl.querySelectorAll('[data-review-section]').forEach((btn) => {
+	          const key = String(btn?.dataset?.reviewSection || '').trim().toLowerCase();
+	          const active = key ? (currentSections[key] !== false) : false;
+	          btn.classList.toggle('active', active);
+	          btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+	        });
+	      };
+
+	      bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
+	        btn.addEventListener('click', async () => {
+	          const key = String(btn?.dataset?.reviewPreset || '').trim().toLowerCase();
+	          if (!key || !presets[key]) return;
+	          currentPreset = key;
+	          const next = presets[key];
+	          currentSections.terminals = next.terminals !== false;
+	          currentSections.files = next.files !== false;
+	          currentSections.commits = next.commits !== false;
+	          currentSections.diff = next.diff !== false;
+	          applyLayout();
+	          await persist();
+	        });
+	      });
+
+	      bodyEl.querySelectorAll('[data-review-window]').forEach((btn) => {
+	        btn.addEventListener('click', async () => {
+	          const key = String(btn?.dataset?.reviewWindow || '').trim().toLowerCase();
+	          currentFullscreen = key === 'fullscreen';
+	          applyLayout();
+	          await persist();
+	        });
+	      });
+
+	      bodyEl.querySelectorAll('[data-review-section]').forEach((btn) => {
+	        btn.addEventListener('click', async () => {
+	          const key = String(btn?.dataset?.reviewSection || '').trim().toLowerCase();
+	          if (!key || !(key in currentSections)) return;
+	          currentPreset = 'custom';
+	          currentSections[key] = !currentSections[key];
+	          applyLayout();
+	          await persist();
+	        });
+	      });
+
+	      applyLayout();
+
+		      // Diff controls (PR-only: default embed).
+	      const diffIframe = bodyEl.querySelector('[data-diff-iframe="true"]');
+	      const diffStatusEl = bodyEl.querySelector('[data-diff-status="true"]');
+	      const embedBtn = bodyEl.querySelector('[data-diff-embed="true"]');
       const openBtn = bodyEl.querySelector('[data-diff-open="true"]');
       const refreshBtn = bodyEl.querySelector('[data-diff-refresh="true"]');
       const closeBtn = bodyEl.querySelector('[data-diff-close="true"]');
@@ -8810,14 +8992,15 @@ class ClaudeOrchestrator {
         }
       };
 
-      const embed = async () => {
-        if (!diffIframe) return;
-        await ensureDiffViewer();
-        const target = diffViewerPath || '';
-        diffIframe.src = target ? `${baseUrl}${target}` : `${baseUrl}/`;
-        diffIframe.classList.remove('hidden');
-        if (diffStatusEl) diffStatusEl.textContent = target ? `Target: ${target}` : 'Target: (diff viewer home)';
-      };
+	      const embed = async () => {
+	        if (!diffIframe) return;
+	        if (currentSections.diff === false) return;
+	        await ensureDiffViewer();
+	        const target = diffViewerPath || '';
+	        diffIframe.src = target ? `${baseUrl}${target}` : `${baseUrl}/`;
+	        diffIframe.classList.remove('hidden');
+	        if (diffStatusEl) diffStatusEl.textContent = target ? `Target: ${target}` : 'Target: (diff viewer home)';
+	      };
 
       embedBtn?.addEventListener('click', () => {
         embed().catch((e) => this.showToast(String(e?.message || e), 'error'));
@@ -8834,11 +9017,11 @@ class ClaudeOrchestrator {
         diffIframe.classList.add('hidden');
       });
 
-		      // Default: embed when enabled in Review Console settings (terminals or not).
-		      const rcCfg = this.getReviewConsoleConfig();
-		      if (rcCfg?.diffEmbed !== false) {
-		        embed().catch(() => {});
-		      }
+			      // Default: embed when enabled in Review Console settings (terminals or not).
+			      let diffEmbedEnabled = rcCfg?.diffEmbed !== false;
+			      if (diffEmbedEnabled && currentSections.diff !== false) {
+			        embed().catch(() => {});
+			      }
 
 		      // If we have terminals that are already linked to this PR, dock them into the PR console.
 		      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');
@@ -16862,6 +17045,8 @@ class ClaudeOrchestrator {
       if (preset.triageMode !== undefined) state.triageMode = !!preset.triageMode;
       if (preset.unreviewedOnly !== undefined) state.unreviewedOnly = !!preset.unreviewedOnly;
       if (preset.autoOpenDiff !== undefined) state.autoOpenDiff = !!preset.autoOpenDiff;
+      if (preset.autoConsole !== undefined) state.autoConsole = !!preset.autoConsole;
+      if (preset.autoAdvance !== undefined) state.autoAdvance = !!preset.autoAdvance;
       state.reviewActive = preset.reviewActive !== undefined ? !!preset.reviewActive : true;
       if (preset.query !== undefined) state.query = String(preset.query || '');
     }
