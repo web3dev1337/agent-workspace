@@ -3180,6 +3180,8 @@ app.get('/api/prs/details', async (req, res) => {
       maxComments,
       maxReviews
     });
+    // Prevent browsers from caching incomplete/empty results when GitHub is briefly flaky.
+    res.setHeader('Cache-Control', 'no-store');
     res.json(details);
   } catch (error) {
     logger.error('Failed to get PR details', { error: error.message, stack: error.stack });
