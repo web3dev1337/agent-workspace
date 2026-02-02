@@ -303,6 +303,34 @@
             </div>
 
             <div class="setting-section">
+                <h4>PR Merge Automation</h4>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="pr-merge-auto-enabled" />
+                        Enable PR-merge automation (Trello)
+                    </label>
+                    <p class="setting-description">When a PR merges, auto-move/comment on the linked Trello card (when a Trello card is linked to the PR task).</p>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Move merged ticket to:
+                        <select id="pr-merge-move-target">
+                            <option value="done">Done (auto-detect)</option>
+                            <option value="for_test">For Test</option>
+                            <option value="none">Don’t move</option>
+                        </select>
+                    </label>
+                    <p class="setting-description">Configure board-specific Done/For Test lists in Tasks → Board Settings → Conventions.</p>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="pr-merge-auto-comment" />
+                        Add comment on merge
+                    </label>
+                </div>
+            </div>
+
+            <div class="setting-section">
                 <h4>Tasks Launch</h4>
                 <div class="setting-group">
                     <label>
