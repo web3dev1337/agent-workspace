@@ -406,13 +406,14 @@ class ClaudeOrchestrator {
         this.notificationManager.requestPermission();
       }
       
-      // Set up UI
-      this.setupEventListeners();
-      this.applyTheme();
-      this.syncSettingsUI();
-      
-      // Connect to server
-      await this.connectToServer();
+	      // Set up UI
+	      this.setupEventListeners();
+	      this.applyTheme();
+	      this.syncSettingsUI();
+	      this.installAuthFetchShim();
+	      
+	      // Connect to server
+	      await this.connectToServer();
 
       // Hook panels that depend on socket events
       this.activityFeedPanel?.onSocketConnected?.(this.socket);
@@ -9322,7 +9323,7 @@ class ClaudeOrchestrator {
     }
   }
 
-  getAuthToken() {
+	  getAuthToken() {
     // Check URL params first
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('token');
@@ -9335,12 +9336,56 @@ class ClaudeOrchestrator {
       return tokenFromUrl;
     }
     
-    // Check localStorage
-    return localStorage.getItem('claude-orchestrator-token');
-  }
-  
-  // Terminal Focus Feature - Now shows only that worktree
-  focusTerminal(sessionId) {
+	    // Check localStorage
+	    return localStorage.getItem('claude-orchestrator-token');
+	  }
+
+	  installAuthFetchShim() {
+	    if (window.__claudeOrchestratorFetchAuthInstalled) return;
+	    if (typeof window.fetch !== 'function') return;
+
+	    const originalFetch = window.fetch.bind(window);
+	    const getToken = () => {
+	      try {
+	        return this.getAuthToken?.();
+	      } catch {
+	        return null;
+	      }
+	    };
+
+	    window.fetch = (input, init) => {
+	      try {
+	        const token = getToken();
+	        if (!token) return originalFetch(input, init);
+
+	        const rawUrl =
+	          typeof input === 'string'
+	            ? input
+	            : (input && typeof input.url === 'string' ? input.url : null);
+	        if (!rawUrl) return originalFetch(input, init);
+
+	        const resolved = new URL(rawUrl, window.location.origin);
+	        if (resolved.origin !== window.location.origin) return originalFetch(input, init);
+	        if (!resolved.pathname.startsWith('/api/')) return originalFetch(input, init);
+
+	        const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+	        if (!headers.has('X-Auth-Token')) headers.set('X-Auth-Token', token);
+
+	        const nextInit = { ...(init || {}), headers };
+	        if (input instanceof Request) {
+	          return originalFetch(new Request(input, nextInit));
+	        }
+	        return originalFetch(input, nextInit);
+	      } catch {
+	        return originalFetch(input, init);
+	      }
+	    };
+
+	    window.__claudeOrchestratorFetchAuthInstalled = true;
+	  }
+	  
+	  // Terminal Focus Feature - Now shows only that worktree
+	  focusTerminal(sessionId) {
     // Extract worktree ID from session ID
     const worktreeId = sessionId.split('-')[0];
 
