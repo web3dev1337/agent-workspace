@@ -4989,6 +4989,43 @@ app.post('/api/commander/execute', async (req, res) => {
   }
 });
 
+// Execute a command from free text (shared parsing pipeline with Voice: rules -> LLM fallback)
+app.post('/api/commander/execute-text', async (req, res) => {
+  try {
+    const { text, dryRun } = req.body || {};
+    const input = String(text || '').trim();
+    if (!input) {
+      return res.status(400).json({ ok: false, error: 'text is required' });
+    }
+    if (input.length > 2000) {
+      return res.status(400).json({ ok: false, error: 'text too long' });
+    }
+
+    // Keep the parser context in sync with Commander’s current UI state.
+    try {
+      const snapshot = commanderContextService.getSnapshot({ workspaceManager, commanderService, commandRegistry });
+      voiceCommandService.setContext(snapshot?.context || {});
+    } catch {
+      // ignore
+    }
+
+    const parsed = await voiceCommandService.parseCommand(input);
+    if (!parsed || parsed.success !== true) {
+      return res.status(200).json({ ok: false, parsed });
+    }
+
+    if (dryRun === true || String(dryRun).toLowerCase() === 'true') {
+      return res.status(200).json({ ok: true, parsed, result: null, dryRun: true });
+    }
+
+    const result = await commandRegistry.execute(parsed.command, parsed.params || {});
+    res.json({ ok: true, parsed, result });
+  } catch (error) {
+    logger.error('Failed to execute text command', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to execute text command', message: error.message });
+  }
+});
+
 // Commander context (UI state + sessions + workspace info)
 app.get('/api/commander/context', (req, res) => {
   try {
