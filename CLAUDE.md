@@ -34,6 +34,27 @@ Tier tagging persistence:
 - stored in `~/.orchestrator/task-records.json` via `session:<id>` task records
 - loaded on page refresh via `GET /api/process/task-records`
 
+## Launching Agents from Trello
+
+**Zoo Hytopia board:** `691e5516c77f3e9c9fd89f61` | **AB T3 Que list:** `697feb0865aa4467a08831d9`
+
+**Get card with agent field:**
+```bash
+# Get card details
+bash ~/.claude/scripts/trello-get.sh card CARD_ID | jq '{name, desc}'
+# Get agent field (Claude=697ff232d7b65d75a1d5f3d6, Codex=697ff232d7b65d75a1d5f3d7)
+curl -sS "https://api.trello.com/1/cards/CARD_ID/customFieldItems?key=$KEY&token=$TOKEN" | jq -r '.[0].idValue'
+```
+
+**Prompt must include (NEVER truncate!):**
+1. **Title:** Full card name
+2. **Description:** ENTIRE card description - user wrote detailed prompts there!
+3. **Workflow:** git checkout, commit/push, tests, PR
+
+**Launch commands:**
+- Codex: `codex --dangerously-bypass-approvals-and-sandbox`
+- Claude: `claude --dangerously-skip-permissions`
+
 ## 🚨 STOP! DO THIS FIRST BEFORE ANYTHING ELSE! 🚨
 
 ### THE VERY FIRST THING YOU MUST DO (NO EXCEPTIONS):
