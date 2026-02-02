@@ -1295,6 +1295,28 @@ class ClaudeOrchestrator {
       });
     }
 
+    // PR merge automation settings (server-persisted)
+    const prMergeEnabled = document.getElementById('pr-merge-auto-enabled');
+    if (prMergeEnabled) {
+      prMergeEnabled.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.tasks.automations.trello.onPrMerged.enabled', !!e.target.checked);
+      });
+    }
+    const prMergeMoveTarget = document.getElementById('pr-merge-move-target');
+    if (prMergeMoveTarget) {
+      prMergeMoveTarget.addEventListener('change', (e) => {
+        const v = String(e.target.value || '').trim().toLowerCase();
+        const next = (v === 'done' || v === 'for_test' || v === 'none') ? v : 'done';
+        this.updateGlobalUserSetting('ui.tasks.automations.trello.onPrMerged.moveTarget', next);
+      });
+    }
+    const prMergeComment = document.getElementById('pr-merge-auto-comment');
+    if (prMergeComment) {
+      prMergeComment.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.tasks.automations.trello.onPrMerged.comment', !!e.target.checked);
+      });
+    }
+
     const identityClaimName = document.getElementById('identity-claim-name');
     if (identityClaimName) {
       identityClaimName.addEventListener('change', async (e) => {
@@ -10277,6 +10299,23 @@ class ClaudeOrchestrator {
     const trelloMeUsername = document.getElementById('trello-me-username');
     if (trelloMeUsername) {
       trelloMeUsername.value = this.userSettings.global?.ui?.tasks?.me?.trelloUsername || '';
+    }
+
+    const prMergeEnabled = document.getElementById('pr-merge-auto-enabled');
+    if (prMergeEnabled) {
+      const cfg = this.userSettings.global?.ui?.tasks?.automations?.trello?.onPrMerged || {};
+      prMergeEnabled.checked = cfg.enabled === true;
+    }
+    const prMergeMoveTarget = document.getElementById('pr-merge-move-target');
+    if (prMergeMoveTarget) {
+      const cfg = this.userSettings.global?.ui?.tasks?.automations?.trello?.onPrMerged || {};
+      const v = String(cfg.moveTarget || (cfg.moveToDoneList !== false ? 'done' : 'none')).trim().toLowerCase();
+      prMergeMoveTarget.value = (v === 'done' || v === 'for_test' || v === 'none') ? v : 'done';
+    }
+    const prMergeComment = document.getElementById('pr-merge-auto-comment');
+    if (prMergeComment) {
+      const cfg = this.userSettings.global?.ui?.tasks?.automations?.trello?.onPrMerged || {};
+      prMergeComment.checked = cfg.comment !== false;
     }
 
     const identityClaimName = document.getElementById('identity-claim-name');
