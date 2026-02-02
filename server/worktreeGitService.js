@@ -1,9 +1,18 @@
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const util = require('util');
 const winston = require('winston');
 const { TTLCache } = require('./utils/ttlCache');
 
-const execAsync = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
+
+const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024; // 10MB
+
+async function execFileSafe(command, args, options = {}) {
+  return execFileAsync(command, args, {
+    ...options,
+    maxBuffer: options.maxBuffer ?? DEFAULT_MAX_BUFFER
+  });
+}
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -139,7 +148,7 @@ class WorktreeGitService {
       let unpushedOutput = '';
 
       try {
-        const { stdout } = await execAsync('git rev-parse --is-inside-work-tree', { cwd: p, timeout: 3000 });
+        const { stdout } = await execFileSafe('git', ['rev-parse', '--is-inside-work-tree'], { cwd: p, timeout: 3000 });
         gitDetected = String(stdout || '').trim() === 'true';
       } catch (error) {
         gitDetected = false;
@@ -161,14 +170,14 @@ class WorktreeGitService {
       }
 
       try {
-        const { stdout } = await execAsync('git branch --show-current', { cwd: p, timeout: 7000 });
+        const { stdout } = await execFileSafe('git', ['branch', '--show-current'], { cwd: p, timeout: 7000 });
         branch = stdout.trim() || null;
       } catch (error) {
         logger.debug('Failed to get branch', { path: p, error: error.message });
       }
 
       try {
-        const { stdout } = await execAsync('git rev-list --left-right --count @{u}...HEAD', { cwd: p, timeout: 7000 });
+        const { stdout } = await execFileSafe('git', ['rev-list', '--left-right', '--count', '@{u}...HEAD'], { cwd: p, timeout: 7000 });
         const [b, a] = String(stdout || '').trim().split('\t').map(Number);
         behind = Number.isFinite(b) ? b : 0;
         ahead = Number.isFinite(a) ? a : 0;
@@ -180,16 +189,22 @@ class WorktreeGitService {
       const boundedCommits = Math.min(200, Math.max(0, Number(maxCommits) || 0)) || 25;
 
       const cmds = [
-        execAsync('git status --porcelain', { cwd: p, timeout: 7000 }).then(r => { statusOutput = r.stdout || ''; }).catch(() => {}),
-        execAsync('git diff --numstat', { cwd: p, timeout: 7000 }).then(r => { diffUnstaged = r.stdout || ''; }).catch(() => {}),
-        execAsync('git diff --cached --numstat', { cwd: p, timeout: 7000 }).then(r => { diffStaged = r.stdout || ''; }).catch(() => {}),
-        execAsync(`git log -n ${boundedCommits} --date=iso --pretty=format:%h|%ad|%s`, { cwd: p, timeout: 7000 }).then(r => { commitsOutput = r.stdout || ''; }).catch(() => {})
+        execFileSafe('git', ['status', '--porcelain'], { cwd: p, timeout: 7000 }).then(r => { statusOutput = r.stdout || ''; }).catch(() => {}),
+        execFileSafe('git', ['diff', '--numstat'], { cwd: p, timeout: 7000 }).then(r => { diffUnstaged = r.stdout || ''; }).catch(() => {}),
+        execFileSafe('git', ['diff', '--cached', '--numstat'], { cwd: p, timeout: 7000 }).then(r => { diffStaged = r.stdout || ''; }).catch(() => {}),
+        execFileSafe('git', ['log', '-n', String(boundedCommits), '--date=iso', '--pretty=format:%h|%ad|%s'], { cwd: p, timeout: 7000 })
+          .then(r => { commitsOutput = r.stdout || ''; })
+          .catch(() => {})
       ];
 
       // Best-effort: list only unpushed commits when upstream exists.
       if (ahead > 0) {
         cmds.push(
-          execAsync(`git log -n ${Math.min(100, Math.max(1, ahead))} --date=iso --pretty=format:%h|%ad|%s @{u}..HEAD`, { cwd: p, timeout: 7000 })
+          execFileSafe(
+            'git',
+            ['log', '-n', String(Math.min(100, Math.max(1, ahead))), '--date=iso', '--pretty=format:%h|%ad|%s', '@{u}..HEAD'],
+            { cwd: p, timeout: 7000 }
+          )
             .then(r => { unpushedOutput = r.stdout || ''; })
             .catch(() => {})
         );
