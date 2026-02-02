@@ -3,9 +3,18 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const winston = require('winston');
+
+// Ensure log directory exists early (some services create file transports at require-time).
+try {
+  const logsDir = path.join(process.cwd(), 'logs');
+  if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+} catch {
+  // ignore
+}
 
 // Initialize logger
 const logger = winston.createLogger({
@@ -98,7 +107,6 @@ const audioUpload = multer({
 
 // Configure multer for image uploads (for terminal image paste)
 const imageUploadDir = path.join(os.tmpdir(), 'orchestrator-images');
-const fs = require('fs');
 if (!fs.existsSync(imageUploadDir)) {
   fs.mkdirSync(imageUploadDir, { recursive: true });
 }
@@ -129,7 +137,14 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
-      if (!origin || origin === 'tauri://localhost' || origin.startsWith('http://localhost:')) {
+      const allowed =
+        !origin ||
+        origin === 'tauri://localhost' ||
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.startsWith('http://[::1]:');
+
+      if (allowed) {
         callback(null, true);
         return;
       }
@@ -5372,7 +5387,7 @@ app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
 
 // Start server
 const PORT = process.env.ORCHESTRATOR_PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.ORCHESTRATOR_HOST || process.env.HOST || '0.0.0.0';
 
 httpServer.listen(PORT, HOST, () => {
   logger.info(`Server running on http://${HOST}:${PORT}`);

@@ -10,7 +10,7 @@
     "dev:diff": "cd diff-viewer && npm run dev",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:build": "node scripts/tauri/prepare-backend-resources.js --install-prod && tauri build",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:full": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run tauri:dev\"",
     "prod": "concurrently \"npm run dev:server\" \"npm run dev:client\"",

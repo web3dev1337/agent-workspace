@@ -3,12 +3,156 @@
 
 use tauri::{Manager, State, Emitter};
 use tokio::sync::mpsc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::process::{Child, Command, Stdio};
+use std::time::Duration;
+use uuid::Uuid;
 
 mod terminal;
 mod file_watcher;
 use terminal::{TerminalManager, TerminalOutput};
 use file_watcher::{FileWatcherManager, FileEvent};
+
+struct BackendProcess {
+    child: Mutex<Option<Child>>,
+}
+
+impl BackendProcess {
+    fn new() -> Self {
+        Self { child: Mutex::new(None) }
+    }
+
+    fn set_child(&self, child: Child) {
+        if let Ok(mut guard) = self.child.lock() {
+            *guard = Some(child);
+        }
+    }
+
+    fn kill(&self) {
+        let child = self.child.lock().ok().and_then(|mut guard| guard.take());
+        if let Some(mut child) = child {
+            let _ = child.kill();
+        }
+    }
+}
+
+fn env_truthy(name: &str) -> Option<bool> {
+    let raw = std::env::var(name).ok()?;
+    let v = raw.trim().to_lowercase();
+    if v.is_empty() { return None; }
+    Some(!matches!(v.as_str(), "0" | "false" | "no" | "off"))
+}
+
+fn should_spawn_backend() -> bool {
+    if let Some(v) = env_truthy("TAURI_SPAWN_BACKEND") {
+        return v;
+    }
+    // Default: spawn backend only in release builds.
+    !cfg!(debug_assertions)
+}
+
+fn pick_free_port() -> Option<u16> {
+    std::net::TcpListener::bind(("127.0.0.1", 0))
+        .ok()
+        .and_then(|listener| listener.local_addr().ok().map(|addr| addr.port()))
+}
+
+fn resolve_node_command(app: &tauri::AppHandle) -> std::ffi::OsString {
+    if let Ok(p) = std::env::var("ORCHESTRATOR_NODE_PATH") {
+        let trimmed = p.trim();
+        if !trimmed.is_empty() && std::path::Path::new(trimmed).exists() {
+            return trimmed.into();
+        }
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let candidates = if cfg!(target_os = "windows") {
+            vec![
+                resource_dir.join("backend").join("node").join("node.exe"),
+                resource_dir.join("node").join("node.exe"),
+                resource_dir.join("backend").join("node.exe"),
+                resource_dir.join("node.exe"),
+            ]
+        } else {
+            vec![
+                resource_dir.join("backend").join("node").join("node"),
+                resource_dir.join("node").join("node"),
+                resource_dir.join("backend").join("node"),
+                resource_dir.join("node"),
+            ]
+        };
+
+        for c in candidates {
+            if c.exists() {
+                return c.into_os_string();
+            }
+        }
+    }
+
+    "node".into()
+}
+
+fn resolve_server_entry(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let candidates = [
+            resource_dir.join("backend").join("server").join("index.js"),
+            resource_dir.join("server").join("index.js"),
+        ];
+        for candidate in candidates {
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    // Dev fallback (repo checkout): src-tauri/.. contains server/
+    let candidate = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("server")
+        .join("index.js");
+    if candidate.exists() {
+        return Some(candidate);
+    }
+
+    None
+}
+
+fn has_diff_viewer_folder(app: &tauri::AppHandle) -> bool {
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        if resource_dir.join("backend").join("diff-viewer").exists() {
+            return true;
+        }
+        if resource_dir.join("diff-viewer").exists() {
+            return true;
+        }
+    }
+
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("diff-viewer")
+        .exists()
+}
+
+async fn wait_for_port(port: u16, timeout: Duration) -> bool {
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
+        if tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(150)).await;
+    }
+    false
+}
+
+async fn navigate_window(window: tauri::WebviewWindow, url: String) {
+    let js = format!("window.location.replace({});", serde_json::to_string(&url).unwrap_or_else(|_| "\"/\"".to_string()));
+    for _ in 0..60 {
+        if window.eval(&js).is_ok() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(150)).await;
+    }
+}
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -140,7 +284,10 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             println!("Claude Orchestrator starting...");
-            
+
+            // Manage backend process (Tauri-spawned Node server)
+            app.manage(BackendProcess::new());
+
             // Create terminal manager
             let terminal_manager = Arc::new(TerminalManager::new(output_tx));
             app.manage(terminal_manager);
@@ -168,6 +315,65 @@ fn main() {
                     app_handle2.emit("file-event", event).unwrap();
                 }
             });
+
+            if should_spawn_backend() {
+                let app_handle = app.handle().clone();
+                let window = app.get_webview_window("main").or_else(|| {
+                    app.webview_windows().values().next().cloned()
+                });
+
+                // Pick ephemeral port + per-launch auth token (local-only).
+                let port = pick_free_port().unwrap_or(3000);
+                let token = Uuid::new_v4().to_string();
+
+                let node_cmd = resolve_node_command(&app_handle);
+                let server_entry = resolve_server_entry(&app_handle);
+
+                match server_entry {
+                    None => {
+                        eprintln!("Unable to locate server/index.js; backend will not start.");
+                    }
+                    Some(entry) => {
+                        let data_dir = app_handle
+                            .path()
+                            .app_data_dir()
+                            .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+                        let _ = std::fs::create_dir_all(&data_dir);
+
+                        let mut cmd = Command::new(node_cmd);
+                        cmd.arg(entry);
+                        cmd.current_dir(&data_dir);
+                        cmd.stdin(Stdio::null());
+                        cmd.env("ORCHESTRATOR_HOST", "127.0.0.1");
+                        cmd.env("ORCHESTRATOR_PORT", port.to_string());
+                        cmd.env("AUTH_TOKEN", token.clone());
+                        cmd.env("ORCHESTRATOR_DATA_DIR", data_dir.to_string_lossy().to_string());
+
+                        // If we didn't bundle diff-viewer, disable auto-start so packaged builds don't fail noisily.
+                        if !has_diff_viewer_folder(&app_handle) {
+                            cmd.env("AUTO_START_DIFF_VIEWER", "false");
+                        }
+
+                        match cmd.spawn() {
+                            Err(err) => {
+                                eprintln!("Failed to spawn backend: {}", err);
+                            }
+                            Ok(child) => {
+                                app_handle.state::<BackendProcess>().set_child(child);
+
+                                if let Some(window) = window {
+                                    let url = format!("http://127.0.0.1:{}/?token={}", port, token);
+                                    tauri::async_runtime::spawn(async move {
+                                        if wait_for_port(port, Duration::from_secs(20)).await {
+                                            navigate_window(window, url).await;
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             
             Ok(())
         })
@@ -184,6 +390,15 @@ fn main() {
             unwatch_directory,
             list_watched_paths
         ])
-        .run(tauri::generate_context!())
+        .run(tauri::generate_context!(), |app_handle, event| {
+            match event {
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+                    if let Some(proc_state) = app_handle.try_state::<BackendProcess>() {
+                        proc_state.kill();
+                    }
+                }
+                _ => {}
+            }
+        })
         .expect("error while running tauri application");
 }
