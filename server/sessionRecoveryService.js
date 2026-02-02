@@ -34,18 +34,40 @@ class SessionRecoveryService {
     this.initialized = false;
   }
 
+  ensureWorkspaceStateLoadedSync(workspaceId) {
+    const ws = String(workspaceId || '').trim();
+    if (!ws) return;
+    if (this.states.has(ws)) return;
+
+    try {
+      const filePath = this.getRecoveryPath(ws);
+      const fsSync = require('fs');
+      const data = fsSync.readFileSync(filePath, 'utf8');
+      const state = JSON.parse(String(data || '{}'));
+      this.states.set(ws, new Map(Object.entries(state.sessions || {})));
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        logger.error('Failed to load recovery state (sync)', { workspaceId: ws, error: error.message });
+      }
+      this.states.set(ws, new Map());
+    }
+  }
+
   saveWorkspaceStateSync(workspaceId) {
     try {
-      const sessions = this.states.get(workspaceId);
+      const ws = String(workspaceId || '').trim();
+      if (!ws) return;
+
+      const sessions = this.states.get(ws);
       if (!sessions) return;
 
       const state = {
-        workspaceId,
+        workspaceId: ws,
         savedAt: new Date().toISOString(),
         sessions: Object.fromEntries(sessions)
       };
 
-      const filePath = this.getRecoveryPath(workspaceId);
+      const filePath = this.getRecoveryPath(ws);
       const fsSync = require('fs');
       fsSync.mkdirSync(RECOVERY_DIR, { recursive: true });
       fsSync.writeFileSync(filePath, JSON.stringify(state, null, 2));
@@ -129,11 +151,12 @@ class SessionRecoveryService {
    * Update session state
    */
   updateSession(workspaceId, sessionId, updates) {
-    if (!this.states.has(workspaceId)) {
-      this.states.set(workspaceId, new Map());
-    }
+    const ws = String(workspaceId || '').trim();
+    if (!ws) return null;
 
-    const sessions = this.states.get(workspaceId);
+    this.ensureWorkspaceStateLoadedSync(ws);
+
+    const sessions = this.states.get(ws);
     const current = sessions.get(sessionId) || {
       sessionId,
       createdAt: new Date().toISOString()
@@ -146,7 +169,7 @@ class SessionRecoveryService {
     };
 
     sessions.set(sessionId, updated);
-    this.saveWorkspaceState(workspaceId);
+    this.saveWorkspaceState(ws);
 
     return updated;
   }
@@ -381,20 +404,24 @@ class SessionRecoveryService {
    * Clear session state (e.g., when workspace is closed normally)
    */
   clearSession(workspaceId, sessionId) {
-    const sessions = this.states.get(workspaceId);
-    if (sessions) {
-      sessions.delete(sessionId);
+    const ws = String(workspaceId || '').trim();
+    if (!ws) return;
 
-      // Clear any pending debounced write and persist immediately, so explicit user closes
-      // don't keep showing up as "recoverable" if the server exits soon after.
-      const existing = this.saveDebounce.get(workspaceId);
-      if (existing) {
-        clearTimeout(existing);
-        this.saveDebounce.delete(workspaceId);
-      }
+    this.ensureWorkspaceStateLoadedSync(ws);
+    const sessions = this.states.get(ws);
+    if (!sessions) return;
 
-      this.saveWorkspaceStateSync(workspaceId);
+    sessions.delete(sessionId);
+
+    // Clear any pending debounced write and persist immediately, so explicit user closes
+    // don't keep showing up as "recoverable" if the server exits soon after.
+    const existing = this.saveDebounce.get(ws);
+    if (existing) {
+      clearTimeout(existing);
+      this.saveDebounce.delete(ws);
     }
+
+    this.saveWorkspaceStateSync(ws);
   }
 
   /**
