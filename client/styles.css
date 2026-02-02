@@ -2,21 +2,46 @@
 :root {
   /* Colors - Dark Theme */
   --bg-primary: #0d1117;
-  --bg-secondary: #161b22;
-  --bg-tertiary: #21262d;
-  --bg-hover: #2a313a;
+  --bg-secondary-base: #161b22;
+  --bg-tertiary-base: #21262d;
+  --bg-hover-base: #2a313a;
   --text-primary: #c9d1d9;
   --text-secondary: #8b949e;
   --text-tertiary: #6e7681;
   --text-on-accent: #ffffff;
-  --focus-ring: rgba(31, 111, 235, 0.35);
-  --border-color: #30363d;
+  --focus-ring-base: rgba(31, 111, 235, 0.35);
+  --border-color-base: #30363d;
   --accent-primary: #1f6feb;
   --accent-primary-hover: #388bfd;
   --accent-primary-pressed: #1a66d9;
   --accent-success: #3fb950;
   --accent-warning: #d29922;
   --accent-danger: #f85149;
+
+  /* Skin mixing (0..1). Skins can override `--skin-*` targets; we blend against `*-base`. */
+  --skin-intensity: 1;
+  --skin-mix: calc(var(--skin-intensity) * 100%);
+  --skin-mix-inv: calc(100% - var(--skin-mix));
+
+  --skin-bg-secondary: var(--bg-secondary-base);
+  --skin-bg-tertiary: var(--bg-tertiary-base);
+  --skin-bg-hover: var(--bg-hover-base);
+  --skin-border-color: var(--border-color-base);
+  --skin-focus-ring: var(--focus-ring-base);
+
+  /* Fallbacks (when `color-mix()` isn't supported) */
+  --bg-secondary: var(--bg-secondary-base);
+  --bg-tertiary: var(--bg-tertiary-base);
+  --bg-hover: var(--bg-hover-base);
+  --border-color: var(--border-color-base);
+  --focus-ring: var(--focus-ring-base);
+
+  /* Prefer skin-mixed values when supported */
+  --bg-secondary: color-mix(in srgb, var(--bg-secondary-base) var(--skin-mix-inv), var(--skin-bg-secondary) var(--skin-mix));
+  --bg-tertiary: color-mix(in srgb, var(--bg-tertiary-base) var(--skin-mix-inv), var(--skin-bg-tertiary) var(--skin-mix));
+  --bg-hover: color-mix(in srgb, var(--bg-hover-base) var(--skin-mix-inv), var(--skin-bg-hover) var(--skin-mix));
+  --border-color: color-mix(in srgb, var(--border-color-base) var(--skin-mix-inv), var(--skin-border-color) var(--skin-mix));
+  --focus-ring: color-mix(in srgb, var(--focus-ring-base) var(--skin-mix-inv), var(--skin-focus-ring) var(--skin-mix));
 
   /* Status colors (must match StatusDetector semantics) */
   --status-idle: var(--text-tertiary);     /* idle = no active agent work */
@@ -44,14 +69,14 @@
 /* Light Theme */
 body.light-theme {
   --bg-primary: #ffffff;
-  --bg-secondary: #f6f8fa;
-  --bg-tertiary: #e6e8eb;
-  --bg-hover: #eef2f6;
+  --bg-secondary-base: #f6f8fa;
+  --bg-tertiary-base: #e6e8eb;
+  --bg-hover-base: #eef2f6;
   --text-primary: #24292f;
   --text-secondary: #57606a;
   --text-tertiary: #6e7781;
-  --focus-ring: rgba(9, 105, 218, 0.35);
-  --border-color: #d0d7de;
+  --focus-ring-base: rgba(9, 105, 218, 0.35);
+  --border-color-base: #d0d7de;
   --accent-primary-hover: #0969da;
   --accent-primary-pressed: #1a66d9;
 }
@@ -61,22 +86,21 @@ body.skin-blue {
   --accent-primary: #0f67fd;
   --accent-primary-hover: #2b7cff;
   --accent-primary-pressed: #0b56d8;
-  --focus-ring: rgba(15, 103, 253, 0.4);
-
-  /* Dark mode: subtle blue-tinted neutrals */
-  --bg-secondary: #0f1624;
-  --bg-tertiary: #17233a;
-  --bg-hover: #1d2c48;
-  --border-color: #2a3b63;
+  /* Dark mode: subtle blue-tinted neutrals (blended by --skin-intensity) */
+  --skin-bg-secondary: #0f1624;
+  --skin-bg-tertiary: #17233a;
+  --skin-bg-hover: #1d2c48;
+  --skin-border-color: #2a3b63;
+  --skin-focus-ring: rgba(15, 103, 253, 0.4);
 }
 
 body.light-theme.skin-blue {
   /* Light mode: keep it clean, just a hint of blue */
-  --bg-secondary: #f2f7ff;
-  --bg-tertiary: #e8f0ff;
-  --bg-hover: #dbe8ff;
-  --border-color: #c6d8ff;
-  --focus-ring: rgba(15, 103, 253, 0.35);
+  --skin-bg-secondary: #f2f7ff;
+  --skin-bg-tertiary: #e8f0ff;
+  --skin-bg-hover: #dbe8ff;
+  --skin-border-color: #c6d8ff;
+  --skin-focus-ring: rgba(15, 103, 253, 0.35);
 }
 
 body.skin-purple {
