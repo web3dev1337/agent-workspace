@@ -16,7 +16,17 @@ const logger = winston.createLogger({
 
 class UserSettingsService {
   constructor() {
-    this.settingsPath = path.join(__dirname, '..', 'user-settings.json');
+    const dataDirRaw = String(process.env.ORCHESTRATOR_DATA_DIR || '').trim();
+    const baseDir = (() => {
+      if (dataDirRaw) {
+        try { return path.resolve(dataDirRaw); } catch { return dataDirRaw; }
+      }
+      return path.join(__dirname, '..');
+    })();
+
+    this.settingsPath = process.env.ORCHESTRATOR_USER_SETTINGS_PATH
+      ? String(process.env.ORCHESTRATOR_USER_SETTINGS_PATH)
+      : path.join(baseDir, 'user-settings.json');
     this.settings = this.loadSettings();
   }
 
