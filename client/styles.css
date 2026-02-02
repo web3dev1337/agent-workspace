@@ -2840,18 +2840,18 @@ header h1 {
 
 .yolo-toggle input:checked + .yolo-label,
 .yolo-toggle-modal input:checked + .yolo-label {
-  color: #667eea;
+  color: var(--accent-primary);
 }
 
 /* Buttons when YOLO is active */
 .startup-btn-inline.yolo-active {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
-  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(31, 111, 235, 0.2), rgba(31, 111, 235, 0.08));
+  border-color: var(--accent-primary);
 }
 
 .startup-btn-inline.yolo-active:hover {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-hover));
+  color: var(--text-on-accent);
 }
 
 .start-claude-inline:hover {
@@ -2925,8 +2925,8 @@ header h1 {
   margin: 10px 12px 14px;
   padding: 10px 12px;
   border: 1px solid var(--border-color);
-  border-left: 4px solid #f59e0b;
-  background: rgba(245, 158, 11, 0.10);
+  border-left: 4px solid var(--accent-warning);
+  background: rgba(210, 153, 34, 0.10);
   border-radius: 10px;
 }
 
