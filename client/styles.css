@@ -1582,6 +1582,27 @@ header h1 {
   font-weight: 600;
 }
 
+.worktree-inspector-file-link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--accent-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+}
+
+.worktree-inspector-file-link:hover {
+  color: var(--accent-primary-hover);
+}
+
+.worktree-inspector-file-link:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
 .diff-binary {
   opacity: 0.8;
   font-style: italic;
