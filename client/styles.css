@@ -2979,6 +2979,7 @@ header h1 {
   z-index: 100;
   display: flex;
   flex-direction: column;
+  height: calc(100vh - var(--header-height));
   max-height: calc(100vh - var(--header-height));
   overflow: hidden;
 }
