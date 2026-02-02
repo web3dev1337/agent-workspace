@@ -1477,7 +1477,7 @@ header h1 {
 
 .review-console-grid {
   display: grid;
-  grid-template-columns: minmax(340px, 0.35fr) minmax(0, 1fr);
+  grid-template-columns: minmax(380px, 0.25fr) minmax(360px, 0.25fr) minmax(0, 1fr);
   gap: 14px;
   flex: 1 1 auto;
   min-height: 0;
@@ -1488,6 +1488,11 @@ header h1 {
   grid-template-columns: 1fr;
 }
 
+.review-console-grid.two-column {
+  grid-template-columns: minmax(360px, 0.35fr) minmax(0, 1fr);
+}
+
+.review-console-col,
 .review-console-left {
   display: flex;
   flex-direction: column;
@@ -1496,6 +1501,7 @@ header h1 {
   overflow: auto;
 }
 
+.review-console-col-diff,
 .review-console-right {
   min-height: 0;
   overflow: hidden;
@@ -1503,6 +1509,7 @@ header h1 {
   flex-direction: column;
 }
 
+.review-console-col-diff .worktree-inspector-diff-panel,
 .review-console-right .worktree-inspector-diff-panel {
   flex: 1 1 auto;
   min-height: 0;
@@ -1511,6 +1518,7 @@ header h1 {
   overflow: hidden;
 }
 
+.review-console-col-diff .worktree-inspector-diff-iframe,
 .review-console-right .worktree-inspector-diff-iframe {
   flex: 1 1 auto;
   min-height: 0;
