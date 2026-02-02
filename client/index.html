@@ -280,20 +280,40 @@
                 </div>
             </div>
 
-            <div class="setting-section">
-                <h4>Discord</h4>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="discord-auto-ensure-services" />
-                        Auto-start Services workspace on server startup
-                    </label>
-                    <p class="setting-description">Keeps Claudesworth (bot + queue processor) running after orchestrator restarts.</p>
-                </div>
-            </div>
+	            <div class="setting-section">
+	                <h4>Discord</h4>
+	                <div class="setting-group">
+	                    <label>
+	                        <input type="checkbox" id="discord-auto-ensure-services" />
+	                        Auto-start Services workspace on server startup
+	                    </label>
+	                    <p class="setting-description">Keeps Claudesworth (bot + queue processor) running after orchestrator restarts.</p>
+	                </div>
+	            </div>
 
-            <div class="setting-group">
-                <label>
-                    Tasks Theme:
+	            <div class="setting-section">
+	                <h4>License</h4>
+	                <div class="setting-group">
+	                    <div id="license-status" class="mono" style="opacity:0.85;">Loading…</div>
+	                    <p class="setting-description">Local/offline license verification (no project data is sent anywhere).</p>
+	                </div>
+	                <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
+	                    <button class="btn-secondary" type="button" id="license-reload">Reload</button>
+	                </div>
+	                <div class="setting-group">
+	                    <label>
+	                        Paste <code>license.json</code>:
+	                        <textarea id="license-json" class="tasks-textarea" rows="5" placeholder='{"license":{...},"signature":"..."}'></textarea>
+	                    </label>
+	                    <div style="display:flex; gap:8px; margin-top:8px; flex-wrap: wrap;">
+	                        <button class="btn-secondary" type="button" id="license-save">Save</button>
+	                    </div>
+	                </div>
+	            </div>
+
+	            <div class="setting-group">
+	                <label>
+	                    Tasks Theme:
                     <select id="tasks-theme-select">
                         <option value="inherit">Follow App</option>
                         <option value="light">Light</option>

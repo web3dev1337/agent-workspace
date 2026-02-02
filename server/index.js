@@ -48,6 +48,7 @@ const { StatusDetector } = require('./statusDetector');
 const { GitHelper } = require('./gitHelper');
 const { NotificationService } = require('./notificationService');
 const { UserSettingsService } = require('./userSettingsService');
+const { LicenseService } = require('./licenseService');
 const { GitUpdateService } = require('./gitUpdateService');
 const { WorkspaceManager } = require('./workspaceManager');
 const { WorktreeHelper } = require('./worktreeHelper');
@@ -252,6 +253,7 @@ const pullRequestService = PullRequestService.getInstance();
 const processTaskService = ProcessTaskService.getInstance({ sessionManager, worktreeTagService, pullRequestService });
 const taskRecordService = TaskRecordService.getInstance();
 const userSettingsService = UserSettingsService.getInstance();
+const licenseService = LicenseService.getInstance();
 const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager, userSettingsService });
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
 const telemetrySnapshotService = TelemetrySnapshotService.getInstance();
@@ -2257,6 +2259,65 @@ app.get('/api/user-settings/check-updates', (req, res) => {
   } catch (error) {
     logger.error('Failed to check for settings updates', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to check for settings updates' });
+  }
+});
+
+// License (local/offline)
+app.get('/api/license/status', (req, res) => {
+  try {
+    const requiredRaw = String(process.env.ORCHESTRATOR_LICENSE_REQUIRED || '').trim().toLowerCase();
+    const required = requiredRaw ? !['0', 'false', 'no', 'off'].includes(requiredRaw) : false;
+
+    const status = licenseService.getStatus();
+    const entitlements = licenseService.getEntitlements();
+    res.json({
+      required,
+      status,
+      entitlements,
+      licensePath: licenseService.getLicensePath(),
+      publicKeyConfigured: !!licenseService.readPublicKeyPem()
+    });
+  } catch (error) {
+    logger.error('Failed to get license status', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get license status' });
+  }
+});
+
+app.post('/api/license/reload', (req, res) => {
+  try {
+    const status = licenseService.getStatus({ forceReload: true });
+    res.json({ ok: true, status });
+  } catch (error) {
+    logger.error('Failed to reload license', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to reload license' });
+  }
+});
+
+// Save license.json (paste into UI); stored in ORCHESTRATOR_DATA_DIR by default.
+app.post('/api/license/set', express.json({ limit: '2mb' }), (req, res) => {
+  try {
+    let payload = req.body;
+    if (payload && typeof payload.text === 'string') {
+      payload = JSON.parse(payload.text);
+    }
+
+    if (!payload || typeof payload !== 'object') {
+      return res.status(400).json({ error: 'Missing license payload' });
+    }
+    if (!payload.license) {
+      return res.status(400).json({ error: 'Missing license object (expected { license, signature })' });
+    }
+
+    const result = licenseService.saveLicenseFile(payload);
+    if (!result.ok) {
+      return res.status(500).json({ error: result.error || 'Failed to save license' });
+    }
+
+    const status = licenseService.getStatus({ forceReload: true });
+    res.json({ ok: true, status, path: result.path });
+  } catch (error) {
+    logger.error('Failed to set license', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to set license' });
   }
 });
 
