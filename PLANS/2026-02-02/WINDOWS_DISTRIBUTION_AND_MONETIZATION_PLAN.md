@@ -194,17 +194,49 @@ Not required to run, but avoids SmartScreen “Unknown publisher” friction.
 ## 7) Implementation checklist (phased)
 
 ### Phase A — Make Tauri app actually usable on Windows (no licensing yet)
-- [ ] Add `ORCHESTRATOR_HOST` support in backend and bind to `127.0.0.1`
-- [ ] Add “packaged build requires auth token” behavior
-- [ ] Update UI fetch + Socket.IO to send `X-Auth-Token` / handshake token in Tauri mode
-- [ ] Update Tauri main.rs to spawn Node backend and open the URL
-- [ ] Add a “backend health” screen if server fails to start (port in use, missing node.exe)
-- [ ] Document Windows build commands + prerequisites
+- [x] Add `ORCHESTRATOR_HOST` support in backend and bind to `127.0.0.1` (Tauri sets it)
+- [x] Add “packaged build requires auth token” behavior (Tauri spawns backend with per-run `AUTH_TOKEN`)
+- [x] Update UI fetch + Socket.IO to send `X-Auth-Token` / handshake token in Tauri mode
+- [x] Update Tauri main.rs to spawn Node backend and open the URL
+- [~] Add a “backend health” screen if server fails to start (port in use, missing node.exe)
+- [~] Document Windows build commands + prerequisites
 
 ### Phase B — Productize
-- [ ] Add local license file + offline verification
+- [x] Add local license file + offline verification
 - [ ] Gate Pro features behind license flags
 - [ ] Add auto-updater (optional)
+
+---
+
+## Status (implemented in repo)
+
+Merged:
+- **PR #576**: Tauri spawns backend + local auth, and build bundles backend resources.
+
+In progress (this branch / next PR):
+- Tauri bootstrap page (`src-tauri/bootstrap/index.html`) to avoid loading full UI before backend is up.
+- `ORCHESTRATOR_DATA_DIR` plumbing for `user-settings.json` so packaged builds are writable.
+- Offline license verification + `/api/license/*` endpoints + Settings UI for status/paste.
+
+### New env vars (packaging-focused)
+
+- `ORCHESTRATOR_HOST`: backend bind host (existing `HOST` still works; `ORCHESTRATOR_HOST` wins).
+- `ORCHESTRATOR_PORT`: backend port (Tauri picks an ephemeral port).
+- `AUTH_TOKEN`: when set, the server requires:
+  - `X-Auth-Token` header for `/api/*`
+  - socket handshake `auth.token` for Socket.IO
+- `ORCHESTRATOR_DATA_DIR`: where packaged builds should store runtime files (logs, settings, license).
+- `ORCHESTRATOR_USER_SETTINGS_PATH`: override where `user-settings.json` is stored.
+- `ORCHESTRATOR_LICENSE_PATH`: override license file path (defaults to `${ORCHESTRATOR_DATA_DIR}/license.json`).
+- `ORCHESTRATOR_LICENSE_PUBLIC_KEY` or `ORCHESTRATOR_LICENSE_PUBLIC_KEY_PATH`: public key PEM for offline verify.
+- `ORCHESTRATOR_LICENSE_ALLOW_UNSIGNED`: dev-only escape hatch for unsigned license files.
+- `ORCHESTRATOR_LICENSE_REQUIRED`: future enforcement toggle (status is exposed; hard-gating not wired yet).
+
+### License endpoints
+
+- `GET /api/license/status`
+- `POST /api/license/reload`
+- `POST /api/license/set` (JSON body: either `{ license, signature }` or `{ text: \"{...}\" }`)
 
 ### Phase C — Team/Enterprise add-ons (still local)
 - [ ] RBAC/policy layer
@@ -219,4 +251,3 @@ Not required to run, but avoids SmartScreen “Unknown publisher” friction.
 3) Which monetization style do you want:
    - one-time license + paid upgrades, or subscription?
 4) Do you want to keep `src-tauri/src/terminal.rs` PTY implementation (Rust) for future, or remove it to reduce confusion?
-
