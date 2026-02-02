@@ -2,9 +2,9 @@ const util = require('util');
 const fs = require('fs');
 const path = require('path');
 
-let mockExec;
+let mockExecFile;
 jest.mock('child_process', () => ({
-  exec: mockExec
+  execFile: mockExecFile
 }));
 
 describe('GitHelper environment', () => {
@@ -23,9 +23,9 @@ describe('GitHelper environment', () => {
 
   test('getCurrentBranch does not override HOME with the worktree path', async () => {
     const calls = [];
-    mockExec = jest.fn();
-    mockExec[util.promisify.custom] = async (cmd, options) => {
-      calls.push({ cmd, options });
+    mockExecFile = jest.fn();
+    mockExecFile[util.promisify.custom] = async (file, args, options) => {
+      calls.push({ file, args, options });
       return { stdout: 'main\n', stderr: '' };
     };
 
@@ -37,7 +37,7 @@ describe('GitHelper environment', () => {
     const branch = await helper.getCurrentBranch(worktreePath, true);
     expect(branch).toBe('main');
 
-    const call = calls.find(c => String(c.cmd).includes('git rev-parse'));
+    const call = calls.find(c => String(c.file) === 'git' && Array.isArray(c.args) && c.args.join(' ').includes('rev-parse'));
     expect(call).toBeTruthy();
     const opts = call.options;
     expect(opts.cwd).toBe(worktreePath);
@@ -47,9 +47,9 @@ describe('GitHelper environment', () => {
 
   test('getRemoteUrl does not override HOME with the worktree path', async () => {
     const calls = [];
-    mockExec = jest.fn();
-    mockExec[util.promisify.custom] = async (cmd, options) => {
-      calls.push({ cmd, options });
+    mockExecFile = jest.fn();
+    mockExecFile[util.promisify.custom] = async (file, args, options) => {
+      calls.push({ file, args, options });
       return { stdout: 'git@github.com:owner/repo.git\n', stderr: '' };
     };
 
@@ -61,7 +61,7 @@ describe('GitHelper environment', () => {
     const url = await helper.getRemoteUrl(worktreePath);
     expect(url).toBe('https://github.com/owner/repo');
 
-    const call = calls.find(c => String(c.cmd).includes('git remote get-url origin'));
+    const call = calls.find(c => String(c.file) === 'git' && Array.isArray(c.args) && c.args.join(' ').includes('remote get-url origin'));
     expect(call).toBeTruthy();
     const opts = call.options;
     expect(opts.cwd).toBe(worktreePath);
@@ -71,9 +71,9 @@ describe('GitHelper environment', () => {
 
   test('invalid worktree path does not throw and returns sentinel', async () => {
     const calls = [];
-    mockExec = jest.fn();
-    mockExec[util.promisify.custom] = async (cmd, options) => {
-      calls.push({ cmd, options });
+    mockExecFile = jest.fn();
+    mockExecFile[util.promisify.custom] = async (file, args, options) => {
+      calls.push({ file, args, options });
       return { stdout: 'main\n', stderr: '' };
     };
 
@@ -88,9 +88,9 @@ describe('GitHelper environment', () => {
 
   test('missing worktree path does not throw and returns sentinel', async () => {
     const calls = [];
-    mockExec = jest.fn();
-    mockExec[util.promisify.custom] = async (cmd, options) => {
-      calls.push({ cmd, options });
+    mockExecFile = jest.fn();
+    mockExecFile[util.promisify.custom] = async (file, args, options) => {
+      calls.push({ file, args, options });
       return { stdout: 'main\n', stderr: '' };
     };
 
