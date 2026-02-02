@@ -50,6 +50,23 @@ const pickDoneListId = (lists) => {
   );
 };
 
+const pickForTestListId = (lists) => {
+  const arr = Array.isArray(lists) ? lists : [];
+  const norm = (s) => String(s || '').trim().toLowerCase();
+
+  const scored = arr
+    .map((l) => ({ id: l?.id || '', name: norm(l?.name || '') }))
+    .filter((l) => !!l.id && !!l.name);
+
+  const firstMatch = (re) => scored.find((l) => re.test(l.name))?.id || null;
+
+  return (
+    firstMatch(/\b(for\s*test|for\s*qa)\b/) ||
+    firstMatch(/\b(qa|test|testing|verify|verification)\b/) ||
+    null
+  );
+};
+
 const parseLabelNames = (value) => {
   if (!value) return [];
   if (Array.isArray(value)) return value.map(v => String(v || '').trim()).filter(Boolean);
@@ -107,6 +124,10 @@ class PrMergeAutomationService {
   getConfig() {
     const cfg = this.userSettingsService?.settings?.global?.ui?.tasks?.automations?.trello?.onPrMerged || {};
     const template = String(cfg.commentTemplate || '').trim();
+    const moveTargetRaw = String(cfg.moveTarget || '').trim().toLowerCase();
+    const moveTarget = ['done', 'for_test', 'none'].includes(moveTargetRaw)
+      ? moveTargetRaw
+      : (cfg.moveToDoneList !== false ? 'done' : 'none');
     return {
       enabled: !!cfg.enabled,
       pollEnabled: cfg.pollEnabled !== false,
@@ -114,6 +135,7 @@ class PrMergeAutomationService {
       comment: cfg.comment !== false,
       commentTemplate: template || 'Merged ✅\nPR: {prUrl}',
       moveToDoneList: cfg.moveToDoneList !== false,
+      moveTarget,
       closeIfNoDoneList: !!cfg.closeIfNoDoneList,
       pollMs: Math.max(10_000, Math.min(10 * 60_000, Number(cfg.pollMs) || 60_000))
     };
@@ -211,16 +233,25 @@ class PrMergeAutomationService {
 
     const boardId = String(card?.idBoard || '').trim();
     let targetListId = null;
-    if (cfg.moveToDoneList && boardId) {
+    if (cfg.moveTarget !== 'none' && cfg.moveToDoneList && boardId) {
       try {
         const lists = await provider.listLists({ boardId, refresh: true });
         const key = `${providerId}:${boardId}`;
         const configured = this.userSettingsService?.settings?.global?.ui?.tasks?.boardConventions?.[key] || null;
-        const configuredDoneListId = String(configured?.doneListId || '').trim();
         const listIds = new Set((Array.isArray(lists) ? lists : []).map(l => l?.id).filter(Boolean));
-        targetListId = (configuredDoneListId && listIds.has(configuredDoneListId))
-          ? configuredDoneListId
-          : pickDoneListId(lists);
+
+        const configuredDoneListId = String(configured?.doneListId || '').trim();
+        const configuredForTestListId = String(configured?.forTestListId || '').trim();
+
+        const pick = (cfg.moveTarget === 'for_test')
+          ? ((configuredForTestListId && listIds.has(configuredForTestListId))
+            ? configuredForTestListId
+            : pickForTestListId(lists))
+          : ((configuredDoneListId && listIds.has(configuredDoneListId))
+            ? configuredDoneListId
+            : pickDoneListId(lists));
+
+        targetListId = pick;
       } catch (e) {
         logger.debug('Failed to list board lists', { boardId, error: e?.message || String(e) });
       }
@@ -572,4 +603,4 @@ class PrMergeAutomationService {
   }
 }
 
-module.exports = { PrMergeAutomationService, extractTrelloShortLinks, pickDoneListId, parseLabelNames, extractCardLabelIds };
+module.exports = { PrMergeAutomationService, extractTrelloShortLinks, pickDoneListId, pickForTestListId, parseLabelNames, extractCardLabelIds };
