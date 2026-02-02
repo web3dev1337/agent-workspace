@@ -32,6 +32,9 @@ class ClaudeOrchestrator {
     this.githubLinkLogs = new Map(); // Track last logged GitHub links per session
     this.sessionActivity = new Map(); // Track which sessions have been used
     this.branchRefreshRequestAt = new Map(); // sessionId -> last refresh timestamp (ms)
+    // Session IDs can contain characters that break CSS selectors (e.g. "hytopia/zoo-game-claude").
+    // Keep DOM ids safe/stable by mapping sessionId -> domSafeKey.
+    this.sessionDomIdCache = new Map();
     this.dismissedStartupUI = new Map(); // Track which sessions have dismissed startup UI
     this.startupUIDebounce = new Map(); // Debounce startup UI showing
     this.sessionAgentPreferences = new Map(); // Track agent preferences per session
@@ -90,6 +93,38 @@ class ClaudeOrchestrator {
     } catch {
       return false;
     }
+  }
+
+  hashStringToBase36(value) {
+    const s = String(value ?? '');
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) {
+      h = ((h << 5) + h) ^ s.charCodeAt(i); // djb2 xor
+    }
+    return (h >>> 0).toString(36);
+  }
+
+  getDomSafeIdPart(value) {
+    const raw = String(value ?? '');
+    if (!raw) return '';
+    const base = raw.replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (base === raw) return base;
+    return `${base}__${this.hashStringToBase36(raw)}`;
+  }
+
+  getSessionDomKey(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return '';
+    const cached = this.sessionDomIdCache.get(sid);
+    if (cached) return cached;
+    const key = this.getDomSafeIdPart(sid);
+    this.sessionDomIdCache.set(sid, key);
+    return key;
+  }
+
+  getSessionDomId(prefix, sessionId) {
+    const key = this.getSessionDomKey(sessionId);
+    return key ? `${prefix}-${key}` : `${prefix}-`;
   }
 
   syncSidebarBackdrop() {
@@ -502,7 +537,7 @@ class ClaudeOrchestrator {
 
         // Remove terminal wrapper from UI (scope to the active grid to avoid cross-tab collisions)
         const grid = this.getTerminalGrid();
-        const wrapperId = `wrapper-${sessionId}`;
+        const wrapperId = this.getSessionDomId('wrapper', sessionId);
         let wrapper = document.getElementById(wrapperId);
         if (wrapper && grid && !grid.contains(wrapper)) wrapper = null;
         if (wrapper) {
@@ -510,7 +545,7 @@ class ClaudeOrchestrator {
           wrapper.remove();
         } else {
           // Fallback for older DOM shapes
-          const terminalId = `terminal-${sessionId}`;
+          const terminalId = this.getSessionDomId('terminal', sessionId);
           let terminalElement = document.getElementById(terminalId);
           if (terminalElement && grid && !grid.contains(terminalElement)) terminalElement = null;
           if (terminalElement) {
@@ -3163,14 +3198,14 @@ class ClaudeOrchestrator {
   }
   
   resizeAllVisibleTerminals() {
-    // Force resize all visible terminals to fit their containers
-    this.activeView.forEach(sessionId => {
-      const wrapper = document.getElementById(`wrapper-${sessionId}`);
-      if (wrapper && wrapper.style.display !== 'none') {
-        this.terminalManager.fitTerminal(sessionId);
-        const term = this.terminalManager.terminals.get(sessionId);
-        if (term) {
-          term.refresh(0, term.rows - 1);
+	    // Force resize all visible terminals to fit their containers
+	    this.activeView.forEach(sessionId => {
+	      const wrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
+	      if (wrapper && wrapper.style.display !== 'none') {
+	        this.terminalManager.fitTerminal(sessionId);
+	        const term = this.terminalManager.terminals.get(sessionId);
+	        if (term) {
+	          term.refresh(0, term.rows - 1);
         }
       }
     });
@@ -3364,7 +3399,7 @@ class ClaudeOrchestrator {
     sessionIds.forEach((sessionId) => {
       const session = this.sessions.get(sessionId);
       const isVisible = this.isSessionVisibleInCurrentView(sessionId);
-      const wrapperId = `wrapper-${sessionId}`;
+      const wrapperId = this.getSessionDomId('wrapper', sessionId);
       let wrapper = document.getElementById(wrapperId);
       if (wrapper && !grid.contains(wrapper)) wrapper = null;
 
@@ -3381,7 +3416,7 @@ class ClaudeOrchestrator {
 
             // Initialize terminal for newly created element (scope query to wrapper/grid to avoid cross-tab collisions)
             setTimeout(() => {
-              const terminalId = `terminal-${sessionId}`;
+              const terminalId = this.getSessionDomId('terminal', sessionId);
               const terminalEl = document.getElementById(terminalId);
               if (terminalEl && wrapper && wrapper.contains(terminalEl) && !this.terminalManager.terminals.has(sessionId)) {
                 this.terminalManager.createTerminal(sessionId, session);
@@ -3508,9 +3543,9 @@ class ClaudeOrchestrator {
     sortedSessionIds.forEach((sessionId, index) => {
       const session = this.sessions.get(sessionId);
       if (session) {
-        setTimeout(() => {
-          const terminalEl = document.getElementById(`terminal-${sessionId}`);
-          if (!terminalEl) return;
+	        setTimeout(() => {
+	          const terminalEl = document.getElementById(this.getSessionDomId('terminal', sessionId));
+	          if (!terminalEl) return;
           
           if (this.terminalManager.terminals.has(sessionId)) {
             // Re-attach existing terminal to the new element
@@ -3686,7 +3721,7 @@ class ClaudeOrchestrator {
   }
 
 	  updateTerminalBranchLabel(sessionId, branch) {
-	    const wrapper = document.getElementById(`wrapper-${sessionId}`);
+	    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
 	    const terminalElement = wrapper ? wrapper.querySelector('.terminal-branch') : null;
 	    if (!terminalElement) return;
 	    const meta = this.formatBranchLabel(branch, { context: 'terminal' });
@@ -3746,12 +3781,12 @@ class ClaudeOrchestrator {
 	    return null;
 	  }
 	
-	  updateTerminalTicketLabel(sessionId) {
-	    const sid = String(sessionId || '').trim();
-	    if (!sid) return;
-	
-	    const wrapper = document.getElementById(`wrapper-${sid}`);
-	    if (!wrapper) return;
+		  updateTerminalTicketLabel(sessionId) {
+		    const sid = String(sessionId || '').trim();
+		    if (!sid) return;
+		
+		    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sid));
+		    if (!wrapper) return;
 	
 	    const titleRow = wrapper.querySelector('.terminal-title');
 	    if (!titleRow) return;
@@ -3825,7 +3860,7 @@ class ClaudeOrchestrator {
   createTerminalElement(sessionId, session) {
     const wrapper = document.createElement('div');
     wrapper.className = 'terminal-wrapper';
-    wrapper.id = `wrapper-${sessionId}`;
+    wrapper.id = this.getSessionDomId('wrapper', sessionId);
     wrapper.addEventListener('mousedown', () => {
       this.lastInteractedSessionId = sessionId;
     });
@@ -3844,14 +3879,14 @@ class ClaudeOrchestrator {
 		      ? `<a class="terminal-ticket" href="${this.escapeHtml(ticketMeta.url)}" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(ticketMeta.tooltip || ticketMeta.title || ticketMeta.label)}">🧾 ${this.escapeHtml(ticketMeta.label)}</a>`
 		      : `<span class="terminal-ticket" title="${this.escapeHtml(ticketMeta.tooltip || ticketMeta.title || ticketMeta.label)}">🧾 ${this.escapeHtml(ticketMeta.label)}</span>`
 		    ) : '';
-		    wrapper.innerHTML = `
-		      <div class="terminal-header">
-		        <div class="terminal-title">
-	          <span class="status-indicator ${session.status}" id="status-${sessionId}"></span>
-	          <span>${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
-	          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
-	          ${ticketChip}
-		        </div>
+			    wrapper.innerHTML = `
+			      <div class="terminal-header">
+			        <div class="terminal-title">
+		          <span class="status-indicator ${session.status}" id="${this.getSessionDomId('status', sessionId)}"></span>
+		          <span>${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
+		          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
+		          ${ticketChip}
+			        </div>
 		        <div class="terminal-controls">
 		          ${isClaudeSession ? `
 		            ${this.getTierDropdownHTML(sessionId)}
@@ -3866,26 +3901,26 @@ class ClaudeOrchestrator {
 		            ${this.getSessionCloseButtonHTML(sessionId)}
 		          ` : ''}
 		        </div>
-		      </div>
-      <div class="terminal-body">
-        <div class="terminal" id="terminal-${sessionId}"></div>
-        ${isClaudeSession ? `
-          <div class="terminal-startup-ui" id="startup-ui-${sessionId}" style="display: none;">
-            <div class="startup-ui-compact">
-              <!-- Agent Selection -->
-              <div class="inline-agent-selector">
-                <select id="inline-agent-${sessionId}" class="agent-dropdown" onchange="window.orchestrator.updateInlineAgent('${sessionId}', this.value)">
-                  <option value="claude">🤖 Claude</option>
-                  <option value="codex">⚡ Codex</option>
-                </select>
-              </div>
+			      </div>
+	      <div class="terminal-body">
+	        <div class="terminal" id="${this.getSessionDomId('terminal', sessionId)}"></div>
+	        ${isClaudeSession ? `
+	          <div class="terminal-startup-ui" id="${this.getSessionDomId('startup-ui', sessionId)}" style="display: none;">
+	            <div class="startup-ui-compact">
+	              <!-- Agent Selection -->
+	              <div class="inline-agent-selector">
+	                <select id="${this.getSessionDomId('inline-agent', sessionId)}" class="agent-dropdown" onchange="window.orchestrator.updateInlineAgent('${sessionId}', this.value)">
+	                  <option value="claude">🤖 Claude</option>
+	                  <option value="codex">⚡ Codex</option>
+	                </select>
+	              </div>
 
-              <!-- Dynamic Mode Buttons -->
-              <div class="inline-mode-buttons" id="inline-modes-${sessionId}">
-                <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'fresh')">
-                  <span class="btn-icon">🆕</span>
-                  <span>Fresh</span>
-                </button>
+	              <!-- Dynamic Mode Buttons -->
+	              <div class="inline-mode-buttons" id="${this.getSessionDomId('inline-modes', sessionId)}">
+	                <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'fresh')">
+	                  <span class="btn-icon">🆕</span>
+	                  <span>Fresh</span>
+	                </button>
                 <button class="startup-btn-inline" onclick="window.orchestrator.quickStartAgent('${sessionId}', 'continue')">
                   <span class="btn-icon">➡️</span>
                   <span>Continue</span>
@@ -3910,7 +3945,7 @@ class ClaudeOrchestrator {
   }
   
   updateSessionStatus(sessionId, status) {
-    const statusElement = document.getElementById(`status-${sessionId}`);
+    const statusElement = document.getElementById(this.getSessionDomId('status', sessionId));
     // Update session data
     const session = this.sessions.get(sessionId);
     const previousStatus = session ? session.status : null;
@@ -3936,7 +3971,7 @@ class ClaudeOrchestrator {
 
         if (effectiveSettings && effectiveSettings.autoStart && effectiveSettings.autoStart.enabled) {
           // Hide the startup UI since auto-start will handle it
-          const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+          const startupUI = document.getElementById(this.getSessionDomId('startup-ui', sessionId));
           if (startupUI) {
             startupUI.style.display = 'none';
           }
@@ -4210,9 +4245,9 @@ class ClaudeOrchestrator {
     const worktreeNum = worktreeMatch[1];
     console.log(`Building production ZIP for worktree ${worktreeNum}`);
     
-    // Disable the build button and show loading state
-    const wrapper = document.getElementById(`wrapper-${sessionId}`);
-    const buildBtn = wrapper ? wrapper.querySelector('button[onclick*="buildProduction"]') : null;
+	    // Disable the build button and show loading state
+	    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
+	    const buildBtn = wrapper ? wrapper.querySelector('button[onclick*="buildProduction"]') : null;
     if (buildBtn) {
       buildBtn.disabled = true;
       buildBtn.innerHTML = '<span class="loading-spinner"></span>';
@@ -4368,11 +4403,11 @@ class ClaudeOrchestrator {
     return buttons;
   }
   
-		  updateTerminalControls(sessionId) {
-		    const wrapper = document.getElementById(`wrapper-${sessionId}`);
-		    if (!wrapper) return;
-		    const controlsDiv = wrapper.querySelector('.terminal-controls');
-	    if (!controlsDiv) return;
+			  updateTerminalControls(sessionId) {
+			    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
+			    if (!wrapper) return;
+			    const controlsDiv = wrapper.querySelector('.terminal-controls');
+		    if (!controlsDiv) return;
 
 	    if (sessionId.includes('-claude')) {
 	      controlsDiv.innerHTML = `
@@ -4397,12 +4432,12 @@ class ClaudeOrchestrator {
 		  getWorktreeInspectorButtonHTML(sessionId) {
     const session = this.sessions.get(sessionId);
     const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
-	    const links = this.githubLinks.get(sessionId) || {};
-	    const prUrl = String(links.pr || '').trim();
-	    const canOpen = !!(worktreePath || prUrl);
-	    const ariaDisabled = canOpen ? '' : 'aria-disabled="true"';
-	    return `<button class="control-btn" onclick="event.stopPropagation(); window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${ariaDisabled}>🗂</button>`;
-	  }
+		    const links = this.githubLinks.get(sessionId) || {};
+		    const prUrl = String(links.pr || '').trim();
+		    const canOpen = !!(worktreePath || prUrl);
+		    const ariaDisabled = canOpen ? '' : 'aria-disabled="true"';
+		    return `<button class="control-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${ariaDisabled}>🗂</button>`;
+		  }
 
 			  getWorktreeRemoveButtonHTML(sessionId) {
 			    const session = this.sessions.get(sessionId);
@@ -4415,11 +4450,11 @@ class ClaudeOrchestrator {
 	    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}')" title="Remove worktree from workspace (keeps files intact)">✕</button>`;
 	  }
 
-			  getSessionCloseButtonHTML(sessionId) {
-			    const sid = String(sessionId || '').trim();
-			    if (!sid) return '';
-			    return `<button class="control-btn danger terminal-session-close-btn" onclick="event.stopPropagation(); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove worktree from workspace (kills agent+server; keeps files)">✕</button>`;
-			  }
+				  getSessionCloseButtonHTML(sessionId) {
+				    const sid = String(sessionId || '').trim();
+				    if (!sid) return '';
+				    return `<button class="control-btn danger terminal-session-close-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove worktree from workspace (kills agent+server; keeps files)">✕</button>`;
+				  }
   
   updateServerStatus(sessionId, output) {
     // Check if server started - look for various startup messages
@@ -4517,9 +4552,9 @@ class ClaudeOrchestrator {
     return '<option value="development">Dev</option><option value="production">Prod</option>';
   }
 
-  updateServerControls(sessionId) {
-    const wrapper = document.getElementById(`wrapper-${sessionId}`);
-    if (!wrapper) return;
+	  updateServerControls(sessionId) {
+	    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
+	    if (!wrapper) return;
 
     const controlsDiv = wrapper.querySelector('.terminal-controls');
     if (!controlsDiv) return;
@@ -5454,13 +5489,13 @@ class ClaudeOrchestrator {
       term.refresh(0, term.rows - 1);
       
       // Also try scrolling to bottom to trigger redraw
-      term.scrollToBottom();
-      
-      // If still blank, re-attach to DOM
-      const terminalEl = document.getElementById(`terminal-${sessionId}`);
-      if (terminalEl && terminalEl.children.length === 0) {
-        term.open(terminalEl);
-      }
+	      term.scrollToBottom();
+	      
+	      // If still blank, re-attach to DOM
+	      const terminalEl = document.getElementById(this.getSessionDomId('terminal', sessionId));
+	      if (terminalEl && terminalEl.children.length === 0) {
+	        term.open(terminalEl);
+	      }
     }
   }
   
@@ -6439,13 +6474,13 @@ class ClaudeOrchestrator {
     }
   }
   
-  showCodeReviewDropdown(sessionId) {
+	  showCodeReviewDropdown(sessionId) {
     // Close any existing dropdowns
     document.querySelectorAll('.review-dropdown').forEach(dropdown => dropdown.remove());
     
     // Get the terminal controls container
-    const terminalWrapper = document.getElementById(`wrapper-${sessionId}`);
-    const controlsContainer = terminalWrapper.querySelector('.terminal-controls');
+	    const terminalWrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
+	    const controlsContainer = terminalWrapper.querySelector('.terminal-controls');
     
     // Create dropdown
     const dropdown = document.createElement('div');
@@ -7045,9 +7080,9 @@ class ClaudeOrchestrator {
       }
       const grid = this.getTerminalGrid?.() || document.getElementById('terminal-grid');
 
-      for (const [sessionId, info] of this.reviewConsoleDockedTerminals.entries()) {
-        const wrapper = info?.wrapper || document.getElementById(`wrapper-${sessionId}`);
-        if (!wrapper) continue;
+	      for (const [sessionId, info] of this.reviewConsoleDockedTerminals.entries()) {
+	        const wrapper = info?.wrapper || document.getElementById(this.getSessionDomId('wrapper', sessionId));
+	        if (!wrapper) continue;
 
         wrapper.classList.remove('review-console-terminal');
 
@@ -7135,9 +7170,9 @@ class ClaudeOrchestrator {
 
     container.innerHTML = '';
 
-    for (const sessionId of sessionIds) {
-      const wrapper = document.getElementById(`wrapper-${sessionId}`);
-      if (!wrapper) continue;
+	    for (const sessionId of sessionIds) {
+	      const wrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
+	      if (!wrapper) continue;
 
       // Remember original location so we can restore on close.
       if (!this.reviewConsoleDockedTerminals.has(sessionId)) {
@@ -8429,14 +8464,14 @@ class ClaudeOrchestrator {
     const label = inferredWorktreeId || String(t.id || '').trim() || worktreePath;
     await this.openWorktreeInspectorForPath(worktreePath, { label, task: t, reviewConsole: true });
 
-    if (rcShowTerminals) {
-      const preferredSessionId = sessionId || (inferredWorktreeId ? `${inferredWorktreeId}-claude` : '');
-      if (preferredSessionId) {
-        const wrapper = document.getElementById(`wrapper-${preferredSessionId}`);
-        wrapper?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-      }
-    }
-  }
+	    if (rcShowTerminals) {
+	      const preferredSessionId = sessionId || (inferredWorktreeId ? `${inferredWorktreeId}-claude` : '');
+	      if (preferredSessionId) {
+	        const wrapper = document.getElementById(this.getSessionDomId('wrapper', preferredSessionId));
+	        wrapper?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+	      }
+	    }
+	  }
 
   async fetchPullRequestDetails(prUrl, { maxFiles = 300, maxCommits = 200, maxComments = 50, maxReviews = 50 } = {}) {
     const url = new URL('/api/prs/details', window.location.origin);
@@ -8796,28 +8831,28 @@ class ClaudeOrchestrator {
 		          const sid = String(sessionId || '').trim();
 		          if (!sid) continue;
 
-		          // In normal grid view, server terminals may not exist in the DOM (e.g. viewMode=claude).
-		          // For Review Console, force-create them if we have the session object.
-		          const wrapperId = `wrapper-${sid}`;
-		          let wrapper = document.getElementById(wrapperId);
-		          if (!wrapper) {
-		            const session = this.sessions.get(sid);
-		            const grid = this.getTerminalGrid?.() || document.getElementById('terminal-grid');
-		            if (session && grid) {
-		              try {
-		                wrapper = this.createTerminalElement(sid, session);
-		                if (wrapper) {
-		                  grid.appendChild(wrapper);
-		                  setTimeout(() => {
-		                    try {
-		                      const terminalEl = document.getElementById(`terminal-${sid}`);
-		                      if (terminalEl && wrapper && wrapper.contains(terminalEl) && !this.terminalManager.terminals.has(sid)) {
-		                        this.terminalManager.createTerminal(sid, session);
-		                      }
-		                    } catch {
-		                      // ignore
-		                    }
-		                  }, 50);
+			          // In normal grid view, server terminals may not exist in the DOM (e.g. viewMode=claude).
+			          // For Review Console, force-create them if we have the session object.
+			          const wrapperId = this.getSessionDomId('wrapper', sid);
+			          let wrapper = document.getElementById(wrapperId);
+			          if (!wrapper) {
+			            const session = this.sessions.get(sid);
+			            const grid = this.getTerminalGrid?.() || document.getElementById('terminal-grid');
+			            if (session && grid) {
+			              try {
+			                wrapper = this.createTerminalElement(sid, session);
+			                if (wrapper) {
+			                  grid.appendChild(wrapper);
+			                  setTimeout(() => {
+			                    try {
+			                      const terminalEl = document.getElementById(this.getSessionDomId('terminal', sid));
+			                      if (terminalEl && wrapper && wrapper.contains(terminalEl) && !this.terminalManager.terminals.has(sid)) {
+			                        this.terminalManager.createTerminal(sid, session);
+			                      }
+			                    } catch {
+			                      // ignore
+			                    }
+			                  }, 50);
 		                }
 		              } catch {
 		                wrapper = null;
@@ -8906,23 +8941,23 @@ class ClaudeOrchestrator {
     const worktreeId = sessionId.split('-')[0];
 
     // Show only this worktree (hides all others)
-    this.showOnlyWorktree(worktreeId);
+	    this.showOnlyWorktree(worktreeId);
 
-    // Note: scroll to the terminal if needed
-    const terminalWrapper = document.getElementById(`wrapper-${sessionId}`);
-    if (terminalWrapper) {
-      terminalWrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+	    // Note: scroll to the terminal if needed
+	    const terminalWrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
+	    if (terminalWrapper) {
+	      terminalWrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+	    }
 
     return; // Skip the old overlay logic
 
-    // OLD OVERLAY LOGIC BELOW (keeping for reference, will be removed)
-    try {
-      const terminalWrapperOld = document.getElementById(`wrapper-${sessionId}`);
-      if (!terminalWrapperOld) {
-        console.error(`Terminal wrapper not found for ${sessionId}`);
-        return;
-      }
+	    // OLD OVERLAY LOGIC BELOW (keeping for reference, will be removed)
+	    try {
+	      const terminalWrapperOld = document.getElementById(this.getSessionDomId('wrapper', sessionId));
+	      if (!terminalWrapperOld) {
+	        console.error(`Terminal wrapper not found for ${sessionId}`);
+	        return;
+	      }
 
       // Get session info
       const session = this.sessions.get(sessionId);
@@ -9229,7 +9264,7 @@ class ClaudeOrchestrator {
       });
 
       // Hide the startup UI if it exists
-      const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+      const startupUI = document.getElementById(this.getSessionDomId('startup-ui', sessionId));
       if (startupUI) {
         startupUI.style.display = 'none';
       }
@@ -9357,7 +9392,7 @@ class ClaudeOrchestrator {
   }
 
   hideStartupUI(sessionId) {
-    const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+    const startupUI = document.getElementById(this.getSessionDomId('startup-ui', sessionId));
     if (startupUI) {
       startupUI.style.display = 'none';
       // Mark as dismissed by user action
@@ -9371,7 +9406,7 @@ class ClaudeOrchestrator {
 
     this.startupUIDebounce.set(sessionId, setTimeout(() => {
       if (this.shouldShowStartupUI(sessionId, currentStatus, previousStatus)) {
-        const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+        const startupUI = document.getElementById(this.getSessionDomId('startup-ui', sessionId));
         if (startupUI) {
           console.log(`Showing startup UI for ${sessionId} (${previousStatus} → ${currentStatus})`);
           startupUI.style.display = 'block';
@@ -9389,7 +9424,7 @@ class ClaudeOrchestrator {
     if (!sid || !sid.includes('-claude')) return;
 
     const session = this.sessions?.get?.(sid);
-    const startupUI = document.getElementById(`startup-ui-${sid}`);
+    const startupUI = document.getElementById(this.getSessionDomId('startup-ui', sid));
     const isVisible = startupUI && startupUI.style.display === 'block';
 
     // Only suppress if the terminal is idle (shell) or the startup UI is currently visible.
@@ -9417,7 +9452,7 @@ class ClaudeOrchestrator {
    * Quick start agent from inline UI (new agent-agnostic method)
    */
   quickStartAgent(sessionId, mode) {
-    const agentDropdown = document.getElementById(`inline-agent-${sessionId}`);
+    const agentDropdown = document.getElementById(this.getSessionDomId('inline-agent', sessionId));
     const selectedAgent = agentDropdown ? agentDropdown.value : 'claude';
 
     // Build configuration with BEST settings by default (no more "powerful" checkbox)
@@ -9449,7 +9484,7 @@ class ClaudeOrchestrator {
    * Update inline agent selection
    */
   updateInlineAgent(sessionId, agentId) {
-    const modesContainer = document.getElementById(`inline-modes-${sessionId}`);
+    const modesContainer = document.getElementById(this.getSessionDomId('inline-modes', sessionId));
     if (!modesContainer) return;
 
     // Save preference
@@ -9745,7 +9780,7 @@ class ClaudeOrchestrator {
       });
       
       // Hide the startup UI
-      const startupUI = document.getElementById(`startup-ui-${sessionId}`);
+      const startupUI = document.getElementById(this.getSessionDomId('startup-ui', sessionId));
       if (startupUI) {
         startupUI.style.display = 'none';
       }
