@@ -12,6 +12,7 @@ This is intentionally short, concrete, and actionable. It supersedes “nothing 
 Status:
 - ✅ Skin selector exists (Settings → Skin).
 - ✅ Blue skin uses requested primary `#0f67fd` and works in light + dark.
+- ✅ Skin intensity shipped (Settings → Skin intensity; persisted via `ui.skinIntensity`).
 - ✅ Color audit exists (`PLANS/2026-01-31/UI_COLOR_AUDIT.md`).
 - ✅ Started tokenizing a few hard-coded accents (YOLO highlight + warning accents) to respect skins.
 
@@ -21,7 +22,6 @@ Remaining work:
   - selected rows/tiles, active tabs, focused buttons, modals/overlays
   - Queue/Tasks/Review Console overlays
 - Add 1–2 additional skins as validation of the architecture (e.g. Purple/Emerald) and QA light+dark readability.
-- Optional: add “skin intensity” (0–100) so Blue can be subtle or bold.
 
 Primary sources:
 - `PLANS/2026-01-31/THEMING_SKINS_BLUE_MODE_PLAN.md`
@@ -36,9 +36,9 @@ Status:
 - ✅ Voice = rules first, then LLM fallback using registry capabilities.
 - ✅ Commander execute + capabilities shipped.
 - ✅ Queue + Review Console core control surface shipped.
+- ✅ Voice exact-match aliases are auto-generated from command metadata (prevents drift).
 
 Remaining work:
-- Auto-generate Voice “exact match” aliases from command metadata (reduces drift; avoids manual rule edits).
 - Provider plugin interface (Claude/Codex/future) to keep the architecture clean:
   - `listSessions`, `resume`, `searchHistory`, `getTranscript`, etc.
 - Commander “typed freeform → LLM parse → {command, params}” flow (same prompt logic as voice, but typed).
@@ -68,11 +68,7 @@ Primary source:
 
 These are “investigate if reproducible” items (not confirmed open work if you can’t reproduce):
 - Terminal flicker: verify remaining cases are not status-dot logic vs layout/fit.
-- Workspaces/worktrees/sessions drift: ensure “remove/close” semantics are consistent and de-duped:
-  - Closing/removing a worktree should remove **both** Agent + Server terminals together (no orphan server tiles).
-  - Worktree list/sidebar should not show stale entries after close/remove (no caching/out-of-sync state).
-  - Identify source-of-truth per UI surface (workspace config `terminals[]` vs runtime `sessions`) and unify.
-- Review Console layout polish: if any panels still feel cramped/“micro”, capture screenshot + viewport size.
+- Review Console layout polish: if any panels still feel cramped/“micro”, capture screenshot + viewport size (the console is intended to be single-screen with the diff dominating).
 - Workspace cleanup UX: confirm the dashboard 🧹 button is enough; add a detail view of removed entries if needed.
 
 ---
@@ -86,5 +82,5 @@ Status:
 - ✅ PR merge automation can now target `done` / `for_test` / `none` (Settings → PR Merge Automation).
 
 Remaining work:
-- Optional: make “Move ticket” controls more discoverable (e.g. a header chip for “🧪 For Test” when configured).
+- (done) “For Test” is now available as a Review Console header chip when configured.
 - Optional: add a richer “Move ticket…” picker that surfaces board list names more prominently (still provider-agnostic).
