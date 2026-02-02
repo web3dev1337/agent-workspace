@@ -44,6 +44,8 @@ function main() {
   const srcClient = path.join(repoRoot, 'client');
   const srcPkg = path.join(repoRoot, 'package.json');
   const srcLock = path.join(repoRoot, 'package-lock.json');
+  const srcConfig = path.join(repoRoot, 'config.json');
+  const srcUserDefaults = path.join(repoRoot, 'user-settings.default.json');
 
   if (clean && fs.existsSync(outDir)) {
     fs.rmSync(outDir, { recursive: true, force: true });
@@ -54,6 +56,8 @@ function main() {
   copyDir(srcClient, path.join(outDir, 'client'));
   copyFile(srcPkg, path.join(outDir, 'package.json'));
   if (fs.existsSync(srcLock)) copyFile(srcLock, path.join(outDir, 'package-lock.json'));
+  if (fs.existsSync(srcConfig)) copyFile(srcConfig, path.join(outDir, 'config.json'));
+  if (fs.existsSync(srcUserDefaults)) copyFile(srcUserDefaults, path.join(outDir, 'user-settings.default.json'));
 
   if (installProd) {
     const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -74,4 +78,3 @@ function main() {
 }
 
 main();
-
