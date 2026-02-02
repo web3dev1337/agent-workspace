@@ -606,7 +606,7 @@ class Dashboard {
         }
       }
 
-    updatePolecatSummary(targetEl = null) {
+	    updatePolecatSummary(targetEl = null) {
       const el = targetEl || document.getElementById('dashboard-polecats-summary');
       if (!el) return;
 
@@ -654,37 +654,60 @@ class Dashboard {
           Status: busy ${busy} • waiting ${waiting} • idle ${idle}${otherStatuses ? ` • ${otherStatuses}` : ''}
         </div>
       `;
-    }
-
-	  downloadTelemetryCsv(lookbackHours) {
-	    const hours = Number(lookbackHours);
-	    const safe = Number.isFinite(hours) && hours > 0 ? hours : 24;
-	    const url = `/api/process/telemetry/export?format=csv&lookbackHours=${encodeURIComponent(String(safe))}`;
-	    try {
-	      const a = document.createElement('a');
-	      a.href = url;
-	      a.target = '_blank';
-	      a.rel = 'noopener';
-	      a.click();
-	    } catch {
-	      window.open(url, '_blank', 'noopener');
 	    }
-	  }
 
-	  downloadTelemetryJson(lookbackHours) {
-	    const hours = Number(lookbackHours);
-	    const safe = Number.isFinite(hours) && hours > 0 ? hours : 24;
-	    const url = `/api/process/telemetry/export?format=json&lookbackHours=${encodeURIComponent(String(safe))}`;
-	    try {
-	      const a = document.createElement('a');
-	      a.href = url;
-	      a.target = '_blank';
-	      a.rel = 'noopener';
-	      a.click();
-	    } catch {
-	      window.open(url, '_blank', 'noopener');
-	    }
-	  }
+		  async ensureProEntitlement(featureLabel) {
+		    try {
+		      const res = await fetch('/api/license/status');
+		      const data = await res.json().catch(() => ({}));
+		      const pro = data?.entitlements?.pro === true;
+		      if (pro) return true;
+
+		      const msg = featureLabel ? `${featureLabel} requires Pro.` : 'This feature requires Pro.';
+		      this.orchestrator.showToast?.(msg, 'error');
+		      this.orchestrator.showSettings?.();
+		      return false;
+		    } catch (err) {
+		      this.orchestrator.showToast?.(`Failed to check license: ${String(err?.message || err)}`, 'error');
+		      return false;
+		    }
+		  }
+
+		  downloadTelemetryCsv(lookbackHours) {
+		    const hours = Number(lookbackHours);
+		    const safe = Number.isFinite(hours) && hours > 0 ? hours : 24;
+		    const url = `/api/process/telemetry/export?format=csv&lookbackHours=${encodeURIComponent(String(safe))}`;
+		    this.ensureProEntitlement('Telemetry export').then((ok) => {
+		      if (!ok) return;
+		      try {
+		        const a = document.createElement('a');
+		        a.href = url;
+		        a.target = '_blank';
+		        a.rel = 'noopener';
+		        a.click();
+		      } catch {
+		        window.open(url, '_blank', 'noopener');
+		      }
+		    });
+		  }
+
+		  downloadTelemetryJson(lookbackHours) {
+		    const hours = Number(lookbackHours);
+		    const safe = Number.isFinite(hours) && hours > 0 ? hours : 24;
+		    const url = `/api/process/telemetry/export?format=json&lookbackHours=${encodeURIComponent(String(safe))}`;
+		    this.ensureProEntitlement('Telemetry export').then((ok) => {
+		      if (!ok) return;
+		      try {
+		        const a = document.createElement('a');
+		        a.href = url;
+		        a.target = '_blank';
+		        a.rel = 'noopener';
+		        a.click();
+		      } catch {
+		        window.open(url, '_blank', 'noopener');
+		      }
+		    });
+		  }
 
 	  showTelemetryOverlay() {
 	    const existing = document.getElementById('dashboard-telemetry-overlay');
