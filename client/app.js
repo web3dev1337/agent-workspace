@@ -8731,22 +8731,25 @@ class ClaudeOrchestrator {
 	    }
 	  }
 
-  async fetchPullRequestDetails(prUrl, { maxFiles = 300, maxCommits = 200, maxComments = 50, maxReviews = 50 } = {}) {
-    const url = new URL('/api/prs/details', window.location.origin);
-    url.searchParams.set('url', String(prUrl || '').trim());
-    if (Number.isFinite(Number(maxFiles))) url.searchParams.set('maxFiles', String(Math.max(1, Math.round(Number(maxFiles)))));
-    if (Number.isFinite(Number(maxCommits))) url.searchParams.set('maxCommits', String(Math.max(1, Math.round(Number(maxCommits)))));
-    if (Number.isFinite(Number(maxComments))) url.searchParams.set('maxComments', String(Math.max(0, Math.round(Number(maxComments)))));
-    if (Number.isFinite(Number(maxReviews))) url.searchParams.set('maxReviews', String(Math.max(0, Math.round(Number(maxReviews)))));
+	  async fetchPullRequestDetails(prUrl, { maxFiles = 300, maxCommits = 200, maxComments = 50, maxReviews = 50 } = {}) {
+	    const url = new URL('/api/prs/details', window.location.origin);
+	    url.searchParams.set('url', String(prUrl || '').trim());
+	    if (Number.isFinite(Number(maxFiles))) url.searchParams.set('maxFiles', String(Math.max(1, Math.round(Number(maxFiles)))));
+	    if (Number.isFinite(Number(maxCommits))) url.searchParams.set('maxCommits', String(Math.max(1, Math.round(Number(maxCommits)))));
+	    if (Number.isFinite(Number(maxComments))) url.searchParams.set('maxComments', String(Math.max(0, Math.round(Number(maxComments)))));
+	    if (Number.isFinite(Number(maxReviews))) url.searchParams.set('maxReviews', String(Math.max(0, Math.round(Number(maxReviews)))));
 
-    const res = await fetch(url.toString());
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const msg = String(data?.error || data?.message || res.statusText || 'Failed to load PR details');
-      throw new Error(msg);
-    }
-    return data;
-  }
+	    const res = await fetch(url.toString(), {
+	      cache: 'no-store',
+	      headers: { 'Cache-Control': 'no-cache' }
+	    });
+	    const data = await res.json().catch(() => ({}));
+	    if (!res.ok) {
+	      const msg = String(data?.error || data?.message || res.statusText || 'Failed to load PR details');
+	      throw new Error(msg);
+	    }
+	    return data;
+	  }
 
   getDiffViewerPathForGitHubUrl(githubUrl) {
     const raw = String(githubUrl || '').trim();
@@ -8981,12 +8984,12 @@ class ClaudeOrchestrator {
 			      const commitsPanelHiddenClass = currentSections.commits === false ? 'hidden' : '';
 			      const diffPanelHiddenClass = currentSections.diff === false ? 'hidden' : '';
 
-				      bodyEl.innerHTML = `
-				        <div class="worktree-inspector-header review-console-header">
-				          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
-			            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
-		              <strong>PR #${escapeHtml(pr.number || '')}</strong>
-	              ${pr.state ? ` • <span style="opacity:0.85;">${escapeHtml(pr.state)}</span>` : ''}
+	      bodyEl.innerHTML = `
+	        <div class="worktree-inspector-header review-console-header">
+	          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
+            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
+              <strong>PR #${escapeHtml(pr.number || '')}</strong>
+              ${pr.state ? ` • <span style="opacity:0.85;">${escapeHtml(pr.state)}</span>` : ''}
               ${pr.isDraft ? ' • <span style="opacity:0.85;">draft</span>' : ''}
               ${pr.headRefName ? ` • <span style="opacity:0.85;">${escapeHtml(pr.headRefName)}</span>` : ''}
             </div>
@@ -8996,11 +8999,12 @@ class ClaudeOrchestrator {
           </div>
           <span style="flex:1"></span>
           <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+            <button class="btn-secondary" type="button" data-pr-refresh="true">🔄 Refresh</button>
             <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
             <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}">🔍 Diff</button>
             <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" ${pr.isDraft ? 'disabled' : ''}>✅ Merge</button>
-			          </div>
-			        </div>
+	          </div>
+	        </div>
 
 			        ${warnings.length ? `
 		          <div class="review-console-warning">
@@ -9377,6 +9381,20 @@ class ClaudeOrchestrator {
 	      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
 	        const url = e.target?.dataset?.openDiff;
 	        if (url) this.launchDiffViewer(url);
+	      });
+	      bodyEl.querySelector('[data-pr-refresh]')?.addEventListener('click', async (e) => {
+	        const btn = e.target;
+	        if (!btn) return;
+	        btn.disabled = true;
+	        this.showToast('Refreshing PR details…', 'info');
+	        try {
+	          await this.openReviewConsoleForPRTask(t);
+	          this.showToast('PR details refreshed', 'success');
+	        } catch (err) {
+	          this.showToast(String(err?.message || err), 'error');
+	        } finally {
+	          btn.disabled = false;
+	        }
 	      });
       bodyEl.querySelector('[data-pr-merge]')?.addEventListener('click', async (e) => {
         const u = e.target?.dataset?.prMerge;
