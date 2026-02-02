@@ -2515,7 +2515,7 @@ class ClaudeOrchestrator {
         terminalType: 'both'
       },
       kill: {
-        icon: '✕',
+        icon: '⛔',
         title: 'Force Kill',
         action: 'killServer',
         showWhen: 'always',
@@ -3030,10 +3030,34 @@ class ClaudeOrchestrator {
     const nextTier = (tier >= 1 && tier <= 4) ? tier : null;
 
     try {
-      const recordId = `session:${sid}`;
-      const rec = await this.upsertTaskRecord(recordId, { tier: nextTier });
-      if (rec) this.taskRecords.set(recordId, rec);
-      else this.taskRecords.delete(recordId);
+      const session = this.sessions.get(sid);
+      const links = this.githubLinks.get(sid) || {};
+      const prUrl = String(links.pr || '').trim();
+      const prTaskId = prUrl ? this.getPRTaskIdFromUrl(prUrl) : null;
+      const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
+
+      // Propagate tier changes so Queue tiers reflect what you set in the terminal header:
+      // - session:<sid> is the immediate control surface
+      // - worktree:<path> groups agent/server under a single worktree
+      // - pr:<owner/repo>#<n> makes Queue tiering consistent for PR items
+      const recordIds = [
+        `session:${sid}`,
+        worktreePath ? `worktree:${worktreePath}` : null,
+        prTaskId || null
+      ].filter(Boolean);
+
+      const results = await Promise.allSettled(recordIds.map(async (recordId) => {
+        const rec = await this.upsertTaskRecord(recordId, { tier: nextTier });
+        return { recordId, rec };
+      }));
+
+      for (const r of results) {
+        if (r.status !== 'fulfilled') continue;
+        const { recordId, rec } = r.value || {};
+        if (!recordId) continue;
+        if (rec) this.taskRecords.set(recordId, rec);
+        else this.taskRecords.delete(recordId);
+      }
 
       this.refreshTier1Busy();
       this.buildSidebar();
@@ -8600,13 +8624,23 @@ class ClaudeOrchestrator {
 		        matchingSessionIds.push(...Array.from(withPairs));
 		      }
 
-		      // Stable ordering: Agent terminals first, then servers.
-		      matchingSessionIds.sort((a, b) => {
-		        const aIsServer = a.includes('-server');
-		        const bIsServer = b.includes('-server');
-	        if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
-	        return a.localeCompare(b);
-	      });
+			      // Stable ordering: keep pairs adjacent, and always put Agent left of Server.
+			      const baseId = (sid) => String(sid || '').replace(/-(claude|server)$/, '');
+			      const isServer = (sid) => {
+			        const s = String(sid || '');
+			        if (s.endsWith('-server')) return true;
+			        const sess = this.sessions.get(s);
+			        return String(sess?.type || '').toLowerCase() === 'server';
+			      };
+			      matchingSessionIds.sort((a, b) => {
+			        const aBase = baseId(a);
+			        const bBase = baseId(b);
+			        if (aBase !== bBase) return aBase.localeCompare(bBase);
+			        const aIsServer = isServer(a);
+			        const bIsServer = isServer(b);
+			        if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
+			        return String(a).localeCompare(String(b));
+			      });
 
 	      const statusLabel = (s) => {
 	        const v = String(s || '').trim().toLowerCase();
