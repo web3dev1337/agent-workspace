@@ -858,11 +858,46 @@ io.on('connection', (socket) => {
     try {
       const id = String(sessionId || '').trim();
       if (!id) return;
-      const ok = sessionManager.closeSession(id, { clearRecovery: true });
-      if (ok) {
-        io.emit('session-closed', { sessionId: id });
+      const target = sessionManager.getSessionById(id);
+      if (!target) {
+        activityFeed.track('session.closed', { sessionId: id, ok: false, socketId: socket.id });
+        return;
       }
-      activityFeed.track('session.closed', { sessionId: id, ok: !!ok, socketId: socket.id });
+
+      // If the user closes either the agent or server terminal, close the whole worktree group.
+      // This avoids "server orphaned" / "agent orphaned" drift and matches the UI expectation
+      // that agent+server live/die together.
+      const workspaceId = String(target.workspace || '').trim();
+      const worktreeId = String(target.worktreeId || '').trim();
+      const repoName = String(target.repositoryName || '').trim();
+      const closeIds = new Set([id]);
+
+      if (workspaceId && worktreeId) {
+        const map = sessionManager.workspaceSessionMaps?.get?.(workspaceId) || null;
+        const iterable = map && typeof map.entries === 'function'
+          ? map.entries()
+          : sessionManager.sessions.entries();
+
+        for (const [sid, sess] of iterable) {
+          if (!sid || !sess) continue;
+          if (workspaceId && String(sess.workspace || '').trim() !== workspaceId) continue;
+          if (String(sess.worktreeId || '').trim() !== worktreeId) continue;
+          if (repoName && String(sess.repositoryName || '').trim() !== repoName) continue;
+          const t = String(sess.type || '').trim().toLowerCase();
+          if (t !== 'claude' && t !== 'codex' && t !== 'server') continue;
+          closeIds.add(String(sid));
+        }
+      }
+
+      let closed = 0;
+      closeIds.forEach((sid) => {
+        const ok = sessionManager.closeSession(sid, { clearRecovery: true });
+        if (!ok) return;
+        closed += 1;
+        io.emit('session-closed', { sessionId: sid });
+      });
+
+      activityFeed.track('session.closed', { sessionId: id, ok: closed > 0, closed, socketId: socket.id });
     } catch (error) {
       activityFeed.track('session.close.failed', {
         sessionId: String(sessionId || '').trim() || null,
@@ -2377,11 +2412,26 @@ app.get('/api/recovery/:workspaceId', async (req, res) => {
   try {
     const { workspaceId } = req.params;
     const workspace = workspaceManager.getWorkspace(workspaceId);
-    const terminals = workspace && Array.isArray(workspace.terminals) ? workspace.terminals : [];
-    const allowSessionIds = terminals
-      .filter((t) => t && typeof t === 'object' && t.visible !== false)
-      .map((t) => String(t.id || '').trim())
-      .filter(Boolean);
+    const allowSessionIds = (() => {
+      if (!workspace) return [];
+      // Mixed-repo and newer configs: explicit terminal array.
+      if (Array.isArray(workspace.terminals)) {
+        return workspace.terminals
+          .filter((t) => t && typeof t === 'object' && t.visible !== false)
+          .map((t) => String(t.id || '').trim())
+          .filter(Boolean);
+      }
+      // Legacy single-repo config: `terminals: { pairs: N }`
+      const pairs = Number(workspace?.terminals?.pairs || 0);
+      if (Number.isFinite(pairs) && pairs > 0 && pairs < 200) {
+        const ids = [];
+        for (let i = 1; i <= pairs; i += 1) {
+          ids.push(`work${i}-claude`, `work${i}-server`, `work${i}-codex`);
+        }
+        return ids;
+      }
+      return [];
+    })();
 
     const recoveryInfo = await sessionRecoveryService.getRecoveryInfo(workspaceId, {
       allowSessionIds: allowSessionIds.length ? allowSessionIds : null,
