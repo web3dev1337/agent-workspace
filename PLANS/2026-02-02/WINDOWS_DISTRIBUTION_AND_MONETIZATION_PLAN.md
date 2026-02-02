@@ -203,7 +203,7 @@ Not required to run, but avoids SmartScreen “Unknown publisher” friction.
 
 ### Phase B — Productize
 - [x] Add local license file + offline verification
-- [ ] Gate Pro features behind license flags
+- [x] Gate Pro features behind license flags (initial: telemetry export + PR-merge automation run)
 - [ ] Add auto-updater (optional)
 
 ---
@@ -212,11 +212,12 @@ Not required to run, but avoids SmartScreen “Unknown publisher” friction.
 
 Merged:
 - **PR #576**: Tauri spawns backend + local auth, and build bundles backend resources.
+- **PR #577**: Bootstrap page + packaged data dir + offline license endpoints + Settings UI.
+- **PR #578**: Pro gating middleware and initial gated endpoints + UI messaging.
 
-In progress (this branch / next PR):
-- Tauri bootstrap page (`src-tauri/bootstrap/index.html`) to avoid loading full UI before backend is up.
-- `ORCHESTRATOR_DATA_DIR` plumbing for `user-settings.json` so packaged builds are writable.
-- Offline license verification + `/api/license/*` endpoints + Settings UI for status/paste.
+Remaining:
+- Auto-updater (optional).
+- Decide which additional features (if any) are Pro-only beyond the initial gates.
 
 ### New env vars (packaging-focused)
 
@@ -237,6 +238,26 @@ In progress (this branch / next PR):
 - `GET /api/license/status`
 - `POST /api/license/reload`
 - `POST /api/license/set` (JSON body: either `{ license, signature }` or `{ text: \"{...}\" }`)
+
+### License creation (seller/operator tooling)
+
+These scripts are for you (the seller) to generate keys and sign licenses offline:
+
+- Generate keypair (Ed25519):
+  - `node scripts/license/generate-keypair.js --out-dir /tmp/orchestrator-license-keys`
+    - Outputs:
+      - `license-public-key.pem` (safe to ship/bundle)
+      - `license-private-key.pem` (keep secret; do not commit)
+- Sign a license payload:
+  - Create `license-payload.json` with fields like:
+    - `customer`, `plan` (`free` | `pro` | `team`), optional `expiresAt`
+  - `node scripts/license/sign-license.js --license license-payload.json --private-key /tmp/orchestrator-license-keys/license-private-key.pem --out license.json`
+- Verify:
+  - `node scripts/license/verify-license.js --license license.json --public-key /tmp/orchestrator-license-keys/license-public-key.pem`
+
+Bundling the public key into a Tauri build:
+- Put `license-public-key.pem` at repo root **or** set `ORCHESTRATOR_LICENSE_PUBLIC_KEY_PATH` when running `npm run tauri:build`.
+- `scripts/tauri/prepare-backend-resources.js` will copy it into `resources/backend/license-public-key.pem` so the packaged backend can verify signatures offline.
 
 ### Phase C — Team/Enterprise add-ons (still local)
 - [ ] RBAC/policy layer
