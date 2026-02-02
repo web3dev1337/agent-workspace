@@ -7402,11 +7402,22 @@ class ClaudeOrchestrator {
 		          );
 		        }
 
-	        if (reviewTaskId && (ticketCardId || ticketCardUrl)) {
-	          parts.push(
-	            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-ticket-move="${escapeHtml(reviewTaskId)}" title="Move ticket to Done list">📦 Done</button>`
-	          );
-	        }
+		        if (reviewTaskId && (ticketCardId || ticketCardUrl)) {
+		          parts.push(
+		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-ticket-move="${escapeHtml(reviewTaskId)}" title="Move ticket to Done list">📦 Done</button>`
+		          );
+
+	            const providerId = String(reviewRecord?.ticketProvider || 'trello').trim().toLowerCase() || 'trello';
+	            const boardId = String(reviewRecord?.ticketBoardId || '').trim();
+	            const key = (boardId && providerId) ? `${providerId}:${boardId}` : '';
+	            const conv = key ? (this.userSettings?.global?.ui?.tasks?.boardConventions?.[key] || null) : null;
+	            const forTestListId = String(conv?.forTestListId || '').trim();
+	            if (forTestListId) {
+	              parts.push(
+	                `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-ticket-move-for-test="${escapeHtml(reviewTaskId)}" data-ticket-move-listid="${escapeHtml(forTestListId)}" title="Move ticket to For Test list">🧪 For Test</button>`
+	              );
+	            }
+		        }
 
 	        if (prUrl && prState === 'open') {
 	          const mergeable = String(pr?.mergeable || '').trim().toUpperCase();
@@ -8237,28 +8248,54 @@ class ClaudeOrchestrator {
 	        const url = e.target?.dataset?.ticketOpen;
 	        if (url) window.open(url, '_blank', 'noreferrer');
 	      });
-			      bodyEl.querySelector('[data-ticket-move]')?.addEventListener('click', async (e) => {
-			        const taskId = e.target?.dataset?.ticketMove;
-			        if (!taskId) return;
-			        if (!window.confirm(`Move ticket to Done?\n${taskId}`)) return;
+				      const moveTicket = async ({ taskId, listId = null, label = 'ticket' } = {}) => {
+				        const id = String(taskId || '').trim();
+				        if (!id) return;
+				        const body = listId ? { listId } : {};
+				        const res = await fetch(`/api/process/task-records/${encodeURIComponent(id)}/ticket-move`, {
+				          method: 'POST',
+				          headers: { 'Content-Type': 'application/json' },
+				          body: JSON.stringify(body)
+				        });
+				        const data = await res.json().catch(() => ({}));
+				        if (!res.ok) throw new Error(String(data?.error || data?.message || `Failed to move ${label}`));
+				        return data;
+				      };
 
-	        const btn = e.target;
-	        btn.disabled = true;
-	        this.showToast('Moving ticket…', 'info');
-	        try {
-	          const res = await fetch(`/api/process/task-records/${encodeURIComponent(taskId)}/ticket-move`, {
-	            method: 'POST',
-	            headers: { 'Content-Type': 'application/json' },
-	            body: JSON.stringify({})
-	          });
-	          const data = await res.json().catch(() => ({}));
-	          if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to move ticket'));
-	          this.showToast('Ticket moved', 'success');
-	        } catch (err) {
-		          this.showToast(String(err?.message || err), 'error');
-			          btn.disabled = false;
-			        }
-			      });
+				      bodyEl.querySelector('[data-ticket-move]')?.addEventListener('click', async (e) => {
+				        const taskId = e.target?.dataset?.ticketMove;
+				        if (!taskId) return;
+				        if (!window.confirm(`Move ticket to Done?\n${taskId}`)) return;
+
+		        const btn = e.target;
+		        btn.disabled = true;
+		        this.showToast('Moving ticket…', 'info');
+		        try {
+		          await moveTicket({ taskId });
+		          this.showToast('Ticket moved', 'success');
+		        } catch (err) {
+			          this.showToast(String(err?.message || err), 'error');
+				          btn.disabled = false;
+				        }
+				      });
+
+				      bodyEl.querySelector('[data-ticket-move-for-test]')?.addEventListener('click', async (e) => {
+				        const taskId = e.target?.dataset?.ticketMoveForTest;
+				        const listId = e.target?.dataset?.ticketMoveListid;
+				        if (!taskId || !listId) return;
+				        if (!window.confirm(`Move ticket to For Test?\n${taskId}`)) return;
+
+				        const btn = e.target;
+				        btn.disabled = true;
+				        this.showToast('Moving ticket (For Test)…', 'info');
+				        try {
+				          await moveTicket({ taskId, listId, label: 'ticket' });
+				          this.showToast('Ticket moved (For Test)', 'success');
+				        } catch (err) {
+				          this.showToast(String(err?.message || err), 'error');
+				          btn.disabled = false;
+				        }
+				      });
 
 		      const ticketListEl = bodyEl.querySelector('[data-ticket-list]');
 		      const ticketMoveListBtn = bodyEl.querySelector('[data-ticket-move-list]');
