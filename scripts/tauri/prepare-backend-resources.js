@@ -50,6 +50,10 @@ function main() {
     process.env.ORCHESTRATOR_LICENSE_PUBLIC_KEY_PATH
     || process.env.TAURI_LICENSE_PUBLIC_KEY_PATH
     || path.join(repoRoot, 'license-public-key.pem');
+  const bundledNodePathRaw =
+    process.env.ORCHESTRATOR_BUNDLED_NODE_PATH
+    || process.env.TAURI_BUNDLED_NODE_PATH
+    || '';
 
   if (clean && fs.existsSync(outDir)) {
     fs.rmSync(outDir, { recursive: true, force: true });
@@ -64,6 +68,17 @@ function main() {
   if (fs.existsSync(srcUserDefaults)) copyFile(srcUserDefaults, path.join(outDir, 'user-settings.default.json'));
   if (srcLicensePublicKey && fs.existsSync(srcLicensePublicKey)) {
     copyFile(srcLicensePublicKey, path.join(outDir, 'license-public-key.pem'));
+  }
+  if (bundledNodePathRaw) {
+    const bundledNodePath = path.resolve(String(bundledNodePathRaw));
+    if (fs.existsSync(bundledNodePath)) {
+      const isExe = bundledNodePath.toLowerCase().endsWith('.exe');
+      const nodeFilename = isExe ? 'node.exe' : 'node';
+      copyFile(bundledNodePath, path.join(outDir, 'node', nodeFilename));
+      console.log('[tauri] Bundled Node runtime:', bundledNodePath);
+    } else {
+      console.warn('[tauri] NOTE: ORCHESTRATOR_BUNDLED_NODE_PATH not found:', bundledNodePath);
+    }
   }
 
   if (installProd) {
