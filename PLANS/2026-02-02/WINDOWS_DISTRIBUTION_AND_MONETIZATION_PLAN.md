@@ -67,13 +67,19 @@ Recommendation: **Option A (Tauri)**.
 ### 3.1 Build shape (what gets bundled)
 Bundle contents:
 - Tauri app (Rust) + WebView2 webview
-- **Node runtime** (Windows `node.exe`) as an app resource
+- **Node runtime** (Windows `node.exe`) as an app resource (optional but recommended)
 - App JS assets:
   - `server/` JS backend
   - `client/` static UI (or keep serving via backend)
 - Any required helper binaries/scripts (optional)
 
 Important: **do not rely on WSL** for the shipped Windows app. It must run natively.
+
+Bundling Node (recommended):
+- We **do not** commit `node.exe` to git.
+- At build time, set `ORCHESTRATOR_BUNDLED_NODE_PATH` (or `TAURI_BUNDLED_NODE_PATH`) to a local Node binary.
+  - The build prep script copies it into `src-tauri/resources/backend/node/node.exe`.
+  - At runtime, Tauri prefers the bundled Node binary; otherwise it falls back to `ORCHESTRATOR_NODE_PATH` or `node` on PATH.
 
 ### 3.2 Startup flow (target)
 On app launch:
@@ -179,6 +185,16 @@ Build on Windows (not WSL):
 - Node.js (Windows)
 - WebView2 runtime (usually present on Win 11; installer fallback if missing)
 
+### 6.1.1 Exact commands (PowerShell)
+Build an installer (recommended path):
+- `npm ci`
+- `$env:ORCHESTRATOR_BUNDLED_NODE_PATH = "C:\\Program Files\\nodejs\\node.exe"`
+- `npm run tauri:build`
+
+Notes:
+- `npm run tauri:build` runs `scripts/tauri/prepare-backend-resources.js --install-prod` first (bundles `server/`, `client/`, and installs prod deps into the packaged backend).
+- The regular web workflow remains unchanged: `npm start` / `npm run dev`.
+
 ### 6.2 Artifacts to produce
 From `tauri build`:
 - `*.msi` or `*.exe` installer
@@ -198,8 +214,8 @@ Not required to run, but avoids SmartScreen “Unknown publisher” friction.
 - [x] Add “packaged build requires auth token” behavior (Tauri spawns backend with per-run `AUTH_TOKEN`)
 - [x] Update UI fetch + Socket.IO to send `X-Auth-Token` / handshake token in Tauri mode
 - [x] Update Tauri main.rs to spawn Node backend and open the URL
-- [~] Add a “backend health” screen if server fails to start (port in use, missing node.exe)
-- [~] Document Windows build commands + prerequisites
+- [x] Add a “backend health” screen if server fails to start (port in use, missing node.exe)
+- [x] Document Windows build commands + prerequisites
 
 ### Phase B — Productize
 - [x] Add local license file + offline verification
@@ -218,6 +234,9 @@ Merged:
 Remaining:
 - Auto-updater (optional).
 - Decide which additional features (if any) are Pro-only beyond the initial gates.
+
+Notes:
+- When the backend fails to spawn or never becomes healthy, Tauri now updates the bootstrap UI and writes `logs/tauri-bootstrap.log` inside `ORCHESTRATOR_DATA_DIR` (Windows release builds have no console).
 
 ### New env vars (packaging-focused)
 
