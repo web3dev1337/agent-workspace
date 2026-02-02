@@ -7438,12 +7438,53 @@ class ClaudeOrchestrator {
     container.innerHTML = '';
 
     for (const sessionId of sessionIds) {
-      const wrapper = this.getSessionWrapperElement(sessionId);
+      const sid = String(sessionId || '').trim();
+      if (!sid) continue;
+
+      let wrapper = this.getSessionWrapperElement(sid);
+      if (!wrapper) {
+        // In normal grid view, some terminals may not exist in the DOM (e.g. viewMode=claude hides servers).
+        // For Review Console, force-create them if we have the session object.
+        const session = this.sessions.get(sid);
+        const grid = this.getTerminalGrid?.() || document.getElementById('terminal-grid');
+        if (session) {
+          try {
+            wrapper = this.createTerminalElement(sid, session);
+            if (wrapper && grid) {
+              grid.appendChild(wrapper);
+            }
+
+            // Attach or create the xterm instance.
+            setTimeout(() => {
+              try {
+                const terminalEl = document.getElementById(this.getSessionDomId('terminal', sid));
+                if (!terminalEl) return;
+
+                if (this.terminalManager?.terminals?.has?.(sid)) {
+                  const term = this.terminalManager.terminals.get(sid);
+                  if (term) {
+                    terminalEl.innerHTML = '';
+                    term.open(terminalEl);
+                    this.terminalManager.fitTerminal(sid);
+                    try { term.refresh(0, term.rows - 1); } catch {}
+                  }
+                } else {
+                  this.terminalManager?.createTerminal?.(sid, session);
+                }
+              } catch {
+                // ignore
+              }
+            }, 50);
+          } catch {
+            wrapper = null;
+          }
+        }
+      }
       if (!wrapper) continue;
 
       // Remember original location so we can restore on close.
-      if (!this.reviewConsoleDockedTerminals.has(sessionId)) {
-        this.reviewConsoleDockedTerminals.set(sessionId, {
+      if (!this.reviewConsoleDockedTerminals.has(sid)) {
+        this.reviewConsoleDockedTerminals.set(sid, {
           wrapper,
           parent: wrapper.parentElement,
           nextSibling: wrapper.nextSibling
@@ -7457,7 +7498,7 @@ class ClaudeOrchestrator {
       // Let layout settle, then fit.
       setTimeout(() => {
         try {
-          this.terminalManager?.fitTerminal?.(sessionId);
+          this.terminalManager?.fitTerminal?.(sid);
         } catch {
           // ignore
         }
@@ -8267,7 +8308,7 @@ class ClaudeOrchestrator {
 		          await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
 		        };
 
-		        let diffEmbedEnabled = rc?.diffEmbed === true;
+			        let diffEmbedEnabled = rc?.diffEmbed !== false;
 		        let diffLoadPromise = null;
 		        const diffIframeEl = bodyEl.querySelector('[data-diff-iframe="true"]');
 		        const diffStatusEl = bodyEl.querySelector('[data-diff-status="true"]');
@@ -9291,20 +9332,27 @@ class ClaudeOrchestrator {
 	        });
 	      };
 
-	      bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
-	        btn.addEventListener('click', async () => {
-	          const key = String(btn?.dataset?.reviewPreset || '').trim().toLowerCase();
-	          if (!key || !presets[key]) return;
-	          currentPreset = key;
-	          const next = presets[key];
-	          currentSections.terminals = next.terminals !== false;
-	          currentSections.files = next.files !== false;
-	          currentSections.commits = next.commits !== false;
-	          currentSections.diff = next.diff !== false;
-	          applyLayout();
-	          await persist();
-	        });
-	      });
+		      bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
+		        btn.addEventListener('click', async () => {
+		          const key = String(btn?.dataset?.reviewPreset || '').trim().toLowerCase();
+		          if (!key || !presets[key]) return;
+		          currentPreset = key;
+		          const next = presets[key];
+		          currentSections.terminals = next.terminals !== false;
+		          currentSections.files = next.files !== false;
+		          currentSections.commits = next.commits !== false;
+		          currentSections.diff = next.diff !== false;
+		          applyLayout();
+		          await persist();
+		          try {
+		            if (diffEmbedEnabled && currentSections.diff !== false) {
+		              embed({ showToast: false }).catch(() => {});
+		            }
+		          } catch {
+		            // ignore (diffEmbedEnabled/embed may not be initialized yet)
+		          }
+		        });
+		      });
 
 	      bodyEl.querySelectorAll('[data-review-window]').forEach((btn) => {
 	        btn.addEventListener('click', async () => {
@@ -9315,16 +9363,23 @@ class ClaudeOrchestrator {
 	        });
 	      });
 
-	      bodyEl.querySelectorAll('[data-review-section]').forEach((btn) => {
-	        btn.addEventListener('click', async () => {
-	          const key = String(btn?.dataset?.reviewSection || '').trim().toLowerCase();
-	          if (!key || !(key in currentSections)) return;
-	          currentPreset = 'custom';
-	          currentSections[key] = !currentSections[key];
-	          applyLayout();
-	          await persist();
-	        });
-	      });
+		      bodyEl.querySelectorAll('[data-review-section]').forEach((btn) => {
+		        btn.addEventListener('click', async () => {
+		          const key = String(btn?.dataset?.reviewSection || '').trim().toLowerCase();
+		          if (!key || !(key in currentSections)) return;
+		          currentPreset = 'custom';
+		          currentSections[key] = !currentSections[key];
+		          applyLayout();
+		          await persist();
+		          try {
+		            if (key === 'diff' && currentSections.diff !== false && diffEmbedEnabled) {
+		              embed({ showToast: false }).catch(() => {});
+		            }
+		          } catch {
+		            // ignore
+		          }
+		        });
+		      });
 
 	      applyLayout();
 
@@ -9388,28 +9443,44 @@ class ClaudeOrchestrator {
 			        syncDiffButtons();
 			      };
 
-	      embedBtn?.addEventListener('click', () => {
-	        embed({ showToast: true }).catch(() => {});
-	      });
-	      openBtn?.addEventListener('click', () => this.launchDiffViewer(prUrl));
-		      refreshBtn?.addEventListener('click', () => {
-		        if (!diffIframe) return;
-		        if (!diffIframe.src) return embed({ showToast: true }).catch(() => {});
-		        try { diffIframe.contentWindow?.location?.reload?.(); } catch { diffIframe.src = diffIframe.src; }
-		      });
-	      closeBtn?.addEventListener('click', () => {
-	        if (!diffIframe) return;
-	        diffIframe.src = 'about:blank';
-	        diffIframe.classList.add('hidden');
-	        syncDiffButtons();
-	      });
+      // Default: embed when enabled in Review Console settings (terminals or not).
+      let diffEmbedEnabled = rcCfg?.diffEmbed !== false;
 
-				      // Default: embed when enabled in Review Console settings (terminals or not).
-				      let diffEmbedEnabled = rcCfg?.diffEmbed !== false;
-					      if (diffEmbedEnabled && currentSections.diff !== false) {
-					        embed({ showToast: false }).catch(() => {});
-					      }
-				      syncDiffButtons();
+      const persistDiffEmbed = async (enabled) => {
+        try {
+          const existing = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+            ? this.userSettings.global.ui.reviewConsole
+            : {};
+          const nextCfg = { ...existing, diffEmbed: enabled !== false };
+          await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
+        } catch {
+          // ignore
+        }
+      };
+
+      embedBtn?.addEventListener('click', () => {
+        diffEmbedEnabled = true;
+        persistDiffEmbed(true);
+        embed({ showToast: true }).catch(() => {});
+      });
+      openBtn?.addEventListener('click', () => this.launchDiffViewer(prUrl));
+      refreshBtn?.addEventListener('click', () => {
+        if (!diffIframe) return;
+        if (!diffIframe.src) return embed({ showToast: true }).catch(() => {});
+        try { diffIframe.contentWindow?.location?.reload?.(); } catch { diffIframe.src = diffIframe.src; }
+      });
+      closeBtn?.addEventListener('click', () => {
+        if (!diffIframe) return;
+        diffEmbedEnabled = false;
+        persistDiffEmbed(false);
+        diffIframe.src = 'about:blank';
+        diffIframe.classList.add('hidden');
+        if (diffStatusEl) diffStatusEl.textContent = diffViewerPath ? `Target: ${diffViewerPath}` : 'Target: (diff viewer home)';
+        syncDiffButtons();
+      });
+
+      if (diffEmbedEnabled && currentSections.diff !== false) embed({ showToast: false }).catch(() => {});
+      syncDiffButtons();
 
 		      // If we have terminals that are already linked to this PR, dock them into the PR console.
 		      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');
