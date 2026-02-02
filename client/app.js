@@ -35,6 +35,14 @@ class ClaudeOrchestrator {
     // Session IDs can contain characters that break CSS selectors (e.g. "hytopia/zoo-game-claude").
     // Keep DOM ids safe/stable by mapping sessionId -> domSafeKey.
     this.sessionDomIdCache = new Map();
+    // Be defensive: older/bad builds may be missing stopSession(), but commander-action expects it.
+    if (typeof this.stopSession !== 'function') {
+      this.stopSession = (sessionId) => {
+        const sid = String(sessionId || '').trim();
+        if (!sid) return;
+        try { this.socket?.emit?.('destroy-session', { sessionId: sid }); } catch {}
+      };
+    }
     this.dismissedStartupUI = new Map(); // Track which sessions have dismissed startup UI
     this.startupUIDebounce = new Map(); // Debounce startup UI showing
     this.sessionAgentPreferences = new Map(); // Track agent preferences per session
@@ -3795,13 +3803,14 @@ class ClaudeOrchestrator {
     if (!t) return;
 
     // Cheap filter first.
-    if (!/(switched to|already on|on branch|head is now at|your branch is up to date)/i.test(t)) {
+    if (!/(switched to|already on|on branch|head is now at|your branch is up to date|checked out branch)/i.test(t)) {
       return;
     }
 
     // Only trigger when output is very likely a branch-changing/branch-reporting git message.
     const looksLikeBranchEvent =
       /Switched to (a new )?branch\b/i.test(t) ||
+      /\bChecked out branch\b/i.test(t) ||
       /\bAlready on\b/i.test(t) ||
       /^\s*On branch\b/im.test(t) ||
       /\bHEAD is now at\b/i.test(t) ||
@@ -4538,21 +4547,25 @@ class ClaudeOrchestrator {
 		  }
 
 			  getWorktreeRemoveButtonHTML(sessionId) {
-			    const session = this.sessions.get(sessionId);
-			    const worktreeId = session?.worktreeId || String(sessionId || '').split('-')[0];
-			    if (!worktreeId) return '';
+				    const session = this.sessions.get(sessionId);
+				    const worktreeId = session?.worktreeId || String(sessionId || '').split('-')[0];
+				    if (!worktreeId) return '';
 
-	    const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
-	    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
-	    const removeLabel = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId;
-	    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}')" title="Remove worktree from workspace (keeps files intact)">✕</button>`;
-	  }
+		    const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
+		    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+		    const removeLabel = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId;
+		    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}')" title="Remove worktree from workspace (kills terminals; keeps files)">🗑</button>`;
+		  }
 
-				  getSessionCloseButtonHTML(sessionId) {
-				    const sid = String(sessionId || '').trim();
-				    if (!sid) return '';
-				    return `<button class="control-btn danger terminal-session-close-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove worktree from workspace (kills agent+server; keeps files)">✕</button>`;
-				  }
+					  getSessionCloseButtonHTML(sessionId) {
+					    const sid = String(sessionId || '').trim();
+					    if (!sid) return '';
+					    const session = this.sessions.get(sid);
+					    // Reduce UI confusion: show the "remove worktree" button only once per pair (on the Agent tile).
+					    // Server tiles keep their server controls; removal is done from the Agent tile or sidebar.
+					    if (String(session?.type || '').toLowerCase() === 'server') return '';
+					    return `<button class="control-btn danger terminal-session-close-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove worktree from workspace (kills agent+server; keeps files)">✕</button>`;
+					  }
   
   updateServerStatus(sessionId, output) {
     // Check if server started - look for various startup messages
@@ -7297,9 +7310,9 @@ class ClaudeOrchestrator {
 
     container.innerHTML = '';
 
-	    for (const sessionId of sessionIds) {
-	      const wrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
-	      if (!wrapper) continue;
+    for (const sessionId of sessionIds) {
+      const wrapper = this.getSessionWrapperElement(sessionId);
+      if (!wrapper) continue;
 
       // Remember original location so we can restore on close.
       if (!this.reviewConsoleDockedTerminals.has(sessionId)) {
@@ -9940,12 +9953,12 @@ class ClaudeOrchestrator {
 	  /**
 	   * Delete worktree from workspace with confirmation
 	   */
-		  async deleteWorktree(worktreeId, displayName, { workspaceId = null } = {}) {
-	    const wsId = String(workspaceId || this.currentWorkspace?.id || '').trim();
-	    if (!wsId) {
-	      this.showToast?.('No workspace selected for removal', 'warning');
-	      return;
-	    }
+			  async deleteWorktree(worktreeId, displayName, { workspaceId = null } = {}) {
+		    const wsId = String(workspaceId || this.currentWorkspace?.id || '').trim();
+		    if (!wsId) {
+		      this.showToast?.('No workspace selected for removal', 'warning');
+		      return;
+		    }
 	    // Show confirmation dialog with clear messaging about what gets deleted
 	    const confirmed = await this.showConfirmationDialog(
 	      'Remove Worktree from Workspace',
@@ -9958,28 +9971,52 @@ class ClaudeOrchestrator {
       return;
     }
 
-    try {
-      console.log(`Removing worktree ${worktreeId} from workspace configuration (keeping folder)...`);
+	    try {
+	      console.log(`Removing worktree ${worktreeId} from workspace configuration (keeping folder)...`);
 
-      // Call backend API to remove from workspace configuration only
-      // Backend will handle closing sessions and emitting session-closed events
-	      const response = await fetch('/api/workspaces/remove-worktree', {
-	        method: 'POST',
-	        headers: { 'Content-Type': 'application/json' },
-	        body: JSON.stringify({
-	          workspaceId: wsId,
-	          worktreeId: worktreeId
-	        })
-	      });
-
-      if (response.ok) {
-        const result = await response.json();
-        this.showTemporaryMessage(`Removed "${displayName}" from workspace (files preserved)`, 'success');
-
-        // Update local workspace reference with the updated configuration
-	        if (result.updatedWorkspace && this.currentWorkspace?.id === wsId) {
-	          this.currentWorkspace = result.updatedWorkspace;
+	      // Best-effort: if the user explicitly removes a worktree from the workspace,
+	      // don't offer any of its sessions as "recoverable" later.
+	      const sessionIdsToPrune = [];
+	      try {
+	        for (const [sid, session] of this.sessions) {
+	          if (!session) continue;
+	          const workspace = String(session?.workspace || '').trim();
+	          if (workspace && workspace !== wsId) continue;
+	          const wt = String(session?.worktreeId || '').trim() || String(sid).split('-')[0];
+	          if (!wt) continue;
+	          const repoName = String(session?.repositoryName || this.extractRepositoryName(sid) || '').trim();
+	          const key = repoName ? `${repoName}-${wt}` : wt;
+	          if (key === String(worktreeId || '').trim()) sessionIdsToPrune.push(String(sid));
 	        }
+	      } catch {
+	        // ignore
+	      }
+
+	      // Call backend API to remove from workspace configuration only
+	      // Backend will handle closing sessions and emitting session-closed events
+		      const response = await fetch('/api/workspaces/remove-worktree', {
+		        method: 'POST',
+		        headers: { 'Content-Type': 'application/json' },
+		        body: JSON.stringify({
+		          workspaceId: wsId,
+		          worktreeId: worktreeId
+		        })
+		      });
+
+	      if (response.ok) {
+	        const result = await response.json();
+	        this.showTemporaryMessage(`Removed "${displayName}" from workspace (files preserved)`, 'success');
+
+	        // Best-effort recovery cleanup (server may also do this).
+	        sessionIdsToPrune.forEach((sid) => {
+	          fetch(`/api/recovery/${encodeURIComponent(wsId)}/${encodeURIComponent(String(sid || '').trim())}`, { method: 'DELETE' })
+	            .catch(() => {});
+	        });
+
+	        // Update local workspace reference with the updated configuration
+		        if (result.updatedWorkspace && this.currentWorkspace?.id === wsId) {
+		          this.currentWorkspace = result.updatedWorkspace;
+		        }
 
         // Rebuild sidebar to reflect removal (without clearing terminal content)
         this.buildSidebar();
