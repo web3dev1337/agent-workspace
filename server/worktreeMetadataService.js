@@ -8,11 +8,20 @@
  * - Caching with periodic refresh
  */
 
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const util = require('util');
 const winston = require('winston');
 
-const execAsync = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
+
+const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024; // 10MB
+
+async function execFileSafe(command, args, options = {}) {
+  return execFileAsync(command, args, {
+    ...options,
+    maxBuffer: options.maxBuffer ?? DEFAULT_MAX_BUFFER
+  });
+}
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -67,15 +76,17 @@ class WorktreeMetadataService {
 
     try {
       // Get branch name
-      const { stdout: branchOutput } = await execAsync(
-        'git branch --show-current',
+      const { stdout: branchOutput } = await execFileSafe(
+        'git',
+        ['branch', '--show-current'],
         { cwd: worktreePath, timeout: 5000 }
       );
       const branch = branchOutput.trim();
 
       // Get status (modified, untracked, staged)
-      const { stdout: statusOutput } = await execAsync(
-        'git status --porcelain',
+      const { stdout: statusOutput } = await execFileSafe(
+        'git',
+        ['status', '--porcelain'],
         { cwd: worktreePath, timeout: 5000 }
       );
 
@@ -89,8 +100,9 @@ class WorktreeMetadataService {
       let ahead = 0;
       let behind = 0;
       try {
-        const { stdout: trackingOutput } = await execAsync(
-          'git rev-list --left-right --count @{u}...HEAD',
+        const { stdout: trackingOutput } = await execFileSafe(
+          'git',
+          ['rev-list', '--left-right', '--count', '@{u}...HEAD'],
           { cwd: worktreePath, timeout: 5000 }
         );
         const [b, a] = trackingOutput.trim().split('\t').map(Number);
@@ -103,8 +115,9 @@ class WorktreeMetadataService {
       // Get last commit info
       let lastCommit = null;
       try {
-        const { stdout: commitOutput } = await execAsync(
-          'git log -1 --format="%h|%s|%ar"',
+        const { stdout: commitOutput } = await execFileSafe(
+          'git',
+          ['log', '-1', '--format=%h|%s|%ar'],
           { cwd: worktreePath, timeout: 5000 }
         );
         const [hash, message, timeAgo] = commitOutput.trim().split('|');
@@ -158,8 +171,9 @@ class WorktreeMetadataService {
     let branch = null;
     try {
       // Get current branch
-      const { stdout: branchOutput } = await execAsync(
-        'git branch --show-current',
+      const { stdout: branchOutput } = await execFileSafe(
+        'git',
+        ['branch', '--show-current'],
         { cwd: worktreePath, timeout: 5000 }
       );
       branch = branchOutput.trim();
@@ -169,8 +183,9 @@ class WorktreeMetadataService {
       }
 
       // Check for PR on this branch
-      const { stdout: prOutput } = await execAsync(
-        `gh pr list --head "${branch}" --json number,title,state,url,isDraft,mergeable --limit 1`,
+      const { stdout: prOutput } = await execFileSafe(
+        'gh',
+        ['pr', 'list', '--head', branch, '--json', 'number,title,state,url,isDraft,mergeable', '--limit', '1'],
         { cwd: worktreePath, timeout: 10000 }
       );
 
