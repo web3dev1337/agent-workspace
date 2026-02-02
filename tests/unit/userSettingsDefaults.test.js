@@ -13,6 +13,8 @@ describe('UserSettingsService defaults', () => {
     expect(defaults?.global?.ui).toBeTruthy();
     expect(typeof defaults.global.ui.skin).toBe('string');
     expect(defaults.global.ui.skin).toBeTruthy();
+    expect(typeof defaults.global.ui.skinIntensity).toBe('number');
+    expect(defaults.global.ui.skinIntensity).toBeGreaterThanOrEqual(0);
   });
 
   test('includes ui.tasks.launch defaults', () => {
