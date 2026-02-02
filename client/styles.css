@@ -1413,6 +1413,30 @@ header h1 {
   margin-bottom: 10px;
 }
 
+/* Review Console headers should stay compact (avoid multi-line chip wrapping);
+   overflow horizontally instead of consuming vertical space. */
+.worktree-inspector-header.review-console-header {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.worktree-inspector-header.review-console-header .worktree-inspector-chip {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.worktree-inspector-header.review-console-header::-webkit-scrollbar {
+  height: 6px;
+}
+
+.worktree-inspector-header.review-console-header::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+}
+
 .worktree-inspector-chip {
   display: inline-flex;
   align-items: center;
@@ -1536,7 +1560,7 @@ header h1 {
 
 .worktree-inspector-layout-panel {
   padding: 10px 12px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 /* Diff stats inline colors */
@@ -1611,7 +1635,7 @@ header h1 {
 }
 
 .worktree-inspector-review-panel {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .worktree-inspector-review-controls {
@@ -1619,7 +1643,7 @@ header h1 {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .worktree-inspector-review-meta {
@@ -1627,7 +1651,7 @@ header h1 {
   flex-wrap: wrap;
   gap: 14px;
   font-size: 0.82rem;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   opacity: 0.92;
 }
 
