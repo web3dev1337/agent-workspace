@@ -67,6 +67,9 @@ Primary source:
 
 These are “investigate if reproducible” items (not confirmed open work if you can’t reproduce):
 - Terminal flicker: verify remaining cases are not status-dot logic vs layout/fit.
+- Workspaces/worktrees/sessions drift: ensure “remove/close” semantics are consistent and de-duped:
+  - Closing/removing a worktree should remove **both** Agent + Server terminals together (no orphan server tiles).
+  - Worktree list/sidebar should not show stale entries after close/remove (no caching/out-of-sync state).
+  - Identify source-of-truth per UI surface (workspace config `terminals[]` vs runtime `sessions`) and unify.
 - Review Console layout polish: if any panels still feel cramped/“micro”, capture screenshot + viewport size.
 - Workspace cleanup UX: confirm the dashboard 🧹 button is enough; add a detail view of removed entries if needed.
-
