@@ -49,6 +49,7 @@ const { GitHelper } = require('./gitHelper');
 const { NotificationService } = require('./notificationService');
 const { UserSettingsService } = require('./userSettingsService');
 const { LicenseService } = require('./licenseService');
+const { requirePro } = require('./licenseMiddleware');
 const { GitUpdateService } = require('./gitUpdateService');
 const { WorkspaceManager } = require('./workspaceManager');
 const { WorktreeHelper } = require('./worktreeHelper');
@@ -254,6 +255,7 @@ const processTaskService = ProcessTaskService.getInstance({ sessionManager, work
 const taskRecordService = TaskRecordService.getInstance();
 const userSettingsService = UserSettingsService.getInstance();
 const licenseService = LicenseService.getInstance();
+const proOnly = requirePro(licenseService);
 const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager, userSettingsService });
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
 const telemetrySnapshotService = TelemetrySnapshotService.getInstance();
@@ -2097,7 +2099,7 @@ app.get('/api/process/automations', (req, res) => {
   }
 });
 
-app.post('/api/process/automations/pr-merge/run', express.json(), async (req, res) => {
+app.post('/api/process/automations/pr-merge/run', proOnly, express.json(), async (req, res) => {
   try {
     const limit = Number(req.body?.limit || 60);
     const result = await prMergeAutomationService.runOnce({ limit });
@@ -3636,7 +3638,7 @@ app.get('/api/process/telemetry/snapshots/:id', async (req, res) => {
   }
 });
 
-app.get('/api/process/telemetry/export', async (req, res) => {
+app.get('/api/process/telemetry/export', proOnly, async (req, res) => {
   try {
     const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
     const format = String(req.query.format || 'csv').trim().toLowerCase();
