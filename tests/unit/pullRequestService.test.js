@@ -132,7 +132,7 @@ describe('PullRequestService', () => {
   test('ghApi adds --paginate and flattens paginated arrays', async () => {
     execFile.mockImplementation((cmd, args, opts, cb) => {
       expect(cmd).toBe('gh');
-      expect(args).toEqual(['api', 'repos/o/r/pulls/1/files', '--paginate']);
+      expect(args).toEqual(['api', 'repos/o/r/pulls/1/files', '--method', 'GET', '--paginate']);
       cb(null, JSON.stringify([{ filename: 'a' }]) + '\n' + JSON.stringify([{ filename: 'b' }]) + '\n', '');
     });
 
