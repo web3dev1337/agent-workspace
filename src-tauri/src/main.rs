@@ -68,12 +68,16 @@ fn resolve_node_command(app: &tauri::AppHandle) -> std::ffi::OsString {
     if let Ok(resource_dir) = app.path().resource_dir() {
         let candidates = if cfg!(target_os = "windows") {
             vec![
+                resource_dir.join("backend").join("node").join("node.exe"),
                 resource_dir.join("node").join("node.exe"),
+                resource_dir.join("backend").join("node.exe"),
                 resource_dir.join("node.exe"),
             ]
         } else {
             vec![
+                resource_dir.join("backend").join("node").join("node"),
                 resource_dir.join("node").join("node"),
+                resource_dir.join("backend").join("node"),
                 resource_dir.join("node"),
             ]
         };
@@ -90,9 +94,14 @@ fn resolve_node_command(app: &tauri::AppHandle) -> std::ffi::OsString {
 
 fn resolve_server_entry(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let candidate = resource_dir.join("server").join("index.js");
-        if candidate.exists() {
-            return Some(candidate);
+        let candidates = [
+            resource_dir.join("backend").join("server").join("index.js"),
+            resource_dir.join("server").join("index.js"),
+        ];
+        for candidate in candidates {
+            if candidate.exists() {
+                return Some(candidate);
+            }
         }
     }
 
@@ -110,6 +119,9 @@ fn resolve_server_entry(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
 
 fn has_diff_viewer_folder(app: &tauri::AppHandle) -> bool {
     if let Ok(resource_dir) = app.path().resource_dir() {
+        if resource_dir.join("backend").join("diff-viewer").exists() {
+            return true;
+        }
         if resource_dir.join("diff-viewer").exists() {
             return true;
         }
