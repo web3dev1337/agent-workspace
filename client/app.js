@@ -9218,22 +9218,26 @@ class ClaudeOrchestrator {
 				                    </tr>
 				                  </thead>
 				                  <tbody>
-				                    ${files.map((f) => {
-				                      const st = statusLabel(f.status);
-				                      const cls = statusClass(f.status);
-				                      const adds = Number.isFinite(Number(f.additions)) ? Number(f.additions) : null;
-				                      const dels = Number.isFinite(Number(f.deletions)) ? Number(f.deletions) : null;
-				                      const plus = (adds != null && adds > 0) ? `<span class="diff-plus">+${adds}</span>` : '';
-				                      const minus = (dels != null && dels > 0) ? `<span class="diff-minus">-${dels}</span>` : '';
-				                      const delta = [plus, minus].filter(Boolean).join(' ');
-				                      const name = escapeHtml(f.filename || '');
-				                      const prev = f.previousFilename ? ` <span style="opacity:0.65;">(was ${escapeHtml(f.previousFilename)})</span>` : '';
-				                      return `<tr>
-				                        <td><span class="worktree-inspector-tree-status ${cls}">${escapeHtml(st)}</span></td>
-				                        <td style="font-family:var(--font-mono); font-size:0.9rem;">${name}${prev}</td>
-				                        <td style="opacity:0.9;">${delta}</td>
-				                      </tr>`;
-				                    }).join('')}
+					                    ${files.map((f) => {
+					                      const st = statusLabel(f.status);
+					                      const cls = statusClass(f.status);
+					                      const adds = Number.isFinite(Number(f.additions)) ? Number(f.additions) : null;
+					                      const dels = Number.isFinite(Number(f.deletions)) ? Number(f.deletions) : null;
+					                      const plus = (adds != null && adds > 0) ? `<span class="diff-plus">+${adds}</span>` : '';
+					                      const minus = (dels != null && dels > 0) ? `<span class="diff-minus">-${dels}</span>` : '';
+					                      const delta = [plus, minus].filter(Boolean).join(' ');
+					                      const name = escapeHtml(f.filename || '');
+					                      const diffFile = (() => { try { return encodeURIComponent(String(f.filename || '')); } catch { return ''; } })();
+					                      const nameEl = diffFile
+					                        ? `<button class="worktree-inspector-file-link" type="button" data-diff-file="${diffFile}" title="Open in embedded diff viewer">${name}</button>`
+					                        : name;
+					                      const prev = f.previousFilename ? ` <span style="opacity:0.65;">(was ${escapeHtml(f.previousFilename)})</span>` : '';
+					                      return `<tr>
+					                        <td><span class="worktree-inspector-tree-status ${cls}">${escapeHtml(st)}</span></td>
+					                        <td style="font-family:var(--font-mono); font-size:0.9rem;">${nameEl}${prev}</td>
+					                        <td style="opacity:0.9;">${delta}</td>
+					                      </tr>`;
+					                    }).join('')}
 				                  </tbody>
 					                </table>
 					                ${files.length === 0 ? '<div class="worktree-inspector-subtle">No files found.</div>' : ''}
@@ -9460,12 +9464,12 @@ class ClaudeOrchestrator {
 	        }
 	      };
 
-			      const embed = async ({ showToast = false } = {}) => {
-			        if (!diffIframe) return;
-			        if (currentSections.diff === false) return;
-			        try {
-			          if (diffStatusEl) diffStatusEl.textContent = 'Starting Diff Viewer…';
-			          await ensureDiffViewer();
+				      const embed = async ({ showToast = false, filePath = '' } = {}) => {
+				        if (!diffIframe) return;
+				        if (currentSections.diff === false) return;
+				        try {
+				          if (diffStatusEl) diffStatusEl.textContent = 'Starting Diff Viewer…';
+				          await ensureDiffViewer();
 			        } catch (err) {
 			          const msg = String(err?.message || err);
 			          if (diffStatusEl) diffStatusEl.textContent = `Diff Viewer failed to start: ${msg}`;
@@ -9473,12 +9477,18 @@ class ClaudeOrchestrator {
 			          syncDiffButtons();
 			          throw err;
 			        }
-			        const target = diffViewerPath || '';
-			        diffIframe.src = target ? `${baseUrl}${target}` : `${baseUrl}/`;
-			        diffIframe.classList.remove('hidden');
-			        if (diffStatusEl) diffStatusEl.textContent = target ? `Target: ${target}` : 'Target: (diff viewer home)';
-			        syncDiffButtons();
-			      };
+				        const target = diffViewerPath || '';
+				        let url = target ? `${baseUrl}${target}` : `${baseUrl}/`;
+				        const fp = String(filePath || '').trim();
+				        if (fp) {
+				          const sep = url.includes('?') ? '&' : '?';
+				          url = `${url}${sep}file=${encodeURIComponent(fp)}`;
+				        }
+				        diffIframe.src = url;
+				        diffIframe.classList.remove('hidden');
+				        if (diffStatusEl) diffStatusEl.textContent = target ? `Target: ${target}` : 'Target: (diff viewer home)';
+				        syncDiffButtons();
+				      };
 
       // Default: embed when enabled in Review Console settings (terminals or not).
       let diffEmbedEnabled = rcCfg?.diffEmbed !== false;
@@ -9516,13 +9526,42 @@ class ClaudeOrchestrator {
         syncDiffButtons();
       });
 
-      if (diffEmbedEnabled && currentSections.diff !== false) embed({ showToast: false }).catch(() => {});
-      syncDiffButtons();
+	      if (diffEmbedEnabled && currentSections.diff !== false) embed({ showToast: false }).catch(() => {});
+	      syncDiffButtons();
 
-		      // If we have terminals that are already linked to this PR, dock them into the PR console.
-		      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');
-		      if (matchingSessionIds.length && terminalsContainer) {
-		        terminalsContainer.innerHTML = '';
+	      // File deep link: click file in the Files panel to jump the embedded diff viewer.
+	      bodyEl.querySelectorAll('[data-diff-file]').forEach((btn) => {
+	        btn.addEventListener('click', async (e) => {
+	          e.preventDefault();
+	          e.stopPropagation();
+	          const enc = String(btn?.dataset?.diffFile || '').trim();
+	          if (!enc) return;
+	          let filePath = '';
+	          try { filePath = decodeURIComponent(enc); } catch { filePath = enc; }
+	          filePath = String(filePath || '').trim();
+	          if (!filePath) return;
+	          if (!diffViewerPath) {
+	            this.showToast('Diff Viewer target is unavailable for this PR.', 'error');
+	            return;
+	          }
+
+	          if (currentSections.diff === false) {
+	            currentPreset = 'custom';
+	            currentSections.diff = true;
+	            applyLayout();
+	            try { await persist(); } catch { /* ignore */ }
+	          }
+
+	          diffEmbedEnabled = true;
+	          persistDiffEmbed(true);
+	          embed({ showToast: true, filePath }).catch(() => {});
+	        });
+	      });
+
+			      // If we have terminals that are already linked to this PR, dock them into the PR console.
+			      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');
+			      if (matchingSessionIds.length && terminalsContainer) {
+			        terminalsContainer.innerHTML = '';
 		        for (const sessionId of matchingSessionIds) {
 		          const sid = String(sessionId || '').trim();
 		          if (!sid) continue;
