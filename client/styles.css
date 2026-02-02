@@ -3039,6 +3039,45 @@ header h1 {
   scrollbar-gutter: stable both-edges;
 }
 
+.settings-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: calc(var(--space-md) * -1) calc(var(--space-md) * -1) var(--space-md);
+  padding: 10px var(--space-md) 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-toolbar input,
+.settings-toolbar select {
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.settings-toolbar input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.settings-toolbar select {
+  flex: 0 0 auto;
+  min-width: 120px;
+  padding: 0 8px;
+}
+
+.settings-filter-hidden {
+  display: none !important;
+}
+
 /* Review Console */
 .review-console-warning {
   margin: 10px 12px 14px;
