@@ -13,6 +13,7 @@ Status:
 - ✅ Skin selector exists (Settings → Skin).
 - ✅ Blue skin uses requested primary `#0f67fd` and works in light + dark.
 - ✅ Color audit exists (`PLANS/2026-01-31/UI_COLOR_AUDIT.md`).
+- ✅ Started tokenizing a few hard-coded accents (YOLO highlight + warning accents) to respect skins.
 
 Remaining work:
 - Convert remaining hard-coded UI colors/gradients to token-driven styling where appropriate (don’t touch status semantic colors unless intentional).
@@ -81,14 +82,9 @@ These are “investigate if reproducible” items (not confirmed open work if yo
 Status:
 - ✅ PR merge automation exists (can move/comment when enabled in settings).
 - ✅ Orchestrator already stores per-board automation settings in `ui.tasks.automations.trello.onPrMerged`.
+- ✅ Board Conventions now supports `forTestListId` (Tasks → Board Settings → Conventions).
+- ✅ PR merge automation can now target `done` / `for_test` / `none` (Settings → PR Merge Automation).
 
 Remaining work:
-- Add an optional **post-merge target list** concept (e.g. “For Test”) so merges don’t always go straight to Done/Shipped.
-  - UI: Board Settings → Automations should allow selecting a target list for “on merged”.
-  - Behavior: on PR merge, move card to that list; if not configured, keep current behavior.
-- Add a **manual “Move ticket” control** directly inside Review Console (and optionally on server/agent tiles) so you can move to:
-  - For Test / QA / Done / Shipped (whatever lists exist for that board)
-  - Keep it provider-agnostic (Trello now; future providers later).
-- Decide defaults and document:
-  - default list mapping if a board has “For Test” vs “QA” vs “Ready to Test”
-  - whether “Merge” should move by default (recommended: only if explicitly configured)
+- Optional: make “Move ticket” controls more discoverable (e.g. a header chip for “🧪 For Test” when configured).
+- Optional: add a richer “Move ticket…” picker that surfaces board list names more prominently (still provider-agnostic).
