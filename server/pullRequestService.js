@@ -121,11 +121,15 @@ class PullRequestService {
     return JSON.parse(stdout || '{}');
   }
 
-  async ghApi(path, { paginate = false, timeoutMs = 20000, params = null } = {}) {
+  async ghApi(path, { paginate = false, timeoutMs = 20000, params = null, method = 'GET' } = {}) {
     const rawPath = String(path || '').trim().replace(/^\//, '');
     if (!rawPath) throw new Error('Invalid gh api path');
 
     const args = ['api', rawPath];
+    // IMPORTANT: `gh api` implicitly switches to POST when `-f` is used unless a method is forced.
+    // We use `-f` for query params, so default to GET unless explicitly overridden.
+    const m = String(method || 'GET').trim().toUpperCase() || 'GET';
+    args.push('--method', m);
     if (paginate) args.push('--paginate');
     Object.entries(params || {}).forEach(([key, value]) => {
       if (value === undefined || value === null || value === '') return;
