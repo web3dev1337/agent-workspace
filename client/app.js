@@ -1177,6 +1177,20 @@ class ClaudeOrchestrator {
           return;
         }
 
+        // Check if click was on branch refresh button
+        const refreshBranchBtn = e.target.closest('.refresh-branch-btn');
+        if (refreshBranchBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const item = refreshBranchBtn.closest('.worktree-item');
+          const worktreeId = item?.dataset?.worktreeId || refreshBranchBtn.dataset.worktreeId;
+          if (worktreeId) {
+            this.refreshWorktreeBranch(worktreeId, { showToast: true });
+          }
+          return;
+        }
+
         // Check if click was on delete button
         if (e.target.closest('.delete-worktree-btn')) {
           return; // Let the button's onclick handler deal with it
@@ -3051,6 +3065,11 @@ class ClaudeOrchestrator {
 		            </div>
 	          </div>
 	          <div class="worktree-actions">
+	            <button class="refresh-branch-btn"
+	                    data-worktree-id="${this.escapeHtml(worktree.id)}"
+	                    title="Refresh branch label">
+	              ↻
+	            </button>
             <button class="ready-review-btn ${isReadyForReview ? 'ready' : ''}"
                     data-worktree-path="${this.escapeHtml(worktreePath || '')}"
                     aria-pressed="${isReadyForReview ? 'true' : 'false'}"
@@ -3813,6 +3832,14 @@ class ClaudeOrchestrator {
   formatBranchLabel(rawBranch, { context = 'terminal' } = {}) {
     const cfg = this.getBranchLabelConfig();
     const raw = String(rawBranch || '').trim();
+
+    // Hide non-branch sentinels (not a repo / invalid path). Keep "unknown" visible so users can
+    // see when branch detection is temporarily failing.
+    const hide = new Set(['no-git', 'missing', 'invalid-path']);
+    if (hide.has(raw)) {
+      return { raw, text: '', title: raw, className: '' };
+    }
+
     const { type, prefix } = this.classifyBranchType(raw);
 
     let display = raw;
@@ -3849,6 +3876,54 @@ class ClaudeOrchestrator {
       title: raw,
       className: classes.join(' ')
     };
+  }
+
+  requestBranchRefresh(sessionId, { showToast = false } = {}) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return false;
+    if (!this.socket) return false;
+
+    const now = Date.now();
+    const last = this.branchRefreshRequestAt.get(sid) || 0;
+    if (now - last < 500) return false;
+    this.branchRefreshRequestAt.set(sid, now);
+
+    try {
+      this.socket.emit('refresh-branch', { sessionId: sid });
+      if (showToast) this.showToast?.('Refreshing branch…', 'info');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  refreshWorktreeBranch(worktreeIdOrKey, { showToast = true } = {}) {
+    const key = String(worktreeIdOrKey || '').trim();
+    if (!key) return;
+
+    const sessionIds = [];
+    for (const [sessionId, session] of this.sessions) {
+      if (!session) continue;
+      if (this.currentWorkspace && session.workspace && session.workspace !== this.currentWorkspace.id) continue;
+      if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
+
+      const sessionWorktreeId = session.worktreeId || String(sessionId).split('-')[0];
+      const repositoryName = this.extractRepositoryName(sessionId);
+      const sessionKey = repositoryName ? `${repositoryName}-${sessionWorktreeId}` : sessionWorktreeId;
+      if (sessionKey === key || sessionWorktreeId === key) {
+        sessionIds.push(sessionId);
+      }
+    }
+
+    if (!sessionIds.length) {
+      if (showToast) this.showToast?.('No terminals found for this worktree', 'warning');
+      return;
+    }
+
+    if (showToast) this.showToast?.('Refreshing branch…', 'info');
+    sessionIds.forEach((sid) => {
+      this.requestBranchRefresh(sid, { showToast: false });
+    });
   }
 
   maybeRequestBranchRefreshFromOutput(sessionId, data) {
@@ -4038,6 +4113,7 @@ class ClaudeOrchestrator {
 	    const worktreeId = session.worktreeId;
 		    const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
 		    const branchMeta = this.formatBranchLabel(session.branch || '', { context: 'terminal' });
+		    const branchRefreshId = (() => { try { return encodeURIComponent(String(sessionId || '')); } catch { return ''; } })();
 		    const ticketMeta = this.getTicketMetaForSession(sessionId, session);
 		    const ticketChip = ticketMeta?.label ? (
 		      ticketMeta.url
@@ -4050,6 +4126,7 @@ class ClaudeOrchestrator {
 		          <span class="status-indicator ${session.status}" id="${this.getSessionDomId('status', sessionId)}"></span>
 		          <span>${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
 		          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
+		          <button type="button" class="terminal-branch-refresh" data-branch-refresh="${this.escapeHtml(branchRefreshId)}" title="Refresh branch label">↻</button>
 		          ${ticketChip}
 			        </div>
 		        <div class="terminal-controls">
@@ -4105,6 +4182,23 @@ class ClaudeOrchestrator {
         ` : ''}
       </div>
     `;
+
+	    // Branch refresh button
+	    try {
+	      const btn = wrapper.querySelector('[data-branch-refresh]');
+	      if (btn) {
+	        btn.addEventListener('click', (e) => {
+	          e.preventDefault();
+	          e.stopPropagation();
+	          const enc = String(btn.dataset.branchRefresh || '').trim();
+	          let sid = enc;
+	          try { sid = decodeURIComponent(enc); } catch { sid = enc; }
+	          this.requestBranchRefresh(sid, { showToast: true });
+	        });
+	      }
+	    } catch {
+	      // ignore
+	    }
     
     return wrapper;
   }
