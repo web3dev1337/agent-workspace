@@ -10704,6 +10704,51 @@ class ClaudeOrchestrator {
 		    await this.deleteWorktree?.(worktreeKey, display, { workspaceId: wsId });
 		  }
 
+	  getWorktreeSessionGroupIds(sessionId) {
+	    const sid = String(sessionId || '').trim();
+	    if (!sid) return [];
+
+	    const session = this.sessions.get(sid) || null;
+	    const wsId = String(session?.workspace || this.currentWorkspace?.id || '').trim();
+	    const worktreeId = String(session?.worktreeId || '').trim() || String(sid).split('-')[0];
+	    const repoName = String(session?.repositoryName || this.extractRepositoryName(sid) || '').trim();
+	    if (!worktreeId) return [sid];
+
+	    const key = repoName ? `${repoName}-${worktreeId}` : worktreeId;
+	    const ids = [];
+	    for (const [otherId, other] of this.sessions) {
+	      if (!otherId || !other) continue;
+	      const otherWs = String(other?.workspace || '').trim();
+	      if (wsId && otherWs && otherWs !== wsId) continue;
+
+	      const otherWorktreeId = String(other?.worktreeId || '').trim() || String(otherId).split('-')[0];
+	      const otherRepo = String(other?.repositoryName || this.extractRepositoryName(otherId) || '').trim();
+	      const otherKey = otherRepo ? `${otherRepo}-${otherWorktreeId}` : otherWorktreeId;
+	      if (otherKey === key) ids.push(String(otherId));
+	    }
+
+	    if (!ids.length) return [sid];
+
+	    const baseId = (x) => String(x || '').replace(/-(claude|server)$/, '');
+	    const isServer = (x) => {
+	      const s = String(x || '');
+	      if (s.endsWith('-server')) return true;
+	      const sess = this.sessions.get(s);
+	      return String(sess?.type || '').toLowerCase() === 'server';
+	    };
+	    ids.sort((a, b) => {
+	      const aBase = baseId(a);
+	      const bBase = baseId(b);
+	      if (aBase !== bBase) return aBase.localeCompare(bBase);
+	      const aIsServer = isServer(a);
+	      const bIsServer = isServer(b);
+	      if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
+	      return String(a).localeCompare(String(b));
+	    });
+
+	    return ids;
+	  }
+
 	  /**
 	   * Close a specific terminal session (keeps the worktree in the workspace).
 	   */
@@ -10711,18 +10756,28 @@ class ClaudeOrchestrator {
 	    const sid = String(sessionId || '').trim();
 	    if (!sid) return;
 	    const session = this.sessions.get(sid);
-	    const label = session?.worktreeId ? `${session.type === 'server' ? 'Server' : 'Agent'} ${session.worktreeId}` : sid;
+	    const repoName = String(session?.repositoryName || this.extractRepositoryName(sid) || '').trim();
+	    const worktreeId = String(session?.worktreeId || '').trim() || String(sid).split('-')[0];
+	    const groupIds = this.getWorktreeSessionGroupIds(sid);
+	    const labelBase = worktreeId ? (repoName ? `${repoName}/${worktreeId}` : worktreeId) : sid;
+	    const label = groupIds.length > 1 ? `${labelBase} (${groupIds.length} terminals)` : labelBase;
 
     const confirmed = await this.showConfirmationDialog(
       'Close Terminal',
-      `Close "${label}"?\n\nThis will terminate the terminal process and any child processes.\nThe worktree stays in the workspace and can be re-opened later.`,
+      `Close "${label}"?\n\nThis will terminate the terminal process${groupIds.length > 1 ? 'es' : ''} and any child processes.\nThe worktree stays in the workspace and can be re-opened later.`,
       'Close terminal',
       'Cancel'
     );
 
 	    if (!confirmed) return;
-	    this.clearRecoveryForSessionClose(sid);
-	    this.socket.emit('destroy-session', { sessionId: sid });
+	    if (!this.socket || !this.socket.connected) {
+	      this.showToast?.('Not connected to server', 'warning');
+	      return;
+	    }
+	    (groupIds.length ? groupIds : [sid]).forEach((id) => {
+	      this.clearRecoveryForSessionClose(id);
+	      this.socket.emit('destroy-session', { sessionId: id });
+	    });
 	  }
 
 	  clearRecoveryForSessionClose(sessionId) {
@@ -10747,8 +10802,11 @@ class ClaudeOrchestrator {
 	      this.showToast?.('Not connected to server', 'warning');
 	      return;
 	    }
-	    this.clearRecoveryForSessionClose(sid);
-	    this.socket.emit('destroy-session', { sessionId: sid });
+	    const groupIds = this.getWorktreeSessionGroupIds(sid);
+	    (groupIds.length ? groupIds : [sid]).forEach((id) => {
+	      this.clearRecoveryForSessionClose(id);
+	      this.socket.emit('destroy-session', { sessionId: id });
+	    });
 	  }
 
   /**
