@@ -18,6 +18,7 @@ This doc is the “what’s left” list after the last ~10 days of changes. Som
 - PR #593: Branch labels: adds manual refresh (sidebar + terminal headers) and hides non-git sentinels (`no-git`/`missing`/`invalid-path`).
 - PR #594: PR details (files/commits) now load reliably for private repos via `gh pr view` + GraphQL files (instead of REST endpoints that can 404).
 - PR #595: Review Console layout tweak: wider terminals column + adaptive terminal grid (avoids “micro” terminals).
+- PR #597: Session recovery prompts now only count “actionable” sessions (those with `lastAgent` or `lastServerCommand`), reducing stale/noise recoverables after restarts.
 
 ## 0) Definitions / mental model gaps (needs UI+docs)
 
