@@ -599,7 +599,7 @@ All changes are in PR: https://github.com/web3dev1337/claude-orchestrator/pull/6
    - Replaced all hardcoded `'bash'` with `getDefaultShell()`
    - Replaced all `['-c', ...]` with `buildShellArgs(...)`
    - Fixed git branch detection for PowerShell
-   - Removed `exec bash` from command chains
+   - On non-Windows, keeps bash sessions open via `exec bash` to avoid PTY “exit/restart” loops; on Windows uses PowerShell `-NoExit`
 
 2. **server/commanderService.js**
    - Added platform detection for shell selection

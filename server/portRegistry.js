@@ -1,12 +1,14 @@
 const winston = require('winston');
 const { exec } = require('child_process');
 const util = require('util');
+const os = require('os');
+const net = require('net');
 const fs = require('fs').promises;
 const path = require('path');
 const execAsync = util.promisify(exec);
 
 // Custom port labels file
-const PORT_LABELS_FILE = path.join(process.env.HOME || '', '.orchestrator', 'port-labels.json');
+const PORT_LABELS_FILE = path.join(process.env.HOME || os.homedir(), '.orchestrator', 'port-labels.json');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -144,16 +146,19 @@ class PortRegistry {
    * @returns {Promise<boolean>} True if port is free
    */
   async isPortFree(port) {
-    try {
-      // Use lsof to check if port is in use
-      await execAsync(`lsof -i :${port}`, { timeout: 2000 });
-      // If lsof succeeds, port is in use
-      return false;
-    } catch (error) {
-      // If lsof fails with exit code 1, port is free
-      // (lsof returns 1 when no processes are found)
-      return true;
-    }
+    // Cross-platform: try to bind briefly.
+    return await new Promise((resolve) => {
+      const server = net.createServer();
+      server.once('error', () => {
+        try { server.close(); } catch {}
+        resolve(false);
+      });
+      server.once('listening', () => {
+        server.close(() => resolve(true));
+      });
+      // Use 0.0.0.0 because our launched servers often bind to all interfaces.
+      server.listen({ port, host: '0.0.0.0' });
+    });
   }
 
   /**

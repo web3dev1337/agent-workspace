@@ -6,10 +6,11 @@
  */
 
 const fs = require('fs').promises;
+const os = require('os');
 const path = require('path');
 const winston = require('winston');
 
-const RECOVERY_DIR = path.join(process.env.HOME || '', '.orchestrator', 'session-recovery');
+const RECOVERY_DIR = path.join(process.env.HOME || os.homedir(), '.orchestrator', 'session-recovery');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',

@@ -50,10 +50,21 @@ function main() {
     process.env.ORCHESTRATOR_LICENSE_PUBLIC_KEY_PATH
     || process.env.TAURI_LICENSE_PUBLIC_KEY_PATH
     || path.join(repoRoot, 'license-public-key.pem');
-  const bundledNodePathRaw =
+  const skipBundleNodeRaw = String(
+    process.env.ORCHESTRATOR_SKIP_BUNDLE_NODE
+    || process.env.TAURI_SKIP_BUNDLE_NODE
+    || ''
+  ).trim().toLowerCase();
+  const shouldBundleNode = !['1', 'true', 'yes', 'on'].includes(skipBundleNodeRaw);
+
+  const bundledNodePathRawFromEnv =
     process.env.ORCHESTRATOR_BUNDLED_NODE_PATH
     || process.env.TAURI_BUNDLED_NODE_PATH
     || '';
+
+  // Default: bundle the Node runtime we’re currently running on.
+  // This makes `npm run tauri:build` much more “it just works” on Windows.
+  const bundledNodePathRaw = bundledNodePathRawFromEnv || (shouldBundleNode ? process.execPath : '');
 
   if (clean && fs.existsSync(outDir)) {
     fs.rmSync(outDir, { recursive: true, force: true });
