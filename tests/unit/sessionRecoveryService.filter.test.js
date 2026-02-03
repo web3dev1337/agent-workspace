@@ -28,5 +28,27 @@ describe('SessionRecoveryService (filtering)', () => {
     expect(map.has('a-claude')).toBe(true);
     expect(map.has('b-claude')).toBe(false);
   });
-});
 
+  it('does not treat plain worktree sessions as recoverable', async () => {
+    const svc = new SessionRecoveryService();
+    svc.saveWorkspaceState = jest.fn(); // avoid timers/open handles
+
+    const workspaceId = 'ws';
+    const sessions = {
+      'a-server': { sessionId: 'a-server', worktreePath: '/a', updatedAt: '2026-01-31T00:00:00.000Z' }, // no agent/server command
+      'b-server': { sessionId: 'b-server', worktreePath: '/b', lastServerCommand: 'npm start', updatedAt: '2026-01-31T00:00:00.000Z' },
+      'c-codex': { sessionId: 'c-codex', worktreePath: '/c', lastAgent: 'codex', updatedAt: '2026-01-31T00:00:00.000Z' }
+    };
+
+    svc.loadWorkspaceState = jest.fn().mockImplementation(async (id) => {
+      svc.states.set(id, new Map(Object.entries(sessions)));
+      return { workspaceId: id, savedAt: '2026-01-31T00:00:00.000Z', sessions };
+    });
+
+    const out = await svc.getRecoveryInfo(workspaceId, { allowSessionIds: Object.keys(sessions), pruneMissing: false });
+
+    expect(out.workspaceId).toBe(workspaceId);
+    expect(out.recoverableSessions).toBe(2);
+    expect(out.sessions.map(s => s.sessionId).sort()).toEqual(['b-server', 'c-codex'].sort());
+  });
+});
