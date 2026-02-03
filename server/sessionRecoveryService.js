@@ -260,14 +260,19 @@ class SessionRecoveryService {
 
     // If a workspace has changed its terminal list, session recovery can accumulate stale entries.
     // Filter (and optionally prune) to only sessions still present in the workspace config.
+    const allEntries = Object.entries(sessions);
+    const allowedEntries = allowSet
+      ? allEntries.filter(([id]) => allowSet.has(String(id || '').trim()))
+      : allEntries;
     if (allowSet) {
-      const keys = Object.keys(sessions);
-      const stale = keys.filter((k) => !allowSet.has(String(k || '').trim()));
+      const stale = allEntries
+        .map(([id]) => String(id || '').trim())
+        .filter((id) => id && !allowSet.has(id));
       if (stale.length && pruneMissing) {
         try {
           const map = this.states.get(workspaceId);
           if (map) {
-            stale.forEach((k) => map.delete(String(k || '').trim()));
+            stale.forEach((id) => map.delete(id));
             this.saveWorkspaceState(workspaceId);
           }
         } catch {
@@ -278,14 +283,12 @@ class SessionRecoveryService {
 
     // Build recovery info for each session - validate conversations exist
     const recoveryData = [];
-    for (const [id, s0] of Object.entries(sessions)) {
+    for (const [id, s0] of allowedEntries) {
       const sid = String(id || '').trim();
-      if (allowSet && !allowSet.has(sid)) continue;
       const s = s0 || {};
-      // Skip if no worktree path and no server command
-      if (!s.worktreePath && !s.lastServerCommand) {
-        continue;
-      }
+      // Only include sessions that have meaningful recovery state. A bare worktreePath (seeded on session creation)
+      // is not actionable and creates noisy "recoverable session" prompts after restarts.
+      if (!s.lastAgent && !s.lastServerCommand) continue;
 
       // For Claude sessions, validate the conversation file exists and has content
       let conversationValid = false;
@@ -338,7 +341,7 @@ class SessionRecoveryService {
     return {
       workspaceId,
       savedAt: state.savedAt,
-      totalSessions: Object.keys(sessions).length,
+      totalSessions: allowedEntries.length,
       recoverableSessions: recoveryData.length,
       sessions: recoveryData
     };
