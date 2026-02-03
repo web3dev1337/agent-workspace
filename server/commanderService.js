@@ -102,10 +102,17 @@ class CommanderService {
           this.io.emit('commander-output', { data });
         }
 
-        // Detect when Claude is ready
+        // Detect when shell is ready
         if (data.includes('>') || data.includes('$')) {
-          this.session.status = 'ready';
-          this.isReady = true;
+          if (!this.isReady) {
+            this.session.status = 'ready';
+            this.isReady = true;
+
+            // Auto-start Claude when shell becomes ready
+            setTimeout(() => {
+              this.startClaude('fresh', true);
+            }, 500);
+          }
         }
       });
 
