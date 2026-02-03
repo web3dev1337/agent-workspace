@@ -1,8 +1,6 @@
-use std::path::PathBuf;
-
 fn main() {
     // Use custom config to prevent tracking node_modules for rebuilds
-    let context = tauri_build::try_build(tauri_build::Attributes::new())
+    let _context = tauri_build::try_build(tauri_build::Attributes::new())
         .expect("failed to run tauri build");
 
     // Explicitly tell cargo to NOT track node_modules changes

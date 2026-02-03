@@ -8,6 +8,7 @@ try {
 const { EventEmitter } = require('events');
 const winston = require('winston');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 const { UserSettingsService } = require('./userSettingsService');
@@ -44,9 +45,10 @@ function buildShellArgs(commands) {
     const joined = Array.isArray(commands) ? commands.join('; ') : commands.replace(/&&/g, ';');
     return ['-NoExit', '-Command', joined];
   } else {
-    // Bash: join commands with && and use -c
+    // Bash: join commands with && and keep the terminal open by exec'ing into an interactive shell.
     const joined = Array.isArray(commands) ? commands.join(' && ') : commands;
-    return ['-c', joined];
+    const keepOpen = joined && joined.trim() ? `${joined} && exec bash` : 'exec bash';
+    return ['-c', keepOpen];
   }
 }
 
@@ -725,20 +727,27 @@ class SessionManager extends EventEmitter {
         logger.error('Cannot create session - node-pty unavailable', { sessionId, type: config.type });
         throw new Error('node-pty unavailable');
       }
+      const homeDir = process.env.HOME || os.homedir();
+      const env = {
+        ...process.env,
+        HOME: homeDir, // Use a stable home directory for Claude/Codex config resolution
+        TERM: 'xterm-color'
+      };
+
+      // Preserve the existing Linux dev PATH hack, but never apply it on Windows (path separator differs).
+      if (process.platform !== 'win32') {
+        env.PATH = `${homeDir}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
+        if (process.env.NODE_PATH) {
+          env.NODE_PATH = process.env.NODE_PATH;
+        }
+      }
+
       const ptyProcess = pty.spawn(config.command, config.args, {
         name: 'xterm-color',
         cols: 80,
         rows: 24,
         cwd: config.cwd,
-        env: {
-          ...process.env,
-          // Include snap binaries, node paths, and common paths
-          PATH: `${process.env.HOME}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
-          HOME: process.env.HOME, // Use actual home directory for Claude CLI access
-          TERM: 'xterm-color',
-          // Ensure Claude CLI can find its config
-          NODE_PATH: process.env.NODE_PATH
-        }
+        env
       });
 
       const initialCwd = config.cwd || process.cwd();
