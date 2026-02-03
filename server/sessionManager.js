@@ -40,9 +40,9 @@ function getDefaultShell() {
 // Helper function to build shell args for executing commands
 function buildShellArgs(commands) {
   if (process.platform === 'win32') {
-    // PowerShell: join commands with ; and use -Command
+    // PowerShell: join commands with ; and use -NoExit -Command to keep shell open
     const joined = Array.isArray(commands) ? commands.join('; ') : commands.replace(/&&/g, ';');
-    return ['-Command', joined];
+    return ['-NoExit', '-Command', joined];
   } else {
     // Bash: join commands with && and use -c
     const joined = Array.isArray(commands) ? commands.join(' && ') : commands;
@@ -2181,7 +2181,7 @@ class SessionManager extends EventEmitter {
           `echo "${serverWelcome}"`,
           `echo "Directory: ${worktreePath}"`,
           process.platform === 'win32'
-            ? `powershell -Command "git branch --show-current 2>$null; if(!$?) { echo 'unknown' }"`
+            ? `Write-Host "Branch: $(git branch --show-current 2>$null; if(-not $?) { Write-Output 'unknown' })"`
             : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
           `echo ""`
         ]),
