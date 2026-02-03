@@ -14,6 +14,10 @@ This doc is the “what’s left” list after the last ~10 days of changes. Som
 - PR #587: Review Console docks hidden terminals reliably; Diff embed defaults on; session recovery clearing fixed.
 - PR #588: Worktree Inspector 🗂 button resolves worktreePath from workspace config (mixed-repo) and falls back to PR console with a clear toast.
 - PR #589: PR Review Console Files list supports click-to-open the embedded diff viewer for that file (via `?file=...`), and “-0” is never shown for deletions.
+- PR #592: PR Review Console supports Prev/Next navigation by capturing the current filtered Queue PR list (review stack).
+- PR #593: Branch labels: adds manual refresh (sidebar + terminal headers) and hides non-git sentinels (`no-git`/`missing`/`invalid-path`).
+- PR #594: PR details (files/commits) now load reliably for private repos via `gh pr view` + GraphQL files (instead of REST endpoints that can 404).
+- PR #595: Review Console layout tweak: wider terminals column + adaptive terminal grid (avoids “micro” terminals).
 
 ## 0) Definitions / mental model gaps (needs UI+docs)
 
