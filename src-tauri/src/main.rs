@@ -214,6 +214,10 @@ fn toggle_devtools(window: tauri::WebviewWindow) {
     {
         window.open_devtools();
     }
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = window;
+    }
 }
 
 #[tauri::command]
@@ -496,15 +500,6 @@ fn main() {
             unwatch_directory,
             list_watched_paths
         ])
-        .run(tauri::generate_context!(), |app_handle, event| {
-            match event {
-                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
-                    if let Some(proc_state) = app_handle.try_state::<BackendProcess>() {
-                        proc_state.kill();
-                    }
-                }
-                _ => {}
-            }
-        })
+        .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
