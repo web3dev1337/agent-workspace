@@ -437,7 +437,7 @@ io.on('connection', (socket) => {
         // Build command with NODE_ENV and custom settings
         const nodeEnv = environment === 'production' ? 'production' : 'development';
 
-        const { getShellKind, buildShellCommand, parseEnvAssignments, buildEcho } = require('./utils/shellCommand');
+        const { getShellKind, buildShellCommand, parseEnvAssignments } = require('./utils/shellCommand');
         const shellKind = getShellKind();
 
         const env = {
@@ -450,18 +450,12 @@ io.on('connection', (socket) => {
         }
 
         // Build command (cross-shell).
+        // Use NODE_OPTIONS for node flags so this works on both bash and PowerShell.
+        // (Avoids bash-only `$(which hytopia)` and Windows `.cmd` wrapper issues.)
         let runCommand = 'hytopia start';
         const nodeOptions = String(launchSettings?.nodeOptions || '').trim();
         if (nodeOptions) {
-          if (shellKind === 'powershell') {
-            // Bash-only helper previously used `$(which hytopia)` to get the JS entrypoint.
-            // On Windows that is often a .cmd wrapper, so we cannot reliably inject Node flags.
-            // Best-effort: start normally and warn.
-            sessionManager.writeToSession(sessionId, `${buildEcho(shellKind, 'NOTE: nodeOptions are not currently supported on Windows PowerShell; running "hytopia start" without forcing node flags.')}\n`);
-            runCommand = 'hytopia start';
-          } else {
-            runCommand = `node ${nodeOptions} $(which hytopia) start`;
-          }
+          env.NODE_OPTIONS = nodeOptions;
         }
 
         const gameArgs = String(launchSettings?.gameArgs || '').trim();
