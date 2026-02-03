@@ -35,6 +35,7 @@ class CommanderService {
     this.outputBuffer = [];
     this.maxBufferLines = 500;
     this.isReady = false;
+    this.claudeStarted = false; // Track if Claude has been auto-started
   }
 
   static getInstance(options) {
@@ -108,10 +109,13 @@ class CommanderService {
             this.session.status = 'ready';
             this.isReady = true;
 
-            // Auto-start Claude when shell becomes ready
-            setTimeout(() => {
-              this.startClaude('fresh', true);
-            }, 500);
+            // Auto-start Claude when shell becomes ready (only once)
+            if (!this.claudeStarted) {
+              this.claudeStarted = true;
+              setTimeout(() => {
+                this.startClaude('fresh', true);
+              }, 1000);
+            }
           }
         }
       });
@@ -121,6 +125,7 @@ class CommanderService {
         logger.info('Commander terminal exited', { exitCode });
         this.session = null;
         this.isReady = false;
+        this.claudeStarted = false; // Reset for next start
         if (this.io) {
           this.io.emit('commander-exit', { exitCode });
         }
