@@ -148,6 +148,13 @@ class CommanderService {
       await this.start();
     }
 
+    // Prevent duplicate calls
+    if (this.claudeStarted) {
+      logger.warn('Claude already started, ignoring duplicate call');
+      return { success: false, error: 'Already started' };
+    }
+    this.claudeStarted = true;
+
     // Build the claude command
     let cmd = 'claude';
 
@@ -242,7 +249,12 @@ class CommanderService {
       return false;
     }
 
-    this.session.pty.write(input);
+    // On Windows, convert \n to \r\n for proper line endings
+    const processedInput = process.platform === 'win32'
+      ? input.replace(/\n/g, '\r\n')
+      : input;
+
+    this.session.pty.write(processedInput);
     return true;
   }
 
