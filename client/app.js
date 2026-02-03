@@ -91,6 +91,9 @@ class ClaudeOrchestrator {
     // move existing terminal wrappers into the modal and restore them on close.
     this.reviewConsoleDockedTerminals = new Map(); // sessionId -> { wrapper, parent, nextSibling }
     this.reviewConsoleDockedWorktreePath = null;
+    // When Review Console is opened from Queue, capture the current filtered PR list so you can
+    // navigate Prev/Next without reopening the Queue overlay.
+    this.reviewConsoleNav = null; // { source, createdAtMs, items: [{ id, kind, title, url, ... }], index }
 
     this.init();
   }
@@ -8939,10 +8942,68 @@ class ClaudeOrchestrator {
 
 		    this.restoreReviewConsoleDockedTerminals();
 
-	    // Queue is a fullscreen overlay; close it so the console has the whole screen.
-	    if (document.getElementById('queue-panel')) {
-	      document.getElementById('queue-close-btn')?.click?.();
-	    }
+		    // If Queue is open, capture the current filtered PR list so Review Console can navigate it.
+		    const normUrl = (u) => String(u || '').trim().replace(/\/+$/, '');
+		    const reviewTaskId = String(t.id || this.getPRTaskIdFromUrl(prUrl) || '').trim();
+		    try {
+		      const queueOpen = !!(this.queuePanelApi?.isOpen?.());
+		      if (queueOpen) {
+		        const summary = this.queuePanelApi?.getVisibleTasksSummary?.({ limit: 200 });
+		        const rawItems = Array.isArray(summary) ? summary : [];
+		        const items = rawItems
+		          .filter((x) => x && String(x.kind || '').trim() === 'pr')
+		          .map((x) => ({
+		            id: String(x.id || '').trim() || null,
+		            kind: 'pr',
+		            title: String(x.title || '').trim() || null,
+		            url: String(x.url || '').trim() || null,
+		            prNumber: x.prNumber ?? null,
+		            isDraft: !!x.isDraft
+		          }))
+		          .filter((x) => x.id && x.url);
+
+		        if (items.length) {
+		          // Ensure current PR is included (even if it’s beyond the queue summary cap).
+		          const currentId = reviewTaskId || this.getPRTaskIdFromUrl(prUrl) || null;
+		          const currentUrl = normUrl(prUrl);
+		          const hasCurrent = items.some((x) => x && (x.id === currentId || normUrl(x.url) === currentUrl));
+		          if (!hasCurrent) {
+		            items.unshift({
+		              id: currentId || `pr:${prUrl}`,
+		              kind: 'pr',
+		              title: String(t.title || '').trim() || null,
+		              url: prUrl,
+		              prNumber: t.prNumber ?? null,
+		              isDraft: !!t.isDraft
+		            });
+		          }
+
+		          const idx = items.findIndex((x) => x && (x.id === currentId || normUrl(x.url) === currentUrl));
+		          this.reviewConsoleNav = {
+		            source: 'queue',
+		            createdAtMs: Date.now(),
+		            items,
+		            index: idx >= 0 ? idx : 0
+		          };
+		        }
+		      }
+
+		      // If queue isn't open, but we have a nav stack, keep it and just update index to this PR if present.
+		      if (!queueOpen && this.reviewConsoleNav?.items?.length) {
+		        const navItems = this.reviewConsoleNav.items;
+		        const currentId = reviewTaskId || this.getPRTaskIdFromUrl(prUrl) || null;
+		        const currentUrl = normUrl(prUrl);
+		        const idx = navItems.findIndex((x) => x && (x.id === currentId || normUrl(x.url) === currentUrl));
+		        if (idx >= 0) this.reviewConsoleNav.index = idx;
+		      }
+		    } catch {
+		      // ignore
+		    }
+
+		    // Queue is a fullscreen overlay; close it so the console has the whole screen.
+		    if (document.getElementById('queue-panel')) {
+		      document.getElementById('queue-close-btn')?.click?.();
+		    }
 
 	    const modal = this.ensureWorktreeInspectorModal();
 	    modal.classList.remove('hidden');
@@ -8977,9 +9038,8 @@ class ClaudeOrchestrator {
 		      const reviews = Array.isArray(conversation.reviews) ? conversation.reviews : [];
 		      const warnings = Array.isArray(details?.warnings) ? details.warnings : [];
 
-		      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
-		      const normUrl = (u) => String(u || '').trim().replace(/\/+$/, '');
-		      const targetPrUrl = normUrl(pr.url || prUrl);
+			      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
+			      const targetPrUrl = normUrl(pr.url || prUrl);
 
 		      const matchingSessionIds = [];
 		      for (const [sid, links] of this.githubLinks) {
@@ -9150,27 +9210,37 @@ class ClaudeOrchestrator {
 				      const metaColumnHiddenClass = (currentSections.files === false && currentSections.commits === false) ? 'hidden' : '';
 				      const diffColumnHiddenClass = currentSections.diff === false ? 'hidden' : '';
 
-	      bodyEl.innerHTML = `
-	        <div class="worktree-inspector-header review-console-header">
-	          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
-            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
-              <strong>PR #${escapeHtml(pr.number || '')}</strong>
-              ${pr.state ? ` • <span style="opacity:0.85;">${escapeHtml(pr.state)}</span>` : ''}
-              ${pr.isDraft ? ' • <span style="opacity:0.85;">draft</span>' : ''}
-              ${pr.headRefName ? ` • <span style="opacity:0.85;">${escapeHtml(pr.headRefName)}</span>` : ''}
-            </div>
-            <div class="worktree-inspector-subtle" style="opacity:0.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-              ${escapeHtml(pr.title || t.title || '')}
-            </div>
-          </div>
-          <span style="flex:1"></span>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-            <button class="btn-secondary" type="button" data-pr-refresh="true">🔄 Refresh</button>
-            <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
-            <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}">🔍 Diff</button>
-            <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" ${pr.isDraft ? 'disabled' : ''}>✅ Merge</button>
+			      const nav = (this.reviewConsoleNav && Array.isArray(this.reviewConsoleNav.items)) ? this.reviewConsoleNav : null;
+			      const navCount = nav ? nav.items.length : 0;
+			      const navIndex = nav && Number.isFinite(Number(nav.index)) ? Math.max(0, Math.min(navCount - 1, Number(nav.index))) : -1;
+			      const showNav = navCount > 1 && navIndex >= 0;
+
+		      bodyEl.innerHTML = `
+		        <div class="worktree-inspector-header review-console-header">
+		          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
+	            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
+	              <strong>PR #${escapeHtml(pr.number || '')}</strong>
+	              ${pr.state ? ` • <span style="opacity:0.85;">${escapeHtml(pr.state)}</span>` : ''}
+	              ${pr.isDraft ? ' • <span style="opacity:0.85;">draft</span>' : ''}
+	              ${pr.headRefName ? ` • <span style="opacity:0.85;">${escapeHtml(pr.headRefName)}</span>` : ''}
+	            </div>
+	            <div class="worktree-inspector-subtle" style="opacity:0.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+	              ${escapeHtml(pr.title || t.title || '')}
+	            </div>
 	          </div>
-	        </div>
+	          <span style="flex:1"></span>
+	          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+	            ${showNav ? `
+	              <button class="btn-secondary" type="button" data-review-nav="prev" title="Previous PR in review stack">◀ Prev</button>
+	              <span class="worktree-inspector-subtle" data-review-nav-status="true" title="Review stack (captured from Queue)">${navIndex + 1}/${navCount}</span>
+	              <button class="btn-secondary" type="button" data-review-nav="next" title="Next PR in review stack">Next ▶</button>
+	            ` : ''}
+	            <button class="btn-secondary" type="button" data-pr-refresh="true">🔄 Refresh</button>
+	            <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
+	            <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}">🔍 Diff</button>
+	            <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" ${pr.isDraft ? 'disabled' : ''}>✅ Merge</button>
+		          </div>
+		        </div>
 
 			        ${warnings.length ? `
 		          <div class="review-console-warning">
@@ -9490,8 +9560,8 @@ class ClaudeOrchestrator {
 				        syncDiffButtons();
 				      };
 
-      // Default: embed when enabled in Review Console settings (terminals or not).
-      let diffEmbedEnabled = rcCfg?.diffEmbed !== false;
+	      // Default: embed when enabled in Review Console settings (terminals or not).
+	      let diffEmbedEnabled = rcCfg?.diffEmbed !== false;
 
       const persistDiffEmbed = async (enabled) => {
         try {
@@ -9528,6 +9598,70 @@ class ClaudeOrchestrator {
 
 	      if (diffEmbedEnabled && currentSections.diff !== false) embed({ showToast: false }).catch(() => {});
 	      syncDiffButtons();
+
+	      // Review stack navigation (captured from Queue).
+	      const navPrevBtn = bodyEl.querySelector('[data-review-nav="prev"]');
+	      const navNextBtn = bodyEl.querySelector('[data-review-nav="next"]');
+	      const navStatusEl = bodyEl.querySelector('[data-review-nav-status="true"]');
+
+	      const parsePrUrlFromTaskId = (id) => {
+	        const raw = String(id || '').trim();
+	        const m = raw.match(/^pr:([^#]+)#(\d+)$/);
+	        if (!m) return '';
+	        return `https://github.com/${m[1]}/pull/${m[2]}`;
+	      };
+
+	      const updateNavStatus = () => {
+	        try {
+	          const nav0 = (this.reviewConsoleNav && Array.isArray(this.reviewConsoleNav.items)) ? this.reviewConsoleNav : null;
+	          const count = nav0 ? nav0.items.length : 0;
+	          const idx0 = nav0 && Number.isFinite(Number(nav0.index)) ? Math.max(0, Math.min(count - 1, Number(nav0.index))) : -1;
+	          if (navStatusEl) navStatusEl.textContent = (count > 1 && idx0 >= 0) ? `${idx0 + 1}/${count}` : '';
+	          const disabled = !(count > 1 && idx0 >= 0);
+	          if (navPrevBtn) navPrevBtn.disabled = disabled;
+	          if (navNextBtn) navNextBtn.disabled = disabled;
+	        } catch {
+	          // ignore
+	        }
+	      };
+
+	      const navigateInReviewStack = async (dir) => {
+	        const nav0 = (this.reviewConsoleNav && Array.isArray(this.reviewConsoleNav.items)) ? this.reviewConsoleNav : null;
+	        const items = nav0?.items || [];
+	        if (items.length <= 1) return;
+
+	        const current = Number.isFinite(Number(nav0.index)) ? Number(nav0.index) : 0;
+	        const nextIndex = (current + dir + items.length) % items.length;
+	        const next = items[nextIndex] || null;
+	        if (!next) return;
+
+	        const nextUrl = String(next.url || '').trim() || parsePrUrlFromTaskId(next.id);
+	        if (!nextUrl) {
+	          this.showToast?.('Next review item has no PR URL', 'warning');
+	          return;
+	        }
+
+	        // Update nav index before navigation so the next render shows correct position.
+	        nav0.index = nextIndex;
+	        this.reviewConsoleNav = nav0;
+	        updateNavStatus();
+
+	        // Re-open the console for the next PR.
+	        await this.openReviewConsoleForTask({
+	          id: String(next.id || '').trim() || this.getPRTaskIdFromUrl(nextUrl) || null,
+	          kind: 'pr',
+	          title: next.title || null,
+	          url: nextUrl
+	        });
+	      };
+
+	      navPrevBtn?.addEventListener('click', () => {
+	        navigateInReviewStack(-1).catch(() => {});
+	      });
+	      navNextBtn?.addEventListener('click', () => {
+	        navigateInReviewStack(1).catch(() => {});
+	      });
+	      updateNavStatus();
 
 	      // File deep link: click file in the Files panel to jump the embedded diff viewer.
 	      bodyEl.querySelectorAll('[data-diff-file]').forEach((btn) => {
@@ -21406,7 +21540,7 @@ class ClaudeOrchestrator {
 	      getSelectedTask: () => (state.selectedId ? getTaskById(state.selectedId) : null),
 	      getVisibleTasksSummary: ({ limit = 12 } = {}) => {
 	        const tasks = getOrderedTasks(getFilteredTasks());
-	        const bounded = Math.min(50, Math.max(1, Number(limit) || 12));
+	        const bounded = Math.min(200, Math.max(1, Number(limit) || 12));
 	        return tasks.slice(0, bounded).map((t) => {
 	          const rec = (t && typeof t === 'object') ? (t.record && typeof t.record === 'object' ? t.record : {}) : {};
 	          const pick = (v) => {
