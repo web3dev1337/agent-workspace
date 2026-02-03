@@ -5183,6 +5183,12 @@ class ClaudeOrchestrator {
           .catch?.((err) => console.error('Failed to open queue conveyor t2:', err));
         break;
 
+      case 'queue-conveyor-t3':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => document.getElementById('queue-conveyor-t3')?.click?.(), 50))
+          .catch?.((err) => console.error('Failed to open queue conveyor t3:', err));
+        break;
+
       case 'queue-select':
         this.showQueuePanel?.()
           .then(() => setTimeout(() => this.queuePanelApi?.selectById?.(String(params?.id || '').trim()), 50))
@@ -18050,12 +18056,13 @@ class ClaudeOrchestrator {
 			            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
 			            <button class="btn-secondary tasks-view-btn" id="queue-blocked" title="Toggle: show blocked only (dependency-blocked items)">Blocked</button>
 			            <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-auto-console" title="Toggle: auto-open Review Console for worktree/session items">Auto Console</button>
+			            <button class="btn-secondary tasks-view-btn" id="queue-auto-console" title="Toggle: auto-open Review Console for PR/worktree/session items">Auto Console</button>
 			            <button class="btn-secondary tasks-view-btn" id="queue-auto-next" title="Toggle: auto-advance when you complete a review">Auto Next</button>
 			            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
 			            <button class="btn-secondary tasks-view-btn" id="queue-auto-fixer" title="Toggle: auto-spawn a fixer when Outcome=needs_fix and Notes is set">Auto Fixer</button>
 			            <button class="btn-secondary tasks-view-btn" id="queue-auto-recheck" title="Toggle: auto-spawn a recheck reviewer after fixes land on the PR">Auto Recheck</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t2" title="Conveyor: Tier 2 + unreviewed + auto-next (one-at-a-time)">Conveyor T2</button>
+		            <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t3" title="Conveyor: Tier 3 + unreviewed + auto-console + auto-next (one-at-a-time)">Conveyor T3</button>
 		            <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
 		          </div>
 	          <div class="tasks-view-toggle" role="group" aria-label="Queue navigation">
@@ -18102,6 +18109,7 @@ class ClaudeOrchestrator {
 			    const autoFixerBtn = modal.querySelector('#queue-auto-fixer');
 			    const autoRecheckBtn = modal.querySelector('#queue-auto-recheck');
 		    const conveyorT2Btn = modal.querySelector('#queue-conveyor-t2');
+		    const conveyorT3Btn = modal.querySelector('#queue-conveyor-t3');
 		    const startReviewBtn = modal.querySelector('#queue-start-review');
 		    const prevBtn = modal.querySelector('#queue-prev');
 		    const nextBtn = modal.querySelector('#queue-next');
@@ -18317,7 +18325,8 @@ class ClaudeOrchestrator {
 		      syncReviewControlsUI();
 		      if (state.autoConsole && state.selectedId) {
 		        const t = getTaskById(state.selectedId);
-		        if (t && (t.sessionId || t.worktreePath)) this.openReviewConsoleForTask(t);
+		        const wantsConsole = !!(t && (t.sessionId || t.worktreePath || (t.kind === 'pr' && String(t.url || '').trim())));
+		        if (wantsConsole) this.openReviewConsoleForTask(t);
 		      }
 		    });
 
@@ -18382,6 +18391,26 @@ class ClaudeOrchestrator {
 	        return;
 	      }
 	      selectById(ordered[0].id, { allowAutoOpenDiff: true });
+	    });
+
+	    conveyorT3Btn?.addEventListener('click', () => {
+	      state.reviewActive = true;
+	      state.reviewTier = 3;
+	      state.unreviewedOnly = true;
+	      state.autoConsole = true;
+	      try { localStorage.setItem('queue-auto-console', 'true'); } catch {}
+	      state.autoOpenDiff = false;
+	      state.autoAdvance = true;
+	      localStorage.setItem('queue-auto-advance', 'true');
+	      syncReviewControlsUI();
+	      renderList();
+
+	      const ordered = getOrderedTasks(getFilteredTasks());
+	      if (!ordered.length) {
+	        this.showToast('No Tier 3 items to review', 'info');
+	        return;
+	      }
+	      selectById(ordered[0].id, { allowAutoOpenDiff: false });
 	    });
 
 	    const maybeAutoAdvanceAfterReview = (currentTaskId) => {
@@ -21560,7 +21589,8 @@ class ClaudeOrchestrator {
 		      maybeAutoSpawnReviewer(t).catch(() => {});
 		      maybeAutoSpawnFixer(t).catch(() => {});
 		      maybeAutoSpawnRecheck(t).catch(() => {});
-		      if (state.autoConsole && (t?.sessionId || t?.worktreePath)) {
+		      const wantsConsole = !!(t?.sessionId || t?.worktreePath || (t?.kind === 'pr' && String(t?.url || '').trim()));
+		      if (state.autoConsole && wantsConsole) {
 		        this.openReviewConsoleForTask(t);
 		      }
 		    };
