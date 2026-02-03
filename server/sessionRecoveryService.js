@@ -6,10 +6,12 @@
  */
 
 const fs = require('fs').promises;
+const os = require('os');
 const path = require('path');
 const winston = require('winston');
 
-const RECOVERY_DIR = path.join(process.env.HOME || '', '.orchestrator', 'session-recovery');
+const HOME_DIR = process.env.HOME || os.homedir();
+const RECOVERY_DIR = path.join(HOME_DIR, '.orchestrator', 'session-recovery');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -299,9 +301,9 @@ class SessionRecoveryService {
           ...(s.worktreePath ? candidateRoots(s.worktreePath) : [])
         ])];
         for (const root of roots) {
-          const folderName = root.replace(/\//g, '-');
+          const folderName = String(root || '').replace(/[\\/]/g, '-');
           const convPath = path.join(
-            process.env.HOME, '.claude', 'projects', folderName,
+            HOME_DIR, '.claude', 'projects', folderName,
             `${s.lastConversationId}.jsonl`
           );
           try {
@@ -364,8 +366,8 @@ class SessionRecoveryService {
 
     for (const checkPath of pathsToCheck) {
       // Convert path to Claude's folder format: $HOME/foo → -home-user-foo
-      const folderName = checkPath.replace(/\//g, '-');
-      const projectsDir = path.join(process.env.HOME, '.claude', 'projects', folderName);
+      const folderName = String(checkPath || '').replace(/[\\/]/g, '-');
+      const projectsDir = path.join(HOME_DIR, '.claude', 'projects', folderName);
 
       try {
         if (!fsSync.existsSync(projectsDir)) {

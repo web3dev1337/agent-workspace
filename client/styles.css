@@ -3143,6 +3143,18 @@ header h1 {
   font-size: 0.9rem;
 }
 
+.diagnostics-output {
+  margin: 0;
+  padding: 10px;
+  max-height: 280px;
+  overflow: auto;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  line-height: 1.35;
+}
+
 .settings-toolbar input {
   flex: 1 1 auto;
   min-width: 0;

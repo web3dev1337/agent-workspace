@@ -1367,6 +1367,7 @@ class ClaudeOrchestrator {
 
 		    // Settings UI helpers: search + section jump so the panel doesn’t feel like an endless scroll.
 		    this.setupSettingsPanelNavigation();
+		    this.setupDiagnosticsPanel();
 
 	    const tasksThemeSelect = document.getElementById('tasks-theme-select');
 	    if (tasksThemeSelect) {
@@ -7112,6 +7113,63 @@ class ClaudeOrchestrator {
 	        applyFilter();
 	      });
 	    }
+	  }
+
+	  setupDiagnosticsPanel() {
+	    const btn = document.getElementById('diagnostics-refresh');
+	    const out = document.getElementById('diagnostics-output');
+	    const statusEl = document.getElementById('diagnostics-status');
+	    if (!btn || !out) return;
+
+	    const render = (data) => {
+	      if (!data) return;
+	      const lines = [];
+	      const platform = String(data.platform || '');
+	      lines.push(`platform: ${platform || 'unknown'}`);
+	      if (data?.env) {
+	        lines.push(`homeDir: ${String(data.env.homeDir || '')}`);
+	        if (data.env.USERPROFILE) lines.push(`USERPROFILE: ${String(data.env.USERPROFILE)}`);
+	      }
+	      if (data?.nodePty) {
+	        lines.push(`node-pty: ${data.nodePty.ok ? 'ok' : `missing (${String(data.nodePty.error || 'error')})`}`);
+	      }
+	      lines.push('');
+
+	      const tools = Array.isArray(data.tools) ? data.tools : [];
+	      tools.forEach((t) => {
+	        const name = String(t?.name || t?.id || 'tool');
+	        if (t?.ok) {
+	          const version = String(t?.version || '').trim();
+	          lines.push(`ok   ${name}${version ? `: ${version}` : ''}`);
+	        } else {
+	          const err = String(t?.error || t?.code || 'missing');
+	          lines.push(`fail ${name}: ${err}`);
+	        }
+	      });
+
+	      out.textContent = lines.join('\n').trim() || 'No diagnostics available.';
+	    };
+
+	    const refresh = async () => {
+	      btn.disabled = true;
+	      if (statusEl) statusEl.textContent = 'Loading…';
+	      try {
+	        const res = await fetch('/api/diagnostics');
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok || data?.ok === false) {
+	          throw new Error(String(data?.error || `HTTP ${res.status}`));
+	        }
+	        render(data);
+	        if (statusEl) statusEl.textContent = `Updated: ${String(data?.generatedAt || '')}`;
+	      } catch (err) {
+	        out.textContent = `Failed to load diagnostics: ${String(err?.message || err)}`;
+	        if (statusEl) statusEl.textContent = '';
+	      } finally {
+	        btn.disabled = false;
+	      }
+	    };
+
+	    btn.addEventListener('click', refresh);
 	  }
 
 	  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {

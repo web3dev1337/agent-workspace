@@ -11,7 +11,7 @@
  * - small: ~4s, 500MB, much better
  */
 
-const { spawn, execSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -25,6 +25,25 @@ class WhisperService {
     this.useGpu = process.env.WHISPER_GPU !== 'false';
 
     this.checkAvailability();
+  }
+
+  commandExists(cmd) {
+    const name = String(cmd || '').trim();
+    if (!name) return false;
+    try {
+      if (process.platform === 'win32') {
+        const res = spawnSync('where.exe', [name], { stdio: 'ignore', windowsHide: true });
+        return res.status === 0;
+      }
+      const res = spawnSync('which', [name], { stdio: 'ignore' });
+      return res.status === 0;
+    } catch {
+      return false;
+    }
+  }
+
+  pythonCommandCandidates() {
+    return process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python'];
   }
 
   /**
@@ -57,7 +76,7 @@ class WhisperService {
 
     // Check for openai-whisper Python package
     try {
-      execSync('which whisper', { stdio: 'ignore' });
+      if (!this.commandExists('whisper')) throw new Error('whisper not found');
       this.backend = 'openai-whisper';
       console.log('[Whisper] Using openai-whisper (Python)');
       return;
@@ -66,13 +85,17 @@ class WhisperService {
     }
 
     // Check for faster-whisper
-    try {
-      execSync('python3 -c "import faster_whisper"', { stdio: 'ignore' });
-      this.backend = 'faster-whisper';
-      console.log('[Whisper] Using faster-whisper (Python, GPU optimized)');
-      return;
-    } catch (e) {
-      // Not found
+    for (const py of this.pythonCommandCandidates()) {
+      try {
+        const res = spawnSync(py, ['-c', 'import faster_whisper'], { stdio: 'ignore', windowsHide: true });
+        if (res.status === 0) {
+          this.backend = 'faster-whisper';
+          console.log('[Whisper] Using faster-whisper (Python, GPU optimized)');
+          return;
+        }
+      } catch {
+        // ignore
+      }
     }
 
     console.log('[Whisper] No Whisper backend available. Install whisper.cpp or openai-whisper.');
@@ -143,7 +166,13 @@ class WhisperService {
       // Convert to WAV if needed (16kHz mono for whisper)
       if (!audioPath.endsWith('.wav')) {
         try {
-          execSync(`ffmpeg -y -i "${audioPath}" -ar 16000 -ac 1 -c:a pcm_s16le "${wavPath}" 2>/dev/null`);
+          const res = spawnSync('ffmpeg', ['-y', '-i', audioPath, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wavPath], {
+            stdio: 'ignore',
+            windowsHide: true
+          });
+          if (res.status !== 0) {
+            throw new Error(`ffmpeg exit ${res.status}`);
+          }
         } catch (e) {
           return reject(new Error('Failed to convert audio to WAV. Install ffmpeg.'));
         }
@@ -221,12 +250,13 @@ class WhisperService {
    */
   async transcribeWithOpenAIWhisper(audioPath) {
     return new Promise((resolve, reject) => {
+      const tmpDir = os.tmpdir();
       const proc = spawn('whisper', [
         audioPath,
         '--model', this.model,
         '--language', 'en',
         '--output_format', 'txt',
-        '--output_dir', '/tmp',
+        '--output_dir', tmpDir,
       ]);
 
       let stderr = '';
@@ -239,7 +269,7 @@ class WhisperService {
 
         // Read output file
         const baseName = path.basename(audioPath, path.extname(audioPath));
-        const outputPath = `/tmp/${baseName}.txt`;
+        const outputPath = path.join(tmpDir, `${baseName}.txt`);
 
         if (fs.existsSync(outputPath)) {
           const text = fs.readFileSync(outputPath, 'utf-8').trim();
@@ -265,7 +295,8 @@ segments, info = model.transcribe("${audioPath}", language="en")
 print(" ".join([s.text for s in segments]).strip())
 `;
 
-      const proc = spawn('python3', ['-c', script]);
+      const pythonCmd = this.pythonCommandCandidates().find((c) => this.commandExists(c)) || (process.platform === 'win32' ? 'python' : 'python3');
+      const proc = spawn(pythonCmd, ['-c', script]);
       let stdout = '';
       let stderr = '';
 

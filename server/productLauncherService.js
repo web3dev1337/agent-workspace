@@ -25,6 +25,11 @@ const ORCHESTRATOR_MASTER_PATH = path.resolve(
 );
 const DEFAULT_ALLOWED_ROOT = path.resolve(os.homedir(), 'GitHub');
 
+// Helper function to get the appropriate shell for the platform
+function getDefaultShell() {
+  return process.platform === 'win32' ? 'powershell.exe' : 'bash';
+}
+
 class ProductLauncherService {
   constructor() {
     this.running = new Map(); // productId -> { pid, startedAt, logPath }
@@ -60,7 +65,12 @@ class ProductLauncherService {
     const logPath = this.createLogFile(product.id);
     const fd = fs.openSync(logPath, 'a');
 
-    const child = spawn('bash', ['-lc', product.startCommand], {
+    const shell = getDefaultShell();
+    const shellArgs = process.platform === 'win32'
+      ? ['-Command', product.startCommand]
+      : ['-lc', product.startCommand];
+
+    const child = spawn(shell, shellArgs, {
       cwd: masterPath,
       env: {
         ...process.env,
