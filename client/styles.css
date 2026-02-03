@@ -1546,6 +1546,30 @@ header h1 {
   grid-template-columns: minmax(360px, 0.35fr) minmax(0, 1fr);
 }
 
+/* Review preset (3-column view): prioritize the diff, keep terminals/meta stacked on the right.
+   This is intended to reduce vertical scrolling and make the embedded diff dominate. */
+.review-console-grid[data-review-preset="review"]:not(.one-column):not(.two-column) {
+  grid-template-columns: minmax(0, 2fr) minmax(520px, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "diff terminals"
+    "diff meta";
+}
+
+.review-console-grid[data-review-preset="review"]:not(.one-column):not(.two-column) .review-console-col-terminals {
+  grid-area: terminals;
+  overflow: hidden;
+}
+
+.review-console-grid[data-review-preset="review"]:not(.one-column):not(.two-column) .review-console-col-meta {
+  grid-area: meta;
+  overflow: hidden;
+}
+
+.review-console-grid[data-review-preset="review"]:not(.one-column):not(.two-column) .review-console-col-diff {
+  grid-area: diff;
+}
+
 .review-console-col,
 .review-console-left {
   display: flex;

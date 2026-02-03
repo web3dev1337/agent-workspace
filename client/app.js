@@ -9100,15 +9100,17 @@ class ClaudeOrchestrator {
 
 		    this.restoreReviewConsoleDockedTerminals();
 
-		    // If Queue is open, capture the current filtered PR list so Review Console can navigate it.
-		    const normUrl = (u) => String(u || '').trim().replace(/\/+$/, '');
-		    const reviewTaskId = String(t.id || this.getPRTaskIdFromUrl(prUrl) || '').trim();
-		    try {
-		      const queueOpen = !!(this.queuePanelApi?.isOpen?.());
-		      if (queueOpen) {
-		        const summary = this.queuePanelApi?.getVisibleTasksSummary?.({ limit: 200 });
-		        const rawItems = Array.isArray(summary) ? summary : [];
-		        const items = rawItems
+			    // If Queue is open, capture the current filtered PR list so Review Console can navigate it.
+			    const normUrl = (u) => String(u || '').trim().replace(/\/+$/, '');
+			    const reviewTaskId = String(t.id || this.getPRTaskIdFromUrl(prUrl) || '').trim();
+			    let openedFromQueue = false;
+			    try {
+			      const queueOpen = !!(this.queuePanelApi?.isOpen?.());
+			      openedFromQueue = queueOpen;
+			      if (queueOpen) {
+			        const summary = this.queuePanelApi?.getVisibleTasksSummary?.({ limit: 200 });
+			        const rawItems = Array.isArray(summary) ? summary : [];
+			        const items = rawItems
 		          .filter((x) => x && String(x.kind || '').trim() === 'pr')
 		          .map((x) => ({
 		            id: String(x.id || '').trim() || null,
@@ -9165,11 +9167,11 @@ class ClaudeOrchestrator {
 
 	    const modal = this.ensureWorktreeInspectorModal();
 	    modal.classList.remove('hidden');
-	    modal.classList.remove('docked');
-	    modal.classList.remove('fullscreen');
-	    const rcCfgInit = this.getReviewConsoleConfig();
-	    if (rcCfgInit?.fullscreen !== false) modal.classList.add('fullscreen');
-	    else modal.classList.add('docked');
+		    modal.classList.remove('docked');
+		    modal.classList.remove('fullscreen');
+		    const rcCfgInit = this.getReviewConsoleConfig();
+		    if (openedFromQueue || rcCfgInit?.fullscreen !== false) modal.classList.add('fullscreen');
+		    else modal.classList.add('docked');
 
     const titleEl = modal.querySelector('#worktree-inspector-title');
     if (titleEl) {
@@ -9297,7 +9299,7 @@ class ClaudeOrchestrator {
 				      const rcCfg = this.getReviewConsoleConfig();
 				      let currentPreset = String(rcCfg?.preset || 'default').trim().toLowerCase();
 				      if (!['default', 'review', 'deep', 'code', 'terminals', 'custom'].includes(currentPreset)) currentPreset = 'default';
-			      let currentFullscreen = rcCfg?.fullscreen !== false;
+				      let currentFullscreen = openedFromQueue || rcCfg?.fullscreen !== false;
 			      const currentSections = {
 			        terminals: rcCfg?.sections?.terminals !== false,
 			        files: rcCfg?.sections?.files !== false,
@@ -9417,7 +9419,7 @@ class ClaudeOrchestrator {
 
 			        ${layoutPanel}
 
-					        <div class="review-console-grid" data-rc-grid="true">
+					        <div class="review-console-grid" data-rc-grid="true" data-review-preset="${escapeHtml(currentPreset)}">
 					          <div class="review-console-col review-console-col-terminals ${terminalsColumnHiddenClass}" data-rc-column="terminals">
 					            ${matchingSessionIds.length ? `
 					              <div class="worktree-inspector-panel worktree-inspector-terminals-panel ${terminalsPanelHiddenClass}" data-rc-panel="terminals">
@@ -9572,15 +9574,21 @@ class ClaudeOrchestrator {
 	        if (currentFullscreen) modal.classList.add('fullscreen');
 	        else modal.classList.add('docked');
 
-	        if (terminalsPanelEl) terminalsPanelEl.classList.toggle('hidden', currentSections.terminals === false || !matchingSessionIds.length);
-	        if (filesPanelEl) filesPanelEl.classList.toggle('hidden', currentSections.files === false);
-	        if (commitsPanelEl) commitsPanelEl.classList.toggle('hidden', currentSections.commits === false);
-	        if (diffPanelEl) diffPanelEl.classList.toggle('hidden', currentSections.diff === false);
-	        updateGrid();
+		        if (terminalsPanelEl) terminalsPanelEl.classList.toggle('hidden', currentSections.terminals === false || !matchingSessionIds.length);
+		        if (filesPanelEl) filesPanelEl.classList.toggle('hidden', currentSections.files === false);
+		        if (commitsPanelEl) commitsPanelEl.classList.toggle('hidden', currentSections.commits === false);
+		        if (diffPanelEl) diffPanelEl.classList.toggle('hidden', currentSections.diff === false);
+		        updateGrid();
 
-	        bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
-	          const key = String(btn?.dataset?.reviewPreset || '').trim().toLowerCase();
-	          const active = key && key === currentPreset;
+		        try {
+		          gridEl?.setAttribute?.('data-review-preset', currentPreset);
+		        } catch {
+		          // ignore
+		        }
+
+		        bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
+		          const key = String(btn?.dataset?.reviewPreset || '').trim().toLowerCase();
+		          const active = key && key === currentPreset;
 	          btn.classList.toggle('active', active);
 	          btn.setAttribute('aria-pressed', active ? 'true' : 'false');
 	        });
