@@ -94,7 +94,14 @@ function main() {
 
   if (installProd) {
     const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    run(npmCmd, ['ci', '--omit=dev'], { cwd: outDir });
+    try {
+      run(npmCmd, ['ci', '--omit=dev'], { cwd: outDir });
+    } catch (error) {
+      // Some Windows setups have issues with `npm ci` for native modules.
+      // Fall back to `npm install` so contributors can still build installers.
+      console.warn('[tauri] NOTE: npm ci failed, falling back to npm install --omit=dev');
+      run(npmCmd, ['install', '--omit=dev'], { cwd: outDir });
+    }
   }
 
   const marker = path.join(outDir, 'server', 'index.js');

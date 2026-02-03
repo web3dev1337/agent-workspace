@@ -432,6 +432,10 @@ class PortRegistry {
       // Load custom labels
       const customLabels = await this.loadPortLabels();
 
+      if (process.platform === 'win32') {
+        return await this.scanAllPortsWindows(customLabels);
+      }
+
       // Use ss (socket statistics) to get listening ports
       const { stdout } = await execAsync('ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null', { timeout: 5000 });
       const ports = [];
@@ -499,6 +503,79 @@ class PortRegistry {
       logger.error('Failed to scan ports', { error: error.message });
       return [];
     }
+  }
+
+  async scanAllPortsWindows(customLabels = {}) {
+    try {
+      const { stdout } = await execAsync('netstat -ano -p tcp', { timeout: 8000, maxBuffer: 10 * 1024 * 1024 });
+      const lines = String(stdout || '').split('\n');
+
+      const portToPid = new Map();
+      for (const line of lines) {
+        // Example:
+        // TCP    0.0.0.0:3000     0.0.0.0:0     LISTENING       12345
+        const m = line.match(/^\s*TCP\s+(\S+)\s+(\S+)\s+LISTENING\s+(\d+)\s*$/i);
+        if (!m) continue;
+
+        const local = m[1];
+        const pid = Number(m[3]);
+        if (!Number.isFinite(pid) || pid <= 0) continue;
+
+        const portMatch = local.match(/:(\d+)\s*$/);
+        if (!portMatch) continue;
+        const port = Number(portMatch[1]);
+        if (!Number.isFinite(port) || port < 1000) continue;
+
+        if (!portToPid.has(port)) portToPid.set(port, pid);
+      }
+
+      const pidToName = await this.getWindowsProcessNameMap();
+
+      const ports = [];
+      for (const [port, pid] of portToPid.entries()) {
+        const processName = pidToName.get(pid) || 'unknown';
+        const projectInfo = null;
+        const serviceInfo = this.identifyService(port, processName, projectInfo);
+        const customLabel = customLabels[port];
+
+        ports.push({
+          port,
+          pid,
+          processName,
+          cwd: null,
+          project: projectInfo,
+          customLabel,
+          ...serviceInfo,
+          name: customLabel || serviceInfo.name,
+          url: `http://localhost:${port}`
+        });
+      }
+
+      ports.sort((a, b) => a.port - b.port);
+      return ports;
+    } catch (error) {
+      logger.error('Failed to scan ports (windows)', { error: error.message });
+      return [];
+    }
+  }
+
+  async getWindowsProcessNameMap() {
+    const map = new Map();
+    try {
+      const { stdout } = await execAsync('tasklist /FO CSV /NH', { timeout: 8000, maxBuffer: 10 * 1024 * 1024 });
+      const lines = String(stdout || '').split(/\r?\n/).filter(Boolean);
+      for (const line of lines) {
+        const m = line.match(/^"([^"]*)","([^"]*)",/);
+        if (!m) continue;
+        const name = String(m[1] || '').trim();
+        const pid = Number(String(m[2] || '').trim());
+        if (!name || !Number.isFinite(pid) || pid <= 0) continue;
+        map.set(pid, name);
+      }
+    } catch (error) {
+      logger.debug('tasklist failed (windows)', { error: error.message });
+    }
+    return map;
   }
 
   /**

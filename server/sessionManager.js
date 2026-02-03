@@ -14,6 +14,13 @@ const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 const { UserSettingsService } = require('./userSettingsService');
 const { WorktreeHelper } = require('./worktreeHelper');
 const sessionRecoveryService = require('./sessionRecoveryService');
+const {
+  getShellKind,
+  quoteForShell,
+  buildEcho,
+  buildShellCommand,
+  resolveCwd
+} = require('./utils/shellCommand');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -359,8 +366,8 @@ class SessionManager extends EventEmitter {
                   `cd "${worktree.path}"`,
                   `echo "=== Server Terminal for ${terminal.repository.name}/${terminal.worktree} ==="`,
                   `echo "Directory: ${worktree.path}"`,
-                  process.platform === 'win32'
-                    ? `powershell -Command "git branch --show-current 2>$null; if(!$?) { echo 'unknown' }"`
+                  getShellKind() === 'powershell'
+                    ? `$b = git branch --show-current 2>$null; if (-not $b) { $b = 'unknown' }; Write-Output "Branch: $b"`
                     : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
                   `echo ""`,
                   `echo "Ready to run: bun index.ts"`,
@@ -426,8 +433,8 @@ class SessionManager extends EventEmitter {
                 `cd "${worktree.path}"`,
                 `echo "=== Server Terminal for ${worktree.id} ==="`,
                 `echo "Directory: ${worktree.path}"`,
-                process.platform === 'win32'
-                  ? `powershell -Command "git branch --show-current 2>$null; if(!$?) { echo 'unknown' }"`
+                getShellKind() === 'powershell'
+                  ? `$b = git branch --show-current 2>$null; if (-not $b) { $b = 'unknown' }; Write-Output "Branch: $b"`
                   : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
                 `echo ""`,
                 `echo "Ready to run: bun index.ts"`,
@@ -1540,7 +1547,7 @@ class SessionManager extends EventEmitter {
    */
   pathToFolderName(p) {
     if (!p) return '';
-    return p.replace(/\//g, '-');
+    return String(p).replace(/[\\/]/g, '-');
   }
 
   /**
@@ -1691,7 +1698,15 @@ class SessionManager extends EventEmitter {
     }
     
     try {
-      session.pty.write(data);
+      let payload = data;
+      // PowerShell terminals need CRLF to reliably execute commands written programmatically.
+      if (typeof payload === 'string') {
+        const shellKind = this.getShellKindForSession(sessionId);
+        if (shellKind === 'powershell') {
+          payload = payload.replace(/\r?\n/g, '\r\n');
+        }
+      }
+      session.pty.write(payload);
       session.lastActivity = Date.now();
       
       // Reset inactivity timer on any user input to keep the session alive
@@ -2291,20 +2306,41 @@ class SessionManager extends EventEmitter {
   checkProcessLimit(session) {
     if (!session.pty || !session.pty.pid) return;
     
-    // Use pgrep to count child processes
-    const { exec } = require('child_process');
-    exec(`pgrep -P ${session.pty.pid} | wc -l`, (err, stdout) => {
-      if (!err) {
-        const processCount = parseInt(stdout.trim());
+    const pid = Number(session.pty.pid);
+    if (!Number.isFinite(pid) || pid <= 0) return;
+
+    if (process.platform === 'win32') {
+      const { execFile } = require('child_process');
+      const psCmd = `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${pid}").Count`;
+      execFile('powershell.exe', ['-NoProfile', '-Command', psCmd], { timeout: 2000 }, (err, stdout) => {
+        if (err) return;
+        const processCount = parseInt(String(stdout || '').trim(), 10);
+        if (!Number.isFinite(processCount)) return;
         if (processCount > this.maxProcessesPerSession) {
-          logger.error('Process limit exceeded', { 
+          logger.error('Process limit exceeded', {
             sessionId: session.id,
             processCount,
             limit: this.maxProcessesPerSession
           });
-          
           this.terminateSession(session.id);
         }
+      });
+      return;
+    }
+
+    // POSIX: use pgrep to count child processes
+    const { exec } = require('child_process');
+    exec(`pgrep -P ${pid} | wc -l`, (err, stdout) => {
+      if (err) return;
+      const processCount = parseInt(String(stdout || '').trim(), 10);
+      if (!Number.isFinite(processCount)) return;
+      if (processCount > this.maxProcessesPerSession) {
+        logger.error('Process limit exceeded', { 
+          sessionId: session.id,
+          processCount,
+          limit: this.maxProcessesPerSession
+        });
+        this.terminateSession(session.id);
       }
     });
   }
@@ -2422,8 +2458,8 @@ class SessionManager extends EventEmitter {
         `cd "${config.cwd}"`,
         `echo "=== Server Terminal for ${worktreeLabel} ==="`,
         `echo "Directory: ${config.cwd}"`,
-        process.platform === 'win32'
-          ? `powershell -Command "git branch --show-current 2>$null; if(!$?) { echo 'unknown' }"`
+        getShellKind() === 'powershell'
+          ? `$b = git branch --show-current 2>$null; if (-not $b) { $b = 'unknown' }; Write-Output "Branch: $b"`
           : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
         `echo ""`
       ]);
@@ -2457,9 +2493,29 @@ class SessionManager extends EventEmitter {
     return normalized === 'zai' ? 'zai' : 'anthropic';
   }
 
-  escapeShellValue(value) {
-    if (value === null || value === undefined) return "''";
-    return `'${String(value).replace(/'/g, `'\\''`)}'`;
+  getShellKindForSession(sessionId) {
+    const session = this.getSessionById(sessionId);
+    const raw = String(session?.config?.command || '').toLowerCase();
+    if (raw.includes('powershell')) return 'powershell';
+    return getShellKind();
+  }
+
+  buildClaudeCommand({ shellKind, mode, resumeId, skipPermissions }) {
+    let cmd = 'claude';
+
+    if (mode === 'continue') {
+      cmd = 'claude --continue';
+    } else if (mode === 'resume') {
+      cmd = resumeId
+        ? `claude --resume ${quoteForShell(resumeId, shellKind)}`
+        : 'claude --resume';
+    }
+
+    if (skipPermissions) {
+      cmd += ' --dangerously-skip-permissions';
+    }
+
+    return cmd;
   }
 
   getZaiEnvOverrides() {
@@ -2480,25 +2536,25 @@ class SessionManager extends EventEmitter {
   resolveClaudeCommand(claudeCommand, provider) {
     const normalizedProvider = this.normalizeClaudeProvider(provider);
     if (normalizedProvider !== 'zai') {
-      return { command: claudeCommand, provider: 'anthropic' };
+      return { command: claudeCommand, env: null, provider: 'anthropic' };
     }
 
     const zaiEnv = this.getZaiEnvOverrides();
     if (!zaiEnv) {
       return {
         command: claudeCommand,
+        env: null,
         provider: 'anthropic',
         warning: 'Z.ai provider selected but no ZAI_API_KEY or ZAI_ANTHROPIC_AUTH_TOKEN set.'
       };
     }
 
-    const envParts = [
-      `ANTHROPIC_BASE_URL=${this.escapeShellValue(zaiEnv.baseUrl)}`,
-      `ANTHROPIC_AUTH_TOKEN=${this.escapeShellValue(zaiEnv.authToken)}`
-    ];
-
     return {
-      command: `${envParts.join(' ')} ${claudeCommand}`,
+      command: claudeCommand,
+      env: {
+        ANTHROPIC_BASE_URL: zaiEnv.baseUrl,
+        ANTHROPIC_AUTH_TOKEN: zaiEnv.authToken
+      },
       provider: 'zai'
     };
   }
@@ -2536,34 +2592,30 @@ class SessionManager extends EventEmitter {
       finalOptions 
     });
     
-    // Build Claude command based on final options
-    let claudeCommand = 'claude';
-    
-    if (finalOptions.mode === 'continue') {
-      claudeCommand = 'claude --continue';
-    } else if (finalOptions.mode === 'resume') {
-      claudeCommand = finalOptions.resumeId
-        ? `claude --resume ${this.escapeShellValue(finalOptions.resumeId)}`
-        : 'claude --resume';
-    }
-    
-    if (finalOptions.skipPermissions) {
-      claudeCommand += ' --dangerously-skip-permissions';
-    }
+    const shellKind = this.getShellKindForSession(sessionId);
+    const claudeCommand = this.buildClaudeCommand({
+      shellKind,
+      mode: finalOptions.mode,
+      resumeId: finalOptions.resumeId,
+      skipPermissions: !!finalOptions.skipPermissions
+    });
 
     const resolvedCommand = this.resolveClaudeCommand(claudeCommand, finalOptions.provider);
     if (resolvedCommand.warning) {
-      this.writeToSession(sessionId, `echo ${this.escapeShellValue(resolvedCommand.warning)}\n`);
+      this.writeToSession(sessionId, `${buildEcho(shellKind, resolvedCommand.warning)}\n`);
     }
     
     // Write the command to the terminal
-    const commandToRun = finalOptions.cwd
-      ? `cd ${this.escapeShellValue(finalOptions.cwd)} && ${resolvedCommand.command}\n`
-      : `${resolvedCommand.command}\n`;
+    const commandToRun = buildShellCommand({
+      shellKind,
+      cwd: finalOptions.cwd || null,
+      env: resolvedCommand.env || null,
+      command: resolvedCommand.command
+    });
     logger.info('Executing Claude command', { sessionId, command: resolvedCommand.command, provider: resolvedCommand.provider });
     
     // Send the command to the terminal
-    this.writeToSession(sessionId, commandToRun);
+    this.writeToSession(sessionId, `${commandToRun}\n`);
     
     // Emit event to notify UI that Claude is starting
     this.io.emit('claude-started', { sessionId, options: finalOptions });
@@ -2604,26 +2656,42 @@ class SessionManager extends EventEmitter {
     });
 
     try {
-      // Build command using AgentManager (agent-agnostic config object).
-      // This allows passing `resumeId`, model settings, etc. consistently.
-      let command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, finalConfig);
+      const shellKind = this.getShellKindForSession(sessionId);
+
+      // Build command using AgentManager (agent-agnostic config object),
+      // but special-case Claude so resume ids + env overrides work cross-platform.
+      let command = '';
+      let commandEnv = null;
+
       if (finalConfig.agentId === 'claude') {
         const effectiveSettings = this.userSettings.getEffectiveSettings(sessionId);
         const provider = finalConfig.provider || effectiveSettings.claudeFlags.provider || 'anthropic';
-        const resolvedCommand = this.resolveClaudeCommand(command, provider);
+        const skipPermissions = Array.isArray(finalConfig.flags) && finalConfig.flags.includes('skipPermissions');
+        const claudeCmd = this.buildClaudeCommand({
+          shellKind,
+          mode: finalConfig.mode,
+          resumeId: finalConfig.resumeId,
+          skipPermissions
+        });
+        const resolvedCommand = this.resolveClaudeCommand(claudeCmd, provider);
         if (resolvedCommand.warning) {
-          this.writeToSession(sessionId, `echo ${this.escapeShellValue(resolvedCommand.warning)}\n`);
+          this.writeToSession(sessionId, `${buildEcho(shellKind, resolvedCommand.warning)}\n`);
         }
         command = resolvedCommand.command;
+        commandEnv = resolvedCommand.env || null;
         logger.info('Executing agent command', { sessionId, command, provider: resolvedCommand.provider });
       } else {
+        command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, finalConfig);
         logger.info('Executing agent command', { sessionId, command });
       }
 
       // Send the command to the terminal
-      const commandToRun = finalConfig.cwd
-        ? `cd ${this.escapeShellValue(finalConfig.cwd)} && ${command}`
-        : command;
+      const commandToRun = buildShellCommand({
+        shellKind,
+        cwd: finalConfig.cwd || null,
+        env: commandEnv,
+        command
+      });
       this.writeToSession(sessionId, `${commandToRun}\n`);
 
       // Emit event to notify UI that agent is starting
