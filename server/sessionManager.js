@@ -32,6 +32,24 @@ if (ptyLoadError) {
   });
 }
 
+// Helper function to get the appropriate shell for the platform
+function getDefaultShell() {
+  return process.platform === 'win32' ? 'powershell.exe' : 'bash';
+}
+
+// Helper function to build shell args for executing commands
+function buildShellArgs(commands) {
+  if (process.platform === 'win32') {
+    // PowerShell: join commands with ; and use -Command
+    const joined = Array.isArray(commands) ? commands.join('; ') : commands.replace(/&&/g, ';');
+    return ['-Command', joined];
+  } else {
+    // Bash: join commands with && and use -c
+    const joined = Array.isArray(commands) ? commands.join(' && ') : commands;
+    return ['-c', joined];
+  }
+}
+
 class SessionManager extends EventEmitter {
   constructor(io, agentManager) {
     super();
@@ -316,19 +334,36 @@ class SessionManager extends EventEmitter {
             const timeoutMs = Number.isFinite(terminal.timeoutMs) ? terminal.timeoutMs : undefined;
 
             if (terminal.terminalType === 'claude') {
-              command = 'bash';
-              args = ['-c', startCommand
-                ? `cd "${worktree.path}" && exec ${startCommand}`
-                : `cd "${worktree.path}" && exec bash`
-              ];
+              command = getDefaultShell();
+              args = startCommand
+                ? buildShellArgs([`cd "${worktree.path}"`, startCommand])
+                : buildShellArgs(`cd "${worktree.path}"`);
             } else {
               // Server terminal
-              command = 'bash';
+              command = getDefaultShell();
               const header = `=== ${terminal.repository.name}/${terminal.worktree} (${terminal.id}) ===`;
-              args = ['-c', startCommand
-                ? `cd "${worktree.path}" && echo "${header}" && echo "Directory: $(pwd)" && echo "" && exec ${startCommand}`
-                : `cd "${worktree.path}" && echo "=== Server Terminal for ${terminal.repository.name}/${terminal.worktree} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`
-              ];
+              if (startCommand) {
+                args = buildShellArgs([
+                  `cd "${worktree.path}"`,
+                  `echo "${header}"`,
+                  `echo "Directory: ${worktree.path}"`,
+                  `echo ""`,
+                  startCommand
+                ]);
+              } else {
+                args = buildShellArgs([
+                  `cd "${worktree.path}"`,
+                  `echo "=== Server Terminal for ${terminal.repository.name}/${terminal.worktree} ==="`,
+                  `echo "Directory: ${worktree.path}"`,
+                  process.platform === 'win32'
+                    ? `powershell -Command "git branch --show-current 2>$null; if(!$?) { echo 'unknown' }"`
+                    : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
+                  `echo ""`,
+                  `echo "Ready to run: bun index.ts"`,
+                  `echo "Available commands: bun, npm, node"`,
+                  `echo ""`
+                ]);
+              }
             }
 
             this.createSession(sessionId, {
@@ -360,8 +395,8 @@ class SessionManager extends EventEmitter {
               return;
             }
             this.createSession(sessionId, {
-              command: 'bash',
-              args: ['-c', `cd "${worktree.path}" && exec bash`],
+              command: getDefaultShell(),
+              args: buildShellArgs(`cd "${worktree.path}"`),
               cwd: worktree.path,
               type: 'claude',
               worktreeId: worktree.id
@@ -382,8 +417,19 @@ class SessionManager extends EventEmitter {
               return;
             }
             this.createSession(sessionId, {
-              command: 'bash',
-              args: ['-c', `cd "${worktree.path}" && echo "=== Server Terminal for ${worktree.id} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && echo "Ready to run: bun index.ts" && echo "Available commands: bun, npm, node" && echo "" && exec bash`],
+              command: getDefaultShell(),
+              args: buildShellArgs([
+                `cd "${worktree.path}"`,
+                `echo "=== Server Terminal for ${worktree.id} ==="`,
+                `echo "Directory: ${worktree.path}"`,
+                process.platform === 'win32'
+                  ? `powershell -Command "git branch --show-current 2>$null; if(!$?) { echo 'unknown' }"`
+                  : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
+                `echo ""`,
+                `echo "Ready to run: bun index.ts"`,
+                `echo "Available commands: bun, npm, node"`,
+                `echo ""`
+              ]),
               cwd: worktree.path,
               type: 'server',
               worktreeId: worktree.id
@@ -825,8 +871,8 @@ class SessionManager extends EventEmitter {
               // User can then run 'claude' command again if desired
               const restartConfig = {
                 ...config,
-                command: 'bash',
-                args: ['-c', `cd "${config.cwd}" && echo "Claude session ended. Terminal ready for commands." && echo "Type 'claude' to start a new Claude session." && echo "" && exec bash`]
+                command: getDefaultShell(),
+                args: buildShellArgs(`cd "${config.cwd}" && echo "Claude session ended. Terminal ready for commands." && echo "Type 'claude' to start a new Claude session." && echo ""`)
               };
               
               this.createSession(sessionId, restartConfig);
@@ -2098,8 +2144,8 @@ class SessionManager extends EventEmitter {
     // Create Claude session
     try {
       this.createSession(claudeSessionId, {
-        command: 'bash',
-        args: ['-c', `cd "${worktreePath}" && exec bash`],
+        command: getDefaultShell(),
+        args: buildShellArgs(`cd "${worktreePath}"`),
         cwd: worktreePath,
         type: 'claude',
         worktreeId: worktreeId,
@@ -2129,8 +2175,16 @@ class SessionManager extends EventEmitter {
         : `=== Server Terminal for ${worktreeId} ===`;
 
       this.createSession(serverSessionId, {
-        command: 'bash',
-        args: ['-c', `cd "${worktreePath}" && echo "${serverWelcome}" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && exec bash`],
+        command: getDefaultShell(),
+        args: buildShellArgs([
+          `cd "${worktreePath}"`,
+          `echo "${serverWelcome}"`,
+          `echo "Directory: ${worktreePath}"`,
+          process.platform === 'win32'
+            ? `powershell -Command "git branch --show-current 2>$null; if(!$?) { echo 'unknown' }"`
+            : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
+          `echo ""`
+        ]),
         cwd: worktreePath,
         type: 'server',
         worktreeId: worktreeId,
@@ -2340,11 +2394,11 @@ class SessionManager extends EventEmitter {
     // Save config before terminating
     const config = { ...session.config };
 
-    // For Claude sessions, restart as a clean bash shell
+    // For Claude sessions, restart as a clean shell
     // This allows user to use the agent selection UI to choose how to start
     if (config.type === 'claude') {
-      config.command = 'bash';
-      config.args = ['-c', `cd "${config.cwd}" && exec bash`];
+      config.command = getDefaultShell();
+      config.args = buildShellArgs(`cd "${config.cwd}"`);
     }
 
     // For server sessions, restart with welcome message
@@ -2352,8 +2406,16 @@ class SessionManager extends EventEmitter {
       const worktreeLabel = config.repositoryName
         ? `${config.repositoryName}/${config.worktreeId}`
         : config.worktreeId;
-      config.command = 'bash';
-      config.args = ['-c', `cd "${config.cwd}" && echo "=== Server Terminal for ${worktreeLabel} ===" && echo "Directory: $(pwd)" && echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')" && echo "" && exec bash`];
+      config.command = getDefaultShell();
+      config.args = buildShellArgs([
+        `cd "${config.cwd}"`,
+        `echo "=== Server Terminal for ${worktreeLabel} ==="`,
+        `echo "Directory: ${config.cwd}"`,
+        process.platform === 'win32'
+          ? `powershell -Command "git branch --show-current 2>$null; if(!$?) { echo 'unknown' }"`
+          : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
+        `echo ""`
+      ]);
     }
 
     // Terminate existing session

@@ -16,6 +16,11 @@ const logger = winston.createLogger({
   ]
 });
 
+// Helper function to get the appropriate shell for the platform
+function getDefaultShell() {
+  return process.platform === 'win32' ? 'powershell.exe' : 'bash';
+}
+
 class DiffViewerService {
   constructor() {
     this.diffViewerRoot = path.join(__dirname, '..', 'diff-viewer');
@@ -248,7 +253,8 @@ class DiffViewerService {
     let child = null;
     if (process.platform !== 'win32' && fs.existsSync(scriptPath)) {
       logger.info('Starting diff viewer via start-diff-viewer.sh', { port: this.port, scriptPath });
-      child = spawn('bash', [scriptPath], {
+      const shell = getDefaultShell();
+      child = spawn(shell, [scriptPath], {
         cwd: this.diffViewerRoot,
         env,
         detached: true,

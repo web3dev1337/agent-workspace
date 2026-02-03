@@ -57,18 +57,24 @@ class CommanderService {
     logger.info('Starting Commander terminal', { cwd: COMMANDER_CWD });
 
     try {
+      // Detect shell based on platform
+      const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
+      const shellArgs = process.platform === 'win32' ? [] : [];
+
       // Spawn Claude Code terminal
-      const ptyProcess = pty.spawn('bash', [], {
+      const ptyProcess = pty.spawn(shell, shellArgs, {
         name: 'xterm-color',
         cols: 120,
         rows: 40,
         cwd: COMMANDER_CWD,
-        env: {
-          ...process.env,
-          PATH: `${process.env.HOME}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
-          HOME: process.env.HOME,
-          TERM: 'xterm-color'
-        }
+        env: process.platform === 'win32'
+          ? { ...process.env }
+          : {
+              ...process.env,
+              PATH: `${process.env.HOME}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
+              HOME: process.env.HOME,
+              TERM: 'xterm-color'
+            }
       });
 
       this.session = {

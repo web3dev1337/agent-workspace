@@ -495,11 +495,16 @@ io.on('connection', (socket) => {
   socket.on('build-production', ({ sessionId, worktreeNum }) => {
     logger.info('Build production requested', { sessionId, worktreeNum });
     activityFeed.track('build.production.requested', { sessionId, worktreeNum });
-    
+
     const { spawn } = require('child_process');
     const fs = require('fs');
     const path = require('path');
     const { resolveBuildProductionContext } = require('./buildProductionService');
+
+    // Helper function to get the appropriate shell for the platform
+    function getDefaultShell() {
+      return process.platform === 'win32' ? 'powershell.exe' : 'bash';
+    }
     
     let worktreePath;
     let scriptPath;
@@ -533,7 +538,8 @@ io.on('connection', (socket) => {
     socket.emit('build-started', { sessionId, worktreeNum });
     
     // Run the build script
-    const buildProcess = spawn('bash', [scriptPath], {
+    const shell = getDefaultShell();
+    const buildProcess = spawn(shell, [scriptPath], {
       cwd: worktreePath
     });
     
