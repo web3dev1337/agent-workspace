@@ -144,45 +144,60 @@ describe('PullRequestService', () => {
 
   test('getPullRequestDetailsByUrl aggregates PR metadata, files, commits, and conversation', async () => {
     execFile.mockImplementation((cmd, args, opts, cb) => {
-      const path = args[1];
-      if (args[0] !== 'api') throw new Error('Unexpected gh invocation');
+      expect(cmd).toBe('gh');
 
-      if (path === 'repos/web3dev1337/repo/pulls/123') {
+      // PR metadata + commits via `gh pr view --json ...`
+      if (args[0] === 'pr' && args[1] === 'view') {
         cb(null, JSON.stringify({
           number: 123,
           title: 'Hello',
-          state: 'open',
-          html_url: 'https://github.com/web3dev1337/repo/pull/123',
-          draft: false,
-          created_at: '2026-01-01T00:00:00Z',
-          updated_at: '2026-01-02T00:00:00Z',
-          merged_at: null,
-          closed_at: null,
-          mergeable: true,
-          user: { login: 'me' },
-          base: { ref: 'main' },
-          head: { ref: 'feature/x' }
+          state: 'OPEN',
+          url: 'https://github.com/web3dev1337/repo/pull/123',
+          isDraft: false,
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-02T00:00:00Z',
+          mergedAt: null,
+          closedAt: null,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'feature/x',
+          author: { login: 'me' },
+          commits: [{
+            oid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            messageHeadline: 'feat: x',
+            authoredDate: '2026-01-02T00:00:00Z',
+            committedDate: '2026-01-02T00:00:00Z',
+            authors: [{ login: 'me', name: 'Me', email: 'me@example.com' }]
+          }]
         }), '');
         return;
       }
 
-      if (path === 'repos/web3dev1337/repo/pulls/123/files') {
-        cb(null, JSON.stringify([{
-          filename: 'src/a.js',
-          status: 'modified',
-          additions: 1,
-          deletions: 2,
-          changes: 3
-        }]), '');
+      const path = args[1];
+      if (args[0] !== 'api') {
+        cb(new Error(`Unexpected gh invocation: ${args.join(' ')}`));
         return;
       }
 
-      if (path === 'repos/web3dev1337/repo/pulls/123/commits') {
-        cb(null, JSON.stringify([{
-          sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-          commit: { message: 'feat: x\n\nbody', author: { name: 'Me', date: '2026-01-02T00:00:00Z' } },
-          author: { login: 'me' }
-        }]), '');
+      // PR files (path/additions/deletions/changeType) via `gh api graphql`
+      if (path === 'graphql') {
+        cb(null, JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                files: {
+                  nodes: [{
+                    path: 'src/a.js',
+                    additions: 1,
+                    deletions: 2,
+                    changeType: 'MODIFIED'
+                  }],
+                  pageInfo: { hasNextPage: false, endCursor: null }
+                }
+              }
+            }
+          }
+        }), '');
         return;
       }
 
@@ -219,7 +234,7 @@ describe('PullRequestService', () => {
       maxReviews: 50
     });
 
-    expect(execFile).toHaveBeenCalledTimes(5);
+    expect(execFile).toHaveBeenCalledTimes(4);
     expect(result.pr.number).toBe(123);
     expect(result.files).toHaveLength(1);
     expect(result.files[0].filename).toBe('src/a.js');
