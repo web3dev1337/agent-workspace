@@ -14,6 +14,7 @@ const path = require('path');
 const readline = require('readline');
 const { exec } = require('child_process');
 const util = require('util');
+const os = require('os');
 const winston = require('winston');
 
 const execAsync = util.promisify(exec);
@@ -30,9 +31,10 @@ const logger = winston.createLogger({
   ]
 });
 
-const CLAUDE_PROJECTS_DIR = path.join(process.env.HOME, '.claude', 'projects');
-const CODEX_SESSIONS_DIR = path.join(process.env.HOME, '.codex', 'sessions');
-const INDEX_CACHE_FILE = path.join(process.env.HOME, '.orchestrator', 'conversation-index.json');
+const HOME_DIR = process.env.HOME || os.homedir();
+const CLAUDE_PROJECTS_DIR = path.join(HOME_DIR, '.claude', 'projects');
+const CODEX_SESSIONS_DIR = path.join(HOME_DIR, '.codex', 'sessions');
+const INDEX_CACHE_FILE = path.join(HOME_DIR, '.orchestrator', 'conversation-index.json');
 const INDEX_CACHE_VERSION = 3;
 
 class ConversationService {

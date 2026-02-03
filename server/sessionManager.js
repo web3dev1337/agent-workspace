@@ -52,6 +52,8 @@ function buildShellArgs(commands) {
   }
 }
 
+const HOME_DIR = process.env.HOME || os.homedir();
+
 class SessionManager extends EventEmitter {
   constructor(io, agentManager) {
     super();
@@ -1321,7 +1323,7 @@ class SessionManager extends EventEmitter {
     const state = session.cwdState || { current: session.config?.cwd || process.cwd(), previous: null, stack: [] };
     session.cwdState = state;
 
-    const home = process.env.HOME || '';
+    const home = HOME_DIR;
     const targetArg = args.find(arg => arg === '-' || !arg.startsWith('-'));
     const rawTarget = targetArg || home;
 
@@ -1495,7 +1497,7 @@ class SessionManager extends EventEmitter {
    */
   snapshotConversationFiles() {
     const fsSync = require('fs');
-    const projectsBase = path.join(process.env.HOME, '.claude', 'projects');
+    const projectsBase = path.join(HOME_DIR, '.claude', 'projects');
     const existing = new Set();
     const now = Date.now();
 
@@ -1558,12 +1560,12 @@ class SessionManager extends EventEmitter {
     logger.info('captureConversationId called', { workspaceId, sessionId, worktreePath });
     const fsSync = require('fs');
     const now = Date.now();
-    const projectsBase = path.join(process.env.HOME, '.claude', 'projects');
+    const projectsBase = path.join(HOME_DIR, '.claude', 'projects');
 
     // Build a map of folder names to actual paths
     // Include ALL paths from worktree up to home (entire hierarchy)
     const folderToPath = new Map();
-    const home = process.env.HOME;
+    const home = HOME_DIR;
 
     // Add all parent paths from worktreePath up to home
     let current = worktreePath;

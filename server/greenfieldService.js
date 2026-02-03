@@ -531,7 +531,7 @@ Start by understanding the requirements, then design and implement the solution.
     }
 
     // Expand home directory
-    const expandedPath = parentPath.replace('~', process.env.HOME);
+    const expandedPath = expandUserPath(parentPath);
     const projectPath = path.join(expandedPath, name);
 
     // Check if directory exists
