@@ -111,9 +111,10 @@ class CommanderService {
 
             // Auto-start Claude when shell becomes ready (only once)
             if (!this.claudeStarted) {
-              this.claudeStarted = true;
               setTimeout(() => {
-                this.startClaude('fresh', true);
+                if (!this.claudeStarted) {  // Double-check before calling
+                  this.startClaude('fresh', true);
+                }
               }, 1000);
             }
           }
@@ -170,8 +171,9 @@ class CommanderService {
       cmd += ' --dangerously-skip-permissions';
     }
 
-    logger.info('Starting Claude in Commander', { mode, yolo, cmd });
-    this.sendInput(cmd + '\n');
+    logger.info('Starting Claude in Commander', { mode, yolo, cmd, platform: process.platform });
+    const success = this.sendInput(cmd + '\n');
+    logger.info('Sent claude command', { success, cmd });
 
     // Always provide a stable, self-updating control surface pointer so Commander
     // never needs manual prompt edits when new commands are added.
