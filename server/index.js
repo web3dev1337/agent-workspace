@@ -500,11 +500,6 @@ io.on('connection', (socket) => {
     const fs = require('fs');
     const path = require('path');
     const { resolveBuildProductionContext } = require('./buildProductionService');
-
-    // Helper function to get the appropriate shell for the platform
-    function getDefaultShell() {
-      return process.platform === 'win32' ? 'powershell.exe' : 'bash';
-    }
     
     let worktreePath;
     let scriptPath;
@@ -538,8 +533,15 @@ io.on('connection', (socket) => {
     socket.emit('build-started', { sessionId, worktreeNum });
     
     // Run the build script
-    const shell = getDefaultShell();
-    const buildProcess = spawn(shell, [scriptPath], {
+    if (process.platform === 'win32') {
+      const error = 'build-production-with-console.sh requires bash. Run the orchestrator from WSL/Linux, or add a Windows build-production script.';
+      logger.error('Build production not supported on Windows', { worktreeNum, scriptPath });
+      activityFeed.track('build.production.failed', { sessionId, worktreeNum, error });
+      socket.emit('build-failed', { sessionId, worktreeNum, error });
+      return;
+    }
+
+    const buildProcess = spawn('bash', [scriptPath], {
       cwd: worktreePath
     });
     

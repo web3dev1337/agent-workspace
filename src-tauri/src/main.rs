@@ -487,6 +487,13 @@ fn main() {
             
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if let Some(proc_state) = window.app_handle().try_state::<BackendProcess>() {
+                    proc_state.kill();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             show_notification,
             toggle_devtools,
