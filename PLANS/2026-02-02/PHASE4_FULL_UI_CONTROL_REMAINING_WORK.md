@@ -10,6 +10,7 @@ This doc is the “what’s left” list after the last ~10 days of changes. Som
 
 ## Shipped since this doc
 
+- PR #574: Commander supports “typed” text → command execution via the same Voice parser pipeline (`POST /api/commander/execute-text`), and the Commander panel has a `/` command mode.
 - PR #587: Review Console docks hidden terminals reliably; Diff embed defaults on; session recovery clearing fixed.
 - PR #588: Worktree Inspector 🗂 button resolves worktreePath from workspace config (mixed-repo) and falls back to PR console with a clear toast.
 - PR #589: PR Review Console Files list supports click-to-open the embedded diff viewer for that file (via `?file=...`), and “-0” is never shown for deletions.
@@ -38,13 +39,13 @@ Target behavior:
   - be available to Commander typed execution.
 
 Work needed:
-- Build an exported “command manifest” from `server/commandRegistry.js` (name, params schema, examples, safety notes).
-- Update voice LLM fallback prompt to include the manifest (or a scoped subset + retrieval).
-- Add `POST /api/commander/execute-text`:
+- Build an exported “command manifest” from `server/commandRegistry.js` (name, params schema, examples, safety notes). (PARTIAL: `GET /api/commander/capabilities` exists; remaining: add explicit safety notes + UI help view)
+- Update voice LLM fallback prompt to include the manifest (or a scoped subset + retrieval). (DONE)
+- Add `POST /api/commander/execute-text`: (DONE: PR #574)
   - input: free text
   - pipeline: same as voice parse → command execution (with a “typed” source)
   - output: structured result + a human readable summary
-- Add a “Commander command mode” UX:
+- Add a “Commander command mode” UX: (DONE: PR #574)
   - e.g. prefix `/` or `:` lines as commands, otherwise send as terminal text
   - show command results inline in the Commander terminal.
 
