@@ -69,6 +69,10 @@ Artifacts:
 - `src-tauri/target/release/bundle/msi/*.msi`
 - `src-tauri/target/release/bundle/nsis/*-setup.exe`
 
+CI option (recommended for repeatable release builds):
+- Run the GitHub Actions workflow `windows` (workflow_dispatch) or push a tag like `v1.2.3`.
+- It runs Windows unit tests and produces installer artifacts via `npm run tauri:build`.
+
 ---
 
 ## 4) Optional: WSL mode (bash-first workflows)
@@ -80,4 +84,3 @@ In WSL:
 npm install
 npm run dev
 ```
-
