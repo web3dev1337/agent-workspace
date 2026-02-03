@@ -71,7 +71,7 @@ Artifacts:
 
 CI option (recommended for repeatable release builds):
 - Run the GitHub Actions workflow `windows` (workflow_dispatch) or push a tag like `v1.2.3`.
-- It runs Windows unit tests and produces installer artifacts via `npm run tauri:build`.
+- It runs Windows unit tests and produces installer artifacts via `npm run tauri:build` (and on tag pushes it publishes a GitHub Release with the installers attached).
 
 ---
 
