@@ -131,7 +131,9 @@ Fix direction:
 
 ### P2 (optional / product polish)
 - [x] Windows implementation for `scanAllPorts()` (or mark WSL-only).
-- [ ] Evaluate prebuilt PTY dependency to reduce contributor friction.
+- [x] Evaluate prebuilt PTY dependency to reduce contributor friction.
+  - Looked at `@homebridge/node-pty-prebuilt-multiarch` and `node-pty-prebuilt-multiarch`: both lag behind `node-pty@^1.x` and increase compatibility risk.
+  - Decision: **keep `node-pty`** for runtime correctness. For end-users, the intended path is a packaged Tauri build that ships compiled deps (no Visual Studio required).
 
 ## Related docs
 - `WINDOWS_BUILD_GUIDE.md` (detailed Windows build pain log + fixes)
