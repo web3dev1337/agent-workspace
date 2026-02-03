@@ -11,6 +11,8 @@ const path = require('path');
 const os = require('os');
 const winston = require('winston');
 
+const HOME_DIR = process.env.HOME || os.homedir();
+
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
@@ -72,8 +74,8 @@ class CommanderService {
           ? { ...process.env }
           : {
               ...process.env,
-              PATH: `${process.env.HOME}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
-              HOME: process.env.HOME,
+              PATH: `${HOME_DIR}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
+              HOME: HOME_DIR,
               TERM: 'xterm-color'
             }
       });

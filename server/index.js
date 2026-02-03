@@ -91,6 +91,7 @@ const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
 const sessionRecoveryService = require('./sessionRecoveryService');
+const { collectDiagnostics } = require('./diagnosticsService');
 const multer = require('multer');
 
 // Configure multer for audio file uploads
@@ -436,30 +437,40 @@ io.on('connection', (socket) => {
         // Build command with NODE_ENV and custom settings
         const nodeEnv = environment === 'production' ? 'production' : 'development';
 
-        // Start with base environment variables
-        let envVars = `NODE_ENV=${nodeEnv} PORT=${port}`;
+        const { getShellKind, buildShellCommand, parseEnvAssignments, buildEcho } = require('./utils/shellCommand');
+        const shellKind = getShellKind();
 
-        // Add custom environment variables if provided
-        if (launchSettings && launchSettings.envVars) {
-          envVars += ` ${launchSettings.envVars}`;
+        const env = {
+          NODE_ENV: nodeEnv,
+          PORT: String(port)
+        };
+
+        if (launchSettings?.envVars) {
+          Object.assign(env, parseEnvAssignments(launchSettings.envVars));
         }
 
-        // Build the command
-        let command = envVars;
-
-        // Add node options if provided
-        if (launchSettings && launchSettings.nodeOptions) {
-          command += ` node ${launchSettings.nodeOptions} $(which hytopia) start`;
-        } else {
-          command += ` hytopia start`;
+        // Build command (cross-shell).
+        let runCommand = 'hytopia start';
+        const nodeOptions = String(launchSettings?.nodeOptions || '').trim();
+        if (nodeOptions) {
+          if (shellKind === 'powershell') {
+            // Bash-only helper previously used `$(which hytopia)` to get the JS entrypoint.
+            // On Windows that is often a .cmd wrapper, so we cannot reliably inject Node flags.
+            // Best-effort: start normally and warn.
+            sessionManager.writeToSession(sessionId, `${buildEcho(shellKind, 'NOTE: nodeOptions are not currently supported on Windows PowerShell; running "hytopia start" without forcing node flags.')}\n`);
+            runCommand = 'hytopia start';
+          } else {
+            runCommand = `node ${nodeOptions} $(which hytopia) start`;
+          }
         }
 
-        // Add game arguments if provided
-        if (launchSettings && launchSettings.gameArgs) {
-          command += ` ${launchSettings.gameArgs}`;
+        const gameArgs = String(launchSettings?.gameArgs || '').trim();
+        if (gameArgs) {
+          runCommand += ` ${gameArgs}`;
         }
 
-        command += '\n';
+        const cwd = session?.config?.cwd || null;
+        const command = buildShellCommand({ shellKind, cwd, env, command: runCommand }) + '\n';
 
         logger.info('Starting server with command', { sessionId, command, port, nodeEnv, repoPath, worktreeId });
 
@@ -1530,9 +1541,11 @@ app.post('/api/files/sync', async (req, res) => {
 });
 
 app.get('/api/process/performance', async (req, res) => {
-  const { exec } = require('child_process');
+  const { exec, execFile } = require('child_process');
   const util = require('util');
   const execAsync = util.promisify(exec);
+  const execFileAsync = util.promisify(execFile);
+  const isWin = process.platform === 'win32';
 
   const parseIntSafe = (s) => {
     const n = Number(String(s || '').trim());
@@ -1543,6 +1556,18 @@ app.get('/api/process/performance', async (req, res) => {
     const p = Number(pid);
     if (!Number.isFinite(p) || p <= 0) return [];
     try {
+      if (isWin) {
+        const { stdout } = await execFileAsync(
+          'powershell.exe',
+          ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${p}").ProcessId`],
+          { timeout: 1500 }
+        );
+        return String(stdout || '')
+          .split(/\s+/)
+          .map(l => parseIntSafe(l))
+          .filter(n => Number.isFinite(n) && n > 0);
+      }
+
       const { stdout } = await execAsync(`pgrep -P ${p}`, { timeout: 1500 });
       return String(stdout || '')
         .split('\n')
@@ -1557,6 +1582,17 @@ app.get('/api/process/performance', async (req, res) => {
     const p = Number(pid);
     if (!Number.isFinite(p) || p <= 0) return null;
     try {
+      if (isWin) {
+        const { stdout } = await execFileAsync(
+          'powershell.exe',
+          ['-NoProfile', '-Command', `(Get-Process -Id ${p} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty WorkingSet64)`],
+          { timeout: 1500 }
+        );
+        const bytes = Number(String(stdout || '').trim());
+        if (!Number.isFinite(bytes) || bytes <= 0) return null;
+        return Math.round(bytes / 1024);
+      }
+
       const { stdout } = await execAsync(`ps -o rss= -p ${p}`, { timeout: 1500 });
       return parseIntSafe(stdout);
     } catch {
@@ -2374,6 +2410,17 @@ app.get('/api/agents', (req, res) => {
   } catch (error) {
     logger.error('Failed to get agent configurations', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get agent configurations' });
+  }
+});
+
+// Diagnostics (cross-platform dependency + environment checks)
+app.get('/api/diagnostics', async (req, res) => {
+  try {
+    const data = await collectDiagnostics();
+    res.json({ ok: true, ...data });
+  } catch (error) {
+    logger.error('Failed to collect diagnostics', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to collect diagnostics' });
   }
 });
 
