@@ -532,6 +532,17 @@ class CommandRegistry {
       }
     });
 
+    this.register('queue-conveyor-t3', {
+      category: 'process',
+      description: 'Open Queue and start Conveyor T3 (one-at-a-time Tier 3 reviews)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-conveyor-t3' });
+        return { message: 'Queue: conveyor t3' };
+      }
+    });
+
     this.register('queue-select', {
       category: 'process',
       description: 'Select a specific Queue item by id (e.g. pr:owner/repo#123)',
