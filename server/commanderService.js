@@ -11,6 +11,8 @@ const path = require('path');
 const os = require('os');
 const winston = require('winston');
 
+const HOME_DIR = process.env.HOME || os.homedir();
+
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
@@ -35,6 +37,7 @@ class CommanderService {
     this.outputBuffer = [];
     this.maxBufferLines = 500;
     this.isReady = false;
+    this.claudeStarted = false; // Track if Claude has been auto-started
   }
 
   static getInstance(options) {
@@ -57,18 +60,24 @@ class CommanderService {
     logger.info('Starting Commander terminal', { cwd: COMMANDER_CWD });
 
     try {
+      // Detect shell based on platform
+      const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
+      const shellArgs = process.platform === 'win32' ? ['-NoExit'] : [];
+
       // Spawn Claude Code terminal
-      const ptyProcess = pty.spawn('bash', [], {
+      const ptyProcess = pty.spawn(shell, shellArgs, {
         name: 'xterm-color',
         cols: 120,
         rows: 40,
         cwd: COMMANDER_CWD,
-        env: {
-          ...process.env,
-          PATH: `${process.env.HOME}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
-          HOME: process.env.HOME,
-          TERM: 'xterm-color'
-        }
+        env: process.platform === 'win32'
+          ? { ...process.env }
+          : {
+              ...process.env,
+              PATH: `${HOME_DIR}/.nvm/versions/node/v22.16.0/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`,
+              HOME: HOME_DIR,
+              TERM: 'xterm-color'
+            }
       });
 
       this.session = {
@@ -96,10 +105,21 @@ class CommanderService {
           this.io.emit('commander-output', { data });
         }
 
-        // Detect when Claude is ready
+        // Detect when shell is ready
         if (data.includes('>') || data.includes('$')) {
-          this.session.status = 'ready';
-          this.isReady = true;
+          if (!this.isReady) {
+            this.session.status = 'ready';
+            this.isReady = true;
+
+            // Auto-start Claude when shell becomes ready (only once)
+            if (!this.claudeStarted) {
+              setTimeout(() => {
+                if (!this.claudeStarted) {  // Double-check before calling
+                  this.startClaude('fresh', true);
+                }
+              }, 1000);
+            }
+          }
         }
       });
 
@@ -108,6 +128,7 @@ class CommanderService {
         logger.info('Commander terminal exited', { exitCode });
         this.session = null;
         this.isReady = false;
+        this.claudeStarted = false; // Reset for next start
         if (this.io) {
           this.io.emit('commander-exit', { exitCode });
         }
@@ -130,6 +151,13 @@ class CommanderService {
       await this.start();
     }
 
+    // Prevent duplicate calls
+    if (this.claudeStarted) {
+      logger.warn('Claude already started, ignoring duplicate call');
+      return { success: false, error: 'Already started' };
+    }
+    this.claudeStarted = true;
+
     // Build the claude command
     let cmd = 'claude';
 
@@ -145,8 +173,9 @@ class CommanderService {
       cmd += ' --dangerously-skip-permissions';
     }
 
-    logger.info('Starting Claude in Commander', { mode, yolo, cmd });
-    this.sendInput(cmd + '\n');
+    logger.info('Starting Claude in Commander', { mode, yolo, cmd, platform: process.platform });
+    const success = this.sendInput(cmd + '\n');
+    logger.info('Sent claude command', { success, cmd });
 
     // Always provide a stable, self-updating control surface pointer so Commander
     // never needs manual prompt edits when new commands are added.
@@ -224,7 +253,12 @@ class CommanderService {
       return false;
     }
 
-    this.session.pty.write(input);
+    // On Windows, convert \n to \r\n for proper line endings
+    const processedInput = process.platform === 'win32'
+      ? input.replace(/\n/g, '\r\n')
+      : input;
+
+    this.session.pty.write(processedInput);
     return true;
   }
 

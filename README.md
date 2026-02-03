@@ -52,17 +52,24 @@ A multi-workspace development environment for AI coding agent sessions (Claude C
 
 ## 📊 Quick Start
 
-### Installation
+### Installation (WSL/Linux)
 ```bash
 # Navigate to orchestrator directory
 cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 
+# Install deps
+npm ci
+
 # Run migration to set up workspace system
 node scripts/migrate-to-workspaces.js
 
-# Install one-click startup shortcuts
+# (Optional) Install one-click startup shortcuts
 bash scripts/install-startup.sh
 ```
+
+### Installation (Windows native)
+- Follow `WINDOWS_QUICK_START.md` (short) or `WINDOWS_BUILD_GUIDE.md` (full).
+- Recommended “ready to sell” path is the Tauri build: `npm run tauri:build` (creates an installer).
 
 ### Launch Orchestrator
 ```bash
@@ -73,7 +80,7 @@ orchestrator
 # Click "Claude Orchestrator" icon
 
 # Or manual startup
-npm run dev:all
+npm run dev
 ```
 
 ### Process docs (resume-safe)
@@ -86,7 +93,7 @@ Tier tagging (T1–T4) persists across page refreshes and server restarts becaus
 - `~/.orchestrator/task-records.json` (`session:<id>`, `pr:owner/repo#123`, `worktree:/path`)
 
 ### Create Your First Custom Workspace
-1. **Access Dashboard**: http://localhost:4000 (dev) or http://localhost:2080 (prod)
+1. **Access Dashboard**: http://localhost:2080
 2. **Click "Create New"** → Opens workspace wizard
 3. **Select Repository**: Choose from categorized list (Hytopia Games, MonoGame Games, Writing, etc.)
 4. **Configure**: Set name, terminal count, access level
@@ -164,11 +171,12 @@ claude-orchestrator-dev/
 
 ### Available Scripts
 ```bash
-npm run dev:all          # Start all services (server + client + tauri)
-npm run dev              # Development mode (ports 4000/2081)
-npm run prod             # Production mode (ports 3000/2080)
+npm run dev              # Start backend + UI dev server
+npm run dev:server       # Start backend only (port 3000)
+npm run dev:client       # Start UI dev server only (port 2080)
+npm run dev:full         # Start backend + UI + tauri dev
+npm run tauri:build      # Build native app for distribution (Windows installer)
 npm run tauri:dev        # Native app development
-npm run tauri:build      # Build native app for distribution
 ```
 
 ## 📈 Capabilities
@@ -193,8 +201,8 @@ npm run tauri:build      # Build native app for distribution
 
 ## 🚀 Getting Started
 
-1. **Installation**: `bash scripts/install-startup.sh`
-2. **Launch**: `orchestrator` (or click desktop shortcut)
+1. **Installation**: WSL/Linux: `bash scripts/install-startup.sh` (optional) • Windows: `WINDOWS_QUICK_START.md`
+2. **Launch**: `npm run dev` (or `orchestrator` if installed)
 3. **Create Workspace**: Dashboard → Create New → Select repository
 4. **Add Mixed Terminals**: "+ Add Worktree" → Browse repositories
 5. **Enjoy**: Complete development environment ready!
