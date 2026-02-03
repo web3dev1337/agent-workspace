@@ -226,6 +226,29 @@ body {
   gap: 4px;
 }
 
+.refresh-branch-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.refresh-branch-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  transform: scale(1.05);
+}
+
 .ready-review-btn {
   background: transparent;
   border: 1px solid var(--border-color);
@@ -361,6 +384,10 @@ body {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.worktree-branch:empty {
+  display: none;
 }
 
 .worktree-item.active .worktree-branch:not(.master-branch):not([class*="branch-type-"]) {
@@ -819,6 +846,33 @@ header h1 {
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--accent-primary);
+}
+
+.terminal-branch:empty {
+  display: none;
+}
+
+.terminal-branch-refresh {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  line-height: 1;
+  opacity: 0.65;
+  transition: all 0.2s;
+}
+
+.terminal-title:hover .terminal-branch-refresh {
+  opacity: 1;
+}
+
+.terminal-branch-refresh:hover {
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  transform: scale(1.05);
 }
 
 .terminal-branch.master-branch {
