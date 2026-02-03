@@ -89,13 +89,33 @@ class PullRequestService {
     }
   }
 
-  async getPullRequest({ owner, repo, number }) {
+  async getPullRequest({ owner, repo, number, fields = null }) {
     const o = String(owner || '').trim();
     const r = String(repo || '').trim();
     const n = Number(number);
     if (!o || !r || !Number.isFinite(n)) {
       throw new Error('Invalid PR identifier');
     }
+
+    const defaultFields = [
+      'number',
+      'title',
+      'state',
+      'url',
+      'isDraft',
+      'createdAt',
+      'updatedAt',
+      'author',
+      'body',
+      'mergedAt',
+      'closedAt'
+    ];
+    const provided = Array.isArray(fields)
+      ? fields.map((x) => String(x || '').trim()).filter(Boolean)
+      : (typeof fields === 'string'
+        ? String(fields).split(',').map((x) => String(x || '').trim()).filter(Boolean)
+        : null);
+    const jsonFields = (provided && provided.length) ? provided : defaultFields;
 
     const args = [
       'pr',
@@ -104,7 +124,7 @@ class PullRequestService {
       '--repo',
       `${o}/${r}`,
       '--json',
-      'number,title,state,url,isDraft,createdAt,updatedAt,author,body,mergedAt,closedAt'
+      jsonFields.join(',')
     ];
 
     const { stdout } = await new Promise((resolve, reject) => {
@@ -195,6 +215,88 @@ class PullRequestService {
     return all;
   }
 
+  async ghGraphql(query, variables = {}, { timeoutMs = 30000 } = {}) {
+    const q = String(query || '').trim();
+    if (!q) throw new Error('Invalid GraphQL query');
+
+    const args = ['api', 'graphql', '--method', 'POST', '-f', `query=${q}`];
+
+    const varEntries = Object.entries(variables || {});
+    for (const [key, value] of varEntries) {
+      const k = String(key || '').trim();
+      if (!k) continue;
+      if (value === undefined) continue;
+
+      if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+        const v = value === null ? 'null' : String(value);
+        args.push('-F', `${k}=${v}`);
+      } else {
+        args.push('-f', `${k}=${String(value)}`);
+      }
+    }
+
+    const { stdout } = await new Promise((resolve, reject) => {
+      execFile('gh', args, { timeout: timeoutMs }, (error, stdout, stderr) => {
+        if (error) {
+          logger.error('gh graphql failed', { error: error.message, stderr });
+          reject(error);
+          return;
+        }
+        resolve({ stdout, stderr });
+      });
+    });
+
+    return JSON.parse(stdout || '{}');
+  }
+
+  async getPullRequestFilesByGraphql({ owner, repo, number, limit = 300 } = {}) {
+    const o = String(owner || '').trim();
+    const r = String(repo || '').trim();
+    const n = Number(number);
+    if (!o || !r || !Number.isFinite(n)) {
+      throw new Error('Invalid PR identifier');
+    }
+
+    const max = Number.isFinite(Number(limit)) ? Math.min(Math.max(Number(limit), 1), 2000) : 300;
+
+    const query = `
+      query($owner: String!, $repo: String!, $number: Int!, $after: String) {
+        repository(owner: $owner, name: $repo) {
+          pullRequest(number: $number) {
+            files(first: 100, after: $after) {
+              nodes {
+                path
+                additions
+                deletions
+                changeType
+              }
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+            }
+          }
+        }
+      }
+    `.trim().replace(/\s+/g, ' ');
+
+    const out = [];
+    let after = null;
+    while (out.length < max) {
+      const res = await this.ghGraphql(query, { owner: o, repo: r, number: n, after }, { timeoutMs: 30000 });
+      const files = res?.data?.repository?.pullRequest?.files;
+      const nodes = Array.isArray(files?.nodes) ? files.nodes : [];
+      nodes.forEach((f) => out.push(f));
+
+      const pageInfo = files?.pageInfo || {};
+      if (!pageInfo?.hasNextPage) break;
+      after = pageInfo.endCursor || null;
+      if (!after) break;
+    }
+
+    return out.slice(0, max);
+  }
+
   async getPullRequestDetailsByUrl(prUrl, {
     maxFiles = 300,
     maxCommits = 200,
@@ -236,10 +338,26 @@ class PullRequestService {
       }
     };
 
-    const [prRes, filesRes, commitsRes, issueCommentsRes, reviewsRes] = await Promise.all([
-      safe(`repos/${o}/${r}/pulls/${n}`, () => this.ghApi(`repos/${o}/${r}/pulls/${n}`, { paginate: false, timeoutMs: 20000 }), null),
-      safe(`repos/${o}/${r}/pulls/${n}/files`, () => this.ghApiGetAllPages(`repos/${o}/${r}/pulls/${n}/files`, { timeoutMs: 30000, maxPages: maxPagesFor(filesLimit, 100) }), []),
-      safe(`repos/${o}/${r}/pulls/${n}/commits`, () => this.ghApiGetAllPages(`repos/${o}/${r}/pulls/${n}/commits`, { timeoutMs: 30000, maxPages: maxPagesFor(commitsLimit, 100) }), []),
+    const prViewFields = [
+      'number',
+      'title',
+      'state',
+      'url',
+      'isDraft',
+      'createdAt',
+      'updatedAt',
+      'mergedAt',
+      'closedAt',
+      'mergeable',
+      'baseRefName',
+      'headRefName',
+      'author',
+      'commits'
+    ];
+
+    const [prViewRes, filesRes, issueCommentsRes, reviewsRes] = await Promise.all([
+      safe(`gh pr view ${o}/${r}#${n}`, () => this.getPullRequest({ owner: o, repo: r, number: n, fields: prViewFields }), null),
+      safe(`graphql ${o}/${r}#${n} files`, () => this.getPullRequestFilesByGraphql({ owner: o, repo: r, number: n, limit: filesLimit }), []),
       commentsLimit > 0
         ? safe(`repos/${o}/${r}/issues/${n}/comments`, () => this.ghApiGetAllPages(`repos/${o}/${r}/issues/${n}/comments`, { timeoutMs: 30000, maxPages: maxPagesFor(commentsLimit, 100) }), [])
         : Promise.resolve({ ok: true, value: [], endpoint: null, error: null }),
@@ -248,31 +366,49 @@ class PullRequestService {
         : Promise.resolve({ ok: true, value: [], endpoint: null, error: null })
     ]);
 
-    const pr = prRes.value;
+    const prRaw = prViewRes.value;
     const filesRaw = filesRes.value;
-    const commitsRaw = commitsRes.value;
     const issueCommentsRaw = issueCommentsRes.value;
     const reviewsRaw = reviewsRes.value;
 
-    const warnings = [prRes, filesRes, commitsRes, issueCommentsRes, reviewsRes]
+    const warnings = [prViewRes, filesRes, issueCommentsRes, reviewsRes]
       .filter((x) => x && x.ok === false)
       .map((x) => ({ endpoint: x.endpoint, error: x.error }));
 
-    const files = Array.isArray(filesRaw) ? filesRaw.slice(0, filesLimit).map((f) => ({
-      filename: String(f?.filename || ''),
-      previousFilename: f?.previous_filename ? String(f.previous_filename) : null,
-      status: String(f?.status || ''),
-      additions: Number.isFinite(Number(f?.additions)) ? Number(f.additions) : null,
-      deletions: Number.isFinite(Number(f?.deletions)) ? Number(f.deletions) : null,
-      changes: Number.isFinite(Number(f?.changes)) ? Number(f.changes) : null
-    })).filter(f => f.filename) : [];
+    const statusMap = new Map([
+      ['ADDED', 'added'],
+      ['MODIFIED', 'modified'],
+      ['DELETED', 'removed'],
+      ['RENAMED', 'renamed']
+    ]);
 
-    const commits = Array.isArray(commitsRaw) ? commitsRaw.slice(0, commitsLimit).map((c) => ({
-      sha: String(c?.sha || ''),
-      message: String(c?.commit?.message || '').split('\n')[0] || '',
-      author: c?.author?.login ? String(c.author.login) : (c?.commit?.author?.name ? String(c.commit.author.name) : ''),
-      date: String(c?.commit?.author?.date || c?.commit?.committer?.date || '')
-    })).filter(c => c.sha) : [];
+    const files = Array.isArray(filesRaw) ? filesRaw.slice(0, filesLimit).map((f) => {
+      const filename = String(f?.path || '');
+      const changeType = String(f?.changeType || '').trim().toUpperCase();
+      const status = statusMap.get(changeType) || '';
+      const additions = Number.isFinite(Number(f?.additions)) ? Number(f.additions) : null;
+      const deletions = Number.isFinite(Number(f?.deletions)) ? Number(f.deletions) : null;
+      const changes = (additions != null && deletions != null) ? (additions + deletions) : null;
+      return {
+        filename,
+        previousFilename: null,
+        status,
+        additions,
+        deletions,
+        changes
+      };
+    }).filter(f => f.filename) : [];
+
+    const commitsRaw = (prRaw && typeof prRaw === 'object' && Array.isArray(prRaw.commits)) ? prRaw.commits : [];
+    const commits = commitsRaw.slice(0, commitsLimit).map((c) => {
+      const sha = String(c?.oid || '').trim();
+      const message = String(c?.messageHeadline || '').split('\n')[0] || '';
+      const authors = Array.isArray(c?.authors) ? c.authors : [];
+      const a0 = authors[0] || {};
+      const author = a0?.login ? String(a0.login) : (a0?.name ? String(a0.name) : '');
+      const date = String(c?.committedDate || c?.authoredDate || '');
+      return { sha, message, author, date };
+    }).filter((c) => c.sha);
 
     const issueComments = Array.isArray(issueCommentsRaw) ? issueCommentsRaw.slice(-commentsLimit).map((c) => ({
       id: c?.id,
@@ -290,20 +426,20 @@ class PullRequestService {
       body: String(rv?.body || '')
     })) : [];
 
-    const prSummary = pr && typeof pr === 'object' ? {
-      number: pr.number,
-      title: pr.title,
-      state: pr.state,
-      url: pr.html_url || parsed.url,
-      isDraft: !!pr.draft,
-      createdAt: pr.created_at,
-      updatedAt: pr.updated_at,
-      mergedAt: pr.merged_at,
-      closedAt: pr.closed_at,
-      mergeable: pr.mergeable,
-      baseRefName: pr.base?.ref,
-      headRefName: pr.head?.ref,
-      author: pr.user?.login || null
+    const prSummary = prRaw && typeof prRaw === 'object' ? {
+      number: prRaw.number ?? n,
+      title: prRaw.title || null,
+      state: prRaw.state || null,
+      url: prRaw.url || parsed.url,
+      isDraft: !!prRaw.isDraft,
+      createdAt: prRaw.createdAt || null,
+      updatedAt: prRaw.updatedAt || null,
+      mergedAt: prRaw.mergedAt || null,
+      closedAt: prRaw.closedAt || null,
+      mergeable: prRaw.mergeable ?? null,
+      baseRefName: prRaw.baseRefName || null,
+      headRefName: prRaw.headRefName || null,
+      author: prRaw.author?.login ? String(prRaw.author.login) : null
     } : {
       number: n,
       title: null,
