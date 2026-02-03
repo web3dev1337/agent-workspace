@@ -120,20 +120,19 @@ Fix direction:
 ## Recommended implementation order (concrete tasks)
 
 ### P0 (unblock “native Windows works without crashing”)
-- [ ] Replace `process.env.HOME`-only joins with `os.homedir()` fallback in the known hotspots.
-- [ ] Replace `PortRegistry.isPortFree()` from `lsof` → Node bind test.
-- [ ] Make PTY-injected env-var commands PowerShell-safe where used (at least server-control start).
+- [x] Replace `process.env.HOME`-only joins with `os.homedir()` fallback in the known hotspots.
+- [x] Replace `PortRegistry.isPortFree()` from `lsof` → Node bind test.
+- [x] Make PTY-injected env-var commands PowerShell-safe where used (at least server-control start).
 
 ### P1 (make Windows actually pleasant)
-- [ ] Add “Diagnostics” panel: show missing external deps (git/gh/claude/codex/ffmpeg).
-- [ ] Improve `scripts/tauri/prepare-backend-resources.js` UX (auto-bundle the current Node runtime if possible).
-- [ ] Add a short “Windows Quick Start” doc (developer vs end-user paths), pointing to the long `WINDOWS_BUILD_GUIDE.md`.
+- [x] Add “Diagnostics” panel: show missing external deps (git/gh/claude/codex/ffmpeg).
+- [x] Improve `scripts/tauri/prepare-backend-resources.js` UX (auto-bundle the current Node runtime if possible).
+- [x] Add a short “Windows Quick Start” doc (developer vs end-user paths), pointing to the long `WINDOWS_BUILD_GUIDE.md`.
 
 ### P2 (optional / product polish)
-- [ ] Windows implementation for `scanAllPorts()` (or mark WSL-only).
+- [x] Windows implementation for `scanAllPorts()` (or mark WSL-only).
 - [ ] Evaluate prebuilt PTY dependency to reduce contributor friction.
 
 ## Related docs
 - `WINDOWS_BUILD_GUIDE.md` (detailed Windows build pain log + fixes)
 - `PLANS/2026-02-02/WINDOWS_DISTRIBUTION_AND_MONETIZATION_PLAN.md` (how to ship + package + license later)
-
