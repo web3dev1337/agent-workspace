@@ -118,6 +118,15 @@ class VoiceCommandService {
         command: 'queue-conveyor-t2',
         extractParams: () => ({})
       },
+      // Open Queue (Conveyor T3)
+      {
+        patterns: [
+          /conveyor\s+t3/i,
+          /conveyor\s+tier\s*3/i,
+        ],
+        command: 'queue-conveyor-t3',
+        extractParams: () => ({})
+      },
       // Queue: open console (review console)
       {
         patterns: [
