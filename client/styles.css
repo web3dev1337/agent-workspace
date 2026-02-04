@@ -1641,9 +1641,11 @@ header h1 {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+}
+
+/* Hide modal header for Review Console - all controls are in rc-header now */
+.worktree-inspector-modal.review-console-mode .modal-header {
+  display: none;
 }
 
 .worktree-inspector-header {
@@ -2254,25 +2256,26 @@ header h1 {
 }
 
 .rc-tiny-btn {
-  padding: 2px 6px;
-  font-size: 0.7rem;
-  background: var(--bg-secondary);
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 3px;
-  color: var(--text-secondary);
+  border-radius: 4px;
+  color: var(--text-primary);
   cursor: pointer;
-  min-width: 20px;
+  min-width: 28px;
   text-align: center;
+  white-space: nowrap;
 }
 
 .rc-tiny-btn:hover {
   background: var(--bg-tertiary);
-  color: var(--text-primary);
+  border-color: var(--accent-primary);
 }
 
 .rc-tiny-btn.active {
   background: var(--accent-primary);
-  color: var(--bg-primary);
+  color: white;
   border-color: var(--accent-primary);
 }
 
@@ -2450,30 +2453,32 @@ header h1 {
 .rc-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  background: var(--bg-tertiary);
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  font-size: 0.75rem;
-  margin-bottom: 4px;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
   flex-wrap: nowrap;
-  min-height: 32px;
+  min-height: 40px;
 }
 
 .rc-header-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 1;
   min-width: 0;
 }
 
 .rc-header-path {
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 180px;
+  max-width: 200px;
 }
 
 .rc-header-branch {
@@ -2487,6 +2492,9 @@ header h1 {
   text-decoration: none;
   font-weight: 600;
   white-space: nowrap;
+  padding: 2px 8px;
+  background: rgba(var(--accent-success-rgb, 34, 197, 94), 0.15);
+  border-radius: 4px;
 }
 
 .rc-header-pr:hover {
@@ -2496,7 +2504,7 @@ header h1 {
 .rc-header-toggles {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   margin-left: auto;
   flex-shrink: 0;
 }
@@ -2504,46 +2512,54 @@ header h1 {
 .rc-sep {
   color: var(--text-tertiary);
   opacity: 0.5;
-  margin: 0 4px;
+  margin: 0 6px;
 }
 
 .rc-header-right {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-left: 8px;
+  gap: 6px;
+  margin-left: 12px;
   flex-shrink: 0;
 }
 
 .rc-outcome-select {
-  padding: 2px 4px;
-  font-size: 0.7rem;
-  background: var(--bg-secondary);
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 3px;
-  color: var(--text-secondary);
+  border-radius: 4px;
+  color: var(--text-primary);
   cursor: pointer;
-  max-width: 100px;
+  min-width: 90px;
 }
 
 .rc-merge-btn {
-  padding: 4px 12px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  padding: 6px 16px;
+  font-size: 0.9rem;
+  font-weight: 700;
   background: var(--accent-success);
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   color: white;
   cursor: pointer;
   white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .rc-merge-btn:hover {
   filter: brightness(1.1);
+  transform: translateY(-1px);
 }
 
 .rc-close-btn {
-  margin-left: 4px;
+  margin-left: 6px;
+  color: var(--text-secondary);
+}
+
+.rc-close-btn:hover {
+  color: var(--accent-danger);
+  border-color: var(--accent-danger);
 }
 
 /* Details panel for review console (hidden by default, toggled via 📝) */
