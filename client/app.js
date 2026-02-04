@@ -8667,7 +8667,7 @@ class ClaudeOrchestrator {
 			            ` : ''}
 			          </div>
 			        </div>
-			      `) : '';
+			      ` : '';
 
 		      // When PR exists, fetch PR details to show PR files/commits alongside local status
 		      let prDetails = null;
@@ -9410,6 +9410,9 @@ class ClaudeOrchestrator {
 	      bodyEl.querySelector('[data-pr-url]')?.addEventListener('click', (e) => {
 	        const url = e.target?.dataset?.prUrl;
 	        if (url) this.openPRLink(url);
+	      });
+	      bodyEl.querySelector('[data-close-inspector]')?.addEventListener('click', () => {
+	        this.closeWorktreeInspector();
 	      });
 	      bodyEl.querySelector('[data-ticket-open]')?.addEventListener('click', (e) => {
 	        const url = e.target?.dataset?.ticketOpen;
@@ -11402,6 +11405,9 @@ class ClaudeOrchestrator {
 		      this.reviewConsoleHotkeysCleanup = () => {
 		        document.removeEventListener('keydown', onReviewHotkey, true);
 		      };
+		      bodyEl.querySelector('[data-close-inspector]')?.addEventListener('click', () => {
+		        this.closeWorktreeInspector();
+		      });
 	    } catch (err) {
       bodyEl.innerHTML = `
         <div style="opacity:0.9; margin-bottom:10px;">Failed to load PR details.</div>
