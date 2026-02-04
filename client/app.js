@@ -7978,7 +7978,55 @@ class ClaudeOrchestrator {
 			        </div>
 			      ` : '';
 
-		      const files = Array.isArray(summary?.files) ? summary.files : [];
+		      // When PR exists, fetch PR details to show PR files/commits alongside local status
+		      let prDetails = null;
+		      let prFiles = [];
+		      let prCommits = [];
+		      if (pr?.hasPR && prUrl) {
+		        try {
+		          prDetails = await this.fetchPullRequestDetails(prUrl, { maxFiles: 400, maxCommits: 100, maxComments: 0, maxReviews: 0 });
+		          prFiles = Array.isArray(prDetails?.files) ? prDetails.files : [];
+		          prCommits = Array.isArray(prDetails?.commits) ? prDetails.commits : [];
+		        } catch (e) {
+		          console.warn('Failed to fetch PR details for Review Console:', e);
+		        }
+		      }
+
+		      // Local uncommitted changes
+		      const localFiles = Array.isArray(summary?.files) ? summary.files : [];
+
+		      // Merge: PR files + local uncommitted (mark source)
+		      const prFileMap = new Map(prFiles.map(f => [f.filename || f.path || '', f]));
+		      const localFileMap = new Map(localFiles.map(f => [f.path || '', f]));
+
+		      // Combined files: all PR files + any local-only uncommitted
+		      const files = [];
+		      for (const pf of prFiles) {
+		        const path = pf.filename || pf.path || '';
+		        const local = localFileMap.get(path);
+		        files.push({
+		          path,
+		          oldPath: pf.previous_filename || null,
+		          indexStatus: pf.status === 'added' ? 'A' : pf.status === 'removed' ? 'D' : pf.status === 'renamed' ? 'R' : 'M',
+		          worktreeStatus: local ? (local.worktreeStatus || ' ') : ' ',
+		          isUntracked: false,
+		          staged: { added: pf.additions || 0, deleted: pf.deletions || 0, binary: pf.binary || false },
+		          unstaged: local?.unstaged || null,
+		          inPR: true,
+		          hasLocalChanges: !!local
+		        });
+		      }
+		      // Add local-only files not in PR
+		      for (const lf of localFiles) {
+		        if (!prFileMap.has(lf.path)) {
+		          files.push({
+		            ...lf,
+		            inPR: false,
+		            hasLocalChanges: true
+		          });
+		        }
+		      }
+
 			      const statParts = (s) => {
 			        const stat = s && typeof s === 'object' ? s : null;
 			        if (!stat) return { binary: false, added: 0, deleted: 0 };
@@ -8024,10 +8072,17 @@ class ClaudeOrchestrator {
 			        const oldPath = f?.oldPath ? escapeHtml(f.oldPath) : '';
 			        const renameHint = oldPath ? `<div class="worktree-inspector-subtle">from ${oldPath}</div>` : '';
 			        const rawPath = escapeHtml(String(f?.path || '').replace(/\\/g, '/'));
+			        // Show source indicator: PR file, local-only, or both
+			        const inPR = f?.inPR === true;
+			        const hasLocal = f?.hasLocalChanges === true;
+			        const sourceHint = inPR && hasLocal ? '<span class="worktree-inspector-badge" title="In PR + local changes">PR+Local</span>'
+			          : inPR ? '<span class="worktree-inspector-badge" title="In PR">PR</span>'
+			          : hasLocal ? '<span class="worktree-inspector-badge worktree-inspector-badge-warn" title="Local only (not in PR)">Local</span>'
+			          : '';
 			        return `
 			          <tr>
 			            <td class="mono"><span class="worktree-inspector-tree-status ${statusClass}" title="${escapeHtml(statusTitle)}">${escapeHtml(statusGlyph)}</span></td>
-			            <td class="mono">${path}${renameHint}</td>
+			            <td class="mono">${path}${renameHint} ${sourceHint}</td>
 			            <td class="mono">${staged}</td>
 			            <td class="mono">${unstaged}</td>
 			            <td><button class="btn-secondary worktree-inspector-mini-btn" type="button" data-file-sync="${rawPath}" title="Copy this file to another worktree">Sync</button></td>
@@ -8178,16 +8233,43 @@ class ClaudeOrchestrator {
 	          ? `<div class="worktree-inspector-tree">${sortChildren(treeRoot).map((n) => renderTreeNode(n, 0)).join('')}</div>`
 	          : `<div style="opacity:0.8;">No changes.</div>`);
 
-	      const commits = Array.isArray(summary?.unpushedCommits) && summary.unpushedCommits.length
-	        ? summary.unpushedCommits
-	        : (Array.isArray(summary?.commits) ? summary.commits : []);
-	      const commitsTitle = (Array.isArray(summary?.unpushedCommits) && summary.unpushedCommits.length) ? 'Unpushed commits' : 'Recent commits';
+	      // Use PR commits if available, plus show local unpushed commits
+	      const localUnpushed = Array.isArray(summary?.unpushedCommits) ? summary.unpushedCommits : [];
+	      const localCommits = Array.isArray(summary?.commits) ? summary.commits : [];
+
+	      // Build commit list: PR commits (if any) + indicator for unpushed local
+	      let commits = [];
+	      let commitsTitle = 'Recent commits';
+
+	      if (prCommits.length > 0) {
+	        commitsTitle = `PR commits (${prCommits.length})`;
+	        commits = prCommits.map(c => ({
+	          hash: String(c.sha || '').slice(0, 9),
+	          date: c.date || '',
+	          message: c.message || '',
+	          inPR: true
+	        }));
+	      } else if (localUnpushed.length > 0) {
+	        commitsTitle = 'Unpushed commits';
+	        commits = localUnpushed;
+	      } else {
+	        commits = localCommits;
+	      }
+
+	      // Add unpushed local commits indicator if we have PR commits AND local unpushed
+	      const hasUnpushedNotInPR = prCommits.length > 0 && localUnpushed.length > 0;
+
 	      const commitRows = commits.slice(0, 50).map((c) => {
 	        const hash = escapeHtml(c?.hash || '');
 	        const date = escapeHtml(c?.date || '');
 	        const msg = escapeHtml(c?.message || '');
-	        return `<div class="worktree-inspector-commit mono"><span class="worktree-inspector-commit-hash">${hash}</span><span class="worktree-inspector-commit-date">${date}</span><span class="worktree-inspector-commit-msg">${msg}</span></div>`;
+	        const prBadge = c?.inPR ? '' : '';
+	        return `<div class="worktree-inspector-commit mono"><span class="worktree-inspector-commit-hash">${hash}</span><span class="worktree-inspector-commit-date">${date}</span><span class="worktree-inspector-commit-msg">${msg}${prBadge}</span></div>`;
 	      }).join('');
+
+	      const unpushedWarning = hasUnpushedNotInPR
+	        ? `<div class="worktree-inspector-subtle" style="margin-top:8px;color:var(--warning-color,#f0ad4e);">⚠ ${localUnpushed.length} unpushed local commit(s) not yet in PR</div>`
+	        : '';
 
 		      const rcEmbedTerminals = reviewConsole && rcShowTerminals;
 		      const visibleSections = (rcEmbedTerminals ? 1 : 0) + (rcShowFiles ? 1 : 0) + (rcShowCommits ? 1 : 0) + (rcShowDiff ? 1 : 0);
@@ -8268,6 +8350,7 @@ class ClaudeOrchestrator {
 	                ? `<div style="opacity:0.8;">No commits found.</div>`
 	                : `<div style="opacity:0.8;">Git not detected for this path.</div>${gitError ? `<div class="worktree-inspector-subtle mono">${escapeHtml(gitError)}</div>` : ''}`)}
 	            </div>
+	            ${unpushedWarning}
 	          </div>
 	          ${diffPanelHtml}
 	        </div>

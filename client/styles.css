@@ -1927,6 +1927,23 @@ header h1 {
   color: var(--text-primary);
 }
 
+.worktree-inspector-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+  font-weight: 600;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.worktree-inspector-badge-warn {
+  background: var(--warning-color, #f0ad4e);
+  color: #000;
+}
+
 /* Agent Startup Modal (Dynamic) */
 .agent-startup-dynamic {
   max-width: 600px;
