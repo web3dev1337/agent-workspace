@@ -120,12 +120,12 @@ curl -s http://localhost:4000/api/workspaces/scan-repos | jq
 # Create a new worktree
 curl -s http://localhost:4000/api/workspaces/create-worktree \
   -H "Content-Type: application/json" \
-  -d '{"repoPath": "/home/ab/GitHub/games/monogame/zoo-game", "branchName": "feature/new-work"}'
+  -d '{"repoPath": "~/GitHub/games/monogame/zoo-game", "branchName": "feature/new-work"}'
 
 # Remove a worktree
 curl -s http://localhost:4000/api/workspaces/remove-worktree \
   -H "Content-Type: application/json" \
-  -d '{"worktreePath": "/home/ab/GitHub/games/monogame/zoo-game/work5"}'
+  -d '{"worktreePath": "~/GitHub/games/monogame/zoo-game/work5"}'
 ```
 
 ## Greenfield Projects

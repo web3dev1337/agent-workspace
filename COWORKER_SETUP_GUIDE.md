@@ -802,7 +802,7 @@ Instead of switching workspaces constantly, create ONE mixed workspace.
       "id": "hyfire2-work1-claude",
       "repository": {
         "name": "HyFire2",
-        "path": "/home/ab/GitHub/games/hytopia/games/HyFire2",
+        "path": "~/GitHub/games/hytopia/games/HyFire2",
         "masterBranch": "master"
       },
       "worktree": "work1",
@@ -813,7 +813,7 @@ Instead of switching workspaces constantly, create ONE mixed workspace.
       "id": "hyfire2-work1-server",
       "repository": {
         "name": "HyFire2",
-        "path": "/home/ab/GitHub/games/hytopia/games/HyFire2",
+        "path": "~/GitHub/games/hytopia/games/HyFire2",
         "masterBranch": "master"
       },
       "worktree": "work1",
@@ -824,7 +824,7 @@ Instead of switching workspaces constantly, create ONE mixed workspace.
       "id": "2d-game-work1-claude",
       "repository": {
         "name": "hytopia-2d-game-test",
-        "path": "/home/ab/GitHub/games/hytopia/games/hytopia-2d-game-test",
+        "path": "~/GitHub/games/hytopia/games/hytopia-2d-game-test",
         "masterBranch": "master"
       },
       "worktree": "work1",
@@ -835,7 +835,7 @@ Instead of switching workspaces constantly, create ONE mixed workspace.
       "id": "2d-game-work1-server",
       "repository": {
         "name": "hytopia-2d-game-test",
-        "path": "/home/ab/GitHub/games/hytopia/games/hytopia-2d-game-test",
+        "path": "~/GitHub/games/hytopia/games/hytopia-2d-game-test",
         "masterBranch": "master"
       },
       "worktree": "work1",

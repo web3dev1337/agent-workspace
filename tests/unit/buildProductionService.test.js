@@ -11,7 +11,6 @@ describe('buildProductionService', () => {
     const ctx = resolveBuildProductionContext({ sessionManager, sessionId: 'work1-claude', worktreeNum: 1 });
     expect(ctx.worktreePath).toBe('/tmp/my-worktree/work1');
     expect(ctx.scriptPath).toBe('/tmp/my-worktree/work1/build-production-with-console.sh');
-    expect(ctx.scriptPath).not.toContain('/home/anrokx');
   });
 
   test('throws if sessionId not found or cwd missing', () => {
@@ -20,4 +19,3 @@ describe('buildProductionService', () => {
       .toThrow(/No cwd found/);
   });
 });
-

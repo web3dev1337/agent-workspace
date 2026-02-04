@@ -332,13 +332,13 @@ The **Claude Orchestrator** is a revolutionary tool that manages unlimited devel
 {
   "version": "2.0.0",
   "activeWorkspace": "epic-survivors---2-hyfire",
-  "workspaceDirectory": "/home/ab/.orchestrator/workspaces",
+  "workspaceDirectory": "~/.orchestrator/workspaces",
 
   "discovery": {
     "scanPaths": [
-      "/home/ab/GitHub/games",
-      "/home/ab/GitHub/website",
-      "/home/ab/GitHub/tools"
+      "~/GitHub/games",
+      "~/GitHub/website",
+      "~/GitHub/tools"
     ],
     "exclude": ["node_modules", ".git", "dist", "build", "target"]
   },
@@ -404,7 +404,7 @@ The **Claude Orchestrator** is a revolutionary tool that manages unlimited devel
       "id": "epic-survivors-work1-claude",
       "repository": {
         "name": "epic-survivors",
-        "path": "/home/ab/GitHub/games/monogame/epic-survivors",
+        "path": "~/GitHub/games/monogame/epic-survivors",
         "type": "monogame-game"
       },
       "worktree": "work1",
@@ -415,7 +415,7 @@ The **Claude Orchestrator** is a revolutionary tool that manages unlimited devel
       "id": "epic-survivors-work1-server",
       "repository": {
         "name": "epic-survivors",
-        "path": "/home/ab/GitHub/games/monogame/epic-survivors"
+        "path": "~/GitHub/games/monogame/epic-survivors"
       },
       "worktree": "work1",
       "terminalType": "server",
@@ -427,7 +427,7 @@ The **Claude Orchestrator** is a revolutionary tool that manages unlimited devel
       "id": "hyfire2-work1-claude",
       "repository": {
         "name": "HyFire2",
-        "path": "/home/ab/GitHub/games/hytopia/games/HyFire2",
+        "path": "~/GitHub/games/hytopia/games/HyFire2",
         "type": "hytopia-game"
       },
       "worktree": "work1",
@@ -438,7 +438,7 @@ The **Claude Orchestrator** is a revolutionary tool that manages unlimited devel
       "id": "hyfire2-work1-server",
       "repository": {
         "name": "HyFire2",
-        "path": "/home/ab/GitHub/games/hytopia/games/HyFire2"
+        "path": "~/GitHub/games/hytopia/games/HyFire2"
       },
       "worktree": "work1",
       "terminalType": "server",
@@ -815,7 +815,7 @@ The **Claude Orchestrator** is a revolutionary tool that manages unlimited devel
 │  ┌──────────────────────────────────────────────────┐              │
 │  │  User selects: "epic-survivors"                  │              │
 │  │  Auto-detects type: "monogame-game"              │              │
-│  │  Path: /home/ab/GitHub/games/monogame/...        │              │
+│  │  Path: ~/GitHub/games/monogame/...               │              │
 │  └──────────────────────────────────────────────────┘              │
 │          │                                                          │
 │          ▼                                                          │

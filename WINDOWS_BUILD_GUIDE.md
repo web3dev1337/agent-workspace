@@ -1026,7 +1026,7 @@ npm start
 
 **Production:** Run from installed app
 ```
-C:\Users\AB\AppData\Local\Claude Orchestrator\claude-orchestrator.exe
+%LOCALAPPDATA%\\Claude Orchestrator\\claude-orchestrator.exe
 # Uses bundled resources from installation
 ```
 

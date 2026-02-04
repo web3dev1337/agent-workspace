@@ -1,12 +1,17 @@
 const fetch = require('node-fetch');
 
+const BASE_URL = process.env.DIFF_VIEWER_BASE_URL || 'http://localhost:7655';
+const OWNER = process.env.DIFF_VIEWER_DEBUG_OWNER || 'facebook';
+const REPO = process.env.DIFF_VIEWER_DEBUG_REPO || 'react';
+const PR_NUMBER = process.env.DIFF_VIEWER_DEBUG_PR || '25000';
+
 async function testAPI() {
   console.log('🧪 Testing Diff Viewer API...\n');
   
   try {
     // Test GitHub API
     console.log('📥 Fetching PR data from GitHub API...');
-    const githubResponse = await fetch('http://localhost:7655/api/github/pr/NeuralPixelGames/HyFire2/876');
+    const githubResponse = await fetch(`${BASE_URL}/api/github/pr/${OWNER}/${REPO}/${PR_NUMBER}`);
     const githubData = await githubResponse.json();
     
     if (githubData.error) {
@@ -33,7 +38,7 @@ async function testAPI() {
     
     // Test Diff Analysis API
     console.log('📊 Testing Diff Analysis API...');
-    const diffResponse = await fetch('http://localhost:7655/api/diff/pr/NeuralPixelGames/HyFire2/876');
+    const diffResponse = await fetch(`${BASE_URL}/api/diff/pr/${OWNER}/${REPO}/${PR_NUMBER}`);
     const diffData = await diffResponse.json();
     
     console.log(`✅ Analyzed ${diffData.files.length} files\n`);

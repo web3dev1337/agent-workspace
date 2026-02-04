@@ -12,8 +12,9 @@ read
 
 # Step 2: Clear the cache
 echo "2️⃣ Clearing cache database..."
-cd ${WORKTREE_BASE:-$HOME}/HyFire2-work1/claude-orchestrator/diff-viewer
-rm -f server/cache/diff-cache.db
+DIFF_VIEWER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$DIFF_VIEWER_DIR"
+rm -f cache/diffs.db
 echo "✅ Cache cleared!"
 echo ""
 
@@ -25,6 +26,6 @@ echo "✅ Server started!"
 echo ""
 
 echo "4️⃣ Wait 5 seconds, then refresh your browser at:"
-echo "   http://localhost:7655/pr/NeuralPixelGames/HyFire2/925"
+echo "   http://localhost:7655/pr/OWNER/REPO/PR_NUMBER"
 echo ""
 echo "The analysis will be regenerated with the advanced semantic engine!"

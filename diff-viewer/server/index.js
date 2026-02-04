@@ -7,6 +7,7 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.DIFF_VIEWER_PORT || 7655;
+const HOST = process.env.DIFF_VIEWER_HOST || '127.0.0.1';
 
 // Initialize WebSocket
 const WebSocketManager = require('./websocket');
@@ -16,7 +17,31 @@ const wsManager = new WebSocketManager(server);
 app.locals.wsManager = wsManager;
 
 // Middleware
-app.use(cors());
+const enableCors = (() => {
+  const raw = String(process.env.DIFF_VIEWER_ENABLE_CORS || '').trim().toLowerCase();
+  return ['1', 'true', 'yes'].includes(raw);
+})();
+
+if (enableCors) {
+  const allowedRaw = String(process.env.DIFF_VIEWER_CORS_ORIGINS || '').trim();
+  const allowed = allowedRaw
+    ? allowedRaw.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
+
+  // If no allowlist is provided, keep it local-only by default.
+  app.use(cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // same-origin / curl
+      const selfOrigins = [
+        `http://${HOST}:${PORT}`,
+        HOST === '127.0.0.1' ? `http://localhost:${PORT}` : null
+      ].filter(Boolean);
+      if (selfOrigins.includes(origin)) return cb(null, true);
+      if (allowed.includes(origin)) return cb(null, true);
+      return cb(new Error('CORS blocked'), false);
+    }
+  }));
+}
 app.use(express.json());
 
 // Serve static files from client build
@@ -68,8 +93,8 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-server.listen(PORT, () => {
-  console.log(`🔍 Diff Viewer running on http://localhost:${PORT}`);
-  console.log(`📊 API available at http://localhost:${PORT}/api`);
+server.listen(PORT, HOST, () => {
+  console.log(`🔍 Diff Viewer running on http://${HOST}:${PORT}`);
+  console.log(`📊 API available at http://${HOST}:${PORT}/api`);
   console.log(`🔌 WebSocket ready for real-time updates`);
 });

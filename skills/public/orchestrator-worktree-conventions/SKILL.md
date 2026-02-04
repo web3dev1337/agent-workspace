@@ -11,7 +11,7 @@ This skill defines the **standard directory layout** and **worktree naming conve
 
 ## Quick Rules
 
-- **Never edit the user’s run-only orchestrator instance:** avoid `/home/ab/GitHub/tools/automation/claude-orchestrator/master` (it’s used on port 3000). Do all orchestrator dev work in `.../claude-orchestrator-dev`.
+- **Never edit the user’s run-only orchestrator instance:** avoid `~/GitHub/tools/automation/claude-orchestrator/master` (it’s used on port 3000). Do all orchestrator dev work in `.../claude-orchestrator-dev`.
 - Prefer the **worktree layout**: each project has a stable `master/` folder plus multiple `workN/` folders (e.g., `work1`…`work8`) for parallel work.
 - Keep paths deterministic: the orchestrator and scripts should be able to derive category/framework/project/worktree from folder location.
 

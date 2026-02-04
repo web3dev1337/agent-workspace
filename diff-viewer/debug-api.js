@@ -1,22 +1,27 @@
 // Debug script to test the API
 const fetch = require('node-fetch');
 
+const BASE_URL = process.env.DIFF_VIEWER_BASE_URL || 'http://localhost:7655';
+const OWNER = process.env.DIFF_VIEWER_DEBUG_OWNER || 'facebook';
+const REPO = process.env.DIFF_VIEWER_DEBUG_REPO || 'react';
+const PR_NUMBER = process.env.DIFF_VIEWER_DEBUG_PR || '25000';
+
 async function testAPI() {
   console.log('Testing diff viewer API...\n');
   
   // Test health endpoint
   try {
-    const health = await fetch('http://localhost:7655/api/health');
+    const health = await fetch(`${BASE_URL}/api/health`);
     const healthData = await health.json();
     console.log('✅ Health check:', healthData);
   } catch (e) {
     console.log('❌ Health check failed:', e.message);
   }
   
-  // Test a known public PR for comparison
+  // Test a PR (override via env: DIFF_VIEWER_DEBUG_OWNER/REPO/PR)
   try {
-    console.log('\n📋 Testing with a public repo (facebook/react #25000)...');
-    const response = await fetch('http://localhost:7655/api/github/pr/facebook/react/25000');
+    console.log(`\n📋 Testing PR fetch (${OWNER}/${REPO} #${PR_NUMBER})...`);
+    const response = await fetch(`${BASE_URL}/api/github/pr/${OWNER}/${REPO}/${PR_NUMBER}`);
     const data = await response.json();
     
     if (data.error) {
@@ -42,30 +47,6 @@ async function testAPI() {
     }
   } catch (e) {
     console.log('❌ API test failed:', e.message);
-  }
-  
-  // Test your private repo
-  console.log('\n📋 Testing with HyFire2 PR #876...');
-  try {
-    const response = await fetch('http://localhost:7655/api/github/pr/NeuralPixelGames/HyFire2/876');
-    const data = await response.json();
-    
-    if (data.error) {
-      console.log('❌ Error:', data.error, data.message);
-    } else {
-      console.log('✅ PR fetched successfully');
-      console.log('   Files:', data.files.length);
-      data.files.slice(0, 3).forEach((file, i) => {
-        console.log(`\n   File ${i + 1}: ${file.filename}`);
-        console.log(`   - Status: ${file.status}`);
-        console.log(`   - Changes: +${file.additions} -${file.deletions}`);
-        console.log(`   - Has patch? ${!!file.patch}`);
-        console.log(`   - Has content? old=${!!file.oldContent} new=${!!file.newContent}`);
-        console.log(`   - Patch length: ${file.patch?.length || 0}`);
-      });
-    }
-  } catch (e) {
-    console.log('❌ Private repo test failed:', e.message);
   }
 }
 
