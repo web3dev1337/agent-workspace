@@ -8279,14 +8279,33 @@ class ClaudeOrchestrator {
       return a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
     };
 
+    // Extract worktree ID from path (e.g., "work4" from ".../zoo-game/work4")
+    const pathParts = target.split('/').filter(Boolean);
+    const worktreeId = pathParts[pathParts.length - 1] || '';
+    // Also get repo name for better matching (e.g., "zoo-game" from ".../zoo-game/work4")
+    const repoName = pathParts.length >= 2 ? pathParts[pathParts.length - 2] : '';
+
     const sessionIds = [];
     for (const [sessionId, session] of this.sessions) {
       if (!sessionId || !session) continue;
       if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
+
+      // Try matching by cwd first
       const cwd = session?.config?.cwd || session?.cwd || '';
-      if (!cwd) continue;
-      if (!overlaps(cwd, target)) continue;
-      sessionIds.push(String(sessionId));
+      if (cwd && overlaps(cwd, target)) {
+        sessionIds.push(String(sessionId));
+        continue;
+      }
+
+      // Fallback: match by worktree ID pattern in session ID (e.g., "zoo-game-work4-claude")
+      const sid = String(sessionId).toLowerCase();
+      const wid = worktreeId.toLowerCase();
+      if (wid && (sid.includes(`-${wid}-`) || sid.endsWith(`-${wid}`))) {
+        // Extra check: if we have repo name, make sure it matches too
+        if (!repoName || sid.includes(repoName.toLowerCase())) {
+          sessionIds.push(String(sessionId));
+        }
+      }
     }
 
     // Stable ordering: keep pairs adjacent, always put Agent left of Server.
