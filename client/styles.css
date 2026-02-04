@@ -2446,16 +2446,26 @@ header h1 {
   overflow-x: hidden;
 }
 
-/* Super compact Review Console header */
+/* Unified single-row Review Console header */
 .rc-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 8px;
+  gap: 6px;
+  padding: 4px 8px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   margin-bottom: 4px;
+  flex-wrap: nowrap;
+  min-height: 32px;
+}
+
+.rc-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .rc-header-path {
@@ -2463,26 +2473,89 @@ header h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 200px;
+  max-width: 180px;
 }
 
 .rc-header-branch {
   color: var(--accent-primary);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .rc-header-pr {
   color: var(--accent-success);
   text-decoration: none;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .rc-header-pr:hover {
   text-decoration: underline;
 }
 
-.rc-header .rc-tiny-btn:last-child {
+.rc-header-toggles {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   margin-left: auto;
+  flex-shrink: 0;
+}
+
+.rc-sep {
+  color: var(--text-tertiary);
+  opacity: 0.5;
+  margin: 0 4px;
+}
+
+.rc-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.rc-outcome-select {
+  padding: 2px 4px;
+  font-size: 0.7rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  max-width: 100px;
+}
+
+.rc-merge-btn {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--accent-success);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rc-merge-btn:hover {
+  filter: brightness(1.1);
+}
+
+.rc-close-btn {
+  margin-left: 4px;
+}
+
+/* Details panel for review console (hidden by default, toggled via 📝) */
+.rc-details-only {
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  margin-bottom: 4px;
+}
+
+.rc-details-only.hidden {
+  display: none;
 }
 
 /* Agent Startup Modal (Dynamic) */
