@@ -1637,6 +1637,10 @@ header h1 {
 .worktree-inspector-modal.fullscreen .worktree-inspector-body,
 .worktree-inspector-modal.docked .worktree-inspector-body {
   overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -2279,7 +2283,18 @@ header h1 {
   gap: 8px;
   flex: 1;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
+}
+
+/* When terminals hidden, right column takes full width */
+.rc-main-grid:has(.rc-left-col.hidden) {
+  grid-template-columns: 1fr;
+}
+
+/* Fallback for browsers without :has() */
+.rc-main-grid.terminals-hidden {
+  grid-template-columns: 1fr;
 }
 
 /* Left column: Terminals stack */
@@ -2415,10 +2430,11 @@ header h1 {
 .rc-diff-iframe {
   flex: 1;
   width: 100%;
+  height: 100%;
   border: none;
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   background: var(--bg-primary);
-  min-height: 200px;
+  min-height: 300px;
 }
 
 .rc-diff-iframe.hidden {
