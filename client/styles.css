@@ -2276,10 +2276,10 @@ header h1 {
   border-color: var(--accent-primary);
 }
 
-/* Main 2-column grid: Terminals | Commits+Diff */
+/* Main 2-column grid: Terminals (30%) | Commits+Diff (70%) */
 .rc-main-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 3fr 7fr;
   gap: 8px;
   flex: 1;
   min-height: 0;
