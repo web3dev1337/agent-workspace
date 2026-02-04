@@ -129,7 +129,7 @@ In the workspace/terminal configuration, add:
   "id": "claudesworth-bot",
   "name": "Claudesworth",
   "type": "service",
-  "cwd": "/home/ab/GitHub/tools/discord-task-bot",
+  "cwd": "~/GitHub/tools/discord-task-bot",
   "command": "npm run dev",
   "autoStart": true,
   "icon": "🤖"
@@ -145,7 +145,7 @@ Add a Claude Code terminal configured to handle queue processing:
   "id": "discord-queue-processor",
   "name": "Discord Queue Processor",
   "type": "claude",
-  "cwd": "/home/ab",
+  "cwd": "~",
   "autoStart": false,
   "icon": "📥"
 }

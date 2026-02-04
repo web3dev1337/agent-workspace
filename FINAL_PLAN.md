@@ -6,7 +6,7 @@
 ## Project Types (Based on Your Actual GitHub Structure)
 
 ```
-/home/ab/GitHub/
+~/GitHub/
 ├── games/
 │   ├── hytopia/      → TYPE: hytopia-game (HyFire 2, Epic Survivors)
 │   ├── monogame/     → TYPE: monogame-game (C# games)

@@ -80,8 +80,8 @@ describe('GitHelper environment', () => {
     const { GitHelper } = require('../../server/gitHelper');
     const helper = new GitHelper();
 
-    // WORKTREE_BASE_PATH is /tmp in this test; /home/ab is invalid.
-    const branch = await helper.getCurrentBranch('/home/ab/not-allowed', true);
+    // WORKTREE_BASE_PATH is /tmp in this test; /home/user is invalid.
+    const branch = await helper.getCurrentBranch('/home/user/not-allowed', true);
     expect(branch).toBe('invalid-path');
     expect(calls.length).toBe(0);
   });

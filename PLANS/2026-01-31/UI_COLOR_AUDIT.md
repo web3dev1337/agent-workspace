@@ -5,7 +5,7 @@ Generated: 2026-01-31T12:42:31.140Z
 ## Scope
 
 - Files scanned: 27 (css: 3, js: 21, html: 3)
-- Root: `/home/ab/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev`
+- Root: `~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev`
 - Matches: hex (`#rgb/#rrggbb/#rrggbbaa`), `rgb()/rgba()`, `hsl()/hsla()`, and the named colors `white/black/transparent`.
 
 ## Colors (sorted by frequency)

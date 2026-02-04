@@ -118,7 +118,7 @@ class SessionManager extends EventEmitter {
     } catch (error) {
       logger.warn('Could not load config.json, using defaults', { error: error.message, stack: error.stack });
       return {
-        server: { port: 3000, host: "0.0.0.0" },
+        server: { port: 3000, host: "127.0.0.1" },
         worktrees: { basePath: "auto", count: 8 },
         sessions: { timeoutMs: 1800000, maxBufferSize: 100000, maxProcessesPerSession: 50 },
         logging: { level: "info" },

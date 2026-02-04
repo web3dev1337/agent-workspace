@@ -160,7 +160,7 @@ scripts/
 ### **Installation**
 ```bash
 # Install startup shortcuts
-cd /home/ab/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
+cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 bash scripts/install-startup.sh
 ```
 

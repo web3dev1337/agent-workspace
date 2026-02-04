@@ -5500,13 +5500,37 @@ app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
 });
 
 // Start server
-const PORT = process.env.ORCHESTRATOR_PORT || 3000;
-const HOST = process.env.ORCHESTRATOR_HOST || process.env.HOST || '0.0.0.0';
+const PORT = Number(process.env.ORCHESTRATOR_PORT || 3000);
+const HOST = String(process.env.ORCHESTRATOR_HOST || process.env.HOST || '127.0.0.1');
+
+function isLoopbackHost(host) {
+  const h = String(host || '').trim().toLowerCase();
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1';
+}
+
+function isBindAllHost(host) {
+  const h = String(host || '').trim().toLowerCase();
+  return h === '0.0.0.0' || h === '::';
+}
+
+const allowInsecureLanNoAuth = (() => {
+  const raw = String(process.env.ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH || '').trim().toLowerCase();
+  return ['1', 'true', 'yes'].includes(raw);
+})();
+
+if (!isLoopbackHost(HOST) && !AUTH_TOKEN && !allowInsecureLanNoAuth) {
+  logger.error('Refusing to bind to a non-loopback host without AUTH_TOKEN. Set AUTH_TOKEN or set ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH=1 to override.', { host: HOST, port: PORT });
+  process.exit(1);
+}
 
 httpServer.listen(PORT, HOST, () => {
   logger.info(`Server running on http://${HOST}:${PORT}`);
-  if (HOST === '0.0.0.0') {
-    logger.info(`LAN access available on port ${PORT}`);
+  if (!isLoopbackHost(HOST)) {
+    const bindType = isBindAllHost(HOST) ? 'bind-all' : 'explicit-host';
+    logger.info(`LAN access enabled (${bindType}) on port ${PORT}`);
+    if (!AUTH_TOKEN) {
+      logger.warn('LAN access is enabled without AUTH_TOKEN. This is insecure; anyone on the network can control this orchestrator.', { host: HOST, port: PORT });
+    }
   }
   if (AUTH_TOKEN) {
     logger.info('Authentication enabled');

@@ -28,10 +28,8 @@ Open your browser to: **http://localhost:7655**
 
 ⚠️ **IMPORTANT**: The server runs on port **7655**, not 7656!
 
-### Test URLs:
-- http://localhost:7655/pr/facebook/react/27000
-- http://localhost:7655/pr/microsoft/vscode/123456
-- http://localhost:7655/pr/NeuralPixelGames/HyFire2/925
+### URL format:
+- http://localhost:7655/pr/OWNER/REPO/PR_NUMBER
 
 ## Features Working:
 
