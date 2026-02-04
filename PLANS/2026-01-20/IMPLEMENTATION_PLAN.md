@@ -4,7 +4,7 @@ This plan converts `PLANS/2026-01-20/REQUESTED_CHANGES.md` into an executable, P
 
 ## Ground Rules (Non‑Negotiables)
 
-- **Do not impact your running instance** in `/home/<user>/GitHub/tools/automation/claude-orchestrator/master` (port **3000**).
+- **Do not impact your running instance** in `~/GitHub/tools/automation/claude-orchestrator/master` (port **3000**).
 - Use this repo’s dev ports (**4000+**) and prefer **4001** for automated test servers.
 - Ship in **small PRs**. Each PR:
   1) reproduces a single issue (or small cohesive set),

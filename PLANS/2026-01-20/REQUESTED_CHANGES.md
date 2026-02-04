@@ -4,7 +4,7 @@ This document captures (verbatim intent, condensed) all requested changes and is
 
 ## Context / Constraints
 
-- You are actively running another orchestrator instance from the separate worktree at `/home/<user>/GitHub/tools/automation/claude-orchestrator/master` on **port 3000**.
+- You are actively running another orchestrator instance from the separate worktree at `~/GitHub/tools/automation/claude-orchestrator/master` on **port 3000**.
 - All local dev/testing work in this repo should **avoid port 3000**. Prefer running this repo on **4000+** (or **4001** for test servers).
 - Keep work **modular** and **performance-aware**.
 - Ship changes as a sequence of small PRs: **1 change → tests → commit → push → PR**.

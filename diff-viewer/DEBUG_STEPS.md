@@ -9,14 +9,14 @@
 
 ### 1. Rebuild the client with debug logging
 ```bash
-cd /home/<user>/HyFire2-work1/claude-orchestrator/diff-viewer/client
+cd <path-to-your-worktree>/claude-orchestrator/diff-viewer/client
 npm run build
 ```
 
 ### 2. Clear the cache to force re-analysis
 ```bash
-cd /home/<user>/HyFire2-work1/claude-orchestrator/diff-viewer
-rm -f server/cache/diff-cache.db
+cd <path-to-your-worktree>/claude-orchestrator/diff-viewer
+rm -f cache/diffs.db
 ```
 
 ### 3. Restart the server
@@ -26,7 +26,7 @@ npm run dev
 ```
 
 ### 4. Access the URL again
-http://localhost:7655/pr/NeuralPixelGames/HyFire2/925
+http://localhost:7655/pr/OWNER/REPO/PR_NUMBER
 
 ### 5. Check the browser console
 Look for the debug messages:

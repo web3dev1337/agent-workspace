@@ -37,6 +37,9 @@ config/security.json
 license-private-key.pem
 license.json
 
+# Migration backups / local artifacts
+config.json.pre-workspace-backup
+
 # User-specific settings
 user-settings.json
 .user-settings-metadata.json
@@ -58,3 +61,6 @@ coverage/
 # Playwright
 test-results/
 playwright-report/
+
+# Diff viewer cache (contains derived data; never commit)
+diff-viewer/cache/

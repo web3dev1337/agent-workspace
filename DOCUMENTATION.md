@@ -80,14 +80,14 @@ Edit `.env` file:
 ```env
 # Server
 ORCHESTRATOR_PORT=3000
-HOST=0.0.0.0
+ORCHESTRATOR_HOST=127.0.0.1
+# For LAN access (recommended with AUTH_TOKEN):
+# ORCHESTRATOR_HOST=0.0.0.0
 
 # Security
 AUTH_TOKEN=your-secret-token
 
-# Paths
-WORKTREE_BASE_PATH=/home/ab
-WORKTREE_COUNT=8
+# Worktrees are configured via `config.json` (worktrees.basePath/worktrees.count)
 
 # Session settings
 SESSION_TIMEOUT=1800000  # 30 minutes

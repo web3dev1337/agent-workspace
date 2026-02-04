@@ -44,7 +44,7 @@ The Claude Orchestrator is **already highly sophisticated** with advanced per-wo
 ### Folder Structure
 
 ```
-/home/<user>/
+~/
 ├── HyFire2/                           # Current project (8 worktrees + master)
 │   ├── master/
 │   ├── work1/
@@ -164,7 +164,7 @@ Instead of one hardcoded "HyFire 2" setup, the orchestrator needs to support mul
   "description": "Tactical 5v5 shooter for Hytopia",
 
   "repository": {
-    "path": "/home/<user>/HyFire2",
+    "path": "~/HyFire2",
     "masterBranch": "master",
     "remote": "https://github.com/web3dev1337/hyfire2"
   },
@@ -346,13 +346,13 @@ Since different project types need different launch settings, create templates:
 {
   "version": "2.0.0",
   "activeWorkspace": "hyfire2",  // Currently selected workspace
-  "workspaceDirectory": "/home/<user>/.orchestrator/workspaces",
+  "workspaceDirectory": "~/.orchestrator/workspaces",
 
   "discovery": {
     "scanPaths": [
-      "/home/<user>/GitHub/games",
-      "/home/<user>/GitHub/website",
-      "/home/<user>/GitHub/tools"
+      "~/GitHub/games",
+      "~/GitHub/website",
+      "~/GitHub/tools"
     ],
     "exclude": ["node_modules", ".git", "dist", "build"]
   },
@@ -487,9 +487,9 @@ What type of project?
 Select Repository
 
 Auto-detected Projects:
-  ● /home/<user>/GitHub/games/hytopia/games/EpicSurvivors
-  ● /home/<user>/GitHub/website/carm-crypto
-  ● /home/<user>/GitHub/games/monogame/AdventureGame
+  ● ~/GitHub/games/hytopia/games/EpicSurvivors
+  ● ~/GitHub/website/carm-crypto
+  ● ~/GitHub/games/monogame/AdventureGame
 
 Or enter custom path:
 [________________________________]  [Browse...]
@@ -527,7 +527,7 @@ Review Workspace
 
 Name: Epic Survivors
 Type: hytopia-game
-Repository: /home/<user>/GitHub/games/hytopia/games/EpicSurvivors
+Repository: ~/GitHub/games/hytopia/games/EpicSurvivors
 Worktrees: 8 (on-demand)
 Terminals: 8 Claude+Server pairs
 
@@ -593,7 +593,7 @@ config.json → ~/.orchestrator/config.json  - New location & structure
      constructor() {
        this.workspaces = new Map();
        this.activeWorkspace = null;
-       this.configPath = '/home/<user>/.orchestrator';
+       this.configPath = '$HOME/.orchestrator';
      }
 
      async loadWorkspaces() {
@@ -1465,7 +1465,7 @@ Currently in HyFire 2 workspace, working on work1. Epic Survivors workspace has 
 
    set -e
 
-   ORCH_DIR="/home/<user>/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev"
+   ORCH_DIR="$HOME/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev"
    PORT=3000
    CLIENT_PORT=2080
 
@@ -1535,8 +1535,8 @@ Currently in HyFire 2 workspace, working on work1. Epic Survivors workspace has 
    Type=Application
    Name=Claude Orchestrator
    Comment=Multi-workspace development environment
-   Exec=/home/<user>/.local/bin/orchestrator
-   Icon=/home/<user>/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev/client/icon.png
+   Exec=/home/YOUR_USERNAME/.local/bin/orchestrator
+   Icon=/home/YOUR_USERNAME/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev/client/icon.png
    Terminal=false
    Categories=Development;IDE;
    ```
@@ -1557,8 +1557,8 @@ Currently in HyFire 2 workspace, working on work1. Epic Survivors workspace has 
    Type=Application
    Name=Claude Orchestrator
    Comment=Multi-workspace development environment
-   Exec=/home/<user>/.local/bin/orchestrator
-   Icon=/home/<user>/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev/client/icon.png
+   Exec=/home/YOUR_USERNAME/.local/bin/orchestrator
+   Icon=/home/YOUR_USERNAME/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev/client/icon.png
    Terminal=false
    Categories=Development;IDE;
    EOF
@@ -1603,7 +1603,7 @@ Currently in HyFire 2 workspace, working on work1. Epic Survivors workspace has 
    - Creates `~/.orchestrator/` directory structure
    - Generates `config.json` from current `config.json`
    - Creates `workspaces/hyfire2.json` based on current setup:
-     - Path: `/home/<user>/HyFire2`
+     - Path: `~/HyFire2`
      - Worktrees: 8 (work1-8)
      - Type: `hytopia-game`
      - Launch settings: Current `serverLaunchSettings` from localStorage
@@ -1724,7 +1724,7 @@ Currently in HyFire 2 workspace, working on work1. Epic Survivors workspace has 
 ### Current Issues to Address
 
 1. **Hardcoded Paths**:
-   - `/home/<user>/HyFire2` → Use workspace config
+   - `~/HyFire2` → Use workspace config
    - Port calculation: `8080 + worktreeNum` → Use workspace config
 
 2. **Launch Settings Modal**:

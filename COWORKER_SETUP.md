@@ -87,7 +87,7 @@ The system supports these environment variables (defaults apply when unset):
 
 ## What Changed
 
-Previously, paths were hardcoded to `/home/<user>/`. Now:
+Previously, paths were hardcoded to a specific user home directory (e.g. `/home/<user>/`). Now:
 - Server automatically uses your home directory
 - All shell scripts use dynamic paths
 - No .env file required unless you have a custom setup

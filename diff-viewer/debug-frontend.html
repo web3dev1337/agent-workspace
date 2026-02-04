@@ -14,8 +14,14 @@
             output.textContent = 'Testing...\n';
             
             try {
+                const params = new URLSearchParams(window.location.search);
+                const baseUrl = params.get('base') || 'http://localhost:7655';
+                const owner = params.get('owner') || 'facebook';
+                const repo = params.get('repo') || 'react';
+                const pr = params.get('pr') || '25000';
+
                 // Test fetching PR data
-                const response = await fetch('http://localhost:7655/api/github/pr/NeuralPixelGames/HyFire2/876');
+                const response = await fetch(`${baseUrl}/api/github/pr/${owner}/${repo}/${pr}`);
                 const data = await response.json();
                 
                 output.textContent += `\nPR Data fetched: ${data.files.length} files\n`;
@@ -35,7 +41,7 @@
                 }
                 
                 // Test diff analysis
-                const diffResponse = await fetch('http://localhost:7655/api/diff/pr/NeuralPixelGames/HyFire2/876');
+                const diffResponse = await fetch(`${baseUrl}/api/diff/pr/${owner}/${repo}/${pr}`);
                 const diffData = await diffResponse.json();
                 
                 output.textContent += `\n\nDiff Analysis:\n`;

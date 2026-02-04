@@ -643,7 +643,7 @@ This means:
 ## Integration: Continuous-Claude-Lite
 
 ### Existing System
-Located at: `/home/<user>/GitHub/tools/continuous-claude-lite/`
+Located at: `~/GitHub/tools/continuous-claude-lite/`
 
 Provides:
 - **Ledgers** (`thoughts/ledgers/CONTINUITY_CLAUDE-*.md`) - Session state per worktree
