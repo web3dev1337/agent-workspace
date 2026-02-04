@@ -36,13 +36,13 @@ Tier tagging persistence:
 
 ## Launching Agents from Trello
 
-**Zoo Hytopia board:** `691e5516c77f3e9c9fd89f61` | **AB T3 Que list:** `697feb0865aa4467a08831d9`
+**Zoo Hytopia board:** `<TRELLO_BOARD_ID>` | **Tier-3 queue list:** `<TRELLO_LIST_ID>`
 
 **Get card with agent field:**
 ```bash
 # Get card details
 bash ~/.claude/scripts/trello-get.sh card CARD_ID | jq '{name, desc}'
-# Get agent field (Claude=697ff232d7b65d75a1d5f3d6, Codex=697ff232d7b65d75a1d5f3d7)
+# Get agent field (Claude=<TRELLO_FIELD_OPTION_ID_CLAUDE>, Codex=<TRELLO_FIELD_OPTION_ID_CODEX>)
 curl -sS "https://api.trello.com/1/cards/CARD_ID/customFieldItems?key=$KEY&token=$TOKEN" | jq -r '.[0].idValue'
 ```
 
