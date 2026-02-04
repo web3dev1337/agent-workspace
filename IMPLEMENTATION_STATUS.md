@@ -84,7 +84,7 @@
 
 ### Run Migration Script
 ```bash
-cd /home/<user>/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
+cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 node scripts/migrate-to-workspaces.js
 ```
 
@@ -334,7 +334,7 @@ socket.on('list-workspaces', () => {
 
 **Problem**:
 ```javascript
-const scriptPath = `/home/<user>/HyFire2-work${worktreeNum}/build-production-with-console.sh`;
+const scriptPath = `${process.env.HOME}/HyFire2-work${worktreeNum}/build-production-with-console.sh`;
 ```
 
 **Fix** (shipped): Build production now uses the requesting session’s `cwd` (worktree root) to locate and run `build-production-with-console.sh`, avoiding any hardcoded user paths.
@@ -526,7 +526,7 @@ const scriptPath = `/home/<user>/HyFire2-work${worktreeNum}/build-production-wit
 
 ```bash
 # 1. Pull latest
-cd /home/<user>/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
+cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
 git pull origin feature/multi-workspace-system
 
 # 2. Run migration (if not done)

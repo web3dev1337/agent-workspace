@@ -423,7 +423,7 @@ class WorkspaceManager {
         continue;
       }
 
-      // Fix common “repo root terminal” mis-shape: repoPath=/home/<user>/GitHub, worktree=GitHub → joined /home/<user>/GitHub/GitHub (missing)
+      // Fix common “repo root terminal” mis-shape: repoPath=/home/user/GitHub, worktree=GitHub → joined /home/user/GitHub/GitHub (missing)
       if (!explicitWorktreePath && repoPath && worktree) {
         const joined = derived;
         if (!fsSync.existsSync(joined) && fsSync.existsSync(repoPath) && path.basename(repoPath) === worktree) {

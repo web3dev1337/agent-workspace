@@ -13,7 +13,7 @@ These scripts provide one-click launching of the Claude Orchestrator from Window
 2. **Update the path** (if needed):
    - Open the `.bat` file in Notepad
    - Change the path on line with `code --folder-uri` to match your setup
-   - Default is: `/home/<user>/GitHub/tools/automation/claude-orchestrator/master`
+   - Default is: `~/GitHub/tools/automation/claude-orchestrator/master`
 
 3. **Double-click to launch!**
 
