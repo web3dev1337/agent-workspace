@@ -6,6 +6,20 @@
   color: var(--text-primary);
 }
 
+/* Embed mode - no header, compact */
+.smart-diff-viewer.embedded {
+  height: 100%;
+}
+
+.smart-diff-viewer.embedded .left-panel {
+  width: 220px;
+  min-width: 180px;
+}
+
+.smart-diff-viewer.embedded .file-header-bar {
+  padding: 4px 8px;
+}
+
 /* Header */
 .viewer-header {
   display: flex;

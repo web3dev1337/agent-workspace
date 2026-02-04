@@ -21,6 +21,10 @@ const SmartDiffViewer = ({ data, initialFilePath = '' }) => {
   const [mergeBusy, setMergeBusy] = useState(false);
   const [mergeOk, setMergeOk] = useState(false);
   const [mergeError, setMergeError] = useState('');
+
+  // Detect embed mode from URL param
+  const isEmbedded = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embed') === '1';
+
   const [expandedSections, setExpandedSections] = useState({
     refactorings: true,
     moves: true,
@@ -229,54 +233,55 @@ const SmartDiffViewer = ({ data, initialFilePath = '' }) => {
   };
 
   return (
-    <div className="smart-diff-viewer">
-      {/* Header with PR info and progress */}
-      <div className="viewer-header">
-        <div className="pr-info">
-          <h2>{prTitle}</h2>
-          {metadata?.description && (
-            <p className="pr-description">{metadata.description}</p>
-          )}
-          {!!mergeError && (
-            <p className="pr-description" style={{ color: 'var(--accent-danger)' }}>
-              {mergeError}
-            </p>
-          )}
-        </div>
-        
-        <div className="overall-stats">
-          <div className="stat-item">
-            <span className="stat-label">Files</span>
-            <span className="stat-value">{files.length}</span>
+    <div className={`smart-diff-viewer ${isEmbedded ? 'embedded' : ''}`}>
+      {/* Header with PR info and progress - hidden in embed mode */}
+      {!isEmbedded && (
+        <div className="viewer-header">
+          <div className="pr-info">
+            <h2>{prTitle}</h2>
+            {metadata?.description && (
+              <p className="pr-description">{metadata.description}</p>
+            )}
+            {!!mergeError && (
+              <p className="pr-description" style={{ color: 'var(--accent-danger)' }}>
+                {mergeError}
+              </p>
+            )}
           </div>
-          <div className="stat-item">
-            <span className="stat-label">Progress</span>
-            <span className="stat-value">{reviewProgress.percentage}%</span>
-          </div>
-          {diff.stats?.noiseReduction && (
-            <div className="stat-item">
-              <span className="stat-label">Noise Reduced</span>
-              <span className="stat-value">{diff.stats.noiseReduction}%</span>
-            </div>
-          )}
-        </div>
 
-        <div className="viewer-actions">
-          {prInfo && (
-            <>
-              <a
-                className="viewer-action-btn"
-                href={prUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Open PR on GitHub"
-              >
-                ↗ PR
-              </a>
-              <button
-                className="viewer-action-btn viewer-action-merge-btn"
-                onClick={mergePullRequest}
-                title={mergeOk ? 'PR merged' : 'Merge PR'}
+          <div className="overall-stats">
+            <div className="stat-item">
+              <span className="stat-label">Files</span>
+              <span className="stat-value">{files.length}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Progress</span>
+              <span className="stat-value">{reviewProgress.percentage}%</span>
+            </div>
+            {diff.stats?.noiseReduction && (
+              <div className="stat-item">
+                <span className="stat-label">Noise Reduced</span>
+                <span className="stat-value">{diff.stats.noiseReduction}%</span>
+              </div>
+            )}
+          </div>
+
+          <div className="viewer-actions">
+            {prInfo && (
+              <>
+                <a
+                  className="viewer-action-btn"
+                  href={prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open PR on GitHub"
+                >
+                  ↗ PR
+                </a>
+                <button
+                  className="viewer-action-btn viewer-action-merge-btn"
+                  onClick={mergePullRequest}
+                  title={mergeOk ? 'PR merged' : 'Merge PR'}
                 type="button"
                 disabled={mergeBusy || mergeOk}
               >
@@ -294,6 +299,7 @@ const SmartDiffViewer = ({ data, initialFilePath = '' }) => {
           </button>
         </div>
       </div>
+      )}
 
       <div className="viewer-content">
         {/* Left panel - File tree with review state */}
