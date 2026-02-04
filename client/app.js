@@ -9120,12 +9120,14 @@ class ClaudeOrchestrator {
 		        const diffPanelEl = bodyEl.querySelector('[data-rc-panel="diff"]');
 
 		        const updateGrid = () => {
-		          const visible = [terminalsPanelEl, filesPanelEl, commitsPanelEl, diffPanelEl]
+		          const visible = [terminalsPanelEl, commitsPanelEl, diffPanelEl]
 		            .filter(Boolean)
 		            .filter(el => !el.classList.contains('hidden')).length;
+		          const terminalsHidden = terminalsPanelEl?.classList.contains('hidden');
 		          if (gridEl) {
 		            gridEl.classList.toggle('hidden', visible === 0);
 		            gridEl.classList.toggle('one-column', visible === 1);
+		            gridEl.classList.toggle('terminals-hidden', terminalsHidden);
 		          }
 		          if (emptyEl) emptyEl.classList.toggle('hidden', visible !== 0);
 		        };
