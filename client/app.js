@@ -8488,15 +8488,19 @@ class ClaudeOrchestrator {
 
     const reviewConsoleConfig = reviewConsole ? this.getReviewConsoleConfig() : null;
     if (reviewConsole) {
+      modal.classList.add('review-console-mode');
       if (reviewConsoleConfig?.fullscreen) modal.classList.add('fullscreen');
       else modal.classList.add('docked');
+    } else {
+      modal.classList.remove('review-console-mode');
     }
 
     const titleEl = modal.querySelector('#worktree-inspector-title');
     if (titleEl) {
       const fallback = p.replace(/\\/g, '/').split('/').filter(Boolean).slice(-2).join('/');
       const safe = String(label || fallback || 'Worktree').trim();
-      titleEl.textContent = `${reviewConsole ? 'Review Console' : 'Worktree Inspector'} • ${safe}`;
+      // For Review Console, title is in the rc-header now, so just set a minimal title
+      titleEl.textContent = reviewConsole ? '' : `Worktree Inspector • ${safe}`;
     }
 
     const bodyEl = modal.querySelector('#worktree-inspector-body');
