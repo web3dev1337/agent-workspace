@@ -7814,11 +7814,33 @@ class ClaudeOrchestrator {
 		      const diffViewerPath = prUrl ? getDiffViewerPathForGitHubUrl(prUrl) : '';
 
 		      const header = (() => {
-		        const branch = gitDetected ? escapeHtml(summary?.branch || 'unknown') : 'no-git';
+		        const branch = gitDetected ? escapeHtml(summary?.branch || '?') : '?';
+		        const shortPath = escapeHtml(p.split('/').slice(-2).join('/'));
+
+		        if (reviewConsole) {
+		          // Super compact header for Review Console
+		          const mergeable = String(pr?.mergeable || '').trim().toUpperCase();
+		          const isDraft = !!pr?.isDraft;
+		          const canMerge = prUrl && prState === 'open' && !isDraft && (!mergeable || mergeable === 'MERGEABLE');
+		          const mergeBtn = canMerge
+		            ? `<button class="rc-tiny-btn" type="button" data-pr-merge="${escapeHtml(prUrl)}" title="Merge PR">✓ Merge</button>`
+		            : '';
+
+		          return `
+		            <div class="rc-header">
+		              <span class="rc-header-path" title="${escapeHtml(p)}">${shortPath}</span>
+		              <span class="rc-header-branch">🌿 ${branch}</span>
+		              ${prUrl ? `<a class="rc-header-pr" href="${escapeHtml(prUrl)}" target="_blank" title="Open PR">${escapeHtml(prText)}</a>` : ''}
+		              ${mergeBtn}
+		              <button class="rc-tiny-btn" type="button" data-close-inspector="true" title="Close">✕</button>
+		            </div>
+		          `;
+		        }
+
+		        // Standard header for non-review-console
 		        const ahead = Number(summary?.ahead || 0);
 		        const behind = Number(summary?.behind || 0);
 	        const dirty = Array.isArray(summary?.files) ? summary.files.length : 0;
-	        const rcFullscreen = reviewConsole ? (reviewConsoleConfig?.fullscreen !== false) : false;
 
 	        const parts = [];
 	        parts.push(`<span class="worktree-inspector-chip" title="${escapeHtml(p)}">📁 ${escapeHtml(p)}</span>`);
@@ -7833,108 +7855,27 @@ class ClaudeOrchestrator {
 		          : `<span class="worktree-inspector-chip">${escapeHtml(prText)}${prState ? ` • ${escapeHtml(prState)}` : ''}</span>`;
 		        parts.push(prChip);
 
-		        if (prUrl) {
-		          parts.push(
-		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-pr-console="${escapeHtml(prUrl)}" title="Open PR Review Console (comments/files/commits)">🖥 PR Console</button>`
-		          );
-		        }
-
-		        const diffBtn = prUrl
-		          ? `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff="${escapeHtml(prUrl)}" title="Open diff viewer for PR">🔍 Diff</button>`
-		          : `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-open-diff-home="true" title="Open diff viewer">🔍 Diff</button>`;
-		        parts.push(diffBtn);
-
-		        if (reviewConsole) {
-		          parts.push(
-		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn ${rcFullscreen ? 'active' : ''}" type="button" data-review-window="fullscreen" title="Fullscreen Review Console">🖥 Full</button>`
-		          );
-		          parts.push(
-		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn ${!rcFullscreen ? 'active' : ''}" type="button" data-review-window="docked" title="Dock Review Console (narrow)">📌 Dock</button>`
-		          );
-		        }
-
-		        if (ticketUrl) {
-		          parts.push(
-		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-ticket-open="${escapeHtml(ticketUrl)}" title="Open ticket">🎫 Ticket</button>`
-		          );
-		        }
-
-		        if (reviewTaskId && (ticketCardId || ticketCardUrl)) {
-		          parts.push(
-		            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-ticket-move="${escapeHtml(reviewTaskId)}" title="Move ticket to Done list">📦 Done</button>`
-		          );
-
-	            const providerId = String(reviewRecord?.ticketProvider || 'trello').trim().toLowerCase() || 'trello';
-	            const boardId = String(reviewRecord?.ticketBoardId || '').trim();
-	            const key = (boardId && providerId) ? `${providerId}:${boardId}` : '';
-	            const conv = key ? (this.userSettings?.global?.ui?.tasks?.boardConventions?.[key] || null) : null;
-	            const forTestListId = String(conv?.forTestListId || '').trim();
-	            if (forTestListId) {
-	              parts.push(
-	                `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-ticket-move-for-test="${escapeHtml(reviewTaskId)}" data-ticket-move-listid="${escapeHtml(forTestListId)}" title="Move ticket to For Test list">🧪 For Test</button>`
-	              );
-	            }
-		        }
-
-	        if (prUrl && prState === 'open') {
-	          const mergeable = String(pr?.mergeable || '').trim().toUpperCase();
-	          const isDraft = !!pr?.isDraft;
-	          const canMerge = !isDraft && (!mergeable || mergeable === 'MERGEABLE');
-	          const reason = isDraft
-	            ? 'PR is draft'
-	            : (mergeable && mergeable !== 'MERGEABLE' ? `Not mergeable (${mergeable})` : 'Merge PR');
-	          parts.push(
-	            `<button class="worktree-inspector-chip worktree-inspector-chip-btn" type="button" data-pr-merge="${escapeHtml(prUrl)}" ${canMerge ? '' : 'disabled'} title="${escapeHtml(reason)}">✅ Merge</button>`
-	          );
-	        }
-
-				        const headerClass = reviewConsole ? 'worktree-inspector-header review-console-header' : 'worktree-inspector-header';
-				        return `<div class="${headerClass}">${parts.join('')}</div>`;
+				        return `<div class="worktree-inspector-header">${parts.join('')}</div>`;
 				      })();
 
 			      const layoutPanel = reviewConsole ? (() => {
-			        const presetBtn = (key, text, title) => {
-			          const active = rcPreset === key;
-			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-preset="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title || '')}">${escapeHtml(text)}</button>`;
+			        const tinyBtn = (dataAttr, key, text, active, title) => {
+			          return `<button class="rc-tiny-btn ${active ? 'active' : ''}" type="button" data-${dataAttr}="${escapeHtml(key)}" title="${escapeHtml(title || '')}">${escapeHtml(text)}</button>`;
 			        };
-			        const windowBtn = (key, text, title) => {
-			          const wantsFullscreen = key === 'fullscreen';
-			          const active = wantsFullscreen ? !!rc?.fullscreen : !rc?.fullscreen;
-			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-window="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title || '')}">${escapeHtml(text)}</button>`;
-			        };
-			        const sectionBtn = (key, text, title) => {
-			          const active = rcSections[key] !== false;
-			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-section="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title || '')}">${escapeHtml(text)}</button>`;
-			        };
+			        const rcFullscreen = rc?.fullscreen !== false;
 
 			        return `
-			          <div class="worktree-inspector-panel worktree-inspector-layout-panel">
-			            <div class="worktree-inspector-layout-row">
-			              <div class="worktree-inspector-layout-label">Preset</div>
-			              <div class="worktree-inspector-layout-buttons">
-			                ${presetBtn('default', 'Default', 'Terminals + Files + Commits + Diff')}
-			                ${presetBtn('review', 'Review', 'Terminals + Files + Diff')}
-			                ${presetBtn('deep', 'Deep', 'Terminals + Files + Commits + Diff')}
-			                ${presetBtn('terminals', 'Terminals', 'Terminals only')}
-			                ${presetBtn('code', 'Code', 'Files + Commits + Diff (no terminals)')}
-			              </div>
-			            </div>
-			            <div class="worktree-inspector-layout-row">
-			              <div class="worktree-inspector-layout-label">Window</div>
-			              <div class="worktree-inspector-layout-buttons">
-			                ${windowBtn('fullscreen', 'Full', 'Fullscreen Review Console')}
-			                ${windowBtn('docked', 'Docked', 'Dock on the right (narrow)')}
-			              </div>
-			            </div>
-			            <div class="worktree-inspector-layout-row">
-			              <div class="worktree-inspector-layout-label">Sections</div>
-			              <div class="worktree-inspector-layout-buttons">
-			                ${sectionBtn('terminals', 'Terminals', 'Embed terminals into the console')}
-			                ${sectionBtn('files', 'Files', 'Changed files')}
-			                ${sectionBtn('commits', 'Commits', 'Recent/unpushed commits')}
-			                ${sectionBtn('diff', 'Diff', 'Advanced Diff Viewer (embed or open in new tab)')}
-			              </div>
-			            </div>
+			          <div class="rc-layout-bar">
+			            <span class="rc-layout-group">
+			              ${tinyBtn('review-window', 'fullscreen', '⛶', rcFullscreen, 'Fullscreen')}
+			              ${tinyBtn('review-window', 'docked', '▐', !rcFullscreen, 'Docked')}
+			            </span>
+			            <span class="rc-layout-sep">|</span>
+			            <span class="rc-layout-group">
+			              ${tinyBtn('review-section', 'terminals', 'T', rcSections.terminals !== false, 'Terminals')}
+			              ${tinyBtn('review-section', 'commits', 'C', rcSections.commits !== false, 'Commits')}
+			              ${tinyBtn('review-section', 'diff', 'D', rcSections.diff !== false, 'Diff')}
+			            </span>
 			          </div>
 			        `;
 			      })() : '';
@@ -8276,112 +8217,41 @@ class ClaudeOrchestrator {
 		      const gridClass = visibleSections === 1 ? 'one-column' : '';
 		      const gridHiddenClass = visibleSections === 0 ? 'hidden' : '';
 		      const terminalsPanelHiddenClass = rcEmbedTerminals ? '' : 'hidden';
-		      const filesPanelHiddenClass = rcShowFiles ? '' : 'hidden';
 		      const commitsPanelHiddenClass = rcShowCommits ? '' : 'hidden';
 		      const diffPanelHiddenClass = rcShowDiff ? '' : 'hidden';
-		      const terminalsPanelHtml = reviewConsole ? `
-		        <div class="worktree-inspector-panel worktree-inspector-terminals-panel ${terminalsPanelHiddenClass}" data-rc-panel="terminals">
-		          <div class="worktree-inspector-panel-title-row">
-		            <div class="worktree-inspector-panel-title">Terminals</div>
-		            <div class="worktree-inspector-subtle">Live terminals for this worktree</div>
-		          </div>
-		          <div class="worktree-inspector-terminals" data-rc-terminals="true"></div>
-		        </div>
-		      ` : '';
-		      const diffPanelHtml = reviewConsole ? `
-		        <div class="worktree-inspector-panel worktree-inspector-diff-panel ${diffPanelHiddenClass}" data-rc-panel="diff">
-		          <div class="worktree-inspector-panel-title-row">
-		            <div class="worktree-inspector-panel-title">Diff</div>
-		            <div class="worktree-inspector-diff-controls">
-		              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-diff-embed="true" title="Embed Advanced Diff Viewer">Embed</button>
-		              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-diff-open="true" title="Open Advanced Diff Viewer in new tab">Open</button>
-		              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-diff-refresh="true" title="Reload embedded diff" disabled>Refresh</button>
-		              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-diff-close="true" title="Close embedded diff" disabled>Close</button>
-		            </div>
-		          </div>
-		          <div class="worktree-inspector-subtle worktree-inspector-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)')}</div>
-		          <iframe class="worktree-inspector-diff-iframe hidden" data-diff-iframe="true" title="Advanced Diff Viewer" referrerpolicy="no-referrer"></iframe>
-		        </div>
-		      ` : '';
 
 			      bodyEl.innerHTML = `
 			        ${header}
 			        ${layoutPanel}
 			        ${reviewPanel}
-			        <div class="worktree-inspector-subtle ${visibleSections === 0 ? '' : 'hidden'}" data-rc-empty="true">${reviewConsole ? 'Enable Terminals/Files/Commits/Diff sections to see context.' : 'No context available.'}</div>
-			        <div class="worktree-inspector-grid ${gridClass} ${gridHiddenClass}" data-rc-grid="true">
-			          ${terminalsPanelHtml}
-			          <div class="worktree-inspector-panel worktree-inspector-files-panel ${filesPanelHiddenClass}" data-rc-panel="files">
-			            <div class="worktree-inspector-panel-title-row">
-			              <div class="worktree-inspector-panel-title">Files</div>
-		              <div class="worktree-inspector-view-toggle">
-		                <button class="btn-secondary ${filesView === 'tree' ? 'active' : ''}" type="button" data-files-view-btn="tree" title="Folder tree">Tree</button>
-		                <button class="btn-secondary ${filesView === 'list' ? 'active' : ''}" type="button" data-files-view-btn="list" title="Flat list">List</button>
-		              </div>
-		            </div>
-		            <div class="worktree-inspector-files ${filesView === 'list' ? 'view-list' : 'view-tree'}" id="worktree-inspector-files">
-		              <div class="worktree-inspector-files-tree">
-		                ${treeHtml}
-		              </div>
-		              <div class="worktree-inspector-files-list">
-		                <table class="worktree-inspector-table">
-		                  <thead>
-		                    <tr>
-		                      <th>Status</th>
-		                      <th>Path</th>
-		                      <th>Staged</th>
-		                      <th>Unstaged</th>
-		                      <th>Sync</th>
-		                    </tr>
-		                  </thead>
-		                  <tbody>
-		                    ${fileRows || (gitDetected
-		                      ? `<tr><td colspan="5" style="opacity:0.8;">No changes.</td></tr>`
-		                      : `<tr><td colspan="5" style="opacity:0.8;">Git not detected for this path.</td></tr>`)}
-		                  </tbody>
-		                </table>
-		              </div>
-		            </div>
-		          </div>
-		          <div class="worktree-inspector-panel worktree-inspector-commits-panel ${commitsPanelHiddenClass}" data-rc-panel="commits">
-		            <div class="worktree-inspector-panel-title">${escapeHtml(commitsTitle)}</div>
-		            <div class="worktree-inspector-commits">
-	              ${commitRows || (gitDetected
-	                ? `<div style="opacity:0.8;">No commits found.</div>`
-	                : `<div style="opacity:0.8;">Git not detected for this path.</div>${gitError ? `<div class="worktree-inspector-subtle mono">${escapeHtml(gitError)}</div>` : ''}`)}
-	            </div>
-	            ${unpushedWarning}
-	          </div>
-	          ${diffPanelHtml}
-	        </div>
+			        <div class="rc-main-grid" data-rc-grid="true">
+			          <div class="rc-left-col ${terminalsPanelHiddenClass}" data-rc-panel="terminals">
+			            <div class="rc-terminals-wrap" data-rc-terminals="true"></div>
+			          </div>
+			          <div class="rc-right-col">
+			            <div class="rc-commits-section ${commitsPanelHiddenClass}" data-rc-panel="commits">
+			              <details class="rc-commits-details" open>
+			                <summary class="rc-commits-summary">${escapeHtml(commitsTitle)} <span class="rc-commits-count">(${commits.length})</span></summary>
+			                <div class="rc-commits-list">
+			                  ${commitRows || `<div class="rc-muted">No commits</div>`}
+			                </div>
+			                ${unpushedWarning}
+			              </details>
+			            </div>
+			            <div class="rc-diff-section ${diffPanelHiddenClass}" data-rc-panel="diff">
+			              <div class="rc-diff-toolbar">
+			                <button class="rc-tiny-btn" type="button" data-diff-embed="true" title="Embed">⊞</button>
+			                <button class="rc-tiny-btn" type="button" data-diff-open="true" title="Open in tab">↗</button>
+			                <button class="rc-tiny-btn" type="button" data-diff-refresh="true" title="Refresh" disabled>⟳</button>
+			                <span class="rc-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath || '/')}</span>
+			              </div>
+			              <iframe class="rc-diff-iframe hidden" data-diff-iframe="true" title="Diff Viewer"></iframe>
+			            </div>
+			          </div>
+			        </div>
 			      `;
 
-	      const filesRoot = bodyEl.querySelector('#worktree-inspector-files');
-	      const filesViewBtns = bodyEl.querySelectorAll('[data-files-view-btn]');
-	      const applyFilesView = (view) => {
-	        if (!filesRoot) return;
-	        const v = String(view || '').trim().toLowerCase();
-	        const next = (v === 'list' || v === 'tree') ? v : 'tree';
-	        filesRoot.classList.toggle('view-tree', next === 'tree');
-	        filesRoot.classList.toggle('view-list', next === 'list');
-	        filesViewBtns.forEach((btn) => {
-	          btn.classList.toggle('active', String(btn?.dataset?.filesViewBtn || '') === next);
-	        });
-	      };
-
-		      filesViewBtns.forEach((btn) => {
-		        btn.addEventListener('click', () => {
-		          const view = String(btn?.dataset?.filesViewBtn || '').trim().toLowerCase();
-		          const next = (view === 'list' || view === 'tree') ? view : 'tree';
-		          try {
-		            localStorage.setItem(filesViewKey, next);
-		          } catch {
-		            // ignore
-		          }
-		          applyFilesView(next);
-		        });
-		      });
-		      applyFilesView(filesView);
+	      // Files section removed - using diff viewer instead
 
 		      const fileSyncButtons = bodyEl.querySelectorAll('[data-file-sync]');
 		      const openFileSyncModal = (relativePath) => {
@@ -8661,7 +8531,8 @@ class ClaudeOrchestrator {
 		            try {
 		              const baseUrl = await ensureDiffViewerBaseUrl();
 		              if (!diffEmbedEnabled || currentSections.diff === false) return;
-		              const url = `${baseUrl}${targetPath}`;
+		              const embedParam = targetPath.includes('?') ? '&embed=1' : '?embed=1';
+		              const url = `${baseUrl}${targetPath}${embedParam}`;
 		              diffIframeEl.src = url;
 		              diffIframeEl.classList.remove('hidden');
 		              diffStatusEl.textContent = `Embedded: ${targetPath || baseUrl}`;
