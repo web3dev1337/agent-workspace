@@ -1927,6 +1927,268 @@ header h1 {
   color: var(--text-primary);
 }
 
+.worktree-inspector-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+  font-weight: 600;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.worktree-inspector-badge-warn {
+  background: var(--warning-color, #f0ad4e);
+  color: #000;
+}
+
+/* ===== Review Console Compact Layout ===== */
+
+.rc-layout-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.rc-layout-group {
+  display: flex;
+  gap: 2px;
+}
+
+.rc-layout-sep {
+  color: var(--text-secondary);
+  opacity: 0.4;
+  margin: 0 4px;
+}
+
+.rc-tiny-btn {
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  min-width: 20px;
+  text-align: center;
+}
+
+.rc-tiny-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.rc-tiny-btn.active {
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+  border-color: var(--accent-primary);
+}
+
+/* Main 2-column grid: Terminals | Commits+Diff */
+.rc-main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Left column: Terminals stack */
+.rc-left-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rc-left-col.hidden {
+  display: none;
+}
+
+.rc-terminals-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 4px;
+  overflow: hidden;
+}
+
+/* Terminal wrappers inside Review Console */
+.rc-terminals-wrap .terminal-wrapper {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 120px;
+  max-height: none;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+/* Agent terminal gets 75% of space */
+.rc-terminals-wrap .terminal-wrapper:first-child {
+  flex: 3;
+}
+
+/* Server terminal gets 25% */
+.rc-terminals-wrap .terminal-wrapper:nth-child(2) {
+  flex: 1;
+}
+
+/* Right column: Commits (collapsible) + Diff (fills rest) */
+.rc-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Commits section - collapsible */
+.rc-commits-section {
+  flex-shrink: 0;
+  max-height: 180px;
+  overflow: hidden;
+}
+
+.rc-commits-section.hidden {
+  display: none;
+}
+
+.rc-commits-details {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.rc-commits-summary {
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.rc-commits-summary:hover {
+  color: var(--text-primary);
+}
+
+.rc-commits-count {
+  opacity: 0.6;
+  font-weight: 400;
+}
+
+.rc-commits-list {
+  max-height: 140px;
+  overflow-y: auto;
+  padding: 4px 8px;
+  font-size: 0.7rem;
+}
+
+.rc-muted {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+/* Diff section - fills remaining space */
+.rc-diff-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rc-diff-section.hidden {
+  display: none;
+}
+
+.rc-diff-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  flex-shrink: 0;
+}
+
+.rc-diff-status {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-diff-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--bg-primary);
+  min-height: 200px;
+}
+
+.rc-diff-iframe.hidden {
+  display: none;
+}
+
+/* Hide horizontal scroll in diff iframe container */
+.rc-diff-section {
+  overflow-x: hidden;
+}
+
+/* Super compact Review Console header */
+.rc-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  margin-bottom: 4px;
+}
+
+.rc-header-path {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.rc-header-branch {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.rc-header-pr {
+  color: var(--accent-success);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.rc-header-pr:hover {
+  text-decoration: underline;
+}
+
+.rc-header .rc-tiny-btn:last-child {
+  margin-left: auto;
+}
+
 /* Agent Startup Modal (Dynamic) */
 .agent-startup-dynamic {
   max-width: 600px;
