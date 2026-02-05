@@ -1519,11 +1519,11 @@ header h1 {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-  padding: 8px 10px;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--bg-tertiary);
 }
 
@@ -1581,7 +1581,7 @@ header h1 {
 .review-console-grid {
   display: grid;
   grid-template-columns: minmax(520px, 0.25fr) minmax(360px, 0.25fr) minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
@@ -1623,14 +1623,14 @@ header h1 {
 .review-console-left {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
   overflow: auto;
 }
 
 /* Review Console should waste less vertical space than the full inspector. */
 .review-console-grid .worktree-inspector-panel {
-  padding: 10px;
+  padding: 8px;
 }
 
 .review-console-col-diff,
@@ -1694,8 +1694,30 @@ header h1 {
 }
 
 .worktree-inspector-terminals .terminal-wrapper.review-console-terminal {
-  height: clamp(260px, 38vh, 520px);
-  min-height: 260px;
+  height: clamp(220px, 34vh, 460px);
+  min-height: 220px;
+}
+
+.rc-panel-toggle-btn {
+  min-width: 58px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 0.74rem;
+}
+
+.review-console-files-list {
+  max-height: 230px;
+  overflow: auto;
+}
+
+.review-console-commits-list {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.review-console-comments-list {
+  max-height: 220px;
+  overflow: auto;
 }
 
 .worktree-inspector-layout-panel {

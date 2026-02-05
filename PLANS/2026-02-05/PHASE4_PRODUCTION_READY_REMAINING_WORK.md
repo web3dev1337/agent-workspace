@@ -14,7 +14,7 @@ Ordering: **actionable remaining work first**, “no remaining work / already sh
 
 Goal: a single-click surface to batch review Tier 3+ items with minimal vertical waste.
 
-- [ ] Make the Review Console a true “review route” surface:
+- [x] Make the Review Console a true “review route” surface:
   - [x] filter/sort within the console route stack (tier/risk/unreviewed/blocked/claimed)
   - [x] add a single “Review route” launcher (Queue → open console already filtered + stacked)
 - [ ] Reduce vertical waste further (tighten paddings, make meta blocks collapsible by default).
@@ -44,7 +44,7 @@ Goal: make the repo safe to publish and easy to reason about.
 
 - [ ] Decide which docs should be public vs private companion repo (internal project names, screenshots, workflow logs).
 - [ ] Replace “real project” examples in docs with placeholders where desired (`OWNER/REPO`, `~/Projects/MyGame`, etc.).
-- [ ] Add baseline public-facing repo files:
+- [x] Add baseline public-facing repo files:
   - `CONTRIBUTING.md` (optional)
 
 Important: do **not** rewrite history yet (separate step).
@@ -116,6 +116,7 @@ Goal: safe, auditable automations (disabled by default).
   - Clear “missing GitHub data” banners with Retry + Diagnostics shortcuts.
   - “Next unreviewed T3+” navigation works even without a captured stack.
   - Auto-retry once when PR details return empty (reduces “0 files/0 commits” confusion).
+  - Files/Commits/Conversation meta blocks are collapsible (default collapsed) to reduce vertical waste.
 
 ### C) Session recovery policy
 - ✅ Session recovery filters out non-actionable entries by default and supports clearing saved/old recoverables.
