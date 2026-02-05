@@ -107,6 +107,17 @@ class VoiceCommandService {
         command: 'queue-triage',
         extractParams: () => ({})
       },
+      // Review Route (Tier 3/4, unreviewed, batch flow)
+      {
+        patterns: [
+          /review\s+route/i,
+          /start\s+review\s+route/i,
+          /open\s+review\s+route/i,
+          /batch\s+review\s+route/i,
+        ],
+        command: 'open-review-route',
+        extractParams: () => ({})
+      },
       // Open Queue (Conveyor T2)
       {
         patterns: [
