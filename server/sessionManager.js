@@ -681,12 +681,15 @@ class SessionManager extends EventEmitter {
     
     // 3. Try to find git directory using git command as fallback
     try {
-      const { execSync } = require('child_process');
-      let gitDir = execSync('git rev-parse --git-dir', { 
+      const { execFileSync } = require('child_process');
+      let gitDir = String(execFileSync('git', ['rev-parse', '--git-dir'], {
         cwd: repoPath,
         encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe']
-      }).trim();
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+        timeout: 3000,
+        maxBuffer: 1024 * 1024
+      }) || '').trim();
 
       if (gitDir && !path.isAbsolute(gitDir)) {
         gitDir = path.resolve(repoPath, gitDir);
