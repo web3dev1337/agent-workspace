@@ -65,6 +65,23 @@ class UserSettingsService {
             }
           }
         },
+        scheduler: {
+          enabled: false,
+          tickSeconds: 30,
+          safety: {
+            defaultMode: 'safe',
+            blockedCommandPatterns: [
+              'queue-merge',
+              'queue-request-changes',
+              'queue-approve',
+              'stop-session',
+              'kill-session',
+              'destroy-session',
+              'remove-worktree'
+            ]
+          },
+          schedules: []
+        },
         ui: {
           theme: 'dark',
           skin: 'default',
@@ -370,6 +387,18 @@ class UserSettingsService {
           }
         };
       }
+      if (userSettings.global.scheduler) {
+        const defaultsScheduler = (merged.global.scheduler || {});
+        const next = userSettings.global.scheduler || {};
+        merged.global.scheduler = {
+          ...defaultsScheduler,
+          ...next,
+          safety: {
+            ...(defaultsScheduler.safety || {}),
+            ...(next.safety || {})
+          }
+        };
+      }
       if (userSettings.global.ui) {
         const ui = userSettings.global.ui || {};
 
@@ -594,6 +623,19 @@ class UserSettingsService {
               ...((defaultsProcess.status || {}).caps || {}),
               ...((next.status || {}).caps || {})
             }
+          }
+        };
+      }
+
+      if (newGlobal.scheduler) {
+        const defaultsScheduler = (this.getDefaultSettings().global.scheduler || {});
+        const next = (newGlobal.scheduler || {});
+        this.settings.global.scheduler = {
+          ...defaultsScheduler,
+          ...next,
+          safety: {
+            ...(defaultsScheduler.safety || {}),
+            ...(next.safety || {})
           }
         };
       }

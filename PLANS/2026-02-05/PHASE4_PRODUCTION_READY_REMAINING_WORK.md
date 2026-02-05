@@ -15,8 +15,8 @@ Ordering: **actionable remaining work first**, “no remaining work / already sh
 Goal: a single-click surface to batch review Tier 3+ items with minimal vertical waste.
 
 - [ ] Make the Review Console a true “review route” surface:
-  - filter/sort within the console (tier/risk/unreviewed/blocked/claimed)
-  - add a single “Review route” launcher (Queue → open console already filtered + stacked)
+  - [x] filter/sort within the console route stack (tier/risk/unreviewed/blocked/claimed)
+  - [x] add a single “Review route” launcher (Queue → open console already filtered + stacked)
 - [ ] Reduce vertical waste further (tighten paddings, make meta blocks collapsible by default).
 - [ ] Layout v2:
   - keep Agent + Server side-by-side consistently (Agent always left when both visible)
@@ -30,7 +30,7 @@ References:
 
 Goal: when you close/remove something, it’s truly gone (and doesn’t pile up in recovery).
 
-- [ ] Clarify and standardize the two destructive actions in UI copy (everywhere):
+- [x] Clarify and standardize the two destructive actions in UI copy (everywhere):
   - “Close terminal process” (kills PTY, keeps worktree in workspace)
   - “Remove worktree from workspace” (kills all group sessions, removes from workspace config, keeps files on disk)
 - [x] Eliminate confusing duplicate “✕” buttons and make the intent unambiguous.
@@ -77,10 +77,10 @@ References:
 Goal: enable “Free vs Pro” without turning core into spaghetti.
 
 - [ ] Decide “Pro v1” feature list (server-enforced; UI gating is UX-only).
-- [ ] Implement a minimal plugin loader (server-side first):
-  - load `plugins/<id>/server.js` at startup
-  - allow plugin routes under `/api/plugins/<id>/*`
-  - (optional) allow plugins to register commands into `CommandRegistry`
+- [x] Implement a minimal plugin loader (server-side first):
+  - [x] load `plugins/<id>/server.js` at startup
+  - [x] allow plugin routes under `/api/plugins/<id>/*`
+  - [x] allow plugins to register commands into `CommandRegistry` via a namespaced helper
 - [ ] Decide whether client plugin support is in-scope for Phase 4 or Phase 5 (it’s higher risk because `client/app.js` is large and not modular).
 
 References:
@@ -91,11 +91,11 @@ References:
 
 Goal: safe, auditable automations (disabled by default).
 
-- [ ] Design + implement a small “Scheduler” service:
-  - schedules stored locally (user settings)
-  - each schedule runs a semantic command (CommandRegistry) with a safety policy
-  - audit log of what ran + when
-- [ ] Add a UI surface (minimal) to enable/disable and view schedules.
+- [x] Design + implement a small “Scheduler” service:
+  - [x] schedules stored locally (user settings)
+  - [x] each schedule runs a semantic command (CommandRegistry) with a safety policy
+  - [x] audit log of what ran + when
+- [x] Add a UI surface (minimal) to enable/disable and view schedules.
 
 ---
 

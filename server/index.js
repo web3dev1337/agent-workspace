@@ -92,6 +92,8 @@ const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
 const sessionRecoveryService = require('./sessionRecoveryService');
 const { collectDiagnostics } = require('./diagnosticsService');
+const { PluginLoaderService } = require('./pluginLoaderService');
+const { SchedulerService } = require('./schedulerService');
 const multer = require('multer');
 
 // Configure multer for audio file uploads
@@ -271,6 +273,8 @@ const githubRepoService = GitHubRepoService.getInstance();
 const { ProcessPairingService } = require('./processPairingService');
 const processPairingService = ProcessPairingService.getInstance({ processTaskService, taskRecordService, worktreeConflictService, projectMetadataService });
 const testOrchestrationService = TestOrchestrationService.getInstance({ sessionManager, workspaceManager });
+const pluginLoaderService = PluginLoaderService.getInstance({ logger });
+const schedulerService = SchedulerService.getInstance({ logger });
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -284,6 +288,22 @@ commandRegistry.init({
   sessionManager,
   workspaceManager
 });
+schedulerService.init({ userSettingsService, commandRegistry });
+
+const loadPlugins = async () => {
+  const status = await pluginLoaderService.loadAll({
+    app,
+    commandRegistry,
+    services: {
+      io,
+      logger,
+      workspaceManager,
+      sessionManager,
+      userSettingsService
+    }
+  });
+  return status;
+};
 
 // Connect services
 sessionManager.setStatusDetector(statusDetector);
@@ -318,6 +338,16 @@ async function initializeWorkspaceSystem() {
 // Initialize workspace system before starting server
 initializeWorkspaceSystem().then(() => {
   logger.info('Workspace system initialized');
+  loadPlugins()
+    .then((status) => {
+      logger.info('Plugin loader finished', {
+        loaded: Array.isArray(status?.loaded) ? status.loaded.length : 0,
+        failed: Array.isArray(status?.failed) ? status.failed.length : 0
+      });
+    })
+    .catch((error) => {
+      logger.error('Plugin loader failed', { error: error.message, stack: error.stack });
+    });
 }).catch(error => {
   logger.error('Workspace system initialization failed', { error: error.message, stack: error.stack });
 });
@@ -5015,6 +5045,72 @@ app.delete('/api/quick-links/recent-sessions', async (req, res) => {
   } catch (error) {
     logger.error('Failed to clear recent sessions', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to clear recent sessions' });
+  }
+});
+
+// =====================================
+// Plugin loader API
+// =====================================
+
+app.get('/api/plugins', (req, res) => {
+  try {
+    res.json(pluginLoaderService.getStatus());
+  } catch (error) {
+    logger.error('Failed to get plugin status', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get plugin status' });
+  }
+});
+
+app.post('/api/plugins/reload', async (req, res) => {
+  try {
+    const status = await loadPlugins();
+    res.json({ ok: true, ...status });
+  } catch (error) {
+    logger.error('Failed to reload plugins', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to reload plugins', message: error.message });
+  }
+});
+
+// =====================================
+// Scheduler API
+// =====================================
+
+app.get('/api/scheduler/status', (req, res) => {
+  try {
+    res.json(schedulerService.getStatus());
+  } catch (error) {
+    logger.error('Failed to get scheduler status', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get scheduler status' });
+  }
+});
+
+app.put('/api/scheduler/config', express.json(), async (req, res) => {
+  try {
+    const patch = req.body && typeof req.body === 'object' ? req.body : {};
+    const config = await schedulerService.updateConfig({
+      enabled: patch.enabled,
+      tickSeconds: patch.tickSeconds,
+      schedules: patch.schedules,
+      safety: patch.safety
+    });
+    res.json({ ok: true, config });
+  } catch (error) {
+    logger.error('Failed to update scheduler config', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to update scheduler config', message: error.message });
+  }
+});
+
+app.post('/api/scheduler/run-now', express.json(), async (req, res) => {
+  try {
+    const scheduleId = String(req.body?.scheduleId || '').trim();
+    if (!scheduleId) {
+      return res.status(400).json({ ok: false, error: 'scheduleId is required' });
+    }
+    const result = await schedulerService.runNow(scheduleId);
+    res.json({ ok: true, result });
+  } catch (error) {
+    logger.error('Failed to run schedule now', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to run schedule now', message: error.message });
   }
 });
 

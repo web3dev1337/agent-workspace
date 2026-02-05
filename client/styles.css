@@ -1515,6 +1515,31 @@ header h1 {
   border-radius: 999px;
 }
 
+.review-console-route-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+}
+
+.review-console-route-bar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.review-console-route-bar select {
+  min-width: 88px;
+  height: 30px;
+}
+
 .worktree-inspector-chip {
   display: inline-flex;
   align-items: center;

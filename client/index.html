@@ -60,6 +60,9 @@
                 <button id="queue-btn" class="header-btn" title="Review inbox (tiers/queue)">
                     📥 Queue
                 </button>
+                <button id="review-route-btn" class="header-btn" title="Review Route (Tier 3+ unreviewed batch review)">
+                    🛣 Review Route
+                </button>
                 <button id="activity-btn" class="header-btn" title="Activity feed (agents, PRs, tests)">
                     📰 Activity
                 </button>
@@ -384,6 +387,37 @@
 	                    <p class="setting-description">Keeps Claudesworth (bot + queue processor) running after orchestrator restarts.</p>
 	                </div>
 	            </div>
+
+                <div class="setting-section">
+                    <h4>Scheduler</h4>
+                    <div class="setting-group">
+                        <label>
+                            <input type="checkbox" id="scheduler-enabled" />
+                            Enable scheduler
+                        </label>
+                        <p class="setting-description">Runs configured semantic commands on an interval. Safety mode blocks destructive commands unless explicitly allowed per schedule.</p>
+                    </div>
+                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
+                        <button class="btn-secondary" type="button" id="scheduler-refresh">Refresh scheduler</button>
+                        <button class="btn-secondary" type="button" id="scheduler-save">Save scheduler config</button>
+                        <button class="btn-secondary" type="button" id="scheduler-run-now">Run selected now</button>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            Selected schedule id:
+                            <input id="scheduler-run-id" type="text" placeholder="schedule-id" style="width: 220px;" />
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            Schedules JSON:
+                            <textarea id="scheduler-json" class="tasks-textarea" rows="8" placeholder='[{"id":"review-route","enabled":true,"intervalMinutes":60,"command":"open-review-route","params":{}}]'></textarea>
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <pre id="scheduler-status-output" class="mono diagnostics-output">Click “Refresh scheduler”.</pre>
+                    </div>
+                </div>
 
 	            <div class="setting-section">
 	                <h4>License</h4>

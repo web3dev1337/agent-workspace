@@ -488,6 +488,17 @@ class CommandRegistry {
       }
     });
 
+    this.register('open-review-route', {
+      category: 'process',
+      description: 'Open Queue in Review Route mode (Tier 3/4, unreviewed, auto-console, auto-next)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-review-route' });
+        return { message: 'Opening Review Route' };
+      }
+    });
+
     this.register('queue-next', {
       category: 'process',
       description: 'Open Queue and jump to the next review item',
