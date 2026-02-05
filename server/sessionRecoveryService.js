@@ -446,6 +446,48 @@ class SessionRecoveryService {
       // Ignore if file doesn't exist
     }
   }
+
+  /**
+   * Prune recovery entries older than a cutoff (best-effort hygiene).
+   * Returns number of pruned sessions.
+   */
+  pruneOlderThan(workspaceId, { olderThanMs } = {}) {
+    const ws = String(workspaceId || '').trim();
+    if (!ws) return 0;
+
+    const cutoffMs = Number(olderThanMs);
+    if (!Number.isFinite(cutoffMs) || cutoffMs <= 0) return 0;
+
+    this.ensureWorkspaceStateLoadedSync(ws);
+    const sessions = this.states.get(ws);
+    if (!sessions || sessions.size === 0) return 0;
+
+    const cutoff = Date.now() - cutoffMs;
+    let pruned = 0;
+
+    for (const [sid, s0] of sessions.entries()) {
+      const s = s0 || {};
+      const ts =
+        Date.parse(String(s.updatedAt || '')) ||
+        Date.parse(String(s.createdAt || '')) ||
+        0;
+      if (!ts || ts < cutoff) {
+        sessions.delete(sid);
+        pruned += 1;
+      }
+    }
+
+    if (pruned > 0) {
+      const existing = this.saveDebounce.get(ws);
+      if (existing) {
+        clearTimeout(existing);
+        this.saveDebounce.delete(ws);
+      }
+      this.saveWorkspaceStateSync(ws);
+    }
+
+    return pruned;
+  }
 }
 
 // Singleton instance
