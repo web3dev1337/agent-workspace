@@ -359,16 +359,21 @@ class PullRequestService {
       'baseRefName',
       'headRefName',
       'author',
-      'commits'
+      // Commits are fetched via REST (`/pulls/:n/commits`) for reliability.
     ];
 
-    const [prViewRes, filesRes, issueCommentsRes, reviewsRes] = await Promise.all([
+    const [prViewRes, filesRes, commitsRes, issueCommentsRes, reviewsRes] = await Promise.all([
       safe(`gh pr view ${o}/${r}#${n}`, () => this.getPullRequest({ owner: o, repo: r, number: n, fields: prViewFields }), null),
       // Prefer REST here: GraphQL sometimes returns { errors: [...] } while still exiting 0, which previously
       // looked like "0 files" with no warnings. REST gives us status + rename info too.
       safe(
         `repos/${o}/${r}/pulls/${n}/files`,
         () => this.ghApiGetAllPages(`repos/${o}/${r}/pulls/${n}/files`, { timeoutMs: 30000, maxPages: maxPagesFor(filesLimit, 100) }),
+        []
+      ),
+      safe(
+        `repos/${o}/${r}/pulls/${n}/commits`,
+        () => this.ghApiGetAllPages(`repos/${o}/${r}/pulls/${n}/commits`, { timeoutMs: 30000, maxPages: maxPagesFor(commitsLimit, 100) }),
         []
       ),
       commentsLimit > 0
@@ -381,10 +386,11 @@ class PullRequestService {
 
     const prRaw = prViewRes.value;
     const filesRaw = filesRes.value;
+    const commitsRaw = commitsRes.value;
     const issueCommentsRaw = issueCommentsRes.value;
     const reviewsRaw = reviewsRes.value;
 
-    const warnings = [prViewRes, filesRes, issueCommentsRes, reviewsRes]
+    const warnings = [prViewRes, filesRes, commitsRes, issueCommentsRes, reviewsRes]
       .filter((x) => x && x.ok === false)
       .map((x) => ({ endpoint: x.endpoint, error: x.error }));
 
@@ -430,16 +436,16 @@ class PullRequestService {
       };
     }).filter(f => f.filename) : [];
 
-    const commitsRaw = (prRaw && typeof prRaw === 'object' && Array.isArray(prRaw.commits)) ? prRaw.commits : [];
-    const commits = commitsRaw.slice(0, commitsLimit).map((c) => {
-      const sha = String(c?.oid || '').trim();
-      const message = String(c?.messageHeadline || '').split('\n')[0] || '';
-      const authors = Array.isArray(c?.authors) ? c.authors : [];
-      const a0 = authors[0] || {};
-      const author = a0?.login ? String(a0.login) : (a0?.name ? String(a0.name) : '');
-      const date = String(c?.committedDate || c?.authoredDate || '');
+    const commits = Array.isArray(commitsRaw) ? commitsRaw.slice(0, commitsLimit).map((c) => {
+      const sha = String(c?.sha || '').trim();
+      const msgRaw = String(c?.commit?.message || '').trim();
+      const message = msgRaw ? msgRaw.split('\n')[0] : '';
+      const author = c?.author?.login
+        ? String(c.author.login)
+        : (c?.commit?.author?.name ? String(c.commit.author.name) : '');
+      const date = String(c?.commit?.author?.date || c?.commit?.committer?.date || '');
       return { sha, message, author, date };
-    }).filter((c) => c.sha);
+    }).filter((c) => c.sha) : [];
 
     const issueComments = Array.isArray(issueCommentsRaw) ? issueCommentsRaw.slice(-commentsLimit).map((c) => ({
       id: c?.id,
