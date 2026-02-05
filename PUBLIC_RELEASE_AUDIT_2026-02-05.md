@@ -6,14 +6,14 @@ This is an updated audit after the Windows/public-release hardening work (late J
 
 ## Summary (what matters)
 
-- ✅ **Secrets (history)**: `gitleaks` reports **no leaked secrets** (scanned **1,239 commits**).
+- ✅ **Secrets (history)**: `gitleaks` reports **no leaked secrets** (scanned **1,242 commits**).
 - ✅ **Network safety defaults (current HEAD)**:
   - Orchestrator binds to **loopback by default** (`127.0.0.1`) and refuses LAN binding without `AUTH_TOKEN` unless explicitly overridden.
   - Diff viewer binds to **loopback by default** and keeps **CORS disabled by default**.
 - ⚠️ **Git history still contains non-public artifacts** that were previously committed (even if removed from HEAD):
   - `diff-viewer/cache/diffs.db` (derived cache DB)
   - `test-results/.last-run.json` (test artifact)
-- ⚠️ **Git history metadata contains personal author/committer emails** (7 unique emails; includes Gmail addresses).
+- ⚠️ **Git history metadata contains author/committer emails** (includes at least one personal email).
 - ⚠️ **Docs/skills include “internal project naming”** (e.g. `HyFire2`, repo URLs, and workflow examples). Not secrets, but decide if you want them public.
 
 If you want a truly “clean public repo”, you must either:
@@ -28,7 +28,7 @@ Run:
 - `gitleaks detect --source . --log-opts="--all" --redact`
 
 Result:
-- **no leaks found** (1,238 commits scanned).
+- **no leaks found** (1,242 commits scanned).
 
 ### 2) “Should never be committed” artifact checks
 
@@ -43,15 +43,12 @@ Verified in history:
 
 ### 3) Git history PII (author/committer metadata)
 
-Unique emails found in git metadata (author/committer) (normalized to lowercase; history may contain case variants):
-- `143916802+archanon@users.noreply.github.com`
-- `160291380+web3dev1337@users.noreply.github.com`
-- `192667251+AnrokX@users.noreply.github.com`
-- `shrimpchicken8@gmail.com`
-- `dev@example.com`
-- `noreply@github.com`
+Git history includes author/committer emails (some are GitHub noreply, and at least one is a personal email).
 
-This is normal for private repos, but if the repo becomes public those emails are visible.
+Important: **don’t commit the raw email list into the repo** (that re-leaks it in HEAD).
+
+To inspect locally:
+- `git log --all --format='%ae%n%ce' | tr '[:upper:]' '[:lower:]' | sed '/^$/d' | sort | uniq -c | sort -nr`
 
 ## Risk assessment (public repo)
 
