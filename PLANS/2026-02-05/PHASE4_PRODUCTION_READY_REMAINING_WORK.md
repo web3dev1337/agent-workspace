@@ -1,6 +1,6 @@
 # Phase 4 — Production-ready + sellable (Remaining work)
 
-Date: 2026-02-05
+Date: 2026-02-06
 
 This is the consolidated “what’s left” list for **Phase 4**: making the orchestrator production-ready (Windows + Linux/WSL) and ready to publish/sell, *without* rewriting history yet.
 
@@ -16,13 +16,11 @@ Goal: a single-click surface to batch review Tier 3+ items with minimal vertical
 
 - [ ] Make the Review Console a true “review route” surface:
   - filter/sort within the console (tier/risk/unreviewed/blocked/claimed)
-  - “Next unreviewed T3” navigation (not just Next/Prev in the captured stack)
+  - add a single “Review route” launcher (Queue → open console already filtered + stacked)
 - [ ] Reduce vertical waste further (tighten paddings, make meta blocks collapsible by default).
-- [ ] Terminal grouping polish:
+- [ ] Layout v2:
   - keep Agent + Server side-by-side consistently (Agent always left when both visible)
-  - ensure symmetric controls (avoid “server feels different” surprises)
-- [ ] Make failures explicit when GitHub data is missing:
-  - if PR details calls fail, show a clear banner + “Retry” (not “0 files” with no clue)
+  - make Diff embed the dominant pane by default (single-screen, minimal vertical scrolling)
 
 References:
 - `PLANS/2026-01-25/REVIEW_CONSOLE_V1.md`
@@ -39,10 +37,6 @@ Goal: when you close/remove something, it’s truly gone (and doesn’t pile up 
 - [ ] Add a small Help/Glossary panel (UI) explaining:
   - workspace vs worktree vs session/terminal
   - agent vs server pairing (and why they live/die together)
-- [ ] Session recovery policy improvements:
-  - show only actionable recoverables by default
-  - optional “Archived/Closed sessions” collapsible list
-  - add “Clear recoverables older than N days” (with confirmation)
 
 ### C) Public release: privacy + security hardening (without destructive history actions)
 
@@ -51,13 +45,13 @@ Goal: make the repo safe to publish and easy to reason about.
 - [ ] Decide which docs should be public vs private companion repo (internal project names, screenshots, workflow logs).
 - [ ] Replace “real project” examples in docs with placeholders where desired (`OWNER/REPO`, `~/Projects/MyGame`, etc.).
 - [ ] Add baseline public-facing repo files:
-  - `SECURITY.md` (reporting policy + threat model summary)
   - `CONTRIBUTING.md` (optional)
 
 Important: do **not** rewrite history yet (separate step).
 
 References:
 - `PUBLIC_RELEASE_AUDIT_2026-02-05.md`
+- `PUBLIC_RELEASE_AUDIT_2026-02-06.md`
 - `PLANS/2026-02-05/HISTORY_REWRITE_PRIVACY_EMAILS_PLAN.md`
 
 ### D) Packaging / shipping (Windows-first)
@@ -110,21 +104,32 @@ Goal: safe, auditable automations (disabled by default).
 ### A) Windows support baseline (native Windows + WSL)
 - ✅ Windows build pain + fixes documented (`WINDOWS_BUILD_GUIDE.md`).
 - ✅ Windows CI runs unit tests on PRs and pushes; Tauri build remains tag/dispatch-gated (`.github/workflows/windows.yml`).
+- ✅ Windows UX: hide `gh` console windows + improve `gh` auth diagnostics (PR tooling) (`server/pullRequestService.js`, `server/diagnosticsService.js`).
 
 ### B) Review Console defaults + reliability improvements
 - ✅ Review Console defaults to the diff-dominant `review` preset (`client/app.js`).
 - ✅ Review Console can show GitHub PR details (files/commits/comments) and embeds the Advanced Diff Viewer.
 - ✅ Diff “Embed” default is controlled via Settings → Review Console; per-console “Close” no longer disables the default.
+- ✅ Review Console improvements:
+  - Agent/Server pairing inferred when possible and ordered Agent-left-of-Server.
+  - Server/Agent visibility toggles added (Settings + in-console).
+  - Clear “missing GitHub data” banners with Retry + Diagnostics shortcuts.
+  - “Next unreviewed T3+” navigation works even without a captured stack.
+  - Auto-retry once when PR details return empty (reduces “0 files/0 commits” confusion).
 
-### C) Skins / “Blue mode”
+### C) Session recovery policy
+- ✅ Session recovery filters out non-actionable entries by default and supports clearing saved/old recoverables.
+
+### D) Skins / “Blue mode”
 - ✅ Skin system exists (Light/Dark + Default/Blue/Purple/Emerald/Amber) with intensity control.
   - Primary blue is `#0f67fd` (`client/styles.css`).
 
-### D) Security/privacy audit (plan-only for destructive cleanup)
+### E) Security/privacy audit (plan-only for destructive cleanup)
 - ✅ History scanned with `gitleaks` (no secrets found).
 - ✅ Clear plan exists for removing historical artifacts + rewriting author emails (not executed yet).
+- ✅ Baseline `SECURITY.md` added.
 
 References:
 - `PUBLIC_RELEASE_AUDIT_2026-02-05.md`
+- `PUBLIC_RELEASE_AUDIT_2026-02-06.md`
 - `PLANS/2026-02-05/HISTORY_REWRITE_PRIVACY_EMAILS_PLAN.md`
-
