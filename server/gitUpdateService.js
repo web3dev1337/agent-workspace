@@ -1,6 +1,10 @@
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 const winston = require('winston');
 const path = require('path');
+
+const execFileAsync = promisify(execFile);
+const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024; // 10MB
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -19,6 +23,18 @@ class GitUpdateService {
     this.projectRoot = path.join(__dirname, '..');
   }
 
+  async execGit(args, { timeoutMs = 20000 } = {}) {
+    const argv = Array.isArray(args) ? args.map(String) : [];
+    if (!argv.length) throw new Error('execGit: args required');
+    const { stdout, stderr } = await execFileAsync('git', argv, {
+      cwd: this.projectRoot,
+      timeout: timeoutMs,
+      windowsHide: true,
+      maxBuffer: DEFAULT_MAX_BUFFER
+    });
+    return { stdout: String(stdout || ''), stderr: String(stderr || '') };
+  }
+
   static getInstance() {
     if (!GitUpdateService.instance) {
       GitUpdateService.instance = new GitUpdateService();
@@ -27,48 +43,38 @@ class GitUpdateService {
   }
 
   async getCurrentBranch() {
-    return new Promise((resolve, reject) => {
-      exec('git branch --show-current', { cwd: this.projectRoot }, (error, stdout, stderr) => {
-        if (error) {
-          logger.error('Failed to get current branch', { error: error.message, stderr });
-          reject(error);
-          return;
-        }
-        resolve(stdout.trim());
-      });
-    });
+    try {
+      const { stdout } = await this.execGit(['branch', '--show-current'], { timeoutMs: 10000 });
+      return stdout.trim();
+    } catch (error) {
+      logger.error('Failed to get current branch', { error: error.message });
+      throw error;
+    }
   }
 
   async getStatus() {
-    return new Promise((resolve, reject) => {
-      exec('git status --porcelain', { cwd: this.projectRoot }, (error, stdout, stderr) => {
-        if (error) {
-          logger.error('Failed to get git status', { error: error.message, stderr });
-          reject(error);
-          return;
-        }
-        
-        const hasChanges = stdout.trim().length > 0;
-        resolve({
-          hasChanges,
-          changes: stdout.trim().split('\n').filter(line => line.trim())
-        });
-      });
-    });
+    try {
+      const { stdout } = await this.execGit(['status', '--porcelain'], { timeoutMs: 15000 });
+      const hasChanges = stdout.trim().length > 0;
+      return {
+        hasChanges,
+        changes: stdout.trim().split('\n').filter(line => line.trim())
+      };
+    } catch (error) {
+      logger.error('Failed to get git status', { error: error.message });
+      throw error;
+    }
   }
 
   async fetchLatest() {
-    return new Promise((resolve, reject) => {
-      exec('git fetch origin', { cwd: this.projectRoot }, (error, stdout, stderr) => {
-        if (error) {
-          logger.error('Failed to fetch latest changes', { error: error.message, stderr });
-          reject(error);
-          return;
-        }
-        logger.info('Fetched latest changes from origin');
-        resolve({ stdout, stderr });
-      });
-    });
+    try {
+      const { stdout, stderr } = await this.execGit(['fetch', 'origin'], { timeoutMs: 30000 });
+      logger.info('Fetched latest changes from origin');
+      return { stdout, stderr };
+    } catch (error) {
+      logger.error('Failed to fetch latest changes', { error: error.message });
+      throw error;
+    }
   }
 
   async pullLatest() {
@@ -101,91 +107,63 @@ class GitUpdateService {
       await this.fetchLatest();
 
       // Pull current branch (use different strategy based on branch)
-      let pullCommand = `git pull origin ${currentBranch}`;
+      const pullArgs = ['pull', 'origin', currentBranch];
       
       // For feature branches, try to pull from remote, but if it fails, suggest using main/master
       if (!isOnMainBranch) {
         // First check if the remote branch exists
-        return new Promise((resolve) => {
-          exec(`git ls-remote --heads origin ${currentBranch}`, { cwd: this.projectRoot }, (error, stdout) => {
-            const remoteBranchExists = stdout.trim().length > 0;
-            
-            if (!remoteBranchExists) {
-              // Feature branch doesn't exist on remote, suggest main/master
-              resolve({
-                success: false,
-                error: `Branch '${currentBranch}' doesn't exist on remote. Consider switching to main/master for updates, or push your feature branch first.`,
-                currentBranch,
-                suggestion: 'Switch to main branch for updates'
-              });
-              return;
-            }
-            
-            // Remote branch exists, proceed with normal pull
-            exec(pullCommand, { cwd: this.projectRoot }, (error, stdout, stderr) => {
-              if (error) {
-                logger.error('Failed to pull latest changes', { 
-                  error: error.message, 
-                  stderr,
-                  currentBranch 
-                });
-                resolve({
-                  success: false,
-                  error: `Failed to pull ${currentBranch}: ${error.message}`,
-                  stderr,
-                  currentBranch,
-                  suggestion: 'Try switching to main/master branch'
-                });
-                return;
-              }
-              
-              logger.info('Successfully pulled latest changes', { 
-                currentBranch,
-                output: stdout 
-              });
+        try {
+          const { stdout: remoteStdout } = await this.execGit(['ls-remote', '--heads', 'origin', currentBranch], { timeoutMs: 15000 });
+          const remoteBranchExists = remoteStdout.trim().length > 0;
 
-              resolve({
-                success: true,
-                currentBranch,
-                output: stdout,
-                wasUpToDate: stdout.includes('Already up to date') || stdout.includes('Already up-to-date')
-              });
-            });
-          });
-        });
-      }
-      
-      // For main/master branches, proceed normally
-      return new Promise((resolve) => {
-        exec(pullCommand, { cwd: this.projectRoot }, (error, stdout, stderr) => {
-          if (error) {
-            logger.error('Failed to pull latest changes', { 
-              error: error.message, 
-              stderr,
-              currentBranch 
-            });
-            resolve({
+          if (!remoteBranchExists) {
+            return {
               success: false,
-              error: error.message,
-              stderr,
-              currentBranch
-            });
-            return;
+              error: `Branch '${currentBranch}' doesn't exist on remote. Consider switching to main/master for updates, or push your feature branch first.`,
+              currentBranch,
+              suggestion: 'Switch to main branch for updates'
+            };
           }
 
-          logger.info('Successfully pulled latest changes', { 
-            currentBranch,
-            output: stdout 
-          });
-
-          resolve({
+          const { stdout, stderr } = await this.execGit(pullArgs, { timeoutMs: 60000 });
+          logger.info('Successfully pulled latest changes', { currentBranch, output: stdout });
+          return {
             success: true,
             currentBranch,
             output: stdout,
+            stderr,
             wasUpToDate: stdout.includes('Already up to date') || stdout.includes('Already up-to-date')
-          });
-        });
-      });
+          };
+        } catch (error) {
+          logger.error('Failed to pull latest changes', { error: error.message, currentBranch });
+          return {
+            success: false,
+            error: `Failed to pull ${currentBranch}: ${error.message}`,
+            currentBranch,
+            suggestion: 'Try switching to main/master branch'
+          };
+        }
+      }
+      
+      // For main/master branches, proceed normally
+      try {
+        const { stdout, stderr } = await this.execGit(pullArgs, { timeoutMs: 60000 });
+        logger.info('Successfully pulled latest changes', { currentBranch, output: stdout });
+        return {
+          success: true,
+          currentBranch,
+          output: stdout,
+          stderr,
+          wasUpToDate: stdout.includes('Already up to date') || stdout.includes('Already up-to-date')
+        };
+      } catch (error) {
+        logger.error('Failed to pull latest changes', { error: error.message, currentBranch });
+        return {
+          success: false,
+          error: error.message,
+          currentBranch
+        };
+      }
 
     } catch (error) {
       logger.error('Error during pull operation', { error: error.message, stack: error.stack });
@@ -204,25 +182,22 @@ class GitUpdateService {
       await this.fetchLatest();
 
       // Check if behind origin
-      return new Promise((resolve) => {
-        exec(`git rev-list --count HEAD..origin/${currentBranch}`, { cwd: this.projectRoot }, (error, stdout, stderr) => {
-          if (error) {
-            logger.error('Failed to check for updates', { error: error.message, stderr });
-            resolve({
-              hasUpdates: null,
-              error: error.message
-            });
-            return;
-          }
-
-          const commitsBehind = parseInt(stdout.trim()) || 0;
-          resolve({
-            hasUpdates: commitsBehind > 0,
-            commitsBehind,
-            currentBranch
-          });
-        });
-      });
+      try {
+        const { stdout, stderr } = await this.execGit(['rev-list', '--count', `HEAD..origin/${currentBranch}`], { timeoutMs: 15000 });
+        const commitsBehind = parseInt(String(stdout || '').trim(), 10) || 0;
+        return {
+          hasUpdates: commitsBehind > 0,
+          commitsBehind,
+          currentBranch,
+          stderr
+        };
+      } catch (error) {
+        logger.error('Failed to check for updates', { error: error.message });
+        return {
+          hasUpdates: null,
+          error: error.message
+        };
+      }
 
     } catch (error) {
       logger.error('Error checking for updates', { error: error.message, stack: error.stack });
