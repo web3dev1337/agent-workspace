@@ -287,6 +287,37 @@
             </div>
 
             <div class="setting-section">
+                <h4>Review Console</h4>
+                <div class="setting-group">
+                    <label>
+                        Default preset:
+                        <select id="review-console-preset">
+                            <option value="review">Review (diff-dominant)</option>
+                            <option value="default">Default</option>
+                            <option value="deep">Deep</option>
+                            <option value="terminals">Terminals</option>
+                            <option value="code">Code</option>
+                        </select>
+                    </label>
+                    <p class="setting-description">Controls the initial layout preset when opening the Review Console.</p>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="review-console-fullscreen" />
+                        Open fullscreen by default
+                    </label>
+                    <p class="setting-description">Recommended: fullscreen. Docked mode is best for quick lookups.</p>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="review-console-diff-embed" />
+                        Embed diff by default
+                    </label>
+                    <p class="setting-description">If disabled, you’ll need to click “Embed” inside the Diff panel.</p>
+                </div>
+            </div>
+
+            <div class="setting-section">
                 <h4>Diagnostics</h4>
                 <div class="setting-group">
                     <button id="diagnostics-refresh" class="template-btn secondary">Refresh diagnostics</button>

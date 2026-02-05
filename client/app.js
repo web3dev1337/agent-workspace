@@ -1285,6 +1285,16 @@ class ClaudeOrchestrator {
     
 	    // Settings
 		    const settingsToggle = document.getElementById('settings-toggle');
+		    const closeSettingsPanel = () => {
+		      const panel = document.getElementById('settings-panel');
+		      if (!panel) return;
+		      panel.classList.add('hidden');
+		      const searchEl = document.getElementById('settings-search');
+		      if (searchEl && searchEl.value) {
+		        searchEl.value = '';
+		        document.querySelectorAll('.settings-filter-hidden').forEach((el) => el.classList.remove('settings-filter-hidden'));
+		      }
+		    };
 		    if (settingsToggle) {
 		      settingsToggle.addEventListener('click', () => {
 		        const panel = document.getElementById('settings-panel');
@@ -1302,12 +1312,29 @@ class ClaudeOrchestrator {
 		    }
 	    
 	    document.getElementById('close-settings').addEventListener('click', () => {
-	      document.getElementById('settings-panel').classList.add('hidden');
-	      const searchEl = document.getElementById('settings-search');
-	      if (searchEl && searchEl.value) {
-	        searchEl.value = '';
-	        document.querySelectorAll('.settings-filter-hidden').forEach((el) => el.classList.remove('settings-filter-hidden'));
-	      }
+	      closeSettingsPanel();
+	    });
+
+	    // Close settings when pressing Escape (unless the user is typing in an input/textarea).
+	    document.addEventListener('keydown', (e) => {
+	      if (e.key !== 'Escape') return;
+	      const panel = document.getElementById('settings-panel');
+	      if (!panel || panel.classList.contains('hidden')) return;
+	      const active = document.activeElement;
+	      const tag = String(active?.tagName || '').toLowerCase();
+	      const typing = tag === 'input' || tag === 'textarea' || tag === 'select';
+	      if (typing) return;
+	      closeSettingsPanel();
+	    });
+
+	    // Close settings when clicking outside the panel.
+	    document.addEventListener('mousedown', (e) => {
+	      const panel = document.getElementById('settings-panel');
+	      if (!panel || panel.classList.contains('hidden')) return;
+	      const toggle = document.getElementById('settings-toggle');
+	      if (toggle && (toggle === e.target || toggle.contains(e.target))) return;
+	      if (panel.contains(e.target)) return;
+	      closeSettingsPanel();
 	    });
     
     // Settings inputs
@@ -1649,6 +1676,29 @@ class ClaudeOrchestrator {
       branchesShowAtSidebar.addEventListener('change', async (e) => {
         await this.updateGlobalUserSetting('ui.branches.showAtInSidebar', !!e.target.checked);
         this.refreshBranchLabels();
+      });
+    }
+
+    // Review Console settings (server-persisted)
+    const reviewConsolePreset = document.getElementById('review-console-preset');
+    if (reviewConsolePreset) {
+      reviewConsolePreset.addEventListener('change', async (e) => {
+        const v = String(e.target.value || '').trim().toLowerCase();
+        const allowed = new Set(['default', 'review', 'deep', 'terminals', 'code', 'custom']);
+        const preset = allowed.has(v) ? v : 'review';
+        await this.updateGlobalUserSetting('ui.reviewConsole.preset', preset);
+      });
+    }
+    const reviewConsoleFullscreen = document.getElementById('review-console-fullscreen');
+    if (reviewConsoleFullscreen) {
+      reviewConsoleFullscreen.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.reviewConsole.fullscreen', !!e.target.checked);
+      });
+    }
+    const reviewConsoleDiffEmbed = document.getElementById('review-console-diff-embed');
+    if (reviewConsoleDiffEmbed) {
+      reviewConsoleDiffEmbed.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.reviewConsole.diffEmbed', !!e.target.checked);
       });
     }
 
@@ -7586,12 +7636,28 @@ class ClaudeOrchestrator {
       sessionIds.push(String(sessionId));
     }
 
-    // Stable ordering: Agent terminals first, then servers.
+    // Stable ordering: keep pairs adjacent, always put Agent left of Server.
+    const baseId = (sid) => String(sid || '').replace(/-(claude|codex|server)$/, '');
+    const isServer = (sid) => {
+      const s = String(sid || '');
+      if (s.endsWith('-server')) return true;
+      const sess = this.sessions.get(s);
+      return String(sess?.type || '').toLowerCase() === 'server';
+    };
+    const rank = (sid) => {
+      const s = String(sid || '');
+      if (isServer(s)) return 2;
+      if (s.endsWith('-codex') || String(this.sessions.get(s)?.type || '').toLowerCase() === 'codex') return 1;
+      return 0; // claude/other
+    };
     sessionIds.sort((a, b) => {
-      const aIsServer = a.includes('-server');
-      const bIsServer = b.includes('-server');
-      if (aIsServer !== bIsServer) return aIsServer ? 1 : -1;
-      return a.localeCompare(b);
+      const aBase = baseId(a);
+      const bBase = baseId(b);
+      if (aBase !== bBase) return aBase.localeCompare(bBase);
+      const ar = rank(a);
+      const br = rank(b);
+      if (ar !== br) return ar - br;
+      return String(a).localeCompare(String(b));
     });
 
     if (sessionIds.length === 0) {
@@ -8247,6 +8313,7 @@ class ClaudeOrchestrator {
 			                <button class="rc-tiny-btn" type="button" data-diff-embed="true" title="Embed">⊞</button>
 			                <button class="rc-tiny-btn" type="button" data-diff-open="true" title="Open in tab">↗</button>
 			                <button class="rc-tiny-btn" type="button" data-diff-refresh="true" title="Refresh" disabled>⟳</button>
+			                <button class="rc-tiny-btn" type="button" data-diff-close="true" title="Close embed" disabled>✕</button>
 			                <span class="rc-diff-status" data-diff-status="true">${escapeHtml(diffViewerPath || '/')}</span>
 			              </div>
 			              <iframe class="rc-diff-iframe hidden" data-diff-iframe="true" title="Diff Viewer"></iframe>
@@ -8463,6 +8530,8 @@ class ClaudeOrchestrator {
 		          await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
 		        };
 
+			        // Default is controlled by Settings → Review Console → “Embed diff by default”.
+			        // The toolbar buttons should be per-console actions (do not persist on click).
 			        let diffEmbedEnabled = rc?.diffEmbed !== false;
 		        let diffLoadPromise = null;
 		        const diffIframeEl = bodyEl.querySelector('[data-diff-iframe="true"]');
@@ -8477,14 +8546,6 @@ class ClaudeOrchestrator {
 		          if (diffEmbedBtn) diffEmbedBtn.disabled = embedded;
 		          if (diffCloseBtn) diffCloseBtn.disabled = !embedded;
 		          if (diffRefreshBtn) diffRefreshBtn.disabled = !embedded;
-		        };
-
-		        const persistDiffEmbed = async () => {
-		          const existing = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
-		            ? this.userSettings.global.ui.reviewConsole
-		            : {};
-		          const nextCfg = { ...existing, diffEmbed: diffEmbedEnabled };
-		          await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
 		        };
 
 			        const ensureDiffViewerBaseUrl = async () => {
@@ -8561,7 +8622,6 @@ class ClaudeOrchestrator {
 		        diffEmbedBtn?.addEventListener('click', async () => {
 		          diffEmbedEnabled = true;
 		          updateDiffControls();
-		          try { await persistDiffEmbed(); } catch {}
 		          await embedDiff({ showToast: true });
 		        });
 
@@ -8573,7 +8633,6 @@ class ClaudeOrchestrator {
 		          }
 		          if (diffStatusEl) diffStatusEl.textContent = diffViewerPath ? ('Target: ' + diffViewerPath) : 'Target: (diff viewer home)';
 		          updateDiffControls();
-		          try { await persistDiffEmbed(); } catch {}
 		        });
 
 		        diffRefreshBtn?.addEventListener('click', () => {
@@ -9684,24 +9743,12 @@ class ClaudeOrchestrator {
 				        syncDiffButtons();
 				      };
 
-	      // Default: embed when enabled in Review Console settings (terminals or not).
+	      // Default: embed when enabled in Review Console settings.
+	      // Note: "Embed" / "Close" buttons should be per-console actions; the default is controlled in Settings.
 	      let diffEmbedEnabled = rcCfg?.diffEmbed !== false;
-
-      const persistDiffEmbed = async (enabled) => {
-        try {
-          const existing = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
-            ? this.userSettings.global.ui.reviewConsole
-            : {};
-          const nextCfg = { ...existing, diffEmbed: enabled !== false };
-          await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
-        } catch {
-          // ignore
-        }
-      };
 
       embedBtn?.addEventListener('click', () => {
         diffEmbedEnabled = true;
-        persistDiffEmbed(true);
         embed({ showToast: true }).catch(() => {});
       });
       openBtn?.addEventListener('click', () => this.launchDiffViewer(prUrl));
@@ -9713,7 +9760,6 @@ class ClaudeOrchestrator {
       closeBtn?.addEventListener('click', () => {
         if (!diffIframe) return;
         diffEmbedEnabled = false;
-        persistDiffEmbed(false);
         diffIframe.src = 'about:blank';
         diffIframe.classList.add('hidden');
         if (diffStatusEl) diffStatusEl.textContent = diffViewerPath ? `Target: ${diffViewerPath}` : 'Target: (diff viewer home)';
@@ -9811,7 +9857,6 @@ class ClaudeOrchestrator {
 	          }
 
 	          diffEmbedEnabled = true;
-	          persistDiffEmbed(true);
 	          embed({ showToast: true, filePath }).catch(() => {});
 	        });
 	      });
@@ -11213,6 +11258,31 @@ class ClaudeOrchestrator {
     if (branchesShowAtSidebar) {
       const cfg = this.userSettings.global?.ui?.branches || {};
       branchesShowAtSidebar.checked = !!cfg.showAtInSidebar;
+    }
+
+    // Review Console settings UI
+    const reviewConsolePreset = document.getElementById('review-console-preset');
+    if (reviewConsolePreset) {
+      const cfg = (this.userSettings.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+        ? this.userSettings.global.ui.reviewConsole
+        : {};
+      const v = String(cfg.preset || 'review').trim().toLowerCase();
+      const allowed = new Set(['default', 'review', 'deep', 'terminals', 'code', 'custom']);
+      reviewConsolePreset.value = allowed.has(v) ? v : 'review';
+    }
+    const reviewConsoleFullscreen = document.getElementById('review-console-fullscreen');
+    if (reviewConsoleFullscreen) {
+      const cfg = (this.userSettings.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+        ? this.userSettings.global.ui.reviewConsole
+        : {};
+      reviewConsoleFullscreen.checked = cfg.fullscreen !== false;
+    }
+    const reviewConsoleDiffEmbed = document.getElementById('review-console-diff-embed');
+    if (reviewConsoleDiffEmbed) {
+      const cfg = (this.userSettings.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+        ? this.userSettings.global.ui.reviewConsole
+        : {};
+      reviewConsoleDiffEmbed.checked = cfg.diffEmbed !== false;
     }
 
     const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
