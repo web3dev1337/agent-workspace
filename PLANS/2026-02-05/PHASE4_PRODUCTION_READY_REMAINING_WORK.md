@@ -62,6 +62,7 @@ Goal: end users install an `.msi` / `.exe` and run the app without dev toolchain
 - [ ] Validate the tag-based release path end-to-end:
   - Windows CI builds installer artifacts
   - release notes + attached artifacts are correct
+  - Tracking run (workflow_dispatch dry run): `https://github.com/web3dev1337/claude-orchestrator/actions/runs/21729801065`
 - [x] Decide initial release posture:
   - unsigned internal builds vs code-signed public builds
   - portable zip vs installer
