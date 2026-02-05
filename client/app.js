@@ -7071,8 +7071,8 @@ class ClaudeOrchestrator {
 
 		    const presets = {
 		      default: { terminals: true, files: true, commits: true, diff: true },
-		      // Review layout preset (diff-dominant). Keep sections on by default; users can toggle.
-		      review: { terminals: true, files: true, commits: true, diff: true },
+		      // Review layout preset (diff-dominant). Keep commits off by default for less vertical scrolling.
+		      review: { terminals: true, files: true, commits: false, diff: true },
 		      deep: { terminals: true, files: true, commits: true, diff: true },
 		      code: { terminals: false, files: true, commits: true, diff: true },
 		      terminals: { terminals: true, files: false, commits: false, diff: false }
@@ -9135,7 +9135,14 @@ class ClaudeOrchestrator {
 		            title: String(x.title || '').trim() || null,
 		            url: String(x.url || '').trim() || null,
 		            prNumber: x.prNumber ?? null,
-		            isDraft: !!x.isDraft
+		            isDraft: !!x.isDraft,
+		            tier: x?.tier ?? null,
+		            changeRisk: String(x?.changeRisk || '').trim() || null,
+		            claimedBy: String(x?.claimedBy || '').trim() || null,
+		            assignedTo: String(x?.assignedTo || '').trim() || null,
+		            reviewed: !!x?.reviewed,
+		            done: !!x?.done,
+		            outcome: String(x?.outcome || '').trim() || null
 		          }))
 		          .filter((x) => x.id && x.url);
 
@@ -9145,13 +9152,21 @@ class ClaudeOrchestrator {
 		          const currentUrl = normUrl(prUrl);
 		          const hasCurrent = items.some((x) => x && (x.id === currentId || normUrl(x.url) === currentUrl));
 		          if (!hasCurrent) {
+		            const rec = (t?.record && typeof t.record === 'object') ? t.record : {};
 		            items.unshift({
 		              id: currentId || `pr:${prUrl}`,
 		              kind: 'pr',
 		              title: String(t.title || '').trim() || null,
 		              url: prUrl,
 		              prNumber: t.prNumber ?? null,
-		              isDraft: !!t.isDraft
+		              isDraft: !!t.isDraft,
+		              tier: rec?.tier ?? null,
+		              changeRisk: String(rec?.changeRisk || '').trim() || null,
+		              claimedBy: String(rec?.claimedBy || '').trim() || null,
+		              assignedTo: String(rec?.assignedTo || '').trim() || null,
+		              reviewed: !!rec?.reviewedAt,
+		              done: !!rec?.doneAt,
+		              outcome: String(rec?.reviewOutcome || '').trim() || null
 		            });
 		          }
 
@@ -9214,6 +9229,10 @@ class ClaudeOrchestrator {
 		      const issueComments = Array.isArray(conversation.issueComments) ? conversation.issueComments : [];
 		      const reviews = Array.isArray(conversation.reviews) ? conversation.reviews : [];
 		      const warnings = Array.isArray(details?.warnings) ? details.warnings : [];
+		      const githubReturnedEmpty =
+		        warnings.length === 0
+		        && files.length === 0
+		        && commits.length === 0;
 
 			      const diffViewerPath = this.getDiffViewerPathForGitHubUrl(prUrl);
 			      const targetPrUrl = normUrl(pr.url || prUrl);
@@ -9326,54 +9345,38 @@ class ClaudeOrchestrator {
 
 				      const presets = {
 				        default: { terminals: true, files: true, commits: true, diff: true },
-				        review: { terminals: true, files: true, commits: true, diff: true },
+				        review: { terminals: true, files: true, commits: false, diff: true },
 				        deep: { terminals: true, files: true, commits: true, diff: true },
 				        code: { terminals: false, files: true, commits: true, diff: true },
 				        terminals: { terminals: true, files: false, commits: false, diff: false }
 				      };
 
 			      const layoutPanel = (() => {
-			        const btn = (key, text, title = '') => {
-			          const active = key === currentPreset;
-			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-preset="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title)}">${escapeHtml(text)}</button>`;
+			        const tinyBtn = (dataAttr, key, text, active, title = '') => {
+			          return `<button class="rc-tiny-btn ${active ? 'active' : ''}" type="button" data-${dataAttr}="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title)}">${escapeHtml(text)}</button>`;
 			        };
-			        const windowBtn = (key, text, title = '') => {
-			          const wantsFullscreen = key === 'fullscreen';
-			          const active = wantsFullscreen ? !!currentFullscreen : !currentFullscreen;
-			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-window="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title)}">${escapeHtml(text)}</button>`;
-			        };
-			        const sectionBtn = (key, text, title = '') => {
-			          const active = currentSections[key] !== false;
-			          return `<button class="btn-secondary worktree-inspector-mini-btn ${active ? 'active' : ''}" type="button" data-review-section="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title)}">${escapeHtml(text)}</button>`;
-			        };
+
 			        return `
-			          <div class="worktree-inspector-panel worktree-inspector-layout-panel">
-			            <div class="worktree-inspector-layout-row">
-				              <div class="worktree-inspector-layout-label">Preset</div>
-				              <div class="worktree-inspector-layout-buttons">
-				                ${btn('review', 'Review', 'Batch review: terminals + files + diff')}
-				                ${btn('default', 'Default')}
-				                ${btn('deep', 'Deep')}
-				                ${btn('code', 'Code')}
-				                ${btn('terminals', 'Terminals')}
-				              </div>
-			            </div>
-			            <div class="worktree-inspector-layout-row">
-			              <div class="worktree-inspector-layout-label">Window</div>
-			              <div class="worktree-inspector-layout-buttons">
-			                ${windowBtn('fullscreen', 'Full', 'Fullscreen Review Console')}
-			                ${windowBtn('docked', 'Dock', 'Dock Review Console')}
-			              </div>
-			            </div>
-			            <div class="worktree-inspector-layout-row">
-			              <div class="worktree-inspector-layout-label">Sections</div>
-			              <div class="worktree-inspector-layout-buttons">
-			                ${sectionBtn('terminals', 'Terminals')}
-			                ${sectionBtn('files', 'Files')}
-			                ${sectionBtn('commits', 'Commits')}
-			                ${sectionBtn('diff', 'Diff')}
-			              </div>
-			            </div>
+			          <div class="rc-layout-bar">
+			            <span class="rc-layout-group">
+			              ${tinyBtn('review-window', 'fullscreen', '⛶', !!currentFullscreen, 'Fullscreen Review Console')}
+			              ${tinyBtn('review-window', 'docked', '▐', !currentFullscreen, 'Dock Review Console')}
+			            </span>
+			            <span class="rc-layout-sep">|</span>
+			            <span class="rc-layout-group">
+			              ${tinyBtn('review-preset', 'review', 'Review', currentPreset === 'review', 'Batch review: terminals + files + diff')}
+			              ${tinyBtn('review-preset', 'default', 'Default', currentPreset === 'default')}
+			              ${tinyBtn('review-preset', 'deep', 'Deep', currentPreset === 'deep')}
+			              ${tinyBtn('review-preset', 'code', 'Code', currentPreset === 'code')}
+			              ${tinyBtn('review-preset', 'terminals', 'Terminals', currentPreset === 'terminals')}
+			            </span>
+			            <span class="rc-layout-sep">|</span>
+			            <span class="rc-layout-group">
+			              ${tinyBtn('review-section', 'terminals', 'T', currentSections.terminals !== false, 'Toggle terminals')}
+			              ${tinyBtn('review-section', 'files', 'F', currentSections.files !== false, 'Toggle files')}
+			              ${tinyBtn('review-section', 'commits', 'C', currentSections.commits !== false, 'Toggle commits')}
+			              ${tinyBtn('review-section', 'diff', 'D', currentSections.diff !== false, 'Toggle diff')}
+			            </span>
 			          </div>
 			        `;
 			      })();
@@ -9406,11 +9409,12 @@ class ClaudeOrchestrator {
 	            </div>
 	          </div>
 	          <span style="flex:1"></span>
-	          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+	          <div style="display:flex; gap:8px; flex-wrap:nowrap; justify-content:flex-end;">
 	            ${showNav ? `
 	              <button class="btn-secondary" type="button" data-review-nav="prev" title="Previous PR in review stack">◀ Prev</button>
 	              <span class="worktree-inspector-subtle" data-review-nav-status="true" title="Review stack (captured from Queue)">${navIndex + 1}/${navCount}</span>
 	              <button class="btn-secondary" type="button" data-review-nav="next" title="Next PR in review stack">Next ▶</button>
+	              <button class="btn-secondary" type="button" data-review-nav="next-unreviewed-t3" title="Next unreviewed Tier 3+ PR in this review stack">Next unreviewed T3+ ▶</button>
 	            ` : ''}
 	            <button class="btn-secondary" type="button" data-pr-refresh="true">🔄 Refresh</button>
 	            <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
@@ -9431,6 +9435,13 @@ class ClaudeOrchestrator {
 		              }).join('')}
 		              ${warnings.length > 6 ? `<div>• …and ${warnings.length - 6} more</div>` : ''}
 		            </div>
+		          </div>
+			        ` : ''}
+
+			        ${githubReturnedEmpty ? `
+		          <div class="review-console-warning">
+		            <div style="font-weight:600; margin-bottom:6px;">GitHub returned no files/commits</div>
+		            <div style="opacity:0.9;">This is usually a temporary auth/rate-limit issue. Click <strong>🔄 Refresh</strong>. If it persists, check <code class="mono">gh auth status</code> on the server machine.</div>
 		          </div>
 			        ` : ''}
 
@@ -9772,6 +9783,7 @@ class ClaudeOrchestrator {
 	      // Review stack navigation (captured from Queue).
 	      const navPrevBtn = bodyEl.querySelector('[data-review-nav="prev"]');
 	      const navNextBtn = bodyEl.querySelector('[data-review-nav="next"]');
+	      const navNextUnreviewedT3Btn = bodyEl.querySelector('[data-review-nav="next-unreviewed-t3"]');
 	      const navStatusEl = bodyEl.querySelector('[data-review-nav-status="true"]');
 
 	      const parsePrUrlFromTaskId = (id) => {
@@ -9790,18 +9802,17 @@ class ClaudeOrchestrator {
 	          const disabled = !(count > 1 && idx0 >= 0);
 	          if (navPrevBtn) navPrevBtn.disabled = disabled;
 	          if (navNextBtn) navNextBtn.disabled = disabled;
+	          if (navNextUnreviewedT3Btn) navNextUnreviewedT3Btn.disabled = disabled;
 	        } catch {
 	          // ignore
 	        }
 	      };
 
-	      const navigateInReviewStack = async (dir) => {
+	      const navigateToIndex = async (nextIndex) => {
 	        const nav0 = (this.reviewConsoleNav && Array.isArray(this.reviewConsoleNav.items)) ? this.reviewConsoleNav : null;
 	        const items = nav0?.items || [];
 	        if (items.length <= 1) return;
 
-	        const current = Number.isFinite(Number(nav0.index)) ? Number(nav0.index) : 0;
-	        const nextIndex = (current + dir + items.length) % items.length;
 	        const next = items[nextIndex] || null;
 	        if (!next) return;
 
@@ -9825,11 +9836,51 @@ class ClaudeOrchestrator {
 	        });
 	      };
 
+	      const navigateInReviewStack = async (dir) => {
+	        const nav0 = (this.reviewConsoleNav && Array.isArray(this.reviewConsoleNav.items)) ? this.reviewConsoleNav : null;
+	        const items = nav0?.items || [];
+	        if (items.length <= 1) return;
+
+	        const current = Number.isFinite(Number(nav0.index)) ? Number(nav0.index) : 0;
+	        const nextIndex = (current + dir + items.length) % items.length;
+	        await navigateToIndex(nextIndex);
+	      };
+
+	      const navigateNextMatching = async (predicate, { label = 'matching item' } = {}) => {
+	        const nav0 = (this.reviewConsoleNav && Array.isArray(this.reviewConsoleNav.items)) ? this.reviewConsoleNav : null;
+	        const items = nav0?.items || [];
+	        if (items.length <= 1) return;
+
+	        const current = Number.isFinite(Number(nav0.index)) ? Number(nav0.index) : 0;
+	        for (let step = 1; step <= items.length; step += 1) {
+	          const idx = (current + step) % items.length;
+	          const item = items[idx];
+	          if (predicate && !predicate(item)) continue;
+	          await navigateToIndex(idx);
+	          return;
+	        }
+
+	        this.showToast?.(`No ${label} found in this stack`, 'warning');
+	      };
+
+	      const isUnreviewedTier3Plus = (item) => {
+	        const tier = Number(item?.tier);
+	        if (!Number.isFinite(tier) || tier < 3) return false;
+	        if (item?.reviewed) return false;
+	        if (item?.done) return false;
+	        const outcome = String(item?.outcome || '').trim().toLowerCase();
+	        if (outcome === 'blocked') return false;
+	        return true;
+	      };
+
 	      navPrevBtn?.addEventListener('click', () => {
 	        navigateInReviewStack(-1).catch(() => {});
 	      });
 	      navNextBtn?.addEventListener('click', () => {
 	        navigateInReviewStack(1).catch(() => {});
+	      });
+	      navNextUnreviewedT3Btn?.addEventListener('click', () => {
+	        navigateNextMatching(isUnreviewedTier3Plus, { label: 'unreviewed Tier 3+ item' }).catch(() => {});
 	      });
 	      updateNavStatus();
 
