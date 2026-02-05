@@ -9604,6 +9604,19 @@ class ClaudeOrchestrator {
               }
             };
             const routeFilters = readRouteFilters();
+            const readCollapsedPanels = () => {
+              try {
+                const raw = JSON.parse(localStorage.getItem('review-console-collapsed-panels') || '{}');
+                return {
+                  files: raw?.files !== false,
+                  commits: raw?.commits !== false,
+                  conversation: raw?.conversation !== false
+                };
+              } catch {
+                return { files: true, commits: true, conversation: true };
+              }
+            };
+            const collapsedPanels = readCollapsedPanels();
             const reviewRouteBar = navCount > 0 ? `
               <div class="review-console-route-bar" data-review-route-bar="true">
                 <strong style="margin-right:6px;">Route</strong>
@@ -9716,9 +9729,12 @@ class ClaudeOrchestrator {
 					            <div class="worktree-inspector-panel worktree-inspector-files ${filesPanelHiddenClass}" data-rc-panel="files">
 					              <div class="worktree-inspector-panel-title-row">
 					                <div class="worktree-inspector-panel-title">Files</div>
-					                <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
+					                <div style="display:flex; align-items:center; gap:8px;">
+					                  <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
+					                  <button class="btn-secondary rc-panel-toggle-btn" type="button" data-rc-panel-toggle="files" aria-expanded="${collapsedPanels.files ? 'false' : 'true'}">${collapsedPanels.files ? 'Show' : 'Hide'}</button>
+					                </div>
 					              </div>
-				              <div class="worktree-inspector-files-list">
+				              <div class="worktree-inspector-files-list review-console-files-list ${collapsedPanels.files ? 'hidden' : ''}" data-rc-panel-body="files">
 				                <table class="worktree-inspector-table">
 				                  <thead>
 				                    <tr>
@@ -9757,9 +9773,12 @@ class ClaudeOrchestrator {
 					            <div class="worktree-inspector-panel worktree-inspector-commits ${commitsPanelHiddenClass}" data-rc-panel="commits">
 				              <div class="worktree-inspector-panel-title-row">
 				                <div class="worktree-inspector-panel-title">Commits</div>
-				                <div class="worktree-inspector-subtle">count ${commits.length}</div>
+				                <div style="display:flex; align-items:center; gap:8px;">
+				                  <div class="worktree-inspector-subtle">count ${commits.length}</div>
+				                  <button class="btn-secondary rc-panel-toggle-btn" type="button" data-rc-panel-toggle="commits" aria-expanded="${collapsedPanels.commits ? 'false' : 'true'}">${collapsedPanels.commits ? 'Show' : 'Hide'}</button>
+				                </div>
 				              </div>
-				              <div>
+				              <div class="review-console-commits-list ${collapsedPanels.commits ? 'hidden' : ''}" data-rc-panel-body="commits">
 				                ${commits.map((c) => `
 				                  <div class="worktree-inspector-commit">
 				                    <code class="worktree-inspector-commit-hash">${escapeHtml(String(c.sha || '').slice(0, 7))}</code>
@@ -9770,12 +9789,15 @@ class ClaudeOrchestrator {
 				                ${commits.length === 0 ? '<div class="worktree-inspector-subtle">No commits found.</div>' : ''}
 				              </div>
 
-				              <div style="margin-top:12px;">
+				              <div style="margin-top:8px;">
 				                <div class="worktree-inspector-panel-title-row">
 				                  <div class="worktree-inspector-panel-title">Conversation</div>
-				                  <div class="worktree-inspector-subtle">reviews ${reviews.length} • comments ${issueComments.length}</div>
+				                  <div style="display:flex; align-items:center; gap:8px;">
+				                    <div class="worktree-inspector-subtle">reviews ${reviews.length} • comments ${issueComments.length}</div>
+				                    <button class="btn-secondary rc-panel-toggle-btn" type="button" data-rc-panel-toggle="conversation" aria-expanded="${collapsedPanels.conversation ? 'false' : 'true'}">${collapsedPanels.conversation ? 'Show' : 'Hide'}</button>
+				                  </div>
 				                </div>
-				                <div>
+				                <div class="review-console-comments-list ${collapsedPanels.conversation ? 'hidden' : ''}" data-rc-panel-body="conversation">
 					                  ${commentItems.length ? commentItems.slice(-15).map(renderComment).join('') : '<div class="worktree-inspector-subtle">No recent comments/reviews found.</div>'}
 					                </div>
 					              </div>
@@ -10108,6 +10130,7 @@ class ClaudeOrchestrator {
         const routeBlockedEl = bodyEl.querySelector('[data-review-route-blocked]');
         const routeClaimedEl = bodyEl.querySelector('[data-review-route-claimed]');
         const routeResetBtn = bodyEl.querySelector('[data-review-route-reset="true"]');
+        const panelToggleBtns = Array.from(bodyEl.querySelectorAll('[data-rc-panel-toggle]'));
 
 	      const parsePrUrlFromTaskId = (id) => {
 	        const raw = String(id || '').trim();
@@ -10289,6 +10312,33 @@ class ClaudeOrchestrator {
           persistRouteFilters();
           updateNavStatus();
         });
+        const persistPanelCollapse = () => {
+          try {
+            localStorage.setItem('review-console-collapsed-panels', JSON.stringify(collapsedPanels));
+          } catch {
+            // ignore
+          }
+        };
+        const applyPanelCollapseUI = () => {
+          panelToggleBtns.forEach((btn) => {
+            const key = String(btn?.dataset?.rcPanelToggle || '').trim().toLowerCase();
+            if (!key) return;
+            const collapsed = collapsedPanels[key] === true;
+            const body = bodyEl.querySelector(`[data-rc-panel-body="${key}"]`);
+            if (body) body.classList.toggle('hidden', collapsed);
+            btn.textContent = collapsed ? 'Show' : 'Hide';
+            btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+          });
+        };
+        panelToggleBtns.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const key = String(btn?.dataset?.rcPanelToggle || '').trim().toLowerCase();
+            if (!key || !(key in collapsedPanels)) return;
+            collapsedPanels[key] = !collapsedPanels[key];
+            applyPanelCollapseUI();
+            persistPanelCollapse();
+          });
+        });
 
 	      const fetchGlobalQueueItems = async () => {
 	        const url = new URL('/api/process/tasks', window.location.origin);
@@ -10392,8 +10442,9 @@ class ClaudeOrchestrator {
 	          this.showToast?.(String(err?.message || err), 'error');
 	        });
 	      });
+        applyPanelCollapseUI();
         syncRouteControls();
-	      updateNavStatus();
+		      updateNavStatus();
 
 	      // File deep link: click file in the Files panel to jump the embedded diff viewer.
 	      bodyEl.querySelectorAll('[data-diff-file]').forEach((btn) => {
