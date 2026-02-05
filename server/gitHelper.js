@@ -455,9 +455,19 @@ class GitHelper {
       this.basePath,
       '/games',
       '/tmp'
-    ].filter(Boolean).map((p) => path.resolve(p));
+    ];
 
-    return prefixes.some((prefix) => normalized === prefix || normalized.startsWith(prefix + path.sep));
+    // WSL users often keep repos under /mnt/c/... which is outside HOME. Allow /mnt on WSL.
+    try {
+      const isWsl = !!process.env.WSL_DISTRO_NAME || /microsoft/i.test(os.release?.() || '');
+      if (isWsl) prefixes.push('/mnt');
+    } catch {
+      // ignore
+    }
+
+    const resolvedPrefixes = prefixes.filter(Boolean).map((p) => path.resolve(p));
+
+    return resolvedPrefixes.some((prefix) => normalized === prefix || normalized.startsWith(prefix + path.sep));
   }
   
   isValidBranchName(branchName) {
