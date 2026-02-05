@@ -2606,6 +2606,31 @@ app.delete('/api/recovery/:workspaceId', async (req, res) => {
   }
 });
 
+// Prune old recovery sessions (hygiene): removes entries older than N days.
+app.post('/api/recovery/:workspaceId/prune', express.json(), async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const rawDays =
+      (req.body && (req.body.olderThanDays ?? req.body.days))
+      ?? req.query.olderThanDays
+      ?? req.query.days;
+    const days = Math.max(1, Math.min(365, Number(rawDays)));
+    if (!Number.isFinite(days)) {
+      return res.status(400).json({ success: false, error: 'olderThanDays must be a number (1..365)' });
+    }
+
+    await sessionRecoveryService.loadWorkspaceState(workspaceId);
+    const prunedCount = sessionRecoveryService.pruneOlderThan(workspaceId, {
+      olderThanMs: Math.round(days * 24 * 60 * 60 * 1000)
+    });
+
+    res.json({ success: true, prunedCount, olderThanDays: days });
+  } catch (error) {
+    logger.error('Failed to prune recovery state', { error: error.message });
+    res.status(500).json({ success: false, error: error.message || 'Failed to prune recovery state' });
+  }
+});
+
 app.get('/api/ports/:repoPath/:worktreeId', async (req, res) => {
   try {
     const { repoPath, worktreeId } = req.params;
