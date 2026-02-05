@@ -12,6 +12,7 @@ const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024; // 10MB
 async function execFileSafe(command, args, options = {}) {
   return execFileAsync(command, args, {
     ...options,
+    windowsHide: true,
     maxBuffer: options.maxBuffer ?? DEFAULT_MAX_BUFFER
   });
 }
