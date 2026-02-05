@@ -4139,10 +4139,11 @@ class ClaudeOrchestrator {
 		            ${this.getGitHubButtons(sessionId)}
 		            ${this.getSessionCloseButtonHTML(sessionId)}
 		          ` : ''}
-		          ${isServerSession ? `
-		            ${this.getServerControlsHTML(sessionId)}
-		            ${this.getSessionCloseButtonHTML(sessionId)}
-		          ` : ''}
+			          ${isServerSession ? `
+			            ${this.getServerControlsHTML(sessionId)}
+			            ${this.getWorktreeInspectorButtonHTML(sessionId)}
+			            ${this.getSessionCloseButtonHTML(sessionId)}
+			          ` : ''}
 		        </div>
 			      </div>
 	      <div class="terminal-body">
@@ -4689,16 +4690,16 @@ class ClaudeOrchestrator {
 			    `;
 			  }
 
-			  getWorktreeInspectorButtonHTML(sessionId) {
-	    const session = this.sessions.get(sessionId);
-	    const worktreePath = this.resolveWorktreePathForSession(sessionId, session) || null;
-			    const links = this.githubLinks.get(sessionId) || {};
-			    const prUrl = String(links.pr || '').trim();
-			    const canOpen = !!(worktreePath || prUrl);
-			    const ariaDisabled = canOpen ? '' : 'aria-disabled="true"';
-			    const sidJson = JSON.stringify(String(sessionId || ''));
-			    return `<button class="control-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector(${sidJson}, { reviewConsole: true })" title="Review Console (worktree/files/commits/diff)" ${ariaDisabled}>🗂</button>`;
-			  }
+				  getWorktreeInspectorButtonHTML(sessionId) {
+		    const session = this.sessions.get(sessionId);
+		    const worktreePath = this.resolveWorktreePathForSession(sessionId, session) || null;
+				    const links = this.githubLinks.get(sessionId) || {};
+				    const prUrl = String(links.pr || '').trim();
+				    const canOpen = !!(worktreePath || prUrl);
+				    const disabledAttr = canOpen ? '' : 'disabled aria-disabled="true"';
+				    const sidJson = JSON.stringify(String(sessionId || ''));
+				    return `<button class="control-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector(${sidJson}, { reviewConsole: true })" title="Review Console (worktree/files/commits/diff)" ${disabledAttr}>🗂</button>`;
+				  }
 
 			  getWorktreeRemoveButtonHTML(sessionId) {
 				    const session = this.sessions.get(sessionId);
@@ -7872,13 +7873,14 @@ class ClaudeOrchestrator {
 			              ${tinyBtn('review-window', 'fullscreen', '⛶', rcFullscreen, 'Fullscreen')}
 			              ${tinyBtn('review-window', 'docked', '▐', !rcFullscreen, 'Docked')}
 			            </span>
-			            <span class="rc-layout-sep">|</span>
-			            <span class="rc-layout-group">
-			              ${tinyBtn('review-section', 'terminals', 'T', rcSections.terminals !== false, 'Terminals')}
-			              ${tinyBtn('review-section', 'commits', 'C', rcSections.commits !== false, 'Commits')}
-			              ${tinyBtn('review-section', 'diff', 'D', rcSections.diff !== false, 'Diff')}
-			            </span>
-			          </div>
+				            <span class="rc-layout-sep">|</span>
+				            <span class="rc-layout-group">
+				              ${tinyBtn('review-section', 'terminals', 'T', rcSections.terminals !== false, 'Terminals')}
+				              ${tinyBtn('review-section', 'files', 'F', rcSections.files !== false, 'Files')}
+				              ${tinyBtn('review-section', 'commits', 'C', rcSections.commits !== false, 'Commits')}
+				              ${tinyBtn('review-section', 'diff', 'D', rcSections.diff !== false, 'Diff')}
+				            </span>
+				          </div>
 			        `;
 			      })() : '';
 
