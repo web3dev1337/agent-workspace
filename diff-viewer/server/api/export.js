@@ -177,8 +177,8 @@ async function generateDiffHTML(diffData, metadata) {
     </div>
     <div class="stats">
       <div class="stat">Files: ${stats.files || files.length}</div>
-      <div class="stat additions">+${stats.additions || 0}</div>
-      <div class="stat deletions">-${stats.deletions || 0}</div>
+      ${Number(stats.additions || 0) > 0 ? `<div class="stat additions">+${Number(stats.additions || 0)}</div>` : ''}
+      ${Number(stats.deletions || 0) > 0 ? `<div class="stat deletions">-${Number(stats.deletions || 0)}</div>` : ''}
       ${stats.semanticReduction ? `<div class="stat">Reduction: ${stats.semanticReduction}%</div>` : ''}
     </div>
   </div>
@@ -188,8 +188,8 @@ async function generateDiffHTML(diffData, metadata) {
     <div class="diff-block">
       <div class="file-header">
         ${file.path || file.filename} 
-        <span class="additions">+${file.additions}</span> 
-        <span class="deletions">-${file.deletions}</span>
+        ${Number(file.additions || 0) > 0 ? `<span class="additions">+${Number(file.additions || 0)}</span>` : ''}
+        ${Number(file.deletions || 0) > 0 ? `<span class="deletions">-${Number(file.deletions || 0)}</span>` : ''}
       </div>
       <pre><code>${formatDiffContent(file)}</code></pre>
     </div>
@@ -221,7 +221,9 @@ function generateDiffMarkdown(diffData, metadata) {
   markdown += '\n## Statistics\n\n';
   markdown += `- **Files Changed:** ${stats.files || files.length}\n`;
   markdown += `- **Additions:** +${stats.additions || 0}\n`;
-  markdown += `- **Deletions:** -${stats.deletions || 0}\n`;
+  if (Number(stats.deletions || 0) > 0) {
+    markdown += `- **Deletions:** -${stats.deletions || 0}\n`;
+  }
   if (stats.semanticReduction) {
     markdown += `- **Semantic Reduction:** ${stats.semanticReduction}%\n`;
   }
@@ -231,8 +233,11 @@ function generateDiffMarkdown(diffData, metadata) {
   // File changes
   files.forEach(file => {
     markdown += `### ${file.path || file.filename}\n\n`;
-    markdown += `- Additions: +${file.additions}\n`;
-    markdown += `- Deletions: -${file.deletions}\n\n`;
+    markdown += `- Additions: +${file.additions || 0}\n`;
+    if (Number(file.deletions || 0) > 0) {
+      markdown += `- Deletions: -${file.deletions || 0}\n`;
+    }
+    markdown += '\n';
     
     if (file.patch || file.content) {
       markdown += '```diff\n';

@@ -6,7 +6,7 @@ This is an updated audit after the Windows/public-release hardening work (late J
 
 ## Summary (what matters)
 
-- ✅ **Secrets (history)**: `gitleaks` reports **no leaked secrets** (scanned **1,238 commits**).
+- ✅ **Secrets (history)**: `gitleaks` reports **no leaked secrets** (scanned **1,239 commits**).
 - ✅ **Network safety defaults (current HEAD)**:
   - Orchestrator binds to **loopback by default** (`127.0.0.1`) and refuses LAN binding without `AUTH_TOKEN` unless explicitly overridden.
   - Diff viewer binds to **loopback by default** and keeps **CORS disabled by default**.
@@ -43,11 +43,10 @@ Verified in history:
 
 ### 3) Git history PII (author/committer metadata)
 
-Unique emails found in git metadata (author/committer):
+Unique emails found in git metadata (author/committer) (normalized to lowercase; history may contain case variants):
 - `143916802+archanon@users.noreply.github.com`
 - `160291380+web3dev1337@users.noreply.github.com`
 - `192667251+AnrokX@users.noreply.github.com`
-- `Shrimpchicken8@gmail.com`
 - `shrimpchicken8@gmail.com`
 - `dev@example.com`
 - `noreply@github.com`
@@ -119,4 +118,3 @@ Exact steps are documented here:
 - If you publish binaries/installer releases, you should also:
   - sign them eventually (reduces SmartScreen friction)
   - make sure logs aren’t accidentally bundled
-
