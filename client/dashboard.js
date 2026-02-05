@@ -3673,9 +3673,9 @@ class Dashboard {
       const existing = document.getElementById('recovery-dialog');
       if (existing) existing.remove();
 
-      const sessions = recoveryInfo.sessions || [];
-      const savedAt = recoveryInfo.savedAt ? new Date(recoveryInfo.savedAt).toLocaleString() : 'Unknown';
-      const savedAtRaw = String(recoveryInfo.savedAt || '').trim();
+      let sessions = recoveryInfo.sessions || [];
+      let savedAt = recoveryInfo.savedAt ? new Date(recoveryInfo.savedAt).toLocaleString() : 'Unknown';
+      let savedAtRaw = String(recoveryInfo.savedAt || '').trim();
 
       const modal = document.createElement('div');
       modal.id = 'recovery-dialog';
@@ -3713,6 +3713,9 @@ class Dashboard {
               <button class="btn-recovery btn-recovery-clear" id="recovery-clear" title="Delete stored recovery info for this workspace (won't kill processes)">
                 Clear
               </button>
+              <button class="btn-recovery btn-recovery-clear-old" id="recovery-clear-old" title="Delete stored recovery info older than 7 days (won't kill processes)">
+                Clear old (7d)
+              </button>
               <button class="btn-recovery btn-recovery-selected" id="recovery-selected">
                 Recover Selected
               </button>
@@ -3748,6 +3751,39 @@ class Dashboard {
         }));
       };
 
+      const infoEl = modal.querySelector('.recovery-info');
+      const sessionsEl = modal.querySelector('.recovery-sessions');
+
+      const renderSessions = () => {
+        if (!sessionsEl) return;
+        sessionsEl.innerHTML = sessions.length === 0
+          ? '<div class="no-recovery">No sessions to recover</div>'
+          : sessions.map((s, i) => `
+              <div class="recovery-session" data-session-id="${s.sessionId}">
+                <input type="checkbox" class="recovery-checkbox" id="recover-${i}" checked>
+                <label for="recover-${i}" class="recovery-session-info">
+                  <div class="recovery-session-id">${s.sessionId}</div>
+                  <div class="recovery-session-details">
+                    ${s.lastCwd ? `<span class="recovery-session-cwd">📁 ${s.lastCwd.split('/').slice(-2).join('/')}</span>` : ''}
+                    ${s.lastAgent ? `<span class="recovery-session-agent">${s.lastAgent}</span>` : ''}
+                    ${s.lastConversationId ? `<span>💬 ${s.lastConversationId.slice(0, 8)}...</span>` : ''}
+                  </div>
+                </label>
+              </div>
+            `).join('');
+
+        // Toggle selection on row click
+        sessionsEl.querySelectorAll('.recovery-session').forEach(el => {
+          el.onclick = (e) => {
+            if (e.target.tagName !== 'INPUT') {
+              const checkbox = el.querySelector('.recovery-checkbox');
+              checkbox.checked = !checkbox.checked;
+              el.classList.toggle('selected', checkbox.checked);
+            }
+          };
+        });
+      };
+
       // Event handlers
       modal.querySelector('.close-btn').onclick = () => {
         modal.remove();
@@ -3778,6 +3814,31 @@ class Dashboard {
         }
       };
 
+      modal.querySelector('#recovery-clear-old').onclick = async () => {
+        setButtonsDisabled(true);
+        try {
+          await fetch(`${serverUrl}/api/recovery/${encodeURIComponent(workspaceId)}/prune`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ olderThanDays: 7 })
+          });
+
+          const next = await this.checkRecoveryState(workspaceId);
+          sessions = next?.sessions || [];
+          savedAt = next?.savedAt ? new Date(next.savedAt).toLocaleString() : savedAt;
+          savedAtRaw = String(next?.savedAt || savedAtRaw || '').trim();
+
+          if (infoEl) {
+            infoEl.textContent = `Found ${sessions.length} recoverable session${sessions.length !== 1 ? 's' : ''} from ${savedAt}`;
+          }
+          renderSessions();
+        } catch (error) {
+          console.error('Failed to prune recovery state:', error);
+        } finally {
+          setButtonsDisabled(false);
+        }
+      };
+
       modal.querySelector('#recovery-selected').onclick = async () => {
         const selected = [];
         modal.querySelectorAll('.recovery-session').forEach(el => {
@@ -3805,16 +3866,7 @@ class Dashboard {
         }
       };
 
-      // Toggle selection on row click
-      modal.querySelectorAll('.recovery-session').forEach(el => {
-        el.onclick = (e) => {
-          if (e.target.tagName !== 'INPUT') {
-            const checkbox = el.querySelector('.recovery-checkbox');
-            checkbox.checked = !checkbox.checked;
-            el.classList.toggle('selected', checkbox.checked);
-          }
-        };
-      });
+      renderSessions();
     });
   }
 }

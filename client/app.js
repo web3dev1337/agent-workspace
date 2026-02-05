@@ -577,6 +577,18 @@ class ClaudeOrchestrator {
 
       this.socket.on('session-closed', ({ sessionId }) => {
         console.log(`Session closed by server: ${sessionId}`);
+        // Best-effort: if the session was explicitly closed/removed, it should not keep appearing in recovery prompts.
+        try {
+          const sid = String(sessionId || '').trim();
+          const session = this.sessions.get(sid);
+          const workspaceId = String(session?.workspace || this.currentWorkspace?.id || '').trim();
+          if (workspaceId && sid) {
+            fetch(`/api/recovery/${encodeURIComponent(workspaceId)}/${encodeURIComponent(sid)}`, { method: 'DELETE' })
+              .catch(() => {});
+          }
+        } catch {
+          // ignore
+        }
         // Remove session from local state
         this.sessions.delete(sessionId);
         this.visibleTerminals.delete(sessionId);
@@ -3131,7 +3143,7 @@ class ClaudeOrchestrator {
             <button class="delete-worktree-btn"
                     onclick="event.stopPropagation(); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
                     title="Remove worktree from workspace (keeps files intact)">
-              ✕
+              🗑
             </button>
           </div>
         </div>
