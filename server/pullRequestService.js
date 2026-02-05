@@ -246,7 +246,14 @@ class PullRequestService {
       });
     });
 
-    return JSON.parse(stdout || '{}');
+    const parsed = JSON.parse(stdout || '{}');
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.errors) && parsed.errors.length) {
+      const msg = parsed.errors.map((e) => String(e?.message || '').trim()).filter(Boolean).join('; ');
+      const err = new Error(msg || 'GraphQL request failed');
+      err.graphqlErrors = parsed.errors;
+      throw err;
+    }
+    return parsed;
   }
 
   async getPullRequestFilesByGraphql({ owner, repo, number, limit = 300 } = {}) {
@@ -357,7 +364,13 @@ class PullRequestService {
 
     const [prViewRes, filesRes, issueCommentsRes, reviewsRes] = await Promise.all([
       safe(`gh pr view ${o}/${r}#${n}`, () => this.getPullRequest({ owner: o, repo: r, number: n, fields: prViewFields }), null),
-      safe(`graphql ${o}/${r}#${n} files`, () => this.getPullRequestFilesByGraphql({ owner: o, repo: r, number: n, limit: filesLimit }), []),
+      // Prefer REST here: GraphQL sometimes returns { errors: [...] } while still exiting 0, which previously
+      // looked like "0 files" with no warnings. REST gives us status + rename info too.
+      safe(
+        `repos/${o}/${r}/pulls/${n}/files`,
+        () => this.ghApiGetAllPages(`repos/${o}/${r}/pulls/${n}/files`, { timeoutMs: 30000, maxPages: maxPagesFor(filesLimit, 100) }),
+        []
+      ),
       commentsLimit > 0
         ? safe(`repos/${o}/${r}/issues/${n}/comments`, () => this.ghApiGetAllPages(`repos/${o}/${r}/issues/${n}/comments`, { timeoutMs: 30000, maxPages: maxPagesFor(commentsLimit, 100) }), [])
         : Promise.resolve({ ok: true, value: [], endpoint: null, error: null }),
@@ -375,23 +388,41 @@ class PullRequestService {
       .filter((x) => x && x.ok === false)
       .map((x) => ({ endpoint: x.endpoint, error: x.error }));
 
-    const statusMap = new Map([
-      ['ADDED', 'added'],
-      ['MODIFIED', 'modified'],
-      ['DELETED', 'removed'],
-      ['RENAMED', 'renamed']
-    ]);
-
     const files = Array.isArray(filesRaw) ? filesRaw.slice(0, filesLimit).map((f) => {
-      const filename = String(f?.path || '');
-      const changeType = String(f?.changeType || '').trim().toUpperCase();
-      const status = statusMap.get(changeType) || '';
+      const filename = String(f?.filename || f?.path || '');
+      const previousFilename = f?.previous_filename ? String(f.previous_filename) : (f?.previousFilename ? String(f.previousFilename) : null);
+
+      const statusRaw = String(f?.status || '').trim().toLowerCase();
+      const normalizeStatus = (raw) => {
+        const s = String(raw || '').trim().toLowerCase();
+        if (!s) return '';
+        if (s === 'added') return 'added';
+        if (s === 'modified' || s === 'changed') return 'modified';
+        if (s === 'removed' || s === 'deleted') return 'removed';
+        if (s === 'renamed') return 'renamed';
+        if (s === 'copied') return 'added';
+        return s;
+      };
+
+      let status = normalizeStatus(statusRaw);
+
+      // Back-compat: older code paths used GraphQL `changeType`.
+      if (!status) {
+        const statusMap = new Map([
+          ['ADDED', 'added'],
+          ['MODIFIED', 'modified'],
+          ['DELETED', 'removed'],
+          ['RENAMED', 'renamed']
+        ]);
+        const changeType = String(f?.changeType || '').trim().toUpperCase();
+        status = statusMap.get(changeType) || '';
+      }
       const additions = Number.isFinite(Number(f?.additions)) ? Number(f.additions) : null;
       const deletions = Number.isFinite(Number(f?.deletions)) ? Number(f.deletions) : null;
       const changes = (additions != null && deletions != null) ? (additions + deletions) : null;
       return {
         filename,
-        previousFilename: null,
+        previousFilename: previousFilename || null,
         status,
         additions,
         deletions,

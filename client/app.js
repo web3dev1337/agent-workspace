@@ -4696,7 +4696,8 @@ class ClaudeOrchestrator {
 			    const prUrl = String(links.pr || '').trim();
 			    const canOpen = !!(worktreePath || prUrl);
 			    const ariaDisabled = canOpen ? '' : 'aria-disabled="true"';
-			    return `<button class="control-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector('${sessionId}')" title="Worktree files + commits" ${ariaDisabled}>🗂</button>`;
+			    const sidJson = JSON.stringify(String(sessionId || ''));
+			    return `<button class="control-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector(${sidJson}, { reviewConsole: true })" title="Review Console (worktree/files/commits/diff)" ${ariaDisabled}>🗂</button>`;
 			  }
 
 			  getWorktreeRemoveButtonHTML(sessionId) {
@@ -7704,7 +7705,7 @@ class ClaudeOrchestrator {
 	    return '';
 	  }
 
-		  async openWorktreeInspector(sessionId) {
+		  async openWorktreeInspector(sessionId, { reviewConsole = false } = {}) {
 		    const sid = String(sessionId || '').trim();
 		    try {
 		      const session = this.sessions.get(sid);
@@ -7722,7 +7723,7 @@ class ClaudeOrchestrator {
 		      }
 
 		      const label = session?.worktreeId ? `${session.worktreeId}` : sid;
-		      await this.openWorktreeInspectorForPath(worktreePath, { label });
+		      await this.openWorktreeInspectorForPath(worktreePath, { label, reviewConsole: !!reviewConsole });
 	    } catch (err) {
 	      console.error('openWorktreeInspector failed:', err);
 	      this.showToast?.(`Inspector failed: ${String(err?.message || err)}`, 'error');
