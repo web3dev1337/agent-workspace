@@ -17,10 +17,10 @@ Goal: a single-click surface to batch review Tier 3+ items with minimal vertical
 - [x] Make the Review Console a true “review route” surface:
   - [x] filter/sort within the console route stack (tier/risk/unreviewed/blocked/claimed)
   - [x] add a single “Review route” launcher (Queue → open console already filtered + stacked)
-- [ ] Reduce vertical waste further (tighten paddings, make meta blocks collapsible by default).
-- [ ] Layout v2:
-  - keep Agent + Server side-by-side consistently (Agent always left when both visible)
-  - make Diff embed the dominant pane by default (single-screen, minimal vertical scrolling)
+- [x] Reduce vertical waste further (tighten paddings, make meta blocks collapsible by default).
+- [x] Layout v2:
+  - [x] keep Agent + Server side-by-side consistently (Agent always left when both visible)
+  - [x] make Diff embed the dominant pane by default (single-screen, minimal vertical scrolling)
 
 References:
 - `PLANS/2026-01-25/REVIEW_CONSOLE_V1.md`
@@ -42,8 +42,8 @@ Goal: when you close/remove something, it’s truly gone (and doesn’t pile up 
 
 Goal: make the repo safe to publish and easy to reason about.
 
-- [ ] Decide which docs should be public vs private companion repo (internal project names, screenshots, workflow logs).
-- [ ] Replace “real project” examples in docs with placeholders where desired (`OWNER/REPO`, `~/Projects/MyGame`, etc.).
+- [x] Decide which docs should be public vs private companion repo (internal project names, screenshots, workflow logs).
+- [x] Replace “real project” examples in docs with placeholders where desired (`OWNER/REPO`, `~/Projects/MyGame`, etc.).
 - [x] Add baseline public-facing repo files:
   - `CONTRIBUTING.md` (optional)
 
@@ -53,6 +53,7 @@ References:
 - `PUBLIC_RELEASE_AUDIT_2026-02-05.md`
 - `PUBLIC_RELEASE_AUDIT_2026-02-06.md`
 - `PLANS/2026-02-05/HISTORY_REWRITE_PRIVACY_EMAILS_PLAN.md`
+- `PLANS/2026-02-06/PHASE4_DECISIONS_2026-02-06.md`
 
 ### D) Packaging / shipping (Windows-first)
 
@@ -61,10 +62,10 @@ Goal: end users install an `.msi` / `.exe` and run the app without dev toolchain
 - [ ] Validate the tag-based release path end-to-end:
   - Windows CI builds installer artifacts
   - release notes + attached artifacts are correct
-- [ ] Decide initial release posture:
+- [x] Decide initial release posture:
   - unsigned internal builds vs code-signed public builds
   - portable zip vs installer
-- [ ] Consider adding an auto-updater (optional; can be Phase 4.1)
+- [x] Consider adding an auto-updater (optional; can be Phase 4.1)
 
 References:
 - `WINDOWS_QUICK_START.md`
@@ -76,16 +77,17 @@ References:
 
 Goal: enable “Free vs Pro” without turning core into spaghetti.
 
-- [ ] Decide “Pro v1” feature list (server-enforced; UI gating is UX-only).
+- [x] Decide “Pro v1” feature list (server-enforced; UI gating is UX-only).
 - [x] Implement a minimal plugin loader (server-side first):
   - [x] load `plugins/<id>/server.js` at startup
   - [x] allow plugin routes under `/api/plugins/<id>/*`
   - [x] allow plugins to register commands into `CommandRegistry` via a namespaced helper
-- [ ] Decide whether client plugin support is in-scope for Phase 4 or Phase 5 (it’s higher risk because `client/app.js` is large and not modular).
+- [x] Decide whether client plugin support is in-scope for Phase 4 or Phase 5 (it’s higher risk because `client/app.js` is large and not modular).
 
 References:
 - `PLANS/2026-02-05/PUBLISHING_AND_MONETIZATION_OPTIONS.md`
 - `PLANS/2026-02-05/PLUGIN_ARCHITECTURE_AND_PRO_GATING.md`
+- `PLANS/2026-02-06/PHASE4_DECISIONS_2026-02-06.md`
 
 ### F) Scheduler / “cron jobs” for orchestrations
 
