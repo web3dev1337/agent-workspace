@@ -3,8 +3,11 @@ name: windows
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - "v*"
+  pull_request:
 
 permissions:
   contents: write
@@ -32,6 +35,7 @@ jobs:
 
   tauri_windows:
     name: tauri build (windows)
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 60
     needs: [unit_windows]
