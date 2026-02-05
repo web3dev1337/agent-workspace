@@ -1045,6 +1045,17 @@ header h1 {
   line-height: 1;
 }
 
+.control-btn.terminal-process-close-btn {
+  font-weight: 700;
+  line-height: 1;
+}
+
+.control-btn.terminal-process-close-btn:hover {
+  background: var(--accent-warning);
+  border-color: var(--accent-warning);
+  color: var(--text-on-accent);
+}
+
 /* Environment select styles */
 .control-btn.env-select {
   min-width: auto;
@@ -3538,6 +3549,35 @@ header h1 {
   color: var(--text-tertiary);
   font-size: 0.85em;
   margin-bottom: var(--space-md);
+}
+
+.settings-glossary details {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  margin: 10px 0;
+}
+
+.settings-glossary details[open] {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.settings-glossary summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+}
+
+.settings-glossary summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-glossary details > .setting-description {
+  margin: 10px 0 0;
+  opacity: 0.95;
 }
 
 .identity-saved-list {

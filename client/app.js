@@ -3153,7 +3153,7 @@ class ClaudeOrchestrator {
               R
             </button>
             <button class="delete-worktree-btn"
-                    onclick="event.stopPropagation(); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
+                    onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
                     title="Remove worktree from workspace (keeps files intact)">
               🗑
             </button>
@@ -4775,7 +4775,7 @@ class ClaudeOrchestrator {
 					    // show an explanatory toast instead of rendering a dead button.
 					    const disabledAttr = canOpen ? '' : 'aria-disabled="true" data-disabled="true"';
 					    const sidJson = JSON.stringify(String(sessionId || ''));
-					    return `<button class="control-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector(${sidJson}, { reviewConsole: true })" title="Review Console (worktree/files/commits/diff)" ${disabledAttr}>🗂</button>`;
+					    return `<button class="control-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector(${sidJson}, { reviewConsole: true })" title="Review Console (worktree/files/commits/diff)" ${disabledAttr}>🗂</button>`;
 					  }
 
 			  getWorktreeRemoveButtonHTML(sessionId) {
@@ -4793,10 +4793,14 @@ class ClaudeOrchestrator {
 					    const sid = String(sessionId || '').trim();
 					    if (!sid) return '';
 					    const session = this.sessions.get(sid);
+					    const stopBtn = `<button class="control-btn terminal-process-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.requestCloseSession('${sid}')" title="Close terminal(s) (kills agent+server processes; keeps worktree)">×</button>`;
+
 					    // Reduce UI confusion: show the "remove worktree" button only once per pair (on the Agent tile).
 					    // Server tiles keep their server controls; removal is done from the Agent tile or sidebar.
-					    if (String(session?.type || '').toLowerCase() === 'server') return '';
-					    return `<button class="control-btn danger terminal-session-close-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove worktree from workspace (kills agent+server; keeps files)">✕</button>`;
+					    if (String(session?.type || '').toLowerCase() === 'server') return stopBtn;
+
+					    const removeBtn = `<button class="control-btn danger terminal-session-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove worktree from workspace (kills terminals; keeps files)">🗑</button>`;
+					    return `${stopBtn}\n${removeBtn}`;
 					  }
   
   updateServerStatus(sessionId, output) {

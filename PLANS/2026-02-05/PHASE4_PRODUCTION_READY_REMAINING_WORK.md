@@ -33,8 +33,8 @@ Goal: when you close/remove something, it’s truly gone (and doesn’t pile up 
 - [ ] Clarify and standardize the two destructive actions in UI copy (everywhere):
   - “Close terminal process” (kills PTY, keeps worktree in workspace)
   - “Remove worktree from workspace” (kills all group sessions, removes from workspace config, keeps files on disk)
-- [ ] Eliminate confusing duplicate “✕” buttons and make the intent unambiguous.
-- [ ] Add a small Help/Glossary panel (UI) explaining:
+- [x] Eliminate confusing duplicate “✕” buttons and make the intent unambiguous.
+- [x] Add a small Help/Glossary panel (UI) explaining:
   - workspace vs worktree vs session/terminal
   - agent vs server pairing (and why they live/die together)
 
@@ -120,11 +120,17 @@ Goal: safe, auditable automations (disabled by default).
 ### C) Session recovery policy
 - ✅ Session recovery filters out non-actionable entries by default and supports clearing saved/old recoverables.
 
-### D) Skins / “Blue mode”
+### D) Lifecycle UI clarity (close vs remove)
+- ✅ Terminal controls are now unambiguous:
+  - **×** closes terminals (kills agent+server processes; keeps worktree in workspace)
+  - **🗑** removes worktree from workspace (kills terminals; keeps files)
+- ✅ Settings now includes a **Glossary** section explaining workspaces/worktrees/sessions and agent/server pairing.
+
+### E) Skins / “Blue mode”
 - ✅ Skin system exists (Light/Dark + Default/Blue/Purple/Emerald/Amber) with intensity control.
   - Primary blue is `#0f67fd` (`client/styles.css`).
 
-### E) Security/privacy audit (plan-only for destructive cleanup)
+### F) Security/privacy audit (plan-only for destructive cleanup)
 - ✅ History scanned with `gitleaks` (no secrets found).
 - ✅ Clear plan exists for removing historical artifacts + rewriting author emails (not executed yet).
 - ✅ Baseline `SECURITY.md` added.
