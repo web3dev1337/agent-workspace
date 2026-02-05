@@ -646,21 +646,52 @@ io.on('connection', (socket) => {
   socket.on('reveal-in-explorer', ({ path: filePath }) => {
     logger.info('Reveal in explorer requested', { filePath });
     
-    const { exec } = require('child_process');
-    
-    // Use xdg-open on Linux/WSL to open the file manager
-    // The file manager will open to the directory containing the file
-    const dirPath = path.dirname(filePath);
-    const command = `explorer.exe "$(wslpath -w '${dirPath}')"`;
-    
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        logger.error('Failed to open file explorer', { 
-          error: error.message, 
-          stderr 
+    const { execFile } = require('child_process');
+
+    const raw = String(filePath || '').trim();
+    if (!raw) return;
+
+    const dirPath = path.dirname(raw);
+    const isWSL = process.platform === 'linux' && (process.env.WSL_DISTRO_NAME || process.env.WSLENV);
+
+    // Windows native: explorer.exe can open the folder directly.
+    if (process.platform === 'win32') {
+      execFile('explorer.exe', [dirPath], { windowsHide: true }, (error, stdout, stderr) => {
+        if (error) {
+          logger.error('Failed to open explorer.exe', { error: error.message, stderr });
+        } else {
+          logger.info('Explorer opened successfully', { dirPath });
+        }
+      });
+      return;
+    }
+
+    // WSL: convert Linux path -> Windows path before calling explorer.exe.
+    if (isWSL) {
+      execFile('wslpath', ['-w', dirPath], { windowsHide: true, timeout: 3000 }, (err, stdout, stderr) => {
+        if (err) {
+          logger.error('Failed to convert path via wslpath', { error: err.message, stderr, dirPath });
+          return;
+        }
+        const winPath = String(stdout || '').trim();
+        if (!winPath) return;
+        execFile('explorer.exe', [winPath], { windowsHide: true }, (error, _stdout2, _stderr2) => {
+          if (error) {
+            logger.error('Failed to open explorer.exe (WSL)', { error: error.message, winPath });
+          } else {
+            logger.info('Explorer opened successfully (WSL)', { dirPath, winPath });
+          }
         });
+      });
+      return;
+    }
+
+    // Linux native fallback.
+    execFile('xdg-open', [dirPath], { windowsHide: true, timeout: 3000 }, (error, stdout, stderr) => {
+      if (error) {
+        logger.error('Failed to open file manager', { error: error.message, stderr, dirPath });
       } else {
-        logger.info('File explorer opened successfully', { dirPath });
+        logger.info('File manager opened successfully', { dirPath });
       }
     });
   });
