@@ -1713,6 +1713,18 @@ class ClaudeOrchestrator {
         await this.updateGlobalUserSetting('ui.reviewConsole.diffEmbed', !!e.target.checked);
       });
     }
+    const reviewConsoleShowAgent = document.getElementById('review-console-show-agent');
+    if (reviewConsoleShowAgent) {
+      reviewConsoleShowAgent.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.reviewConsole.terminalKinds.agent', !!e.target.checked);
+      });
+    }
+    const reviewConsoleShowServer = document.getElementById('review-console-show-server');
+    if (reviewConsoleShowServer) {
+      reviewConsoleShowServer.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.reviewConsole.terminalKinds.server', !!e.target.checked);
+      });
+    }
 
     // Discord services auto-start (server-persisted)
     const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
@@ -4164,6 +4176,7 @@ class ClaudeOrchestrator {
     wrapper.className = 'terminal-wrapper';
     wrapper.id = this.getSessionDomId('wrapper', sessionId);
     wrapper.dataset.sessionId = String(sessionId || '');
+    wrapper.dataset.sessionType = String(session?.type || '');
     wrapper.addEventListener('mousedown', () => {
       this.lastInteractedSessionId = sessionId;
     });
@@ -4752,16 +4765,18 @@ class ClaudeOrchestrator {
 			    `;
 			  }
 
-				  getWorktreeInspectorButtonHTML(sessionId) {
-		    const session = this.sessions.get(sessionId);
-		    const worktreePath = this.resolveWorktreePathForSession(sessionId, session) || null;
-				    const links = this.githubLinks.get(sessionId) || {};
-				    const prUrl = String(links.pr || '').trim();
-				    const canOpen = !!(worktreePath || prUrl);
-				    const disabledAttr = canOpen ? '' : 'disabled aria-disabled="true"';
-				    const sidJson = JSON.stringify(String(sessionId || ''));
-				    return `<button class="control-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector(${sidJson}, { reviewConsole: true })" title="Review Console (worktree/files/commits/diff)" ${disabledAttr}>🗂</button>`;
-				  }
+					  getWorktreeInspectorButtonHTML(sessionId) {
+			    const session = this.sessions.get(sessionId);
+			    const worktreePath = this.resolveWorktreePathForSession(sessionId, session) || null;
+					    const links = this.githubLinks.get(sessionId) || {};
+					    const prUrl = String(links.pr || '').trim();
+					    const canOpen = !!(worktreePath || prUrl);
+					    // Even when we can't resolve a worktree path/PR link yet, allow clicking so we can
+					    // show an explanatory toast instead of rendering a dead button.
+					    const disabledAttr = canOpen ? '' : 'aria-disabled="true" data-disabled="true"';
+					    const sidJson = JSON.stringify(String(sessionId || ''));
+					    return `<button class="control-btn" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector(${sidJson}, { reviewConsole: true })" title="Review Console (worktree/files/commits/diff)" ${disabledAttr}>🗂</button>`;
+					  }
 
 			  getWorktreeRemoveButtonHTML(sessionId) {
 				    const session = this.sessions.get(sessionId);
@@ -7099,12 +7114,18 @@ class ClaudeOrchestrator {
 	    const fullscreen = cfg.fullscreen !== false;
 	    // Default to embedded diff (you can still Close it).
 	    const diffEmbed = cfg.diffEmbed !== false;
+	    const terminalKindsRaw = (cfg.terminalKinds && typeof cfg.terminalKinds === 'object') ? cfg.terminalKinds : {};
+	    const terminalKinds = {
+	      agent: terminalKindsRaw.agent !== false,
+	      server: terminalKindsRaw.server !== false
+	    };
 
 		    return {
 		      preset,
 		      sections: appliedSections,
 		      fullscreen,
-	      diffEmbed
+	      diffEmbed,
+	      terminalKinds
 	    };
 	  }
 
@@ -8140,12 +8161,11 @@ class ClaudeOrchestrator {
 	      const formatAgg = (agg) => {
 	        const a = Number(agg?.added || 0) || 0;
 	        const d = Number(agg?.deleted || 0) || 0;
-	        const hasNums = !!(a || d);
-	        const hasBin = !!agg?.binary;
-	        if (hasNums && hasBin) return `+${a}/-${d} +bin`;
-	        if (hasNums) return `+${a}/-${d}`;
-	        if (hasBin) return 'bin';
-	        return '';
+	        const parts = [];
+	        if (a > 0) parts.push(`+${a}`);
+	        if (d > 0) parts.push(`-${d}`);
+	        if (agg?.binary) parts.push('bin');
+	        return parts.join(' ');
 	      };
 
 	      const treeRoot = { type: 'dir', name: '', children: new Map(), staged: { added: 0, deleted: 0, binary: false }, unstaged: { added: 0, deleted: 0, binary: false } };
@@ -9233,7 +9253,29 @@ class ClaudeOrchestrator {
       .replace(/>/g, '&gt;');
 
 		    try {
-			      const details = await this.fetchPullRequestDetails(prUrl, { maxFiles: 400, maxCommits: 200, maxComments: 60, maxReviews: 60 });
+			      const fetchWithRetry = async () => {
+			        const opts = { maxFiles: 400, maxCommits: 200, maxComments: 60, maxReviews: 60 };
+			        const first = await this.fetchPullRequestDetails(prUrl, opts);
+			        const w0 = Array.isArray(first?.warnings) ? first.warnings : [];
+			        const f0 = Array.isArray(first?.files) ? first.files : [];
+			        const c0 = Array.isArray(first?.commits) ? first.commits : [];
+			        const empty0 = (w0.length === 0 && f0.length === 0 && c0.length === 0);
+			        if (!empty0) return first;
+
+			        // GitHub/gh can occasionally return empty payloads transiently; retry once to avoid a confusing "0 files" UI.
+			        await new Promise((r) => setTimeout(r, 800));
+			        const second = await this.fetchPullRequestDetails(prUrl, opts);
+			        const w1 = Array.isArray(second?.warnings) ? second.warnings : [];
+			        const f1 = Array.isArray(second?.files) ? second.files : [];
+			        const c1 = Array.isArray(second?.commits) ? second.commits : [];
+			        const empty1 = (w1.length === 0 && f1.length === 0 && c1.length === 0);
+			        if (!empty1) return second;
+			        // If the retry produced warnings, prefer it so we can display diagnostics.
+			        if (w1.length > 0 && w0.length === 0) return second;
+			        return first;
+			      };
+
+			      const details = await fetchWithRetry();
 		      const pr = (details?.pr && typeof details.pr === 'object') ? details.pr : {};
 		      const files = Array.isArray(details?.files) ? details.files : [];
 		      const commits = Array.isArray(details?.commits) ? details.commits : [];
@@ -9255,6 +9297,67 @@ class ClaudeOrchestrator {
 		        const linkedPr = normUrl(link.pr);
 		        if (!linkedPr) continue;
 		        if (linkedPr === targetPrUrl) matchingSessionIds.push(String(sid));
+		      }
+
+		      // Fallback: if we don't have explicit GitHub link detection yet, try to link sessions by:
+		      // 1) the task's known worktreePath (Queue/process tasks often include it), or
+		      // 2) repo remote URL + head branch name.
+		      if (matchingSessionIds.length === 0) {
+		        const taskWorktreePath = String(t?.worktreePath || t?.record?.worktreePath || '').trim();
+		        const normPath = (v) => String(v || '').trim().replace(/\\/g, '/').replace(/\/+$/, '');
+		        const overlaps = (a0, b0) => {
+		          const a = normPath(a0);
+		          const b = normPath(b0);
+		          if (!a || !b) return false;
+		          if (a === b) return true;
+		          return a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+		        };
+
+		        if (taskWorktreePath) {
+		          const target = normPath(taskWorktreePath);
+		          for (const [sid, session] of this.sessions) {
+		            if (!sid || !session) continue;
+		            if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
+		            const cwd = String(session?.config?.cwd || session?.cwd || session?.worktreePath || '').trim();
+		            if (!cwd) continue;
+		            if (!overlaps(cwd, target)) continue;
+		            matchingSessionIds.push(String(sid));
+		          }
+		        }
+
+		        if (matchingSessionIds.length === 0) {
+		          const headRef = String(pr?.headRefName || '').trim();
+		          const repoUrl = (() => {
+		            const u = String(pr?.url || prUrl || '').trim();
+		            const m = u.match(/github\\.com\\/([^/]+)\\/([^/]+)\\/pull\\/(\\d+)/);
+		            if (!m) return '';
+		            return `https://github.com/${m[1]}/${m[2]}`;
+		          })();
+		          const repoNorm = normUrl(repoUrl);
+		          if (repoNorm && headRef) {
+		            for (const [sid, session] of this.sessions) {
+		              if (!sid || !session) continue;
+		              if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
+		              const remote = normUrl(String(session?.remoteUrl || '').trim().replace(/\\.git$/i, ''));
+		              const branch = String(session?.branch || '').trim();
+		              if (!remote || !branch) continue;
+		              if (branch !== headRef) continue;
+		              if (!(remote === repoNorm || remote.endsWith(`/${repoNorm.split('/').slice(-2).join('/')}`) || repoNorm.endsWith(remote))) continue;
+		              matchingSessionIds.push(String(sid));
+		            }
+		          }
+		        }
+		      }
+
+		      // If we found matches, seed the PR link so tier/risk propagation (and GitHub buttons) work consistently.
+		      if (matchingSessionIds.length) {
+		        for (const sid of matchingSessionIds) {
+		          const links = this.githubLinks.get(sid) || {};
+		          if (!links.pr) {
+		            links.pr = targetPrUrl;
+		            this.githubLinks.set(sid, links);
+		          }
+		        }
 		      }
 
 		      // If we found any linked sessions, also include their paired terminal (agent <-> server)
@@ -9354,6 +9457,17 @@ class ClaudeOrchestrator {
 			        commits: rcCfg?.sections?.commits !== false,
 			        diff: rcCfg?.sections?.diff !== false
 			      };
+			      const currentTerminalKinds = {
+			        agent: rcCfg?.terminalKinds?.agent !== false,
+			        server: rcCfg?.terminalKinds?.server !== false
+			      };
+			      const getVisibleTerminalCount = () => {
+			        if (!matchingSessionIds.length) return 0;
+			        return matchingSessionIds.filter((sid) => {
+			          const isSrv = isServer(sid);
+			          return isSrv ? currentTerminalKinds.server : currentTerminalKinds.agent;
+			        }).length;
+			      };
 
 				      const presets = {
 				        default: { terminals: true, files: true, commits: true, diff: true },
@@ -9389,16 +9503,22 @@ class ClaudeOrchestrator {
 			              ${tinyBtn('review-section', 'commits', 'C', currentSections.commits !== false, 'Toggle commits')}
 			              ${tinyBtn('review-section', 'diff', 'D', currentSections.diff !== false, 'Toggle diff')}
 			            </span>
+			            <span class="rc-layout-sep">|</span>
+			            <span class="rc-layout-group">
+			              ${tinyBtn('review-terminal-kind', 'agent', '🤖', currentTerminalKinds.agent !== false, 'Toggle agent terminals')}
+			              ${tinyBtn('review-terminal-kind', 'server', '💻', currentTerminalKinds.server !== false, 'Toggle server terminals')}
+			            </span>
 			          </div>
 			        `;
 			      })();
 
-				      const terminalsPanelHiddenClass = (!matchingSessionIds.length || currentSections.terminals === false) ? 'hidden' : '';
+				      const visibleTerminals0 = getVisibleTerminalCount();
+				      const terminalsPanelHiddenClass = (!visibleTerminals0 || currentSections.terminals === false) ? 'hidden' : '';
 				      const filesPanelHiddenClass = currentSections.files === false ? 'hidden' : '';
 				      const commitsPanelHiddenClass = currentSections.commits === false ? 'hidden' : '';
 				      const diffPanelHiddenClass = currentSections.diff === false ? 'hidden' : '';
 
-				      const terminalsColumnHiddenClass = (!matchingSessionIds.length || currentSections.terminals === false) ? 'hidden' : '';
+				      const terminalsColumnHiddenClass = (!visibleTerminals0 || currentSections.terminals === false) ? 'hidden' : '';
 				      const metaColumnHiddenClass = (currentSections.files === false && currentSections.commits === false) ? 'hidden' : '';
 				      const diffColumnHiddenClass = currentSections.diff === false ? 'hidden' : '';
 
@@ -9426,8 +9546,8 @@ class ClaudeOrchestrator {
 	              <button class="btn-secondary" type="button" data-review-nav="prev" title="Previous PR in review stack">◀ Prev</button>
 	              <span class="worktree-inspector-subtle" data-review-nav-status="true" title="Review stack (captured from Queue)">${navIndex + 1}/${navCount}</span>
 	              <button class="btn-secondary" type="button" data-review-nav="next" title="Next PR in review stack">Next ▶</button>
-	              <button class="btn-secondary" type="button" data-review-nav="next-unreviewed-t3" title="Next unreviewed Tier 3+ PR in this review stack">Next unreviewed T3+ ▶</button>
 	            ` : ''}
+	            <button class="btn-secondary" type="button" data-review-nav="next-unreviewed-t3" title="Next unreviewed Tier 3+ PR (uses current stack if available; otherwise loads from Process Queue)">Next unreviewed T3+ ▶</button>
 	            <button class="btn-secondary" type="button" data-pr-refresh="true">🔄 Refresh</button>
 	            <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
 	            <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}">🔍 Diff</button>
@@ -9435,27 +9555,35 @@ class ClaudeOrchestrator {
 		          </div>
 		        </div>
 
-			        ${warnings.length ? `
-		          <div class="review-console-warning">
-		            <div style="font-weight:600; margin-bottom:6px;">GitHub details may be incomplete</div>
-		            <div style="opacity:0.9;">Some GitHub API calls failed, so Files/Commits/Conversation can appear empty.</div>
-		            <div style="margin-top:6px; opacity:0.85; font-family:var(--font-mono); font-size:0.85rem;">
-		              ${warnings.slice(0, 6).map((w) => {
-		                const ep = escapeHtml(String(w?.endpoint || '(unknown endpoint)'));
-		                const err = escapeHtml(String(w?.error || '(unknown error)'));
-		                return `<div>• ${ep}: ${err}</div>`;
-		              }).join('')}
-		              ${warnings.length > 6 ? `<div>• …and ${warnings.length - 6} more</div>` : ''}
-		            </div>
-		          </div>
-			        ` : ''}
+				        ${warnings.length ? `
+			          <div class="review-console-warning">
+			            <div style="font-weight:600; margin-bottom:6px;">GitHub details may be incomplete</div>
+			            <div style="opacity:0.9;">Some GitHub API calls failed, so Files/Commits/Conversation can appear empty.</div>
+			            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+			              <button class="btn-secondary" type="button" data-pr-refresh="true" title="Retry loading PR details">🔄 Retry</button>
+			              <button class="btn-secondary" type="button" data-open-diagnostics="true" title="Open Settings → Diagnostics">🧰 Diagnostics</button>
+			            </div>
+			            <div style="margin-top:6px; opacity:0.85; font-family:var(--font-mono); font-size:0.85rem;">
+			              ${warnings.slice(0, 6).map((w) => {
+			                const ep = escapeHtml(String(w?.endpoint || '(unknown endpoint)'));
+			                const err = escapeHtml(String(w?.error || '(unknown error)'));
+			                return `<div>• ${ep}: ${err}</div>`;
+			              }).join('')}
+			              ${warnings.length > 6 ? `<div>• …and ${warnings.length - 6} more</div>` : ''}
+			            </div>
+			          </div>
+				        ` : ''}
 
-			        ${githubReturnedEmpty ? `
-		          <div class="review-console-warning">
-		            <div style="font-weight:600; margin-bottom:6px;">GitHub returned no files/commits</div>
-		            <div style="opacity:0.9;">This is usually a temporary auth/rate-limit issue. Click <strong>🔄 Refresh</strong>. If it persists, check <code class="mono">gh auth status</code> on the server machine.</div>
-		          </div>
-			        ` : ''}
+				        ${githubReturnedEmpty ? `
+			          <div class="review-console-warning">
+			            <div style="font-weight:600; margin-bottom:6px;">GitHub returned no files/commits</div>
+			            <div style="opacity:0.9;">This is usually a temporary auth/rate-limit issue. Click <strong>🔄 Refresh</strong>. If it persists, check <code class="mono">gh auth status</code> on the server machine.</div>
+			            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+			              <button class="btn-secondary" type="button" data-pr-refresh="true" title="Retry loading PR details">🔄 Retry</button>
+			              <button class="btn-secondary" type="button" data-open-diagnostics="true" title="Open Settings → Diagnostics">🧰 Diagnostics</button>
+			            </div>
+			          </div>
+				        ` : ''}
 
 			        ${layoutPanel}
 
@@ -9465,7 +9593,7 @@ class ClaudeOrchestrator {
 					              <div class="worktree-inspector-panel worktree-inspector-terminals-panel ${terminalsPanelHiddenClass}" data-rc-panel="terminals">
 					                <div class="worktree-inspector-panel-title-row">
 					                  <div class="worktree-inspector-panel-title">Terminals</div>
-					                  <div class="worktree-inspector-subtle">${matchingSessionIds.length} linked</div>
+					                  <div class="worktree-inspector-subtle" data-terminals-count="true">${visibleTerminals0}/${matchingSessionIds.length} shown</div>
 					                </div>
 					                <div class="worktree-inspector-terminals" data-pr-terminals="true"></div>
 					              </div>
@@ -9571,6 +9699,47 @@ class ClaudeOrchestrator {
 			      const terminalsColEl = bodyEl.querySelector('[data-rc-column="terminals"]');
 			      const metaColEl = bodyEl.querySelector('[data-rc-column="meta"]');
 			      const diffColEl = bodyEl.querySelector('[data-rc-column="diff"]');
+			      const terminalsCountEl = bodyEl.querySelector('[data-terminals-count="true"]');
+			      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');
+
+			      const updateTerminalKindVisibility = () => {
+			        try {
+			          if (terminalsCountEl) {
+			            const total = matchingSessionIds.length;
+			            const visible = getVisibleTerminalCount();
+			            terminalsCountEl.textContent = total ? `${visible}/${total} shown` : '';
+			          }
+			        } catch {
+			          // ignore
+			        }
+
+			        if (!terminalsContainer) return;
+			        const wrappers = Array.from(terminalsContainer.querySelectorAll('.terminal-wrapper.review-console-terminal'));
+			        const visibleSessionIds = [];
+			        wrappers.forEach((wrapper) => {
+			          const sid = String(wrapper?.dataset?.sessionId || '').trim();
+			          if (!sid) return;
+			          const sess = this.sessions.get(sid) || null;
+			          const t = String(wrapper?.dataset?.sessionType || sess?.type || '').trim().toLowerCase();
+			          if (t && (!wrapper.dataset.sessionType || wrapper.dataset.sessionType !== t)) {
+			            try { wrapper.dataset.sessionType = t; } catch {}
+			          }
+			          const isSrv = isServer(sid) || t === 'server';
+			          const allowed = isSrv ? (currentTerminalKinds.server !== false) : (currentTerminalKinds.agent !== false);
+			          const show = allowed && (currentSections.terminals !== false);
+			          wrapper.style.display = show ? '' : 'none';
+			          wrapper.classList.toggle('hidden', !show);
+			          if (show) visibleSessionIds.push(sid);
+			        });
+
+			        if (visibleSessionIds.length) {
+			          setTimeout(() => {
+			            visibleSessionIds.forEach((sid) => {
+			              try { this.terminalManager?.fitTerminal?.(sid); } catch {}
+			            });
+			          }, 60);
+			        }
+			      };
 
 			      const updateGrid = () => {
 			        if (!gridEl || !emptyEl) return;
@@ -9599,11 +9768,13 @@ class ClaudeOrchestrator {
 	          ? this.userSettings.global.ui.reviewConsole
 	          : {};
 	        const existingSections = (existing.sections && typeof existing.sections === 'object') ? existing.sections : {};
+	        const existingKinds = (existing.terminalKinds && typeof existing.terminalKinds === 'object') ? existing.terminalKinds : {};
 	        const nextCfg = {
 	          ...existing,
 	          preset: currentPreset,
 	          fullscreen: !!currentFullscreen,
-	          sections: { ...existingSections, ...currentSections }
+	          sections: { ...existingSections, ...currentSections },
+	          terminalKinds: { ...existingKinds, ...currentTerminalKinds }
 	        };
 	        await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
 	      };
@@ -9614,7 +9785,9 @@ class ClaudeOrchestrator {
 	        if (currentFullscreen) modal.classList.add('fullscreen');
 	        else modal.classList.add('docked');
 
-		        if (terminalsPanelEl) terminalsPanelEl.classList.toggle('hidden', currentSections.terminals === false || !matchingSessionIds.length);
+		        const visibleTerminals = getVisibleTerminalCount();
+		        const showTerminals = currentSections.terminals !== false && visibleTerminals > 0;
+		        if (terminalsPanelEl) terminalsPanelEl.classList.toggle('hidden', !showTerminals);
 		        if (filesPanelEl) filesPanelEl.classList.toggle('hidden', currentSections.files === false);
 		        if (commitsPanelEl) commitsPanelEl.classList.toggle('hidden', currentSections.commits === false);
 		        if (diffPanelEl) diffPanelEl.classList.toggle('hidden', currentSections.diff === false);
@@ -9647,6 +9820,15 @@ class ClaudeOrchestrator {
 	          btn.classList.toggle('active', active);
 	          btn.setAttribute('aria-pressed', active ? 'true' : 'false');
 	        });
+
+	        bodyEl.querySelectorAll('[data-review-terminal-kind]').forEach((btn) => {
+	          const key = String(btn?.dataset?.reviewTerminalKind || '').trim().toLowerCase();
+	          const active = key ? (currentTerminalKinds[key] !== false) : false;
+	          btn.classList.toggle('active', active);
+	          btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+	        });
+
+	        try { updateTerminalKindVisibility(); } catch {}
 	      };
 
 		      bodyEl.querySelectorAll('[data-review-preset]').forEach((btn) => {
@@ -9695,6 +9877,17 @@ class ClaudeOrchestrator {
 		          } catch {
 		            // ignore
 		          }
+		        });
+		      });
+
+		      bodyEl.querySelectorAll('[data-review-terminal-kind]').forEach((btn) => {
+		        btn.addEventListener('click', async () => {
+		          const key = String(btn?.dataset?.reviewTerminalKind || '').trim().toLowerCase();
+		          if (!key || !(key in currentTerminalKinds)) return;
+		          currentPreset = 'custom';
+		          currentTerminalKinds[key] = !currentTerminalKinds[key];
+		          applyLayout();
+		          await persist();
 		        });
 		      });
 
@@ -9811,10 +10004,11 @@ class ClaudeOrchestrator {
 	          const count = nav0 ? nav0.items.length : 0;
 	          const idx0 = nav0 && Number.isFinite(Number(nav0.index)) ? Math.max(0, Math.min(count - 1, Number(nav0.index))) : -1;
 	          if (navStatusEl) navStatusEl.textContent = (count > 1 && idx0 >= 0) ? `${idx0 + 1}/${count}` : '';
-	          const disabled = !(count > 1 && idx0 >= 0);
-	          if (navPrevBtn) navPrevBtn.disabled = disabled;
-	          if (navNextBtn) navNextBtn.disabled = disabled;
-	          if (navNextUnreviewedT3Btn) navNextUnreviewedT3Btn.disabled = disabled;
+	          const stackEnabled = (count > 1 && idx0 >= 0);
+	          if (navPrevBtn) navPrevBtn.disabled = !stackEnabled;
+	          if (navNextBtn) navNextBtn.disabled = !stackEnabled;
+	          // The "Next unreviewed T3+" button can load its own global stack when no nav stack exists.
+	          if (navNextUnreviewedT3Btn) navNextUnreviewedT3Btn.disabled = false;
 	        } catch {
 	          // ignore
 	        }
@@ -9885,6 +10079,55 @@ class ClaudeOrchestrator {
 	        return true;
 	      };
 
+	      const fetchGlobalQueueItems = async () => {
+	        const url = new URL('/api/process/tasks', window.location.origin);
+	        url.searchParams.set('mode', 'mine');
+	        url.searchParams.set('state', 'open');
+	        url.searchParams.set('sort', 'updated');
+	        url.searchParams.set('limit', '200');
+	        const res = await fetch(url.toString(), {
+	          cache: 'no-store',
+	          headers: { 'Cache-Control': 'no-cache' }
+	        });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to load process tasks'));
+	        const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+	        return tasks
+	          .filter((x) => x && String(x.kind || '').trim() === 'pr' && x.url)
+	          .map((x) => {
+	            const rec = (x.record && typeof x.record === 'object') ? x.record : {};
+	            return {
+	              id: String(x.id || '').trim() || null,
+	              kind: 'pr',
+	              title: String(x.title || '').trim() || null,
+	              url: String(x.url || '').trim() || null,
+	              prNumber: x.prNumber ?? null,
+	              isDraft: !!x.isDraft,
+	              tier: rec?.tier ?? null,
+	              changeRisk: String(rec?.changeRisk || '').trim() || null,
+	              claimedBy: String(rec?.claimedBy || '').trim() || null,
+	              assignedTo: String(rec?.assignedTo || '').trim() || null,
+	              reviewed: !!rec?.reviewedAt,
+	              done: !!rec?.doneAt,
+	              outcome: String(rec?.reviewOutcome || '').trim() || null
+	            };
+	          })
+	          .filter((x) => x && x.id && x.url);
+	      };
+
+	      const loadGlobalUnreviewedTier3Stack = async () => {
+	        const items = await fetchGlobalQueueItems();
+	        const candidates = items.filter(isUnreviewedTier3Plus);
+	        const nav0 = {
+	          source: 'process',
+	          createdAtMs: Date.now(),
+	          items: candidates,
+	          index: 0
+	        };
+	        this.reviewConsoleNav = nav0;
+	        return nav0;
+	      };
+
 	      navPrevBtn?.addEventListener('click', () => {
 	        navigateInReviewStack(-1).catch(() => {});
 	      });
@@ -9892,7 +10135,51 @@ class ClaudeOrchestrator {
 	        navigateInReviewStack(1).catch(() => {});
 	      });
 	      navNextUnreviewedT3Btn?.addEventListener('click', () => {
-	        navigateNextMatching(isUnreviewedTier3Plus, { label: 'unreviewed Tier 3+ item' }).catch(() => {});
+	        (async () => {
+	          const nav0 = (this.reviewConsoleNav && Array.isArray(this.reviewConsoleNav.items)) ? this.reviewConsoleNav : null;
+	          const hasStack = !!(nav0 && Array.isArray(nav0.items) && nav0.items.length > 1);
+	          if (hasStack) {
+	            await navigateNextMatching(isUnreviewedTier3Plus, { label: 'unreviewed Tier 3+ item' });
+	            return;
+	          }
+
+	          this.showToast?.('Loading unreviewed Tier 3+ PRs…', 'info');
+	          const navNew = await loadGlobalUnreviewedTier3Stack();
+	          const items = Array.isArray(navNew?.items) ? navNew.items : [];
+	          if (items.length === 0) {
+	            this.showToast?.('No unreviewed Tier 3+ PRs found', 'warning');
+	            return;
+	          }
+
+	          const cur = normUrl(prUrl);
+	          const idx = items.findIndex((x) => x && normUrl(x.url) === cur);
+	          if (items.length === 1) {
+	            const only = items[0];
+	            if (only && normUrl(only.url) !== cur) {
+	              navNew.index = 0;
+	              this.reviewConsoleNav = navNew;
+	              updateNavStatus();
+	              await this.openReviewConsoleForTask({
+	                id: String(only.id || '').trim() || this.getPRTaskIdFromUrl(only.url) || null,
+	                kind: 'pr',
+	                title: only.title || null,
+	                url: only.url
+	              });
+	            } else {
+	              this.showToast?.('Already at the only unreviewed Tier 3+ PR', 'info');
+	            }
+	            return;
+	          }
+
+	          const nextIndex = (idx >= 0) ? ((idx + 1) % items.length) : 0;
+	          navNew.index = nextIndex;
+	          this.reviewConsoleNav = navNew;
+	          updateNavStatus();
+	          await navigateToIndex(nextIndex);
+	        })().catch((err) => {
+	          console.error('Failed to navigate to next unreviewed T3+', err);
+	          this.showToast?.(String(err?.message || err), 'error');
+	        });
 	      });
 	      updateNavStatus();
 
@@ -9925,7 +10212,6 @@ class ClaudeOrchestrator {
 	      });
 
 			      // If we have terminals that are already linked to this PR, dock them into the PR console.
-			      const terminalsContainer = bodyEl.querySelector('[data-pr-terminals="true"]');
 			      if (matchingSessionIds.length && terminalsContainer) {
 			        terminalsContainer.innerHTML = '';
 		        for (const sessionId of matchingSessionIds) {
@@ -9984,26 +10270,45 @@ class ClaudeOrchestrator {
 		            }
 		          }, 60);
 		        }
+		        try { updateTerminalKindVisibility(); } catch {}
 		      }
 
-	      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
-	        const url = e.target?.dataset?.openDiff;
-	        if (url) this.launchDiffViewer(url);
-	      });
-	      bodyEl.querySelector('[data-pr-refresh]')?.addEventListener('click', async (e) => {
-	        const btn = e.target;
-	        if (!btn) return;
-	        btn.disabled = true;
-	        this.showToast('Refreshing PR details…', 'info');
-	        try {
-	          await this.openReviewConsoleForPRTask(t);
-	          this.showToast('PR details refreshed', 'success');
-	        } catch (err) {
-	          this.showToast(String(err?.message || err), 'error');
-	        } finally {
-	          btn.disabled = false;
-	        }
-	      });
+		      bodyEl.querySelector('[data-open-diff]')?.addEventListener('click', (e) => {
+		        const url = e.target?.dataset?.openDiff;
+		        if (url) this.launchDiffViewer(url);
+		      });
+		      bodyEl.querySelectorAll?.('[data-open-diagnostics="true"]')?.forEach?.((btn) => {
+		        btn.addEventListener('click', () => {
+		          try {
+		            document.getElementById('settings-panel')?.classList?.remove?.('hidden');
+		            setTimeout(() => {
+		              try {
+		                document.getElementById('diagnostics-output')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+		              } catch {}
+		              try {
+		                document.getElementById('diagnostics-refresh')?.click?.();
+		              } catch {}
+		            }, 50);
+		          } catch {
+		            // ignore
+		          }
+		        });
+		      });
+		      bodyEl.querySelectorAll('[data-pr-refresh]').forEach((btn0) => {
+		        btn0.addEventListener('click', async () => {
+		          const buttons = Array.from(bodyEl.querySelectorAll('[data-pr-refresh]'));
+		          buttons.forEach((b) => { try { b.disabled = true; } catch {} });
+		          this.showToast('Refreshing PR details…', 'info');
+		          try {
+		            await this.openReviewConsoleForPRTask(t);
+		            this.showToast('PR details refreshed', 'success');
+		          } catch (err) {
+		            this.showToast(String(err?.message || err), 'error');
+		          } finally {
+		            buttons.forEach((b) => { try { b.disabled = false; } catch {} });
+		          }
+		        });
+		      });
       bodyEl.querySelector('[data-pr-merge]')?.addEventListener('click', async (e) => {
         const u = e.target?.dataset?.prMerge;
         if (!u) return;
@@ -11346,6 +11651,22 @@ class ClaudeOrchestrator {
         ? this.userSettings.global.ui.reviewConsole
         : {};
       reviewConsoleDiffEmbed.checked = cfg.diffEmbed !== false;
+    }
+    const reviewConsoleShowAgent = document.getElementById('review-console-show-agent');
+    if (reviewConsoleShowAgent) {
+      const cfg = (this.userSettings.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+        ? this.userSettings.global.ui.reviewConsole
+        : {};
+      const kinds = (cfg.terminalKinds && typeof cfg.terminalKinds === 'object') ? cfg.terminalKinds : {};
+      reviewConsoleShowAgent.checked = kinds.agent !== false;
+    }
+    const reviewConsoleShowServer = document.getElementById('review-console-show-server');
+    if (reviewConsoleShowServer) {
+      const cfg = (this.userSettings.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+        ? this.userSettings.global.ui.reviewConsole
+        : {};
+      const kinds = (cfg.terminalKinds && typeof cfg.terminalKinds === 'object') ? cfg.terminalKinds : {};
+      reviewConsoleShowServer.checked = kinds.server !== false;
     }
 
     const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
