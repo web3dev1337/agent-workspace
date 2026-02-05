@@ -70,6 +70,13 @@ async function collectDiagnostics() {
     name: 'GitHub CLI',
     ...(await checkCommand('gh', ['--version']))
   });
+  // Auth status is the most common root cause of "0 files/commits" in PR tooling on Windows.
+  // We keep it lightweight: first line of `gh auth status` is enough to spot "not logged in".
+  tools.push({
+    id: 'ghAuth',
+    name: 'GitHub CLI auth',
+    ...(await checkCommand('gh', ['auth', 'status']))
+  });
 
   tools.push({
     id: 'claude',
@@ -136,4 +143,3 @@ async function collectDiagnostics() {
 }
 
 module.exports = { collectDiagnostics };
-
