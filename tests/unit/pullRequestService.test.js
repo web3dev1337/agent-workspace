@@ -179,25 +179,16 @@ describe('PullRequestService', () => {
         return;
       }
 
-      // PR files (path/additions/deletions/changeType) via `gh api graphql`
-      if (path === 'graphql') {
-        cb(null, JSON.stringify({
-          data: {
-            repository: {
-              pullRequest: {
-                files: {
-                  nodes: [{
-                    path: 'src/a.js',
-                    additions: 1,
-                    deletions: 2,
-                    changeType: 'MODIFIED'
-                  }],
-                  pageInfo: { hasNextPage: false, endCursor: null }
-                }
-              }
-            }
-          }
-        }), '');
+      // PR files via REST (status + rename info)
+      if (path === 'repos/web3dev1337/repo/pulls/123/files') {
+        cb(null, JSON.stringify([{
+          filename: 'src/a.js',
+          status: 'modified',
+          additions: 1,
+          deletions: 2,
+          changes: 3,
+          previous_filename: null
+        }]), '');
         return;
       }
 
