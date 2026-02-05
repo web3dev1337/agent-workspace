@@ -128,7 +128,7 @@ class PullRequestService {
     ];
 
     const { stdout } = await new Promise((resolve, reject) => {
-      execFile('gh', args, { timeout: 20000 }, (error, stdout, stderr) => {
+      execFile('gh', args, { timeout: 20000, windowsHide: true }, (error, stdout, stderr) => {
         if (error) {
           logger.error('gh pr view failed', { error: error.message, stderr, owner: o, repo: r, number: n });
           reject(error);
@@ -157,7 +157,7 @@ class PullRequestService {
     });
 
     const { stdout } = await new Promise((resolve, reject) => {
-      execFile('gh', args, { timeout: timeoutMs }, (error, stdout, stderr) => {
+      execFile('gh', args, { timeout: timeoutMs, windowsHide: true }, (error, stdout, stderr) => {
         if (error) {
           logger.error('gh api failed', { error: error.message, stderr, path: rawPath });
           reject(error);
@@ -236,7 +236,7 @@ class PullRequestService {
     }
 
     const { stdout } = await new Promise((resolve, reject) => {
-      execFile('gh', args, { timeout: timeoutMs }, (error, stdout, stderr) => {
+      execFile('gh', args, { timeout: timeoutMs, windowsHide: true }, (error, stdout, stderr) => {
         if (error) {
           logger.error('gh graphql failed', { error: error.message, stderr });
           reject(error);
@@ -509,7 +509,7 @@ class PullRequestService {
     if (auto) args.push('--auto');
 
     const { stdout } = await new Promise((resolve, reject) => {
-      execFile('gh', args, { timeout: 60000 }, (error, stdout, stderr) => {
+      execFile('gh', args, { timeout: 60000, windowsHide: true }, (error, stdout, stderr) => {
         if (error) {
           logger.error('gh pr merge failed', { error: error.message, stderr, url: parsed.url });
           reject(error);
@@ -536,7 +536,7 @@ class PullRequestService {
     if (text) args.push('--body', text);
 
     const { stdout } = await new Promise((resolve, reject) => {
-      execFile('gh', args, { timeout: 60000 }, (error, stdout, stderr) => {
+      execFile('gh', args, { timeout: 60000, windowsHide: true }, (error, stdout, stderr) => {
         if (error) {
           logger.error('gh pr review failed', { error: error.message, stderr, url: parsed.url, action: normalizedAction });
           reject(error);
@@ -614,7 +614,7 @@ class PullRequestService {
     if (queryParts.length) args.push('--', ...queryParts);
 
     const { stdout } = await new Promise((resolve, reject) => {
-      execFile('gh', args, { timeout: 20000 }, (error, stdout, stderr) => {
+      execFile('gh', args, { timeout: 20000, windowsHide: true }, (error, stdout, stderr) => {
         if (error) {
           logger.error('gh search prs failed', { error: error.message, stderr });
           reject(error);
