@@ -162,13 +162,7 @@ describe('PullRequestService', () => {
           baseRefName: 'main',
           headRefName: 'feature/x',
           author: { login: 'me' },
-          commits: [{
-            oid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-            messageHeadline: 'feat: x',
-            authoredDate: '2026-01-02T00:00:00Z',
-            committedDate: '2026-01-02T00:00:00Z',
-            authors: [{ login: 'me', name: 'Me', email: 'me@example.com' }]
-          }]
+          commits: []
         }), '');
         return;
       }
@@ -188,6 +182,19 @@ describe('PullRequestService', () => {
           deletions: 2,
           changes: 3,
           previous_filename: null
+        }]), '');
+        return;
+      }
+
+      if (path === 'repos/web3dev1337/repo/pulls/123/commits') {
+        cb(null, JSON.stringify([{
+          sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          commit: {
+            message: 'feat: x\n\nbody',
+            author: { name: 'Me', date: '2026-01-02T00:00:00Z' },
+            committer: { date: '2026-01-02T00:00:00Z' }
+          },
+          author: { login: 'me' }
         }]), '');
         return;
       }
@@ -225,7 +232,7 @@ describe('PullRequestService', () => {
       maxReviews: 50
     });
 
-    expect(execFile).toHaveBeenCalledTimes(4);
+    expect(execFile).toHaveBeenCalledTimes(5);
     expect(result.pr.number).toBe(123);
     expect(result.files).toHaveLength(1);
     expect(result.files[0].filename).toBe('src/a.js');
