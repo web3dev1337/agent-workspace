@@ -1532,7 +1532,7 @@ header h1 {
 .review-console-grid {
   display: grid;
   grid-template-columns: minmax(520px, 0.25fr) minmax(360px, 0.25fr) minmax(0, 1fr);
-  gap: 14px;
+  gap: 10px;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
@@ -1574,9 +1574,14 @@ header h1 {
 .review-console-left {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-height: 0;
   overflow: auto;
+}
+
+/* Review Console should waste less vertical space than the full inspector. */
+.review-console-grid .worktree-inspector-panel {
+  padding: 10px;
 }
 
 .review-console-col-diff,
@@ -1955,7 +1960,9 @@ header h1 {
   border-radius: var(--radius-sm);
   margin-bottom: 6px;
   flex-wrap: nowrap;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .rc-layout-group {
