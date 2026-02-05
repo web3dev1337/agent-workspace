@@ -1022,6 +1022,19 @@ header h1 {
   border-color: var(--accent-primary);
 }
 
+.control-btn[aria-disabled="true"],
+.control-btn[data-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.control-btn[aria-disabled="true"]:hover,
+.control-btn[data-disabled="true"]:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
 .control-btn.danger:hover {
   background: var(--accent-danger);
   border-color: var(--accent-danger);
