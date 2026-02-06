@@ -98,6 +98,7 @@ const { ThreadService } = require('./threadService');
 const { PolicyService } = require('./policyService');
 const { AuditExportService } = require('./auditExportService');
 const { getInstance: getCommandHistoryService } = require('./commandHistoryService');
+const { evaluateBindSecurity } = require('./networkSecurityPolicy');
 const multer = require('multer');
 
 // Configure multer for audio file uploads
@@ -731,11 +732,33 @@ io.on('connection', (socket) => {
     logger.info('Reveal in explorer requested', { filePath });
     
     const { execFile } = require('child_process');
+    const fs = require('fs');
 
     const raw = String(filePath || '').trim();
     if (!raw) return;
 
-    const dirPath = path.dirname(raw);
+    const resolvedPath = path.resolve(raw);
+    if (!fs.existsSync(resolvedPath)) {
+      logger.warn('Reveal path does not exist', { filePath, resolvedPath });
+      return;
+    }
+
+    let dirPath = resolvedPath;
+    try {
+      const stat = fs.statSync(resolvedPath);
+      if (!stat.isDirectory()) {
+        dirPath = path.dirname(resolvedPath);
+      }
+    } catch (error) {
+      logger.warn('Failed to stat reveal path', { filePath, resolvedPath, error: error.message });
+      return;
+    }
+
+    if (!fs.existsSync(dirPath)) {
+      logger.warn('Reveal directory does not exist', { filePath, resolvedPath, dirPath });
+      return;
+    }
+
     const isWSL = process.platform === 'linux' && (process.env.WSL_DISTRO_NAME || process.env.WSLENV);
 
     // Windows native: explorer.exe can open the folder directly.
@@ -1650,9 +1673,8 @@ app.post('/api/files/sync', async (req, res) => {
 });
 
 app.get('/api/process/performance', async (req, res) => {
-  const { exec, execFile } = require('child_process');
+  const { execFile } = require('child_process');
   const util = require('util');
-  const execAsync = util.promisify(exec);
   const execFileAsync = util.promisify(execFile);
   const isWin = process.platform === 'win32';
 
@@ -1669,7 +1691,7 @@ app.get('/api/process/performance', async (req, res) => {
         const { stdout } = await execFileAsync(
           'powershell.exe',
           ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${p}").ProcessId`],
-          { timeout: 1500 }
+          { timeout: 1500, windowsHide: true }
         );
         return String(stdout || '')
           .split(/\s+/)
@@ -1677,7 +1699,7 @@ app.get('/api/process/performance', async (req, res) => {
           .filter(n => Number.isFinite(n) && n > 0);
       }
 
-      const { stdout } = await execAsync(`pgrep -P ${p}`, { timeout: 1500 });
+      const { stdout } = await execFileAsync('pgrep', ['-P', String(p)], { timeout: 1500, windowsHide: true });
       return String(stdout || '')
         .split('\n')
         .map(l => parseIntSafe(l))
@@ -1695,14 +1717,14 @@ app.get('/api/process/performance', async (req, res) => {
         const { stdout } = await execFileAsync(
           'powershell.exe',
           ['-NoProfile', '-Command', `(Get-Process -Id ${p} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty WorkingSet64)`],
-          { timeout: 1500 }
+          { timeout: 1500, windowsHide: true }
         );
         const bytes = Number(String(stdout || '').trim());
         if (!Number.isFinite(bytes) || bytes <= 0) return null;
         return Math.round(bytes / 1024);
       }
 
-      const { stdout } = await execAsync(`ps -o rss= -p ${p}`, { timeout: 1500 });
+      const { stdout } = await execFileAsync('ps', ['-o', 'rss=', '-p', String(p)], { timeout: 1500, windowsHide: true });
       return parseIntSafe(stdout);
     } catch {
       return null;
@@ -6035,38 +6057,28 @@ app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
 
 // Start server
 const PORT = Number(process.env.ORCHESTRATOR_PORT || 3000);
-const HOST = String(process.env.ORCHESTRATOR_HOST || process.env.HOST || '127.0.0.1');
+const hostPolicy = evaluateBindSecurity({
+  host: process.env.ORCHESTRATOR_HOST || process.env.HOST,
+  authToken: AUTH_TOKEN,
+  allowInsecureLanNoAuth: process.env.ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH
+});
+const HOST = hostPolicy.host;
 
-function isLoopbackHost(host) {
-  const h = String(host || '').trim().toLowerCase();
-  return h === 'localhost' || h === '127.0.0.1' || h === '::1';
-}
-
-function isBindAllHost(host) {
-  const h = String(host || '').trim().toLowerCase();
-  return h === '0.0.0.0' || h === '::';
-}
-
-const allowInsecureLanNoAuth = (() => {
-  const raw = String(process.env.ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH || '').trim().toLowerCase();
-  return ['1', 'true', 'yes'].includes(raw);
-})();
-
-if (!isLoopbackHost(HOST) && !AUTH_TOKEN && !allowInsecureLanNoAuth) {
+if (!hostPolicy.allowStart) {
   logger.error('Refusing to bind to a non-loopback host without AUTH_TOKEN. Set AUTH_TOKEN or set ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH=1 to override.', { host: HOST, port: PORT });
   process.exit(1);
 }
 
 httpServer.listen(PORT, HOST, () => {
   logger.info(`Server running on http://${HOST}:${PORT}`);
-  if (!isLoopbackHost(HOST)) {
-    const bindType = isBindAllHost(HOST) ? 'bind-all' : 'explicit-host';
+  if (!hostPolicy.isLoopback) {
+    const bindType = hostPolicy.isBindAll ? 'bind-all' : 'explicit-host';
     logger.info(`LAN access enabled (${bindType}) on port ${PORT}`);
-    if (!AUTH_TOKEN) {
+    if (!hostPolicy.hasAuthToken) {
       logger.warn('LAN access is enabled without AUTH_TOKEN. This is insecure; anyone on the network can control this orchestrator.', { host: HOST, port: PORT });
     }
   }
-  if (AUTH_TOKEN) {
+  if (hostPolicy.hasAuthToken) {
     logger.info('Authentication enabled');
   }
 
