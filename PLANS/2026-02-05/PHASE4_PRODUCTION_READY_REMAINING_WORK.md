@@ -59,10 +59,13 @@ References:
 
 Goal: end users install an `.msi` / `.exe` and run the app without dev toolchains.
 
-- [ ] Validate the tag-based release path end-to-end:
+- [x] Validate the tag-based release path end-to-end:
   - Windows CI builds installer artifacts
   - release notes + attached artifacts are correct
   - Tracking run (workflow_dispatch dry run): `https://github.com/web3dev1337/claude-orchestrator/actions/runs/21729801065`
+  - Latest validation run (success): `https://github.com/web3dev1337/claude-orchestrator/actions/runs/21740979424`
+  - Uploaded artifact (success): `tauri-windows-bundle`
+  - Follow-up notes: initial dispatch run `21740774410` exposed a Windows packaging issue in `scripts/tauri/prepare-backend-resources.js` (direct `npm.cmd` invocation); fixed by invoking npm through `process.execPath + npm_execpath`, then revalidated successfully.
 - [x] Decide initial release posture:
   - unsigned internal builds vs code-signed public builds
   - portable zip vs installer
