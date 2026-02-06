@@ -150,8 +150,12 @@ fn build_runtime_updater(app: &tauri::AppHandle) -> Result<tauri_plugin_updater:
     let pubkey = resolve_updater_pubkey(app)
         .ok_or_else(|| "Desktop updater public key is missing (set ORCHESTRATOR_UPDATER_PUBKEY or ORCHESTRATOR_UPDATER_PUBKEY_PATH).".to_string())?;
 
-    app.updater_builder()
+    let updater_builder = app
+        .updater_builder()
         .endpoints(endpoints)
+        .map_err(|e| format!("Failed to configure updater endpoints: {}", e))?;
+
+    updater_builder
         .pubkey(pubkey)
         .build()
         .map_err(|e| format!("Failed to initialize updater: {}", e))
