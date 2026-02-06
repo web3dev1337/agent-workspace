@@ -1,4 +1,5 @@
 const { resolveBuildProductionContext } = require('../../server/buildProductionService');
+const path = require('path');
 
 describe('buildProductionService', () => {
   test('derives scriptPath from session cwd', () => {
@@ -10,7 +11,7 @@ describe('buildProductionService', () => {
 
     const ctx = resolveBuildProductionContext({ sessionManager, sessionId: 'work1-claude', worktreeNum: 1 });
     expect(ctx.worktreePath).toBe('/tmp/my-worktree/work1');
-    expect(ctx.scriptPath).toBe('/tmp/my-worktree/work1/build-production-with-console.sh');
+    expect(ctx.scriptPath).toBe(path.join('/tmp/my-worktree/work1', 'build-production-with-console.sh'));
   });
 
   test('throws if sessionId not found or cwd missing', () => {

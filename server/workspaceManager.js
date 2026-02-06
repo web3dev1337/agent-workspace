@@ -471,6 +471,15 @@ class WorkspaceManager {
     const ws = workspace && typeof workspace === 'object' ? workspace : {};
     const changes = [];
 
+    const removeExtraHytopiaGamesSegment = (inputPath) => {
+      const raw = String(inputPath || '').trim();
+      if (!raw) return null;
+      // Handles both POSIX and Windows separators.
+      const pattern = /([\\/])games\1hytopia\1games\1/;
+      if (!pattern.test(raw)) return null;
+      return raw.replace(pattern, '$1games$1hytopia$1');
+    };
+
     const tryFixPath = (p) => {
       const raw = String(p || '').trim();
       if (!raw) return { value: raw, changed: false, from: raw, to: raw, reason: null };
@@ -479,11 +488,9 @@ class WorkspaceManager {
       }
 
       const variants = [];
-      if (raw.includes('/games/hytopia/games/')) {
-        variants.push({
-          candidate: raw.replace('/games/hytopia/games/', '/games/hytopia/'),
-          reason: 'remove_extra_hytopia_games_segment'
-        });
+      const candidate = removeExtraHytopiaGamesSegment(raw);
+      if (candidate) {
+        variants.push({ candidate, reason: 'remove_extra_hytopia_games_segment' });
       }
 
       for (const v of variants) {
@@ -537,8 +544,8 @@ class WorkspaceManager {
 
         // Worktree paths can also be stale even when repo root exists; fix when parent exists.
         const wt = String(terminal.worktreePath || '').trim();
-        if (wt && wt.includes('/games/hytopia/games/')) {
-          const candidate = wt.replace('/games/hytopia/games/', '/games/hytopia/');
+        const candidate = removeExtraHytopiaGamesSegment(wt);
+        if (wt && candidate) {
           const parent = path.dirname(candidate);
           if (candidate !== wt && fsSync.existsSync(parent)) {
             terminal.worktreePath = candidate;
