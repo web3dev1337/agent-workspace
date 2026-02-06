@@ -291,6 +291,7 @@ class ClaudeOrchestrator {
     try {
       // Initialize managers
       this.terminalManager = new TerminalManager(this);
+      this.terminalManager.autosuggestEnabled = this.settings.autoSuggestions !== false;
       this.notificationManager = new NotificationManager(this);
       this.agentModalManager = new AgentModalManager(this);
 
@@ -1382,6 +1383,19 @@ class ClaudeOrchestrator {
     document.getElementById('auto-scroll').addEventListener('change', (e) => {
       this.settings.autoScroll = e.target.checked;
       this.saveSettings();
+    });
+
+    document.getElementById('auto-suggestions').addEventListener('change', (e) => {
+      this.settings.autoSuggestions = e.target.checked;
+      this.saveSettings();
+      if (this.terminalManager) {
+        this.terminalManager.autosuggestEnabled = e.target.checked;
+        if (!e.target.checked) {
+          for (const sessionId of this.terminalManager.terminals.keys()) {
+            this.terminalManager.clearSuggestion(sessionId);
+          }
+        }
+      }
     });
     
     document.getElementById('theme-select').addEventListener('change', (e) => {
@@ -6160,6 +6174,7 @@ class ClaudeOrchestrator {
       notifications: true,
       sounds: true,
       autoScroll: true,
+      autoSuggestions: true,
       theme: 'dark',
       skin: 'default'
     };
@@ -7029,6 +7044,7 @@ class ClaudeOrchestrator {
 	    document.getElementById('enable-notifications').checked = this.settings.notifications;
 	    document.getElementById('enable-sounds').checked = this.settings.sounds;
 	    document.getElementById('auto-scroll').checked = this.settings.autoScroll;
+	    document.getElementById('auto-suggestions').checked = this.settings.autoSuggestions !== false;
 	    document.getElementById('theme-select').value = this.settings.theme;
 	    const skinSelect = document.getElementById('skin-select');
 	    if (skinSelect) skinSelect.value = this.settings.skin || 'default';
