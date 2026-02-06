@@ -715,11 +715,33 @@ io.on('connection', (socket) => {
     logger.info('Reveal in explorer requested', { filePath });
     
     const { execFile } = require('child_process');
+    const fs = require('fs');
 
     const raw = String(filePath || '').trim();
     if (!raw) return;
 
-    const dirPath = path.dirname(raw);
+    const resolvedPath = path.resolve(raw);
+    if (!fs.existsSync(resolvedPath)) {
+      logger.warn('Reveal path does not exist', { filePath, resolvedPath });
+      return;
+    }
+
+    let dirPath = resolvedPath;
+    try {
+      const stat = fs.statSync(resolvedPath);
+      if (!stat.isDirectory()) {
+        dirPath = path.dirname(resolvedPath);
+      }
+    } catch (error) {
+      logger.warn('Failed to stat reveal path', { filePath, resolvedPath, error: error.message });
+      return;
+    }
+
+    if (!fs.existsSync(dirPath)) {
+      logger.warn('Reveal directory does not exist', { filePath, resolvedPath, dirPath });
+      return;
+    }
+
     const isWSL = process.platform === 'linux' && (process.env.WSL_DISTRO_NAME || process.env.WSLENV);
 
     // Windows native: explorer.exe can open the folder directly.
@@ -1634,9 +1656,8 @@ app.post('/api/files/sync', async (req, res) => {
 });
 
 app.get('/api/process/performance', async (req, res) => {
-  const { exec, execFile } = require('child_process');
+  const { execFile } = require('child_process');
   const util = require('util');
-  const execAsync = util.promisify(exec);
   const execFileAsync = util.promisify(execFile);
   const isWin = process.platform === 'win32';
 
@@ -1653,7 +1674,7 @@ app.get('/api/process/performance', async (req, res) => {
         const { stdout } = await execFileAsync(
           'powershell.exe',
           ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${p}").ProcessId`],
-          { timeout: 1500 }
+          { timeout: 1500, windowsHide: true }
         );
         return String(stdout || '')
           .split(/\s+/)
@@ -1661,7 +1682,7 @@ app.get('/api/process/performance', async (req, res) => {
           .filter(n => Number.isFinite(n) && n > 0);
       }
 
-      const { stdout } = await execAsync(`pgrep -P ${p}`, { timeout: 1500 });
+      const { stdout } = await execFileAsync('pgrep', ['-P', String(p)], { timeout: 1500, windowsHide: true });
       return String(stdout || '')
         .split('\n')
         .map(l => parseIntSafe(l))
@@ -1679,14 +1700,14 @@ app.get('/api/process/performance', async (req, res) => {
         const { stdout } = await execFileAsync(
           'powershell.exe',
           ['-NoProfile', '-Command', `(Get-Process -Id ${p} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty WorkingSet64)`],
-          { timeout: 1500 }
+          { timeout: 1500, windowsHide: true }
         );
         const bytes = Number(String(stdout || '').trim());
         if (!Number.isFinite(bytes) || bytes <= 0) return null;
         return Math.round(bytes / 1024);
       }
 
-      const { stdout } = await execAsync(`ps -o rss= -p ${p}`, { timeout: 1500 });
+      const { stdout } = await execFileAsync('ps', ['-o', 'rss=', '-p', String(p)], { timeout: 1500, windowsHide: true });
       return parseIntSafe(stdout);
     } catch {
       return null;

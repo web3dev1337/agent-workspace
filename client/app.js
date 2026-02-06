@@ -7412,6 +7412,15 @@ class ClaudeOrchestrator {
 	      if (data?.nodePty) {
 	        lines.push(`node-pty: ${data.nodePty.ok ? 'ok' : `missing (${String(data.nodePty.error || 'error')})`}`);
 	      }
+	      if (data?.platformSmoke?.checks) {
+	        const checks = data.platformSmoke.checks;
+	        lines.push(`platform-smoke: ${data.platformSmoke.ok ? 'ok' : 'issues detected'}`);
+	        const shellId = String(checks?.shell?.id || 'shell');
+	        lines.push(`  shell(${shellId}): ${checks?.shell?.ok ? 'ok' : `fail (${String(checks?.shell?.error || 'missing')})`}`);
+	        lines.push(`  git: ${checks?.git?.ok ? 'ok' : `fail (${String(checks?.git?.error || 'missing')})`}`);
+	        lines.push(`  gh: ${checks?.gh?.ok ? 'ok' : `fail (${String(checks?.gh?.error || 'missing')})`}`);
+	        lines.push(`  gh auth: ${checks?.ghAuth?.ok ? 'ok' : `fail (${String(checks?.ghAuth?.error || 'not authenticated')})`}`);
+	      }
 	      lines.push('');
 
 	      const tools = Array.isArray(data.tools) ? data.tools : [];
