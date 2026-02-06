@@ -97,6 +97,7 @@ const { SchedulerService } = require('./schedulerService');
 const { ThreadService } = require('./threadService');
 const { PolicyService } = require('./policyService');
 const { AuditExportService } = require('./auditExportService');
+const { evaluateBindSecurity } = require('./networkSecurityPolicy');
 const multer = require('multer');
 
 // Configure multer for audio file uploads
@@ -6040,38 +6041,28 @@ app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
 
 // Start server
 const PORT = Number(process.env.ORCHESTRATOR_PORT || 3000);
-const HOST = String(process.env.ORCHESTRATOR_HOST || process.env.HOST || '127.0.0.1');
+const hostPolicy = evaluateBindSecurity({
+  host: process.env.ORCHESTRATOR_HOST || process.env.HOST,
+  authToken: AUTH_TOKEN,
+  allowInsecureLanNoAuth: process.env.ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH
+});
+const HOST = hostPolicy.host;
 
-function isLoopbackHost(host) {
-  const h = String(host || '').trim().toLowerCase();
-  return h === 'localhost' || h === '127.0.0.1' || h === '::1';
-}
-
-function isBindAllHost(host) {
-  const h = String(host || '').trim().toLowerCase();
-  return h === '0.0.0.0' || h === '::';
-}
-
-const allowInsecureLanNoAuth = (() => {
-  const raw = String(process.env.ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH || '').trim().toLowerCase();
-  return ['1', 'true', 'yes'].includes(raw);
-})();
-
-if (!isLoopbackHost(HOST) && !AUTH_TOKEN && !allowInsecureLanNoAuth) {
+if (!hostPolicy.allowStart) {
   logger.error('Refusing to bind to a non-loopback host without AUTH_TOKEN. Set AUTH_TOKEN or set ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH=1 to override.', { host: HOST, port: PORT });
   process.exit(1);
 }
 
 httpServer.listen(PORT, HOST, () => {
   logger.info(`Server running on http://${HOST}:${PORT}`);
-  if (!isLoopbackHost(HOST)) {
-    const bindType = isBindAllHost(HOST) ? 'bind-all' : 'explicit-host';
+  if (!hostPolicy.isLoopback) {
+    const bindType = hostPolicy.isBindAll ? 'bind-all' : 'explicit-host';
     logger.info(`LAN access enabled (${bindType}) on port ${PORT}`);
-    if (!AUTH_TOKEN) {
+    if (!hostPolicy.hasAuthToken) {
       logger.warn('LAN access is enabled without AUTH_TOKEN. This is insecure; anyone on the network can control this orchestrator.', { host: HOST, port: PORT });
     }
   }
-  if (AUTH_TOKEN) {
+  if (hostPolicy.hasAuthToken) {
     logger.info('Authentication enabled');
   }
 
