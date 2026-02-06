@@ -60,6 +60,12 @@
                 <button id="queue-btn" class="header-btn" title="Review inbox (tiers/queue)">
                     📥 Queue
                 </button>
+                <button id="project-chats-btn" class="header-btn" title="Simple projects + chats shell (Alt+P)">
+                    🧵 Chats
+                </button>
+                <button id="review-route-btn" class="header-btn" title="Review Route (Tier 3+ unreviewed batch review)">
+                    🛣 Review Route
+                </button>
                 <button id="activity-btn" class="header-btn" title="Activity feed (agents, PRs, tests)">
                     📰 Activity
                 </button>
@@ -330,6 +336,35 @@
                 </div>
             </div>
 
+            <div class="setting-section">
+                <h4>Projects + Chats</h4>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="simple-mode-enabled" />
+                        Enable Projects + Chats shell
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="simple-mode-startup-open" />
+                        Open Projects + Chats on startup
+                    </label>
+                    <p class="setting-description">If enabled, opens the shell automatically once workspaces load.</p>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="simple-mode-hotkeys" />
+                        Enable Projects + Chats hotkey (Alt+P)
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="simple-mode-show-hints" />
+                        Show quick hints in shell
+                    </label>
+                </div>
+            </div>
+
             <div class="setting-section settings-glossary">
                 <h4>Glossary</h4>
                 <p class="setting-description">A quick mental model for how the Orchestrator is structured.</p>
@@ -384,6 +419,50 @@
 	                    <p class="setting-description">Keeps Claudesworth (bot + queue processor) running after orchestrator restarts.</p>
 	                </div>
 	            </div>
+
+                <div class="setting-section">
+                    <h4>Scheduler</h4>
+                    <div class="setting-group">
+                        <label>
+                            <input type="checkbox" id="scheduler-enabled" />
+                            Enable scheduler
+                        </label>
+                        <p class="setting-description">Runs configured semantic commands on an interval. Safety mode blocks destructive commands unless explicitly allowed per schedule.</p>
+                    </div>
+                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
+                        <button class="btn-secondary" type="button" id="scheduler-refresh">Refresh scheduler</button>
+                        <button class="btn-secondary" type="button" id="scheduler-save">Save scheduler config</button>
+                        <button class="btn-secondary" type="button" id="scheduler-run-now">Run selected now</button>
+                    </div>
+                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items:flex-end;">
+                        <label>
+                            Template:
+                            <select id="scheduler-template-select" style="min-width: 260px;">
+                                <option value="">Select template…</option>
+                            </select>
+                        </label>
+                        <label>
+                            Interval (min):
+                            <input id="scheduler-template-interval" type="number" min="5" step="5" value="30" style="width: 110px;" />
+                        </label>
+                        <button class="btn-secondary" type="button" id="scheduler-template-add">Add template job</button>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            Selected schedule id:
+                            <input id="scheduler-run-id" type="text" placeholder="schedule-id" style="width: 220px;" />
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            Schedules JSON:
+                            <textarea id="scheduler-json" class="tasks-textarea" rows="8" placeholder='[{"id":"review-route","enabled":true,"intervalMinutes":60,"command":"open-review-route","params":{}}]'></textarea>
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <pre id="scheduler-status-output" class="mono diagnostics-output">Click “Refresh scheduler”.</pre>
+                    </div>
+                </div>
 
 	            <div class="setting-section">
 	                <h4>License</h4>

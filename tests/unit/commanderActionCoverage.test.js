@@ -20,8 +20,13 @@ const extractCasesFromHandleCommanderAction = (src) => {
 
   // Don’t do brace matching: the function contains template literals (${...})
   // which include braces and break naive counting.
-  const nextFn = src.indexOf('\n\n  handleSessionExit(', fnIndex);
-  if (nextFn < 0) throw new Error('Could not find handleSessionExit() after handleCommanderAction()');
+  // Support both LF and CRLF checkouts.
+  const after = src.slice(fnIndex);
+  const nextFnMatch = after.match(/\r?\n\r?\n\s{2}handleSessionExit\(/);
+  if (!nextFnMatch || typeof nextFnMatch.index !== 'number') {
+    throw new Error('Could not find handleSessionExit() after handleCommanderAction()');
+  }
+  const nextFn = fnIndex + nextFnMatch.index;
   const body = src.slice(fnIndex, nextFn);
   const cases = new Set();
   const re = /\bcase\s+['"]([^'"]+)['"]\s*:/g;

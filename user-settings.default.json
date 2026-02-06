@@ -11,8 +11,31 @@
       "delay": 500
     },
     "terminal": {},
+    "scheduler": {
+      "enabled": false,
+      "tickSeconds": 30,
+      "safety": {
+        "defaultMode": "safe",
+        "blockedCommandPatterns": [
+          "queue-merge",
+          "queue-request-changes",
+          "queue-approve",
+          "stop-session",
+          "kill-session",
+          "destroy-session",
+          "remove-worktree"
+        ]
+      },
+      "schedules": []
+    },
     "ui": {
       "theme": "dark",
+      "simpleMode": {
+        "enabled": true,
+        "startupOpen": false,
+        "hotkeys": true,
+        "showHints": true
+      },
       "branches": {
         "hidePrefixes": true,
         "colorize": true,

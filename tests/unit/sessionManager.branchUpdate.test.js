@@ -1,4 +1,7 @@
 const { SessionManager } = require('../../server/sessionManager');
+const path = require('path');
+
+const toPlatformPath = (p) => path.resolve(p);
 
 describe('SessionManager branch updates', () => {
   beforeEach(() => {
@@ -25,8 +28,8 @@ describe('SessionManager branch updates', () => {
     sessionManager.startBranchRefresh();
     jest.advanceTimersByTime(11);
 
-    expect(updateSpy).toHaveBeenCalledWith('work2', '/tmp/repo-a/work2', true);
-    expect(updateSpy).toHaveBeenCalledWith('work1', '/tmp/repo-a/work1', true);
+    expect(updateSpy).toHaveBeenCalledWith('work2', toPlatformPath('/tmp/repo-a/work2'), true);
+    expect(updateSpy).toHaveBeenCalledWith('work1', toPlatformPath('/tmp/repo-a/work1'), true);
   });
 
   test('startBranchRefresh also refreshes loose sessions (not in worktrees)', () => {
@@ -50,7 +53,7 @@ describe('SessionManager branch updates', () => {
     sessionManager.startBranchRefresh();
     jest.advanceTimersByTime(11);
 
-    expect(updateSpy).toHaveBeenCalledWith('adhoc', '/tmp/repo-z/adhoc', true);
+    expect(updateSpy).toHaveBeenCalledWith('adhoc', toPlatformPath('/tmp/repo-z/adhoc'), true);
   });
 
   test('updateGitBranch falls back to matching by cwd path', async () => {

@@ -14,13 +14,13 @@ Ordering: **actionable remaining work first**, “no remaining work / already sh
 
 Goal: a single-click surface to batch review Tier 3+ items with minimal vertical waste.
 
-- [ ] Make the Review Console a true “review route” surface:
-  - filter/sort within the console (tier/risk/unreviewed/blocked/claimed)
-  - add a single “Review route” launcher (Queue → open console already filtered + stacked)
-- [ ] Reduce vertical waste further (tighten paddings, make meta blocks collapsible by default).
-- [ ] Layout v2:
-  - keep Agent + Server side-by-side consistently (Agent always left when both visible)
-  - make Diff embed the dominant pane by default (single-screen, minimal vertical scrolling)
+- [x] Make the Review Console a true “review route” surface:
+  - [x] filter/sort within the console route stack (tier/risk/unreviewed/blocked/claimed)
+  - [x] add a single “Review route” launcher (Queue → open console already filtered + stacked)
+- [x] Reduce vertical waste further (tighten paddings, make meta blocks collapsible by default).
+- [x] Layout v2:
+  - [x] keep Agent + Server side-by-side consistently (Agent always left when both visible)
+  - [x] make Diff embed the dominant pane by default (single-screen, minimal vertical scrolling)
 
 References:
 - `PLANS/2026-01-25/REVIEW_CONSOLE_V1.md`
@@ -30,7 +30,7 @@ References:
 
 Goal: when you close/remove something, it’s truly gone (and doesn’t pile up in recovery).
 
-- [ ] Clarify and standardize the two destructive actions in UI copy (everywhere):
+- [x] Clarify and standardize the two destructive actions in UI copy (everywhere):
   - “Close terminal process” (kills PTY, keeps worktree in workspace)
   - “Remove worktree from workspace” (kills all group sessions, removes from workspace config, keeps files on disk)
 - [x] Eliminate confusing duplicate “✕” buttons and make the intent unambiguous.
@@ -42,9 +42,9 @@ Goal: when you close/remove something, it’s truly gone (and doesn’t pile up 
 
 Goal: make the repo safe to publish and easy to reason about.
 
-- [ ] Decide which docs should be public vs private companion repo (internal project names, screenshots, workflow logs).
-- [ ] Replace “real project” examples in docs with placeholders where desired (`OWNER/REPO`, `~/Projects/MyGame`, etc.).
-- [ ] Add baseline public-facing repo files:
+- [x] Decide which docs should be public vs private companion repo (internal project names, screenshots, workflow logs).
+- [x] Replace “real project” examples in docs with placeholders where desired (`OWNER/REPO`, `~/Projects/MyGame`, etc.).
+- [x] Add baseline public-facing repo files:
   - `CONTRIBUTING.md` (optional)
 
 Important: do **not** rewrite history yet (separate step).
@@ -53,18 +53,23 @@ References:
 - `PUBLIC_RELEASE_AUDIT_2026-02-05.md`
 - `PUBLIC_RELEASE_AUDIT_2026-02-06.md`
 - `PLANS/2026-02-05/HISTORY_REWRITE_PRIVACY_EMAILS_PLAN.md`
+- `PLANS/2026-02-06/PHASE4_DECISIONS_2026-02-06.md`
 
 ### D) Packaging / shipping (Windows-first)
 
 Goal: end users install an `.msi` / `.exe` and run the app without dev toolchains.
 
-- [ ] Validate the tag-based release path end-to-end:
+- [x] Validate the tag-based release path end-to-end:
   - Windows CI builds installer artifacts
   - release notes + attached artifacts are correct
-- [ ] Decide initial release posture:
+  - Tracking run (workflow_dispatch dry run): `https://github.com/web3dev1337/claude-orchestrator/actions/runs/21729801065`
+  - Latest validation run (success): `https://github.com/web3dev1337/claude-orchestrator/actions/runs/21740979424`
+  - Uploaded artifact (success): `tauri-windows-bundle`
+  - Follow-up notes: initial dispatch run `21740774410` exposed a Windows packaging issue in `scripts/tauri/prepare-backend-resources.js` (direct `npm.cmd` invocation); fixed by invoking npm through `process.execPath + npm_execpath`, then revalidated successfully.
+- [x] Decide initial release posture:
   - unsigned internal builds vs code-signed public builds
   - portable zip vs installer
-- [ ] Consider adding an auto-updater (optional; can be Phase 4.1)
+- [x] Consider adding an auto-updater (optional; can be Phase 4.1)
 
 References:
 - `WINDOWS_QUICK_START.md`
@@ -76,26 +81,46 @@ References:
 
 Goal: enable “Free vs Pro” without turning core into spaghetti.
 
-- [ ] Decide “Pro v1” feature list (server-enforced; UI gating is UX-only).
-- [ ] Implement a minimal plugin loader (server-side first):
-  - load `plugins/<id>/server.js` at startup
-  - allow plugin routes under `/api/plugins/<id>/*`
-  - (optional) allow plugins to register commands into `CommandRegistry`
-- [ ] Decide whether client plugin support is in-scope for Phase 4 or Phase 5 (it’s higher risk because `client/app.js` is large and not modular).
+- [x] Decide “Pro v1” feature list (server-enforced; UI gating is UX-only).
+- [x] Implement a minimal plugin loader (server-side first):
+  - [x] load `plugins/<id>/server.js` at startup
+  - [x] allow plugin routes under `/api/plugins/<id>/*`
+  - [x] allow plugins to register commands into `CommandRegistry` via a namespaced helper
+- [x] Decide whether client plugin support is in-scope for Phase 4 or Phase 5 (it’s higher risk because `client/app.js` is large and not modular).
 
 References:
 - `PLANS/2026-02-05/PUBLISHING_AND_MONETIZATION_OPTIONS.md`
 - `PLANS/2026-02-05/PLUGIN_ARCHITECTURE_AND_PRO_GATING.md`
+- `PLANS/2026-02-06/PHASE4_DECISIONS_2026-02-06.md`
 
 ### F) Scheduler / “cron jobs” for orchestrations
 
 Goal: safe, auditable automations (disabled by default).
 
-- [ ] Design + implement a small “Scheduler” service:
-  - schedules stored locally (user settings)
-  - each schedule runs a semantic command (CommandRegistry) with a safety policy
-  - audit log of what ran + when
-- [ ] Add a UI surface (minimal) to enable/disable and view schedules.
+- [x] Design + implement a small “Scheduler” service:
+  - [x] schedules stored locally (user settings)
+  - [x] each schedule runs a semantic command (CommandRegistry) with a safety policy
+  - [x] audit log of what ran + when
+- [x] Add a UI surface (minimal) to enable/disable and view schedules.
+
+### G) Codex-style “projects + chats” workflow layer (new)
+
+Goal: keep current orchestrator power while adding a simpler top-level UX similar to Codex app workflows.
+
+- [x] Produce official-source research + parity matrix:
+  - `PLANS/2026-02-06/CODEX_PARITY_GAP_ANALYSIS.md`
+- [x] Produce phased implementation plan:
+  - `PLANS/2026-02-06/CODEX_PARITY_IMPLEMENTATION_PLAN.md`
+- [x] Produce PR breakdown plan:
+  - `PLANS/2026-02-06/CODEX_PARITY_PR_BREAKDOWN.md`
+- [x] Implement unified command catalog endpoint for voice/commander/UI parity routing.
+- [x] Implement project/chat shell view (simple mode) with workspace mapping.
+- [x] Implement chat lifecycle mapping (new chat -> worktree/session).
+- [x] Expand scheduler to “cron skills” templates with run safety/auditing.
+- [x] Hardening: simple-mode settings + startup-open + hotkey (`Alt+P`) + shell hints.
+
+References:
+- `PLANS/2026-02-06/CODEX_DESKTOP_PARITY_RESEARCH_AND_IMPLEMENTATION_BRIEF.md`
 
 ---
 
@@ -116,6 +141,7 @@ Goal: safe, auditable automations (disabled by default).
   - Clear “missing GitHub data” banners with Retry + Diagnostics shortcuts.
   - “Next unreviewed T3+” navigation works even without a captured stack.
   - Auto-retry once when PR details return empty (reduces “0 files/0 commits” confusion).
+  - Files/Commits/Conversation meta blocks are collapsible (default collapsed) to reduce vertical waste.
 
 ### C) Session recovery policy
 - ✅ Session recovery filters out non-actionable entries by default and supports clearing saved/old recoverables.

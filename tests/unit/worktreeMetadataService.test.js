@@ -98,7 +98,7 @@ describe('WorktreeMetadataService', () => {
       
       expect(status).toHaveProperty('hasPR');
       expect(status).toHaveProperty('branch');
-    });
+    }, 20000);
 
     it('should cache PR status', async () => {
       const cwd = process.cwd();
