@@ -131,6 +131,7 @@ References:
 - ✅ Windows CI runs unit tests on PRs and pushes; Tauri build remains tag/dispatch-gated (`.github/workflows/windows.yml`).
 - ✅ Windows UX: hide `gh` console windows + improve `gh` auth diagnostics (PR tooling) (`server/pullRequestService.js`, `server/diagnosticsService.js`).
 - ✅ Optional desktop auto-updater plumbing added for packaged Tauri builds (check/install commands + env-driven updater config + Windows docs).
+- ✅ Cross-platform hardening follow-up shipped (`PLANS/2026-02-06/CROSS_PLATFORM_RISK_AUDIT_2026-02-06.md`): safer process execution, branch/update guards, reveal-path validation, and diagnostics platform-smoke checks.
 
 ### B) Review Console defaults + reliability improvements
 - ✅ Review Console defaults to the diff-dominant `review` preset (`client/app.js`).

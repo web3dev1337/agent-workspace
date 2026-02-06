@@ -34,6 +34,44 @@ async function checkFirstAvailable(candidates) {
   return await checkCommand(last.command, last.args, last.options);
 }
 
+function findTool(tools, id) {
+  if (!Array.isArray(tools)) return null;
+  return tools.find((tool) => String(tool?.id || '') === String(id || '')) || null;
+}
+
+function buildPlatformSmoke({ platform, tools }) {
+  const shellToolId = platform === 'win32' ? 'powershell' : 'bash';
+  const shellTool = findTool(tools, shellToolId);
+  const gitTool = findTool(tools, 'git');
+  const ghTool = findTool(tools, 'gh');
+  const ghAuthTool = findTool(tools, 'ghAuth');
+
+  const checks = {
+    shell: {
+      id: shellToolId,
+      ok: !!shellTool?.ok,
+      error: shellTool?.ok ? null : String(shellTool?.error || shellTool?.code || 'missing')
+    },
+    git: {
+      ok: !!gitTool?.ok,
+      error: gitTool?.ok ? null : String(gitTool?.error || gitTool?.code || 'missing')
+    },
+    gh: {
+      ok: !!ghTool?.ok,
+      error: ghTool?.ok ? null : String(ghTool?.error || ghTool?.code || 'missing')
+    },
+    ghAuth: {
+      ok: !!ghAuthTool?.ok,
+      error: ghAuthTool?.ok ? null : String(ghAuthTool?.error || ghAuthTool?.code || 'not authenticated')
+    }
+  };
+
+  return {
+    ok: checks.shell.ok && checks.git.ok,
+    checks
+  };
+}
+
 async function collectDiagnostics() {
   const platform = process.platform;
   const homeDir = process.env.HOME || os.homedir();
@@ -124,7 +162,15 @@ async function collectDiagnostics() {
         { command: 'bash', args: ['--version'], options: { timeoutMs: 2000 } }
       ]))
     });
+  } else {
+    tools.push({
+      id: 'bash',
+      name: 'bash',
+      ...(await checkCommand('bash', ['--version'], { timeoutMs: 2000 }))
+    });
   }
+
+  const platformSmoke = buildPlatformSmoke({ platform, tools });
 
   return {
     generatedAt: new Date().toISOString(),
@@ -138,7 +184,8 @@ async function collectDiagnostics() {
     paths: {
       orchestratorDir: path.resolve(__dirname, '..')
     },
-    tools
+    tools,
+    platformSmoke
   };
 }
 

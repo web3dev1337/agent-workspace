@@ -715,11 +715,33 @@ io.on('connection', (socket) => {
     logger.info('Reveal in explorer requested', { filePath });
     
     const { execFile } = require('child_process');
+    const fs = require('fs');
 
     const raw = String(filePath || '').trim();
     if (!raw) return;
 
-    const dirPath = path.dirname(raw);
+    const resolvedPath = path.resolve(raw);
+    if (!fs.existsSync(resolvedPath)) {
+      logger.warn('Reveal path does not exist', { filePath, resolvedPath });
+      return;
+    }
+
+    let dirPath = resolvedPath;
+    try {
+      const stat = fs.statSync(resolvedPath);
+      if (!stat.isDirectory()) {
+        dirPath = path.dirname(resolvedPath);
+      }
+    } catch (error) {
+      logger.warn('Failed to stat reveal path', { filePath, resolvedPath, error: error.message });
+      return;
+    }
+
+    if (!fs.existsSync(dirPath)) {
+      logger.warn('Reveal directory does not exist', { filePath, resolvedPath, dirPath });
+      return;
+    }
+
     const isWSL = process.platform === 'linux' && (process.env.WSL_DISTRO_NAME || process.env.WSLENV);
 
     // Windows native: explorer.exe can open the folder directly.
