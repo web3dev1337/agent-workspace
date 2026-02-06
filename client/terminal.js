@@ -40,6 +40,14 @@ class TerminalManager {
       // ignore
     }
     
+    // Autosuggestion state
+    this.inputBuffers = new Map();       // sessionId -> current input string
+    this.suggestionOverlays = new Map(); // sessionId -> overlay DOM element
+    this.currentSuggestions = new Map(); // sessionId -> { suggestion, prefix }
+    this.suggestTimers = new Map();      // sessionId -> debounce timer
+    this.suggestDebounceMs = 80;
+    this.autosuggestEnabled = true;
+
     // Apply global terminal scrollbar styles
     this.applyScrollbarStyles();
     
@@ -226,8 +234,28 @@ class TerminalManager {
     `;
     
     document.head.appendChild(style);
+    this.applyAutosuggestStyles();
   }
-  
+
+  applyAutosuggestStyles() {
+    if (document.getElementById('terminal-autosuggest-styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'terminal-autosuggest-styles';
+    style.textContent = `
+      .terminal-autosuggest-overlay {
+        position: absolute;
+        pointer-events: none;
+        z-index: 10;
+        white-space: pre;
+        overflow: hidden;
+        color: rgba(108, 117, 125, 0.6);
+        font-variant-ligatures: none;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   createTerminal(sessionId, sessionInfo) {
     // Skip if already exists
     if (this.terminals.has(sessionId)) {
@@ -301,10 +329,30 @@ class TerminalManager {
       setTimeout(() => terminal.focus(), 100);
     }
     
-    // Handle input
+    // Handle input with autosuggestion tracking
     terminal.onData((data) => {
+      // Check for right-arrow acceptance of suggestion
+      if (data === '\x1b[C') {
+        const suggestion = this.currentSuggestions.get(sessionId);
+        const inputBuf = this.inputBuffers.get(sessionId) || '';
+        if (suggestion && suggestion.suggestion && inputBuf.length > 0) {
+          const remainder = suggestion.suggestion.slice(inputBuf.length);
+          if (remainder) {
+            // Accept the suggestion: type the remaining text into the PTY
+            this.orchestrator?.onManualTerminalInput?.(sessionId);
+            this.orchestrator.sendTerminalInput(sessionId, remainder);
+            this.inputBuffers.set(sessionId, suggestion.suggestion);
+            this.clearSuggestion(sessionId);
+            return; // Don't forward the arrow key
+          }
+        }
+      }
+
       this.orchestrator?.onManualTerminalInput?.(sessionId);
       this.orchestrator.sendTerminalInput(sessionId, data);
+
+      // Track input buffer for autosuggestions
+      this.updateInputBuffer(sessionId, data);
     });
     
     // Handle resize
@@ -362,6 +410,10 @@ class TerminalManager {
     
     // Store terminal reference
     this.terminals.set(sessionId, terminal);
+
+    // Initialize autosuggestion for this terminal
+    this.inputBuffers.set(sessionId, '');
+    this.setupAutosuggestOverlay(sessionId, terminalElement);
 
     // Register with tab manager if available
     if (this.orchestrator.tabManager && this.orchestrator.currentTabId) {
@@ -837,6 +889,9 @@ class TerminalManager {
     // Write data to terminal
     terminal.write(normalized);
 
+    // Reposition or clear autosuggestion overlay after new output
+    this.repositionSuggestion(sessionId);
+
     // Check if this is a carriage return update (like a spinner)
     // Don't auto-scroll for CR updates to avoid breaking the overwrite behavior
     const hasCarriageReturn = normalized.includes('\r') && !normalized.includes('\n');
@@ -1060,13 +1115,212 @@ class TerminalManager {
     }
   }
   
+  // ── Autosuggestion system ──────────────────────────────────────────
+
+  setupAutosuggestOverlay(sessionId, terminalElement) {
+    const overlay = document.createElement('span');
+    overlay.className = 'terminal-autosuggest-overlay';
+    overlay.style.display = 'none';
+
+    // Attach to the xterm-screen element for correct positioning
+    const screen = terminalElement.querySelector('.xterm-screen');
+    if (screen) {
+      screen.style.position = 'relative';
+      screen.appendChild(overlay);
+    } else {
+      // Fallback: attach after terminal opens via RAF
+      requestAnimationFrame(() => {
+        const s = terminalElement.querySelector('.xterm-screen');
+        if (s) {
+          s.style.position = 'relative';
+          s.appendChild(overlay);
+        }
+      });
+    }
+
+    this.suggestionOverlays.set(sessionId, overlay);
+  }
+
+  updateInputBuffer(sessionId, data) {
+    if (!this.autosuggestEnabled) return;
+
+    let buf = this.inputBuffers.get(sessionId) || '';
+
+    // Determine what happened based on the data
+    if (data === '\r' || data === '\n') {
+      // Enter pressed: save command to history, clear buffer
+      if (buf.trim()) {
+        this.orchestrator?.socket?.emit('command-executed', { sessionId, command: buf });
+      }
+      this.inputBuffers.set(sessionId, '');
+      this.clearSuggestion(sessionId);
+      return;
+    }
+
+    if (data === '\x7f' || data === '\b') {
+      // Backspace: remove last character
+      buf = buf.slice(0, -1);
+      this.inputBuffers.set(sessionId, buf);
+      this.debounceSuggest(sessionId, buf);
+      return;
+    }
+
+    if (data === '\x03' || data === '\x15' || data === '\x0c') {
+      // Ctrl+C, Ctrl+U, Ctrl+L: clear the input buffer
+      this.inputBuffers.set(sessionId, '');
+      this.clearSuggestion(sessionId);
+      return;
+    }
+
+    if (data === '\x17') {
+      // Ctrl+W: delete last word
+      buf = buf.replace(/\S+\s*$/, '');
+      this.inputBuffers.set(sessionId, buf);
+      this.debounceSuggest(sessionId, buf);
+      return;
+    }
+
+    // Escape sequences (arrow keys, etc.) - ignore for buffer tracking
+    if (data.startsWith('\x1b')) {
+      return;
+    }
+
+    // Tab - clear suggestion (shell will handle completion)
+    if (data === '\t') {
+      this.inputBuffers.set(sessionId, '');
+      this.clearSuggestion(sessionId);
+      return;
+    }
+
+    // Regular printable characters
+    if (data.length === 1 && data.charCodeAt(0) >= 32) {
+      buf += data;
+      this.inputBuffers.set(sessionId, buf);
+      this.debounceSuggest(sessionId, buf);
+      return;
+    }
+
+    // Multi-character paste
+    if (data.length > 1 && !data.startsWith('\x1b')) {
+      buf += data;
+      this.inputBuffers.set(sessionId, buf);
+      this.debounceSuggest(sessionId, buf);
+      return;
+    }
+  }
+
+  debounceSuggest(sessionId, prefix) {
+    // Clear any existing timer
+    const existing = this.suggestTimers.get(sessionId);
+    if (existing) clearTimeout(existing);
+
+    if (!prefix || prefix.length < 2) {
+      this.clearSuggestion(sessionId);
+      return;
+    }
+
+    // Don't suggest when in alternate buffer (vim, less, etc.)
+    const terminal = this.terminals.get(sessionId);
+    if (terminal && terminal.buffer.active.type === 'alternate') {
+      this.clearSuggestion(sessionId);
+      return;
+    }
+
+    // Don't suggest when an agent is active (user is chatting with Claude, not in shell)
+    const session = this.orchestrator?.sessions?.get(sessionId);
+    if (session) {
+      const status = session.status || session.state;
+      if (status === 'thinking' || status === 'executing' || status === 'waiting') {
+        this.clearSuggestion(sessionId);
+        return;
+      }
+    }
+
+    const timer = setTimeout(() => {
+      this.suggestTimers.delete(sessionId);
+      this.orchestrator?.socket?.emit('autosuggest-request', { sessionId, prefix });
+    }, this.suggestDebounceMs);
+
+    this.suggestTimers.set(sessionId, timer);
+  }
+
+  handleAutosuggestResponse(sessionId, suggestion, prefix) {
+    // Only show if the prefix still matches what the user has typed
+    const currentBuf = this.inputBuffers.get(sessionId) || '';
+    if (currentBuf !== prefix) return;
+
+    if (!suggestion) {
+      this.clearSuggestion(sessionId);
+      return;
+    }
+
+    this.currentSuggestions.set(sessionId, { suggestion, prefix });
+    this.showSuggestion(sessionId, suggestion.slice(prefix.length));
+  }
+
+  showSuggestion(sessionId, remainderText) {
+    if (!remainderText) {
+      this.clearSuggestion(sessionId);
+      return;
+    }
+
+    const terminal = this.terminals.get(sessionId);
+    const overlay = this.suggestionOverlays.get(sessionId);
+    if (!terminal || !overlay) return;
+
+    // Get cell dimensions from the terminal renderer
+    const dims = terminal._core?._renderService?.dimensions;
+    if (!dims) {
+      this.clearSuggestion(sessionId);
+      return;
+    }
+
+    const cellWidth = dims.css.cell.width;
+    const cellHeight = dims.css.cell.height;
+    const cursorX = terminal.buffer.active.cursorX;
+    const cursorY = terminal.buffer.active.cursorY;
+
+    overlay.textContent = remainderText;
+    overlay.style.left = `${cursorX * cellWidth}px`;
+    overlay.style.top = `${cursorY * cellHeight}px`;
+    overlay.style.lineHeight = `${cellHeight}px`;
+    overlay.style.fontSize = `${terminal.options.fontSize}px`;
+    overlay.style.fontFamily = terminal.options.fontFamily;
+    overlay.style.display = 'inline';
+  }
+
+  repositionSuggestion(sessionId) {
+    const suggestion = this.currentSuggestions.get(sessionId);
+    if (!suggestion) return;
+
+    const currentBuf = this.inputBuffers.get(sessionId) || '';
+    if (!currentBuf || currentBuf !== suggestion.prefix) {
+      this.clearSuggestion(sessionId);
+      return;
+    }
+
+    // Reposition at current cursor
+    this.showSuggestion(sessionId, suggestion.suggestion.slice(suggestion.prefix.length));
+  }
+
+  clearSuggestion(sessionId) {
+    const overlay = this.suggestionOverlays.get(sessionId);
+    if (overlay) {
+      overlay.style.display = 'none';
+      overlay.textContent = '';
+    }
+    this.currentSuggestions.delete(sessionId);
+  }
+
+  // ── End autosuggestion system ────────────────────────────────────
+
   clearTerminal(sessionId) {
     const terminal = this.terminals.get(sessionId);
     if (terminal) {
       terminal.clear();
     }
   }
-  
+
   destroyTerminal(sessionId) {
     const terminal = this.terminals.get(sessionId);
     if (terminal) {
@@ -1085,6 +1339,16 @@ class TerminalManager {
     // Clean up paste tracking
     this.lastPasteTimes.delete(sessionId);
     this.lastWordDeleteTimes.delete(sessionId);
+
+    // Clean up autosuggestion state
+    this.clearSuggestion(sessionId);
+    this.inputBuffers.delete(sessionId);
+    const overlay = this.suggestionOverlays.get(sessionId);
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    this.suggestionOverlays.delete(sessionId);
+    const suggestTimer = this.suggestTimers.get(sessionId);
+    if (suggestTimer) clearTimeout(suggestTimer);
+    this.suggestTimers.delete(sessionId);
 
     // Clean up scroll state
     this.terminalScrollStates.delete(sessionId);

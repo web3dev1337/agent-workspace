@@ -97,6 +97,7 @@ const { SchedulerService } = require('./schedulerService');
 const { ThreadService } = require('./threadService');
 const { PolicyService } = require('./policyService');
 const { AuditExportService } = require('./auditExportService');
+const { getInstance: getCommandHistoryService } = require('./commandHistoryService');
 const { evaluateBindSecurity } = require('./networkSecurityPolicy');
 const multer = require('multer');
 
@@ -430,6 +431,21 @@ io.on('connection', (socket) => {
     }
     logger.debug('Terminal input received', { sessionId, dataLength: inputData.length });
     sessionManager.writeToSession(sessionId, inputData);
+  });
+
+  // Autosuggestion: client requests a suggestion for the current input prefix
+  socket.on('autosuggest-request', ({ sessionId, prefix }) => {
+    const commandHistory = getCommandHistoryService();
+    const match = commandHistory.findMatch(sessionId, prefix);
+    socket.emit('autosuggest-response', { sessionId, suggestion: match, prefix });
+  });
+
+  // Autosuggestion: client reports a command was executed (Enter pressed)
+  socket.on('command-executed', ({ sessionId, command }) => {
+    if (command && command.trim()) {
+      const commandHistory = getCommandHistoryService();
+      commandHistory.addCommand(sessionId, command);
+    }
   });
 
   // Client hint: terminal output suggests the branch changed (e.g. "Switched to branch ...").

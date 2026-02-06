@@ -176,6 +176,7 @@ Because `main` is usually checked out in the `master/` worktree, **do not try to
 - **WorktreeHelper**: Git worktree operations (`server/worktreeHelper.js`)
 - **NotificationService**: System notifications (`server/notificationService.js`)
 - **CommanderService**: Top-Level AI orchestration terminal (`server/commanderService.js`)
+- **CommandHistoryService**: Terminal autosuggestions via shell history (`server/commandHistoryService.js`)
 - **Tauri App**: Native desktop application (`src-tauri/`)
 - **Diff Viewer**: Advanced code review tool (`diff-viewer/`)
 
