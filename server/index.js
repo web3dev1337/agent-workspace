@@ -1656,9 +1656,8 @@ app.post('/api/files/sync', async (req, res) => {
 });
 
 app.get('/api/process/performance', async (req, res) => {
-  const { exec, execFile } = require('child_process');
+  const { execFile } = require('child_process');
   const util = require('util');
-  const execAsync = util.promisify(exec);
   const execFileAsync = util.promisify(execFile);
   const isWin = process.platform === 'win32';
 
@@ -1675,7 +1674,7 @@ app.get('/api/process/performance', async (req, res) => {
         const { stdout } = await execFileAsync(
           'powershell.exe',
           ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${p}").ProcessId`],
-          { timeout: 1500 }
+          { timeout: 1500, windowsHide: true }
         );
         return String(stdout || '')
           .split(/\s+/)
@@ -1683,7 +1682,7 @@ app.get('/api/process/performance', async (req, res) => {
           .filter(n => Number.isFinite(n) && n > 0);
       }
 
-      const { stdout } = await execAsync(`pgrep -P ${p}`, { timeout: 1500 });
+      const { stdout } = await execFileAsync('pgrep', ['-P', String(p)], { timeout: 1500, windowsHide: true });
       return String(stdout || '')
         .split('\n')
         .map(l => parseIntSafe(l))
@@ -1701,14 +1700,14 @@ app.get('/api/process/performance', async (req, res) => {
         const { stdout } = await execFileAsync(
           'powershell.exe',
           ['-NoProfile', '-Command', `(Get-Process -Id ${p} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty WorkingSet64)`],
-          { timeout: 1500 }
+          { timeout: 1500, windowsHide: true }
         );
         const bytes = Number(String(stdout || '').trim());
         if (!Number.isFinite(bytes) || bytes <= 0) return null;
         return Math.round(bytes / 1024);
       }
 
-      const { stdout } = await execAsync(`ps -o rss= -p ${p}`, { timeout: 1500 });
+      const { stdout } = await execFileAsync('ps', ['-o', 'rss=', '-p', String(p)], { timeout: 1500, windowsHide: true });
       return parseIntSafe(stdout);
     } catch {
       return null;
