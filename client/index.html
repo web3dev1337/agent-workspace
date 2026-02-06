@@ -60,7 +60,7 @@
                 <button id="queue-btn" class="header-btn" title="Review inbox (tiers/queue)">
                     📥 Queue
                 </button>
-                <button id="project-chats-btn" class="header-btn" title="Simple projects + chats shell">
+                <button id="project-chats-btn" class="header-btn" title="Simple projects + chats shell (Alt+P)">
                     🧵 Chats
                 </button>
                 <button id="review-route-btn" class="header-btn" title="Review Route (Tier 3+ unreviewed batch review)">
@@ -333,6 +333,35 @@
                         Show server terminals
                     </label>
                     <p class="setting-description">When enabled, Review Console includes the paired server tile next to the agent tile (when available).</p>
+                </div>
+            </div>
+
+            <div class="setting-section">
+                <h4>Projects + Chats</h4>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="simple-mode-enabled" />
+                        Enable Projects + Chats shell
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="simple-mode-startup-open" />
+                        Open Projects + Chats on startup
+                    </label>
+                    <p class="setting-description">If enabled, opens the shell automatically once workspaces load.</p>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="simple-mode-hotkeys" />
+                        Enable Projects + Chats hotkey (Alt+P)
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="simple-mode-show-hints" />
+                        Show quick hints in shell
+                    </label>
                 </div>
             </div>
 

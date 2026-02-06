@@ -30,6 +30,12 @@
     },
     "ui": {
       "theme": "dark",
+      "simpleMode": {
+        "enabled": true,
+        "startupOpen": false,
+        "hotkeys": true,
+        "showHints": true
+      },
       "branches": {
         "hidePrefixes": true,
         "colorize": true,

@@ -25,6 +25,7 @@ class ClaudeOrchestrator {
     this.agentModalManager = null; // Agent modal manager
     this.settings = this.loadSettings();
     this.userSettings = null; // Will be loaded from server
+    this.simpleModeStartupTriggered = false;
     this.currentLayout = '2x4';
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
@@ -419,6 +420,7 @@ class ClaudeOrchestrator {
 	      this.setupEventListeners();
 	      this.applyTheme();
 	      this.syncSettingsUI();
+	      this.applySimpleModeConfig();
 	      this.installAuthFetchShim();
 	      
 	      // Connect to server
@@ -823,6 +825,8 @@ class ClaudeOrchestrator {
         this.userSettings = settings;
         this.syncUserSettingsUI();
         this.applyThemeFromUserSettings();
+        this.applySimpleModeConfig();
+        this.maybeAutoOpenSimpleMode();
       });
 
       // Workspace events
@@ -892,6 +896,8 @@ class ClaudeOrchestrator {
 
         // Update voice command context with workspace info
         this.updateVoiceContext();
+        this.applySimpleModeConfig();
+        this.maybeAutoOpenSimpleMode();
 
         // Initialize dashboard if configured
         if (config.ui.startupDashboard && !active) {
@@ -1732,6 +1738,34 @@ class ClaudeOrchestrator {
       });
     }
 
+    // Simple mode settings (Projects + Chats shell)
+    const simpleModeEnabled = document.getElementById('simple-mode-enabled');
+    if (simpleModeEnabled) {
+      simpleModeEnabled.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.simpleMode.enabled', !!e.target.checked);
+        this.applySimpleModeConfig();
+      });
+    }
+    const simpleModeStartupOpen = document.getElementById('simple-mode-startup-open');
+    if (simpleModeStartupOpen) {
+      simpleModeStartupOpen.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.simpleMode.startupOpen', !!e.target.checked);
+      });
+    }
+    const simpleModeHotkeys = document.getElementById('simple-mode-hotkeys');
+    if (simpleModeHotkeys) {
+      simpleModeHotkeys.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.simpleMode.hotkeys', !!e.target.checked);
+        this.applySimpleModeConfig();
+      });
+    }
+    const simpleModeShowHints = document.getElementById('simple-mode-show-hints');
+    if (simpleModeShowHints) {
+      simpleModeShowHints.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.simpleMode.showHints', !!e.target.checked);
+      });
+    }
+
     // Discord services auto-start (server-persisted)
     const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
 	    if (discordAutoEnsure) {
@@ -2007,6 +2041,28 @@ class ClaudeOrchestrator {
       e.stopPropagation();
       this.setWorkflowMode(mode);
       this.showToast(`Mode: ${mode}`, 'info');
+    });
+
+    // Keyboard: Alt+P opens the simple Projects + Chats shell.
+    document.addEventListener('keydown', (e) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+
+      // Ignore when typing in inputs/selects/contenteditable.
+      const t = e.target;
+      const tag = String(t?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return;
+
+      const lower = String(e.key || '').toLowerCase();
+      if (lower !== 'p') return;
+
+      const cfg = this.getSimpleModeConfig();
+      if (!cfg.enabled || !cfg.hotkeys) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      this.showProjectChatsShell().catch((error) => {
+        this.showToast?.(`Failed to open Projects + Chats: ${String(error?.message || error)}`, 'error');
+      });
     });
   }
 	  
@@ -5078,7 +5134,8 @@ class ClaudeOrchestrator {
         break;
 
       case 'open-project-chats':
-        this.showProjectChatsShell?.();
+        if (this.getSimpleModeConfig().enabled) this.showProjectChatsShell?.();
+        else this.showToast?.('Projects + Chats shell is disabled in Settings', 'warning');
         break;
 
       case 'open-telemetry':
@@ -6913,6 +6970,42 @@ class ClaudeOrchestrator {
 
   getKnownSkins() {
     return ['default', 'blue', 'purple', 'emerald', 'amber'];
+  }
+
+  getSimpleModeConfig() {
+    const cfg = this.userSettings?.global?.ui?.simpleMode || {};
+    return {
+      enabled: cfg.enabled !== false,
+      startupOpen: cfg.startupOpen === true,
+      hotkeys: cfg.hotkeys !== false,
+      showHints: cfg.showHints !== false
+    };
+  }
+
+  applySimpleModeConfig() {
+    const cfg = this.getSimpleModeConfig();
+    const btn = document.getElementById('project-chats-btn');
+    if (btn) {
+      btn.classList.toggle('hidden', !cfg.enabled);
+      btn.title = cfg.hotkeys ? 'Simple projects + chats shell (Alt+P)' : 'Simple projects + chats shell';
+    }
+  }
+
+  maybeAutoOpenSimpleMode() {
+    if (this.simpleModeStartupTriggered) return;
+    const cfg = this.getSimpleModeConfig();
+    if (!cfg.enabled || !cfg.startupOpen) return;
+    if (this.isDashboardMode) return;
+    const hasWorkspaceContext = !!(this.currentWorkspace?.id || (Array.isArray(this.availableWorkspaces) && this.availableWorkspaces.length));
+    if (!hasWorkspaceContext) return;
+    this.simpleModeStartupTriggered = true;
+    setTimeout(() => {
+      if (!document.getElementById('projects-chats-shell')) {
+        this.showProjectChatsShell().catch((error) => {
+          this.showToast?.(`Failed to open Projects + Chats: ${String(error?.message || error)}`, 'error');
+        });
+      }
+    }, 60);
   }
   
 	  syncSettingsUI() {
@@ -11883,6 +11976,8 @@ class ClaudeOrchestrator {
         console.log('User settings loaded:', this.userSettings);
         this.syncUserSettingsUI();
         this.applyThemeFromUserSettings();
+        this.applySimpleModeConfig();
+        this.maybeAutoOpenSimpleMode();
         this.refreshBranchLabels();
         this.updateTierFilterButtons();
       } else {
@@ -12148,6 +12243,24 @@ class ClaudeOrchestrator {
       const kinds = (cfg.terminalKinds && typeof cfg.terminalKinds === 'object') ? cfg.terminalKinds : {};
       reviewConsoleShowServer.checked = kinds.server !== false;
     }
+
+    const simpleModeEnabled = document.getElementById('simple-mode-enabled');
+    if (simpleModeEnabled) {
+      simpleModeEnabled.checked = this.userSettings.global?.ui?.simpleMode?.enabled !== false;
+    }
+    const simpleModeStartupOpen = document.getElementById('simple-mode-startup-open');
+    if (simpleModeStartupOpen) {
+      simpleModeStartupOpen.checked = this.userSettings.global?.ui?.simpleMode?.startupOpen === true;
+    }
+    const simpleModeHotkeys = document.getElementById('simple-mode-hotkeys');
+    if (simpleModeHotkeys) {
+      simpleModeHotkeys.checked = this.userSettings.global?.ui?.simpleMode?.hotkeys !== false;
+    }
+    const simpleModeShowHints = document.getElementById('simple-mode-show-hints');
+    if (simpleModeShowHints) {
+      simpleModeShowHints.checked = this.userSettings.global?.ui?.simpleMode?.showHints !== false;
+    }
+    this.applySimpleModeConfig();
 
     const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
     if (discordAutoEnsure) {
@@ -12904,6 +13017,7 @@ class ClaudeOrchestrator {
   async showProjectChatsShell() {
     const existing = document.getElementById('projects-chats-shell');
     if (existing) existing.remove();
+    const simpleCfg = this.getSimpleModeConfig();
 
     const modal = document.createElement('div');
     modal.id = 'projects-chats-shell';
@@ -12927,10 +13041,14 @@ class ClaudeOrchestrator {
                   <input id="projects-chats-include-archived" type="checkbox" />
                   Archived
                 </label>
+                <button class="btn-secondary" type="button" data-project-chats-review-route="true">Review Route</button>
                 <button class="btn-secondary" type="button" data-project-chats-refresh="true">Refresh</button>
                 <button class="button-primary" type="button" data-project-chats-new="true">+ New Chat</button>
               </div>
             </div>
+            ${simpleCfg.showHints ? `
+              <div class="projects-chats-hint mono">Tip: Alt+P opens this shell. Use New Chat to create a worktree + agent session + thread in one step.</div>
+            ` : ''}
             <div id="projects-chats-list" class="projects-chats-list">
               <div class="projects-chats-empty">Loading…</div>
             </div>
@@ -12990,6 +13108,13 @@ class ClaudeOrchestrator {
         } catch (error) {
           this.showToast?.(`Failed to refresh chats: ${String(error?.message || error)}`, 'error');
         }
+        return;
+      }
+
+      if (event.target.closest('[data-project-chats-review-route="true"]')) {
+        this.openReviewRoute?.().catch((error) => {
+          this.showToast?.(`Failed to open review route: ${String(error?.message || error)}`, 'error');
+        });
         return;
       }
 

@@ -111,6 +111,19 @@ You can access the web UI at `http://localhost:2080` or use the native Tauri app
 
 If you use `npm run dev:web:safe`, it runs only the web UI and avoids port `3000`.
 
+## Projects + Chats (Simple Mode)
+
+The Codex-style shell is now available as a top-level workflow.
+
+- Open with header button `🧵 Chats` or hotkey `Alt+P`
+- Create a new thread with `+ New Chat` (creates worktree + sessions + thread record)
+- Use `Close`/`Archive` on chat rows for lifecycle actions
+- Configure behavior in `Settings → Projects + Chats`:
+  - enable/disable shell
+  - open on startup
+  - enable/disable hotkey
+  - show/hide shell hints
+
 ---
 
 **Need help?** Check the main README.md or CLAUDE.md for more details.

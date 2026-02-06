@@ -1499,6 +1499,13 @@ header h1 {
   gap: 8px;
 }
 
+.projects-chats-hint {
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px 12px;
+  opacity: 0.8;
+  font-size: 12px;
+}
+
 .projects-chats-item {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
