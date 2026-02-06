@@ -114,6 +114,7 @@ Goal: keep current orchestrator power while adding a simpler top-level UX simila
 - [x] Implement project/chat shell view (simple mode) with workspace mapping.
 - [x] Implement chat lifecycle mapping (new chat -> worktree/session).
 - [x] Expand scheduler to “cron skills” templates with run safety/auditing.
+- [x] Hardening: simple-mode settings + startup-open + hotkey (`Alt+P`) + shell hints.
 
 References:
 - `PLANS/2026-02-06/CODEX_DESKTOP_PARITY_RESEARCH_AND_IMPLEMENTATION_BRIEF.md`

@@ -87,6 +87,13 @@ class UserSettingsService {
           skin: 'default',
           // 0..100 (applied as 0..1 multiplier for skin tint in CSS)
           skinIntensity: 100,
+          simpleMode: {
+            // Codex-style top-level project/chat shell controls.
+            enabled: true,
+            startupOpen: false,
+            hotkeys: true,
+            showHints: true
+          },
           reviewConsole: {
 	            // Default layout intent: a batch-review surface. Keep it fullscreen and show diff by default.
 	            preset: 'review', // default | review | deep | code | terminals | custom
@@ -417,6 +424,13 @@ class UserSettingsService {
         }
         if (typeof ui.skin === 'string') {
           merged.global.ui.skin = ui.skin;
+        }
+
+        if (ui.simpleMode && typeof ui.simpleMode === 'object') {
+          merged.global.ui.simpleMode = {
+            ...(uiDefaults.simpleMode || {}),
+            ...(ui.simpleMode || {})
+          };
         }
 
 	        if (ui.diffViewer) {
