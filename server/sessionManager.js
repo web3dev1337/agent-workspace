@@ -2331,11 +2331,16 @@ class SessionManager extends EventEmitter {
       return;
     }
 
-    // POSIX: use pgrep to count child processes
-    const { exec } = require('child_process');
-    exec(`pgrep -P ${pid} | wc -l`, (err, stdout) => {
-      if (err) return;
-      const processCount = parseInt(String(stdout || '').trim(), 10);
+    // POSIX: use pgrep to count child processes without shell interpolation.
+    const { execFile } = require('child_process');
+    execFile('pgrep', ['-P', String(pid)], { timeout: 2000, windowsHide: true }, (err, stdout) => {
+      // pgrep exits with code 1 when no child process matches; treat as zero children.
+      if (err && Number(err?.code) !== 1) return;
+      const lines = String(stdout || '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const processCount = lines.length;
       if (!Number.isFinite(processCount)) return;
       if (processCount > this.maxProcessesPerSession) {
         logger.error('Process limit exceeded', { 
