@@ -73,6 +73,13 @@ CI option (recommended for repeatable release builds):
 - Run the GitHub Actions workflow `windows` (workflow_dispatch) or push a tag like `v1.2.3`.
 - It runs Windows unit tests and produces installer artifacts via `npm run tauri:build` (and on tag pushes it publishes a GitHub Release with the installers attached).
 
+Desktop auto-updater (optional, packaged app):
+- Set `ORCHESTRATOR_UPDATER_ENABLED=1`
+- Set `ORCHESTRATOR_UPDATER_ENDPOINTS` to one or more update endpoint URLs (comma/newline separated)
+- Set `ORCHESTRATOR_UPDATER_PUBKEY` or `ORCHESTRATOR_UPDATER_PUBKEY_PATH` (updater public key)
+- In Settings → Repository Updates (Tauri), use `Check App Updates` / `Install App Update`
+- If updater env vars are not set, the app shows a clear “not configured” message and continues normally
+
 ---
 
 ## 4) Optional: WSL mode (bash-first workflows)

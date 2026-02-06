@@ -1645,9 +1645,21 @@ class ClaudeOrchestrator {
       this.checkForUpdates();
     });
 
-    document.getElementById('pull-updates').addEventListener('click', () => {
-      this.pullLatestChanges();
-    });
+    const pullUpdatesBtn = document.getElementById('pull-updates');
+    const checkUpdatesBtn = document.getElementById('check-updates');
+    if (this.isTauriRuntime()) {
+      if (checkUpdatesBtn) checkUpdatesBtn.textContent = 'Check App Updates';
+      if (pullUpdatesBtn) {
+        pullUpdatesBtn.textContent = 'Install App Update';
+        pullUpdatesBtn.addEventListener('click', () => {
+          this.installDesktopAppUpdate();
+        });
+      }
+    } else if (pullUpdatesBtn) {
+      pullUpdatesBtn.addEventListener('click', () => {
+        this.pullLatestChanges();
+      });
+    }
 
     // Notification dismiss buttons
     document.getElementById('dismiss-settings-notification').addEventListener('click', () => {
@@ -12690,7 +12702,98 @@ class ClaudeOrchestrator {
     }
   }
 
+  isTauriRuntime() {
+    return typeof window !== 'undefined' &&
+      !!window.__TAURI__ &&
+      typeof window.__TAURI__.invoke === 'function';
+  }
+
+  normalizeDesktopUpdateResult(result) {
+    const currentVersion = String(result?.currentVersion || result?.current_version || '').trim();
+    const latestVersion = String(result?.latestVersion || result?.latest_version || '').trim();
+    const configured = !!result?.configured;
+    const available = !!result?.available;
+    const message = String(result?.message || '').trim();
+    const notes = String(result?.notes || '').trim();
+
+    return {
+      configured,
+      available,
+      currentVersion,
+      latestVersion,
+      message,
+      notes
+    };
+  }
+
+  async checkForDesktopAppUpdates() {
+    try {
+      this.showTemporaryMessage('Checking desktop app updates...', 'info');
+
+      const result = await window.__TAURI__.invoke('check_app_update');
+      const status = this.normalizeDesktopUpdateResult(result);
+
+      if (!status.configured) {
+        this.showTemporaryMessage(status.message || 'Desktop updater is not configured', 'error');
+        return;
+      }
+
+      if (!status.available) {
+        const details = status.currentVersion ? ` (v${status.currentVersion})` : '';
+        this.showTemporaryMessage(status.message || `Desktop app is up to date${details}`, 'success');
+        return;
+      }
+
+      const from = status.currentVersion ? `v${status.currentVersion}` : 'current';
+      const to = status.latestVersion ? `v${status.latestVersion}` : 'new';
+      const shouldInstall = confirm(`Desktop app update available: ${from} -> ${to}\n\nInstall now?`);
+      if (!shouldInstall) {
+        this.showTemporaryMessage(`Update available: ${from} -> ${to}`, 'success');
+        return;
+      }
+
+      await this.installDesktopAppUpdate();
+    } catch (error) {
+      console.error('Error checking desktop app updates:', error);
+      this.showTemporaryMessage('Failed to check desktop app updates', 'error');
+    }
+  }
+
+  async installDesktopAppUpdate() {
+    try {
+      if (!this.isTauriRuntime()) {
+        this.showTemporaryMessage('Desktop app updater is only available in Tauri builds', 'error');
+        return;
+      }
+
+      this.showTemporaryMessage('Installing desktop app update...', 'info');
+      const result = await window.__TAURI__.invoke('install_app_update');
+      const status = this.normalizeDesktopUpdateResult(result);
+
+      if (!status.configured) {
+        this.showTemporaryMessage(status.message || 'Desktop updater is not configured', 'error');
+        return;
+      }
+
+      if (!status.available) {
+        this.showTemporaryMessage(status.message || 'No update available to install', 'success');
+        return;
+      }
+
+      const to = status.latestVersion ? `v${status.latestVersion}` : 'latest';
+      this.showTemporaryMessage(status.message || `Desktop update ${to} installed`, 'success');
+    } catch (error) {
+      console.error('Error installing desktop app update:', error);
+      this.showTemporaryMessage('Failed to install desktop app update', 'error');
+    }
+  }
+
   async checkForUpdates() {
+    if (this.isTauriRuntime()) {
+      await this.checkForDesktopAppUpdates();
+      return;
+    }
+
     try {
       this.showTemporaryMessage('Checking for updates...', 'info');
       

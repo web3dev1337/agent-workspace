@@ -65,6 +65,10 @@ function main() {
     process.env.ORCHESTRATOR_LICENSE_PUBLIC_KEY_PATH
     || process.env.TAURI_LICENSE_PUBLIC_KEY_PATH
     || path.join(repoRoot, 'license-public-key.pem');
+  const srcUpdaterPublicKey =
+    process.env.ORCHESTRATOR_UPDATER_PUBKEY_PATH
+    || process.env.TAURI_UPDATER_PUBKEY_PATH
+    || path.join(repoRoot, 'updater.pubkey');
   const skipBundleNodeRaw = String(
     process.env.ORCHESTRATOR_SKIP_BUNDLE_NODE
     || process.env.TAURI_SKIP_BUNDLE_NODE
@@ -94,6 +98,9 @@ function main() {
   if (fs.existsSync(srcUserDefaults)) copyFile(srcUserDefaults, path.join(outDir, 'user-settings.default.json'));
   if (srcLicensePublicKey && fs.existsSync(srcLicensePublicKey)) {
     copyFile(srcLicensePublicKey, path.join(outDir, 'license-public-key.pem'));
+  }
+  if (srcUpdaterPublicKey && fs.existsSync(srcUpdaterPublicKey)) {
+    copyFile(srcUpdaterPublicKey, path.join(outDir, 'updater.pubkey'));
   }
   if (bundledNodePathRaw) {
     const bundledNodePath = path.resolve(String(bundledNodePathRaw));

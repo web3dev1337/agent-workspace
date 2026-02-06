@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 use uuid::Uuid;
+use tauri_plugin_updater::UpdaterExt;
+use url::Url;
 
 mod terminal;
 mod file_watcher;
@@ -41,6 +43,118 @@ fn env_truthy(name: &str) -> Option<bool> {
     let v = raw.trim().to_lowercase();
     if v.is_empty() { return None; }
     Some(!matches!(v.as_str(), "0" | "false" | "no" | "off"))
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppUpdateStatus {
+    configured: bool,
+    available: bool,
+    current_version: String,
+    latest_version: Option<String>,
+    notes: Option<String>,
+    published_at: Option<String>,
+    download_url: Option<String>,
+    message: Option<String>,
+}
+
+fn default_update_status(app: &tauri::AppHandle) -> AppUpdateStatus {
+    AppUpdateStatus {
+        configured: false,
+        available: false,
+        current_version: app.package_info().version.to_string(),
+        latest_version: None,
+        notes: None,
+        published_at: None,
+        download_url: None,
+        message: None,
+    }
+}
+
+fn parse_updater_endpoints_from_env() -> Vec<Url> {
+    let raw = std::env::var("ORCHESTRATOR_UPDATER_ENDPOINTS")
+        .or_else(|_| std::env::var("TAURI_UPDATER_ENDPOINTS"))
+        .unwrap_or_default();
+
+    raw.split(['\n', '\r', ',', ';'])
+        .map(|v| v.trim())
+        .filter(|v| !v.is_empty())
+        .filter_map(|v| Url::parse(v).ok())
+        .collect::<Vec<_>>()
+}
+
+fn resolve_updater_pubkey(app: &tauri::AppHandle) -> Option<String> {
+    let from_env = std::env::var("ORCHESTRATOR_UPDATER_PUBKEY")
+        .or_else(|_| std::env::var("TAURI_UPDATER_PUBKEY"))
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    if from_env.is_some() {
+        return from_env;
+    }
+
+    let mut candidates = Vec::new();
+
+    if let Ok(path) = std::env::var("ORCHESTRATOR_UPDATER_PUBKEY_PATH") {
+        let p = std::path::PathBuf::from(path.trim());
+        if !path.trim().is_empty() {
+            candidates.push(p);
+        }
+    }
+    if let Ok(path) = std::env::var("TAURI_UPDATER_PUBKEY_PATH") {
+        let p = std::path::PathBuf::from(path.trim());
+        if !path.trim().is_empty() {
+            candidates.push(p);
+        }
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        candidates.push(resource_dir.join("backend").join("updater.pubkey"));
+        candidates.push(resource_dir.join("updater.pubkey"));
+    }
+
+    candidates.push(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("updater.pubkey")
+    );
+
+    for path in candidates {
+        let Ok(contents) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let trimmed = contents.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+
+    None
+}
+
+fn build_runtime_updater(app: &tauri::AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
+    let enabled = env_truthy("ORCHESTRATOR_UPDATER_ENABLED")
+        .or_else(|| env_truthy("TAURI_UPDATER_ENABLED"))
+        .unwrap_or(false);
+    if !enabled {
+        return Err("Desktop updater is disabled (set ORCHESTRATOR_UPDATER_ENABLED=1).".to_string());
+    }
+
+    let endpoints = parse_updater_endpoints_from_env();
+    if endpoints.is_empty() {
+        return Err(
+            "Desktop updater is not configured (set ORCHESTRATOR_UPDATER_ENDPOINTS to one or more update endpoint URLs).".to_string()
+        );
+    }
+
+    let pubkey = resolve_updater_pubkey(app)
+        .ok_or_else(|| "Desktop updater public key is missing (set ORCHESTRATOR_UPDATER_PUBKEY or ORCHESTRATOR_UPDATER_PUBKEY_PATH).".to_string())?;
+
+    app.updater_builder()
+        .endpoints(endpoints)
+        .pubkey(pubkey)
+        .build()
+        .map_err(|e| format!("Failed to initialize updater: {}", e))
 }
 
 fn should_spawn_backend() -> bool {
@@ -245,6 +359,78 @@ fn open_external(url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn check_app_update(app: tauri::AppHandle) -> Result<AppUpdateStatus, String> {
+    let mut status = default_update_status(&app);
+
+    let updater = match build_runtime_updater(&app) {
+        Ok(v) => v,
+        Err(message) => {
+            status.message = Some(message);
+            return Ok(status);
+        }
+    };
+
+    status.configured = true;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| format!("Failed to check updates: {}", e))?;
+
+    if let Some(update) = update {
+        status.available = true;
+        status.latest_version = Some(update.version.clone());
+        status.notes = update.body.clone();
+        status.published_at = update.date.as_ref().map(|d| d.to_string());
+        status.download_url = Some(update.download_url.to_string());
+    } else {
+        status.message = Some("No desktop app update available.".to_string());
+    }
+
+    Ok(status)
+}
+
+#[tauri::command]
+async fn install_app_update(app: tauri::AppHandle) -> Result<AppUpdateStatus, String> {
+    let mut status = default_update_status(&app);
+
+    let updater = match build_runtime_updater(&app) {
+        Ok(v) => v,
+        Err(message) => {
+            status.message = Some(message);
+            return Ok(status);
+        }
+    };
+
+    status.configured = true;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| format!("Failed to check updates: {}", e))?;
+
+    let Some(update) = update else {
+        status.message = Some("No desktop app update available.".to_string());
+        return Ok(status);
+    };
+
+    status.available = true;
+    status.latest_version = Some(update.version.clone());
+    status.notes = update.body.clone();
+    status.published_at = update.date.as_ref().map(|d| d.to_string());
+    status.download_url = Some(update.download_url.to_string());
+
+    update
+        .download_and_install(
+            |_chunk_len, _content_len| {},
+            || {},
+        )
+        .await
+        .map_err(|e| format!("Failed to download/install update: {}", e))?;
+
+    status.message = Some("Desktop update installed. Relaunch the app to use the new version.".to_string());
+    Ok(status)
+}
+
+#[tauri::command]
 async fn spawn_terminal(
     terminal_manager: State<'_, Arc<TerminalManager>>,
     session_id: Option<String>
@@ -332,6 +518,7 @@ fn main() {
     
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             println!("Claude Orchestrator starting...");
 
@@ -505,7 +692,9 @@ fn main() {
             list_terminals,
             watch_directory,
             unwatch_directory,
-            list_watched_paths
+            list_watched_paths,
+            check_app_update,
+            install_app_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
