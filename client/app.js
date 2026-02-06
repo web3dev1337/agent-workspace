@@ -339,6 +339,9 @@ class ClaudeOrchestrator {
       document.getElementById('queue-btn')?.addEventListener('click', () => {
         this.showQueuePanel();
       });
+      document.getElementById('project-chats-btn')?.addEventListener('click', () => {
+        this.showProjectChatsShell();
+      });
       document.getElementById('review-route-btn')?.addEventListener('click', () => {
         this.openReviewRoute();
       });
@@ -1775,6 +1778,25 @@ class ClaudeOrchestrator {
     if (schedulerRunNow) {
       schedulerRunNow.addEventListener('click', () => {
         this.runSchedulerNowFromSettings().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
+    const schedulerTemplateSelect = document.getElementById('scheduler-template-select');
+    const schedulerTemplateInterval = document.getElementById('scheduler-template-interval');
+    if (schedulerTemplateSelect && schedulerTemplateInterval) {
+      schedulerTemplateSelect.addEventListener('change', () => {
+        const option = schedulerTemplateSelect.options[schedulerTemplateSelect.selectedIndex];
+        const interval = Number(option?.getAttribute('data-interval') || 0);
+        if (Number.isFinite(interval) && interval > 0) {
+          schedulerTemplateInterval.value = String(Math.round(interval));
+        }
+      });
+    }
+    const schedulerTemplateAdd = document.getElementById('scheduler-template-add');
+    if (schedulerTemplateAdd) {
+      schedulerTemplateAdd.addEventListener('click', () => {
+        this.addSchedulerTemplateFromSettings().catch((error) => {
           this.showToast?.(String(error?.message || error), 'error');
         });
       });
@@ -5053,6 +5075,10 @@ class ClaudeOrchestrator {
 
       case 'open-prs':
         this.showPRsPanel?.();
+        break;
+
+      case 'open-project-chats':
+        this.showProjectChatsShell?.();
         break;
 
       case 'open-telemetry':
@@ -9391,7 +9417,7 @@ class ClaudeOrchestrator {
 		          const headRef = String(pr?.headRefName || '').trim();
 		          const repoUrl = (() => {
 		            const u = String(pr?.url || prUrl || '').trim();
-		            const m = u.match(/github\\.com\\/([^/]+)\\/([^/]+)\\/pull\\/(\\d+)/);
+		            const m = u.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
 		            if (!m) return '';
 		            return `https://github.com/${m[1]}/${m[2]}`;
 		          })();
@@ -10660,6 +10686,39 @@ class ClaudeOrchestrator {
     return data;
   }
 
+  populateSchedulerTemplates(templates = []) {
+    const selectEl = document.getElementById('scheduler-template-select');
+    if (!selectEl) return;
+    const rows = Array.isArray(templates) ? templates : [];
+    const previous = String(selectEl.value || '').trim();
+    selectEl.innerHTML = '<option value="">Select template…</option>';
+    for (const row of rows) {
+      const id = String(row?.id || '').trim();
+      if (!id) continue;
+      const name = String(row?.name || id);
+      const interval = Number(row?.defaults?.intervalMinutes || 0);
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = name;
+      if (Number.isFinite(interval) && interval > 0) {
+        option.setAttribute('data-interval', String(Math.round(interval)));
+      }
+      selectEl.appendChild(option);
+    }
+    if (previous && rows.some((row) => String(row?.id || '') === previous)) {
+      selectEl.value = previous;
+    }
+  }
+
+  async fetchSchedulerTemplates() {
+    const res = await fetch('/api/scheduler/templates', { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Scheduler templates failed (${res.status})`));
+    }
+    return Array.isArray(data?.templates) ? data.templates : [];
+  }
+
   renderSchedulerStatus(status) {
     const outputEl = document.getElementById('scheduler-status-output');
     const enabledEl = document.getElementById('scheduler-enabled');
@@ -10668,6 +10727,7 @@ class ClaudeOrchestrator {
 
     const cfg = status?.config || {};
     const schedules = Array.isArray(cfg?.schedules) ? cfg.schedules : [];
+    this.populateSchedulerTemplates(status?.templates || []);
     if (enabledEl) enabledEl.checked = cfg?.enabled === true;
     if (jsonEl && document.activeElement !== jsonEl) {
       jsonEl.value = JSON.stringify(schedules, null, 2);
@@ -10700,6 +10760,43 @@ class ClaudeOrchestrator {
       if (outputEl) outputEl.textContent = `Scheduler error: ${String(error?.message || error)}`;
       throw error;
     }
+  }
+
+  async addSchedulerTemplateFromSettings() {
+    const selectEl = document.getElementById('scheduler-template-select');
+    const intervalEl = document.getElementById('scheduler-template-interval');
+    const outputEl = document.getElementById('scheduler-status-output');
+    if (!selectEl) return false;
+
+    const templateId = String(selectEl.value || '').trim();
+    if (!templateId) {
+      this.showToast?.('Select a scheduler template first', 'warning');
+      return false;
+    }
+
+    const intervalMinutesRaw = Number(intervalEl?.value);
+    const options = {};
+    if (Number.isFinite(intervalMinutesRaw) && intervalMinutesRaw > 0) {
+      options.intervalMinutes = Math.round(intervalMinutesRaw);
+    }
+
+    if (outputEl) outputEl.textContent = 'Creating schedule from template…';
+    const res = await fetch('/api/scheduler/jobs/from-template', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        templateId,
+        options
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Failed to add template job (${res.status})`));
+    }
+
+    this.showToast?.(`Added scheduler job: ${data?.schedule?.id || templateId}`, 'success');
+    await this.refreshSchedulerStatus().catch(() => {});
+    return true;
   }
 
   async saveSchedulerConfigFromSettings() {
@@ -12648,6 +12745,330 @@ class ClaudeOrchestrator {
   switchToWorkspace(workspaceId) {
     console.log('Switching to workspace:', workspaceId);
     this.socket.emit('switch-workspace', { workspaceId });
+  }
+
+  async waitForWorkspaceActive(workspaceId, { timeoutMs = 7000 } = {}) {
+    const target = String(workspaceId || '').trim();
+    if (!target) return false;
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (String(this.currentWorkspace?.id || '').trim() === target) return true;
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    return String(this.currentWorkspace?.id || '').trim() === target;
+  }
+
+  getWorkspaceById(workspaceId) {
+    const id = String(workspaceId || '').trim();
+    if (!id) return null;
+    return (Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : []).find((workspace) => String(workspace?.id || '') === id) || null;
+  }
+
+  async fetchThreadsForWorkspace(workspaceId, { includeArchived = false } = {}) {
+    const id = String(workspaceId || '').trim();
+    if (!id) return [];
+    const query = new URLSearchParams({ workspaceId: id });
+    if (includeArchived) query.set('includeArchived', 'true');
+    const res = await fetch(`/api/threads?${query.toString()}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Failed to load threads (${res.status})`));
+    }
+    return Array.isArray(data?.threads) ? data.threads : [];
+  }
+
+  renderProjectChatsProjects(modal, state) {
+    const listEl = modal.querySelector('#projects-chats-projects-list');
+    if (!listEl) return;
+    const rows = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
+    listEl.innerHTML = rows.map((workspace) => {
+      const id = String(workspace?.id || '').trim();
+      const active = id && id === state.selectedWorkspaceId;
+      const label = this.escapeHtml(workspace?.name || id || 'Workspace');
+      const badge = active ? ' • active' : '';
+      return `<li class="projects-chats-project-item"><button type="button" class="projects-chats-project-btn ${active ? 'active' : ''}" data-project-id="${this.escapeHtml(id)}">${label}${badge}</button></li>`;
+    }).join('');
+  }
+
+  renderProjectChatsThreads(modal, state) {
+    const workspace = this.getWorkspaceById(state.selectedWorkspaceId);
+    const titleEl = modal.querySelector('#projects-chats-selected-name');
+    const listEl = modal.querySelector('#projects-chats-list');
+    if (!titleEl || !listEl) return;
+
+    const selectedName = workspace?.name || state.selectedWorkspaceId || 'No workspace';
+    titleEl.textContent = selectedName;
+
+    const rows = Array.isArray(state.threadsByWorkspace.get(state.selectedWorkspaceId))
+      ? state.threadsByWorkspace.get(state.selectedWorkspaceId)
+      : [];
+
+    if (!rows.length) {
+      listEl.innerHTML = '<div class="projects-chats-empty">No chats yet for this project.</div>';
+      return;
+    }
+
+    listEl.innerHTML = rows.map((thread) => {
+      const threadId = this.escapeHtml(thread?.id || '');
+      const title = this.escapeHtml(thread?.title || thread?.worktreeId || 'Chat');
+      const worktree = this.escapeHtml(thread?.worktreeId || 'n/a');
+      const provider = this.escapeHtml(thread?.provider || 'claude');
+      const status = this.escapeHtml(thread?.status || 'active');
+      const updatedAt = this.escapeHtml(thread?.updatedAt || '');
+      const sessions = Array.isArray(thread?.sessionIds) ? thread.sessionIds : [];
+      const sessionMeta = sessions.length ? `${sessions.length} session${sessions.length === 1 ? '' : 's'}` : 'no session';
+      return `
+        <div class="projects-chats-item">
+          <div class="projects-chats-item-title">${title}</div>
+          <div class="projects-chats-item-meta">
+            <span>🌿 ${worktree}</span>
+            <span>🤖 ${provider}</span>
+            <span>status: ${status}</span>
+            <span>${this.escapeHtml(sessionMeta)}</span>
+            <span>${updatedAt}</span>
+          </div>
+          <div class="projects-chats-item-actions">
+            <button type="button" class="btn-secondary" data-thread-open="${threadId}">Open</button>
+            <button type="button" class="btn-secondary" data-thread-close="${threadId}">Close</button>
+            <button type="button" class="btn-secondary" data-thread-archive="${threadId}">Archive</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async createThreadFromProjectChats(modal, state) {
+    const workspaceId = String(state.selectedWorkspaceId || '').trim();
+    if (!workspaceId) {
+      this.showToast?.('Select a workspace first', 'warning');
+      return null;
+    }
+    const workspace = this.getWorkspaceById(workspaceId);
+    if (!workspace) {
+      this.showToast?.('Workspace not found', 'error');
+      return null;
+    }
+
+    const terminal0 = Array.isArray(workspace?.terminals) ? workspace.terminals[0] : null;
+    const repositoryPath = terminal0?.repository?.path || workspace?.repository?.path || '';
+    const repositoryName = terminal0?.repository?.name || workspace?.repository?.name || '';
+    const repositoryType = terminal0?.repository?.type || workspace?.repository?.type || workspace?.type || 'generic';
+
+    const res = await fetch('/api/threads/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId,
+        repositoryPath,
+        repositoryName,
+        repositoryType,
+        socketId: this.socket?.id || null,
+        startTier: 3
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || 'Failed to create chat'));
+    }
+
+    const threads = await this.fetchThreadsForWorkspace(workspaceId, { includeArchived: state.includeArchived });
+    state.threadsByWorkspace.set(workspaceId, threads);
+    this.renderProjectChatsThreads(modal, state);
+    return data?.thread || null;
+  }
+
+  async openThreadFromProjectChats(thread) {
+    if (!thread || typeof thread !== 'object') return;
+    const workspaceId = String(thread.workspaceId || '').trim();
+    if (workspaceId && workspaceId !== String(this.currentWorkspace?.id || '').trim()) {
+      this.switchToWorkspace(workspaceId);
+      await this.waitForWorkspaceActive(workspaceId).catch(() => false);
+    }
+
+    const sessionIds = Array.isArray(thread.sessionIds) ? thread.sessionIds : [];
+    const preferredSession = sessionIds.find((sessionId) => String(sessionId || '').includes('-claude')) || sessionIds[0] || null;
+    if (preferredSession && this.sessions.has(preferredSession)) {
+      this.focusTerminal(preferredSession);
+      return;
+    }
+
+    const worktreeId = String(thread.worktreeId || '').trim();
+    if (worktreeId) {
+      this.showOnlyWorktree(worktreeId);
+      return;
+    }
+
+    this.showToast?.('Thread has no linked session/worktree yet', 'warning');
+  }
+
+  async showProjectChatsShell() {
+    const existing = document.getElementById('projects-chats-shell');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'projects-chats-shell';
+    modal.className = 'modal projects-chats-modal';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>🧵 Projects + Chats</h2>
+          <button class="close-btn" type="button" data-close-project-chats="true">×</button>
+        </div>
+        <div class="projects-chats-shell">
+          <aside class="projects-chats-projects">
+            <div class="projects-chats-toolbar"><strong>Projects</strong></div>
+            <ul id="projects-chats-projects-list" class="projects-chats-projects-list"></ul>
+          </aside>
+          <section class="projects-chats-main">
+            <div class="projects-chats-toolbar">
+              <div id="projects-chats-selected-name">Workspace</div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <label style="display:flex; gap:6px; align-items:center;">
+                  <input id="projects-chats-include-archived" type="checkbox" />
+                  Archived
+                </label>
+                <button class="btn-secondary" type="button" data-project-chats-refresh="true">Refresh</button>
+                <button class="button-primary" type="button" data-project-chats-new="true">+ New Chat</button>
+              </div>
+            </div>
+            <div id="projects-chats-list" class="projects-chats-list">
+              <div class="projects-chats-empty">Loading…</div>
+            </div>
+          </section>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const workspaces = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
+    const state = {
+      selectedWorkspaceId: String(this.currentWorkspace?.id || workspaces[0]?.id || '').trim() || null,
+      includeArchived: false,
+      threadsByWorkspace: new Map()
+    };
+
+    const loadThreads = async (workspaceId) => {
+      if (!workspaceId) return [];
+      const threads = await this.fetchThreadsForWorkspace(workspaceId, { includeArchived: state.includeArchived });
+      state.threadsByWorkspace.set(workspaceId, threads);
+      return threads;
+    };
+
+    const render = () => {
+      this.renderProjectChatsProjects(modal, state);
+      this.renderProjectChatsThreads(modal, state);
+    };
+
+    modal.addEventListener('click', async (event) => {
+      const closeBtn = event.target.closest('[data-close-project-chats="true"]');
+      if (closeBtn) {
+        modal.remove();
+        return;
+      }
+
+      const projectBtn = event.target.closest('[data-project-id]');
+      if (projectBtn) {
+        const workspaceId = String(projectBtn.getAttribute('data-project-id') || '').trim();
+        if (!workspaceId || workspaceId === state.selectedWorkspaceId) return;
+        state.selectedWorkspaceId = workspaceId;
+        if (!state.threadsByWorkspace.has(workspaceId)) {
+          try {
+            await loadThreads(workspaceId);
+          } catch (error) {
+            this.showToast?.(`Failed to load chats: ${String(error?.message || error)}`, 'error');
+          }
+        }
+        render();
+        return;
+      }
+
+      if (event.target.closest('[data-project-chats-refresh="true"]')) {
+        if (!state.selectedWorkspaceId) return;
+        try {
+          await loadThreads(state.selectedWorkspaceId);
+          render();
+        } catch (error) {
+          this.showToast?.(`Failed to refresh chats: ${String(error?.message || error)}`, 'error');
+        }
+        return;
+      }
+
+      if (event.target.closest('[data-project-chats-new="true"]')) {
+        try {
+          const created = await this.createThreadFromProjectChats(modal, state);
+          render();
+          if (created) await this.openThreadFromProjectChats(created);
+        } catch (error) {
+          this.showToast?.(`Failed to create chat: ${String(error?.message || error)}`, 'error');
+        }
+        return;
+      }
+
+      const openBtn = event.target.closest('[data-thread-open]');
+      if (openBtn) {
+        const threadId = String(openBtn.getAttribute('data-thread-open') || '').trim();
+        const rows = state.threadsByWorkspace.get(state.selectedWorkspaceId) || [];
+        const thread = rows.find((item) => String(item?.id || '') === threadId);
+        if (thread) await this.openThreadFromProjectChats(thread);
+        return;
+      }
+
+      const closeThreadBtn = event.target.closest('[data-thread-close]');
+      if (closeThreadBtn) {
+        const threadId = String(closeThreadBtn.getAttribute('data-thread-close') || '').trim();
+        if (!threadId) return;
+        try {
+          const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/close`, { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data?.ok === false) throw new Error(String(data?.error || data?.message || 'Failed to close chat'));
+          await loadThreads(state.selectedWorkspaceId);
+          render();
+        } catch (error) {
+          this.showToast?.(`Failed to close chat: ${String(error?.message || error)}`, 'error');
+        }
+        return;
+      }
+
+      const archiveThreadBtn = event.target.closest('[data-thread-archive]');
+      if (archiveThreadBtn) {
+        const threadId = String(archiveThreadBtn.getAttribute('data-thread-archive') || '').trim();
+        if (!threadId) return;
+        try {
+          const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/archive`, { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data?.ok === false) throw new Error(String(data?.error || data?.message || 'Failed to archive chat'));
+          await loadThreads(state.selectedWorkspaceId);
+          render();
+        } catch (error) {
+          this.showToast?.(`Failed to archive chat: ${String(error?.message || error)}`, 'error');
+        }
+      }
+    });
+
+    const includeArchivedEl = modal.querySelector('#projects-chats-include-archived');
+    includeArchivedEl?.addEventListener('change', async (event) => {
+      state.includeArchived = !!event.target.checked;
+      if (!state.selectedWorkspaceId) {
+        render();
+        return;
+      }
+      try {
+        await loadThreads(state.selectedWorkspaceId);
+        render();
+      } catch (error) {
+        this.showToast?.(`Failed to load chats: ${String(error?.message || error)}`, 'error');
+      }
+    });
+
+    render();
+    if (state.selectedWorkspaceId) {
+      try {
+        await loadThreads(state.selectedWorkspaceId);
+      } catch (error) {
+        this.showToast?.(`Failed to load chats: ${String(error?.message || error)}`, 'error');
+      }
+      render();
+    }
   }
 
   async showPRsPanel() {

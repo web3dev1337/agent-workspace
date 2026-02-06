@@ -94,6 +94,7 @@ const sessionRecoveryService = require('./sessionRecoveryService');
 const { collectDiagnostics } = require('./diagnosticsService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
+const { ThreadService } = require('./threadService');
 const multer = require('multer');
 
 // Configure multer for audio file uploads
@@ -275,6 +276,7 @@ const processPairingService = ProcessPairingService.getInstance({ processTaskSer
 const testOrchestrationService = TestOrchestrationService.getInstance({ sessionManager, workspaceManager });
 const pluginLoaderService = PluginLoaderService.getInstance({ logger });
 const schedulerService = SchedulerService.getInstance({ logger });
+const threadService = ThreadService.getInstance({ logger });
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -289,6 +291,7 @@ commandRegistry.init({
   workspaceManager
 });
 schedulerService.init({ userSettingsService, commandRegistry });
+threadService.init({ workspaceManager, sessionManager });
 
 const loadPlugins = async () => {
   const status = await pluginLoaderService.loadAll({
@@ -1740,6 +1743,195 @@ app.get('/api/sessions/:sessionId/log', (req, res) => {
   }
 });
 
+function normalizeRepositoryPath(value) {
+  return String(value || '').trim().replace(/[\\/]+$/, '');
+}
+
+function normalizeThreadWorktreeId(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+  const direct = raw.match(/^work(\d+)$/);
+  if (direct) return `work${Number(direct[1])}`;
+  const digits = raw.match(/(\d+)/);
+  if (digits) return `work${Number(digits[1])}`;
+  return '';
+}
+
+function pickNextWorktreeIdForWorkspace(workspace, { repositoryPath } = {}) {
+  const repoPathNorm = normalizeRepositoryPath(repositoryPath);
+
+  if (workspace?.workspaceType === 'mixed-repo') {
+    const terminals = Array.isArray(workspace?.terminals) ? workspace.terminals : [];
+    let max = 0;
+    for (const terminal of terminals) {
+      const terminalRepoPath = normalizeRepositoryPath(terminal?.repository?.path);
+      if (repoPathNorm && terminalRepoPath && terminalRepoPath !== repoPathNorm) continue;
+      const id = normalizeThreadWorktreeId(terminal?.worktree || terminal?.worktreeId || '');
+      const match = String(id || '').match(/^work(\d+)$/);
+      if (!match) continue;
+      const n = Number(match[1]);
+      if (Number.isFinite(n)) max = Math.max(max, n);
+    }
+    return `work${Math.max(1, max + 1)}`;
+  }
+
+  const pairs = Number(workspace?.terminals?.pairs || 0);
+  return `work${Math.max(1, pairs + 1)}`;
+}
+
+function resolveThreadRepositoryContext(workspace, { repositoryPath, repositoryName, repositoryType } = {}) {
+  const repoPathExplicit = normalizeRepositoryPath(repositoryPath);
+  const mixedTerminals = Array.isArray(workspace?.terminals) ? workspace.terminals : [];
+  const repoFromMixed = mixedTerminals.find((terminal) => {
+    const p = normalizeRepositoryPath(terminal?.repository?.path);
+    return !!repoPathExplicit && !!p && p === repoPathExplicit;
+  }) || mixedTerminals[0];
+
+  const resolvedPath = repoPathExplicit
+    || normalizeRepositoryPath(repoFromMixed?.repository?.path)
+    || normalizeRepositoryPath(workspace?.repository?.path);
+
+  const fallbackRepoName = (() => {
+    if (!resolvedPath) return '';
+    return path.basename(resolvedPath);
+  })();
+
+  return {
+    repositoryPath: resolvedPath,
+    repositoryName: String(repositoryName || repoFromMixed?.repository?.name || workspace?.repository?.name || fallbackRepoName || '').trim(),
+    repositoryType: String(repositoryType || repoFromMixed?.repository?.type || workspace?.repository?.type || workspace?.type || 'generic').trim()
+  };
+}
+
+function inferThreadSessionIds({ repositoryName, worktreeId } = {}) {
+  const repo = String(repositoryName || '').trim();
+  const worktree = String(worktreeId || '').trim();
+  if (!worktree) return [];
+  if (repo) return [`${repo}-${worktree}-claude`, `${repo}-${worktree}-server`];
+  return [`${worktree}-claude`, `${worktree}-server`];
+}
+
+async function ensureWorkspaceMixedWorktree({
+  workspaceId,
+  repositoryPath,
+  repositoryType,
+  repositoryName,
+  worktreeId,
+  socketId,
+  startTier
+} = {}) {
+  const workspace = workspaceManager.getWorkspace(workspaceId);
+  if (!workspace) {
+    const error = new Error('Workspace not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const repoPath = normalizeRepositoryPath(repositoryPath);
+  if (!repoPath) {
+    const error = new Error('repositoryPath is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const worktree = normalizeThreadWorktreeId(worktreeId) || pickNextWorktreeIdForWorkspace(workspace, { repositoryPath: repoPath });
+  const repoName = String(repositoryName || path.basename(repoPath)).trim();
+  const repoType = String(repositoryType || workspace?.repository?.type || workspace?.type || 'generic').trim();
+  const worktreePath = path.join(repoPath, worktree);
+  const terminalIdBase = `${repoName}-${worktree}`;
+
+  let updatedWorkspace = workspace;
+  if (workspace.workspaceType !== 'mixed-repo') {
+    const { convertSingleToMixed } = require('./workspaceSchemas');
+    updatedWorkspace = convertSingleToMixed(workspace);
+  }
+
+  const newTerminals = [
+    {
+      id: `${terminalIdBase}-claude`,
+      repository: {
+        name: repoName,
+        path: repoPath,
+        type: repoType,
+        masterBranch: 'master'
+      },
+      worktree: worktree,
+      worktreePath,
+      terminalType: 'claude',
+      visible: true
+    },
+    {
+      id: `${terminalIdBase}-server`,
+      repository: {
+        name: repoName,
+        path: repoPath,
+        type: repoType,
+        masterBranch: 'master'
+      },
+      worktree: worktree,
+      worktreePath,
+      terminalType: 'server',
+      visible: true
+    }
+  ];
+
+  let alreadyExists = false;
+  const terminalList = Array.isArray(updatedWorkspace.terminals) ? updatedWorkspace.terminals : [];
+  const existingIds = new Set(terminalList.map((terminal) => terminal?.id));
+  if (existingIds.has(newTerminals[0].id) || existingIds.has(newTerminals[1].id)) {
+    alreadyExists = true;
+  } else {
+    updatedWorkspace.terminals = terminalList.concat(newTerminals);
+  }
+
+  const tempWorkspace = {
+    name: workspace.name || workspace.id || workspaceId,
+    repository: { path: repoPath, masterBranch: 'master' },
+    worktrees: { enabled: true, namingPattern: 'work{n}', autoCreate: true }
+  };
+  await worktreeHelper.createWorktree(tempWorkspace, worktree);
+
+  if (updatedWorkspace !== workspace || !alreadyExists) {
+    await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+  }
+
+  const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
+  const isActiveWorkspace = workspaceManager.getActiveWorkspace()?.id === workspaceId;
+
+  let sessions = {};
+  if (isActiveWorkspace) {
+    sessionManager.setWorkspace(refreshedWorkspace);
+    sessions = await sessionManager.createSessionsForWorktree({
+      worktreeId: worktree,
+      worktreePath,
+      repositoryName: repoName,
+      repositoryType: repoType
+    });
+  }
+
+  if (isActiveWorkspace) {
+    const tier = Number(startTier);
+    const payload = {
+      worktreeId: worktree,
+      sessions,
+      startTier: (tier >= 1 && tier <= 4) ? tier : undefined
+    };
+    if (socketId && io.sockets.sockets.get(socketId)) io.to(socketId).emit('worktree-sessions-added', payload);
+    else io.emit('worktree-sessions-added', payload);
+  }
+
+  return {
+    workspace: refreshedWorkspace,
+    alreadyExists,
+    terminalIds: alreadyExists ? [] : newTerminals.map((terminal) => terminal.id),
+    sessions,
+    worktreeId: worktree,
+    worktreePath,
+    repositoryName: repoName,
+    repositoryType: repoType
+  };
+}
+
 app.post('/api/workspaces/create-worktree', async (req, res) => {
   try {
     const { workspaceId, repositoryPath, worktreeNumber } = req.body;
@@ -1793,133 +1985,161 @@ app.post('/api/workspaces/create-worktree', async (req, res) => {
 
 app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
   try {
-    const { workspaceId, repositoryPath, repositoryType, repositoryName, worktreeId, socketId, startTier } = req.body;
-    logger.info('Adding mixed worktree to workspace', {
+    const { workspaceId, repositoryPath, repositoryType, repositoryName, worktreeId, socketId, startTier } = req.body || {};
+    logger.info('Adding mixed worktree to workspace', { workspaceId, repositoryName, worktreeId });
+    const result = await ensureWorkspaceMixedWorktree({
       workspaceId,
+      repositoryPath,
+      repositoryType,
       repositoryName,
-      worktreeId
+      worktreeId,
+      socketId,
+      startTier
     });
-
-    const workspace = workspaceManager.getWorkspace(workspaceId);
-    if (!workspace) {
-      return res.status(404).json({ error: 'Workspace not found' });
-    }
-
-    // Convert to mixed-repo workspace if it's single-repo
-    let updatedWorkspace = workspace;
-    if (workspace.workspaceType !== 'mixed-repo') {
-      logger.info('Converting single-repo workspace to mixed-repo');
-      const { convertSingleToMixed } = require('./workspaceSchemas');
-      updatedWorkspace = convertSingleToMixed(workspace);
-    }
-
-    // Add new terminal pair to the workspace
-    const worktreePath = path.join(repositoryPath, worktreeId);
-    const terminalIdBase = `${repositoryName}-${worktreeId}`;
-    const newTerminals = [
-      {
-        id: `${terminalIdBase}-claude`,
-        repository: {
-          name: repositoryName,
-          path: repositoryPath,
-          type: repositoryType,
-          masterBranch: 'master'
-        },
-        worktree: worktreeId,
-        worktreePath: worktreePath,
-        terminalType: 'claude',
-        visible: true
-      },
-      {
-        id: `${terminalIdBase}-server`,
-        repository: {
-          name: repositoryName,
-          path: repositoryPath,
-          type: repositoryType,
-          masterBranch: 'master'
-        },
-        worktree: worktreeId,
-        worktreePath: worktreePath,
-        terminalType: 'server',
-        visible: true
-      }
-    ];
-
-    // Guard: don't double-add the same worktree terminals
-    let alreadyExists = false;
-    if (Array.isArray(updatedWorkspace.terminals)) {
-      const existingIds = new Set(updatedWorkspace.terminals.map(t => t.id));
-      if (existingIds.has(newTerminals[0].id) || existingIds.has(newTerminals[1].id)) {
-        alreadyExists = true;
-      }
-    }
-
-    if (!alreadyExists) {
-      updatedWorkspace.terminals = updatedWorkspace.terminals.concat(newTerminals);
-    }
-
-    // Ensure the worktree exists
-    const tempWorkspace = {
-      repository: { path: repositoryPath, masterBranch: 'master' },
-      worktrees: { enabled: true, namingPattern: 'work{n}', autoCreate: true }
-    };
-    await worktreeHelper.createWorktree(tempWorkspace, worktreeId);
-
-    // Save updated workspace (only if we changed it: conversion or new terminals)
-    if (updatedWorkspace !== workspace || !alreadyExists) {
-      await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
-    }
-
-    // Update the SessionManager workspace reference and rebuild worktrees list
-    const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
-    sessionManager.setWorkspace(refreshedWorkspace);
-
-    // Create sessions for ONLY the new worktree (do not reset existing terminals)
-    const isActiveWorkspace = workspaceManager.getActiveWorkspace()?.id === workspaceId;
-    const newSessions = isActiveWorkspace
-      ? await sessionManager.createSessionsForWorktree({
-        worktreeId,
-        worktreePath,
-        repositoryName,
-        repositoryType
-      })
-      : {};
-
-    if (isActiveWorkspace) {
-      // Prefer targeting the requesting socket (avoid disrupting other connected clients / dashboards)
-      if (socketId && io.sockets.sockets.get(socketId)) {
-        const tier = Number(startTier);
-        io.to(socketId).emit('worktree-sessions-added', {
-          worktreeId,
-          sessions: newSessions,
-          startTier: (tier >= 1 && tier <= 4) ? tier : undefined
-        });
-      } else {
-        const tier = Number(startTier);
-        io.emit('worktree-sessions-added', {
-          worktreeId,
-          sessions: newSessions,
-          startTier: (tier >= 1 && tier <= 4) ? tier : undefined
-        });
-      }
-    }
-
-    logger.info('New worktree sessions initialized (additive)', {
-      totalNewSessions: Object.keys(newSessions).length,
-      alreadyExists
-    });
-
     const tier = Number(startTier);
     res.json({
       success: true,
-      alreadyExists,
-      terminalIds: alreadyExists ? [] : newTerminals.map(t => t.id),
-      sessions: newSessions,
+      alreadyExists: result.alreadyExists,
+      terminalIds: result.terminalIds,
+      sessions: result.sessions,
+      worktreeId: result.worktreeId,
+      worktreePath: result.worktreePath,
       startTier: (tier >= 1 && tier <= 4) ? tier : undefined
     });
   } catch (error) {
-    logger.error('Failed to add mixed worktree', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: error.message, stack: error.stack });
+    const status = Number(error?.statusCode) || 500;
+    logger.error('Failed to add mixed worktree', { error: error.message, stack: error.stack, status });
+    res.status(status).json({ error: error.message, stack: error.stack });
+  }
+});
+
+app.get('/api/threads', (req, res) => {
+  try {
+    const workspaceId = String(req.query.workspaceId || '').trim();
+    const status = String(req.query.status || '').trim().toLowerCase();
+    const includeArchived = String(req.query.includeArchived || '').trim().toLowerCase() === 'true';
+    const threads = threadService.list({ workspaceId, status, includeArchived });
+    res.json({ ok: true, count: threads.length, threads });
+  } catch (error) {
+    logger.error('Failed to list threads', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to list threads', message: error.message });
+  }
+});
+
+app.post('/api/threads/create', express.json(), async (req, res) => {
+  try {
+    const {
+      workspaceId,
+      repositoryPath,
+      repositoryType,
+      repositoryName,
+      worktreeId,
+      socketId,
+      startTier,
+      title,
+      provider
+    } = req.body || {};
+
+    const workspaceIdValue = String(workspaceId || '').trim();
+    if (!workspaceIdValue) {
+      return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    }
+
+    const workspace = workspaceManager.getWorkspace(workspaceIdValue);
+    if (!workspace) {
+      return res.status(404).json({ ok: false, error: 'Workspace not found' });
+    }
+
+    const repoContext = resolveThreadRepositoryContext(workspace, { repositoryPath, repositoryName, repositoryType });
+    if (!repoContext.repositoryPath) {
+      return res.status(400).json({ ok: false, error: 'repositoryPath is required (or derivable from workspace)' });
+    }
+
+    const result = await ensureWorkspaceMixedWorktree({
+      workspaceId: workspaceIdValue,
+      repositoryPath: repoContext.repositoryPath,
+      repositoryType: repoContext.repositoryType,
+      repositoryName: repoContext.repositoryName,
+      worktreeId,
+      socketId,
+      startTier
+    });
+
+    const activeSessionIds = Object.keys(result.sessions || {});
+    const knownSessionIds = activeSessionIds.length
+      ? activeSessionIds
+      : inferThreadSessionIds({
+        repositoryName: result.repositoryName,
+        worktreeId: result.worktreeId
+      }).filter((sessionId) => !!sessionManager.getSessionById(sessionId));
+
+    const created = threadService.createThread({
+      workspaceId: workspaceIdValue,
+      projectId: workspaceIdValue,
+      title: String(title || `${result.repositoryName}/${result.worktreeId}`).trim(),
+      worktreeId: result.worktreeId,
+      worktreePath: result.worktreePath,
+      sessionIds: knownSessionIds,
+      provider: String(provider || 'claude').trim().toLowerCase() || 'claude',
+      repositoryName: result.repositoryName,
+      repositoryPath: repoContext.repositoryPath,
+      repositoryType: result.repositoryType
+    });
+
+    const thread = knownSessionIds.length ? threadService.setSessionIds(created.id, knownSessionIds) : created;
+    const tier = Number(startTier);
+
+    res.json({
+      ok: true,
+      thread,
+      sessions: result.sessions,
+      alreadyExists: result.alreadyExists,
+      worktreeId: result.worktreeId,
+      worktreePath: result.worktreePath,
+      startTier: (tier >= 1 && tier <= 4) ? tier : undefined
+    });
+  } catch (error) {
+    const status = Number(error?.statusCode) || 500;
+    logger.error('Failed to create thread', { error: error.message, stack: error.stack, status });
+    res.status(status).json({ ok: false, error: 'Failed to create thread', message: error.message });
+  }
+});
+
+app.post('/api/threads/:id/close', express.json(), (req, res) => {
+  try {
+    const threadId = String(req.params.id || '').trim();
+    if (!threadId) {
+      return res.status(400).json({ ok: false, error: 'thread id is required' });
+    }
+    const clearSessions = req.body?.clearSessions === true;
+    const thread = threadService.closeThread(threadId);
+    if (clearSessions) {
+      for (const sessionId of Array.isArray(thread.sessionIds) ? thread.sessionIds : []) {
+        sessionManager.closeSession(sessionId, { clearRecovery: false });
+      }
+    }
+    res.json({ ok: true, thread });
+  } catch (error) {
+    const message = String(error?.message || error);
+    const status = message.toLowerCase().includes('not found') ? 404 : 500;
+    logger.error('Failed to close thread', { error: message, stack: error.stack, status });
+    res.status(status).json({ ok: false, error: 'Failed to close thread', message });
+  }
+});
+
+app.post('/api/threads/:id/archive', express.json(), (req, res) => {
+  try {
+    const threadId = String(req.params.id || '').trim();
+    if (!threadId) {
+      return res.status(400).json({ ok: false, error: 'thread id is required' });
+    }
+    const thread = threadService.archiveThread(threadId);
+    res.json({ ok: true, thread });
+  } catch (error) {
+    const message = String(error?.message || error);
+    const status = message.toLowerCase().includes('not found') ? 404 : 500;
+    logger.error('Failed to archive thread', { error: message, stack: error.stack, status });
+    res.status(status).json({ ok: false, error: 'Failed to archive thread', message });
   }
 });
 
@@ -5084,6 +5304,16 @@ app.get('/api/scheduler/status', (req, res) => {
   }
 });
 
+app.get('/api/scheduler/templates', (req, res) => {
+  try {
+    const templates = schedulerService.getTemplates();
+    res.json({ ok: true, count: templates.length, templates });
+  } catch (error) {
+    logger.error('Failed to get scheduler templates', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get scheduler templates' });
+  }
+});
+
 app.put('/api/scheduler/config', express.json(), async (req, res) => {
   try {
     const patch = req.body && typeof req.body === 'object' ? req.body : {};
@@ -5111,6 +5341,23 @@ app.post('/api/scheduler/run-now', express.json(), async (req, res) => {
   } catch (error) {
     logger.error('Failed to run schedule now', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to run schedule now', message: error.message });
+  }
+});
+
+app.post('/api/scheduler/jobs/from-template', express.json(), async (req, res) => {
+  try {
+    const templateId = String(req.body?.templateId || '').trim();
+    if (!templateId) {
+      return res.status(400).json({ ok: false, error: 'templateId is required' });
+    }
+    const options = (req.body?.options && typeof req.body.options === 'object') ? req.body.options : {};
+    const result = await schedulerService.createScheduleFromTemplate(templateId, options);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    const message = String(error?.message || error);
+    const status = message.toLowerCase().includes('unknown scheduler template') ? 404 : 500;
+    logger.error('Failed to create scheduler job from template', { error: message, stack: error.stack, status });
+    res.status(status).json({ ok: false, error: 'Failed to create scheduler job from template', message });
   }
 });
 

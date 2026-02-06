@@ -66,4 +66,29 @@ describe('SchedulerService', () => {
       service.stop();
     }
   });
+
+  test('creates a schedule from a template', async () => {
+    const { service } = buildService({ command: 'open-queue' });
+    try {
+      const created = await service.createScheduleFromTemplate('health-snapshot', { intervalMinutes: 25 });
+      expect(created.schedule.id).toBeTruthy();
+      expect(created.schedule.command).toBe('open-advice');
+      expect(created.schedule.intervalMinutes).toBe(25);
+
+      const status = service.getStatus();
+      const ids = (status.config?.schedules || []).map((row) => row.id);
+      expect(ids).toContain(created.schedule.id);
+    } finally {
+      service.stop();
+    }
+  });
+
+  test('rejects unknown template id', async () => {
+    const { service } = buildService({ command: 'open-queue' });
+    try {
+      await expect(service.createScheduleFromTemplate('does-not-exist')).rejects.toThrow('Unknown scheduler template');
+    } finally {
+      service.stop();
+    }
+  });
 });

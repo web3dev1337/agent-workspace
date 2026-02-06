@@ -159,8 +159,138 @@ class SchedulerService {
       running: !!this.timer,
       tickMs: this.getTickMs(),
       config: cfg,
+      templates: this.getTemplates(),
       recentRuns: this.recentRuns.slice(-50).reverse()
     };
+  }
+
+  getTemplates() {
+    return [
+      {
+        id: 'review-route-sweep',
+        name: 'Review Route Sweep',
+        description: 'Open the review route and refresh the queue context.',
+        defaults: {
+          intervalMinutes: 30,
+          command: 'open-review-route',
+          params: {},
+          safetyMode: 'safe',
+          enabled: false
+        }
+      },
+      {
+        id: 'stuck-task-check',
+        name: 'Stuck Task Check',
+        description: 'Open blockers view to surface blocked items quickly.',
+        defaults: {
+          intervalMinutes: 45,
+          command: 'queue-blockers',
+          params: {},
+          safetyMode: 'safe',
+          enabled: false
+        }
+      },
+      {
+        id: 'dependency-blocked-report',
+        name: 'Dependency Blocked Report',
+        description: 'Open queue triage focused on dependency issues.',
+        defaults: {
+          intervalMinutes: 60,
+          command: 'queue-triage',
+          params: {},
+          safetyMode: 'safe',
+          enabled: false
+        }
+      },
+      {
+        id: 'health-snapshot',
+        name: 'Health Snapshot',
+        description: 'Open advice/health context to review project readiness.',
+        defaults: {
+          intervalMinutes: 90,
+          command: 'open-advice',
+          params: {},
+          safetyMode: 'safe',
+          enabled: false
+        }
+      }
+    ];
+  }
+
+  allocateScheduleId(baseId, existingIds = new Set()) {
+    const root = String(baseId || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || `schedule-${Date.now()}`;
+
+    let candidate = root;
+    let idx = 2;
+    while (existingIds.has(candidate)) {
+      candidate = `${root}-${idx}`;
+      idx += 1;
+    }
+    return candidate;
+  }
+
+  async createScheduleFromTemplate(templateId, options = {}) {
+    const id = String(templateId || '').trim();
+    if (!id) throw new Error('templateId is required');
+
+    const templates = this.getTemplates();
+    const template = templates.find((item) => String(item.id || '') === id);
+    if (!template) throw new Error(`Unknown scheduler template: ${id}`);
+
+    const cfg = this.getConfig();
+    const existingIds = new Set((Array.isArray(cfg.schedules) ? cfg.schedules : []).map((schedule) => String(schedule?.id || '').trim()));
+
+    const base = template.defaults || {};
+    const nowIso = new Date().toISOString();
+    const intervalMinutes = Number(options.intervalMinutes);
+    const nextIntervalMinutes = Number.isFinite(intervalMinutes) && intervalMinutes > 0
+      ? Math.round(intervalMinutes)
+      : Number(base.intervalMinutes || 30);
+
+    const rawSchedule = {
+      id: this.allocateScheduleId(String(options.id || `${template.id}-${Date.now()}`), existingIds),
+      name: String(options.name || template.name || template.id),
+      enabled: options.enabled === true ? true : base.enabled === true,
+      intervalMinutes: nextIntervalMinutes,
+      command: String(options.command || base.command || '').trim(),
+      params: {
+        ...(base.params && typeof base.params === 'object' ? base.params : {}),
+        ...(options.params && typeof options.params === 'object' ? options.params : {})
+      },
+      safetyMode: String(options.safetyMode || base.safetyMode || '').trim() || null,
+      allowDangerous: options.allowDangerous === true,
+      nextRunAt: options.nextRunAt || null,
+      lastRunAt: null,
+      lastStatus: null,
+      lastMessage: null
+    };
+
+    if (rawSchedule.enabled && !rawSchedule.nextRunAt) {
+      rawSchedule.nextRunAt = this.computeNextRunAt(nowIso, rawSchedule.intervalMinutes);
+    }
+
+    const schedule = this.normalizeSchedule(rawSchedule, cfg.schedules.length);
+    if (!schedule) throw new Error('Failed to normalize schedule from template');
+
+    const nextSchedules = (Array.isArray(cfg.schedules) ? cfg.schedules : []).concat([schedule]);
+    const config = await this.updateConfig({ schedules: nextSchedules });
+    const persisted = (Array.isArray(config.schedules) ? config.schedules : []).find((item) => item.id === schedule.id) || schedule;
+
+    this.appendAudit({
+      at: nowIso,
+      scheduleId: persisted.id,
+      command: persisted.command,
+      manual: true,
+      ok: true,
+      message: `created-from-template:${template.id}`
+    });
+
+    return { template, schedule: persisted, config };
   }
 
   isCommandAllowed(schedule, cfg) {

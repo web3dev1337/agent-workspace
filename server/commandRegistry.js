@@ -507,6 +507,18 @@ class CommandRegistry {
       }
     });
 
+    this.register('open-project-chats', {
+      category: 'ui',
+      description: 'Open the simple Projects + Chats shell',
+      params: [],
+      examples: [],
+      aliases: ['open-chats', 'open-projects'],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'open-project-chats' });
+        return { message: 'Opening Projects + Chats' };
+      }
+    });
+
     this.register('open-telemetry', {
       category: 'process',
       description: 'Open Telemetry details (Dashboard overlay)',
