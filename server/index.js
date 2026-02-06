@@ -5244,6 +5244,22 @@ app.post('/api/commander/send-to-session', (req, res) => {
 // ============ COMMANDER COMMAND REGISTRY ============
 // Semantic command system for Commander Claude UI control
 
+// Unified command catalog (shared discovery for UI/voice/commander)
+app.get('/api/commands/catalog', (req, res) => {
+  try {
+    const includeHidden = String(req.query.includeHidden || '').toLowerCase() === 'true';
+    const commands = commandRegistry.getCatalog({ includeHidden });
+    res.json({
+      ok: true,
+      count: commands.length,
+      commands
+    });
+  } catch (error) {
+    logger.error('Failed to get command catalog', { error: error.message });
+    res.status(500).json({ ok: false, error: 'Failed to get command catalog' });
+  }
+});
+
 // Get all available commands (discovery endpoint)
 app.get('/api/commander/capabilities', (req, res) => {
   try {

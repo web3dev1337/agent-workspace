@@ -110,7 +110,7 @@ Goal: keep current orchestrator power while adding a simpler top-level UX simila
   - `PLANS/2026-02-06/CODEX_PARITY_IMPLEMENTATION_PLAN.md`
 - [x] Produce PR breakdown plan:
   - `PLANS/2026-02-06/CODEX_PARITY_PR_BREAKDOWN.md`
-- [ ] Implement unified command catalog endpoint for voice/commander/UI parity routing.
+- [x] Implement unified command catalog endpoint for voice/commander/UI parity routing.
 - [ ] Implement project/chat shell view (simple mode) with workspace mapping.
 - [ ] Implement chat lifecycle mapping (new chat -> worktree/session).
 - [ ] Expand scheduler to “cron skills” templates with run safety/auditing.
