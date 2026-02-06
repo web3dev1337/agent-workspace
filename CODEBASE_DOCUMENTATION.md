@@ -52,6 +52,8 @@ server/claudeVersionChecker.js     - Claude Code version detection
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
+server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
+server/auditExportService.js       - Redacted audit export across activity + scheduler logs (JSON/CSV)
 ```
 
 ### Multi-Workspace System (Core Feature)

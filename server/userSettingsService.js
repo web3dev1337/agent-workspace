@@ -82,6 +82,54 @@ class UserSettingsService {
           },
           schedules: []
         },
+        policy: {
+          enabled: false,
+          defaultRole: 'admin',
+          allowHeaderOverride: false,
+          headerName: 'x-orchestrator-role',
+          allowQueryOverride: false,
+          queryName: 'role',
+          roleByAction: {
+            read: 'viewer',
+            write: 'operator',
+            destructive: 'admin',
+            billing: 'admin',
+            audit_export: 'operator',
+            command_execute: 'operator'
+          },
+          dangerousCommandPatterns: [
+            'merge',
+            'approve',
+            'request-changes',
+            'request_changes',
+            'remove',
+            'destroy',
+            'kill',
+            'stop',
+            'restart',
+            'close',
+            'ticket-move'
+          ],
+          readOnlyCommandPatterns: [
+            'list-',
+            'get-',
+            'open-',
+            'show-',
+            'status',
+            'catalog',
+            'capabilities',
+            'context'
+          ]
+        },
+        audit: {
+          maxRecords: 10000,
+          redaction: {
+            enabled: true,
+            emails: true,
+            tokens: true,
+            homePaths: true
+          }
+        },
         ui: {
           theme: 'dark',
           skin: 'default',
@@ -406,6 +454,30 @@ class UserSettingsService {
           }
         };
       }
+      if (userSettings.global.policy) {
+        const defaultsPolicy = (merged.global.policy || {});
+        const next = userSettings.global.policy || {};
+        merged.global.policy = {
+          ...defaultsPolicy,
+          ...next,
+          roleByAction: {
+            ...(defaultsPolicy.roleByAction || {}),
+            ...(next.roleByAction || {})
+          }
+        };
+      }
+      if (userSettings.global.audit) {
+        const defaultsAudit = (merged.global.audit || {});
+        const next = userSettings.global.audit || {};
+        merged.global.audit = {
+          ...defaultsAudit,
+          ...next,
+          redaction: {
+            ...(defaultsAudit.redaction || {}),
+            ...(next.redaction || {})
+          }
+        };
+      }
       if (userSettings.global.ui) {
         const ui = userSettings.global.ui || {};
 
@@ -650,6 +722,32 @@ class UserSettingsService {
           safety: {
             ...(defaultsScheduler.safety || {}),
             ...(next.safety || {})
+          }
+        };
+      }
+
+      if (newGlobal.policy) {
+        const defaultsPolicy = (this.getDefaultSettings().global.policy || {});
+        const next = (newGlobal.policy || {});
+        this.settings.global.policy = {
+          ...defaultsPolicy,
+          ...next,
+          roleByAction: {
+            ...(defaultsPolicy.roleByAction || {}),
+            ...(next.roleByAction || {})
+          }
+        };
+      }
+
+      if (newGlobal.audit) {
+        const defaultsAudit = (this.getDefaultSettings().global.audit || {});
+        const next = (newGlobal.audit || {});
+        this.settings.global.audit = {
+          ...defaultsAudit,
+          ...next,
+          redaction: {
+            ...(defaultsAudit.redaction || {}),
+            ...(next.redaction || {})
           }
         };
       }

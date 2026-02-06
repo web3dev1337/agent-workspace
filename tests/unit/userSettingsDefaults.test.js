@@ -81,12 +81,39 @@ describe('UserSettingsService defaults', () => {
     expect(typeof status.caps.q4).toBe('number');
   });
 
+  test('includes global.policy defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    const policy = defaults?.global?.policy;
+    expect(policy).toBeTruthy();
+    expect(typeof policy.enabled).toBe('boolean');
+    expect(typeof policy.defaultRole).toBe('string');
+    expect(policy.roleByAction).toBeTruthy();
+    expect(typeof policy.roleByAction.destructive).toBe('string');
+    expect(Array.isArray(policy.dangerousCommandPatterns)).toBe(true);
+  });
+
+  test('includes global.audit defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    const audit = defaults?.global?.audit;
+    expect(audit).toBeTruthy();
+    expect(typeof audit.maxRecords).toBe('number');
+    expect(audit.redaction).toBeTruthy();
+    expect(typeof audit.redaction.enabled).toBe('boolean');
+  });
+
   test('mergeSettings deep-merges ui.tasks without dropping defaults', () => {
     const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
     const merged = UserSettingsService.prototype.mergeSettings.call({}, defaults, {
       global: {
         process: {
           status: { caps: { wipMax: 9 } }
+        },
+        policy: {
+          enabled: true,
+          roleByAction: { destructive: 'operator' }
+        },
+        audit: {
+          redaction: { emails: false }
         },
         ui: {
           skin: 'blue',
@@ -156,5 +183,14 @@ describe('UserSettingsService defaults', () => {
     expect(typeof merged.global.process.status.caps.q12).toBe('number');
     expect(typeof merged.global.process.status.caps.q3).toBe('number');
     expect(typeof merged.global.process.status.caps.q4).toBe('number');
+
+    // Keeps policy defaults while allowing partial override.
+    expect(merged.global.policy.enabled).toBe(true);
+    expect(merged.global.policy.roleByAction.destructive).toBe('operator');
+    expect(typeof merged.global.policy.roleByAction.billing).toBe('string');
+
+    // Keeps audit defaults while allowing partial override.
+    expect(merged.global.audit.redaction.emails).toBe(false);
+    expect(typeof merged.global.audit.redaction.tokens).toBe('boolean');
   });
 });
