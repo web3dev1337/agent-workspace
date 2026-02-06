@@ -25,6 +25,7 @@ class ClaudeOrchestrator {
     this.agentModalManager = null; // Agent modal manager
     this.settings = this.loadSettings();
     this.userSettings = null; // Will be loaded from server
+    this.simpleModeStartupTriggered = false;
     this.currentLayout = '2x4';
     this.serverStatuses = new Map(); // Track server running status
     this.serverPorts = new Map(); // Track server ports
@@ -339,6 +340,12 @@ class ClaudeOrchestrator {
       document.getElementById('queue-btn')?.addEventListener('click', () => {
         this.showQueuePanel();
       });
+      document.getElementById('project-chats-btn')?.addEventListener('click', () => {
+        this.showProjectChatsShell();
+      });
+      document.getElementById('review-route-btn')?.addEventListener('click', () => {
+        this.openReviewRoute();
+      });
 
       // Activity feed (recent system events)
       if (typeof ActivityFeedPanel !== 'undefined') {
@@ -413,6 +420,7 @@ class ClaudeOrchestrator {
 	      this.setupEventListeners();
 	      this.applyTheme();
 	      this.syncSettingsUI();
+	      this.applySimpleModeConfig();
 	      this.installAuthFetchShim();
 	      
 	      // Connect to server
@@ -817,6 +825,8 @@ class ClaudeOrchestrator {
         this.userSettings = settings;
         this.syncUserSettingsUI();
         this.applyThemeFromUserSettings();
+        this.applySimpleModeConfig();
+        this.maybeAutoOpenSimpleMode();
       });
 
       // Workspace events
@@ -886,6 +896,8 @@ class ClaudeOrchestrator {
 
         // Update voice command context with workspace info
         this.updateVoiceContext();
+        this.applySimpleModeConfig();
+        this.maybeAutoOpenSimpleMode();
 
         // Initialize dashboard if configured
         if (config.ui.startupDashboard && !active) {
@@ -1726,6 +1738,34 @@ class ClaudeOrchestrator {
       });
     }
 
+    // Simple mode settings (Projects + Chats shell)
+    const simpleModeEnabled = document.getElementById('simple-mode-enabled');
+    if (simpleModeEnabled) {
+      simpleModeEnabled.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.simpleMode.enabled', !!e.target.checked);
+        this.applySimpleModeConfig();
+      });
+    }
+    const simpleModeStartupOpen = document.getElementById('simple-mode-startup-open');
+    if (simpleModeStartupOpen) {
+      simpleModeStartupOpen.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.simpleMode.startupOpen', !!e.target.checked);
+      });
+    }
+    const simpleModeHotkeys = document.getElementById('simple-mode-hotkeys');
+    if (simpleModeHotkeys) {
+      simpleModeHotkeys.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.simpleMode.hotkeys', !!e.target.checked);
+        this.applySimpleModeConfig();
+      });
+    }
+    const simpleModeShowHints = document.getElementById('simple-mode-show-hints');
+    if (simpleModeShowHints) {
+      simpleModeShowHints.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.simpleMode.showHints', !!e.target.checked);
+      });
+    }
+
     // Discord services auto-start (server-persisted)
     const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
 	    if (discordAutoEnsure) {
@@ -1750,6 +1790,59 @@ class ClaudeOrchestrator {
         }
       });
 	    }
+
+    // Scheduler controls
+    const schedulerRefresh = document.getElementById('scheduler-refresh');
+    if (schedulerRefresh) {
+      schedulerRefresh.addEventListener('click', () => {
+        this.refreshSchedulerStatus().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
+    const schedulerSave = document.getElementById('scheduler-save');
+    if (schedulerSave) {
+      schedulerSave.addEventListener('click', () => {
+        this.saveSchedulerConfigFromSettings().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
+    const schedulerRunNow = document.getElementById('scheduler-run-now');
+    if (schedulerRunNow) {
+      schedulerRunNow.addEventListener('click', () => {
+        this.runSchedulerNowFromSettings().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
+    const schedulerTemplateSelect = document.getElementById('scheduler-template-select');
+    const schedulerTemplateInterval = document.getElementById('scheduler-template-interval');
+    if (schedulerTemplateSelect && schedulerTemplateInterval) {
+      schedulerTemplateSelect.addEventListener('change', () => {
+        const option = schedulerTemplateSelect.options[schedulerTemplateSelect.selectedIndex];
+        const interval = Number(option?.getAttribute('data-interval') || 0);
+        if (Number.isFinite(interval) && interval > 0) {
+          schedulerTemplateInterval.value = String(Math.round(interval));
+        }
+      });
+    }
+    const schedulerTemplateAdd = document.getElementById('scheduler-template-add');
+    if (schedulerTemplateAdd) {
+      schedulerTemplateAdd.addEventListener('click', () => {
+        this.addSchedulerTemplateFromSettings().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
+    const schedulerEnabled = document.getElementById('scheduler-enabled');
+    if (schedulerEnabled) {
+      schedulerEnabled.addEventListener('change', () => {
+        this.saveSchedulerConfigFromSettings().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
 
 	    // License controls
 	    const licenseReload = document.getElementById('license-reload');
@@ -1949,6 +2042,28 @@ class ClaudeOrchestrator {
       this.setWorkflowMode(mode);
       this.showToast(`Mode: ${mode}`, 'info');
     });
+
+    // Keyboard: Alt+P opens the simple Projects + Chats shell.
+    document.addEventListener('keydown', (e) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+
+      // Ignore when typing in inputs/selects/contenteditable.
+      const t = e.target;
+      const tag = String(t?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return;
+
+      const lower = String(e.key || '').toLowerCase();
+      if (lower !== 'p') return;
+
+      const cfg = this.getSimpleModeConfig();
+      if (!cfg.enabled || !cfg.hotkeys) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      this.showProjectChatsShell().catch((error) => {
+        this.showToast?.(`Failed to open Projects + Chats: ${String(error?.message || error)}`, 'error');
+      });
+    });
   }
 	  
 	  setViewMode(mode, { persist = true } = {}) {
@@ -2045,6 +2160,23 @@ class ClaudeOrchestrator {
 
     // Persist for the user.
     this.updateGlobalUserSetting('ui.workflow.mode', normalized);
+  }
+
+  openReviewRoute() {
+    this.setWorkflowMode('review');
+    this.queuePanelPreset = {
+      reviewTier: 'all',
+      tierSet: [3, 4],
+      triageMode: false,
+      unreviewedOnly: true,
+      blockedOnly: false,
+      autoOpenDiff: false,
+      autoConsole: true,
+      autoAdvance: true,
+      reviewActive: true,
+      reviewRouteActive: true
+    };
+    return this.showQueuePanel();
   }
 
   syncWorkflowModeFromUserSettings() {
@@ -3154,7 +3286,7 @@ class ClaudeOrchestrator {
             </button>
             <button class="delete-worktree-btn"
                     onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
-                    title="Remove worktree from workspace (keeps files intact)">
+                    title="Remove worktree from workspace (closes terminal processes, keeps files on disk)">
               🗑
             </button>
           </div>
@@ -4778,7 +4910,7 @@ class ClaudeOrchestrator {
 					    return `<button class="control-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.openWorktreeInspector(${sidJson}, { reviewConsole: true })" title="Review Console (worktree/files/commits/diff)" ${disabledAttr}>🗂</button>`;
 					  }
 
-			  getWorktreeRemoveButtonHTML(sessionId) {
+		  getWorktreeRemoveButtonHTML(sessionId) {
 				    const session = this.sessions.get(sessionId);
 				    const worktreeId = session?.worktreeId || String(sessionId || '').split('-')[0];
 				    if (!worktreeId) return '';
@@ -4786,20 +4918,20 @@ class ClaudeOrchestrator {
 		    const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
 		    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
 		    const removeLabel = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId;
-		    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}')" title="Remove worktree from workspace (kills terminals; keeps files)">🗑</button>`;
+		    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}')" title="Remove worktree from workspace (closes all terminal processes, keeps files on disk)">🗑</button>`;
 		  }
 
 					  getSessionCloseButtonHTML(sessionId) {
 					    const sid = String(sessionId || '').trim();
 					    if (!sid) return '';
 					    const session = this.sessions.get(sid);
-					    const stopBtn = `<button class="control-btn terminal-process-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.requestCloseSession('${sid}')" title="Close terminal(s) (kills agent+server processes; keeps worktree)">×</button>`;
+					    const stopBtn = `<button class="control-btn terminal-process-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.requestCloseSession('${sid}')" title="Close terminal process (kills agent/server for this worktree, keeps worktree in workspace)">×</button>`;
 
 					    // Reduce UI confusion: show the "remove worktree" button only once per pair (on the Agent tile).
 					    // Server tiles keep their server controls; removal is done from the Agent tile or sidebar.
 					    if (String(session?.type || '').toLowerCase() === 'server') return stopBtn;
 
-					    const removeBtn = `<button class="control-btn danger terminal-session-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove worktree from workspace (kills terminals; keeps files)">🗑</button>`;
+					    const removeBtn = `<button class="control-btn danger terminal-session-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove worktree from workspace (closes all terminal processes, keeps files on disk)">🗑</button>`;
 					    return `${stopBtn}\n${removeBtn}`;
 					  }
   
@@ -4999,6 +5131,11 @@ class ClaudeOrchestrator {
 
       case 'open-prs':
         this.showPRsPanel?.();
+        break;
+
+      case 'open-project-chats':
+        if (this.getSimpleModeConfig().enabled) this.showProjectChatsShell?.();
+        else this.showToast?.('Projects + Chats shell is disabled in Settings', 'warning');
         break;
 
       case 'open-telemetry':
@@ -5235,6 +5372,10 @@ class ClaudeOrchestrator {
 
       case 'open-queue':
         this.showQueuePanel?.().catch?.((err) => console.error('Failed to open queue:', err));
+        break;
+
+      case 'open-review-route':
+        this.openReviewRoute?.().catch?.((err) => console.error('Failed to open review route:', err));
         break;
 
       case 'queue-next':
@@ -6829,6 +6970,42 @@ class ClaudeOrchestrator {
 
   getKnownSkins() {
     return ['default', 'blue', 'purple', 'emerald', 'amber'];
+  }
+
+  getSimpleModeConfig() {
+    const cfg = this.userSettings?.global?.ui?.simpleMode || {};
+    return {
+      enabled: cfg.enabled !== false,
+      startupOpen: cfg.startupOpen === true,
+      hotkeys: cfg.hotkeys !== false,
+      showHints: cfg.showHints !== false
+    };
+  }
+
+  applySimpleModeConfig() {
+    const cfg = this.getSimpleModeConfig();
+    const btn = document.getElementById('project-chats-btn');
+    if (btn) {
+      btn.classList.toggle('hidden', !cfg.enabled);
+      btn.title = cfg.hotkeys ? 'Simple projects + chats shell (Alt+P)' : 'Simple projects + chats shell';
+    }
+  }
+
+  maybeAutoOpenSimpleMode() {
+    if (this.simpleModeStartupTriggered) return;
+    const cfg = this.getSimpleModeConfig();
+    if (!cfg.enabled || !cfg.startupOpen) return;
+    if (this.isDashboardMode) return;
+    const hasWorkspaceContext = !!(this.currentWorkspace?.id || (Array.isArray(this.availableWorkspaces) && this.availableWorkspaces.length));
+    if (!hasWorkspaceContext) return;
+    this.simpleModeStartupTriggered = true;
+    setTimeout(() => {
+      if (!document.getElementById('projects-chats-shell')) {
+        this.showProjectChatsShell().catch((error) => {
+          this.showToast?.(`Failed to open Projects + Chats: ${String(error?.message || error)}`, 'error');
+        });
+      }
+    }, 60);
   }
   
 	  syncSettingsUI() {
@@ -9333,7 +9510,7 @@ class ClaudeOrchestrator {
 		          const headRef = String(pr?.headRefName || '').trim();
 		          const repoUrl = (() => {
 		            const u = String(pr?.url || prUrl || '').trim();
-		            const m = u.match(/github\\.com\\/([^/]+)\\/([^/]+)\\/pull\\/(\\d+)/);
+		            const m = u.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
 		            if (!m) return '';
 		            return `https://github.com/${m[1]}/${m[2]}`;
 		          })();
@@ -9530,6 +9707,68 @@ class ClaudeOrchestrator {
 			      const navCount = nav ? nav.items.length : 0;
 			      const navIndex = nav && Number.isFinite(Number(nav.index)) ? Math.max(0, Math.min(navCount - 1, Number(nav.index))) : -1;
 			      const showNav = navCount > 1 && navIndex >= 0;
+            const me = this.getIdentityClaimName();
+            const readRouteFilters = () => {
+              try {
+                const raw = JSON.parse(localStorage.getItem('review-console-route-filters') || '{}');
+                return {
+                  tier: String(raw?.tier || 't3plus').trim().toLowerCase(),
+                  risk: String(raw?.risk || 'all').trim().toLowerCase(),
+                  unreviewed: raw?.unreviewed !== false,
+                  blockedOnly: raw?.blockedOnly === true,
+                  claimed: String(raw?.claimed || 'all').trim().toLowerCase()
+                };
+              } catch {
+                return { tier: 't3plus', risk: 'all', unreviewed: true, blockedOnly: false, claimed: 'all' };
+              }
+            };
+            const routeFilters = readRouteFilters();
+            const readCollapsedPanels = () => {
+              try {
+                const raw = JSON.parse(localStorage.getItem('review-console-collapsed-panels') || '{}');
+                return {
+                  files: raw?.files !== false,
+                  commits: raw?.commits !== false,
+                  conversation: raw?.conversation !== false
+                };
+              } catch {
+                return { files: true, commits: true, conversation: true };
+              }
+            };
+            const collapsedPanels = readCollapsedPanels();
+            const reviewRouteBar = navCount > 0 ? `
+              <div class="review-console-route-bar" data-review-route-bar="true">
+                <strong style="margin-right:6px;">Route</strong>
+                <label>Tier
+                  <select data-review-route-tier>
+                    <option value="all" ${routeFilters.tier === 'all' ? 'selected' : ''}>All</option>
+                    <option value="t3plus" ${routeFilters.tier === 't3plus' ? 'selected' : ''}>T3+</option>
+                    <option value="3" ${routeFilters.tier === '3' ? 'selected' : ''}>T3</option>
+                    <option value="4" ${routeFilters.tier === '4' ? 'selected' : ''}>T4</option>
+                  </select>
+                </label>
+                <label>Risk
+                  <select data-review-route-risk>
+                    <option value="all" ${routeFilters.risk === 'all' ? 'selected' : ''}>All</option>
+                    <option value="critical" ${routeFilters.risk === 'critical' ? 'selected' : ''}>Critical</option>
+                    <option value="high" ${routeFilters.risk === 'high' ? 'selected' : ''}>High</option>
+                    <option value="medium" ${routeFilters.risk === 'medium' ? 'selected' : ''}>Medium</option>
+                    <option value="low" ${routeFilters.risk === 'low' ? 'selected' : ''}>Low</option>
+                  </select>
+                </label>
+                <label><input type="checkbox" data-review-route-unreviewed ${routeFilters.unreviewed ? 'checked' : ''}/> Unreviewed</label>
+                <label><input type="checkbox" data-review-route-blocked ${routeFilters.blockedOnly ? 'checked' : ''}/> Blocked</label>
+                <label>Claim
+                  <select data-review-route-claimed>
+                    <option value="all" ${routeFilters.claimed === 'all' ? 'selected' : ''}>All</option>
+                    <option value="unclaimed" ${routeFilters.claimed === 'unclaimed' ? 'selected' : ''}>Unclaimed</option>
+                    <option value="mine" ${routeFilters.claimed === 'mine' ? 'selected' : ''}>Mine</option>
+                    <option value="claimed" ${routeFilters.claimed === 'claimed' ? 'selected' : ''}>Claimed</option>
+                  </select>
+                </label>
+                <button class="btn-secondary" type="button" data-review-route-reset="true">Reset</button>
+              </div>
+            ` : '';
 
 		      bodyEl.innerHTML = `
 		        <div class="worktree-inspector-header review-console-header">
@@ -9558,6 +9797,7 @@ class ClaudeOrchestrator {
 	            <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" ${pr.isDraft ? 'disabled' : ''}>✅ Merge</button>
 		          </div>
 		        </div>
+            ${reviewRouteBar}
 
 				        ${warnings.length ? `
 			          <div class="review-console-warning">
@@ -9608,9 +9848,12 @@ class ClaudeOrchestrator {
 					            <div class="worktree-inspector-panel worktree-inspector-files ${filesPanelHiddenClass}" data-rc-panel="files">
 					              <div class="worktree-inspector-panel-title-row">
 					                <div class="worktree-inspector-panel-title">Files</div>
-					                <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
+					                <div style="display:flex; align-items:center; gap:8px;">
+					                  <div class="worktree-inspector-subtle">Δ files ${files.length}</div>
+					                  <button class="btn-secondary rc-panel-toggle-btn" type="button" data-rc-panel-toggle="files" aria-expanded="${collapsedPanels.files ? 'false' : 'true'}">${collapsedPanels.files ? 'Show' : 'Hide'}</button>
+					                </div>
 					              </div>
-				              <div class="worktree-inspector-files-list">
+				              <div class="worktree-inspector-files-list review-console-files-list ${collapsedPanels.files ? 'hidden' : ''}" data-rc-panel-body="files">
 				                <table class="worktree-inspector-table">
 				                  <thead>
 				                    <tr>
@@ -9649,9 +9892,12 @@ class ClaudeOrchestrator {
 					            <div class="worktree-inspector-panel worktree-inspector-commits ${commitsPanelHiddenClass}" data-rc-panel="commits">
 				              <div class="worktree-inspector-panel-title-row">
 				                <div class="worktree-inspector-panel-title">Commits</div>
-				                <div class="worktree-inspector-subtle">count ${commits.length}</div>
+				                <div style="display:flex; align-items:center; gap:8px;">
+				                  <div class="worktree-inspector-subtle">count ${commits.length}</div>
+				                  <button class="btn-secondary rc-panel-toggle-btn" type="button" data-rc-panel-toggle="commits" aria-expanded="${collapsedPanels.commits ? 'false' : 'true'}">${collapsedPanels.commits ? 'Show' : 'Hide'}</button>
+				                </div>
 				              </div>
-				              <div>
+				              <div class="review-console-commits-list ${collapsedPanels.commits ? 'hidden' : ''}" data-rc-panel-body="commits">
 				                ${commits.map((c) => `
 				                  <div class="worktree-inspector-commit">
 				                    <code class="worktree-inspector-commit-hash">${escapeHtml(String(c.sha || '').slice(0, 7))}</code>
@@ -9662,12 +9908,15 @@ class ClaudeOrchestrator {
 				                ${commits.length === 0 ? '<div class="worktree-inspector-subtle">No commits found.</div>' : ''}
 				              </div>
 
-				              <div style="margin-top:12px;">
+				              <div style="margin-top:8px;">
 				                <div class="worktree-inspector-panel-title-row">
 				                  <div class="worktree-inspector-panel-title">Conversation</div>
-				                  <div class="worktree-inspector-subtle">reviews ${reviews.length} • comments ${issueComments.length}</div>
+				                  <div style="display:flex; align-items:center; gap:8px;">
+				                    <div class="worktree-inspector-subtle">reviews ${reviews.length} • comments ${issueComments.length}</div>
+				                    <button class="btn-secondary rc-panel-toggle-btn" type="button" data-rc-panel-toggle="conversation" aria-expanded="${collapsedPanels.conversation ? 'false' : 'true'}">${collapsedPanels.conversation ? 'Show' : 'Hide'}</button>
+				                  </div>
 				                </div>
-				                <div>
+				                <div class="review-console-comments-list ${collapsedPanels.conversation ? 'hidden' : ''}" data-rc-panel-body="conversation">
 					                  ${commentItems.length ? commentItems.slice(-15).map(renderComment).join('') : '<div class="worktree-inspector-subtle">No recent comments/reviews found.</div>'}
 					                </div>
 					              </div>
@@ -9994,6 +10243,13 @@ class ClaudeOrchestrator {
 	      const navNextBtn = bodyEl.querySelector('[data-review-nav="next"]');
 	      const navNextUnreviewedT3Btn = bodyEl.querySelector('[data-review-nav="next-unreviewed-t3"]');
 	      const navStatusEl = bodyEl.querySelector('[data-review-nav-status="true"]');
+        const routeTierEl = bodyEl.querySelector('[data-review-route-tier]');
+        const routeRiskEl = bodyEl.querySelector('[data-review-route-risk]');
+        const routeUnreviewedEl = bodyEl.querySelector('[data-review-route-unreviewed]');
+        const routeBlockedEl = bodyEl.querySelector('[data-review-route-blocked]');
+        const routeClaimedEl = bodyEl.querySelector('[data-review-route-claimed]');
+        const routeResetBtn = bodyEl.querySelector('[data-review-route-reset="true"]');
+        const panelToggleBtns = Array.from(bodyEl.querySelectorAll('[data-rc-panel-toggle]'));
 
 	      const parsePrUrlFromTaskId = (id) => {
 	        const raw = String(id || '').trim();
@@ -10002,13 +10258,67 @@ class ClaudeOrchestrator {
 	        return `https://github.com/${m[1]}/pull/${m[2]}`;
 	      };
 
+        const itemMatchesRouteFilters = (item) => {
+          const tier = Number(item?.tier);
+          const risk = String(item?.changeRisk || '').trim().toLowerCase();
+          const outcome = String(item?.outcome || '').trim().toLowerCase();
+          const claimedBy = String(item?.claimedBy || '').trim();
+
+          if (routeFilters.tier === '3' && tier !== 3) return false;
+          if (routeFilters.tier === '4' && tier !== 4) return false;
+          if (routeFilters.tier === 't3plus' && (!(Number.isFinite(tier) && tier >= 3))) return false;
+
+          if (routeFilters.risk !== 'all' && risk !== routeFilters.risk) return false;
+          if (routeFilters.unreviewed && (item?.reviewed || item?.done)) return false;
+          if (routeFilters.blockedOnly && outcome !== 'blocked') return false;
+
+          if (routeFilters.claimed === 'unclaimed' && claimedBy) return false;
+          if (routeFilters.claimed === 'mine' && claimedBy !== me) return false;
+          if (routeFilters.claimed === 'claimed' && !claimedBy) return false;
+
+          return true;
+        };
+
+        const getFilteredRouteEntries = ({ predicate = null } = {}) => {
+          const nav0 = (this.reviewConsoleNav && Array.isArray(this.reviewConsoleNav.items)) ? this.reviewConsoleNav : null;
+          const items = nav0?.items || [];
+          const out = [];
+          for (let index = 0; index < items.length; index += 1) {
+            const item = items[index];
+            if (!itemMatchesRouteFilters(item)) continue;
+            if (predicate && !predicate(item)) continue;
+            out.push({ index, item });
+          }
+          return out;
+        };
+
+        const persistRouteFilters = () => {
+          try {
+            localStorage.setItem('review-console-route-filters', JSON.stringify(routeFilters));
+          } catch {
+            // ignore
+          }
+        };
+
+        const syncRouteControls = () => {
+          if (routeTierEl) routeTierEl.value = routeFilters.tier || 't3plus';
+          if (routeRiskEl) routeRiskEl.value = routeFilters.risk || 'all';
+          if (routeUnreviewedEl) routeUnreviewedEl.checked = routeFilters.unreviewed !== false;
+          if (routeBlockedEl) routeBlockedEl.checked = routeFilters.blockedOnly === true;
+          if (routeClaimedEl) routeClaimedEl.value = routeFilters.claimed || 'all';
+        };
+
 	      const updateNavStatus = () => {
 	        try {
 	          const nav0 = (this.reviewConsoleNav && Array.isArray(this.reviewConsoleNav.items)) ? this.reviewConsoleNav : null;
-	          const count = nav0 ? nav0.items.length : 0;
-	          const idx0 = nav0 && Number.isFinite(Number(nav0.index)) ? Math.max(0, Math.min(count - 1, Number(nav0.index))) : -1;
-	          if (navStatusEl) navStatusEl.textContent = (count > 1 && idx0 >= 0) ? `${idx0 + 1}/${count}` : '';
-	          const stackEnabled = (count > 1 && idx0 >= 0);
+            const filtered = getFilteredRouteEntries();
+	          const count = filtered.length;
+            const rawIndex = nav0 && Number.isFinite(Number(nav0.index)) ? Number(nav0.index) : -1;
+            const filteredPos = filtered.findIndex((entry) => entry.index === rawIndex);
+	          if (navStatusEl) navStatusEl.textContent = (count > 0)
+              ? `${filteredPos >= 0 ? (filteredPos + 1) : 0}/${count}`
+              : '0/0';
+	          const stackEnabled = (count > 1 && filteredPos >= 0);
 	          if (navPrevBtn) navPrevBtn.disabled = !stackEnabled;
 	          if (navNextBtn) navNextBtn.disabled = !stackEnabled;
 	          // The "Next unreviewed T3+" button can load its own global stack when no nav stack exists.
@@ -10048,27 +10358,30 @@ class ClaudeOrchestrator {
 
 	      const navigateInReviewStack = async (dir) => {
 	        const nav0 = (this.reviewConsoleNav && Array.isArray(this.reviewConsoleNav.items)) ? this.reviewConsoleNav : null;
-	        const items = nav0?.items || [];
-	        if (items.length <= 1) return;
+          const filtered = getFilteredRouteEntries();
+	        if (filtered.length <= 1) return;
 
-	        const current = Number.isFinite(Number(nav0.index)) ? Number(nav0.index) : 0;
-	        const nextIndex = (current + dir + items.length) % items.length;
-	        await navigateToIndex(nextIndex);
+	        const currentRaw = Number.isFinite(Number(nav0?.index)) ? Number(nav0.index) : filtered[0].index;
+          const currentPos = filtered.findIndex((entry) => entry.index === currentRaw);
+          const from = currentPos >= 0 ? currentPos : 0;
+	        const nextPos = (from + dir + filtered.length) % filtered.length;
+	        await navigateToIndex(filtered[nextPos].index);
 	      };
 
 	      const navigateNextMatching = async (predicate, { label = 'matching item' } = {}) => {
 	        const nav0 = (this.reviewConsoleNav && Array.isArray(this.reviewConsoleNav.items)) ? this.reviewConsoleNav : null;
-	        const items = nav0?.items || [];
-	        if (items.length <= 1) return;
+	        const filtered = getFilteredRouteEntries({ predicate });
+	        if (filtered.length <= 1) return;
 
-	        const current = Number.isFinite(Number(nav0.index)) ? Number(nav0.index) : 0;
-	        for (let step = 1; step <= items.length; step += 1) {
-	          const idx = (current + step) % items.length;
-	          const item = items[idx];
-	          if (predicate && !predicate(item)) continue;
-	          await navigateToIndex(idx);
-	          return;
-	        }
+	        const currentRaw = Number.isFinite(Number(nav0.index)) ? Number(nav0.index) : filtered[0].index;
+          const currentPos = filtered.findIndex((entry) => entry.index === currentRaw);
+          const from = currentPos >= 0 ? currentPos : 0;
+          const nextPos = (from + 1) % filtered.length;
+          const next = filtered[nextPos];
+          if (next) {
+            await navigateToIndex(next.index);
+            return;
+          }
 
 	        this.showToast?.(`No ${label} found in this stack`, 'warning');
 	      };
@@ -10082,6 +10395,69 @@ class ClaudeOrchestrator {
 	        if (outcome === 'blocked') return false;
 	        return true;
 	      };
+
+        routeTierEl?.addEventListener('change', () => {
+          routeFilters.tier = String(routeTierEl.value || 't3plus').trim().toLowerCase();
+          persistRouteFilters();
+          updateNavStatus();
+        });
+        routeRiskEl?.addEventListener('change', () => {
+          routeFilters.risk = String(routeRiskEl.value || 'all').trim().toLowerCase();
+          persistRouteFilters();
+          updateNavStatus();
+        });
+        routeUnreviewedEl?.addEventListener('change', () => {
+          routeFilters.unreviewed = !!routeUnreviewedEl.checked;
+          persistRouteFilters();
+          updateNavStatus();
+        });
+        routeBlockedEl?.addEventListener('change', () => {
+          routeFilters.blockedOnly = !!routeBlockedEl.checked;
+          persistRouteFilters();
+          updateNavStatus();
+        });
+        routeClaimedEl?.addEventListener('change', () => {
+          routeFilters.claimed = String(routeClaimedEl.value || 'all').trim().toLowerCase();
+          persistRouteFilters();
+          updateNavStatus();
+        });
+        routeResetBtn?.addEventListener('click', () => {
+          routeFilters.tier = 't3plus';
+          routeFilters.risk = 'all';
+          routeFilters.unreviewed = true;
+          routeFilters.blockedOnly = false;
+          routeFilters.claimed = 'all';
+          syncRouteControls();
+          persistRouteFilters();
+          updateNavStatus();
+        });
+        const persistPanelCollapse = () => {
+          try {
+            localStorage.setItem('review-console-collapsed-panels', JSON.stringify(collapsedPanels));
+          } catch {
+            // ignore
+          }
+        };
+        const applyPanelCollapseUI = () => {
+          panelToggleBtns.forEach((btn) => {
+            const key = String(btn?.dataset?.rcPanelToggle || '').trim().toLowerCase();
+            if (!key) return;
+            const collapsed = collapsedPanels[key] === true;
+            const body = bodyEl.querySelector(`[data-rc-panel-body="${key}"]`);
+            if (body) body.classList.toggle('hidden', collapsed);
+            btn.textContent = collapsed ? 'Show' : 'Hide';
+            btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+          });
+        };
+        panelToggleBtns.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const key = String(btn?.dataset?.rcPanelToggle || '').trim().toLowerCase();
+            if (!key || !(key in collapsedPanels)) return;
+            collapsedPanels[key] = !collapsedPanels[key];
+            applyPanelCollapseUI();
+            persistPanelCollapse();
+          });
+        });
 
 	      const fetchGlobalQueueItems = async () => {
 	        const url = new URL('/api/process/tasks', window.location.origin);
@@ -10185,7 +10561,9 @@ class ClaudeOrchestrator {
 	          this.showToast?.(String(err?.message || err), 'error');
 	        });
 	      });
-	      updateNavStatus();
+        applyPanelCollapseUI();
+        syncRouteControls();
+		      updateNavStatus();
 
 	      // File deep link: click file in the Files panel to jump the embedded diff viewer.
 	      bodyEl.querySelectorAll('[data-diff-file]').forEach((btn) => {
@@ -10389,6 +10767,197 @@ class ClaudeOrchestrator {
       el.textContent = bits.join(' • ');
     } catch (err) {
       el.textContent = `License: error (${String(err?.message || err)})`;
+    }
+  }
+
+  async fetchSchedulerStatus() {
+    const res = await fetch('/api/scheduler/status', { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Scheduler status failed (${res.status})`));
+    }
+    return data;
+  }
+
+  populateSchedulerTemplates(templates = []) {
+    const selectEl = document.getElementById('scheduler-template-select');
+    if (!selectEl) return;
+    const rows = Array.isArray(templates) ? templates : [];
+    const previous = String(selectEl.value || '').trim();
+    selectEl.innerHTML = '<option value="">Select template…</option>';
+    for (const row of rows) {
+      const id = String(row?.id || '').trim();
+      if (!id) continue;
+      const name = String(row?.name || id);
+      const interval = Number(row?.defaults?.intervalMinutes || 0);
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = name;
+      if (Number.isFinite(interval) && interval > 0) {
+        option.setAttribute('data-interval', String(Math.round(interval)));
+      }
+      selectEl.appendChild(option);
+    }
+    if (previous && rows.some((row) => String(row?.id || '') === previous)) {
+      selectEl.value = previous;
+    }
+  }
+
+  async fetchSchedulerTemplates() {
+    const res = await fetch('/api/scheduler/templates', { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Scheduler templates failed (${res.status})`));
+    }
+    return Array.isArray(data?.templates) ? data.templates : [];
+  }
+
+  renderSchedulerStatus(status) {
+    const outputEl = document.getElementById('scheduler-status-output');
+    const enabledEl = document.getElementById('scheduler-enabled');
+    const jsonEl = document.getElementById('scheduler-json');
+    if (!outputEl && !enabledEl && !jsonEl) return;
+
+    const cfg = status?.config || {};
+    const schedules = Array.isArray(cfg?.schedules) ? cfg.schedules : [];
+    this.populateSchedulerTemplates(status?.templates || []);
+    if (enabledEl) enabledEl.checked = cfg?.enabled === true;
+    if (jsonEl && document.activeElement !== jsonEl) {
+      jsonEl.value = JSON.stringify(schedules, null, 2);
+    }
+
+    if (outputEl) {
+      const recent = Array.isArray(status?.recentRuns) ? status.recentRuns.slice(0, 8) : [];
+      const recentText = recent.length
+        ? recent.map((row) => `- ${row.at || ''} | ${row.scheduleId || ''} | ${row.command || ''} | ${row.ok ? 'ok' : 'error'}${row.message ? ` | ${row.message}` : ''}`).join('\n')
+        : '(none)';
+      outputEl.textContent = [
+        `running: ${status?.running ? 'yes' : 'no'} (tick ${Math.round(Number(status?.tickMs || 0) / 1000) || 0}s)`,
+        `enabled: ${cfg?.enabled === true ? 'yes' : 'no'}`,
+        `schedules: ${schedules.length}`,
+        '',
+        'recent runs:',
+        recentText
+      ].join('\n');
+    }
+  }
+
+  async refreshSchedulerStatus() {
+    const outputEl = document.getElementById('scheduler-status-output');
+    if (outputEl) outputEl.textContent = 'Loading scheduler…';
+    try {
+      const status = await this.fetchSchedulerStatus();
+      this.renderSchedulerStatus(status);
+      return status;
+    } catch (error) {
+      if (outputEl) outputEl.textContent = `Scheduler error: ${String(error?.message || error)}`;
+      throw error;
+    }
+  }
+
+  async addSchedulerTemplateFromSettings() {
+    const selectEl = document.getElementById('scheduler-template-select');
+    const intervalEl = document.getElementById('scheduler-template-interval');
+    const outputEl = document.getElementById('scheduler-status-output');
+    if (!selectEl) return false;
+
+    const templateId = String(selectEl.value || '').trim();
+    if (!templateId) {
+      this.showToast?.('Select a scheduler template first', 'warning');
+      return false;
+    }
+
+    const intervalMinutesRaw = Number(intervalEl?.value);
+    const options = {};
+    if (Number.isFinite(intervalMinutesRaw) && intervalMinutesRaw > 0) {
+      options.intervalMinutes = Math.round(intervalMinutesRaw);
+    }
+
+    if (outputEl) outputEl.textContent = 'Creating schedule from template…';
+    const res = await fetch('/api/scheduler/jobs/from-template', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        templateId,
+        options
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Failed to add template job (${res.status})`));
+    }
+
+    this.showToast?.(`Added scheduler job: ${data?.schedule?.id || templateId}`, 'success');
+    await this.refreshSchedulerStatus().catch(() => {});
+    return true;
+  }
+
+  async saveSchedulerConfigFromSettings() {
+    const enabledEl = document.getElementById('scheduler-enabled');
+    const jsonEl = document.getElementById('scheduler-json');
+    const outputEl = document.getElementById('scheduler-status-output');
+    if (!enabledEl || !jsonEl) return false;
+
+    let schedules = [];
+    const raw = String(jsonEl.value || '').trim();
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) throw new Error('Schedules JSON must be an array');
+        schedules = parsed;
+      } catch (error) {
+        this.showToast?.(`Invalid scheduler JSON: ${String(error?.message || error)}`, 'error');
+        return false;
+      }
+    }
+
+    if (outputEl) outputEl.textContent = 'Saving scheduler…';
+    try {
+      const res = await fetch('/api/scheduler/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled: !!enabledEl.checked,
+          schedules
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.ok === false) {
+        throw new Error(String(data?.error || data?.message || 'Failed to save scheduler'));
+      }
+      this.showToast?.('Scheduler config saved', 'success');
+      await this.refreshSchedulerStatus().catch(() => {});
+      return true;
+    } catch (error) {
+      if (outputEl) outputEl.textContent = `Scheduler save failed: ${String(error?.message || error)}`;
+      this.showToast?.(`Scheduler save failed: ${String(error?.message || error)}`, 'error');
+      return false;
+    }
+  }
+
+  async runSchedulerNowFromSettings() {
+    const idEl = document.getElementById('scheduler-run-id');
+    const scheduleId = String(idEl?.value || '').trim();
+    if (!scheduleId) {
+      this.showToast?.('Enter a schedule id first', 'warning');
+      return false;
+    }
+    try {
+      const res = await fetch('/api/scheduler/run-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduleId })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.ok === false) {
+        throw new Error(String(data?.error || data?.message || 'Failed to run schedule'));
+      }
+      this.showToast?.(`Ran schedule: ${scheduleId}`, 'success');
+      await this.refreshSchedulerStatus().catch(() => {});
+      return true;
+    } catch (error) {
+      this.showToast?.(`Run-now failed: ${String(error?.message || error)}`, 'error');
+      return false;
     }
   }
   
@@ -11204,9 +11773,9 @@ class ClaudeOrchestrator {
 	    const label = groupIds.length > 1 ? `${labelBase} (${groupIds.length} terminals)` : labelBase;
 
     const confirmed = await this.showConfirmationDialog(
-      'Close Terminal',
-      `Close "${label}"?\n\nThis will terminate the terminal process${groupIds.length > 1 ? 'es' : ''} and any child processes.\nThe worktree stays in the workspace and can be re-opened later.`,
-      'Close terminal',
+      'Close Terminal Process',
+      `Close "${label}"?\n\nThis stops the terminal process${groupIds.length > 1 ? 'es' : ''} and child processes for this worktree.\nThe worktree remains in the workspace and can be started again later.`,
+      'Close process',
       'Cancel'
     );
 
@@ -11407,6 +11976,8 @@ class ClaudeOrchestrator {
         console.log('User settings loaded:', this.userSettings);
         this.syncUserSettingsUI();
         this.applyThemeFromUserSettings();
+        this.applySimpleModeConfig();
+        this.maybeAutoOpenSimpleMode();
         this.refreshBranchLabels();
         this.updateTierFilterButtons();
       } else {
@@ -11673,10 +12244,32 @@ class ClaudeOrchestrator {
       reviewConsoleShowServer.checked = kinds.server !== false;
     }
 
+    const simpleModeEnabled = document.getElementById('simple-mode-enabled');
+    if (simpleModeEnabled) {
+      simpleModeEnabled.checked = this.userSettings.global?.ui?.simpleMode?.enabled !== false;
+    }
+    const simpleModeStartupOpen = document.getElementById('simple-mode-startup-open');
+    if (simpleModeStartupOpen) {
+      simpleModeStartupOpen.checked = this.userSettings.global?.ui?.simpleMode?.startupOpen === true;
+    }
+    const simpleModeHotkeys = document.getElementById('simple-mode-hotkeys');
+    if (simpleModeHotkeys) {
+      simpleModeHotkeys.checked = this.userSettings.global?.ui?.simpleMode?.hotkeys !== false;
+    }
+    const simpleModeShowHints = document.getElementById('simple-mode-show-hints');
+    if (simpleModeShowHints) {
+      simpleModeShowHints.checked = this.userSettings.global?.ui?.simpleMode?.showHints !== false;
+    }
+    this.applySimpleModeConfig();
+
     const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
     if (discordAutoEnsure) {
       const cfg = this.userSettings.global?.ui?.discord || {};
       discordAutoEnsure.checked = cfg.autoEnsureServicesAtStartup === true;
+    }
+
+    if (document.getElementById('scheduler-status-output')) {
+      this.refreshSchedulerStatus().catch(() => {});
     }
 
     const trelloMeUsername = document.getElementById('trello-me-username');
@@ -12265,6 +12858,342 @@ class ClaudeOrchestrator {
   switchToWorkspace(workspaceId) {
     console.log('Switching to workspace:', workspaceId);
     this.socket.emit('switch-workspace', { workspaceId });
+  }
+
+  async waitForWorkspaceActive(workspaceId, { timeoutMs = 7000 } = {}) {
+    const target = String(workspaceId || '').trim();
+    if (!target) return false;
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (String(this.currentWorkspace?.id || '').trim() === target) return true;
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    return String(this.currentWorkspace?.id || '').trim() === target;
+  }
+
+  getWorkspaceById(workspaceId) {
+    const id = String(workspaceId || '').trim();
+    if (!id) return null;
+    return (Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : []).find((workspace) => String(workspace?.id || '') === id) || null;
+  }
+
+  async fetchThreadsForWorkspace(workspaceId, { includeArchived = false } = {}) {
+    const id = String(workspaceId || '').trim();
+    if (!id) return [];
+    const query = new URLSearchParams({ workspaceId: id });
+    if (includeArchived) query.set('includeArchived', 'true');
+    const res = await fetch(`/api/threads?${query.toString()}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Failed to load threads (${res.status})`));
+    }
+    return Array.isArray(data?.threads) ? data.threads : [];
+  }
+
+  renderProjectChatsProjects(modal, state) {
+    const listEl = modal.querySelector('#projects-chats-projects-list');
+    if (!listEl) return;
+    const rows = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
+    listEl.innerHTML = rows.map((workspace) => {
+      const id = String(workspace?.id || '').trim();
+      const active = id && id === state.selectedWorkspaceId;
+      const label = this.escapeHtml(workspace?.name || id || 'Workspace');
+      const badge = active ? ' • active' : '';
+      return `<li class="projects-chats-project-item"><button type="button" class="projects-chats-project-btn ${active ? 'active' : ''}" data-project-id="${this.escapeHtml(id)}">${label}${badge}</button></li>`;
+    }).join('');
+  }
+
+  renderProjectChatsThreads(modal, state) {
+    const workspace = this.getWorkspaceById(state.selectedWorkspaceId);
+    const titleEl = modal.querySelector('#projects-chats-selected-name');
+    const listEl = modal.querySelector('#projects-chats-list');
+    if (!titleEl || !listEl) return;
+
+    const selectedName = workspace?.name || state.selectedWorkspaceId || 'No workspace';
+    titleEl.textContent = selectedName;
+
+    const rows = Array.isArray(state.threadsByWorkspace.get(state.selectedWorkspaceId))
+      ? state.threadsByWorkspace.get(state.selectedWorkspaceId)
+      : [];
+
+    if (!rows.length) {
+      listEl.innerHTML = '<div class="projects-chats-empty">No chats yet for this project.</div>';
+      return;
+    }
+
+    listEl.innerHTML = rows.map((thread) => {
+      const threadId = this.escapeHtml(thread?.id || '');
+      const title = this.escapeHtml(thread?.title || thread?.worktreeId || 'Chat');
+      const worktree = this.escapeHtml(thread?.worktreeId || 'n/a');
+      const provider = this.escapeHtml(thread?.provider || 'claude');
+      const status = this.escapeHtml(thread?.status || 'active');
+      const updatedAt = this.escapeHtml(thread?.updatedAt || '');
+      const sessions = Array.isArray(thread?.sessionIds) ? thread.sessionIds : [];
+      const sessionMeta = sessions.length ? `${sessions.length} session${sessions.length === 1 ? '' : 's'}` : 'no session';
+      return `
+        <div class="projects-chats-item">
+          <div class="projects-chats-item-title">${title}</div>
+          <div class="projects-chats-item-meta">
+            <span>🌿 ${worktree}</span>
+            <span>🤖 ${provider}</span>
+            <span>status: ${status}</span>
+            <span>${this.escapeHtml(sessionMeta)}</span>
+            <span>${updatedAt}</span>
+          </div>
+          <div class="projects-chats-item-actions">
+            <button type="button" class="btn-secondary" data-thread-open="${threadId}">Open</button>
+            <button type="button" class="btn-secondary" data-thread-close="${threadId}">Close</button>
+            <button type="button" class="btn-secondary" data-thread-archive="${threadId}">Archive</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async createThreadFromProjectChats(modal, state) {
+    const workspaceId = String(state.selectedWorkspaceId || '').trim();
+    if (!workspaceId) {
+      this.showToast?.('Select a workspace first', 'warning');
+      return null;
+    }
+    const workspace = this.getWorkspaceById(workspaceId);
+    if (!workspace) {
+      this.showToast?.('Workspace not found', 'error');
+      return null;
+    }
+
+    const terminal0 = Array.isArray(workspace?.terminals) ? workspace.terminals[0] : null;
+    const repositoryPath = terminal0?.repository?.path || workspace?.repository?.path || '';
+    const repositoryName = terminal0?.repository?.name || workspace?.repository?.name || '';
+    const repositoryType = terminal0?.repository?.type || workspace?.repository?.type || workspace?.type || 'generic';
+
+    const res = await fetch('/api/threads/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId,
+        repositoryPath,
+        repositoryName,
+        repositoryType,
+        socketId: this.socket?.id || null,
+        startTier: 3
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || 'Failed to create chat'));
+    }
+
+    const threads = await this.fetchThreadsForWorkspace(workspaceId, { includeArchived: state.includeArchived });
+    state.threadsByWorkspace.set(workspaceId, threads);
+    this.renderProjectChatsThreads(modal, state);
+    return data?.thread || null;
+  }
+
+  async openThreadFromProjectChats(thread) {
+    if (!thread || typeof thread !== 'object') return;
+    const workspaceId = String(thread.workspaceId || '').trim();
+    if (workspaceId && workspaceId !== String(this.currentWorkspace?.id || '').trim()) {
+      this.switchToWorkspace(workspaceId);
+      await this.waitForWorkspaceActive(workspaceId).catch(() => false);
+    }
+
+    const sessionIds = Array.isArray(thread.sessionIds) ? thread.sessionIds : [];
+    const preferredSession = sessionIds.find((sessionId) => String(sessionId || '').includes('-claude')) || sessionIds[0] || null;
+    if (preferredSession && this.sessions.has(preferredSession)) {
+      this.focusTerminal(preferredSession);
+      return;
+    }
+
+    const worktreeId = String(thread.worktreeId || '').trim();
+    if (worktreeId) {
+      this.showOnlyWorktree(worktreeId);
+      return;
+    }
+
+    this.showToast?.('Thread has no linked session/worktree yet', 'warning');
+  }
+
+  async showProjectChatsShell() {
+    const existing = document.getElementById('projects-chats-shell');
+    if (existing) existing.remove();
+    const simpleCfg = this.getSimpleModeConfig();
+
+    const modal = document.createElement('div');
+    modal.id = 'projects-chats-shell';
+    modal.className = 'modal projects-chats-modal';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>🧵 Projects + Chats</h2>
+          <button class="close-btn" type="button" data-close-project-chats="true">×</button>
+        </div>
+        <div class="projects-chats-shell">
+          <aside class="projects-chats-projects">
+            <div class="projects-chats-toolbar"><strong>Projects</strong></div>
+            <ul id="projects-chats-projects-list" class="projects-chats-projects-list"></ul>
+          </aside>
+          <section class="projects-chats-main">
+            <div class="projects-chats-toolbar">
+              <div id="projects-chats-selected-name">Workspace</div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <label style="display:flex; gap:6px; align-items:center;">
+                  <input id="projects-chats-include-archived" type="checkbox" />
+                  Archived
+                </label>
+                <button class="btn-secondary" type="button" data-project-chats-review-route="true">Review Route</button>
+                <button class="btn-secondary" type="button" data-project-chats-refresh="true">Refresh</button>
+                <button class="button-primary" type="button" data-project-chats-new="true">+ New Chat</button>
+              </div>
+            </div>
+            ${simpleCfg.showHints ? `
+              <div class="projects-chats-hint mono">Tip: Alt+P opens this shell. Use New Chat to create a worktree + agent session + thread in one step.</div>
+            ` : ''}
+            <div id="projects-chats-list" class="projects-chats-list">
+              <div class="projects-chats-empty">Loading…</div>
+            </div>
+          </section>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const workspaces = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
+    const state = {
+      selectedWorkspaceId: String(this.currentWorkspace?.id || workspaces[0]?.id || '').trim() || null,
+      includeArchived: false,
+      threadsByWorkspace: new Map()
+    };
+
+    const loadThreads = async (workspaceId) => {
+      if (!workspaceId) return [];
+      const threads = await this.fetchThreadsForWorkspace(workspaceId, { includeArchived: state.includeArchived });
+      state.threadsByWorkspace.set(workspaceId, threads);
+      return threads;
+    };
+
+    const render = () => {
+      this.renderProjectChatsProjects(modal, state);
+      this.renderProjectChatsThreads(modal, state);
+    };
+
+    modal.addEventListener('click', async (event) => {
+      const closeBtn = event.target.closest('[data-close-project-chats="true"]');
+      if (closeBtn) {
+        modal.remove();
+        return;
+      }
+
+      const projectBtn = event.target.closest('[data-project-id]');
+      if (projectBtn) {
+        const workspaceId = String(projectBtn.getAttribute('data-project-id') || '').trim();
+        if (!workspaceId || workspaceId === state.selectedWorkspaceId) return;
+        state.selectedWorkspaceId = workspaceId;
+        if (!state.threadsByWorkspace.has(workspaceId)) {
+          try {
+            await loadThreads(workspaceId);
+          } catch (error) {
+            this.showToast?.(`Failed to load chats: ${String(error?.message || error)}`, 'error');
+          }
+        }
+        render();
+        return;
+      }
+
+      if (event.target.closest('[data-project-chats-refresh="true"]')) {
+        if (!state.selectedWorkspaceId) return;
+        try {
+          await loadThreads(state.selectedWorkspaceId);
+          render();
+        } catch (error) {
+          this.showToast?.(`Failed to refresh chats: ${String(error?.message || error)}`, 'error');
+        }
+        return;
+      }
+
+      if (event.target.closest('[data-project-chats-review-route="true"]')) {
+        this.openReviewRoute?.().catch((error) => {
+          this.showToast?.(`Failed to open review route: ${String(error?.message || error)}`, 'error');
+        });
+        return;
+      }
+
+      if (event.target.closest('[data-project-chats-new="true"]')) {
+        try {
+          const created = await this.createThreadFromProjectChats(modal, state);
+          render();
+          if (created) await this.openThreadFromProjectChats(created);
+        } catch (error) {
+          this.showToast?.(`Failed to create chat: ${String(error?.message || error)}`, 'error');
+        }
+        return;
+      }
+
+      const openBtn = event.target.closest('[data-thread-open]');
+      if (openBtn) {
+        const threadId = String(openBtn.getAttribute('data-thread-open') || '').trim();
+        const rows = state.threadsByWorkspace.get(state.selectedWorkspaceId) || [];
+        const thread = rows.find((item) => String(item?.id || '') === threadId);
+        if (thread) await this.openThreadFromProjectChats(thread);
+        return;
+      }
+
+      const closeThreadBtn = event.target.closest('[data-thread-close]');
+      if (closeThreadBtn) {
+        const threadId = String(closeThreadBtn.getAttribute('data-thread-close') || '').trim();
+        if (!threadId) return;
+        try {
+          const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/close`, { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data?.ok === false) throw new Error(String(data?.error || data?.message || 'Failed to close chat'));
+          await loadThreads(state.selectedWorkspaceId);
+          render();
+        } catch (error) {
+          this.showToast?.(`Failed to close chat: ${String(error?.message || error)}`, 'error');
+        }
+        return;
+      }
+
+      const archiveThreadBtn = event.target.closest('[data-thread-archive]');
+      if (archiveThreadBtn) {
+        const threadId = String(archiveThreadBtn.getAttribute('data-thread-archive') || '').trim();
+        if (!threadId) return;
+        try {
+          const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/archive`, { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data?.ok === false) throw new Error(String(data?.error || data?.message || 'Failed to archive chat'));
+          await loadThreads(state.selectedWorkspaceId);
+          render();
+        } catch (error) {
+          this.showToast?.(`Failed to archive chat: ${String(error?.message || error)}`, 'error');
+        }
+      }
+    });
+
+    const includeArchivedEl = modal.querySelector('#projects-chats-include-archived');
+    includeArchivedEl?.addEventListener('change', async (event) => {
+      state.includeArchived = !!event.target.checked;
+      if (!state.selectedWorkspaceId) {
+        render();
+        return;
+      }
+      try {
+        await loadThreads(state.selectedWorkspaceId);
+        render();
+      } catch (error) {
+        this.showToast?.(`Failed to load chats: ${String(error?.message || error)}`, 'error');
+      }
+    });
+
+    render();
+    if (state.selectedWorkspaceId) {
+      try {
+        await loadThreads(state.selectedWorkspaceId);
+      } catch (error) {
+        this.showToast?.(`Failed to load chats: ${String(error?.message || error)}`, 'error');
+      }
+      render();
+    }
   }
 
   async showPRsPanel() {
@@ -18458,6 +19387,7 @@ class ClaudeOrchestrator {
 	            tierSet: null, // null | number[] (multi-tier presets like [3,4])
 				      unreviewedOnly: false,
 	            blockedOnly: localStorage.getItem('queue-blocked-only') === 'true',
+              reviewRouteActive: false,
 				      autoOpenDiff: false,
 	            autoConsole: localStorage.getItem('queue-auto-console') === 'true',
 	            triageMode: localStorage.getItem('queue-triage') === 'true',
@@ -18548,6 +19478,8 @@ class ClaudeOrchestrator {
       }
       if (preset.triageMode !== undefined) state.triageMode = !!preset.triageMode;
       if (preset.unreviewedOnly !== undefined) state.unreviewedOnly = !!preset.unreviewedOnly;
+      if (preset.blockedOnly !== undefined) state.blockedOnly = !!preset.blockedOnly;
+      if (preset.reviewRouteActive !== undefined) state.reviewRouteActive = !!preset.reviewRouteActive;
       if (preset.autoOpenDiff !== undefined) state.autoOpenDiff = !!preset.autoOpenDiff;
       if (preset.autoConsole !== undefined) state.autoConsole = !!preset.autoConsole;
       if (preset.autoAdvance !== undefined) state.autoAdvance = !!preset.autoAdvance;
@@ -18601,10 +19533,11 @@ class ClaudeOrchestrator {
 			            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
 			            <button class="btn-secondary tasks-view-btn" id="queue-auto-fixer" title="Toggle: auto-spawn a fixer when Outcome=needs_fix and Notes is set">Auto Fixer</button>
 			            <button class="btn-secondary tasks-view-btn" id="queue-auto-recheck" title="Toggle: auto-spawn a recheck reviewer after fixes land on the PR">Auto Recheck</button>
-		            <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t2" title="Conveyor: Tier 2 + unreviewed + auto-next (one-at-a-time)">Conveyor T2</button>
-		            <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t3" title="Conveyor: Tier 3 + unreviewed + auto-console + auto-next (one-at-a-time)">Conveyor T3</button>
-		            <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
-		          </div>
+			            <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t2" title="Conveyor: Tier 2 + unreviewed + auto-next (one-at-a-time)">Conveyor T2</button>
+			            <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t3" title="Conveyor: Tier 3 + unreviewed + auto-console + auto-next (one-at-a-time)">Conveyor T3</button>
+                  <button class="btn-secondary tasks-view-btn" id="queue-review-route" title="Review Route: Tier 3+ unreviewed batch review in Review Console">Review Route</button>
+			            <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
+			          </div>
 	          <div class="tasks-view-toggle" role="group" aria-label="Queue navigation">
 	            <button class="btn-secondary tasks-view-btn" id="queue-prev" title="Previous item (unblocked first)">Prev</button>
 	            <button class="btn-secondary tasks-view-btn" id="queue-next" title="Next item (unblocked first)">Next</button>
@@ -18650,6 +19583,7 @@ class ClaudeOrchestrator {
 			    const autoRecheckBtn = modal.querySelector('#queue-auto-recheck');
 		    const conveyorT2Btn = modal.querySelector('#queue-conveyor-t2');
 		    const conveyorT3Btn = modal.querySelector('#queue-conveyor-t3');
+        const reviewRouteBtn = modal.querySelector('#queue-review-route');
 		    const startReviewBtn = modal.querySelector('#queue-start-review');
 		    const prevBtn = modal.querySelector('#queue-prev');
 		    const nextBtn = modal.querySelector('#queue-next');
@@ -18897,6 +19831,33 @@ class ClaudeOrchestrator {
 		      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
 		    });
 
+        const startReviewRoute = () => {
+          state.reviewRouteActive = true;
+          state.reviewActive = true;
+          state.reviewTier = 'all';
+          state.tierSet = [3, 4];
+          state.triageMode = false;
+          state.unreviewedOnly = true;
+          state.blockedOnly = false;
+          state.autoConsole = true;
+          state.autoOpenDiff = false;
+          state.autoAdvance = true;
+          try { localStorage.setItem('queue-auto-console', 'true'); } catch {}
+          try { localStorage.setItem('queue-auto-advance', 'true'); } catch {}
+          try { localStorage.setItem('queue-triage', 'false'); } catch {}
+          try { localStorage.setItem('queue-blocked-only', 'false'); } catch {}
+
+          syncReviewControlsUI();
+          renderList();
+
+          const ordered = getOrderedTasks(getFilteredTasks());
+          if (!ordered.length) {
+            this.showToast('No Tier 3/4 unreviewed items in review route', 'info');
+            return;
+          }
+          selectById(ordered[0].id, { allowAutoOpenDiff: false });
+        };
+
 	    startReviewBtn?.addEventListener('click', async () => {
 	      if (state.reviewActive) {
 	        state.reviewActive = false;
@@ -18952,6 +19913,10 @@ class ClaudeOrchestrator {
 	      }
 	      selectById(ordered[0].id, { allowAutoOpenDiff: false });
 	    });
+
+        reviewRouteBtn?.addEventListener('click', () => {
+          startReviewRoute();
+        });
 
 	    const maybeAutoAdvanceAfterReview = (currentTaskId) => {
 	      if (!state.reviewActive || !state.autoAdvance) return;
@@ -23281,7 +24246,11 @@ class ClaudeOrchestrator {
       await fetchTasks();
       // Initial render respects triage mode + tierSet presets.
       applyFiltersAndMaybeClampSelection({ renderSelectedDetail: false });
-      if (state.selectedId) selectById(state.selectedId, { allowAutoOpenDiff: state.reviewActive });
+      if (state.reviewRouteActive) {
+        startReviewRoute();
+      } else if (state.selectedId) {
+        selectById(state.selectedId, { allowAutoOpenDiff: state.reviewActive });
+      }
     } catch (e) {
       this.showToast(String(e?.message || e), 'error');
       listEl.innerHTML = `<div class="no-ports">Failed to load queue.</div>`;

@@ -65,11 +65,35 @@ class UserSettingsService {
             }
           }
         },
+        scheduler: {
+          enabled: false,
+          tickSeconds: 30,
+          safety: {
+            defaultMode: 'safe',
+            blockedCommandPatterns: [
+              'queue-merge',
+              'queue-request-changes',
+              'queue-approve',
+              'stop-session',
+              'kill-session',
+              'destroy-session',
+              'remove-worktree'
+            ]
+          },
+          schedules: []
+        },
         ui: {
           theme: 'dark',
           skin: 'default',
           // 0..100 (applied as 0..1 multiplier for skin tint in CSS)
           skinIntensity: 100,
+          simpleMode: {
+            // Codex-style top-level project/chat shell controls.
+            enabled: true,
+            startupOpen: false,
+            hotkeys: true,
+            showHints: true
+          },
           reviewConsole: {
 	            // Default layout intent: a batch-review surface. Keep it fullscreen and show diff by default.
 	            preset: 'review', // default | review | deep | code | terminals | custom
@@ -370,6 +394,18 @@ class UserSettingsService {
           }
         };
       }
+      if (userSettings.global.scheduler) {
+        const defaultsScheduler = (merged.global.scheduler || {});
+        const next = userSettings.global.scheduler || {};
+        merged.global.scheduler = {
+          ...defaultsScheduler,
+          ...next,
+          safety: {
+            ...(defaultsScheduler.safety || {}),
+            ...(next.safety || {})
+          }
+        };
+      }
       if (userSettings.global.ui) {
         const ui = userSettings.global.ui || {};
 
@@ -388,6 +424,13 @@ class UserSettingsService {
         }
         if (typeof ui.skin === 'string') {
           merged.global.ui.skin = ui.skin;
+        }
+
+        if (ui.simpleMode && typeof ui.simpleMode === 'object') {
+          merged.global.ui.simpleMode = {
+            ...(uiDefaults.simpleMode || {}),
+            ...(ui.simpleMode || {})
+          };
         }
 
 	        if (ui.diffViewer) {
@@ -594,6 +637,19 @@ class UserSettingsService {
               ...((defaultsProcess.status || {}).caps || {}),
               ...((next.status || {}).caps || {})
             }
+          }
+        };
+      }
+
+      if (newGlobal.scheduler) {
+        const defaultsScheduler = (this.getDefaultSettings().global.scheduler || {});
+        const next = (newGlobal.scheduler || {});
+        this.settings.global.scheduler = {
+          ...defaultsScheduler,
+          ...next,
+          safety: {
+            ...(defaultsScheduler.safety || {}),
+            ...(next.safety || {})
           }
         };
       }

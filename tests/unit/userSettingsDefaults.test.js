@@ -25,6 +25,16 @@ describe('UserSettingsService defaults', () => {
     expect(typeof launch.includeTicketTitle).toBe('boolean');
   });
 
+  test('includes ui.simpleMode defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    const simpleMode = defaults?.global?.ui?.simpleMode;
+    expect(simpleMode).toBeTruthy();
+    expect(simpleMode.enabled).toBe(true);
+    expect(simpleMode.startupOpen).toBe(false);
+    expect(simpleMode.hotkeys).toBe(true);
+    expect(simpleMode.showHints).toBe(true);
+  });
+
   test('includes ui.workflow focus defaults', () => {
     const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
     expect(defaults?.global?.ui?.workflow).toBeTruthy();
@@ -80,6 +90,9 @@ describe('UserSettingsService defaults', () => {
         },
         ui: {
           skin: 'blue',
+          simpleMode: {
+            startupOpen: true
+          },
           workflow: {
             mode: 'focus'
           },
@@ -131,6 +144,11 @@ describe('UserSettingsService defaults', () => {
     expect(merged.global.ui.workflow.notifications).toBeTruthy();
     // Keeps ui.skin when provided.
     expect(merged.global.ui.skin).toBe('blue');
+    // Keeps simpleMode defaults while allowing partial override.
+    expect(merged.global.ui.simpleMode).toBeTruthy();
+    expect(merged.global.ui.simpleMode.startupOpen).toBe(true);
+    expect(merged.global.ui.simpleMode.enabled).toBe(true);
+    expect(merged.global.ui.simpleMode.hotkeys).toBe(true);
 
     // Does not drop process.status defaults when only one cap is provided.
     expect(merged.global.process.status.lookbackHours).toBeTruthy();

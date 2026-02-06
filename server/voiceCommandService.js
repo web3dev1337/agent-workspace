@@ -107,6 +107,17 @@ class VoiceCommandService {
         command: 'queue-triage',
         extractParams: () => ({})
       },
+      // Review Route (Tier 3/4, unreviewed, batch flow)
+      {
+        patterns: [
+          /review\s+route/i,
+          /start\s+review\s+route/i,
+          /open\s+review\s+route/i,
+          /batch\s+review\s+route/i,
+        ],
+        command: 'open-review-route',
+        extractParams: () => ({})
+      },
       // Open Queue (Conveyor T2)
       {
         patterns: [
@@ -1117,25 +1128,43 @@ class VoiceCommandService {
    */
   ensureAutoCommandNamePatterns() {
     // In tests, CommandRegistry is not always initialized, so this must be resilient.
-    const caps = (() => {
+    const catalog = (() => {
       try {
-        return commandRegistry.getCapabilities();
+        if (typeof commandRegistry.getCatalog === 'function') {
+          return commandRegistry.getCatalog();
+        }
       } catch {
-        return {};
+        // ignore
+      }
+      try {
+        const caps = commandRegistry.getCapabilities();
+        const out = [];
+        for (const commands of Object.values(caps || {})) {
+          if (!Array.isArray(commands)) continue;
+          for (const c of commands) {
+            out.push({
+              name: String(c?.name || '').trim(),
+              params: Array.isArray(c?.params) ? c.params : [],
+              surfaces: Array.isArray(c?.surfaces) ? c.surfaces : ['voice']
+            });
+          }
+        }
+        return out;
+      } catch {
+        return [];
       }
     })();
 
     const flat = [];
-    for (const commands of Object.values(caps || {})) {
-      if (!Array.isArray(commands)) continue;
-      for (const c of commands) {
-        const name = String(c?.name || '').trim();
-        if (!name) continue;
-        flat.push({
-          name,
-          params: Array.isArray(c?.params) ? c.params : []
-        });
-      }
+    for (const c of (Array.isArray(catalog) ? catalog : [])) {
+      const name = String(c?.name || '').trim();
+      if (!name) continue;
+      const surfaces = Array.isArray(c?.surfaces) ? c.surfaces.map((s) => String(s || '').trim().toLowerCase()) : [];
+      if (surfaces.length > 0 && !surfaces.includes('voice')) continue;
+      flat.push({
+        name,
+        params: Array.isArray(c?.params) ? c.params : []
+      });
     }
 
     const signature = flat.map((c) => c.name).sort().join('|');
@@ -1182,17 +1211,56 @@ class VoiceCommandService {
    * Build the LLM prompt with context (shared between Ollama and Claude)
    */
   buildLLMPrompt(text) {
-    const capabilities = commandRegistry.getCapabilities();
+    const catalog = (() => {
+      try {
+        if (typeof commandRegistry.getCatalog === 'function') {
+          return commandRegistry.getCatalog();
+        }
+      } catch {
+        // ignore
+      }
+      const out = [];
+      try {
+        const capabilities = commandRegistry.getCapabilities();
+        for (const [category, commands] of Object.entries(capabilities || {})) {
+          if (!Array.isArray(commands)) continue;
+          for (const c of commands) {
+            out.push({
+              name: String(c?.name || '').trim(),
+              category,
+              description: String(c?.description || '').trim(),
+              params: Array.isArray(c?.params) ? c.params : [],
+              examples: Array.isArray(c?.examples) ? c.examples : [],
+              safetyLevel: String(c?.safetyLevel || 'safe').trim().toLowerCase(),
+              surfaces: Array.isArray(c?.surfaces) ? c.surfaces : ['voice']
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return out;
+    })();
 
-    // Build command list (include required params + 1 example if present)
-    const commandList = Object.entries(capabilities)
+    const grouped = new Map();
+    for (const cmd of (Array.isArray(catalog) ? catalog : [])) {
+      const surfaces = Array.isArray(cmd?.surfaces) ? cmd.surfaces.map((s) => String(s || '').trim().toLowerCase()) : [];
+      if (surfaces.length > 0 && !surfaces.includes('voice')) continue;
+      const category = String(cmd?.category || 'general').trim() || 'general';
+      if (!grouped.has(category)) grouped.set(category, []);
+      grouped.get(category).push(cmd);
+    }
+
+    const commandList = Array.from(grouped.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
       .map(([category, commands]) => {
-        const lines = (commands || []).map((c) => {
-          const params = Array.isArray(c.params) ? c.params : [];
+        const lines = commands.map((c) => {
+          const params = Array.isArray(c?.params) ? c.params : [];
           const required = params.filter(p => p && p.required).map(p => p.name).filter(Boolean);
-          const example = Array.isArray(c.examples) && c.examples.length ? c.examples[0] : null;
+          const example = Array.isArray(c?.examples) && c.examples.length ? c.examples[0] : null;
           const exampleLine = example?.params ? ` e.g. ${JSON.stringify(example.params)}` : '';
-          return `${c.name}${required.length ? ` (required: ${required.join(', ')})` : ''}: ${c.description}${exampleLine}`;
+          const safety = String(c?.safetyLevel || 'safe').trim().toLowerCase();
+          return `${c.name}${required.length ? ` (required: ${required.join(', ')})` : ''}: ${c.description || ''} [${safety}]${exampleLine}`;
         });
         return lines.length ? [`[${category}]`, ...lines].join('\n') : '';
       })

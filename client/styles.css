@@ -1415,6 +1415,130 @@ header h1 {
   justify-content: flex-end;
 }
 
+.projects-chats-modal .modal-content {
+  max-width: min(1200px, 96vw);
+  width: min(1200px, 96vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.projects-chats-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 60vh;
+  overflow: hidden;
+}
+
+.projects-chats-projects {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.projects-chats-projects-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
+}
+
+.projects-chats-project-item {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.projects-chats-project-btn {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.projects-chats-project-btn:hover {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+
+.projects-chats-project-btn.active {
+  background: color-mix(in srgb, var(--accent-primary) 24%, transparent);
+}
+
+.projects-chats-main {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.projects-chats-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.projects-chats-list {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.projects-chats-hint {
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px 12px;
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+.projects-chats-item {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.projects-chats-item-title {
+  font-weight: 600;
+}
+
+.projects-chats-item-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+.projects-chats-item-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.projects-chats-empty {
+  opacity: 0.7;
+  padding: 16px 6px;
+}
+
 .mono {
   font-family: var(--font-mono);
 }
@@ -1515,6 +1639,31 @@ header h1 {
   border-radius: 999px;
 }
 
+.review-console-route-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+}
+
+.review-console-route-bar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.review-console-route-bar select {
+  min-width: 88px;
+  height: 30px;
+}
+
 .worktree-inspector-chip {
   display: inline-flex;
   align-items: center;
@@ -1556,7 +1705,7 @@ header h1 {
 .review-console-grid {
   display: grid;
   grid-template-columns: minmax(520px, 0.25fr) minmax(360px, 0.25fr) minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
@@ -1598,14 +1747,14 @@ header h1 {
 .review-console-left {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
   overflow: auto;
 }
 
 /* Review Console should waste less vertical space than the full inspector. */
 .review-console-grid .worktree-inspector-panel {
-  padding: 10px;
+  padding: 8px;
 }
 
 .review-console-col-diff,
@@ -1669,8 +1818,30 @@ header h1 {
 }
 
 .worktree-inspector-terminals .terminal-wrapper.review-console-terminal {
-  height: clamp(260px, 38vh, 520px);
-  min-height: 260px;
+  height: clamp(220px, 34vh, 460px);
+  min-height: 220px;
+}
+
+.rc-panel-toggle-btn {
+  min-width: 58px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 0.74rem;
+}
+
+.review-console-files-list {
+  max-height: 230px;
+  overflow: auto;
+}
+
+.review-console-commits-list {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.review-console-comments-list {
+  max-height: 220px;
+  overflow: auto;
 }
 
 .worktree-inspector-layout-panel {
@@ -4143,6 +4314,11 @@ header h1 {
 }
 
 @media (max-width: 768px) {
+  .projects-chats-shell {
+    grid-template-columns: 1fr;
+    min-height: 70vh;
+  }
+
   .sidebar-toggle {
     display: inline-flex;
   }

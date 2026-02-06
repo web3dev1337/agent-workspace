@@ -2,6 +2,8 @@ const util = require('util');
 const fs = require('fs');
 const path = require('path');
 
+const toPlatformPath = (p) => path.resolve(p);
+
 let mockExecFile;
 jest.mock('child_process', () => ({
   execFile: mockExecFile
@@ -40,7 +42,7 @@ describe('GitHelper environment', () => {
     const call = calls.find(c => String(c.file) === 'git' && Array.isArray(c.args) && c.args.join(' ').includes('rev-parse'));
     expect(call).toBeTruthy();
     const opts = call.options;
-    expect(opts.cwd).toBe(worktreePath);
+    expect(opts.cwd).toBe(toPlatformPath(worktreePath));
     expect(opts.env.GIT_CONFIG_NOSYSTEM).toBe('1');
     expect(opts.env.HOME).toBe(process.env.HOME);
   });
@@ -64,7 +66,7 @@ describe('GitHelper environment', () => {
     const call = calls.find(c => String(c.file) === 'git' && Array.isArray(c.args) && c.args.join(' ').includes('remote get-url origin'));
     expect(call).toBeTruthy();
     const opts = call.options;
-    expect(opts.cwd).toBe(worktreePath);
+    expect(opts.cwd).toBe(toPlatformPath(worktreePath));
     expect(opts.env.GIT_CONFIG_NOSYSTEM).toBe('1');
     expect(opts.env.HOME).toBe(process.env.HOME);
   });
