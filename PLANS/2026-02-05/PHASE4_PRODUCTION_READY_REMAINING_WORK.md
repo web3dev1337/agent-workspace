@@ -104,11 +104,11 @@ Goal: safe, auditable automations (disabled by default).
 
 Goal: keep current orchestrator power while adding a simpler top-level UX similar to Codex app workflows.
 
-- [ ] Produce official-source research + parity matrix:
+- [x] Produce official-source research + parity matrix:
   - `PLANS/2026-02-06/CODEX_PARITY_GAP_ANALYSIS.md`
-- [ ] Produce phased implementation plan:
+- [x] Produce phased implementation plan:
   - `PLANS/2026-02-06/CODEX_PARITY_IMPLEMENTATION_PLAN.md`
-- [ ] Produce PR breakdown plan:
+- [x] Produce PR breakdown plan:
   - `PLANS/2026-02-06/CODEX_PARITY_PR_BREAKDOWN.md`
 - [ ] Implement unified command catalog endpoint for voice/commander/UI parity routing.
 - [ ] Implement project/chat shell view (simple mode) with workspace mapping.
