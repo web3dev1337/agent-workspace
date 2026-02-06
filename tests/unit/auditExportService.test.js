@@ -21,7 +21,7 @@ describe('AuditExportService', () => {
       kind: 'pr.merge',
       data: {
         actorEmail: 'dev@example.com',
-        token: 'pat_example_token_value_123456789012345',
+        token: 'fixture_token_redacted',
         cwd: path.join(os.homedir(), 'GitHub', 'repo')
       }
     })}\n`);
@@ -30,7 +30,7 @@ describe('AuditExportService', () => {
       at: new Date(now).toISOString(),
       scheduleId: 'health-snapshot',
       command: 'open-advice',
-      message: 'bearer sk-abcdefghijklmnopqrstuvwxyz123456'
+      message: 'bearer fixture_token_redacted'
     })}\n`);
 
     service = new AuditExportService();
@@ -76,7 +76,7 @@ describe('AuditExportService', () => {
 
     const asText = JSON.stringify(payload);
     expect(asText).not.toContain('dev@example.com');
-    expect(asText).not.toContain('pat_example_token_value_123456789012345');
+    expect(asText).not.toContain('fixture_token_redacted');
     expect(asText).toContain('[REDACTED]');
     expect(asText).toContain('~');
   });

@@ -162,6 +162,7 @@ References:
 - ✅ History scanned with `gitleaks` (no secrets found).
 - ✅ Clear plan exists for removing historical artifacts + rewriting author emails (not executed yet).
 - ✅ Baseline `SECURITY.md` added.
+- ✅ Public-release audit automation added (`npm run audit:public-release`, `npm run audit:public-release:history`) covering tracked artifacts, public-doc path hygiene, loopback/auth defaults, and history secret scan.
 
 ### G) Policy + audit export hardening
 - ✅ RBAC/policy layer added (`server/policyService.js`) with role-based action checks (`viewer`/`operator`/`admin`) and command authorization.
