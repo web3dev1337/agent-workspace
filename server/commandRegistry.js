@@ -32,12 +32,35 @@ class CommandRegistry {
    * @param {object} config - Command configuration
    */
   register(name, config) {
+    const normalizeSafetyLevel = (value) => {
+      const candidate = String(value || '').trim().toLowerCase();
+      if (candidate === 'caution' || candidate === 'dangerous') return candidate;
+      return 'safe';
+    };
+    const normalizeList = (values) => {
+      if (!Array.isArray(values)) return [];
+      const out = [];
+      for (const value of values) {
+        const item = String(value || '').trim().toLowerCase();
+        if (!item || out.includes(item)) continue;
+        out.push(item);
+      }
+      return out;
+    };
+
+    const surfaces = normalizeList(config.surfaces);
+    const aliases = normalizeList(config.aliases);
+
     this.commands.set(name, {
       name,
       category: config.category || 'general',
       description: config.description,
       params: config.params || [],
       examples: config.examples || [],
+      safetyLevel: normalizeSafetyLevel(config.safetyLevel),
+      surfaces: surfaces.length ? surfaces : ['commander', 'voice', 'ui'],
+      aliases,
+      hidden: config.hidden === true,
       handler: config.handler
     });
   }
@@ -48,6 +71,7 @@ class CommandRegistry {
   getCapabilities() {
     const capabilities = {};
     for (const [name, cmd] of this.commands) {
+      if (cmd.hidden) continue;
       if (!capabilities[cmd.category]) {
         capabilities[cmd.category] = [];
       }
@@ -55,10 +79,40 @@ class CommandRegistry {
         name,
         description: cmd.description,
         params: cmd.params,
-        examples: cmd.examples
+        examples: cmd.examples,
+        safetyLevel: cmd.safetyLevel,
+        surfaces: cmd.surfaces,
+        aliases: cmd.aliases
       });
     }
     return capabilities;
+  }
+
+  /**
+   * Get a flat command catalog for UI/voice/commander discovery.
+   * @param {object} opts
+   * @param {boolean} opts.includeHidden
+   * @returns {Array<object>}
+   */
+  getCatalog(opts = {}) {
+    const includeHidden = opts.includeHidden === true;
+    return Array.from(this.commands.values())
+      .filter((cmd) => includeHidden || !cmd.hidden)
+      .map((cmd) => ({
+        name: cmd.name,
+        category: cmd.category,
+        description: cmd.description,
+        params: cmd.params,
+        examples: cmd.examples,
+        safetyLevel: cmd.safetyLevel,
+        surfaces: cmd.surfaces,
+        aliases: cmd.aliases
+      }))
+      .sort((a, b) => {
+        const categoryCmp = String(a.category).localeCompare(String(b.category));
+        if (categoryCmp !== 0) return categoryCmp;
+        return String(a.name).localeCompare(String(b.name));
+      });
   }
 
   /**
