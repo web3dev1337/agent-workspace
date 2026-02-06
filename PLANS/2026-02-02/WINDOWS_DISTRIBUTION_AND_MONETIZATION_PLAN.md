@@ -281,8 +281,17 @@ Bundling the public key into a Tauri build:
 - `scripts/tauri/prepare-backend-resources.js` will copy it into `resources/backend/license-public-key.pem` so the packaged backend can verify signatures offline.
 
 ### Phase C — Team/Enterprise add-ons (still local)
-- [ ] RBAC/policy layer
-- [ ] audit log export + redaction tools
+- [x] RBAC/policy layer
+- [x] audit log export + redaction tools
+
+Shipped in this slice:
+- `server/policyService.js` adds role/action policy checks (`viewer`/`operator`/`admin`) with optional header/query role override.
+- High-risk API routes now enforce policy checks (`/api/workspaces/remove-worktree`, `/api/git/pull`, `/api/prs/merge`, `/api/process/automations/pr-merge/run`, `/api/license/set`, commander execute routes).
+- `server/auditExportService.js` adds redacted audit export across activity + scheduler logs.
+- New audit/policy endpoints:
+  - `GET /api/policy/status`
+  - `GET /api/audit/status`
+  - `GET /api/audit/export` (`json|csv`, pro-gated, redaction enabled by default)
 
 ---
 

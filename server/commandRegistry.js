@@ -58,6 +58,7 @@ class CommandRegistry {
       params: config.params || [],
       examples: config.examples || [],
       safetyLevel: normalizeSafetyLevel(config.safetyLevel),
+      requiredRole: String(config.requiredRole || '').trim().toLowerCase() || null,
       surfaces: surfaces.length ? surfaces : ['commander', 'voice', 'ui'],
       aliases,
       hidden: config.hidden === true,
@@ -81,6 +82,7 @@ class CommandRegistry {
         params: cmd.params,
         examples: cmd.examples,
         safetyLevel: cmd.safetyLevel,
+        requiredRole: cmd.requiredRole,
         surfaces: cmd.surfaces,
         aliases: cmd.aliases
       });
@@ -105,6 +107,7 @@ class CommandRegistry {
         params: cmd.params,
         examples: cmd.examples,
         safetyLevel: cmd.safetyLevel,
+        requiredRole: cmd.requiredRole,
         surfaces: cmd.surfaces,
         aliases: cmd.aliases
       }))
@@ -113,6 +116,28 @@ class CommandRegistry {
         if (categoryCmp !== 0) return categoryCmp;
         return String(a.name).localeCompare(String(b.name));
       });
+  }
+
+  /**
+   * Get command metadata by name.
+   * @param {string} name
+   * @returns {object|null}
+   */
+  getCommand(name) {
+    const cmd = this.commands.get(name);
+    if (!cmd) return null;
+    return {
+      name: cmd.name,
+      category: cmd.category,
+      description: cmd.description,
+      params: cmd.params,
+      examples: cmd.examples,
+      safetyLevel: cmd.safetyLevel,
+      requiredRole: cmd.requiredRole,
+      surfaces: cmd.surfaces,
+      aliases: cmd.aliases,
+      hidden: cmd.hidden === true
+    };
   }
 
   /**
