@@ -54,6 +54,7 @@ server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
 server/auditExportService.js       - Redacted audit export across activity + scheduler logs (JSON/CSV)
+server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
 ```
 
 ### Multi-Workspace System (Core Feature)
@@ -236,6 +237,10 @@ templates/launch-settings/         - Workspace configuration templates
 scripts/migrate-to-workspaces.js   - Migration script for legacy workspaces
 ├─ Converts: Old workspace format to new multi-workspace format
 └─ Safety: Backup and rollback capabilities
+
+scripts/public-release-audit.js    - Public-release safety audit automation
+├─ Checks: tracked cache/DB artifacts, public-doc path hygiene, loopback/auth defaults
+└─ Optional: full-history gitleaks scan (`--history-secrets`)
 ```
 
 ## Advanced Diff Viewer Component
