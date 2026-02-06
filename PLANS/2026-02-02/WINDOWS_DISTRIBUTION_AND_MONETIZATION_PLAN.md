@@ -220,7 +220,7 @@ Not required to run, but avoids SmartScreen “Unknown publisher” friction.
 ### Phase B — Productize
 - [x] Add local license file + offline verification
 - [x] Gate Pro features behind license flags (initial: telemetry export + PR-merge automation run)
-- [ ] Add auto-updater (optional)
+- [x] Add auto-updater (optional)
 
 ---
 
@@ -232,7 +232,6 @@ Merged:
 - **PR #578**: Pro gating middleware and initial gated endpoints + UI messaging.
 
 Remaining:
-- Auto-updater (optional).
 - Decide which additional features (if any) are Pro-only beyond the initial gates.
 
 Notes:
@@ -251,6 +250,9 @@ Notes:
 - `ORCHESTRATOR_LICENSE_PUBLIC_KEY` or `ORCHESTRATOR_LICENSE_PUBLIC_KEY_PATH`: public key PEM for offline verify.
 - `ORCHESTRATOR_LICENSE_ALLOW_UNSIGNED`: dev-only escape hatch for unsigned license files.
 - `ORCHESTRATOR_LICENSE_REQUIRED`: future enforcement toggle (status is exposed; hard-gating not wired yet).
+- `ORCHESTRATOR_UPDATER_ENABLED`: enables packaged desktop updater commands in Tauri (`1` to enable).
+- `ORCHESTRATOR_UPDATER_ENDPOINTS`: updater endpoint URL list (comma/newline/semicolon separated).
+- `ORCHESTRATOR_UPDATER_PUBKEY` or `ORCHESTRATOR_UPDATER_PUBKEY_PATH`: updater public key source.
 
 ### License endpoints
 
