@@ -43,8 +43,12 @@ describe('SessionManager.findHeadFile', () => {
 
     const sm = new SessionManager({ emit() {} }, null);
     const headPath = sm.findHeadFile(subdir);
+    const canonicalHead = fs.realpathSync.native ? fs.realpathSync.native(headPath) : fs.realpathSync(headPath);
+    const canonicalExpected = fs.realpathSync.native
+      ? fs.realpathSync.native(path.join(repoPath, '.git', 'HEAD'))
+      : fs.realpathSync(path.join(repoPath, '.git', 'HEAD'));
 
-    expect(headPath).toBe(path.join(repoPath, '.git', 'HEAD'));
+    expect(canonicalHead).toBe(canonicalExpected);
     expect(fs.existsSync(headPath)).toBe(true);
   });
 
@@ -67,8 +71,12 @@ describe('SessionManager.findHeadFile', () => {
 
     const sm = new SessionManager({ emit() {} }, null);
     const headPath = sm.findHeadFile(worktreePath);
+    const canonicalHead = fs.realpathSync.native ? fs.realpathSync.native(headPath) : fs.realpathSync(headPath);
+    const canonicalExpected = fs.realpathSync.native
+      ? fs.realpathSync.native(expectedHead)
+      : fs.realpathSync(expectedHead);
 
-    expect(headPath).toBe(expectedHead);
+    expect(canonicalHead).toBe(canonicalExpected);
     expect(fs.existsSync(headPath)).toBe(true);
   });
 });
