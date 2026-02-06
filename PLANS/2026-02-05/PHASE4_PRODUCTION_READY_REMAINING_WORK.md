@@ -131,6 +131,7 @@ References:
 - ✅ Windows CI runs unit tests on PRs and pushes; Tauri build remains tag/dispatch-gated (`.github/workflows/windows.yml`).
 - ✅ Windows UX: hide `gh` console windows + improve `gh` auth diagnostics (PR tooling) (`server/pullRequestService.js`, `server/diagnosticsService.js`).
 - ✅ Optional desktop auto-updater plumbing added for packaged Tauri builds (check/install commands + env-driven updater config + Windows docs).
+- ✅ Cross-platform hardening follow-up shipped (`PLANS/2026-02-06/CROSS_PLATFORM_RISK_AUDIT_2026-02-06.md`): safer process execution, branch/update guards, reveal-path validation, and diagnostics platform-smoke checks.
 
 ### B) Review Console defaults + reliability improvements
 - ✅ Review Console defaults to the diff-dominant `review` preset (`client/app.js`).
@@ -161,6 +162,7 @@ References:
 - ✅ History scanned with `gitleaks` (no secrets found).
 - ✅ Clear plan exists for removing historical artifacts + rewriting author emails (not executed yet).
 - ✅ Baseline `SECURITY.md` added.
+- ✅ Public-release audit automation added (`npm run audit:public-release`, `npm run audit:public-release:history`) covering tracked artifacts, public-doc path hygiene, loopback/auth defaults, and history secret scan.
 
 ### G) Policy + audit export hardening
 - ✅ RBAC/policy layer added (`server/policyService.js`) with role-based action checks (`viewer`/`operator`/`admin`) and command authorization.

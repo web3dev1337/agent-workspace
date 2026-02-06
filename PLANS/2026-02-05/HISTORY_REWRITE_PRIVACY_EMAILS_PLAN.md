@@ -142,8 +142,12 @@ Also update:
 ## Checklist for “OK to go public”
 
 - [ ] History rewritten OR new squashed public repo created
-- [ ] Secrets scan passes (history)
-- [ ] No tracked caches/DBs
-- [ ] Default bind host is loopback; LAN requires auth token
-- [ ] Docs don’t contain personal paths/usernames
+- [x] Secrets scan passes (history)
+- [x] No tracked caches/DBs
+- [x] Default bind host is loopback; LAN requires auth token
+- [x] Docs don’t contain personal paths/usernames
 
+Status notes (2026-02-06):
+- History scan now passes via `npm run audit:public-release:history` (uses `.gitleaksignore` for two known fixture fingerprints from historical test data).
+- Public docs path hygiene + tracked-artifact checks are automated by `scripts/public-release-audit.js`.
+- Remaining destructive item is intentional: rewrite history (or publish a new squashed repo) to remove historical metadata/artifacts.

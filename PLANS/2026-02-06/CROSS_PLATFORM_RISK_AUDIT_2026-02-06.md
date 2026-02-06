@@ -152,21 +152,21 @@ Mitigation:
 
 ---
 
-## Actionable hardening tasks (next)
+## Actionable hardening tasks (status)
 
-1) Replace remaining `exec()` string invocations that include interpolation:
-   - `server/gitUpdateService.js` (branch name interpolation)
-   - `server/index.js` `reveal-in-explorer` handler (quoting)
-
-2) Add a simple “platform smoke” section to Diagnostics:
-   - confirm shell tool exists (`bash` on linux, `powershell.exe` on windows)
-   - confirm `git` and `gh` exist and `gh auth status` is OK
-
-3) Ensure every process spawn uses:
-   - `windowsHide: true` on Windows
-   - `cwd` validation (avoid `spawn /bin/sh ENOENT` style errors)
+- [x] Remove remaining shell interpolation risk in process-limit checks:
+  - `server/sessionManager.js` now uses `execFile('pgrep', ['-P', pid])` instead of shell `exec(...)`.
+- [x] Harden branch/update safety:
+  - `server/gitUpdateService.js` now rejects detached/sentinel/invalid branch names before pull/update checks.
+- [x] Harden `reveal-in-explorer` path handling:
+  - `server/index.js` now resolves/stats/exists-checks target paths before launching explorer/file manager.
+- [x] Add a “platform smoke” diagnostics section:
+  - `server/diagnosticsService.js` now returns `platformSmoke` checks for shell/git/gh/gh-auth.
+  - `client/app.js` diagnostics panel now renders these checks.
+- [x] Improve child-process spawn consistency:
+  - `server/diffViewerService.js` and `server/testOrchestrationService.js` now pass `windowsHide: true`.
+  - `server/diffViewerService.js` validates `cwd` before spawning child processes.
 
 References:
 - `WINDOWS_BUILD_GUIDE.md`
 - `WINDOWS_QUICK_START.md`
-
