@@ -29,9 +29,24 @@ function copyFile(src, dest) {
 
 function run(cmd, args, opts) {
   const res = spawnSync(cmd, args, { stdio: 'inherit', ...opts });
+  if (res.error) {
+    throw new Error(`${cmd} ${args.join(' ')} failed: ${res.error.message}`);
+  }
   if (res.status !== 0) {
     throw new Error(`${cmd} ${args.join(' ')} failed (exit ${res.status})`);
   }
+}
+
+function runNpm(args, opts) {
+  // When invoked via `npm run ...`, npm provides the JS entry path, which is
+  // the most reliable cross-platform invocation target.
+  const npmExecPath = String(process.env.npm_execpath || '').trim();
+  if (npmExecPath) {
+    run(process.execPath, [npmExecPath, ...args], opts);
+    return;
+  }
+  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  run(npmCmd, args, opts);
 }
 
 function main() {
@@ -93,14 +108,13 @@ function main() {
   }
 
   if (installProd) {
-    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
     try {
-      run(npmCmd, ['ci', '--omit=dev'], { cwd: outDir });
+      runNpm(['ci', '--omit=dev', '--no-audit', '--no-fund'], { cwd: outDir });
     } catch (error) {
       // Some Windows setups have issues with `npm ci` for native modules.
       // Fall back to `npm install` so contributors can still build installers.
       console.warn('[tauri] NOTE: npm ci failed, falling back to npm install --omit=dev');
-      run(npmCmd, ['install', '--omit=dev'], { cwd: outDir });
+      runNpm(['install', '--omit=dev', '--no-audit', '--no-fund'], { cwd: outDir });
     }
   }
 
