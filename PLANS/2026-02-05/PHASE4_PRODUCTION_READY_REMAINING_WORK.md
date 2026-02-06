@@ -100,6 +100,24 @@ Goal: safe, auditable automations (disabled by default).
   - [x] audit log of what ran + when
 - [x] Add a UI surface (minimal) to enable/disable and view schedules.
 
+### G) Codex-style “projects + chats” workflow layer (new)
+
+Goal: keep current orchestrator power while adding a simpler top-level UX similar to Codex app workflows.
+
+- [ ] Produce official-source research + parity matrix:
+  - `PLANS/2026-02-06/CODEX_PARITY_GAP_ANALYSIS.md`
+- [ ] Produce phased implementation plan:
+  - `PLANS/2026-02-06/CODEX_PARITY_IMPLEMENTATION_PLAN.md`
+- [ ] Produce PR breakdown plan:
+  - `PLANS/2026-02-06/CODEX_PARITY_PR_BREAKDOWN.md`
+- [ ] Implement unified command catalog endpoint for voice/commander/UI parity routing.
+- [ ] Implement project/chat shell view (simple mode) with workspace mapping.
+- [ ] Implement chat lifecycle mapping (new chat -> worktree/session).
+- [ ] Expand scheduler to “cron skills” templates with run safety/auditing.
+
+References:
+- `PLANS/2026-02-06/CODEX_DESKTOP_PARITY_RESEARCH_AND_IMPLEMENTATION_BRIEF.md`
+
 ---
 
 ## 2) Shipped / no remaining work (for this slice)
