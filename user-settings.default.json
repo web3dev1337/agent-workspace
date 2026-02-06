@@ -28,6 +28,54 @@
       },
       "schedules": []
     },
+    "policy": {
+      "enabled": false,
+      "defaultRole": "admin",
+      "allowHeaderOverride": false,
+      "headerName": "x-orchestrator-role",
+      "allowQueryOverride": false,
+      "queryName": "role",
+      "roleByAction": {
+        "read": "viewer",
+        "write": "operator",
+        "destructive": "admin",
+        "billing": "admin",
+        "audit_export": "operator",
+        "command_execute": "operator"
+      },
+      "dangerousCommandPatterns": [
+        "merge",
+        "approve",
+        "request-changes",
+        "request_changes",
+        "remove",
+        "destroy",
+        "kill",
+        "stop",
+        "restart",
+        "close",
+        "ticket-move"
+      ],
+      "readOnlyCommandPatterns": [
+        "list-",
+        "get-",
+        "open-",
+        "show-",
+        "status",
+        "catalog",
+        "capabilities",
+        "context"
+      ]
+    },
+    "audit": {
+      "maxRecords": 10000,
+      "redaction": {
+        "enabled": true,
+        "emails": true,
+        "tokens": true,
+        "homePaths": true
+      }
+    },
     "ui": {
       "theme": "dark",
       "simpleMode": {

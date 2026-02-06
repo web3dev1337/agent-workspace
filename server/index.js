@@ -95,6 +95,8 @@ const { collectDiagnostics } = require('./diagnosticsService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { ThreadService } = require('./threadService');
+const { PolicyService } = require('./policyService');
+const { AuditExportService } = require('./auditExportService');
 const multer = require('multer');
 
 // Configure multer for audio file uploads
@@ -277,6 +279,8 @@ const testOrchestrationService = TestOrchestrationService.getInstance({ sessionM
 const pluginLoaderService = PluginLoaderService.getInstance({ logger });
 const schedulerService = SchedulerService.getInstance({ logger });
 const threadService = ThreadService.getInstance({ logger });
+const policyService = PolicyService.getInstance({ logger });
+const auditExportService = AuditExportService.getInstance({ logger });
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -290,8 +294,10 @@ commandRegistry.init({
   sessionManager,
   workspaceManager
 });
+policyService.init({ userSettingsService, commandRegistry });
 schedulerService.init({ userSettingsService, commandRegistry });
 threadService.init({ workspaceManager, sessionManager });
+auditExportService.init({ activityFeed, schedulerService, userSettingsService });
 
 const loadPlugins = async () => {
   const status = await pluginLoaderService.loadAll({
@@ -307,6 +313,35 @@ const loadPlugins = async () => {
   });
   return status;
 };
+
+function buildPolicyDeniedPayload(decision, fallbackError = 'Forbidden by policy') {
+  return {
+    ok: false,
+    error: fallbackError,
+    reason: decision?.reason || fallbackError,
+    requiredRole: decision?.requiredRole || null,
+    role: decision?.role || null,
+    action: decision?.action || null,
+    policyEnabled: decision?.policyEnabled === true
+  };
+}
+
+function requirePolicyAction(action) {
+  return (req, res, next) => {
+    try {
+      const decision = policyService.canAccessAction({ req, action });
+      if (!decision.ok) {
+        return res.status(403).json(buildPolicyDeniedPayload(decision));
+      }
+      req.policyRole = decision.role;
+      req.policyAction = decision.action;
+      return next();
+    } catch (error) {
+      logger.error('Policy action check failed', { action, error: error.message, stack: error.stack });
+      return res.status(500).json({ ok: false, error: 'Failed to evaluate policy action' });
+    }
+  };
+}
 
 // Connect services
 sessionManager.setStatusDetector(statusDetector);
@@ -1712,6 +1747,60 @@ app.get('/api/activity', (req, res) => {
   }
 });
 
+app.get('/api/policy/status', (req, res) => {
+  try {
+    const status = policyService.getStatus({ req });
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to get policy status', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get policy status' });
+  }
+});
+
+app.get('/api/audit/status', requirePolicyAction('read'), async (req, res) => {
+  try {
+    const status = await auditExportService.getStatus();
+    res.json({
+      ...status,
+      policyRole: req.policyRole || policyService.resolveRole(req).role
+    });
+  } catch (error) {
+    logger.error('Failed to get audit status', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get audit status' });
+  }
+});
+
+app.get('/api/audit/export', requirePolicyAction('audit_export'), proOnly, async (req, res) => {
+  try {
+    const format = String(req.query?.format || 'json').trim().toLowerCase();
+    if (format !== 'json' && format !== 'csv') {
+      return res.status(400).json({ ok: false, error: 'Unsupported export format (json|csv)' });
+    }
+
+    const limit = req.query?.limit ? Number(req.query.limit) : undefined;
+    const sinceHours = req.query?.sinceHours ? Number(req.query.sinceHours) : 24 * 7;
+    const sinceMs = Number.isFinite(sinceHours) ? Date.now() - (Math.max(1, sinceHours) * 60 * 60 * 1000) : 0;
+    const sources = typeof req.query?.sources === 'string' ? req.query.sources : '';
+    const redactRaw = String(req.query?.redact ?? '').trim().toLowerCase();
+    const redact = redactRaw ? !['0', 'false', 'no', 'off'].includes(redactRaw) : undefined;
+
+    if (format === 'csv') {
+      const payload = await auditExportService.exportCsv({ sources, sinceMs, limit, redact });
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="audit-export-${Date.now()}.csv"`);
+      return res.send(payload.csv);
+    }
+
+    const payload = await auditExportService.exportJson({ sources, sinceMs, limit, redact });
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="audit-export-${Date.now()}.json"`);
+    return res.send(`${JSON.stringify(payload, null, 2)}\n`);
+  } catch (error) {
+    logger.error('Failed to export audit logs', { error: error.message, stack: error.stack });
+    return res.status(500).json({ ok: false, error: 'Failed to export audit logs' });
+  }
+});
+
 app.get('/api/sessions/:sessionId/log', (req, res) => {
   try {
     const sessionId = String(req.params.sessionId || '').trim();
@@ -2144,7 +2233,7 @@ app.post('/api/threads/:id/archive', express.json(), (req, res) => {
 });
 
 // Remove worktree from workspace (config only - does NOT delete git worktree folder)
-app.post('/api/workspaces/remove-worktree', async (req, res) => {
+app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), async (req, res) => {
   try {
     const { workspaceId, worktreeId } = req.body;
     logger.info('Removing worktree from workspace configuration (keeping folder intact)', { workspaceId, worktreeId });
@@ -2418,7 +2507,7 @@ app.get('/api/process/automations', (req, res) => {
   }
 });
 
-app.post('/api/process/automations/pr-merge/run', proOnly, express.json(), async (req, res) => {
+app.post('/api/process/automations/pr-merge/run', requirePolicyAction('destructive'), proOnly, express.json(), async (req, res) => {
   try {
     const limit = Number(req.body?.limit || 60);
     const result = await prMergeAutomationService.runOnce({ limit });
@@ -2615,7 +2704,7 @@ app.post('/api/license/reload', (req, res) => {
 });
 
 // Save license.json (paste into UI); stored in ORCHESTRATOR_DATA_DIR by default.
-app.post('/api/license/set', express.json({ limit: '2mb' }), (req, res) => {
+app.post('/api/license/set', requirePolicyAction('billing'), express.json({ limit: '2mb' }), (req, res) => {
   try {
     let payload = req.body;
     if (payload && typeof payload.text === 'string') {
@@ -2661,7 +2750,7 @@ app.get('/api/git/check-updates', (req, res) => {
     });
 });
 
-app.post('/api/git/pull', (req, res) => {
+app.post('/api/git/pull', requirePolicyAction('destructive'), (req, res) => {
   activityFeed.track('git.pull', { source: 'api' });
   gitUpdateService.pullLatest()
     .then(result => {
@@ -3477,7 +3566,7 @@ app.get('/api/prs', async (req, res) => {
   }
 });
 
-app.post('/api/prs/merge', express.json(), async (req, res) => {
+app.post('/api/prs/merge', requirePolicyAction('destructive'), express.json(), async (req, res) => {
   try {
     const url = String(req.body?.url || '').trim();
     const method = String(req.body?.method || 'merge').trim().toLowerCase();
@@ -3498,7 +3587,7 @@ app.post('/api/prs/merge', express.json(), async (req, res) => {
   }
 });
 
-app.post('/api/prs/review', express.json(), async (req, res) => {
+app.post('/api/prs/review', requirePolicyAction('write'), express.json(), async (req, res) => {
   try {
     const url = String(req.body?.url || '').trim();
     const action = String(req.body?.action || 'comment').trim().toLowerCase();
@@ -5495,7 +5584,12 @@ app.post('/api/commander/send-to-session', (req, res) => {
 app.get('/api/commands/catalog', (req, res) => {
   try {
     const includeHidden = String(req.query.includeHidden || '').toLowerCase() === 'true';
-    const commands = commandRegistry.getCatalog({ includeHidden });
+    const commands = commandRegistry
+      .getCatalog({ includeHidden })
+      .map((cmd) => ({
+        ...cmd,
+        requiredRole: policyService.inferRequiredRoleForCommand(cmd.name, cmd)
+      }));
     res.json({
       ok: true,
       count: commands.length,
@@ -5524,6 +5618,10 @@ app.post('/api/commander/execute', async (req, res) => {
     const { command, params } = req.body;
     if (!command) {
       return res.status(400).json({ error: 'command is required' });
+    }
+    const policyDecision = policyService.authorizeCommand({ req, commandName: command });
+    if (!policyDecision.ok) {
+      return res.status(403).json(buildPolicyDeniedPayload(policyDecision, 'Forbidden command by policy'));
     }
     const result = await commandRegistry.execute(command, params || {});
     res.json(result);
@@ -5560,6 +5658,11 @@ app.post('/api/commander/execute-text', async (req, res) => {
 
     if (dryRun === true || String(dryRun).toLowerCase() === 'true') {
       return res.status(200).json({ ok: true, parsed, result: null, dryRun: true });
+    }
+
+    const policyDecision = policyService.authorizeCommand({ req, commandName: parsed.command });
+    if (!policyDecision.ok) {
+      return res.status(403).json(buildPolicyDeniedPayload(policyDecision, 'Forbidden command by policy'));
     }
 
     const result = await commandRegistry.execute(parsed.command, parsed.params || {});

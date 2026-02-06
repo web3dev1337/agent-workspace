@@ -162,6 +162,11 @@ References:
 - ✅ Clear plan exists for removing historical artifacts + rewriting author emails (not executed yet).
 - ✅ Baseline `SECURITY.md` added.
 
+### G) Policy + audit export hardening
+- ✅ RBAC/policy layer added (`server/policyService.js`) with role-based action checks (`viewer`/`operator`/`admin`) and command authorization.
+- ✅ High-impact routes now policy-guarded (`/api/workspaces/remove-worktree`, `/api/git/pull`, `/api/prs/merge`, `/api/process/automations/pr-merge/run`, `/api/license/set`, commander execute routes).
+- ✅ Audit export + redaction tooling added (`server/auditExportService.js`) with JSON/CSV export endpoints and default redaction for emails/tokens/home paths.
+
 References:
 - `PUBLIC_RELEASE_AUDIT_2026-02-05.md`
 - `PUBLIC_RELEASE_AUDIT_2026-02-06.md`
