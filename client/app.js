@@ -562,6 +562,10 @@ class ClaudeOrchestrator {
         }
       });
       
+      this.socket.on('autosuggest-response', ({ sessionId, suggestion, prefix }) => {
+        this.terminalManager.handleAutosuggestResponse(sessionId, suggestion, prefix);
+      });
+
       this.socket.on('status-update', ({ sessionId, status }) => {
         this.updateSessionStatus(sessionId, status);
         this.maybeAutoSendPrompt(sessionId, status);
