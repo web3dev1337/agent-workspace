@@ -1415,6 +1415,123 @@ header h1 {
   justify-content: flex-end;
 }
 
+.projects-chats-modal .modal-content {
+  max-width: min(1200px, 96vw);
+  width: min(1200px, 96vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.projects-chats-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 60vh;
+  overflow: hidden;
+}
+
+.projects-chats-projects {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.projects-chats-projects-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
+}
+
+.projects-chats-project-item {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.projects-chats-project-btn {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.projects-chats-project-btn:hover {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+
+.projects-chats-project-btn.active {
+  background: color-mix(in srgb, var(--accent-primary) 24%, transparent);
+}
+
+.projects-chats-main {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.projects-chats-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.projects-chats-list {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.projects-chats-item {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.projects-chats-item-title {
+  font-weight: 600;
+}
+
+.projects-chats-item-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+.projects-chats-item-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.projects-chats-empty {
+  opacity: 0.7;
+  padding: 16px 6px;
+}
+
 .mono {
   font-family: var(--font-mono);
 }
@@ -4190,6 +4307,11 @@ header h1 {
 }
 
 @media (max-width: 768px) {
+  .projects-chats-shell {
+    grid-template-columns: 1fr;
+    min-height: 70vh;
+  }
+
   .sidebar-toggle {
     display: inline-flex;
   }
