@@ -72,6 +72,16 @@ describe('VoiceCommandService (rule parsing)', () => {
     const prs = voiceCommandService.parseWithRules('open prs');
     expect(prs.command).toBe('open-prs');
 
+    const projectChats = voiceCommandService.parseWithRules('open projects and chats');
+    expect(projectChats.command).toBe('open-project-chats');
+
+    const newChat = voiceCommandService.parseWithRules('new chat');
+    expect(newChat.command).toBe('project-chats-new');
+
+    const newChatInWorkspace = voiceCommandService.parseWithRules('new chat in Zoo Game');
+    expect(newChatInWorkspace.command).toBe('project-chats-new');
+    expect(newChatInWorkspace.params).toEqual({ workspace: 'Zoo Game' });
+
     const telemetry = voiceCommandService.parseWithRules('open telemetry');
     expect(telemetry.command).toBe('open-telemetry');
 

@@ -5168,6 +5168,56 @@ class ClaudeOrchestrator {
         else this.showToast?.('Projects + Chats shell is disabled in Settings', 'warning');
         break;
 
+      case 'project-chats-new': {
+        const simpleModeEnabled = this.getSimpleModeConfig().enabled;
+        if (!simpleModeEnabled) {
+          this.showToast?.('Projects + Chats shell is disabled in Settings', 'warning');
+          break;
+        }
+
+        const requestedWorkspace = String(
+          params?.workspace ?? params?.workspaceId ?? params?.workspaceName ?? ''
+        ).trim();
+
+        (async () => {
+          await this.showProjectChatsShell?.();
+          const modal = document.getElementById('projects-chats-shell');
+          if (!modal) {
+            this.showToast?.('Projects + Chats shell is not available', 'warning');
+            return;
+          }
+
+          if (requestedWorkspace) {
+            const lookup = requestedWorkspace.toLowerCase();
+            const available = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
+            const match = available.find((w) => {
+              const id = String(w?.id || '').trim().toLowerCase();
+              const name = String(w?.name || '').trim().toLowerCase();
+              return id === lookup || name === lookup;
+            }) || available.find((w) => {
+              const id = String(w?.id || '').trim().toLowerCase();
+              const name = String(w?.name || '').trim().toLowerCase();
+              return id.includes(lookup) || name.includes(lookup);
+            });
+
+            if (match?.id) {
+              modal.querySelector(`[data-project-id="${this.cssEscape(match.id)}"]`)?.click?.();
+            } else {
+              this.showToast?.(`Workspace not found: ${requestedWorkspace}`, 'warning');
+              return;
+            }
+          }
+
+          setTimeout(() => {
+            modal.querySelector('[data-project-chats-new="true"]')?.click?.();
+          }, 100);
+        })().catch((error) => {
+          this.showToast?.(`Failed to create chat: ${String(error?.message || error)}`, 'error');
+        });
+
+        break;
+      }
+
       case 'open-telemetry':
         try {
           this.showDashboard?.();
