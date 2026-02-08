@@ -44,7 +44,7 @@ describe('ThreadService', () => {
     expect(raw.threads[0].workspaceId).toBe('zoo-game');
   });
 
-  test('returns existing active thread for same workspace/worktree', () => {
+  test('allows multiple active threads for same workspace/worktree', () => {
     const service = new ThreadService({ logger: { info: () => {}, warn: () => {}, error: () => {} } });
     service.init({});
 
@@ -59,8 +59,33 @@ describe('ThreadService', () => {
       title: 'Second'
     });
 
-    expect(second.id).toBe(first.id);
-    expect(service.list({ workspaceId: 'zoo-game' }).length).toBe(1);
+    expect(second.id).not.toBe(first.id);
+    expect(service.list({ workspaceId: 'zoo-game' }).length).toBe(2);
+  });
+
+  test('supports projectId filtering and derives projectId from repositoryPath', () => {
+    const service = new ThreadService({ logger: { info: () => {}, warn: () => {}, error: () => {} } });
+    service.init({});
+
+    const t1 = service.createThread({
+      workspaceId: 'zoo-game',
+      repositoryPath: '/tmp/repo-a',
+      repositoryName: 'repo-a',
+      worktreeId: 'work1',
+      title: 'A1'
+    });
+    const t2 = service.createThread({
+      workspaceId: 'zoo-game',
+      repositoryPath: '/tmp/repo-b',
+      repositoryName: 'repo-b',
+      worktreeId: 'work1',
+      title: 'B1'
+    });
+
+    expect(t1.projectId).toBe('repo:/tmp/repo-a');
+    expect(t2.projectId).toBe('repo:/tmp/repo-b');
+    expect(service.list({ workspaceId: 'zoo-game', projectId: 'repo:/tmp/repo-a' }).length).toBe(1);
+    expect(service.list({ workspaceId: 'zoo-game', projectId: 'repo:/tmp/repo-b' }).length).toBe(1);
   });
 
   test('close and archive transitions are persisted', () => {

@@ -88,10 +88,13 @@ class ThreadService {
     const workspaceId = String(thread.workspaceId || thread.projectId || '').trim();
     if (!workspaceId) return null;
 
+    const repositoryPath = String(thread.repositoryPath || '').trim() || null;
+    const derivedProjectId = repositoryPath ? `repo:${repositoryPath}` : workspaceId;
+
     return {
       id,
       workspaceId,
-      projectId: String(thread.projectId || workspaceId).trim() || workspaceId,
+      projectId: String(thread.projectId || derivedProjectId).trim() || derivedProjectId,
       title: String(thread.title || `${thread.repositoryName || workspaceId}/${thread.worktreeId || 'chat'}`).trim(),
       worktreeId: String(thread.worktreeId || '').trim() || null,
       worktreePath: String(thread.worktreePath || '').trim() || null,
@@ -99,7 +102,7 @@ class ThreadService {
       provider: String(thread.provider || 'claude').trim().toLowerCase() || 'claude',
       status: this.normalizeStatus(thread.status),
       repositoryName: String(thread.repositoryName || '').trim() || null,
-      repositoryPath: String(thread.repositoryPath || '').trim() || null,
+      repositoryPath,
       repositoryType: String(thread.repositoryType || '').trim() || null,
       metadata: (thread.metadata && typeof thread.metadata === 'object') ? thread.metadata : {},
       createdAt,
@@ -138,14 +141,16 @@ class ThreadService {
     fs.renameSync(tmp, this.storePath);
   }
 
-  list({ workspaceId, status, includeArchived = false } = {}) {
+  list({ workspaceId, projectId, status, includeArchived = false } = {}) {
     this.ensureLoaded();
     const ws = String(workspaceId || '').trim();
+    const project = String(projectId || '').trim();
     const normalizedStatus = String(status || '').trim().toLowerCase();
 
     return this.threads
       .filter((thread) => {
         if (ws && thread.workspaceId !== ws) return false;
+        if (project && thread.projectId !== project) return false;
         if (!includeArchived && !normalizedStatus && thread.status === 'archived') return false;
         if (normalizedStatus && normalizedStatus !== 'all' && thread.status !== normalizedStatus) return false;
         return true;
@@ -178,15 +183,6 @@ class ThreadService {
     if (!workspaceId) throw new Error('workspaceId is required');
 
     const worktreeId = String(input.worktreeId || '').trim();
-    const existingActive = this.threads.find((thread) =>
-      thread.workspaceId === workspaceId
-      && thread.worktreeId === worktreeId
-      && thread.status === 'active'
-    );
-    if (existingActive) {
-      return existingActive;
-    }
-
     const now = new Date().toISOString();
     const baseId = input.id || `${workspaceId}-${worktreeId || 'chat'}-${Date.now()}`;
     const normalized = this.normalizeThread({

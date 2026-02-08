@@ -2184,28 +2184,34 @@ class SessionManager extends EventEmitter {
       serverSessionId = `${worktreeId}-server`;
     }
 
+    const assignState = (sid, existingSession) => {
+      if (!sid || !existingSession) return;
+      newSessions[sid] = {
+        status: existingSession.status,
+        branch: existingSession.branch,
+        type: existingSession.type,
+        worktreeId: existingSession.worktreeId,
+        repositoryName: existingSession.repositoryName,
+        repositoryType: existingSession.repositoryType
+      };
+    };
+
     // Create Claude session
     try {
-      this.createSession(claudeSessionId, {
-        command: getDefaultShell(),
-        args: buildShellArgs(`cd "${worktreePath}"`),
-        cwd: worktreePath,
-        type: 'claude',
-        worktreeId: worktreeId,
-        repositoryName: repositoryName,
-        repositoryType: repositoryType
-      });
-
-      const claudeSession = this.sessions.get(claudeSessionId);
-      if (claudeSession) {
-        newSessions[claudeSessionId] = {
-          status: claudeSession.status,
-          branch: claudeSession.branch,
-          type: claudeSession.type,
-          worktreeId: claudeSession.worktreeId,
-          repositoryName: claudeSession.repositoryName,
-          repositoryType: claudeSession.repositoryType
-        };
+      const existingClaude = this.getSessionById(claudeSessionId);
+      if (existingClaude) {
+        assignState(claudeSessionId, existingClaude);
+      } else {
+        this.createSession(claudeSessionId, {
+          command: getDefaultShell(),
+          args: buildShellArgs(`cd "${worktreePath}"`),
+          cwd: worktreePath,
+          type: 'claude',
+          worktreeId: worktreeId,
+          repositoryName: repositoryName,
+          repositoryType: repositoryType
+        });
+        assignState(claudeSessionId, this.getSessionById(claudeSessionId));
       }
     } catch (error) {
       logger.error('Failed to create Claude session for worktree', { worktreeId, error: error.message });
@@ -2217,34 +2223,28 @@ class SessionManager extends EventEmitter {
         ? `=== Server Terminal for ${repositoryName}/${worktreeId} ===`
         : `=== Server Terminal for ${worktreeId} ===`;
 
-      this.createSession(serverSessionId, {
-        command: getDefaultShell(),
-        args: buildShellArgs([
-          `cd "${worktreePath}"`,
-          `echo "${serverWelcome}"`,
-          `echo "Directory: ${worktreePath}"`,
-          process.platform === 'win32'
-            ? `Write-Host "Branch: $(git branch --show-current 2>$null; if(-not $?) { Write-Output 'unknown' })"`
-            : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
-          `echo ""`
-        ]),
-        cwd: worktreePath,
-        type: 'server',
-        worktreeId: worktreeId,
-        repositoryName: repositoryName,
-        repositoryType: repositoryType
-      });
-
-      const serverSession = this.sessions.get(serverSessionId);
-      if (serverSession) {
-        newSessions[serverSessionId] = {
-          status: serverSession.status,
-          branch: serverSession.branch,
-          type: serverSession.type,
-          worktreeId: serverSession.worktreeId,
-          repositoryName: serverSession.repositoryName,
-          repositoryType: serverSession.repositoryType
-        };
+      const existingServer = this.getSessionById(serverSessionId);
+      if (existingServer) {
+        assignState(serverSessionId, existingServer);
+      } else {
+        this.createSession(serverSessionId, {
+          command: getDefaultShell(),
+          args: buildShellArgs([
+            `cd "${worktreePath}"`,
+            `echo "${serverWelcome}"`,
+            `echo "Directory: ${worktreePath}"`,
+            process.platform === 'win32'
+              ? `Write-Host "Branch: $(git branch --show-current 2>$null; if(-not $?) { Write-Output 'unknown' })"`
+              : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
+            `echo ""`
+          ]),
+          cwd: worktreePath,
+          type: 'server',
+          worktreeId: worktreeId,
+          repositoryName: repositoryName,
+          repositoryType: repositoryType
+        });
+        assignState(serverSessionId, this.getSessionById(serverSessionId));
       }
     } catch (error) {
       logger.error('Failed to create server session for worktree', { worktreeId, error: error.message });
@@ -2409,6 +2409,16 @@ class SessionManager extends EventEmitter {
     // Kill the PTY process if it exists
     if (session.pty) {
       try {
+        const ptyPid = Number(session.pty?.pid || 0);
+        // Best-effort: terminate the whole PTY process group so child agent
+        // processes don't linger after terminal closure.
+        if (process.platform !== 'win32' && Number.isFinite(ptyPid) && ptyPid > 1) {
+          try {
+            process.kill(-ptyPid, 'SIGTERM');
+          } catch {
+            // best-effort
+          }
+        }
         session.pty.kill();
       } catch (error) {
         logger.error('Failed to kill PTY', {

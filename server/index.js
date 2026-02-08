@@ -2356,6 +2356,19 @@ function normalizeRepositoryPath(value) {
   return String(value || '').trim().replace(/[\\/]+$/, '');
 }
 
+function buildThreadProjectId({ projectId, repositoryPath, repositoryName } = {}) {
+  const explicit = String(projectId || '').trim();
+  if (explicit) return explicit;
+
+  const repoPath = normalizeRepositoryPath(repositoryPath);
+  if (repoPath) return `repo:${repoPath}`;
+
+  const repoName = String(repositoryName || '').trim();
+  if (repoName) return `repo-name:${repoName}`;
+
+  return '';
+}
+
 function normalizeThreadWorktreeId(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return '';
@@ -2493,15 +2506,26 @@ async function ensureWorkspaceMixedWorktree({
     updatedWorkspace.terminals = terminalList.concat(newTerminals);
   }
 
-  const tempWorkspace = {
-    name: workspace.name || workspace.id || workspaceId,
-    repository: { path: repoPath, masterBranch: 'master' },
-    worktrees: { enabled: true, namingPattern: 'work{n}', autoCreate: true }
-  };
-  await worktreeHelper.createWorktree(tempWorkspace, worktree);
-
   if (updatedWorkspace !== workspace || !alreadyExists) {
     await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+  }
+
+  if (!alreadyExists) {
+    const tempWorkspace = {
+      name: workspace.name || workspace.id || workspaceId,
+      repository: { path: repoPath, masterBranch: 'master' },
+      worktrees: { enabled: true, namingPattern: 'work{n}', autoCreate: true }
+    };
+    try {
+      await worktreeHelper.createWorktree(tempWorkspace, worktree);
+    } catch (error) {
+      const message = String(error?.message || '');
+      if (/already exists/i.test(message)) {
+        // best-effort: treat as success when worktree already exists
+      } else {
+        throw error;
+      }
+    }
   }
 
   const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
@@ -2659,6 +2683,7 @@ async function handleCreateThread(req, res) {
       repositoryPath,
       repositoryType,
       repositoryName,
+      projectId,
       worktreeId,
       socketId,
       startTier,
@@ -2681,27 +2706,67 @@ async function handleCreateThread(req, res) {
       return res.status(400).json({ ok: false, error: 'repositoryPath is required (or derivable from workspace)' });
     }
 
-    const result = await ensureWorkspaceMixedWorktree({
-      workspaceId: workspaceIdValue,
-      repositoryPath: repoContext.repositoryPath,
-      repositoryType: repoContext.repositoryType,
-      repositoryName: repoContext.repositoryName,
-      worktreeId,
-      socketId,
-      startTier
-    });
+    const workspaceRepoPath = normalizeRepositoryPath(workspace?.repository?.path);
+    const requestRepoPath = normalizeRepositoryPath(repoContext.repositoryPath);
+    const requestedWorktree = normalizeThreadWorktreeId(worktreeId);
 
-    const activeSessionIds = Object.keys(result.sessions || {});
-    const knownSessionIds = activeSessionIds.length
-      ? activeSessionIds
-      : inferThreadSessionIds({
-        repositoryName: result.repositoryName,
-        worktreeId: result.worktreeId
-      }).filter((sessionId) => !!sessionManager.getSessionById(sessionId));
+    const canUseSingleWorkspaceContext = (
+      workspace?.workspaceType !== 'mixed-repo'
+      && workspaceRepoPath
+      && requestRepoPath
+      && workspaceRepoPath === requestRepoPath
+    );
+
+    let result;
+    let knownSessionIds = [];
+
+    if (canUseSingleWorkspaceContext) {
+      const configuredPairs = Number(workspace?.terminals?.pairs || 1);
+      const safePairs = Number.isFinite(configuredPairs) && configuredPairs > 0 ? configuredPairs : 1;
+      const requestedNumber = Number(String(requestedWorktree || '').replace(/^work/i, '')) || 1;
+      const chosenNumber = Math.min(Math.max(1, requestedNumber), safePairs);
+      const chosenWorktree = `work${chosenNumber}`;
+      const worktreePath = path.join(requestRepoPath, chosenWorktree);
+      const sessionCandidates = [`${chosenWorktree}-claude`, `${chosenWorktree}-codex`, `${chosenWorktree}-server`];
+
+      knownSessionIds = sessionCandidates.filter((sessionId) => !!sessionManager.getSessionById(sessionId));
+      result = {
+        workspace,
+        alreadyExists: true,
+        terminalIds: [],
+        sessions: {},
+        worktreeId: chosenWorktree,
+        worktreePath,
+        repositoryName: String(repoContext.repositoryName || path.basename(requestRepoPath)).trim(),
+        repositoryType: String(repoContext.repositoryType || workspace?.repository?.type || workspace?.type || 'generic').trim()
+      };
+    } else {
+      result = await ensureWorkspaceMixedWorktree({
+        workspaceId: workspaceIdValue,
+        repositoryPath: repoContext.repositoryPath,
+        repositoryType: repoContext.repositoryType,
+        repositoryName: repoContext.repositoryName,
+        worktreeId,
+        socketId,
+        startTier
+      });
+
+      const activeSessionIds = Object.keys(result.sessions || {});
+      knownSessionIds = activeSessionIds.length
+        ? activeSessionIds
+        : inferThreadSessionIds({
+          repositoryName: result.repositoryName,
+          worktreeId: result.worktreeId
+        }).filter((sessionId) => !!sessionManager.getSessionById(sessionId));
+    }
 
     const created = threadService.createThread({
       workspaceId: workspaceIdValue,
-      projectId: workspaceIdValue,
+      projectId: buildThreadProjectId({
+        projectId,
+        repositoryPath: repoContext.repositoryPath,
+        repositoryName: result.repositoryName
+      }),
       title: String(title || `${result.repositoryName}/${result.worktreeId}`).trim(),
       worktreeId: result.worktreeId,
       worktreePath: result.worktreePath,
@@ -2734,9 +2799,10 @@ async function handleCreateThread(req, res) {
 app.get('/api/threads', (req, res) => {
   try {
     const workspaceId = String(req.query.workspaceId || '').trim();
+    const projectId = String(req.query.projectId || '').trim();
     const status = String(req.query.status || '').trim().toLowerCase();
     const includeArchived = String(req.query.includeArchived || '').trim().toLowerCase() === 'true';
-    const threads = threadService.list({ workspaceId, status, includeArchived });
+    const threads = threadService.list({ workspaceId, projectId, status, includeArchived });
     res.json({ ok: true, count: threads.length, threads });
   } catch (error) {
     logger.error('Failed to list threads', { error: error.message, stack: error.stack });
