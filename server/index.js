@@ -165,7 +165,8 @@ const io = new Server(httpServer, {
         origin === 'tauri://localhost' ||
         origin.startsWith('http://localhost:') ||
         origin.startsWith('http://127.0.0.1:') ||
-        origin.startsWith('http://[::1]:');
+        origin.startsWith('http://[::1]:') ||
+        origin.startsWith('http://100.');
 
       if (allowed) {
         callback(null, true);
