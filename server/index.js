@@ -2620,20 +2620,27 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
   }
 });
 
-app.get('/api/threads', (req, res) => {
-  try {
-    const workspaceId = String(req.query.workspaceId || '').trim();
-    const status = String(req.query.status || '').trim().toLowerCase();
-    const includeArchived = String(req.query.includeArchived || '').trim().toLowerCase() === 'true';
-    const threads = threadService.list({ workspaceId, status, includeArchived });
-    res.json({ ok: true, count: threads.length, threads });
-  } catch (error) {
-    logger.error('Failed to list threads', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to list threads', message: error.message });
-  }
-});
+function parseClearSessionsInput(req) {
+  const requested = req.body?.clearSessions;
+  if (requested !== undefined) return requested;
+  const fromQuery = req.query?.clearSessions;
+  if (fromQuery === undefined || fromQuery === null) return undefined;
+  const normalized = String(fromQuery).trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true;
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false;
+  return undefined;
+}
 
-app.post('/api/threads/create', express.json(), async (req, res) => {
+function closeThreadSessions(sessionIds = []) {
+  const ids = Array.isArray(sessionIds) ? sessionIds : [];
+  for (const sessionId of ids) {
+    const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
+    if (ok) io.emit('session-closed', { sessionId });
+  }
+}
+
+async function handleCreateThread(req, res) {
   try {
     const {
       workspaceId,
@@ -2710,6 +2717,81 @@ app.post('/api/threads/create', express.json(), async (req, res) => {
     logger.error('Failed to create thread', { error: error.message, stack: error.stack, status });
     res.status(status).json({ ok: false, error: 'Failed to create thread', message: error.message });
   }
+}
+
+app.get('/api/threads', (req, res) => {
+  try {
+    const workspaceId = String(req.query.workspaceId || '').trim();
+    const status = String(req.query.status || '').trim().toLowerCase();
+    const includeArchived = String(req.query.includeArchived || '').trim().toLowerCase() === 'true';
+    const threads = threadService.list({ workspaceId, status, includeArchived });
+    res.json({ ok: true, count: threads.length, threads });
+  } catch (error) {
+    logger.error('Failed to list threads', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to list threads', message: error.message });
+  }
+});
+
+app.post('/api/threads', express.json(), handleCreateThread);
+app.post('/api/threads/create', express.json(), handleCreateThread);
+
+app.patch('/api/threads/:id', express.json(), (req, res) => {
+  try {
+    const threadId = String(req.params.id || '').trim();
+    if (!threadId) {
+      return res.status(400).json({ ok: false, error: 'thread id is required' });
+    }
+    const before = threadService.getById(threadId);
+    if (!before) {
+      return res.status(404).json({ ok: false, error: 'Failed to update thread', message: `Thread not found: ${threadId}` });
+    }
+
+    const patch = {};
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'title')) {
+      patch.title = String(req.body?.title || '').trim();
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'sessionIds')) {
+      patch.sessionIds = Array.isArray(req.body?.sessionIds) ? req.body.sessionIds : [];
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'metadata') && req.body?.metadata && typeof req.body.metadata === 'object') {
+      patch.metadata = req.body.metadata;
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'provider')) {
+      patch.provider = String(req.body?.provider || '').trim().toLowerCase() || before.provider || 'claude';
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'status')) {
+      const nextStatus = String(req.body?.status || '').trim().toLowerCase();
+      if (!['active', 'closed', 'archived'].includes(nextStatus)) {
+        return res.status(400).json({ ok: false, error: 'Invalid status. Use active|closed|archived' });
+      }
+      patch.status = nextStatus;
+    }
+
+    let thread = threadService.updateThread(threadId, patch);
+    const requested = parseClearSessionsInput(req);
+    const transition = String(patch.status || '').trim().toLowerCase();
+    const shouldClose = requested === true
+      || (transition === 'closed' && shouldCloseSessionsForThreadAction('close', requested))
+      || (transition === 'archived' && shouldCloseSessionsForThreadAction('archive', requested));
+    if (shouldClose) {
+      closeThreadSessions(before.sessionIds);
+      thread = threadService.setSessionIds(threadId, []);
+    }
+
+    res.json({
+      ok: true,
+      thread,
+      lifecycle: {
+        action: 'update-thread',
+        closedSessions: !!shouldClose
+      }
+    });
+  } catch (error) {
+    const message = String(error?.message || error);
+    const status = message.toLowerCase().includes('not found') ? 404 : 500;
+    logger.error('Failed to update thread', { error: message, stack: error.stack, status });
+    res.status(status).json({ ok: false, error: 'Failed to update thread', message });
+  }
 });
 
 app.post('/api/threads/:id/close', express.json(), (req, res) => {
@@ -2718,13 +2800,10 @@ app.post('/api/threads/:id/close', express.json(), (req, res) => {
     if (!threadId) {
       return res.status(400).json({ ok: false, error: 'thread id is required' });
     }
-    const closeSessions = shouldCloseSessionsForThreadAction('close', req.body?.clearSessions);
+    const closeSessions = shouldCloseSessionsForThreadAction('close', parseClearSessionsInput(req));
     let thread = threadService.closeThread(threadId);
     if (closeSessions) {
-      for (const sessionId of Array.isArray(thread.sessionIds) ? thread.sessionIds : []) {
-        const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
-        if (ok) io.emit('session-closed', { sessionId });
-      }
+      closeThreadSessions(thread.sessionIds);
       thread = threadService.setSessionIds(threadId, []);
     }
     res.json({
@@ -2743,13 +2822,13 @@ app.post('/api/threads/:id/close', express.json(), (req, res) => {
   }
 });
 
-app.post('/api/threads/:id/archive', express.json(), (req, res) => {
+function handleArchiveThread(req, res, { sourceAction = 'archive-thread' } = {}) {
   try {
     const threadId = String(req.params.id || '').trim();
     if (!threadId) {
       return res.status(400).json({ ok: false, error: 'thread id is required' });
     }
-    const closeSessions = shouldCloseSessionsForThreadAction('archive', req.body?.clearSessions);
+    const closeSessions = shouldCloseSessionsForThreadAction('archive', parseClearSessionsInput(req));
     const before = threadService.getById(threadId);
     if (!before) {
       return res.status(404).json({ ok: false, error: 'Failed to archive thread', message: `Thread not found: ${threadId}` });
@@ -2757,17 +2836,14 @@ app.post('/api/threads/:id/archive', express.json(), (req, res) => {
 
     let thread = threadService.archiveThread(threadId);
     if (closeSessions) {
-      for (const sessionId of Array.isArray(before.sessionIds) ? before.sessionIds : []) {
-        const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
-        if (ok) io.emit('session-closed', { sessionId });
-      }
+      closeThreadSessions(before.sessionIds);
       thread = threadService.setSessionIds(threadId, []);
     }
     res.json({
       ok: true,
       thread,
       lifecycle: {
-        action: 'archive-thread',
+        action: sourceAction,
         closedSessions: !!closeSessions
       }
     });
@@ -2777,7 +2853,10 @@ app.post('/api/threads/:id/archive', express.json(), (req, res) => {
     logger.error('Failed to archive thread', { error: message, stack: error.stack, status });
     res.status(status).json({ ok: false, error: 'Failed to archive thread', message });
   }
-});
+}
+
+app.post('/api/threads/:id/archive', express.json(), (req, res) => handleArchiveThread(req, res, { sourceAction: 'archive-thread' }));
+app.delete('/api/threads/:id', express.json(), (req, res) => handleArchiveThread(req, res, { sourceAction: 'delete-thread' }));
 
 // Remove worktree from workspace (config only - does NOT delete git worktree folder)
 app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), async (req, res) => {
