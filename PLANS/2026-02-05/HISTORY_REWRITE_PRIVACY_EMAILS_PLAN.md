@@ -73,6 +73,12 @@ Use one of:
 - `git filter-repo` (recommended)
 - BFG Repo-Cleaner (less flexible)
 
+Non-destructive prep helper now available:
+- `npm run audit:history-authors`
+- Optional outputs:
+  - `node scripts/audit-history-authors.js --json /tmp/history-authors.json --md /tmp/history-authors.md --mailmap /tmp/history-authors.mailmap`
+- This does not rewrite history; it only audits author/committer email usage and generates a private mailmap starter file.
+
 ### 3) Rewrite: remove files/directories from all history
 
 In a fresh clone:
@@ -151,3 +157,6 @@ Status notes (2026-02-06):
 - History scan now passes via `npm run audit:public-release:history` (uses `.gitleaksignore` for two known fixture fingerprints from historical test data).
 - Public docs path hygiene + tracked-artifact checks are automated by `scripts/public-release-audit.js`.
 - Remaining destructive item is intentional: rewrite history (or publish a new squashed repo) to remove historical metadata/artifacts.
+
+Status notes (2026-02-08):
+- Added `scripts/audit-history-authors.js` and `npm run audit:history-authors` so rewrite inputs can be prepared safely before any destructive history operation.
