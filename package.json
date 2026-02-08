@@ -33,7 +33,9 @@
     "prep:history-rewrite:pipeline": "node scripts/run-history-rewrite-prep.js",
     "setup:history-rewrite-tools": "node scripts/setup-history-rewrite-tools.js",
     "check:history-rewrite-readiness": "node scripts/check-history-rewrite-readiness.js",
-    "check:history-rewrite-readiness:strict": "node scripts/check-history-rewrite-readiness.js --strict --require-gitleaks"
+    "check:history-rewrite-readiness:strict": "node scripts/check-history-rewrite-readiness.js --strict --require-gitleaks",
+    "check:history-rewrite-result": "node scripts/verify-history-rewrite-result.js",
+    "check:history-rewrite-result:advisory": "node scripts/verify-history-rewrite-result.js --advisory"
   },
   "keywords": [
     "claude",
