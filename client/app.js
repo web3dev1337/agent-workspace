@@ -1888,6 +1888,14 @@ class ClaudeOrchestrator {
         });
       });
     }
+    const schedulerTemplatePreview = document.getElementById('scheduler-template-preview');
+    if (schedulerTemplatePreview) {
+      schedulerTemplatePreview.addEventListener('click', () => {
+        this.previewSchedulerTemplateFromSettings().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
     const schedulerEnabled = document.getElementById('scheduler-enabled');
     if (schedulerEnabled) {
       schedulerEnabled.addEventListener('change', () => {
@@ -11190,6 +11198,12 @@ class ClaudeOrchestrator {
       if (Number.isFinite(interval) && interval > 0) {
         option.setAttribute('data-interval', String(Math.round(interval)));
       }
+      const risk = String(row?.risk || '').trim();
+      const category = String(row?.category || '').trim();
+      const description = String(row?.description || '').trim();
+      if (risk) option.setAttribute('data-risk', risk);
+      if (category) option.setAttribute('data-category', category);
+      if (description) option.setAttribute('data-description', description);
       selectEl.appendChild(option);
     }
     if (previous && rows.some((row) => String(row?.id || '') === previous)) {
@@ -11283,6 +11297,63 @@ class ClaudeOrchestrator {
 
     this.showToast?.(`Added scheduler job: ${data?.schedule?.id || templateId}`, 'success');
     await this.refreshSchedulerStatus().catch(() => {});
+    return true;
+  }
+
+  async previewSchedulerTemplateFromSettings() {
+    const selectEl = document.getElementById('scheduler-template-select');
+    const intervalEl = document.getElementById('scheduler-template-interval');
+    const outputEl = document.getElementById('scheduler-status-output');
+    const runIdEl = document.getElementById('scheduler-run-id');
+    if (!selectEl) return false;
+
+    const templateId = String(selectEl.value || '').trim();
+    if (!templateId) {
+      this.showToast?.('Select a scheduler template first', 'warning');
+      return false;
+    }
+
+    const intervalMinutesRaw = Number(intervalEl?.value);
+    const options = {};
+    if (Number.isFinite(intervalMinutesRaw) && intervalMinutesRaw > 0) {
+      options.intervalMinutes = Math.round(intervalMinutesRaw);
+    }
+
+    if (outputEl) outputEl.textContent = 'Previewing scheduler template…';
+    const res = await fetch('/api/scheduler/jobs/from-template/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        templateId,
+        options
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Failed to preview template job (${res.status})`));
+    }
+
+    const schedule = data?.schedule || {};
+    const safety = data?.safety || {};
+    const command = data?.command || {};
+    const template = data?.template || {};
+    if (runIdEl && schedule?.id) runIdEl.value = String(schedule.id);
+
+    if (outputEl) {
+      const lines = [
+        `template: ${template?.name || templateId} (${templateId})`,
+        `schedule id: ${schedule?.id || '(none)'}`,
+        `interval: ${schedule?.intervalMinutes || '(n/a)'} min`,
+        `command: ${schedule?.command || '(none)'}`,
+        `safety: ${safety?.ok ? 'allowed' : `blocked (${safety?.reason || 'unknown'})`}`,
+        `risk: ${command?.safetyLevel || template?.risk || 'safe'}`
+      ];
+      const description = String(template?.description || '').trim();
+      if (description) lines.push(`description: ${description}`);
+      outputEl.textContent = lines.join('\n');
+    }
+
+    this.showToast?.(`Preview ready: ${templateId}`, 'success');
     return true;
   }
 

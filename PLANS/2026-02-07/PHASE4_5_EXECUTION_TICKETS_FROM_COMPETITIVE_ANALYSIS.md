@@ -121,7 +121,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - tests added for invalid manifest version, command collisions, and command-cap overflow.
 
 ### P1-04: Scheduler UX templates expansion (cron skills)
-- Status: Ready
+- Status: Done
 - Size: M
 - Deliverables:
   - richer template library (review sweep, blockers triage, health snapshots, discord queue cadence)
@@ -130,6 +130,10 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Acceptance criteria:
   - non-technical user can create safe schedule without editing raw JSON
   - blocked dangerous commands surface clear policy reason
+- Shipped in PR #TBD:
+  - expanded `SchedulerService` template catalog with review/integration/maintenance templates.
+  - added shared template build logic + dry-run API path (`/api/scheduler/jobs/from-template/preview`).
+  - added Settings preview action to inspect generated schedule id/command/safety before adding.
 
 ### P1-05: Public release install UX (Windows-first)
 - Status: Ready
