@@ -230,6 +230,40 @@ Files (expected):
 Acceptance:
 - Teams can share workflow defaults without leaking private local data.
 
+---
+
+### PR M4.3 — Pager/Pollcat automation service
+Scope:
+- Add first-class pager jobs that can nudge stalled agent sessions (`next` + Enter).
+- Implement profile model:
+  - default instructions template (global)
+  - per-job custom instructions override/append
+  - per-target session filter (single session, workspace, tier set)
+- Implement safe stop conditions:
+  - explicit max pings and max runtime
+  - stop on terminal exit/session missing
+  - optional done-check prompt: if the agent confirms 100% complete, stop pager service
+- Expose controls:
+  - `POST /api/pager/jobs` (create/start)
+  - `POST /api/pager/jobs/:id/stop`
+  - `GET /api/pager/jobs` (status, last ping, failures)
+- Wire command surface:
+  - Commander/voice actions for start/stop/status
+  - UI quick controls in Scheduler/Automation panel
+
+Files (expected):
+- `server/pagerService.js` (new)
+- `server/index.js`
+- `server/commandRegistry.js`
+- `client/app.js`
+- `tests/unit/pagerService.test.js`
+
+Acceptance:
+- Pager can run with only defaults (no custom prompt required).
+- Pager can run with custom per-job instructions.
+- Pager sends input using the required two-step pattern (`next`, then `\\r`).
+- Pager terminates cleanly on done condition or explicit stop command.
+
 ## 5) Cross-platform release gates (each merge)
 
 Required checks before merge:
@@ -257,7 +291,7 @@ Week 4:
 - M3.1, M3.2
 
 Week 5:
-- M4.1, M4.2
+- M4.1, M4.2, M4.3
 
 ## 7) Explicit non-goals for this phase
 
