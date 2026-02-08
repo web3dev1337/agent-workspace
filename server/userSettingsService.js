@@ -128,6 +128,10 @@ class UserSettingsService {
             emails: true,
             tokens: true,
             homePaths: true
+          },
+          signing: {
+            enabled: false,
+            keyId: 'local-default'
           }
         },
         ui: {
@@ -475,6 +479,10 @@ class UserSettingsService {
           redaction: {
             ...(defaultsAudit.redaction || {}),
             ...(next.redaction || {})
+          },
+          signing: {
+            ...(defaultsAudit.signing || {}),
+            ...(next.signing || {})
           }
         };
       }
@@ -748,6 +756,10 @@ class UserSettingsService {
           redaction: {
             ...(defaultsAudit.redaction || {}),
             ...(next.redaction || {})
+          },
+          signing: {
+            ...(defaultsAudit.signing || {}),
+            ...(next.signing || {})
           }
         };
       }
