@@ -178,6 +178,19 @@ function getSnapshotVerification(repoRoot, snapshotDirArg) {
   };
 }
 
+function getActionableScanStatus(repoRoot) {
+  const scan = runNodeScript(repoRoot, 'scripts/scan-markdown-remaining.js', ['--scope', 'all', '--actionable-only', '--json']);
+  const parsed = parseJsonSafe(scan.stdout);
+  const summary = parsed && parsed.summary ? parsed.summary : null;
+  const withRemaining = summary ? Number(summary.withRemaining || 0) : -1;
+  return {
+    ok: scan.ok && !!summary,
+    status: scan.status,
+    withRemaining,
+    parsed
+  };
+}
+
 function buildMarkdown(report) {
   const lines = [];
   lines.push('# Release readiness report');
@@ -209,6 +222,8 @@ function buildMarkdown(report) {
   if (report.checks.snapshotVerification.parsed) {
     lines.push(`- Snapshot commit count: ${report.checks.snapshotVerification.parsed.commitCount}`);
   }
+  lines.push(`- Actionable markdown scan: ${report.checks.actionableScan.ok ? 'pass' : 'fail'}`);
+  lines.push(`- Actionable markdown remaining: ${report.checks.actionableScan.withRemaining}`);
   lines.push(`- History custom email count (canonical/info): ${report.checks.historyAuthors.customEmails}`);
   lines.push(`- History custom email warning enabled: ${report.checks.historyAuthors.warningEnabled ? 'yes' : 'no'}`);
   lines.push('');
@@ -225,6 +240,7 @@ function main() {
   checks.remainingWork = getRemainingWorkStatus(repoRoot);
   checks.snapshot = getSnapshotStatus(repoRoot, args.snapshotDir);
   checks.snapshotVerification = getSnapshotVerification(repoRoot, args.snapshotDir);
+  checks.actionableScan = getActionableScanStatus(repoRoot);
 
   checks.publicReleaseAudit = runNodeScript(repoRoot, 'scripts/public-release-audit.js', []);
   checks.publicReleaseHistoryAudit = args.includeHistory
@@ -244,7 +260,9 @@ function main() {
     args.includeHistory && checks.publicReleaseHistoryAudit && !checks.publicReleaseHistoryAudit.ok,
     !checks.snapshot.exists,
     !checks.snapshot.hasGit,
-    !checks.snapshotVerification.ok
+    !checks.snapshotVerification.ok,
+    !checks.actionableScan.ok,
+    checks.actionableScan.withRemaining > 0
   ].filter(Boolean).length;
 
   const warnings = [
