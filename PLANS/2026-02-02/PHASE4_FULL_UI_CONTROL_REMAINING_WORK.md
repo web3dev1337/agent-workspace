@@ -94,7 +94,7 @@ Work needed:
 - Add a recovery policy:
   - default: only show sessions not explicitly closed
   - optionally show “closed (archived)” in a collapsible section.
-- Add UI affordance: “Clear all recoverable sessions (older than N days)” with confirmation.
+- DONE: Settings now includes per-workspace “Prune old recoverables” (older-than-days) wired to recovery prune API.
 
 ---
 

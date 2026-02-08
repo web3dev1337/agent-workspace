@@ -733,6 +733,14 @@
                         <input type="checkbox" id="recovery-skip-permissions" checked />
                         <span>Use YOLO mode (--dangerously-skip-permissions)</span>
                     </label>
+                    <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap: wrap; margin-top: 10px;">
+                        <label>
+                            <strong>Prune recoverables older than (days):</strong>
+                            <input type="number" id="recovery-prune-days" value="7" min="1" max="365" style="width: 100px;" />
+                        </label>
+                        <button class="btn-secondary" type="button" id="recovery-prune-old">Prune old recoverables</button>
+                    </div>
+                    <p id="recovery-prune-status" class="setting-description" style="margin-top:8px;">Current workspace: (none)</p>
                 </div>
 
                 <div class="setting-group per-terminal-settings" id="per-terminal-settings">
