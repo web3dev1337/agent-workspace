@@ -54,6 +54,7 @@ server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
 server/policyBundleService.js      - Policy template catalog + bundle export/import for team governance profiles
+server/pluginLoaderService.js      - Plugin manifest validation/compatibility, command registration safety, and client slot metadata
 server/auditExportService.js       - Redacted audit export across activity + scheduler logs (JSON/CSV)
 server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
 server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
@@ -153,6 +154,11 @@ client/workspace-tab-manager.js    - Multi-workspace tab management (NEW)
 client/styles/tabs.css             - Tab bar styling
 ├─ Features: Tab UI, badges, animations
 └─ Responsive: Mobile and desktop layouts
+
+client/plugin-host.js              - Client plugin runtime for UI slots/actions
+├─ Loads: `/api/plugins/client-surface` slot actions with cache/refresh support
+├─ Exposes: `window.orchestratorPluginHost`
+└─ Supports actions: open_url, open_route, copy_text, commander_action
 ```
 
 ### Tabbed Workspace System (NEW)
