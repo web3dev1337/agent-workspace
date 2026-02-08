@@ -11,7 +11,8 @@ function parseArgs(argv) {
     sinceDays: 7,
     out: null,
     format: null, // markdown | json
-    actionableOnly: false
+    actionableOnly: false,
+    backlogOnly: false
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -62,6 +63,10 @@ function parseArgs(argv) {
     }
     if (a === '--actionable-only') {
       args.actionableOnly = true;
+      continue;
+    }
+    if (a === '--backlog-only') {
+      args.backlogOnly = true;
       continue;
     }
   }
@@ -229,12 +234,21 @@ function filterScansForActionable(files) {
   });
 }
 
-function renderJsonReport({ scope, sinceDays, files, actionableOnly = false }) {
+function filterScansForBacklog(files) {
+  return (Array.isArray(files) ? files : []).filter((scan) =>
+    scan &&
+    scan.classification === 'doc/backlog' &&
+    Number(scan.remainingCount || 0) > 0
+  );
+}
+
+function renderJsonReport({ scope, sinceDays, files, actionableOnly = false, backlogOnly = false }) {
   const summary = buildSummary(files);
   return JSON.stringify({
     generatedAt: new Date().toISOString(),
     scope,
     sinceDays: Number(sinceDays),
+    backlogOnly: backlogOnly === true || actionableOnly === true,
     actionableOnly: actionableOnly === true,
     summary,
     filesWithRemaining: files
@@ -247,7 +261,7 @@ function renderJsonReport({ scope, sinceDays, files, actionableOnly = false }) {
   }, null, 2);
 }
 
-function renderReport({ scope, sinceDays, files, actionableOnly = false }) {
+function renderReport({ scope, sinceDays, files, actionableOnly = false, backlogOnly = false }) {
   const stamp = new Date().toISOString().slice(0, 10);
 
   const withRemaining = files.filter(f => f.remainingCount > 0);
@@ -275,6 +289,9 @@ function renderReport({ scope, sinceDays, files, actionableOnly = false }) {
   }
   if (actionableOnly === true) {
     lines.push('Actionable filter: enabled (`doc/backlog` files with explicit markers only: unchecked and/or TODO/FIXME).');
+    lines.push('');
+  } else if (backlogOnly === true) {
+    lines.push('Backlog filter: enabled (`doc/backlog` files with remaining markers only).');
     lines.push('');
   }
 
@@ -369,12 +386,18 @@ function main() {
       const content = fs.readFileSync(abs, 'utf8');
       return scanMarkdown(filePath, content);
     });
-  const filesForReport = args.actionableOnly ? filterScansForActionable(scans) : scans;
+  let filesForReport = scans;
+  if (args.backlogOnly || args.actionableOnly) {
+    filesForReport = filterScansForBacklog(filesForReport);
+  }
+  if (args.actionableOnly) {
+    filesForReport = filterScansForActionable(filesForReport);
+  }
 
   const format = resolveOutputFormat(args, outPath);
   const report = format === 'json'
-    ? renderJsonReport({ scope: args.scope, sinceDays: args.sinceDays, files: filesForReport, actionableOnly: args.actionableOnly })
-    : renderReport({ scope: args.scope, sinceDays: args.sinceDays, files: filesForReport, actionableOnly: args.actionableOnly });
+    ? renderJsonReport({ scope: args.scope, sinceDays: args.sinceDays, files: filesForReport, actionableOnly: args.actionableOnly, backlogOnly: args.backlogOnly })
+    : renderReport({ scope: args.scope, sinceDays: args.sinceDays, files: filesForReport, actionableOnly: args.actionableOnly, backlogOnly: args.backlogOnly });
 
   if (outPath) {
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
@@ -396,5 +419,6 @@ module.exports = {
   renderReport,
   renderJsonReport,
   resolveOutputFormat,
-  filterScansForActionable
+  filterScansForActionable,
+  filterScansForBacklog
 };
