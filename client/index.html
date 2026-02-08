@@ -471,6 +471,62 @@
                     </div>
                 </div>
 
+                <div class="setting-section">
+                    <h4>Pager / Pollcat</h4>
+                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items:flex-end;">
+                        <label>
+                            Session id:
+                            <input id="pager-session-id" type="text" placeholder="work1-claude" style="width: 220px;" />
+                        </label>
+                        <label>
+                            Interval (sec):
+                            <input id="pager-interval-seconds" type="number" min="5" step="5" value="300" style="width: 110px;" />
+                        </label>
+                        <label>
+                            Max pings:
+                            <input id="pager-max-pings" type="number" min="1" step="1" value="24" style="width: 110px;" />
+                        </label>
+                        <label>
+                            Max runtime (min):
+                            <input id="pager-max-runtime-minutes" type="number" min="1" step="1" value="120" style="width: 130px;" />
+                        </label>
+                    </div>
+                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items:flex-end;">
+                        <label>
+                            Nudge text:
+                            <input id="pager-nudge-text" type="text" value="next" style="width: 220px;" />
+                        </label>
+                        <label>
+                            <input type="checkbox" id="pager-done-check-enabled" />
+                            Done-check enabled
+                        </label>
+                        <label>
+                            Done token:
+                            <input id="pager-done-token" type="text" value="PAGER_DONE" style="width: 160px;" />
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            Custom instruction (optional):
+                            <textarea id="pager-custom-instruction" class="tasks-textarea" rows="3" placeholder="continue and finish all remaining implementation tasks"></textarea>
+                        </label>
+                    </div>
+                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
+                        <button class="btn-secondary" type="button" id="pager-refresh">Refresh pager</button>
+                        <button class="btn-secondary" type="button" id="pager-start">Start pager</button>
+                        <button class="btn-secondary" type="button" id="pager-stop">Stop pager</button>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            Stop job id:
+                            <input id="pager-stop-id" type="text" placeholder="pager-..." style="width: 220px;" />
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <pre id="pager-status-output" class="mono diagnostics-output">Click “Refresh pager”.</pre>
+                    </div>
+                </div>
+
 	            <div class="setting-section">
 	                <h4>License</h4>
 	                <div class="setting-group">
