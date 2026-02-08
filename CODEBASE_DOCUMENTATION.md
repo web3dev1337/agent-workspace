@@ -66,6 +66,7 @@ server/serviceStackRuntimeService.js - Workspace service-stack runtime superviso
 server/auditExportService.js       - Redacted audit export across activity + scheduler logs (JSON/CSV)
 server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
 server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
+server/projectTypeService.js       - Project taxonomy loader/validator for category→framework→template metadata (`config/project-types.json`)
 ```
 
 ### Multi-Workspace System (Core Feature)
@@ -124,7 +125,7 @@ Config Structure:
 }
 
 client/app.js                       - Config pre-fetching & caching
-├─ Methods: prefetchWorktreeConfigs(), fetchCascadedConfig()
+├─ Methods: prefetchWorktreeConfigs(), fetchCascadedConfig(), ensureProjectTypeTaxonomy()
 ├─ Cache: Map<sessionId, config> for worktree-specific configs
 └─ Extract: extractRepositoryName() from workspace config
 ```
@@ -151,6 +152,10 @@ client/workspace-wizard.js         - Workspace creation wizard
 ├─ Features: Step-by-step workspace setup, repo selection
 ├─ Types: Single-repo, mixed-repo, and custom configurations
 └─ Integration: Worktree creation and template application
+
+client/greenfield-wizard.js        - New-project wizard (greenfield creation flow)
+├─ Uses project taxonomy categories before rendering
+└─ Calls `/api/greenfield/*` creation APIs for full project bootstrap
 
 client/workspace-tab-manager.js    - Multi-workspace tab management (NEW)
 ├─ Features: Browser-like tabs for multiple workspaces
@@ -401,6 +406,12 @@ PUT /api/workspaces/:id           - Update workspace configuration
 DELETE /api/workspaces/:id        - Delete workspace
 POST /api/workspaces/:id/switch   - Switch to workspace
 POST /api/workspaces/remove-worktree - Remove worktree from workspace config, close linked sessions, keep files on disk
+GET /api/project-types            - Full project taxonomy (categories/frameworks/templates + metadata)
+GET /api/project-types/categories - Project categories with resolved base paths
+GET /api/project-types/frameworks?categoryId=... - Framework catalog (optionally scoped by category)
+GET /api/project-types/templates?frameworkId=...&categoryId=... - Template catalog (optionally scoped)
+GET /api/greenfield/categories    - Greenfield category list (taxonomy-backed)
+POST /api/greenfield/detect-category - Infer category from description (taxonomy keyword matching)
 GET /api/user-settings            - Get user preferences
 PUT /api/user-settings            - Update user preferences
 
