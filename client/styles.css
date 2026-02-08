@@ -1782,6 +1782,28 @@ header h1 {
   grid-area: diff;
 }
 
+.review-console-grid[data-review-preset="throughput"]:not(.one-column):not(.two-column) {
+  grid-template-columns: minmax(0, 2.7fr) minmax(420px, 0.9fr);
+  grid-template-rows: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  grid-template-areas:
+    "diff terminals"
+    "diff meta";
+}
+
+.review-console-grid[data-review-preset="throughput"]:not(.one-column):not(.two-column) .review-console-col-terminals {
+  grid-area: terminals;
+  overflow: hidden;
+}
+
+.review-console-grid[data-review-preset="throughput"]:not(.one-column):not(.two-column) .review-console-col-meta {
+  grid-area: meta;
+  overflow: hidden;
+}
+
+.review-console-grid[data-review-preset="throughput"]:not(.one-column):not(.two-column) .review-console-col-diff {
+  grid-area: diff;
+}
+
 .review-console-col,
 .review-console-left {
   display: flex;
@@ -1856,6 +1878,14 @@ header h1 {
   gap: 12px;
 }
 
+.worktree-inspector-terminals.review-console-terminals-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.worktree-inspector-terminals.review-console-terminals-grid.paired-layout {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .worktree-inspector-terminals .terminal-wrapper.review-console-terminal {
   height: clamp(180px, 30vh, 380px);
   min-height: 180px;
@@ -1881,6 +1911,15 @@ header h1 {
 .review-console-comments-list {
   max-height: 180px;
   overflow: auto;
+}
+
+.review-console-grid[data-review-preset="throughput"] .review-console-files-list {
+  max-height: 160px;
+}
+
+.review-console-grid[data-review-preset="throughput"] .review-console-commits-list,
+.review-console-grid[data-review-preset="throughput"] .review-console-comments-list {
+  max-height: 150px;
 }
 
 .worktree-inspector-layout-panel {

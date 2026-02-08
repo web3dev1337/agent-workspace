@@ -144,7 +144,7 @@ class UserSettingsService {
           },
           reviewConsole: {
 	            // Default layout intent: a batch-review surface. Keep it fullscreen and show diff by default.
-	            preset: 'review', // default | review | deep | code | terminals | custom
+	            preset: 'review', // default | review | throughput | deep | code | terminals | custom
 	            fullscreen: true,
 	            diffEmbed: true,
 	            sections: {
