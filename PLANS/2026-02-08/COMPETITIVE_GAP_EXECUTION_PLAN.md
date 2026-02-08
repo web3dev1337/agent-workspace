@@ -190,6 +190,7 @@ Acceptance:
 ---
 
 ### PR M3.2 — Service stack runtime controls
+Status: Done
 Scope:
 - Start/stop/restart-all actions for stack-defined services.
 - Crash detection + optional auto-restart policy.
@@ -204,6 +205,16 @@ Files (expected):
 
 Acceptance:
 - Stack behaves as one-click local runtime supervisor.
+- Shipped in PR #TBD:
+  - added service runtime supervisor service (`server/serviceStackRuntimeService.js`) with desired-state tracking per workspace/service.
+  - added runtime APIs:
+    - `GET /api/workspaces/:id/service-stack/runtime`
+    - `POST /api/workspaces/:id/service-stack/start`
+    - `POST /api/workspaces/:id/service-stack/stop`
+    - `POST /api/workspaces/:id/service-stack/restart`
+  - added auto-restart monitor for `always` / `on-failure` policies and non-restart fallback for `never`.
+  - added runtime health status model (`unknown` without healthcheck, `down` when stopped, `up/degraded` when healthchecks configured).
+  - added unit coverage in `tests/unit/serviceStackRuntimeService.test.js`.
 
 ## Milestone M4 — Automation UX and governance
 
