@@ -74,3 +74,5 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #697 — scanner output-mode hardening (`scan-markdown-remaining` JSON mode + tests)
 - #698 — docs sync: remaining-work references aligned through PR #697
 - #699 — scanner actionable-only mode (`--actionable-only`) + generated-scan classification
+- #700 — docs sync: remaining-work history through PR #699
+- #701 — strict actionable scan filtering (exclude heuristic-only prose from `--actionable-only`)
