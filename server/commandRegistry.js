@@ -14,15 +14,17 @@ class CommandRegistry {
     this.io = null;
     this.sessionManager = null;
     this.workspaceManager = null;
+    this.pagerService = null;
   }
 
   /**
    * Initialize with dependencies
    */
-  init({ io, sessionManager, workspaceManager }) {
+  init({ io, sessionManager, workspaceManager, pagerService }) {
     this.io = io;
     this.sessionManager = sessionManager;
     this.workspaceManager = workspaceManager;
+    this.pagerService = pagerService || this.pagerService;
     this.registerBuiltinCommands();
   }
 
@@ -170,7 +172,8 @@ class CommandRegistry {
       const result = await cmd.handler(params, {
         io: this.io,
         sessionManager: this.sessionManager,
-        workspaceManager: this.workspaceManager
+        workspaceManager: this.workspaceManager,
+        pagerService: this.pagerService
       });
       return { success: true, ...result };
     } catch (err) {
@@ -1146,6 +1149,78 @@ class CommandRegistry {
       handler: (params, { io }) => {
         io.emit('commander-action', { action: 'open-advice' });
         return { message: 'Opening Advisor' };
+      }
+    });
+
+    this.register('pager-start', {
+      category: 'automation',
+      description: 'Start pager/pollcat nudges for one or more sessions',
+      params: [
+        { name: 'sessionId', required: false, description: 'Single session id (e.g., work1-claude)' },
+        { name: 'sessionIds', required: false, description: 'Array of session ids' },
+        { name: 'workspaceId', required: false, description: 'Target all sessions in a workspace' },
+        { name: 'intervalSeconds', required: false, description: 'Nudge interval in seconds (min 5)' },
+        { name: 'maxPings', required: false, description: 'Maximum nudge cycles before auto-stop' },
+        { name: 'maxRuntimeMinutes', required: false, description: 'Maximum runtime before auto-stop' },
+        { name: 'nudgeText', required: false, description: 'Default nudge text (default: next)' },
+        { name: 'customInstruction', required: false, description: 'Optional custom instruction appended to the nudge' },
+        { name: 'doneCheckEnabled', required: false, description: 'Enable done-token stop check' },
+        { name: 'doneToken', required: false, description: 'Token to detect completion (default: PAGER_DONE)' }
+      ],
+      examples: [
+        { params: { sessionId: 'work1-claude' }, description: 'Start pager for one session with defaults' },
+        { params: { sessionId: 'work2-claude', customInstruction: 'continue with remaining tasks' }, description: 'Start pager with custom instructions' }
+      ],
+      aliases: ['pollcat-start', 'start-pager', 'start-pollcat'],
+      handler: async (params, { pagerService }) => {
+        if (!pagerService || typeof pagerService.startJob !== 'function') {
+          throw new Error('Pager service unavailable');
+        }
+        const job = await pagerService.startJob(params || {});
+        return { message: `Pager started: ${job.id}`, job };
+      }
+    });
+
+    this.register('pager-stop', {
+      category: 'automation',
+      description: 'Stop a running pager/pollcat job',
+      params: [
+        { name: 'id', required: true, description: 'Pager job id' },
+        { name: 'reason', required: false, description: 'Optional stop reason' }
+      ],
+      examples: [
+        { params: { id: 'pager-work1' }, description: 'Stop pager job by id' }
+      ],
+      aliases: ['pollcat-stop', 'stop-pager', 'stop-pollcat'],
+      handler: async (params, { pagerService }) => {
+        if (!pagerService || typeof pagerService.stopJob !== 'function') {
+          throw new Error('Pager service unavailable');
+        }
+        const id = String(params?.id || '').trim();
+        if (!id) throw new Error('id is required');
+        const result = pagerService.stopJob(id, { reason: params?.reason || 'manual' });
+        if (!result?.ok) throw new Error(result?.error || `Job not found: ${id}`);
+        return { message: `Pager stopped: ${id}`, job: result.job };
+      }
+    });
+
+    this.register('pager-status', {
+      category: 'automation',
+      description: 'Get pager/pollcat status',
+      params: [
+        { name: 'id', required: false, description: 'Pager job id (optional)' }
+      ],
+      examples: [
+        { params: {}, description: 'List all pager jobs' },
+        { params: { id: 'pager-work1' }, description: 'Get one pager job status' }
+      ],
+      aliases: ['pollcat-status', 'pager-jobs', 'pollcat-jobs'],
+      handler: async (params, { pagerService }) => {
+        if (!pagerService || typeof pagerService.getStatus !== 'function') {
+          throw new Error('Pager service unavailable');
+        }
+        const id = String(params?.id || '').trim();
+        return pagerService.getStatus({ id: id || undefined });
       }
     });
 
