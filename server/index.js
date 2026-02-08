@@ -61,6 +61,7 @@ const { QuickLinksService } = require('./quickLinksService');
 const { ProductLauncherService } = require('./productLauncherService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
+const { AgentProviderService } = require('./agentProviderService');
 const { WorktreeMetadataService } = require('./worktreeMetadataService');
 const { WorktreeGitService } = require('./worktreeGitService');
 const { ProjectMetadataService } = require('./projectMetadataService');
@@ -262,6 +263,7 @@ activityFeed.setIO(io);
 activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 3000) });
 const productLauncherService = ProductLauncherService.getInstance();
 const conversationService = ConversationService.getInstance();
+const agentProviderService = AgentProviderService.getInstance({ agentManager, logger });
 const worktreeMetadataService = WorktreeMetadataService.getInstance();
 const worktreeGitService = WorktreeGitService.getInstance();
 const projectMetadataService = ProjectMetadataService.getInstance();
@@ -334,7 +336,10 @@ const loadPlugins = async () => {
       logger,
       workspaceManager,
       sessionManager,
-      userSettingsService
+      userSettingsService,
+      conversationService,
+      agentProviderService,
+      agentManager
     }
   });
   return status;
@@ -3956,6 +3961,107 @@ app.post('/api/greenfield/detect-category', (req, res) => {
     category,
     path: categoryConfig.path
   });
+});
+
+// ============================================
+// Agent Provider API
+// ============================================
+
+function mapAgentProviderError(error, fallbackStatus = 500) {
+  const code = String(error?.code || '').trim().toUpperCase();
+  if (code === 'UNKNOWN_PROVIDER') return 404;
+  if (code === 'INVALID_INPUT') return 400;
+  if (code === 'UNSUPPORTED_OPERATION') return 422;
+  return fallbackStatus;
+}
+
+app.get('/api/agent-providers', (req, res) => {
+  try {
+    const providers = agentProviderService.listProviders();
+    res.json({ ok: true, count: providers.length, providers });
+  } catch (error) {
+    logger.error('Failed to list agent providers', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to list agent providers' });
+  }
+});
+
+app.get('/api/agent-providers/:providerId/sessions', (req, res) => {
+  try {
+    const sessions = agentProviderService.listSessions(req.params.providerId, { sessionManager });
+    res.json({ ok: true, provider: String(req.params.providerId || '').trim().toLowerCase(), count: sessions.length, sessions });
+  } catch (error) {
+    const status = mapAgentProviderError(error, 500);
+    logger.error('Failed to list provider sessions', { provider: req.params.providerId, error: error.message, stack: error.stack, status });
+    res.status(status).json({ ok: false, error: error.message || 'Failed to list provider sessions' });
+  }
+});
+
+app.post('/api/agent-providers/:providerId/resume-plan', express.json(), (req, res) => {
+  try {
+    const plan = agentProviderService.buildResumePlan(req.params.providerId, req.body || {}, {
+      agentManager
+    });
+    res.json({ ok: true, provider: String(req.params.providerId || '').trim().toLowerCase(), plan });
+  } catch (error) {
+    const status = mapAgentProviderError(error, 500);
+    logger.error('Failed to build provider resume plan', { provider: req.params.providerId, error: error.message, stack: error.stack, status });
+    res.status(status).json({ ok: false, error: error.message || 'Failed to build provider resume plan' });
+  }
+});
+
+app.post('/api/agent-providers/:providerId/resume', express.json(), (req, res) => {
+  try {
+    const plan = agentProviderService.buildResumePlan(req.params.providerId, req.body || {}, {
+      agentManager
+    });
+    res.json({ ok: true, provider: String(req.params.providerId || '').trim().toLowerCase(), plan });
+  } catch (error) {
+    const status = mapAgentProviderError(error, 500);
+    logger.error('Failed to build provider resume payload', { provider: req.params.providerId, error: error.message, stack: error.stack, status });
+    res.status(status).json({ ok: false, error: error.message || 'Failed to build provider resume payload' });
+  }
+});
+
+app.get('/api/agent-providers/:providerId/history/search', async (req, res) => {
+  try {
+    const results = await agentProviderService.searchHistory(req.params.providerId, req.query || {}, {
+      conversationService
+    });
+    res.json({ ok: true, provider: String(req.params.providerId || '').trim().toLowerCase(), ...results });
+  } catch (error) {
+    const status = mapAgentProviderError(error, 500);
+    logger.error('Failed to search provider history', {
+      provider: req.params.providerId,
+      query: req.query?.q || req.query?.query || '',
+      error: error.message,
+      stack: error.stack,
+      status
+    });
+    res.status(status).json({ ok: false, error: error.message || 'Failed to search provider history' });
+  }
+});
+
+app.get('/api/agent-providers/:providerId/history/:id', async (req, res) => {
+  try {
+    const params = { ...(req.query || {}), id: req.params.id };
+    const conversation = await agentProviderService.getTranscript(req.params.providerId, params, {
+      conversationService
+    });
+    if (!conversation) {
+      return res.status(404).json({ ok: false, error: 'Conversation not found' });
+    }
+    res.json({ ok: true, provider: String(req.params.providerId || '').trim().toLowerCase(), conversation });
+  } catch (error) {
+    const status = mapAgentProviderError(error, 500);
+    logger.error('Failed to get provider transcript', {
+      provider: req.params.providerId,
+      id: req.params.id,
+      error: error.message,
+      stack: error.stack,
+      status
+    });
+    res.status(status).json({ ok: false, error: error.message || 'Failed to get provider transcript' });
+  }
 });
 
 // ============================================
