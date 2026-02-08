@@ -79,3 +79,5 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #702 — docs sync: remaining-work history through PR #701
 - #703 — actionable scan classifier refinement (exclude guide/audit/memory docs)
 - #704 — docs sync: remaining-work history through PR #703
+- #705 — docs sync: remaining-work history through PR #704
+- #706 — backlog-only markdown scan mode (`--backlog-only`) + docs/tests
