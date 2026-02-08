@@ -191,6 +191,41 @@ function getActionableScanStatus(repoRoot) {
   };
 }
 
+function getNoWeekEstimateStatus(repoRoot) {
+  const targets = [
+    'CLAUDE.md',
+    'PLANS/2026-02-05/PLUGIN_ARCHITECTURE_AND_PRO_GATING.md',
+    'PLANS/2026-02-08/COMPETITIVE_GAP_EXECUTION_PLAN.md',
+    'PLANS/2026-02-08/REMAINING_WORK_NOW.md',
+    'PLANS/2026-02-09/REMAINING_WORK_LAST_14_DAYS_SYNTHESIS.md'
+  ];
+  const issues = [];
+  const weekEstimateRegex = /\b\d+\s*(?:[–-]\s*\d+\+?)?\s*weeks?\b/i;
+  const weekNumberRegex = /\bweek\s*\d+\b/i;
+
+  for (const target of targets) {
+    const absolutePath = path.join(repoRoot, target);
+    if (!fs.existsSync(absolutePath)) continue;
+    const content = fs.readFileSync(absolutePath, 'utf8');
+    const lines = content.split('\n');
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (weekEstimateRegex.test(line) || weekNumberRegex.test(line)) {
+        issues.push({
+          file: target,
+          line: index + 1,
+          text: line.trim()
+        });
+      }
+    }
+  }
+
+  return {
+    ok: issues.length === 0,
+    issues
+  };
+}
+
 function buildMarkdown(report) {
   const lines = [];
   lines.push('# Release readiness report');
@@ -224,6 +259,10 @@ function buildMarkdown(report) {
   }
   lines.push(`- Actionable markdown scan: ${report.checks.actionableScan.ok ? 'pass' : 'fail'}`);
   lines.push(`- Actionable markdown remaining: ${report.checks.actionableScan.withRemaining}`);
+  lines.push(`- No week-based estimates in active docs: ${report.checks.noWeekEstimates.ok ? 'pass' : 'fail'}`);
+  if (!report.checks.noWeekEstimates.ok) {
+    lines.push(`- Week-estimate findings: ${report.checks.noWeekEstimates.issues.length}`);
+  }
   lines.push(`- History custom email count (canonical/info): ${report.checks.historyAuthors.customEmails}`);
   lines.push(`- History custom email warning enabled: ${report.checks.historyAuthors.warningEnabled ? 'yes' : 'no'}`);
   lines.push('');
@@ -241,6 +280,7 @@ function main() {
   checks.snapshot = getSnapshotStatus(repoRoot, args.snapshotDir);
   checks.snapshotVerification = getSnapshotVerification(repoRoot, args.snapshotDir);
   checks.actionableScan = getActionableScanStatus(repoRoot);
+  checks.noWeekEstimates = getNoWeekEstimateStatus(repoRoot);
 
   checks.publicReleaseAudit = runNodeScript(repoRoot, 'scripts/public-release-audit.js', []);
   checks.publicReleaseHistoryAudit = args.includeHistory
@@ -262,7 +302,8 @@ function main() {
     !checks.snapshot.hasGit,
     !checks.snapshotVerification.ok,
     !checks.actionableScan.ok,
-    checks.actionableScan.withRemaining > 0
+    checks.actionableScan.withRemaining > 0,
+    !checks.noWeekEstimates.ok
   ].filter(Boolean).length;
 
   const warnings = [
