@@ -60,6 +60,7 @@ class CommandRegistry {
       params: config.params || [],
       examples: config.examples || [],
       safetyLevel: normalizeSafetyLevel(config.safetyLevel),
+      safetyNotes: String(config.safetyNotes || '').trim() || null,
       requiredRole: String(config.requiredRole || '').trim().toLowerCase() || null,
       surfaces: surfaces.length ? surfaces : ['commander', 'voice', 'ui'],
       aliases,
@@ -84,6 +85,7 @@ class CommandRegistry {
         params: cmd.params,
         examples: cmd.examples,
         safetyLevel: cmd.safetyLevel,
+        safetyNotes: this.buildSafetyNotes(cmd),
         requiredRole: cmd.requiredRole,
         surfaces: cmd.surfaces,
         aliases: cmd.aliases
@@ -109,6 +111,7 @@ class CommandRegistry {
         params: cmd.params,
         examples: cmd.examples,
         safetyLevel: cmd.safetyLevel,
+        safetyNotes: this.buildSafetyNotes(cmd),
         requiredRole: cmd.requiredRole,
         surfaces: cmd.surfaces,
         aliases: cmd.aliases
@@ -135,11 +138,28 @@ class CommandRegistry {
       params: cmd.params,
       examples: cmd.examples,
       safetyLevel: cmd.safetyLevel,
+      safetyNotes: this.buildSafetyNotes(cmd),
       requiredRole: cmd.requiredRole,
       surfaces: cmd.surfaces,
       aliases: cmd.aliases,
       hidden: cmd.hidden === true
     };
+  }
+
+  buildSafetyNotes(command) {
+    if (!command || typeof command !== 'object') return '';
+    const explicit = String(command.safetyNotes || '').trim();
+    if (explicit) return explicit;
+    const level = String(command.safetyLevel || 'safe').trim().toLowerCase();
+    const baseByLevel = {
+      safe: 'Read-only or low-impact action.',
+      caution: 'Can change UI or session state; verify the target before running.',
+      dangerous: 'Can modify repositories, workspaces, or process lifecycle; confirm intent first.'
+    };
+    const base = baseByLevel[level] || baseByLevel.safe;
+    const requiredRole = String(command.requiredRole || '').trim().toLowerCase();
+    if (!requiredRole) return base;
+    return `${base} Requires role: ${requiredRole}.`;
   }
 
   /**

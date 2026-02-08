@@ -46,7 +46,7 @@ Target behavior:
   - be available to Commander typed execution.
 
 Work needed:
-- Build an exported “command manifest” from `server/commandRegistry.js` (name, params schema, examples, safety notes). (PARTIAL: `GET /api/commander/capabilities` exists; remaining: add explicit safety notes + UI help view)
+- Build an exported “command manifest” from `server/commandRegistry.js` (name, params schema, examples, safety notes). (DONE: explicit `safetyNotes` now included in catalog/capabilities and Settings has a live Command Catalog help view)
 - Update voice LLM fallback prompt to include the manifest (or a scoped subset + retrieval). (DONE)
 - Add `POST /api/commander/execute-text`: (DONE: PR #574)
   - input: free text

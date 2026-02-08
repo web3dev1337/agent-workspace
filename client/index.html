@@ -416,6 +416,24 @@
                 </div>
             </div>
 
+            <div class="setting-section">
+                <h4>Command Catalog</h4>
+                <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items: flex-end;">
+                    <label>
+                        Filter:
+                        <input id="command-catalog-filter" type="text" placeholder="search command, category, alias..." style="min-width: 260px;" />
+                    </label>
+                    <button id="command-catalog-refresh" class="btn-secondary" type="button">Refresh commands</button>
+                    <span id="command-catalog-status" style="opacity:0.75;"></span>
+                </div>
+                <div class="setting-group">
+                    <p id="command-catalog-summary" class="setting-description">Click “Refresh commands”.</p>
+                </div>
+                <div class="setting-group">
+                    <pre id="command-catalog-output" class="mono diagnostics-output">Loading is manual by default.</pre>
+                </div>
+            </div>
+
 	            <div class="setting-section">
 	                <h4>Discord</h4>
 	                <div class="setting-group">
