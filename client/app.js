@@ -7593,6 +7593,7 @@ class ClaudeOrchestrator {
 	  setupDiagnosticsPanel() {
 	    const btn = document.getElementById('diagnostics-refresh');
 	    const btnFirstRun = document.getElementById('diagnostics-first-run');
+	    const btnRepairSafe = document.getElementById('diagnostics-repair-safe');
 	    const out = document.getElementById('diagnostics-output');
 	    const statusEl = document.getElementById('diagnostics-status');
 	    const repairEl = document.getElementById('diagnostics-repair-actions');
@@ -7698,6 +7699,7 @@ class ClaudeOrchestrator {
 	    const refresh = async (mode = 'all') => {
 	      btn.disabled = true;
 	      if (btnFirstRun) btnFirstRun.disabled = true;
+	      if (btnRepairSafe) btnRepairSafe.disabled = true;
 	      if (statusEl) statusEl.textContent = 'Loading…';
 	      try {
 	        if (mode === 'base') {
@@ -7717,11 +7719,49 @@ class ClaudeOrchestrator {
 	      } finally {
 	        btn.disabled = false;
 	        if (btnFirstRun) btnFirstRun.disabled = false;
+	        if (btnRepairSafe) btnRepairSafe.disabled = false;
 	      }
 	    };
 
 	    btn.addEventListener('click', () => refresh('all'));
 	    btnFirstRun?.addEventListener('click', () => refresh('first-run'));
+	    btnRepairSafe?.addEventListener('click', async () => {
+	      btnRepairSafe.disabled = true;
+	      if (statusEl) statusEl.textContent = 'Running safe auto-fix…';
+	      try {
+	        const res = await fetch('/api/diagnostics/first-run/repair-safe', { method: 'POST' });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok || data?.ok === false) {
+	          throw new Error(String(data?.error || data?.message || `HTTP ${res.status}`));
+	        }
+
+	        const diagnostics = data?.diagnostics;
+	        if (diagnostics && typeof diagnostics === 'object') {
+	          state.firstRun = diagnostics;
+	          renderRepairActions(state.firstRun);
+	        } else {
+	          await refreshFirstRun();
+	        }
+	        if (!state.base) await refreshBase();
+	        render(state.base, state.firstRun);
+
+	        const appliedCount = Number(data?.appliedCount || 0);
+	        const failedCount = Number(data?.failedCount || 0);
+	        const skippedManualCount = Number(data?.skippedManualCount || 0);
+	        if (failedCount > 0) {
+	          this.showToast?.(`Auto-fix applied ${appliedCount}, failed ${failedCount}`, 'warning');
+	        } else {
+	          const tail = skippedManualCount > 0 ? `, ${skippedManualCount} manual step(s) left` : '';
+	          this.showToast?.(`Auto-fix applied ${appliedCount}${tail}`, 'success');
+	        }
+	        if (statusEl) statusEl.textContent = 'Safe auto-fix completed';
+	      } catch (error) {
+	        this.showToast?.(`Safe auto-fix failed: ${String(error?.message || error)}`, 'error');
+	        if (statusEl) statusEl.textContent = '';
+	      } finally {
+	        btnRepairSafe.disabled = false;
+	      }
+	    });
 	    repairEl?.addEventListener('click', async (event) => {
 	      const target = event.target.closest('[data-diagnostics-repair]');
 	      if (!target) return;
