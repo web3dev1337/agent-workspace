@@ -161,4 +161,4 @@ Work needed:
 
 - Reduce or eliminate multiple “✕” close buttons that do different things without clarity.
 - Ensure Queue action bar never hides buttons off-screen (wrap/overflow).
-- Ensure settings panel always stays usable on short viewports.
+- DONE: Settings panel now uses dynamic viewport height + mobile full-width fallback, keeping the full panel scrollable/usable on short viewports.
