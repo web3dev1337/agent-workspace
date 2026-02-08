@@ -1027,8 +1027,18 @@ io.on('connection', (socket) => {
       // We don't track tabId on the backend; the client passes the sessions for that tab.
       const ids = Array.isArray(sessionIds) ? sessionIds.map(String).filter(Boolean) : [];
       let closed = 0;
-
+      const toClose = new Set();
       for (const sessionId of ids) {
+        const groupIds = sessionManager.getSessionGroupIds(sessionId, {
+          sessionTypes: ['claude', 'codex', 'server']
+        });
+        groupIds.forEach((id) => {
+          const sid = String(id || '').trim();
+          if (sid) toClose.add(sid);
+        });
+      }
+
+      for (const sessionId of toClose) {
         const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
         if (!ok) continue;
         closed += 1;
@@ -1066,27 +1076,13 @@ io.on('connection', (socket) => {
       // If the user closes either the agent or server terminal, close the whole worktree group.
       // This avoids "server orphaned" / "agent orphaned" drift and matches the UI expectation
       // that agent+server live/die together.
-      const workspaceId = String(target.workspace || '').trim();
-      const worktreeId = String(target.worktreeId || '').trim();
-      const repoName = String(target.repositoryName || '').trim();
-      const closeIds = new Set([id]);
-
-      if (workspaceId && worktreeId) {
-        const map = sessionManager.workspaceSessionMaps?.get?.(workspaceId) || null;
-        const iterable = map && typeof map.entries === 'function'
-          ? map.entries()
-          : sessionManager.sessions.entries();
-
-        for (const [sid, sess] of iterable) {
-          if (!sid || !sess) continue;
-          if (workspaceId && String(sess.workspace || '').trim() !== workspaceId) continue;
-          if (String(sess.worktreeId || '').trim() !== worktreeId) continue;
-          if (repoName && String(sess.repositoryName || '').trim() !== repoName) continue;
-          const t = String(sess.type || '').trim().toLowerCase();
-          if (t !== 'claude' && t !== 'codex' && t !== 'server') continue;
-          closeIds.add(String(sid));
-        }
-      }
+      const closeIds = new Set(
+        sessionManager.getSessionGroupIds(id, {
+          workspaceId: String(target.workspace || '').trim() || null,
+          sessionTypes: ['claude', 'codex', 'server']
+        })
+      );
+      if (!closeIds.size) closeIds.add(id);
 
       let closed = 0;
       closeIds.forEach((sid) => {
@@ -2639,7 +2635,17 @@ function parseClearSessionsInput(req) {
 
 function closeThreadSessions(sessionIds = []) {
   const ids = Array.isArray(sessionIds) ? sessionIds : [];
+  const toClose = new Set();
   for (const sessionId of ids) {
+    const groupIds = sessionManager.getSessionGroupIds(sessionId, {
+      sessionTypes: ['claude', 'codex', 'server']
+    });
+    groupIds.forEach((id) => {
+      const sid = String(id || '').trim();
+      if (sid) toClose.add(sid);
+    });
+  }
+  for (const sessionId of toClose) {
     const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
     if (ok) io.emit('session-closed', { sessionId });
   }
