@@ -78,6 +78,16 @@ Non-destructive prep helper now available:
 - Optional outputs:
   - `node scripts/audit-history-authors.js --json /tmp/history-authors.json --md /tmp/history-authors.md --mailmap /tmp/history-authors.mailmap`
 - This does not rewrite history; it only audits author/committer email usage and generates a private mailmap starter file.
+- Full private execution prep workkit:
+  - `npm run prep:history-rewrite`
+  - Optional custom output directory:
+    - `node scripts/generate-history-rewrite-workkit.js --out-dir /tmp/history-rewrite-workkit`
+  - Generated artifacts include:
+    - `history-authors.json` / `history-authors.md` (audit evidence)
+    - `mailmap.private.txt` (fill in noreply targets)
+    - `paths-to-remove.txt` (history removal path list)
+    - `run-filter-repo.sh` + `history-rewrite-runbook.md` (execution helpers)
+  - This is still non-destructive; no rewrite commands are executed automatically.
 
 ### 3) Rewrite: remove files/directories from all history
 
@@ -160,3 +170,4 @@ Status notes (2026-02-06):
 
 Status notes (2026-02-08):
 - Added `scripts/audit-history-authors.js` and `npm run audit:history-authors` so rewrite inputs can be prepared safely before any destructive history operation.
+- Added `scripts/generate-history-rewrite-workkit.js` and `npm run prep:history-rewrite` to produce a private rewrite runbook + command kit for a controlled maintenance-window execution.
