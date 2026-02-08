@@ -26,6 +26,9 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
+      - name: Command surface drift check
+        run: npm run check:command-surface
+
   public_release_audit:
     runs-on: ubuntu-latest
     timeout-minutes: 10

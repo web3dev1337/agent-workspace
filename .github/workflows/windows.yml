@@ -33,6 +33,9 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
+      - name: Command surface drift check
+        run: npm run check:command-surface
+
   tauri_windows:
     name: tauri build (windows)
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
