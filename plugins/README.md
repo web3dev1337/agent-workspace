@@ -13,12 +13,32 @@ plugins/
 
 ```json
 {
+  "manifestVersion": 1,
+  "id": "my-plugin",
   "name": "My Plugin",
   "version": "0.1.0",
   "description": "Example plugin",
-  "serverEntry": "server.js"
+  "serverEntry": "server.js",
+  "capabilities": {
+    "routes": true,
+    "commands": true,
+    "surfaces": ["commander", "voice", "ui", "scheduler"],
+    "maxCommands": 64
+  },
+  "compatibility": {
+    "minNodeVersion": "20.0.0",
+    "minOrchestratorVersion": "1.0.0"
+  }
 }
 ```
+
+Rules:
+- `manifestVersion` must currently be `1`.
+- `id` (if provided) must match the plugin folder name.
+- `serverEntry` must be a relative file path inside the plugin directory.
+- `capabilities.maxCommands` is validated (`1..500`).
+- command names are auto-prefixed with `<pluginId>-` and collisions are rejected.
+- unsupported command surfaces are rejected at load time.
 
 ## `server.js` entry
 
