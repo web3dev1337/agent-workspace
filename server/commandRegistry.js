@@ -567,6 +567,23 @@ class CommandRegistry {
       }
     });
 
+    this.register('project-chats-new', {
+      category: 'ui',
+      description: 'Create a new chat in the Projects + Chats shell',
+      params: [
+        { name: 'workspace', required: false, description: 'Optional workspace id or name for where to create the chat' }
+      ],
+      examples: [
+        { params: {}, description: 'Create a chat in the currently selected workspace' },
+        { params: { workspace: 'zoo-game' }, description: 'Create a chat in the zoo-game workspace' }
+      ],
+      aliases: ['new-chat', 'create-chat', 'new-thread'],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'project-chats-new', ...params });
+        return { message: 'Creating new chat' };
+      }
+    });
+
     this.register('open-telemetry', {
       category: 'process',
       description: 'Open Telemetry details (Dashboard overlay)',

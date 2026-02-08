@@ -676,6 +676,29 @@ class VoiceCommandService {
         command: 'open-commander',
         extractParams: () => ({})
       },
+      // Open projects + chats shell (simple mode)
+      {
+        patterns: [
+          /open\s+projects?\s*(?:and|\+)?\s*chats?/i,
+          /show\s+projects?\s*(?:and|\+)?\s*chats?/i,
+          /open\s+chats?\s+shell/i,
+          /open\s+simple\s+mode/i,
+        ],
+        command: 'open-project-chats',
+        extractParams: () => ({})
+      },
+      // Create a new chat from projects + chats
+      {
+        patterns: [
+          /^(?:new|create|start)\s+(?:chat|thread)$/i,
+          /^(?:new|create|start)\s+(?:chat|thread)\s+in\s+(.+)$/i,
+        ],
+        command: 'project-chats-new',
+        extractParams: (match) => {
+          const workspace = String(match?.[1] || '').trim();
+          return workspace ? { workspace } : {};
+        }
+      },
       // Open settings
       {
         patterns: [
@@ -1345,6 +1368,8 @@ Command patterns:
 - "open queue" → open-queue
 - "open tasks" → open-tasks
 - "open advice" → open-advice
+- "open projects and chats" → open-project-chats
+- "new chat" → project-chats-new
 - "open commander" → open-commander
 - "open settings" → open-settings
 - "pager status" → pager-status
