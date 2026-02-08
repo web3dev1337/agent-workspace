@@ -3564,8 +3564,10 @@ header h1 {
   position: fixed;
   top: var(--header-height);
   right: 0;
-  bottom: 0;
-  width: 320px;
+  bottom: auto;
+  width: min(360px, 100vw);
+  height: calc(100dvh - var(--header-height));
+  max-height: calc(100dvh - var(--header-height));
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-color);
   box-shadow: -4px 0 12px rgba(0, 0, 0, 0.15);
@@ -3606,6 +3608,7 @@ header h1 {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable both-edges;
+  padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
 }
 
 .settings-toolbar {
@@ -3657,6 +3660,42 @@ header h1 {
 
 .settings-filter-hidden {
   display: none !important;
+}
+
+@supports not (height: 100dvh) {
+  .settings-panel {
+    height: calc(100vh - var(--header-height));
+    max-height: calc(100vh - var(--header-height));
+  }
+}
+
+@media (max-height: 820px) {
+  .settings-panel {
+    width: min(420px, 100vw);
+  }
+
+  .panel-header {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .settings-content {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .settings-toolbar {
+    margin: calc(var(--space-sm) * -1) calc(var(--space-md) * -1) var(--space-sm);
+    padding: 8px var(--space-md) 10px;
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-panel {
+    left: 0;
+    right: 0;
+    width: 100vw;
+    border-left: none;
+    box-shadow: none;
+  }
 }
 
 /* Review Console */
