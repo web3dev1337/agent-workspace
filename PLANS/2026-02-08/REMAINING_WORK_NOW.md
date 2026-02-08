@@ -14,6 +14,10 @@ This file is the canonical short list after syncing the Phase 5 execution plan a
     - `npm run report:release-readiness -- --include-history`
   - Snapshot quality check only:
     - `npm run check:public-snapshot-repo`
+  - Includes git identity guardrails:
+    - effective git email must be GitHub noreply
+    - global git email should be GitHub noreply
+    - canonical-history custom-email warnings are elevated only in `--include-history` mode
 
 ## Remaining destructive / optional work
 
@@ -48,3 +52,7 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #675 — persisted prep report artifacts
 - #676 — guarded rewrite executor
 - #677 — public snapshot repo generator
+- #678 — docs sync for release readiness closure
+- #679 — one-command release-readiness report
+- #680 — snapshot verifier + report integration
+- #681 — git identity guardrails in release-readiness report
