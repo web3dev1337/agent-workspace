@@ -550,8 +550,8 @@ class ClaudeOrchestrator {
           this.updateServerStatus(sessionId, data);
         }
 
-        // Detect GitHub URLs in Claude sessions
-        if (sessionId.includes('-claude')) {
+        // Detect GitHub URLs in agent sessions
+        if (/-claude$|-codex$/.test(String(sessionId || ''))) {
           this.detectGitHubLinks(sessionId, data);
         }
 
@@ -2662,7 +2662,7 @@ class ClaudeOrchestrator {
   computeTier1Busy() {
     for (const [sessionId, session] of this.sessions) {
       if (!this.matchesViewMode(sessionId)) continue;
-      if (!(session?.type === 'claude' || String(sessionId).includes('-claude'))) continue;
+      if (!((session?.type === 'claude' || session?.type === 'codex') || /-(claude|codex)$/.test(String(sessionId || '')))) continue;
 
       const tier = this.getTierForSession(sessionId);
       if (tier !== 1) continue;
@@ -2756,7 +2756,7 @@ class ClaudeOrchestrator {
 	    const type = session?.type;
 	
 	    if (this.viewMode === 'claude') {
-	      return type === 'claude' || sessionId.includes('-claude');
+	      return type === 'claude' || type === 'codex' || /-(claude|codex)$/.test(String(sessionId || ''));
 	    }
 	
 	    if (this.viewMode === 'server') {
@@ -12116,10 +12116,10 @@ class ClaudeOrchestrator {
       const focusedBranch = document.getElementById('focused-branch');
       const focusedStatus = document.getElementById('focused-status');
       
-      const isClaudeSession = sessionId.includes('-claude');
+      const isAgentSession = /-(claude|codex)$/.test(String(sessionId || ''));
       const worktreeNumber = sessionId.split('-')[0].replace('work', '');
       
-      if (focusedTitle) focusedTitle.textContent = `${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${worktreeNumber}`;
+      if (focusedTitle) focusedTitle.textContent = `${isAgentSession ? '🤖 Agent' : '💻 Server'} ${worktreeNumber}`;
       if (focusedBranch) focusedBranch.textContent = this.formatBranchLabel(session.branch || '', { context: 'terminal' }).text || '';
       if (focusedStatus) focusedStatus.className = `status-indicator ${session.status || 'idle'}`;
       
@@ -14248,7 +14248,7 @@ class ClaudeOrchestrator {
     }
 
     const sessionIds = Array.isArray(thread.sessionIds) ? thread.sessionIds : [];
-    const preferredSession = sessionIds.find((sessionId) => String(sessionId || '').includes('-claude')) || sessionIds[0] || null;
+    const preferredSession = sessionIds.find((sessionId) => /-(claude|codex)$/.test(String(sessionId || ''))) || sessionIds[0] || null;
     if (preferredSession && this.sessions.has(preferredSession)) {
       this.focusTerminal(preferredSession);
       return;
@@ -27437,7 +27437,14 @@ class ClaudeOrchestrator {
       : [];
     if (!ids.length) return;
 
-    const agentSessionIds = ids.filter(id => id.includes('-claude'));
+    const agentSessionIds = ids.filter((id) => {
+      const sid = String(id || '').trim();
+      if (!sid) return false;
+      if (/-claude$|-codex$/.test(sid)) return true;
+      const sess = this.sessions.get(sid);
+      const type = String(sess?.type || '').trim().toLowerCase();
+      return type === 'claude' || type === 'codex';
+    });
     if (!agentSessionIds.length) return;
 
     // Update local state immediately so gating/UI reads the tier before async persistence completes.
