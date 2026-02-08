@@ -149,6 +149,30 @@ body.skin-amber {
   --accent-primary-pressed: #d97706;
 }
 
+body.skin-high-contrast {
+  --accent-primary: #ffd400;
+  --accent-primary-hover: #ffe066;
+  --accent-primary-pressed: #e6bf00;
+  --text-on-accent: #111111;
+  --skin-bg-secondary: #121212;
+  --skin-bg-tertiary: #1a1a1a;
+  --skin-bg-hover: #252525;
+  --skin-border-color: #ffffff;
+  --skin-focus-ring: rgba(255, 212, 0, 0.55);
+}
+
+body.light-theme.skin-high-contrast {
+  --accent-primary: #111111;
+  --accent-primary-hover: #222222;
+  --accent-primary-pressed: #000000;
+  --text-on-accent: #ffffff;
+  --skin-bg-secondary: #ffffff;
+  --skin-bg-tertiary: #f4f4f4;
+  --skin-bg-hover: #e7e7e7;
+  --skin-border-color: #1b1b1b;
+  --skin-focus-ring: rgba(0, 0, 0, 0.55);
+}
+
 /* Reset & Base */
 * {
   margin: 0;
@@ -1664,7 +1688,7 @@ header h1 {
 }
 
 .review-console-route-bar select {
-  min-width: 74px;
+  min-width: 86px;
   height: 26px;
   font-size: 0.78rem;
 }
@@ -3764,6 +3788,74 @@ header h1 {
   color: var(--text-tertiary);
   font-size: 0.85em;
   margin-bottom: var(--space-md);
+}
+
+.skin-gallery {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.skin-swatch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 7px 10px;
+  cursor: pointer;
+  min-height: 36px;
+}
+
+.skin-swatch-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.skin-swatch-btn.active {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-primary) inset;
+}
+
+.skin-swatch-paint {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  flex: 0 0 auto;
+}
+
+.skin-swatch-paint.skin-default {
+  background: linear-gradient(135deg, #1f6feb 0%, #3fb950 100%);
+}
+
+.skin-swatch-paint.skin-blue {
+  background: #0f67fd;
+}
+
+.skin-swatch-paint.skin-purple {
+  background: #a855f7;
+}
+
+.skin-swatch-paint.skin-emerald {
+  background: #10b981;
+}
+
+.skin-swatch-paint.skin-amber {
+  background: #f59e0b;
+}
+
+.skin-swatch-paint.skin-high-contrast {
+  background: linear-gradient(135deg, #111111 0%, #ffd400 100%);
+}
+
+@media (max-width: 900px) {
+  .skin-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .settings-glossary details {

@@ -1407,15 +1407,29 @@ class ClaudeOrchestrator {
       this.updateGlobalUserSetting('ui.theme', e.target.value);
     });
 
+	    const applySkinSelection = (rawSkin, { persist = true } = {}) => {
+	      const candidate = String(rawSkin || '').trim().toLowerCase();
+	      const skin = this.getKnownSkins().includes(candidate) ? candidate : 'default';
+	      this.settings.skin = skin;
+	      this.saveSettings();
+	      this.applyTheme();
+	      this.syncSkinGallerySelection();
+	      if (persist) this.updateGlobalUserSetting('ui.skin', skin);
+	    };
+
 	    const skinSelect = document.getElementById('skin-select');
 	    if (skinSelect) {
 	      skinSelect.addEventListener('change', (e) => {
-	        this.settings.skin = e.target.value;
-	        this.saveSettings();
-	        this.applyTheme();
-	        this.updateGlobalUserSetting('ui.skin', e.target.value);
+	        applySkinSelection(e.target.value, { persist: true });
 	      });
 	    }
+
+	    document.querySelectorAll('[data-skin-swatch]').forEach((btn) => {
+	      btn.addEventListener('click', () => {
+	        const next = String(btn?.dataset?.skinSwatch || '').trim().toLowerCase();
+	        applySkinSelection(next, { persist: true });
+	      });
+	    });
 
 		    const skinIntensityRange = document.getElementById('skin-intensity-range');
 		    const skinIntensityValue = document.getElementById('skin-intensity-value');
@@ -7095,6 +7109,7 @@ class ClaudeOrchestrator {
 	      document.body.classList.toggle(`skin-${s}`, skin === s);
 	    }
 	    try { document.body.dataset.skin = skin; } catch {}
+	    this.syncSkinGallerySelection();
 
 	    const intensityRaw = Number(
 	      this.settings.skinIntensity
@@ -7135,10 +7150,24 @@ class ClaudeOrchestrator {
 	    if (skinIntensityRange) skinIntensityRange.value = String(nextIntensity);
 	    const skinIntensityValue = document.getElementById('skin-intensity-value');
 	    if (skinIntensityValue) skinIntensityValue.textContent = `${nextIntensity}%`;
+	    this.syncSkinGallerySelection();
 	  }
 
   getKnownSkins() {
-    return ['default', 'blue', 'purple', 'emerald', 'amber'];
+    return ['default', 'blue', 'purple', 'emerald', 'amber', 'high-contrast'];
+  }
+
+  syncSkinGallerySelection() {
+    const knownSkins = this.getKnownSkins();
+    const current = knownSkins.includes(String(this.settings?.skin || '').trim().toLowerCase())
+      ? String(this.settings.skin).trim().toLowerCase()
+      : 'default';
+    document.querySelectorAll('[data-skin-swatch]').forEach((btn) => {
+      const key = String(btn?.dataset?.skinSwatch || '').trim().toLowerCase();
+      const active = key === current;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
   }
 
   getSimpleModeConfig() {
@@ -7186,6 +7215,7 @@ class ClaudeOrchestrator {
 	    document.getElementById('theme-select').value = this.settings.theme;
 	    const skinSelect = document.getElementById('skin-select');
 	    if (skinSelect) skinSelect.value = this.settings.skin || 'default';
+	    this.syncSkinGallerySelection();
 	    const skinIntensityRange = document.getElementById('skin-intensity-range');
 	    if (skinIntensityRange) {
 	      const v0 = Number(this.settings.skinIntensity);
@@ -9637,11 +9667,15 @@ class ClaudeOrchestrator {
 		            isDraft: !!x.isDraft,
 		            tier: x?.tier ?? null,
 		            changeRisk: String(x?.changeRisk || '').trim() || null,
+		            pFailFirstPass: Number.isFinite(Number(x?.pFailFirstPass)) ? Number(x.pFailFirstPass) : null,
+		            verifyMinutes: Number.isFinite(Number(x?.verifyMinutes)) ? Number(x.verifyMinutes) : null,
+		            updatedAt: String(x?.updatedAt || '').trim() || null,
 		            claimedBy: String(x?.claimedBy || '').trim() || null,
 		            assignedTo: String(x?.assignedTo || '').trim() || null,
 		            reviewed: !!x?.reviewed,
 		            done: !!x?.done,
-		            outcome: String(x?.outcome || '').trim() || null
+		            outcome: String(x?.outcome || '').trim() || null,
+		            blockedCount: Number(x?.blockedCount || 0) || 0
 		          }))
 		          .filter((x) => x.id && x.url);
 
@@ -9661,11 +9695,15 @@ class ClaudeOrchestrator {
 		              isDraft: !!t.isDraft,
 		              tier: rec?.tier ?? null,
 		              changeRisk: String(rec?.changeRisk || '').trim() || null,
+		              pFailFirstPass: Number.isFinite(Number(rec?.pFailFirstPass)) ? Number(rec.pFailFirstPass) : null,
+		              verifyMinutes: Number.isFinite(Number(rec?.verifyMinutes)) ? Number(rec.verifyMinutes) : null,
+		              updatedAt: String(rec?.updatedAt || t?.updatedAt || '').trim() || null,
 		              claimedBy: String(rec?.claimedBy || '').trim() || null,
 		              assignedTo: String(rec?.assignedTo || '').trim() || null,
 		              reviewed: !!rec?.reviewedAt,
 		              done: !!rec?.doneAt,
-		              outcome: String(rec?.reviewOutcome || '').trim() || null
+		              outcome: String(rec?.reviewOutcome || '').trim() || null,
+		              blockedCount: Number(t?.dependencySummary?.blocked || 0) || 0
 		            });
 		          }
 
@@ -9995,6 +10033,10 @@ class ClaudeOrchestrator {
 			      const showNav = navCount > 1 && navIndex >= 0;
             const me = this.getIdentityClaimName();
             const readRouteFilters = () => {
+              const normalizeSort = (value) => {
+                const v = String(value || 'queue').trim().toLowerCase();
+                return (v === 'queue' || v === 'risk_verify' || v === 'verify_desc' || v === 'updated_desc') ? v : 'queue';
+              };
               try {
                 const raw = JSON.parse(localStorage.getItem('review-console-route-filters') || '{}');
                 return {
@@ -10002,10 +10044,11 @@ class ClaudeOrchestrator {
                   risk: String(raw?.risk || 'all').trim().toLowerCase(),
                   unreviewed: raw?.unreviewed !== false,
                   blockedOnly: raw?.blockedOnly === true,
-                  claimed: String(raw?.claimed || 'all').trim().toLowerCase()
+                  claimed: String(raw?.claimed || 'all').trim().toLowerCase(),
+                  sort: normalizeSort(raw?.sort)
                 };
               } catch {
-                return { tier: 't3plus', risk: 'all', unreviewed: true, blockedOnly: false, claimed: 'all' };
+                return { tier: 't3plus', risk: 'all', unreviewed: true, blockedOnly: false, claimed: 'all', sort: 'queue' };
               }
             };
             const routeFilters = readRouteFilters();
@@ -10050,6 +10093,14 @@ class ClaudeOrchestrator {
                     <option value="unclaimed" ${routeFilters.claimed === 'unclaimed' ? 'selected' : ''}>Unclaimed</option>
                     <option value="mine" ${routeFilters.claimed === 'mine' ? 'selected' : ''}>Mine</option>
                     <option value="claimed" ${routeFilters.claimed === 'claimed' ? 'selected' : ''}>Claimed</option>
+                  </select>
+                </label>
+                <label>Sort
+                  <select data-review-route-sort>
+                    <option value="queue" ${routeFilters.sort === 'queue' ? 'selected' : ''}>Queue</option>
+                    <option value="risk_verify" ${routeFilters.sort === 'risk_verify' ? 'selected' : ''}>Risk+Verify</option>
+                    <option value="verify_desc" ${routeFilters.sort === 'verify_desc' ? 'selected' : ''}>Verify ↓</option>
+                    <option value="updated_desc" ${routeFilters.sort === 'updated_desc' ? 'selected' : ''}>Updated ↓</option>
                   </select>
                 </label>
                 <button class="btn-secondary" type="button" data-review-route-reset="true">Reset</button>
@@ -10534,6 +10585,7 @@ class ClaudeOrchestrator {
         const routeUnreviewedEl = bodyEl.querySelector('[data-review-route-unreviewed]');
         const routeBlockedEl = bodyEl.querySelector('[data-review-route-blocked]');
         const routeClaimedEl = bodyEl.querySelector('[data-review-route-claimed]');
+        const routeSortEl = bodyEl.querySelector('[data-review-route-sort]');
         const routeResetBtn = bodyEl.querySelector('[data-review-route-reset="true"]');
         const panelToggleBtns = Array.from(bodyEl.querySelectorAll('[data-rc-panel-toggle]'));
 
@@ -10575,6 +10627,55 @@ class ClaudeOrchestrator {
             if (predicate && !predicate(item)) continue;
             out.push({ index, item });
           }
+          const riskScore = (entry) => {
+            const risk = String(entry?.item?.changeRisk || '').trim().toLowerCase();
+            if (risk === 'critical') return 4;
+            if (risk === 'high') return 3;
+            if (risk === 'medium') return 2;
+            if (risk === 'low') return 1;
+            return 0;
+          };
+          const verifyScore = (entry) => {
+            const n = Number(entry?.item?.verifyMinutes);
+            return Number.isFinite(n) ? n : -1;
+          };
+          const updatedScore = (entry) => {
+            const ms = Date.parse(String(entry?.item?.updatedAt || ''));
+            return Number.isFinite(ms) ? ms : 0;
+          };
+          const blockedScore = (entry) => {
+            const blockedCount = Number(entry?.item?.blockedCount || 0) || 0;
+            const outcome = String(entry?.item?.outcome || '').trim().toLowerCase();
+            if (blockedCount > 0 || outcome === 'blocked') return 1;
+            return 0;
+          };
+          const byOrder = (a, b) => a.index - b.index;
+          const mode = String(routeFilters.sort || 'queue').trim().toLowerCase();
+          if (mode === 'risk_verify') {
+            out.sort((a, b) => {
+              return (blockedScore(b) - blockedScore(a))
+                || (riskScore(b) - riskScore(a))
+                || (verifyScore(b) - verifyScore(a))
+                || (updatedScore(b) - updatedScore(a))
+                || byOrder(a, b);
+            });
+          } else if (mode === 'verify_desc') {
+            out.sort((a, b) => {
+              return (blockedScore(b) - blockedScore(a))
+                || (verifyScore(b) - verifyScore(a))
+                || (riskScore(b) - riskScore(a))
+                || (updatedScore(b) - updatedScore(a))
+                || byOrder(a, b);
+            });
+          } else if (mode === 'updated_desc') {
+            out.sort((a, b) => {
+              return (blockedScore(b) - blockedScore(a))
+                || (updatedScore(b) - updatedScore(a))
+                || (riskScore(b) - riskScore(a))
+                || (verifyScore(b) - verifyScore(a))
+                || byOrder(a, b);
+            });
+          }
           return out;
         };
 
@@ -10592,6 +10693,7 @@ class ClaudeOrchestrator {
           if (routeUnreviewedEl) routeUnreviewedEl.checked = routeFilters.unreviewed !== false;
           if (routeBlockedEl) routeBlockedEl.checked = routeFilters.blockedOnly === true;
           if (routeClaimedEl) routeClaimedEl.value = routeFilters.claimed || 'all';
+          if (routeSortEl) routeSortEl.value = routeFilters.sort || 'queue';
         };
 
 	      const updateNavStatus = () => {
@@ -10707,12 +10809,18 @@ class ClaudeOrchestrator {
           persistRouteFilters();
           updateNavStatus();
         });
+        routeSortEl?.addEventListener('change', () => {
+          routeFilters.sort = String(routeSortEl.value || 'queue').trim().toLowerCase();
+          persistRouteFilters();
+          updateNavStatus();
+        });
         routeResetBtn?.addEventListener('click', () => {
           routeFilters.tier = 't3plus';
           routeFilters.risk = 'all';
           routeFilters.unreviewed = true;
           routeFilters.blockedOnly = false;
           routeFilters.claimed = 'all';
+          routeFilters.sort = 'queue';
           syncRouteControls();
           persistRouteFilters();
           updateNavStatus();
@@ -12666,6 +12774,7 @@ class ClaudeOrchestrator {
 	      const skin = this.userSettings.global?.ui?.skin;
 	      skinSelect.value = this.getKnownSkins().includes(skin) ? skin : 'default';
 	    }
+	    this.syncSkinGallerySelection();
 
 	    const skinIntensityRange = document.getElementById('skin-intensity-range');
 	    const skinIntensityValue = document.getElementById('skin-intensity-value');
@@ -23817,11 +23926,15 @@ class ClaudeOrchestrator {
 	            worktreePath: pick(t?.worktreePath) || null,
 	            tier: rec?.tier ?? null,
 	            changeRisk: pick(rec?.changeRisk) || null,
+	            pFailFirstPass: Number.isFinite(Number(rec?.pFailFirstPass)) ? Number(rec.pFailFirstPass) : null,
+	            verifyMinutes: Number.isFinite(Number(rec?.verifyMinutes)) ? Number(rec.verifyMinutes) : null,
+	            updatedAt: pick(rec?.updatedAt || t?.updatedAt || '') || null,
 	            claimedBy: pick(rec?.claimedBy) || null,
 	            assignedTo: pick(rec?.assignedTo) || null,
 	            reviewed: !!rec?.reviewedAt,
 	            done: !!rec?.doneAt,
-	            outcome: pick(rec?.reviewOutcome) || null
+	            outcome: pick(rec?.reviewOutcome) || null,
+	            blockedCount: Number(t?.dependencySummary?.blocked || 0) || 0
 	          };
 	        });
 	      },
