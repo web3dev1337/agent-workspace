@@ -41,7 +41,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - added unit coverage for bulk safe repair flow (`runFirstRunSafeRepairs`).
 
 ### P0-02: Lifecycle consistency for workspace/worktree/session close/remove
-- Status: Ready
+- Status: Done
 - Size: M
 - Why: avoid orphaned terminals/sessions and stale recovery entries
 - Deliverables:
@@ -56,6 +56,11 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - closing/removing actions leave no stale active sessions
   - session recovery only shows truly recoverable sessions
   - unit coverage for all lifecycle transitions
+- Shipped in PR #TBD:
+  - added explicit lifecycle policy module + `GET /api/lifecycle/policy`.
+  - tightened worktree removal matching to avoid false positives (`work1` no longer matches `work10`).
+  - synchronized remove-worktree cleanup with linked thread status/session references.
+  - added lifecycle policy unit tests for parsing/matching/default behavior.
 
 ### P0-03: Review Route dense layout defaults (throughput mode)
 - Status: Ready
