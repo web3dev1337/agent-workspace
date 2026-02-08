@@ -1,7 +1,7 @@
 # Competitive gap execution plan (Phase 5) — 2026-02-08
 
 Owner: Agent Orchestrator
-Status: Ready to execute
+Status: Executed (M0-M4 complete)
 Input: `PLANS/2026-02-08/SOLOTERM_CODEX_CLAUDE_COMPETITIVE_ANALYSIS.md`
 
 ## 1) Objective
@@ -33,6 +33,7 @@ This initiative is done when all conditions hold:
 ## Milestone M0 — Foundations and guardrails
 
 ### PR M0.1 — Command catalog contract v1
+Status: Done
 Scope:
 - Add server endpoint `GET /api/commands/catalog`.
 - Expose command metadata from existing registry:
@@ -47,10 +48,14 @@ Files (expected):
 Acceptance:
 - Endpoint returns stable JSON schema.
 - Voice + Commander parsers can read same catalog object.
+- Shipped in PR #627 and PR #643:
+  - added unified command catalog endpoint (`GET /api/commands/catalog`) from server registry metadata.
+  - added command-catalog schema/unit coverage and command/action drift checks in test gates.
 
 ---
 
 ### PR M0.2 — In-app command browser
+Status: Done
 Scope:
 - Add a read-only command browser panel/modal with search and examples.
 - Wire help links from Commander + Voice UI to this browser.
@@ -63,10 +68,14 @@ Files (expected):
 Acceptance:
 - Users can discover every supported command from UI.
 - No regressions in existing command handling.
+- Shipped in PR #643:
+  - added live command catalog browser in Settings with search, command metadata, and safety notes.
+  - wired UI discovery around the shared command catalog.
 
 ## Milestone M1 — Simple mode shell (Codex/Cursor parity direction)
 
 ### PR M1.1 — Add "Simple mode" scaffold
+Status: Done
 Scope:
 - Add top-level mode switch: `Simple` and `Advanced`.
 - Keep current UI as Advanced unchanged.
@@ -84,10 +93,14 @@ Files (expected):
 Acceptance:
 - Mode state persists in user settings.
 - Advanced behavior is unaffected by default.
+- Shipped in PR #627 and PR #652:
+  - added Projects + Chats shell with Simple/Advanced mode behavior.
+  - added simple-mode state persistence and follow-up ergonomics (search + pinned recents).
 
 ---
 
 ### PR M1.2 — Thread model service
+Status: Done
 Scope:
 - Add local persisted thread records:
   - `threadId`, `workspaceId`, `title`, `worktreeId/path`, `sessionIds`, `status`, `updatedAt`.
@@ -105,10 +118,14 @@ Files (expected):
 Acceptance:
 - Thread records survive restart.
 - Thread lifecycle does not orphan session metadata.
+- Shipped in PR #627 and PR #664:
+  - added persisted thread service/model with thread routes and lifecycle transitions.
+  - added REST-complete lifecycle aliases (`POST /api/threads`, `PATCH /api/threads/:id`, `DELETE /api/threads/:id`) while keeping legacy compatibility.
 
 ---
 
 ### PR M1.3 — "New chat" one-click lifecycle
+Status: Done
 Scope:
 - Add unified action:
   1. pick/create worktree
@@ -127,10 +144,15 @@ Files (expected):
 Acceptance:
 - Single action creates a runnable thread from a project.
 - Retrying same request does not create duplicate sessions/worktrees.
+- Shipped in PR #627, PR #635, and PR #511:
+  - added project/chat new-flow wiring across UI + command/voice action surface.
+  - create flow provisions worktree/session/thread through unified path.
+  - idempotency hardening includes `add-mixed-worktree` 409-safe behavior.
 
 ## Milestone M2 — Review Route speed and density
 
 ### PR M2.1 — Review Route dense layout defaults
+Status: Done
 Scope:
 - Enforce dense defaults for review route:
   - fullscreen
@@ -145,10 +167,14 @@ Files (expected):
 
 Acceptance:
 - Review route starts in one click and is immediately usable without manual toggles.
+- Shipped in PR #639 and PR #654:
+  - compact one-click review route defaults with diff-first throughput behavior.
+  - keyboard-first review flow for next/approve/changes/merge.
 
 ---
 
 ### PR M2.2 — Review data reliability fixes
+Status: Done
 Scope:
 - Ensure files/commits/conversation populate for PR tasks even with partial worktree/session data.
 - Resolve known empty-state mismatch conditions and invalid selector edge cases.
@@ -160,6 +186,9 @@ Files (expected):
 
 Acceptance:
 - Known "Files 0 / Commits 0 while PR has changes" regressions are eliminated.
+- Shipped in PR #610 and PR #619:
+  - hardened PR detail loading and retry behavior for files/commits/conversation hydration.
+  - improved fallback handling for partial worktree/session state and reduced empty-state mismatches.
 
 ## Milestone M3 — Solo-like process stacks
 
@@ -178,7 +207,7 @@ Files (expected):
 
 Acceptance:
 - Workspace can persist and load service stack definitions.
-- Shipped in PR #TBD:
+- Shipped in PR #659:
   - added `server/workspaceServiceStackService.js` with strict/non-strict normalization for service manifests.
   - added service stack endpoints:
     - `GET /api/workspaces/:id/service-stack`
@@ -205,7 +234,7 @@ Files (expected):
 
 Acceptance:
 - Stack behaves as one-click local runtime supervisor.
-- Shipped in PR #TBD:
+- Shipped in PR #660:
   - added service runtime supervisor service (`server/serviceStackRuntimeService.js`) with desired-state tracking per workspace/service.
   - added runtime APIs:
     - `GET /api/workspaces/:id/service-stack/runtime`
@@ -235,7 +264,7 @@ Files (expected):
 
 Acceptance:
 - Non-expert users can create useful automations without raw JSON editing.
-- Shipped in PR #662:
+- Shipped in PR #650 and PR #662:
   - expanded scheduler template catalog with `stuck-session-nudge` and `daily-health-digest`.
   - preserved existing dry-run preview flow (`POST /api/scheduler/jobs/from-template/preview`) and status panel recent-run visibility.
   - validated via `npm run test:unit`, `npm run test:e2e:safe`, and `npm run check:command-surface`.
@@ -301,7 +330,7 @@ Acceptance:
 - Pager can run with custom per-job instructions.
 - Pager sends input using the required two-step pattern (`next`, then `\\r`).
 - Pager terminates cleanly on done condition or explicit stop command.
-- Shipped in PR #662:
+- Shipped in PR #642 and PR #662:
   - added global pager defaults under `global.pager` with UI save action and runtime profile merge.
   - added per-job custom instruction mode (`append`/`replace`), workspace targeting, and tier-filtered target selection.
   - extended pager status snapshots with filtered-target and tier metadata.
