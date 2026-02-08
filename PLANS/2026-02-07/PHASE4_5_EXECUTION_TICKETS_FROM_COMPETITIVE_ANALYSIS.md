@@ -91,7 +91,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - keyboard-only flow works for project select + chat open + new chat
 
 ### P1-02: Capability contract generation (single source for UI/voice/commander/help)
-- Status: Ready
+- Status: Done
 - Size: M
 - Deliverables:
   - generated command manifest artifact from registry
@@ -100,6 +100,10 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Acceptance criteria:
   - adding a command updates discovery/help without manual sync work
   - CI fails on command/action drift
+- Shipped in PR #TBD:
+  - Added `scripts/check-command-surface-drift.js` to verify `server/commandRegistry.js` commander actions are all handled in `client/app.js`.
+  - Added `npm run check:command-surface`.
+  - Added CI enforcement in `.github/workflows/tests.yml` and `.github/workflows/windows.yml`.
 
 ### P1-03: Plugin SDK v1 hardening
 - Status: Ready
