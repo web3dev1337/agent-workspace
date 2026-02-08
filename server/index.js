@@ -96,6 +96,12 @@ const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { PagerService } = require('./pagerService');
 const { ThreadService } = require('./threadService');
+const {
+  getLifecyclePolicy,
+  parseWorktreeKey,
+  terminalMatchesWorktree,
+  shouldCloseSessionsForThreadAction
+} = require('./lifecyclePolicyService');
 const { PolicyService } = require('./policyService');
 const { AuditExportService } = require('./auditExportService');
 const { getInstance: getCommandHistoryService } = require('./commandHistoryService');
@@ -2242,14 +2248,23 @@ app.post('/api/threads/:id/close', express.json(), (req, res) => {
     if (!threadId) {
       return res.status(400).json({ ok: false, error: 'thread id is required' });
     }
-    const clearSessions = req.body?.clearSessions === true;
-    const thread = threadService.closeThread(threadId);
-    if (clearSessions) {
+    const closeSessions = shouldCloseSessionsForThreadAction('close', req.body?.clearSessions);
+    let thread = threadService.closeThread(threadId);
+    if (closeSessions) {
       for (const sessionId of Array.isArray(thread.sessionIds) ? thread.sessionIds : []) {
-        sessionManager.closeSession(sessionId, { clearRecovery: true });
+        const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
+        if (ok) io.emit('session-closed', { sessionId });
       }
+      thread = threadService.setSessionIds(threadId, []);
     }
-    res.json({ ok: true, thread });
+    res.json({
+      ok: true,
+      thread,
+      lifecycle: {
+        action: 'close-thread',
+        closedSessions: !!closeSessions
+      }
+    });
   } catch (error) {
     const message = String(error?.message || error);
     const status = message.toLowerCase().includes('not found') ? 404 : 500;
@@ -2264,8 +2279,28 @@ app.post('/api/threads/:id/archive', express.json(), (req, res) => {
     if (!threadId) {
       return res.status(400).json({ ok: false, error: 'thread id is required' });
     }
-    const thread = threadService.archiveThread(threadId);
-    res.json({ ok: true, thread });
+    const closeSessions = shouldCloseSessionsForThreadAction('archive', req.body?.clearSessions);
+    const before = threadService.getById(threadId);
+    if (!before) {
+      return res.status(404).json({ ok: false, error: 'Failed to archive thread', message: `Thread not found: ${threadId}` });
+    }
+
+    let thread = threadService.archiveThread(threadId);
+    if (closeSessions) {
+      for (const sessionId of Array.isArray(before.sessionIds) ? before.sessionIds : []) {
+        const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
+        if (ok) io.emit('session-closed', { sessionId });
+      }
+      thread = threadService.setSessionIds(threadId, []);
+    }
+    res.json({
+      ok: true,
+      thread,
+      lifecycle: {
+        action: 'archive-thread',
+        closedSessions: !!closeSessions
+      }
+    });
   } catch (error) {
     const message = String(error?.message || error);
     const status = message.toLowerCase().includes('not found') ? 404 : 500;
@@ -2289,18 +2324,35 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
     // The actual git worktree folder and all its files remain untouched on disk.
     // This allows users to safely remove a worktree from the UI without losing work.
 
+    const parsedWorktree = parseWorktreeKey(worktreeId);
+
     // Remove terminals associated with this worktree from configuration
     const updatedWorkspace = { ...workspace };
     const originalTerminals = Array.isArray(updatedWorkspace.terminals) ? updatedWorkspace.terminals : [];
     const originalTerminalCount = originalTerminals.length;
     const removedTerminalIds = [];
 
-    updatedWorkspace.terminals = originalTerminals.filter(terminal => {
-      // Remove terminals that match this worktree ID (case-insensitive comparison)
-      const keep = !String(terminal?.id || '').toLowerCase().includes(String(worktreeId || '').toLowerCase());
-      if (!keep && terminal?.id) removedTerminalIds.push(String(terminal.id));
-      return keep;
+    updatedWorkspace.terminals = originalTerminals.filter((terminal) => {
+      const matched = terminalMatchesWorktree(terminal, parsedWorktree);
+      if (matched && terminal?.id) removedTerminalIds.push(String(terminal.id));
+      return !matched;
     });
+
+    // Defensive fallback for older terminal configs where id/worktree metadata is inconsistent.
+    if (updatedWorkspace.terminals.length === originalTerminalCount) {
+      updatedWorkspace.terminals = originalTerminals.filter((terminal) => {
+        const sid = String(terminal?.id || '').trim().toLowerCase();
+        const fallbackMatch = (
+          sid === parsedWorktree.key
+          || (parsedWorktree.key && sid.includes(`${parsedWorktree.key}-`))
+          || (parsedWorktree.worktreeId && sid.includes(`-${parsedWorktree.worktreeId}-`))
+        );
+        if (fallbackMatch && terminal?.id) removedTerminalIds.push(String(terminal.id));
+        return !fallbackMatch;
+      });
+    }
+
+    const dedupedRemovedTerminalIds = Array.from(new Set(removedTerminalIds));
 
     const removedCount = originalTerminalCount - updatedWorkspace.terminals.length;
 
@@ -2310,7 +2362,7 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
 
     // For single-repo workspaces, also update the pairs count
     if (workspace.workspaceType !== 'mixed-repo' && workspace.terminals?.pairs) {
-      const worktreeNum = parseInt(worktreeId.replace(/.*work/, ''));
+      const worktreeNum = parseInt(parsedWorktree.worktreeId.replace(/.*work/, ''));
       if (workspace.terminals.pairs >= worktreeNum) {
         updatedWorkspace.terminals.pairs = workspace.terminals.pairs - 1;
       }
@@ -2322,7 +2374,7 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
     // Always clear recovery entries for removed terminals (even if the workspace isn't active).
     try {
       await sessionRecoveryService.loadWorkspaceState(workspaceId);
-      for (const sid of removedTerminalIds) {
+      for (const sid of dedupedRemovedTerminalIds) {
         if (!sid) continue;
         sessionRecoveryService.clearSession(workspaceId, sid);
       }
@@ -2332,15 +2384,44 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
 
     // Close associated sessions even when this workspace isn't currently active.
     // This prevents orphan PTYs/recovery entries when users manage worktrees from other tabs/views.
-    const relatedSessionIds = sessionManager.getSessionIdsForWorktree({
-      workspaceId,
-      worktreeKey: String(worktreeId || '').trim()
-    });
-    const uniqueSessionIds = Array.from(new Set([...(removedTerminalIds || []), ...(relatedSessionIds || [])]));
+    const relatedSessionIds = new Set([
+      ...sessionManager.getSessionIdsForWorktree({
+        workspaceId,
+        worktreeKey: parsedWorktree.key || parsedWorktree.worktreeId
+      }),
+      ...sessionManager.getSessionIdsForWorktree({
+        workspaceId,
+        worktreeKey: parsedWorktree.worktreeId
+      })
+    ]);
+    const uniqueSessionIds = Array.from(new Set([...(dedupedRemovedTerminalIds || []), ...Array.from(relatedSessionIds)]));
     uniqueSessionIds.forEach((sessionId) => {
       const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
       if (ok) io.emit('session-closed', { sessionId });
     });
+
+    // Sync thread records tied to this worktree so they don't keep stale session references.
+    let updatedThreadCount = 0;
+    try {
+      const candidateThreads = threadService.list({ workspaceId, includeArchived: true });
+      for (const thread of candidateThreads) {
+        const threadWorktree = String(thread?.worktreeId || '').trim().toLowerCase();
+        const threadRepo = String(thread?.repositoryName || '').trim().toLowerCase();
+        const worktreeMatched = !!threadWorktree && (
+          threadWorktree === parsedWorktree.worktreeId
+          || threadWorktree === parsedWorktree.key
+        );
+        const repoMatched = !parsedWorktree.repositoryName || !threadRepo || threadRepo === parsedWorktree.repositoryName;
+        if (!worktreeMatched || !repoMatched) continue;
+        const nextPatch = (String(thread?.status || '').trim().toLowerCase() === 'archived')
+          ? { sessionIds: [] }
+          : { status: 'closed', sessionIds: [] };
+        threadService.updateThread(thread.id, nextPatch);
+        updatedThreadCount += 1;
+      }
+    } catch {
+      // best-effort
+    }
 
     // If this is the active workspace, refresh SessionManager's workspace reference.
     if (workspaceManager.getActiveWorkspace()?.id === workspaceId) {
@@ -2357,12 +2438,20 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
     logger.info('Worktree removed from workspace configuration (folder preserved)', {
       workspaceId,
       worktreeId,
-      removedTerminals: removedCount
+      removedTerminals: removedCount,
+      closedSessions: uniqueSessionIds.length,
+      updatedThreads: updatedThreadCount
     });
 
     res.json({
       success: true,
       removedTerminals: removedCount,
+      closedSessions: uniqueSessionIds.length,
+      updatedThreads: updatedThreadCount,
+      lifecycle: {
+        action: 'remove-worktree',
+        policy: getLifecyclePolicy().actions.removeWorktreeFromWorkspace
+      },
       updatedWorkspace: updatedWorkspace
     });
 
@@ -2868,6 +2957,15 @@ app.post('/api/diagnostics/first-run/repair-safe', requirePolicyAction('write'),
       stack: error.stack
     });
     res.status(500).json({ ok: false, error: String(error?.message || 'Failed to run safe repairs') });
+  }
+});
+
+app.get('/api/lifecycle/policy', (req, res) => {
+  try {
+    res.json({ ok: true, policy: getLifecyclePolicy() });
+  } catch (error) {
+    logger.error('Failed to load lifecycle policy', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to load lifecycle policy' });
   }
 });
 
