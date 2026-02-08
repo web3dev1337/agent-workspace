@@ -110,6 +110,17 @@ Non-destructive prep helper now available:
   - Optional explicit target:
     - `npm run prep:history-rewrite:mailmap-finalize -- --workkit-dir /tmp/history-rewrite-workkit --target-email <id+user@users.noreply.github.com>`
   - Replaces `REPLACE_WITH_NOREPLY_EMAIL` placeholders in `mailmap.private.txt` with a real noreply email (default from global git config).
+- Guarded execution helper (maintenance window):
+  - Plan only (safe/default):
+    - `npm run history-rewrite:execute:plan -- --workkit-dir /tmp/history-rewrite-workkit --clone-dir /path/to/fresh-rewrite-clone`
+  - Execute rewrite in clone (still no push unless requested):
+    - `npm run history-rewrite:execute:plan -- --workkit-dir /tmp/history-rewrite-workkit --clone-dir /path/to/fresh-rewrite-clone --execute --confirm I_UNDERSTAND_HISTORY_REWRITE`
+  - Optional force-push (double-confirmed):
+    - add `--push --confirm-push PUSH_REWRITTEN_HISTORY`
+  - Safety gates:
+    - refuses execution if mailmap has placeholders
+    - refuses execution if clone is dirty
+    - runs strict post-rewrite verification before any push (unless explicitly skipped)
 - Full private execution prep workkit:
   - `npm run prep:history-rewrite`
   - Optional custom output directory:
@@ -212,3 +223,4 @@ Status notes (2026-02-08):
 - Added `scripts/run-history-rewrite-prep.js` and `npm run prep:history-rewrite:pipeline` for one-command non-destructive prep orchestration.
 - Added `scripts/verify-history-rewrite-result.js` and `npm run check:history-rewrite-result` for post-rewrite pass/fail verification.
 - Added `scripts/finalize-history-rewrite-mailmap.js` and `npm run prep:history-rewrite:mailmap-finalize` to convert placeholder mailmap entries to a concrete noreply mapping.
+- Added `scripts/execute-history-rewrite.js` and `npm run history-rewrite:execute:plan` as a guarded maintenance-window rewrite executor (plan by default; explicit confirm required for execution/push).

@@ -32,6 +32,7 @@
     "prep:history-rewrite": "node scripts/generate-history-rewrite-workkit.js",
     "prep:history-rewrite:pipeline": "node scripts/run-history-rewrite-prep.js",
     "prep:history-rewrite:mailmap-finalize": "node scripts/finalize-history-rewrite-mailmap.js",
+    "history-rewrite:execute:plan": "node scripts/execute-history-rewrite.js",
     "setup:history-rewrite-tools": "node scripts/setup-history-rewrite-tools.js",
     "check:history-rewrite-readiness": "node scripts/check-history-rewrite-readiness.js",
     "check:history-rewrite-readiness:strict": "node scripts/check-history-rewrite-readiness.js --strict --require-gitleaks",
