@@ -3294,8 +3294,8 @@ class ClaudeOrchestrator {
 
   getLinkedServerSessionIdForClaude(claudeSessionId) {
     const sid = String(claudeSessionId || '').trim();
-    if (!sid.endsWith('-claude')) return null;
-    const serverSessionId = sid.replace(/-claude$/, '-server');
+    if (!sid.endsWith('-claude') && !sid.endsWith('-codex')) return null;
+    const serverSessionId = sid.replace(/-(claude|codex)$/, '-server');
     if (!this.sessions || !this.sessions.has(serverSessionId)) return null;
     return serverSessionId;
   }
@@ -3304,8 +3304,10 @@ class ClaudeOrchestrator {
     const sid = String(serverSessionId || '').trim();
     if (!sid.endsWith('-server')) return null;
     const claudeSessionId = sid.replace(/-server$/, '-claude');
-    if (!this.sessions || !this.sessions.has(claudeSessionId)) return null;
-    return claudeSessionId;
+    if (this.sessions && this.sessions.has(claudeSessionId)) return claudeSessionId;
+    const codexSessionId = sid.replace(/-server$/, '-codex');
+    if (this.sessions && this.sessions.has(codexSessionId)) return codexSessionId;
+    return null;
   }
 
   getServerQuickControlsHTMLForClaude(claudeSessionId) {
@@ -4468,8 +4470,9 @@ class ClaudeOrchestrator {
       this.lastInteractedSessionId = sessionId;
     });
     
-    const isClaudeSession = session.type === 'claude';
-    const isServerSession = session.type === 'server';
+    const sessionType = String(session?.type || '').trim().toLowerCase();
+    const isAgentSession = sessionType === 'claude' || sessionType === 'codex';
+    const isServerSession = sessionType === 'server';
 
 	    // Build display name with repository info for mixed-repo workspaces
 	    const repositoryName = this.extractRepositoryName(sessionId);
@@ -4487,13 +4490,13 @@ class ClaudeOrchestrator {
 			      <div class="terminal-header">
 			        <div class="terminal-title">
 		          <span class="status-indicator ${session.status}" id="${this.getSessionDomId('status', sessionId)}"></span>
-		          <span>${isClaudeSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
+		          <span>${isAgentSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
 		          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
 		          <button type="button" class="terminal-branch-refresh" data-branch-refresh="${this.escapeHtml(branchRefreshId)}" title="Refresh branch label">↻</button>
 		          ${ticketChip}
 			        </div>
 		        <div class="terminal-controls">
-		          ${isClaudeSession ? `
+		          ${isAgentSession ? `
 		            ${this.getTierDropdownHTML(sessionId)}
 	            ${this.getServerQuickControlsHTMLForClaude(sessionId)}
 	            ${this.getWorktreeInspectorButtonHTML(sessionId)}
@@ -4510,7 +4513,7 @@ class ClaudeOrchestrator {
 			      </div>
 	      <div class="terminal-body">
 	        <div class="terminal" id="${this.getSessionDomId('terminal', sessionId)}"></div>
-	        ${isClaudeSession ? `
+	        ${isAgentSession ? `
 	          <div class="terminal-startup-ui" id="${this.getSessionDomId('startup-ui', sessionId)}" style="display: none;">
 	            <div class="startup-ui-compact">
 	              <!-- Agent Selection -->
@@ -4589,7 +4592,7 @@ class ClaudeOrchestrator {
       }
 
       // Check if auto-start is enabled when status becomes waiting
-      if (status === 'waiting' && sessionId.includes('-claude') && this.userSettings) {
+      if (status === 'waiting' && /-(claude|codex)$/.test(sessionId) && this.userSettings) {
         const effectiveSettings = this.getEffectiveSettings(sessionId);
 
         if (effectiveSettings && effectiveSettings.autoStart && effectiveSettings.autoStart.enabled) {
@@ -4646,18 +4649,18 @@ class ClaudeOrchestrator {
       }
     }
     
-    // Update quick actions for Claude sessions
-    if (sessionId.includes('claude')) {
-      // Clear any pending notification timer if Claude goes busy again
+    // Update quick actions for agent sessions
+    if (/-claude$|-codex$/.test(sessionId)) {
+      // Clear any pending notification timer if agent goes busy again
       if (status === 'busy' && this.notificationTimers && this.notificationTimers[sessionId]) {
         clearTimeout(this.notificationTimers[sessionId]);
         delete this.notificationTimers[sessionId];
       }
 
-      // Show notification when Claude becomes ready AFTER user input
+      // Show notification when agent becomes ready AFTER user input
       // But NOT during intermediate todo steps - wait for a longer idle period
       if (previousStatus === 'busy' && status === 'waiting' && session && session.hasUserInput) {
-        // Set a timer to check if Claude stays in waiting state (not just intermediate)
+        // Set a timer to check if agent stays in waiting state (not just intermediate)
         if (this.notificationTimers && this.notificationTimers[sessionId]) {
           clearTimeout(this.notificationTimers[sessionId]);
         }
@@ -4666,7 +4669,7 @@ class ClaudeOrchestrator {
           this.notificationTimers = {};
         }
 
-        // Only show notification if Claude stays in waiting state for 3+ seconds
+        // Only show notification if agent stays in waiting state for 3+ seconds
         // This filters out intermediate todo steps which quickly go back to busy
         this.notificationTimers[sessionId] = setTimeout(() => {
           const currentSession = this.sessions.get(sessionId);
@@ -4688,8 +4691,8 @@ class ClaudeOrchestrator {
     const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
     const key = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
 
-    // Sidebar status is the agent (Claude) status. Ignore server updates to keep the sidebar compact.
-    if (!sessionId.includes('-claude')) return;
+    // Sidebar status is the agent status. Ignore server updates to keep the sidebar compact.
+    if (!/-claude$|-codex$/.test(sessionId)) return;
 
     const worktreeItem = document.querySelector(`[data-worktree-id="${key}"]`);
     if (!worktreeItem) return;
@@ -5032,7 +5035,9 @@ class ClaudeOrchestrator {
 			    const controlsDiv = wrapper.querySelector('.terminal-controls');
 		    if (!controlsDiv) return;
 
-	    if (sessionId.includes('-claude')) {
+      const sessionType = String(this.sessions?.get?.(sessionId)?.type || '').trim().toLowerCase();
+      const isAgentSession = /-(claude|codex)$/.test(String(sessionId || '')) || sessionType === 'claude' || sessionType === 'codex';
+	    if (isAgentSession) {
 	      controlsDiv.innerHTML = `
 	        ${this.getTierDropdownHTML(sessionId)}
 		      ${this.getServerQuickControlsHTMLForClaude(sessionId)}
@@ -10034,12 +10039,14 @@ class ClaudeOrchestrator {
 		        for (const sid0 of matchingSessionIds) {
 		          const sid = String(sid0 || '').trim();
 		          if (!sid) continue;
-		          if (sid.endsWith('-claude')) {
-		            const paired = sid.replace(/-claude$/, '-server');
+		          if (sid.endsWith('-claude') || sid.endsWith('-codex')) {
+		            const paired = sid.replace(/-(claude|codex)$/, '-server');
 		            if (this.sessions.has(paired)) withPairs.add(paired);
 		          } else if (sid.endsWith('-server')) {
-		            const paired = sid.replace(/-server$/, '-claude');
-		            if (this.sessions.has(paired)) withPairs.add(paired);
+		            const pairedClaude = sid.replace(/-server$/, '-claude');
+		            const pairedCodex = sid.replace(/-server$/, '-codex');
+		            if (this.sessions.has(pairedClaude)) withPairs.add(pairedClaude);
+		            else if (this.sessions.has(pairedCodex)) withPairs.add(pairedCodex);
 		          }
 		        }
 		        matchingSessionIds.length = 0;
@@ -10047,7 +10054,7 @@ class ClaudeOrchestrator {
 		      }
 
 			      // Stable ordering: keep pairs adjacent, and always put Agent left of Server.
-			      const baseId = (sid) => String(sid || '').replace(/-(claude|server)$/, '');
+			      const baseId = (sid) => String(sid || '').replace(/-(claude|codex|server)$/, '');
 			      const isServer = (sid) => {
 			        const s = String(sid || '');
 			        if (s.endsWith('-server')) return true;
@@ -12778,7 +12785,7 @@ class ClaudeOrchestrator {
 
 	    if (!ids.length) return [sid];
 
-	    const baseId = (x) => String(x || '').replace(/-(claude|server)$/, '');
+	    const baseId = (x) => String(x || '').replace(/-(claude|codex|server)$/, '');
 	    const isServer = (x) => {
 	      const s = String(x || '');
 	      if (s.endsWith('-server')) return true;
