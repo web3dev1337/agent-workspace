@@ -2192,8 +2192,48 @@ class ClaudeOrchestrator {
     this.updateGlobalUserSetting('ui.workflow.mode', normalized);
   }
 
-  openReviewRoute() {
+  async applyReviewRouteUiDefaults() {
+    const existing = (this.userSettings?.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
+      ? this.userSettings.global.ui.reviewConsole
+      : {};
+    const existingSections = (existing.sections && typeof existing.sections === 'object') ? existing.sections : {};
+    const existingKinds = (existing.terminalKinds && typeof existing.terminalKinds === 'object') ? existing.terminalKinds : {};
+
+    const nextCfg = {
+      ...existing,
+      preset: 'review',
+      fullscreen: true,
+      diffEmbed: true,
+      sections: {
+        ...existingSections,
+        terminals: true,
+        files: true,
+        commits: false,
+        diff: true
+      },
+      terminalKinds: {
+        ...existingKinds,
+        agent: true,
+        server: true
+      }
+    };
+
+    await this.updateGlobalUserSetting('ui.reviewConsole', nextCfg);
+
+    try { localStorage.setItem('queue-auto-console', 'true'); } catch {}
+    try { localStorage.setItem('queue-auto-advance', 'true'); } catch {}
+    try {
+      localStorage.setItem('review-console-collapsed-panels', JSON.stringify({
+        files: false,
+        commits: true,
+        conversation: true
+      }));
+    } catch {}
+  }
+
+  async openReviewRoute() {
     this.setWorkflowMode('review');
+    await this.applyReviewRouteUiDefaults();
     this.queuePanelPreset = {
       reviewTier: 'all',
       tierSet: [3, 4],
@@ -19963,7 +20003,7 @@ class ClaudeOrchestrator {
 		      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
 		    });
 
-        const startReviewRoute = () => {
+        const startReviewRoute = async () => {
           state.reviewRouteActive = true;
           state.reviewActive = true;
           state.reviewTier = 'all';
@@ -19978,6 +20018,7 @@ class ClaudeOrchestrator {
           try { localStorage.setItem('queue-auto-advance', 'true'); } catch {}
           try { localStorage.setItem('queue-triage', 'false'); } catch {}
           try { localStorage.setItem('queue-blocked-only', 'false'); } catch {}
+          try { await this.applyReviewRouteUiDefaults(); } catch {}
 
           syncReviewControlsUI();
           renderList();
@@ -19987,7 +20028,14 @@ class ClaudeOrchestrator {
             this.showToast('No Tier 3/4 unreviewed items in review route', 'info');
             return;
           }
-          selectById(ordered[0].id, { allowAutoOpenDiff: false });
+          const first = ordered[0];
+          selectById(first.id, { allowAutoOpenDiff: false });
+          const wantsConsole = !!(first?.sessionId || first?.worktreePath || (first?.kind === 'pr' && String(first?.url || '').trim()));
+          if (state.autoConsole && wantsConsole) {
+            this.openReviewConsoleForTask(first).catch((error) => {
+              console.error('Failed to auto-open review console for review route:', error);
+            });
+          }
         };
 
 	    startReviewBtn?.addEventListener('click', async () => {
@@ -20047,7 +20095,7 @@ class ClaudeOrchestrator {
 	    });
 
         reviewRouteBtn?.addEventListener('click', () => {
-          startReviewRoute();
+          startReviewRoute().catch((e) => this.showToast(String(e?.message || e), 'error'));
         });
 
 	    const maybeAutoAdvanceAfterReview = (currentTaskId) => {
@@ -24379,7 +24427,7 @@ class ClaudeOrchestrator {
       // Initial render respects triage mode + tierSet presets.
       applyFiltersAndMaybeClampSelection({ renderSelectedDetail: false });
       if (state.reviewRouteActive) {
-        startReviewRoute();
+        startReviewRoute().catch((e) => this.showToast(String(e?.message || e), 'error'));
       } else if (state.selectedId) {
         selectById(state.selectedId, { allowAutoOpenDiff: state.reviewActive });
       }

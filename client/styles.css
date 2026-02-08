@@ -1641,27 +1641,32 @@ header h1 {
 
 .review-console-route-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  padding: 6px 8px;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding: 4px 6px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--bg-tertiary);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .review-console-route-bar label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
 }
 
 .review-console-route-bar select {
-  min-width: 88px;
-  height: 30px;
+  min-width: 74px;
+  height: 26px;
+  font-size: 0.78rem;
 }
 
 .worktree-inspector-chip {
@@ -1704,8 +1709,8 @@ header h1 {
 
 .review-console-grid {
   display: grid;
-  grid-template-columns: minmax(520px, 0.25fr) minmax(360px, 0.25fr) minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(460px, 0.28fr) minmax(320px, 0.24fr) minmax(0, 1fr);
+  gap: 6px;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
@@ -1722,7 +1727,7 @@ header h1 {
 /* Review preset (3-column view): prioritize the diff, keep terminals/meta stacked on the right.
    This is intended to reduce vertical scrolling and make the embedded diff dominate. */
 .review-console-grid[data-review-preset="review"]:not(.one-column):not(.two-column) {
-  grid-template-columns: minmax(0, 2fr) minmax(520px, 1fr);
+  grid-template-columns: minmax(0, 2.2fr) minmax(420px, 0.9fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
     "diff terminals"
@@ -1747,14 +1752,14 @@ header h1 {
 .review-console-left {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
   overflow: auto;
 }
 
 /* Review Console should waste less vertical space than the full inspector. */
 .review-console-grid .worktree-inspector-panel {
-  padding: 8px;
+  padding: 6px;
 }
 
 .review-console-col-diff,
@@ -1818,8 +1823,8 @@ header h1 {
 }
 
 .worktree-inspector-terminals .terminal-wrapper.review-console-terminal {
-  height: clamp(220px, 34vh, 460px);
-  min-height: 220px;
+  height: clamp(180px, 30vh, 380px);
+  min-height: 180px;
 }
 
 .rc-panel-toggle-btn {
@@ -1830,17 +1835,17 @@ header h1 {
 }
 
 .review-console-files-list {
-  max-height: 230px;
+  max-height: 190px;
   overflow: auto;
 }
 
 .review-console-commits-list {
-  max-height: 220px;
+  max-height: 180px;
   overflow: auto;
 }
 
 .review-console-comments-list {
-  max-height: 220px;
+  max-height: 180px;
   overflow: auto;
 }
 
