@@ -220,9 +220,14 @@ function generateDiffMarkdown(diffData, metadata) {
   
   markdown += '\n## Statistics\n\n';
   markdown += `- **Files Changed:** ${stats.files || files.length}\n`;
-  markdown += `- **Additions:** +${stats.additions || 0}\n`;
+  if (Number(stats.additions || 0) > 0) {
+    markdown += `- **Additions:** +${stats.additions || 0}\n`;
+  }
   if (Number(stats.deletions || 0) > 0) {
     markdown += `- **Deletions:** -${stats.deletions || 0}\n`;
+  }
+  if (Number(stats.additions || 0) <= 0 && Number(stats.deletions || 0) <= 0) {
+    markdown += '- **Line Delta:** none\n';
   }
   if (stats.semanticReduction) {
     markdown += `- **Semantic Reduction:** ${stats.semanticReduction}%\n`;
@@ -233,9 +238,14 @@ function generateDiffMarkdown(diffData, metadata) {
   // File changes
   files.forEach(file => {
     markdown += `### ${file.path || file.filename}\n\n`;
-    markdown += `- Additions: +${file.additions || 0}\n`;
+    if (Number(file.additions || 0) > 0) {
+      markdown += `- Additions: +${file.additions || 0}\n`;
+    }
     if (Number(file.deletions || 0) > 0) {
       markdown += `- Deletions: -${file.deletions || 0}\n`;
+    }
+    if (Number(file.additions || 0) <= 0 && Number(file.deletions || 0) <= 0) {
+      markdown += '- Line Delta: none\n';
     }
     markdown += '\n';
     
