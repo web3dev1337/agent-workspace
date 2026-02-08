@@ -64,8 +64,9 @@ Current state is usable, but not “one-screen batch reviewing”.
 
 Work needed:
 - Make **Diff embed always on by default**, and treat “Open in new tab” as secondary. (DONE: PR #587)
-- Add **filter/sort controls inside Review Console** (not just Queue):
-  - by tier/risk/verifyMinutes/blocked/unreviewed
+- Add **filter/sort controls inside Review Console** (not just Queue). (DONE: this branch)
+  - filters: tier/risk/unreviewed/blocked/claim
+  - sort modes: queue order, risk+verify, verify desc, updated desc
   - quick “next unreviewed tier 3” navigation.
 - Reduce vertical waste:
   - compact headers, tighten paddings, avoid tall meta blocks.
@@ -136,9 +137,9 @@ Work needed:
   - enumerate all hard-coded colors and convert to CSS variables
   - document which variables a skin is allowed to override (`--skin-*` targets).
 - Add more skins with tuned neutral surface targets:
-  - blue (done), plus at least 2 more “beautiful” schemes (e.g. emerald + violet) and a high-contrast option.
+  - blue (done), plus emerald/purple/amber (done) and a high-contrast option. (DONE: this branch)
 - Add a “theme gallery” in Settings:
-  - preview swatches, quick toggle, and a short explanation of intensity.
+  - preview swatches, quick toggle, and a short explanation of intensity. (DONE: this branch)
 
 ---
 
