@@ -47,6 +47,9 @@ describe('scan-markdown-remaining helpers', () => {
       scanMarkdown('PLANS/HEURISTIC_ONLY.md', '# What is left\n- ship docs cleanup\n'),
       scanMarkdown('PLANS/2026-02-02/REMAINING_WORK_LAST_10_DAYS_SCAN.md', '# Remaining\nTODO token\n'),
       scanMarkdown('PLANS/2026-01-20/CHECKLIST.md', '- [ ] template item\n'),
+      scanMarkdown('WINDOWS_BUILD_GUIDE.md', '# Guide\nTODO: sample token\n'),
+      scanMarkdown('scripts/README.md', '# Scripts\n- [ ] example task\n'),
+      scanMarkdown('ai-memory/demo/progress.md', '# Progress\nTODO: memory note\n'),
       scanMarkdown('PLANS/B.md', '# Done\n')
     ];
     const filtered = filterScansForActionable(scans);
