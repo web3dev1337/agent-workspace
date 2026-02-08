@@ -7416,14 +7416,37 @@ class ClaudeOrchestrator {
 
 	  setupDiagnosticsPanel() {
 	    const btn = document.getElementById('diagnostics-refresh');
+	    const btnFirstRun = document.getElementById('diagnostics-first-run');
 	    const out = document.getElementById('diagnostics-output');
 	    const statusEl = document.getElementById('diagnostics-status');
+	    const repairEl = document.getElementById('diagnostics-repair-actions');
 	    if (!btn || !out) return;
+	    const state = {
+	      base: null,
+	      firstRun: null
+	    };
 
-	    const render = (data) => {
-	      if (!data) return;
+	    const renderRepairActions = (firstRunData) => {
+	      if (!repairEl) return;
+	      const actions = Array.isArray(firstRunData?.repairActions) ? firstRunData.repairActions : [];
+	      if (!actions.length) {
+	        repairEl.innerHTML = '';
+	        return;
+	      }
+	      repairEl.innerHTML = actions
+	        .map((action) => {
+	          const id = this.escapeHtml(String(action?.id || '').trim());
+	          const label = this.escapeHtml(String(action?.label || action?.id || 'Repair').trim());
+	          const kind = this.escapeHtml(String(action?.kind || '').trim());
+	          const title = kind ? `Repair (${kind})` : 'Repair';
+	          return `<button class="btn-secondary" type="button" data-diagnostics-repair="${id}" title="${title}">${label}</button>`;
+	        })
+	        .join('');
+	    };
+
+	    const render = (data, firstRunData = null) => {
 	      const lines = [];
-	      const platform = String(data.platform || '');
+	      const platform = String(data?.platform || '');
 	      lines.push(`platform: ${platform || 'unknown'}`);
 	      if (data?.env) {
 	        lines.push(`homeDir: ${String(data.env.homeDir || '')}`);
@@ -7455,29 +7478,113 @@ class ClaudeOrchestrator {
 	        }
 	      });
 
+	      if (firstRunData?.summary) {
+	        lines.push('');
+	        lines.push('first-run:');
+	        lines.push(`  ready: ${firstRunData.summary.ready ? 'yes' : 'no'}`);
+	        lines.push(`  blocking: ${Number(firstRunData.summary.blockingCount || 0)}`);
+	        lines.push(`  warnings: ${Number(firstRunData.summary.warningCount || 0)}`);
+	        lines.push(`  repairable actions: ${Number(firstRunData.summary.repairableCount || 0)}`);
+	        const checks = Array.isArray(firstRunData?.checks) ? firstRunData.checks : [];
+	        checks.forEach((check) => {
+	          const status = String(check?.status || '').trim() || 'unknown';
+	          const severity = String(check?.severity || '').trim() || 'info';
+	          const name = String(check?.name || check?.id || 'check');
+	          const msg = String(check?.message || '').trim();
+	          lines.push(`  ${status} [${severity}] ${name}${msg ? `: ${msg}` : ''}`);
+	        });
+	      }
+
 	      out.textContent = lines.join('\n').trim() || 'No diagnostics available.';
 	    };
 
-	    const refresh = async () => {
+	    const refreshBase = async () => {
+	      const res = await fetch('/api/diagnostics');
+	      const data = await res.json().catch(() => ({}));
+	      if (!res.ok || data?.ok === false) {
+	        throw new Error(String(data?.error || `HTTP ${res.status}`));
+	      }
+	      state.base = data;
+	      return data;
+	    };
+
+	    const refreshFirstRun = async () => {
+	      const res = await fetch('/api/diagnostics/first-run');
+	      const data = await res.json().catch(() => ({}));
+	      if (!res.ok || data?.ok === false) {
+	        throw new Error(String(data?.error || `HTTP ${res.status}`));
+	      }
+	      state.firstRun = data;
+	      renderRepairActions(data);
+	      return data;
+	    };
+
+	    const refresh = async (mode = 'all') => {
 	      btn.disabled = true;
+	      if (btnFirstRun) btnFirstRun.disabled = true;
 	      if (statusEl) statusEl.textContent = 'Loading…';
 	      try {
-	        const res = await fetch('/api/diagnostics');
-	        const data = await res.json().catch(() => ({}));
-	        if (!res.ok || data?.ok === false) {
-	          throw new Error(String(data?.error || `HTTP ${res.status}`));
+	        if (mode === 'base') {
+	          await refreshBase();
+	        } else if (mode === 'first-run') {
+	          await refreshFirstRun();
+	        } else {
+	          await Promise.all([refreshBase(), refreshFirstRun()]);
 	        }
-	        render(data);
-	        if (statusEl) statusEl.textContent = `Updated: ${String(data?.generatedAt || '')}`;
+	        render(state.base, state.firstRun);
+	        const stamp = String(state.firstRun?.generatedAt || state.base?.generatedAt || '');
+	        if (statusEl) statusEl.textContent = `Updated: ${stamp}`;
 	      } catch (err) {
 	        out.textContent = `Failed to load diagnostics: ${String(err?.message || err)}`;
+	        if (repairEl) repairEl.innerHTML = '';
 	        if (statusEl) statusEl.textContent = '';
 	      } finally {
 	        btn.disabled = false;
+	        if (btnFirstRun) btnFirstRun.disabled = false;
 	      }
 	    };
 
-	    btn.addEventListener('click', refresh);
+	    btn.addEventListener('click', () => refresh('all'));
+	    btnFirstRun?.addEventListener('click', () => refresh('first-run'));
+	    repairEl?.addEventListener('click', async (event) => {
+	      const target = event.target.closest('[data-diagnostics-repair]');
+	      if (!target) return;
+	      const action = String(target.getAttribute('data-diagnostics-repair') || '').trim();
+	      if (!action) return;
+	      target.disabled = true;
+	      if (statusEl) statusEl.textContent = `Running repair: ${action}…`;
+	      try {
+	        const res = await fetch('/api/diagnostics/first-run/repair', {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify({ action })
+	        });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok || data?.ok === false) {
+	          throw new Error(String(data?.error || data?.message || `HTTP ${res.status}`));
+	        }
+	        const repair = data?.repair || {};
+	        if (repair.manual) {
+	          this.showToast?.(String(repair?.message || 'Manual action required'), 'warning');
+	        } else {
+	          this.showToast?.(String(repair?.message || 'Repair completed'), 'success');
+	        }
+	        if (data?.diagnostics) {
+	          state.firstRun = data.diagnostics;
+	          renderRepairActions(state.firstRun);
+	        } else {
+	          await refreshFirstRun();
+	        }
+	        if (!state.base) await refreshBase();
+	        render(state.base, state.firstRun);
+	        if (statusEl) statusEl.textContent = `Repair completed: ${action}`;
+	      } catch (error) {
+	        this.showToast?.(`Repair failed: ${String(error?.message || error)}`, 'error');
+	        if (statusEl) statusEl.textContent = '';
+	      } finally {
+	        target.disabled = false;
+	      }
+	    });
 	  }
 
 	  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {

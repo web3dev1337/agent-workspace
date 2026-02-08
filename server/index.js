@@ -91,7 +91,7 @@ const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
 const sessionRecoveryService = require('./sessionRecoveryService');
-const { collectDiagnostics } = require('./diagnosticsService');
+const { collectDiagnostics, collectFirstRunDiagnostics, runFirstRunRepair } = require('./diagnosticsService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { ThreadService } = require('./threadService');
@@ -2823,6 +2823,36 @@ app.get('/api/diagnostics', async (req, res) => {
   } catch (error) {
     logger.error('Failed to collect diagnostics', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to collect diagnostics' });
+  }
+});
+
+app.get('/api/diagnostics/first-run', async (req, res) => {
+  try {
+    const data = await collectFirstRunDiagnostics();
+    res.json({ ok: true, ...data });
+  } catch (error) {
+    logger.error('Failed to collect first-run diagnostics', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to collect first-run diagnostics' });
+  }
+});
+
+app.post('/api/diagnostics/first-run/repair', requirePolicyAction('write'), express.json(), async (req, res) => {
+  try {
+    const action = String(req.body?.action || '').trim();
+    if (!action) {
+      return res.status(400).json({ ok: false, error: 'action is required' });
+    }
+
+    const repair = await runFirstRunRepair({ action });
+    const diagnostics = await collectFirstRunDiagnostics();
+    res.json({ ok: true, repair, diagnostics });
+  } catch (error) {
+    logger.error('Failed to run first-run repair', {
+      error: error.message,
+      stack: error.stack,
+      action: String(req.body?.action || '').trim() || null
+    });
+    res.status(400).json({ ok: false, error: String(error?.message || 'Failed to run repair') });
   }
 });
 
