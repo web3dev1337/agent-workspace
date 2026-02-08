@@ -7498,10 +7498,10 @@ class ClaudeOrchestrator {
 			      ? this.userSettings.global.ui.reviewConsole
 			      : {};
 
-		    // Default to the "review" layout preset (diff-dominant, less vertical scrolling).
-		    const presetRaw = String(cfg.preset || 'review').trim().toLowerCase();
+		    // Default to the "throughput" layout preset (diff-dominant, minimal vertical waste).
+		    const presetRaw = String(cfg.preset || 'throughput').trim().toLowerCase();
 		    const allowedPresets = new Set(['default', 'review', 'throughput', 'deep', 'code', 'terminals', 'custom']);
-		    const preset = allowedPresets.has(presetRaw) ? presetRaw : 'review';
+		    const preset = allowedPresets.has(presetRaw) ? presetRaw : 'throughput';
 
     const rawSections = (cfg.sections && typeof cfg.sections === 'object') ? cfg.sections : {};
     const storedSections = {
@@ -7515,7 +7515,7 @@ class ClaudeOrchestrator {
 		      default: { terminals: true, files: true, commits: true, diff: true },
 		      // Review layout preset (diff-dominant). Keep commits off by default for less vertical scrolling.
 		      review: { terminals: true, files: true, commits: false, diff: true },
-		      throughput: { terminals: true, files: true, commits: false, diff: true },
+		      throughput: { terminals: true, files: false, commits: false, diff: true },
 		      deep: { terminals: true, files: true, commits: true, diff: true },
 		      code: { terminals: false, files: true, commits: true, diff: true },
 		      terminals: { terminals: true, files: false, commits: false, diff: false }
@@ -8507,7 +8507,7 @@ class ClaudeOrchestrator {
 			      const reviewNotes = String(reviewRecord?.notes || '');
 
 		      const rc = reviewConsole ? (reviewConsoleConfig || this.getReviewConsoleConfig()) : null;
-		      const rcPreset = reviewConsole ? String(rc?.preset || 'review').trim().toLowerCase() : 'review';
+		      const rcPreset = reviewConsole ? String(rc?.preset || 'throughput').trim().toLowerCase() : 'throughput';
 		      const rcSections = reviewConsole ? (rc?.sections && typeof rc.sections === 'object' ? rc.sections : {}) : { terminals: true, files: true, commits: true, diff: true };
 		      const rcShowTerminals = !reviewConsole || rcSections.terminals !== false;
 		      const rcShowFiles = !reviewConsole || rcSections.files !== false;
@@ -9105,7 +9105,7 @@ class ClaudeOrchestrator {
 		        const presets = {
 		          default: { terminals: true, files: true, commits: true, diff: true },
 		          review: { terminals: true, files: true, commits: false, diff: true },
-		          throughput: { terminals: true, files: true, commits: false, diff: true },
+		          throughput: { terminals: true, files: false, commits: false, diff: true },
 		          deep: { terminals: true, files: true, commits: true, diff: true },
 		          terminals: { terminals: true, files: false, commits: false, diff: false },
 		          code: { terminals: false, files: true, commits: true, diff: true }
@@ -10122,8 +10122,8 @@ class ClaudeOrchestrator {
 	      };
 
 				      const rcCfg = this.getReviewConsoleConfig();
-				      let currentPreset = String(rcCfg?.preset || 'review').trim().toLowerCase();
-				      if (!['default', 'review', 'throughput', 'deep', 'code', 'terminals', 'custom'].includes(currentPreset)) currentPreset = 'review';
+				      let currentPreset = String(rcCfg?.preset || 'throughput').trim().toLowerCase();
+				      if (!['default', 'review', 'throughput', 'deep', 'code', 'terminals', 'custom'].includes(currentPreset)) currentPreset = 'throughput';
 				      let currentFullscreen = openedFromQueue || rcCfg?.fullscreen !== false;
 			      const currentSections = {
 			        terminals: rcCfg?.sections?.terminals !== false,
@@ -10146,7 +10146,7 @@ class ClaudeOrchestrator {
 				      const presets = {
 				        default: { terminals: true, files: true, commits: true, diff: true },
 				        review: { terminals: true, files: true, commits: false, diff: true },
-				        throughput: { terminals: true, files: true, commits: false, diff: true },
+				        throughput: { terminals: true, files: false, commits: false, diff: true },
 				        deep: { terminals: true, files: true, commits: true, diff: true },
 				        code: { terminals: false, files: true, commits: true, diff: true },
 				        terminals: { terminals: true, files: false, commits: false, diff: false }
@@ -13256,9 +13256,9 @@ class ClaudeOrchestrator {
       const cfg = (this.userSettings.global?.ui?.reviewConsole && typeof this.userSettings.global.ui.reviewConsole === 'object')
         ? this.userSettings.global.ui.reviewConsole
         : {};
-      const v = String(cfg.preset || 'review').trim().toLowerCase();
+      const v = String(cfg.preset || 'throughput').trim().toLowerCase();
       const allowed = new Set(['default', 'review', 'throughput', 'deep', 'terminals', 'code', 'custom']);
-      reviewConsolePreset.value = allowed.has(v) ? v : 'review';
+      reviewConsolePreset.value = allowed.has(v) ? v : 'throughput';
     }
     const reviewConsoleFullscreen = document.getElementById('review-console-fullscreen');
     if (reviewConsoleFullscreen) {
