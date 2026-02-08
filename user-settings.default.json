@@ -74,6 +74,10 @@
         "emails": true,
         "tokens": true,
         "homePaths": true
+      },
+      "signing": {
+        "enabled": false,
+        "keyId": "local-default"
       }
     },
     "ui": {
