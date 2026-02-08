@@ -178,8 +178,8 @@ class VoiceCommandService {
       // Review Console: layout/window controls (assumes console is open)
       {
         patterns: [
-          /^(?:preset|layout)\s+(default|review|deep|terminals|code)$/i,
-          /^(?:set\s+)?review\s+console\s+preset\s+(default|review|deep|terminals|code)$/i,
+          /^(?:preset|layout)\s+(default|review|throughput|deep|terminals|code)$/i,
+          /^(?:set\s+)?review\s+console\s+preset\s+(default|review|throughput|deep|terminals|code)$/i,
         ],
         command: 'review-console-set-preset',
         extractParams: (match) => ({ preset: String(match?.[1] || '').trim().toLowerCase() })

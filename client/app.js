@@ -93,6 +93,7 @@ class ClaudeOrchestrator {
     // move existing terminal wrappers into the modal and restore them on close.
     this.reviewConsoleDockedTerminals = new Map(); // sessionId -> { wrapper, parent, nextSibling }
     this.reviewConsoleDockedWorktreePath = null;
+    this.reviewConsoleHotkeysCleanup = null;
     // When Review Console is opened from Queue, capture the current filtered PR list so you can
     // navigate Prev/Next without reopening the Queue overlay.
     this.reviewConsoleNav = null; // { source, createdAtMs, items: [{ id, kind, title, url, ... }], index }
@@ -106,6 +107,12 @@ class ClaudeOrchestrator {
     } catch {
       return false;
     }
+  }
+
+  isEditableEventTarget(target) {
+    const el = target && target.nodeType === 1 ? target : null;
+    if (!el) return false;
+    return !!el.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]');
   }
 
   hashStringToBase36(value) {
@@ -1761,7 +1768,7 @@ class ClaudeOrchestrator {
     if (reviewConsolePreset) {
       reviewConsolePreset.addEventListener('change', async (e) => {
         const v = String(e.target.value || '').trim().toLowerCase();
-        const allowed = new Set(['default', 'review', 'deep', 'terminals', 'code', 'custom']);
+        const allowed = new Set(['default', 'review', 'throughput', 'deep', 'terminals', 'code', 'custom']);
         const preset = allowed.has(v) ? v : 'review';
         await this.updateGlobalUserSetting('ui.reviewConsole.preset', preset);
       });
@@ -2271,7 +2278,7 @@ class ClaudeOrchestrator {
 
     const nextCfg = {
       ...existing,
-      preset: 'review',
+      preset: 'throughput',
       fullscreen: true,
       diffEmbed: true,
       sections: {
@@ -2294,7 +2301,7 @@ class ClaudeOrchestrator {
     try { localStorage.setItem('queue-auto-advance', 'true'); } catch {}
     try {
       localStorage.setItem('review-console-collapsed-panels', JSON.stringify({
-        files: false,
+        files: true,
         commits: true,
         conversation: true
       }));
@@ -7474,7 +7481,7 @@ class ClaudeOrchestrator {
 
 		    // Default to the "review" layout preset (diff-dominant, less vertical scrolling).
 		    const presetRaw = String(cfg.preset || 'review').trim().toLowerCase();
-		    const allowedPresets = new Set(['default', 'review', 'deep', 'code', 'terminals', 'custom']);
+		    const allowedPresets = new Set(['default', 'review', 'throughput', 'deep', 'code', 'terminals', 'custom']);
 		    const preset = allowedPresets.has(presetRaw) ? presetRaw : 'review';
 
     const rawSections = (cfg.sections && typeof cfg.sections === 'object') ? cfg.sections : {};
@@ -7489,6 +7496,7 @@ class ClaudeOrchestrator {
 		      default: { terminals: true, files: true, commits: true, diff: true },
 		      // Review layout preset (diff-dominant). Keep commits off by default for less vertical scrolling.
 		      review: { terminals: true, files: true, commits: false, diff: true },
+		      throughput: { terminals: true, files: true, commits: false, diff: true },
 		      deep: { terminals: true, files: true, commits: true, diff: true },
 		      code: { terminals: false, files: true, commits: true, diff: true },
 		      terminals: { terminals: true, files: false, commits: false, diff: false }
@@ -8125,6 +8133,8 @@ class ClaudeOrchestrator {
   closeWorktreeInspector() {
     const modal = document.getElementById('worktree-inspector-modal');
     if (!modal) return;
+    try { this.reviewConsoleHotkeysCleanup?.(); } catch {}
+    this.reviewConsoleHotkeysCleanup = null;
     this.restoreReviewConsoleDockedTerminals();
     modal.classList.remove('docked');
     modal.classList.remove('fullscreen');
@@ -8384,6 +8394,8 @@ class ClaudeOrchestrator {
     }
 
     this.restoreReviewConsoleDockedTerminals();
+    try { this.reviewConsoleHotkeysCleanup?.(); } catch {}
+    this.reviewConsoleHotkeysCleanup = null;
 
     const modal = this.ensureWorktreeInspectorModal();
     modal.classList.remove('hidden');
@@ -8430,7 +8442,7 @@ class ClaudeOrchestrator {
 			      const reviewNotes = String(reviewRecord?.notes || '');
 
 		      const rc = reviewConsole ? (reviewConsoleConfig || this.getReviewConsoleConfig()) : null;
-		      const rcPreset = reviewConsole ? String(rc?.preset || 'default').trim().toLowerCase() : 'default';
+		      const rcPreset = reviewConsole ? String(rc?.preset || 'review').trim().toLowerCase() : 'review';
 		      const rcSections = reviewConsole ? (rc?.sections && typeof rc.sections === 'object' ? rc.sections : {}) : { terminals: true, files: true, commits: true, diff: true };
 		      const rcShowTerminals = !reviewConsole || rcSections.terminals !== false;
 		      const rcShowFiles = !reviewConsole || rcSections.files !== false;
@@ -9027,7 +9039,8 @@ class ClaudeOrchestrator {
 
 		        const presets = {
 		          default: { terminals: true, files: true, commits: true, diff: true },
-		          review: { terminals: true, files: true, commits: true, diff: true },
+		          review: { terminals: true, files: true, commits: false, diff: true },
+		          throughput: { terminals: true, files: true, commits: false, diff: true },
 		          deep: { terminals: true, files: true, commits: true, diff: true },
 		          terminals: { terminals: true, files: false, commits: false, diff: false },
 		          code: { terminals: false, files: true, commits: true, diff: true }
@@ -9693,6 +9706,8 @@ class ClaudeOrchestrator {
 		    }
 
 		    this.restoreReviewConsoleDockedTerminals();
+		    try { this.reviewConsoleHotkeysCleanup?.(); } catch {}
+		    this.reviewConsoleHotkeysCleanup = null;
 
 			    // If Queue is open, capture the current filtered PR list so Review Console can navigate it.
 			    const normUrl = (u) => String(u || '').trim().replace(/\/+$/, '');
@@ -10002,7 +10017,7 @@ class ClaudeOrchestrator {
 
 				      const rcCfg = this.getReviewConsoleConfig();
 				      let currentPreset = String(rcCfg?.preset || 'review').trim().toLowerCase();
-				      if (!['default', 'review', 'deep', 'code', 'terminals', 'custom'].includes(currentPreset)) currentPreset = 'review';
+				      if (!['default', 'review', 'throughput', 'deep', 'code', 'terminals', 'custom'].includes(currentPreset)) currentPreset = 'review';
 				      let currentFullscreen = openedFromQueue || rcCfg?.fullscreen !== false;
 			      const currentSections = {
 			        terminals: rcCfg?.sections?.terminals !== false,
@@ -10025,6 +10040,7 @@ class ClaudeOrchestrator {
 				      const presets = {
 				        default: { terminals: true, files: true, commits: true, diff: true },
 				        review: { terminals: true, files: true, commits: false, diff: true },
+				        throughput: { terminals: true, files: true, commits: false, diff: true },
 				        deep: { terminals: true, files: true, commits: true, diff: true },
 				        code: { terminals: false, files: true, commits: true, diff: true },
 				        terminals: { terminals: true, files: false, commits: false, diff: false }
@@ -10042,10 +10058,11 @@ class ClaudeOrchestrator {
 			              ${tinyBtn('review-window', 'docked', '▐', !currentFullscreen, 'Dock Review Console')}
 			            </span>
 			            <span class="rc-layout-sep">|</span>
-			            <span class="rc-layout-group">
-			              ${tinyBtn('review-preset', 'review', 'Review', currentPreset === 'review', 'Batch review: terminals + files + diff')}
-			              ${tinyBtn('review-preset', 'default', 'Default', currentPreset === 'default')}
-			              ${tinyBtn('review-preset', 'deep', 'Deep', currentPreset === 'deep')}
+				            <span class="rc-layout-group">
+				              ${tinyBtn('review-preset', 'throughput', 'Throughput', currentPreset === 'throughput', 'Diff-first compact review flow')}
+				              ${tinyBtn('review-preset', 'review', 'Review', currentPreset === 'review', 'Batch review: terminals + files + diff')}
+				              ${tinyBtn('review-preset', 'default', 'Default', currentPreset === 'default')}
+				              ${tinyBtn('review-preset', 'deep', 'Deep', currentPreset === 'deep')}
 			              ${tinyBtn('review-preset', 'code', 'Code', currentPreset === 'code')}
 			              ${tinyBtn('review-preset', 'terminals', 'Terminals', currentPreset === 'terminals')}
 			            </span>
@@ -10169,18 +10186,20 @@ class ClaudeOrchestrator {
 	            </div>
 	          </div>
 	          <span style="flex:1"></span>
-	          <div style="display:flex; gap:8px; flex-wrap:nowrap; justify-content:flex-end;">
-	            ${showNav ? `
-	              <button class="btn-secondary" type="button" data-review-nav="prev" title="Previous PR in review stack">◀ Prev</button>
-	              <span class="worktree-inspector-subtle" data-review-nav-status="true" title="Review stack (captured from Queue)">${navIndex + 1}/${navCount}</span>
-	              <button class="btn-secondary" type="button" data-review-nav="next" title="Next PR in review stack">Next ▶</button>
-	            ` : ''}
-	            <button class="btn-secondary" type="button" data-review-nav="next-unreviewed-t3" title="Next unreviewed Tier 3+ PR (uses current stack if available; otherwise loads from Process Queue)">Next unreviewed T3+ ▶</button>
-	            <button class="btn-secondary" type="button" data-pr-refresh="true">🔄 Refresh</button>
-	            <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
-	            <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}">🔍 Diff</button>
-	            <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" ${pr.isDraft ? 'disabled' : ''}>✅ Merge</button>
-		          </div>
+		          <div style="display:flex; gap:8px; flex-wrap:nowrap; justify-content:flex-end;">
+		            ${showNav ? `
+		              <button class="btn-secondary" type="button" data-review-nav="prev" title="Previous PR in review stack">◀ Prev</button>
+		              <span class="worktree-inspector-subtle" data-review-nav-status="true" title="Review stack (captured from Queue)">${navIndex + 1}/${navCount}</span>
+		              <button class="btn-secondary" type="button" data-review-nav="next" title="Next PR in review stack">Next ▶</button>
+		            ` : ''}
+		            <button class="btn-secondary" type="button" data-review-nav="next-unreviewed-t3" title="Next unreviewed Tier 3+ PR (Alt+Shift+N)">Next unreviewed T3+ ▶</button>
+		            <button class="btn-secondary" type="button" data-pr-approve="${escapeHtml(prUrl)}" title="Approve PR (Alt+Shift+A)">👍 Approve</button>
+		            <button class="btn-secondary" type="button" data-pr-request-changes="${escapeHtml(prUrl)}" title="Request changes (Alt+Shift+C)">🛑 Changes</button>
+		            <button class="btn-secondary" type="button" data-pr-refresh="true">🔄 Refresh</button>
+		            <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
+		            <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}">🔍 Diff</button>
+		            <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" title="Merge PR (Alt+Shift+M)" ${pr.isDraft ? 'disabled' : ''}>✅ Merge</button>
+			          </div>
 		        </div>
             ${reviewRouteBar}
 
@@ -10224,7 +10243,7 @@ class ClaudeOrchestrator {
 					                  <div class="worktree-inspector-panel-title">Terminals</div>
 					                  <div class="worktree-inspector-subtle" data-terminals-count="true">${visibleTerminals0}/${matchingSessionIds.length} shown</div>
 					                </div>
-					                <div class="worktree-inspector-terminals" data-pr-terminals="true"></div>
+						                <div class="worktree-inspector-terminals review-console-terminals-grid" data-pr-terminals="true"></div>
 					              </div>
 					            ` : ''}
 					          </div>
@@ -10351,27 +10370,34 @@ class ClaudeOrchestrator {
 			          // ignore
 			        }
 
-			        if (!terminalsContainer) return;
-			        const wrappers = Array.from(terminalsContainer.querySelectorAll('.terminal-wrapper.review-console-terminal'));
-			        const visibleSessionIds = [];
-			        wrappers.forEach((wrapper) => {
-			          const sid = String(wrapper?.dataset?.sessionId || '').trim();
-			          if (!sid) return;
-			          const sess = this.sessions.get(sid) || null;
-			          const t = String(wrapper?.dataset?.sessionType || sess?.type || '').trim().toLowerCase();
+				        if (!terminalsContainer) return;
+				        const wrappers = Array.from(terminalsContainer.querySelectorAll('.terminal-wrapper.review-console-terminal'));
+				        const visibleSessionIds = [];
+				        let hasVisibleAgent = false;
+				        let hasVisibleServer = false;
+				        wrappers.forEach((wrapper) => {
+				          const sid = String(wrapper?.dataset?.sessionId || '').trim();
+				          if (!sid) return;
+				          const sess = this.sessions.get(sid) || null;
+				          const t = String(wrapper?.dataset?.sessionType || sess?.type || '').trim().toLowerCase();
 			          if (t && (!wrapper.dataset.sessionType || wrapper.dataset.sessionType !== t)) {
 			            try { wrapper.dataset.sessionType = t; } catch {}
 			          }
 			          const isSrv = isServer(sid) || t === 'server';
 			          const allowed = isSrv ? (currentTerminalKinds.server !== false) : (currentTerminalKinds.agent !== false);
-			          const show = allowed && (currentSections.terminals !== false);
-			          wrapper.style.display = show ? '' : 'none';
-			          wrapper.classList.toggle('hidden', !show);
-			          if (show) visibleSessionIds.push(sid);
-			        });
+				          const show = allowed && (currentSections.terminals !== false);
+				          wrapper.style.display = show ? '' : 'none';
+				          wrapper.classList.toggle('hidden', !show);
+				          if (show) {
+				            visibleSessionIds.push(sid);
+				            if (isSrv) hasVisibleServer = true;
+				            else hasVisibleAgent = true;
+				          }
+				        });
+				        terminalsContainer.classList.toggle('paired-layout', hasVisibleAgent && hasVisibleServer);
 
-			        if (visibleSessionIds.length) {
-			          setTimeout(() => {
+				        if (visibleSessionIds.length) {
+				          setTimeout(() => {
 			            visibleSessionIds.forEach((sid) => {
 			              try { this.terminalManager?.fitTerminal?.(sid); } catch {}
 			            });
@@ -11133,28 +11159,117 @@ class ClaudeOrchestrator {
 		          }
 		        });
 		      });
-      bodyEl.querySelector('[data-pr-merge]')?.addEventListener('click', async (e) => {
-        const u = e.target?.dataset?.prMerge;
-        if (!u) return;
-        if (!window.confirm(`Merge PR?\n${u}`)) return;
-        const btn = e.target;
-        btn.disabled = true;
-        this.showToast('Merging PR…', 'info');
-        try {
-          const res = await fetch('/api/prs/merge', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: u, method: 'merge' })
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to merge PR'));
-          this.showToast('PR merged', 'success');
-        } catch (err) {
-          this.showToast(String(err?.message || err), 'error');
-          btn.disabled = false;
-        }
-      });
-    } catch (err) {
+		      const reviewApproveBtn = bodyEl.querySelector('[data-pr-approve]');
+		      const reviewChangesBtn = bodyEl.querySelector('[data-pr-request-changes]');
+		      const reviewMergeBtn = bodyEl.querySelector('[data-pr-merge]');
+
+		      const setReviewButtonsDisabled = (disabled) => {
+		        [reviewApproveBtn, reviewChangesBtn, reviewMergeBtn].forEach((btn) => {
+		          if (!btn) return;
+		          try { btn.disabled = !!disabled; } catch {}
+		        });
+		      };
+
+		      const runReviewAction = async ({ action, body, successMessage, pendingMessage }) => {
+		        const u = String(prUrl || '').trim();
+		        if (!u) return false;
+		        setReviewButtonsDisabled(true);
+		        this.showToast(pendingMessage, 'info');
+		        try {
+		          const res = await fetch('/api/prs/review', {
+		            method: 'POST',
+		            headers: { 'Content-Type': 'application/json' },
+		            body: JSON.stringify({ url: u, action, body: String(body || '').trim() || undefined })
+		          });
+		          const data = await res.json().catch(() => ({}));
+		          if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to submit review action'));
+		          this.showToast(successMessage, 'success');
+		          return true;
+		        } catch (err) {
+		          this.showToast(String(err?.message || err), 'error');
+		          return false;
+		        } finally {
+		          setReviewButtonsDisabled(false);
+		        }
+		      };
+
+		      const runMergeAction = async () => {
+		        const u = String(prUrl || '').trim();
+		        if (!u) return false;
+		        if (!window.confirm(`Merge PR?\n${u}`)) return false;
+		        setReviewButtonsDisabled(true);
+		        this.showToast('Merging PR…', 'info');
+		        try {
+		          const res = await fetch('/api/prs/merge', {
+		            method: 'POST',
+		            headers: { 'Content-Type': 'application/json' },
+		            body: JSON.stringify({ url: u, method: 'merge' })
+		          });
+		          const data = await res.json().catch(() => ({}));
+		          if (!res.ok) throw new Error(String(data?.error || data?.message || 'Failed to merge PR'));
+		          this.showToast('PR merged', 'success');
+		          return true;
+		        } catch (err) {
+		          this.showToast(String(err?.message || err), 'error');
+		          return false;
+		        } finally {
+		          setReviewButtonsDisabled(false);
+		        }
+		      };
+
+		      reviewApproveBtn?.addEventListener('click', () => {
+		        runReviewAction({
+		          action: 'approve',
+		          body: '',
+		          pendingMessage: 'Submitting approval…',
+		          successMessage: 'Approved'
+		        }).catch(() => {});
+		      });
+		      reviewChangesBtn?.addEventListener('click', () => {
+		        runReviewAction({
+		          action: 'request_changes',
+		          body: 'Requested changes via Review Console.',
+		          pendingMessage: 'Requesting changes…',
+		          successMessage: 'Requested changes'
+		        }).catch(() => {});
+		      });
+		      reviewMergeBtn?.addEventListener('click', () => {
+		        runMergeAction().catch(() => {});
+		      });
+
+		      const onReviewHotkey = (event) => {
+		        const modalEl = document.getElementById('worktree-inspector-modal');
+		        if (!modalEl || modalEl.classList.contains('hidden')) return;
+		        if (!event.altKey || !event.shiftKey) return;
+		        if (this.isEditableEventTarget(event.target)) return;
+		        const key = String(event.key || '').trim().toLowerCase();
+		        if (!key) return;
+
+		        if (key === 'n') {
+		          event.preventDefault();
+		          navNextUnreviewedT3Btn?.click?.();
+		          return;
+		        }
+		        if (key === 'a') {
+		          event.preventDefault();
+		          reviewApproveBtn?.click?.();
+		          return;
+		        }
+		        if (key === 'c') {
+		          event.preventDefault();
+		          reviewChangesBtn?.click?.();
+		          return;
+		        }
+		        if (key === 'm') {
+		          event.preventDefault();
+		          reviewMergeBtn?.click?.();
+		        }
+		      };
+		      document.addEventListener('keydown', onReviewHotkey, true);
+		      this.reviewConsoleHotkeysCleanup = () => {
+		        document.removeEventListener('keydown', onReviewHotkey, true);
+		      };
+	    } catch (err) {
       bodyEl.innerHTML = `
         <div style="opacity:0.9; margin-bottom:10px;">Failed to load PR details.</div>
         <div style="opacity:0.7;" class="mono">${escapeHtml(String(err?.message || err))}</div>
@@ -12948,7 +13063,7 @@ class ClaudeOrchestrator {
         ? this.userSettings.global.ui.reviewConsole
         : {};
       const v = String(cfg.preset || 'review').trim().toLowerCase();
-      const allowed = new Set(['default', 'review', 'deep', 'terminals', 'code', 'custom']);
+      const allowed = new Set(['default', 'review', 'throughput', 'deep', 'terminals', 'code', 'custom']);
       reviewConsolePreset.value = allowed.has(v) ? v : 'review';
     }
     const reviewConsoleFullscreen = document.getElementById('review-console-fullscreen');
