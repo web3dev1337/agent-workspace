@@ -84,7 +84,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 ## P1 Tickets (high)
 
 ### P1-01: Simple mode left-rail polish to Codex-style ergonomics
-- Status: Ready
+- Status: Done
 - Size: M
 - Deliverables:
   - faster thread switching and preloading
@@ -93,6 +93,10 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Acceptance criteria:
   - thread open action <300ms perceived latency on warm cache
   - keyboard-only flow works for project select + chat open + new chat
+- Shipped in PR #TBD:
+  - added project and thread search inputs in Projects + Chats shell.
+  - added pinned and recent thread ordering with per-thread pin/unpin controls.
+  - added background preloading of workspace thread lists for faster project switches.
 
 ### P1-02: Capability contract generation (single source for UI/voice/commander/help)
 - Status: Done
