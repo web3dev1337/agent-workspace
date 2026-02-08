@@ -73,6 +73,7 @@ class ClaudeOrchestrator {
     this.worktreeConfigs = new Map(); // Worktree-specific configs (sessionId → config)
     this.worktreeTags = new Map(); // Worktree path → tags (e.g., readyForReview)
     this.taskRecords = new Map(); // taskId → record (tier/risk/pFail/promptRef)
+    this.commandCatalogCache = []; // Cached /api/commands/catalog payload for local filtering
 
     // Launch helpers (ticket/card → worktree → agent → auto-prompt)
     this.pendingAutoPrompts = new Map(); // sessionId -> { text, createdAt, sentAt }
@@ -1896,6 +1897,20 @@ class ClaudeOrchestrator {
         this.stopPagerFromSettings().catch((error) => {
           this.showToast?.(String(error?.message || error), 'error');
         });
+      });
+    }
+    const commandCatalogRefresh = document.getElementById('command-catalog-refresh');
+    if (commandCatalogRefresh) {
+      commandCatalogRefresh.addEventListener('click', () => {
+        this.refreshCommandCatalog().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
+    const commandCatalogFilter = document.getElementById('command-catalog-filter');
+    if (commandCatalogFilter) {
+      commandCatalogFilter.addEventListener('input', () => {
+        this.renderCommandCatalog(this.commandCatalogCache);
       });
     }
 
@@ -11027,6 +11042,82 @@ class ClaudeOrchestrator {
     }
   }
 
+  async fetchCommandCatalog() {
+    const res = await fetch('/api/commands/catalog', { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Command catalog failed (${res.status})`));
+    }
+    return data;
+  }
+
+  renderCommandCatalog(payload) {
+    const statusEl = document.getElementById('command-catalog-status');
+    const summaryEl = document.getElementById('command-catalog-summary');
+    const outputEl = document.getElementById('command-catalog-output');
+    if (!summaryEl && !outputEl && !statusEl) return;
+
+    const all = Array.isArray(payload?.commands) ? payload.commands : [];
+    const query = String(document.getElementById('command-catalog-filter')?.value || '').trim().toLowerCase();
+    const rows = query
+      ? all.filter((cmd) => {
+          const haystack = [
+            cmd?.name,
+            cmd?.category,
+            cmd?.description,
+            cmd?.safetyLevel,
+            cmd?.safetyNotes,
+            ...(Array.isArray(cmd?.aliases) ? cmd.aliases : [])
+          ]
+            .map((value) => String(value || '').toLowerCase())
+            .join(' ');
+          return haystack.includes(query);
+        })
+      : all;
+
+    const categoryCounts = new Map();
+    for (const cmd of rows) {
+      const category = String(cmd?.category || 'uncategorized');
+      categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+    }
+    const categoryText = Array.from(categoryCounts.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([category, count]) => `${category}:${count}`)
+      .join(' | ');
+
+    if (summaryEl) {
+      summaryEl.textContent = `Commands: ${rows.length}${query ? ` (filtered from ${all.length})` : ''}${categoryText ? ` • ${categoryText}` : ''}`;
+    }
+    if (statusEl) {
+      statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    }
+    if (outputEl) {
+      outputEl.textContent = rows.length
+        ? rows
+            .map((cmd) => {
+              const aliases = Array.isArray(cmd?.aliases) && cmd.aliases.length ? `aliases=${cmd.aliases.join(',')}` : 'aliases=-';
+              const surfaces = Array.isArray(cmd?.surfaces) && cmd.surfaces.length ? cmd.surfaces.join(',') : '-';
+              const role = String(cmd?.requiredRole || '').trim() || '-';
+              const safety = String(cmd?.safetyLevel || 'safe');
+              const safetyNotes = String(cmd?.safetyNotes || '').trim() || '-';
+              return `${cmd.name} [${cmd.category}] | safety=${safety} | role=${role} | surfaces=${surfaces} | ${aliases}\n  ${cmd.description || ''}\n  note: ${safetyNotes}`;
+            })
+            .join('\n\n')
+        : '(no commands match current filter)';
+    }
+  }
+
+  async refreshCommandCatalog() {
+    const statusEl = document.getElementById('command-catalog-status');
+    const outputEl = document.getElementById('command-catalog-output');
+    if (statusEl) statusEl.textContent = 'Loading…';
+    if (outputEl) outputEl.textContent = 'Loading command catalog…';
+    const data = await this.fetchCommandCatalog();
+    this.commandCatalogCache = Array.isArray(data?.commands) ? data.commands : [];
+    this.renderCommandCatalog(data);
+    return data;
+  }
+
   async fetchPagerStatus() {
     const res = await fetch('/api/pager/jobs', { cache: 'no-store' });
     const data = await res.json().catch(() => ({}));
@@ -12462,6 +12553,9 @@ class ClaudeOrchestrator {
 
     if (document.getElementById('scheduler-status-output')) {
       this.refreshSchedulerStatus().catch(() => {});
+    }
+    if (document.getElementById('command-catalog-output')) {
+      this.refreshCommandCatalog().catch(() => {});
     }
     if (document.getElementById('pager-status-output')) {
       this.refreshPagerStatus().catch(() => {});
