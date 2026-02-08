@@ -106,7 +106,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - Added CI enforcement in `.github/workflows/tests.yml` and `.github/workflows/windows.yml`.
 
 ### P1-03: Plugin SDK v1 hardening
-- Status: Ready
+- Status: Done
 - Size: M
 - Deliverables:
   - `plugins/` schema + versioned manifest
@@ -115,6 +115,10 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Acceptance criteria:
   - invalid plugin manifests fail with clear diagnostics
   - plugin command namespace collisions are prevented
+- Shipped in PR #TBD:
+  - `server/pluginLoaderService.js` now validates manifest schema/version (`manifestVersion: 1`), id/path safety, capabilities, and compatibility constraints.
+  - plugin command registration now enforces namespace/collision checks and per-plugin command caps.
+  - tests added for invalid manifest version, command collisions, and command-cap overflow.
 
 ### P1-04: Scheduler UX templates expansion (cron skills)
 - Status: Ready
