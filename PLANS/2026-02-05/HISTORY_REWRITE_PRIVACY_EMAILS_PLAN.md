@@ -234,3 +234,4 @@ Status notes (2026-02-08):
 - Added `scripts/create-public-snapshot-repo.js` and `npm run prep:public-snapshot-repo` to generate the alternative single-commit public snapshot repo path.
 - Executed `npm run prep:public-snapshot-repo` to create a local single-commit public snapshot repository (non-destructive path complete).
 - Added `scripts/generate-release-readiness-report.js` and `npm run report:release-readiness` to produce an objective readiness summary (public-release audits + remaining-work state + snapshot existence), with optional strict history scan via `--include-history`.
+- Added `scripts/verify-public-snapshot-repo.js` and `npm run check:public-snapshot-repo` to validate snapshot integrity (exists, git repo, single commit, package.json, in-snapshot audit pass).

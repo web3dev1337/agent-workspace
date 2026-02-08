@@ -134,6 +134,22 @@ function getSnapshotStatus(repoRoot, snapshotDirArg) {
   return { target, exists, hasGit, commit };
 }
 
+function getSnapshotVerification(repoRoot, snapshotDirArg) {
+  const args = [];
+  if (snapshotDirArg) {
+    args.push('--snapshot-dir', path.resolve(snapshotDirArg));
+  }
+  args.push('--json');
+
+  const verify = runNodeScript(repoRoot, 'scripts/verify-public-snapshot-repo.js', args);
+  const parsed = parseJsonSafe(verify.stdout);
+  return {
+    ok: verify.ok,
+    status: verify.status,
+    parsed
+  };
+}
+
 function buildMarkdown(report) {
   const lines = [];
   lines.push('# Release readiness report');
@@ -159,6 +175,10 @@ function buildMarkdown(report) {
   if (report.checks.snapshot.exists) {
     lines.push(`- Snapshot commit: ${report.checks.snapshot.commit || '(unknown)'}`);
   }
+  lines.push(`- Snapshot verifier: ${report.checks.snapshotVerification.ok ? 'pass' : 'fail'}`);
+  if (report.checks.snapshotVerification.parsed) {
+    lines.push(`- Snapshot commit count: ${report.checks.snapshotVerification.parsed.commitCount}`);
+  }
   lines.push(`- History custom email count (info): ${report.checks.historyAuthors.customEmails}`);
   lines.push('');
   return `${lines.join('\n')}\n`;
@@ -172,6 +192,7 @@ function main() {
   checks.git = getGitState(repoRoot);
   checks.remainingWork = getRemainingWorkStatus(repoRoot);
   checks.snapshot = getSnapshotStatus(repoRoot, args.snapshotDir);
+  checks.snapshotVerification = getSnapshotVerification(repoRoot, args.snapshotDir);
 
   checks.publicReleaseAudit = runNodeScript(repoRoot, 'scripts/public-release-audit.js', []);
   checks.publicReleaseHistoryAudit = args.includeHistory
@@ -190,7 +211,8 @@ function main() {
     !checks.publicReleaseAudit.ok,
     args.includeHistory && checks.publicReleaseHistoryAudit && !checks.publicReleaseHistoryAudit.ok,
     !checks.snapshot.exists,
-    !checks.snapshot.hasGit
+    !checks.snapshot.hasGit,
+    !checks.snapshotVerification.ok
   ].filter(Boolean).length;
 
   const warnings = [
