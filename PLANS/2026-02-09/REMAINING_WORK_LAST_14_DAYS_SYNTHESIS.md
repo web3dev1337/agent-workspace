@@ -5,6 +5,7 @@ Inputs:
 - `PLANS/2026-02-09/REMAINING_WORK_LAST_14_DAYS_SCAN.md`
 - `PLANS/2026-02-08/REMAINING_WORK_NOW.md`
 - merged PR history through `#699`
+- merged PR history through `#701`
 
 ## Actionable implementation backlog
 
@@ -30,3 +31,6 @@ Inputs:
 - Stale `PR #TBD` placeholders in `PLANS/2026-02-07/PHASE4_5_EXECUTION_TICKETS_FROM_COMPETITIVE_ANALYSIS.md` have been replaced with their merged PR numbers (`#648`-`#658` where applicable) to reduce false “remaining” noise.
 - Release-readiness command still reports `READY`:
   - `npm run report:release-readiness`
+- Scanner actionable mode is now strict for explicit tasks only:
+  - `--actionable-only` includes `doc/backlog` files only when they contain unchecked checklist items and/or `TODO`/`FIXME`.
+  - Heuristic-only “What’s left / Next steps” prose is excluded from actionable output.
