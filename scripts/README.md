@@ -111,3 +111,23 @@ The script waits up to 60 seconds for WSL. If that's not enough:
 ### Browser opens before server is ready
 - Increase the `timeout` value in the startup script
 - Or just refresh the browser after a few seconds
+
+## Markdown Remaining Scanner
+
+`scripts/scan-markdown-remaining.js` scans markdown files for unchecked tasks, TODO/FIXME markers, and “remaining” sections.
+
+Examples:
+
+```bash
+# Full markdown report to stdout
+node scripts/scan-markdown-remaining.js --scope all
+
+# JSON output (explicit)
+node scripts/scan-markdown-remaining.js --scope recent --since-days 14 --json --output /tmp/md-remaining.json
+
+# JSON output (auto by .json extension)
+node scripts/scan-markdown-remaining.js --scope recent --since-days 14 --output /tmp/md-remaining.json
+
+# Actionable-only view (filters template/generated-scan noise)
+node scripts/scan-markdown-remaining.js --scope all --actionable-only
+```
