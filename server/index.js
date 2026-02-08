@@ -99,6 +99,7 @@ const { PagerService } = require('./pagerService');
 const { ThreadService } = require('./threadService');
 const { PolicyBundleService } = require('./policyBundleService');
 const { normalizeServiceManifest, getWorkspaceServiceManifest } = require('./workspaceServiceStackService');
+const { ServiceStackRuntimeService } = require('./serviceStackRuntimeService');
 const {
   getLifecyclePolicy,
   parseWorktreeKey,
@@ -297,6 +298,7 @@ const pluginLoaderService = PluginLoaderService.getInstance({ logger });
 const schedulerService = SchedulerService.getInstance({ logger });
 const pagerService = PagerService.getInstance({ logger });
 const threadService = ThreadService.getInstance({ logger });
+const serviceStackRuntimeService = ServiceStackRuntimeService.getInstance({ logger });
 const policyService = PolicyService.getInstance({ logger });
 const auditExportService = AuditExportService.getInstance({ logger });
 const policyBundleService = PolicyBundleService.getInstance({ policyService, userSettingsService });
@@ -318,6 +320,7 @@ policyService.init({ userSettingsService, commandRegistry });
 schedulerService.init({ userSettingsService, commandRegistry });
 pagerService.init({ sessionManager });
 threadService.init({ workspaceManager, sessionManager });
+serviceStackRuntimeService.init({ workspaceManager, sessionManager, io });
 auditExportService.init({ activityFeed, schedulerService, userSettingsService });
 
 const loadPlugins = async () => {
@@ -1364,6 +1367,60 @@ app.post('/api/workspaces/:id/service-stack/import', express.json(), async (req,
   } catch (error) {
     logger.error('Failed to import workspace service stack', { error: error.message, stack: error.stack });
     res.status(400).json({ ok: false, error: 'Failed to import workspace service stack', message: error.message });
+  }
+});
+
+app.get('/api/workspaces/:id/service-stack/runtime', async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const runtime = await serviceStackRuntimeService.getRuntimeStatus(workspaceId);
+    res.json({ ok: true, ...runtime });
+  } catch (error) {
+    logger.error('Failed to get workspace service stack runtime', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get workspace service stack runtime', message: error.message });
+  }
+});
+
+app.post('/api/workspaces/:id/service-stack/start', express.json(), async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const serviceIds = Array.isArray(req.body?.serviceIds) ? req.body.serviceIds : [];
+    const result = await serviceStackRuntimeService.start(workspaceId, { serviceIds });
+    const runtime = await serviceStackRuntimeService.getRuntimeStatus(workspaceId);
+    res.json({ ok: true, ...result, runtime });
+  } catch (error) {
+    logger.error('Failed to start workspace service stack', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: 'Failed to start workspace service stack', message: error.message });
+  }
+});
+
+app.post('/api/workspaces/:id/service-stack/stop', express.json(), async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const serviceIds = Array.isArray(req.body?.serviceIds) ? req.body.serviceIds : [];
+    const result = await serviceStackRuntimeService.stop(workspaceId, { serviceIds });
+    const runtime = await serviceStackRuntimeService.getRuntimeStatus(workspaceId);
+    res.json({ ok: true, ...result, runtime });
+  } catch (error) {
+    logger.error('Failed to stop workspace service stack', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: 'Failed to stop workspace service stack', message: error.message });
+  }
+});
+
+app.post('/api/workspaces/:id/service-stack/restart', express.json(), async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const serviceIds = Array.isArray(req.body?.serviceIds) ? req.body.serviceIds : [];
+    const result = await serviceStackRuntimeService.restart(workspaceId, { serviceIds });
+    const runtime = await serviceStackRuntimeService.getRuntimeStatus(workspaceId);
+    res.json({ ok: true, ...result, runtime });
+  } catch (error) {
+    logger.error('Failed to restart workspace service stack', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: 'Failed to restart workspace service stack', message: error.message });
   }
 });
 
