@@ -38,12 +38,12 @@ Status:
 - ✅ Commander execute + capabilities shipped.
 - ✅ Queue + Review Console core control surface shipped.
 - ✅ Voice exact-match aliases are auto-generated from command metadata (prevents drift).
+- ✅ Selection helper supports repo-aware PR number targeting (`select pr 492 in zoo-game`) via shared command surface.
 
 Remaining work:
 - Provider plugin interface (Claude/Codex/future) to keep the architecture clean:
   - `listSessions`, `resume`, `searchHistory`, `getTranscript`, etc.
 - Commander “typed freeform → LLM parse → {command, params}” flow (same prompt logic as voice, but typed).
-- Expand selection helpers so voice can do “select PR 492 in zoo-game” (repo alias + PR number) without requiring full URL.
 
 Primary source:
 - `PLANS/2026-01-31/FULL_UI_CONTROL_VIA_COMMANDS_GAP_ANALYSIS.md`
