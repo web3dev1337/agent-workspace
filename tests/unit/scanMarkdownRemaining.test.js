@@ -44,6 +44,7 @@ describe('scan-markdown-remaining helpers', () => {
   test('filterScansForActionable keeps only actionable backlog rows', () => {
     const scans = [
       scanMarkdown('PLANS/A.md', '# Remaining\n- [ ] one\n'),
+      scanMarkdown('PLANS/HEURISTIC_ONLY.md', '# What is left\n- ship docs cleanup\n'),
       scanMarkdown('PLANS/2026-02-02/REMAINING_WORK_LAST_10_DAYS_SCAN.md', '# Remaining\nTODO token\n'),
       scanMarkdown('PLANS/2026-01-20/CHECKLIST.md', '- [ ] template item\n'),
       scanMarkdown('PLANS/B.md', '# Done\n')
