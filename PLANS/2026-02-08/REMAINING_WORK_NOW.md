@@ -12,6 +12,8 @@ This file is the canonical short list after syncing the Phase 5 execution plan a
     - `npm run report:release-readiness -- --json-out /tmp/release-readiness.json --md-out /tmp/release-readiness.md`
   - Optional strict history scan:
     - `npm run report:release-readiness -- --include-history`
+  - Snapshot quality check only:
+    - `npm run check:public-snapshot-repo`
 
 ## Remaining destructive / optional work
 
