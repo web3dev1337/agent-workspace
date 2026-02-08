@@ -276,22 +276,13 @@ Required checks before merge:
 4. Linux/WSL smoke checks:
    - same as Windows plus path/cwd correctness
 
-## 6) Estimated sequence (fast path)
+## 6) Dependency-first execution order
 
-Week 1:
-- M0.1, M0.2, M1.1
-
-Week 2:
-- M1.2, M1.3
-
-Week 3:
-- M2.1, M2.2
-
-Week 4:
-- M3.1, M3.2
-
-Week 5:
-- M4.1, M4.2, M4.3
+1. M0.1, M0.2, M1.1
+2. M1.2, M1.3
+3. M2.1, M2.2
+4. M3.1, M3.2
+5. M4.1, M4.2, M4.3
 
 ## 7) Explicit non-goals for this phase
 
