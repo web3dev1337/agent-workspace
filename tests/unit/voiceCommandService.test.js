@@ -85,6 +85,19 @@ describe('VoiceCommandService (rule parsing)', () => {
     expect(adviceNext.command).toBe('open-advice');
   });
 
+  test('parses pager/pollcat controls', () => {
+    const status = voiceCommandService.parseWithRules('pager status');
+    expect(status.command).toBe('pager-status');
+
+    const start = voiceCommandService.parseWithRules('start pollcat for work1-claude');
+    expect(start.command).toBe('pager-start');
+    expect(start.params).toEqual({ sessionId: 'work1-claude' });
+
+    const stop = voiceCommandService.parseWithRules('stop pager pager-work1');
+    expect(stop.command).toBe('pager-stop');
+    expect(stop.params).toEqual({ id: 'pager-work1' });
+  });
+
   test('parses queue review surface helpers', () => {
     const consoleCmd = voiceCommandService.parseWithRules('open review console');
     expect(consoleCmd.command).toBe('queue-open-console');

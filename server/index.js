@@ -94,6 +94,7 @@ const sessionRecoveryService = require('./sessionRecoveryService');
 const { collectDiagnostics } = require('./diagnosticsService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
+const { PagerService } = require('./pagerService');
 const { ThreadService } = require('./threadService');
 const { PolicyService } = require('./policyService');
 const { AuditExportService } = require('./auditExportService');
@@ -280,6 +281,7 @@ const processPairingService = ProcessPairingService.getInstance({ processTaskSer
 const testOrchestrationService = TestOrchestrationService.getInstance({ sessionManager, workspaceManager });
 const pluginLoaderService = PluginLoaderService.getInstance({ logger });
 const schedulerService = SchedulerService.getInstance({ logger });
+const pagerService = PagerService.getInstance({ logger });
 const threadService = ThreadService.getInstance({ logger });
 const policyService = PolicyService.getInstance({ logger });
 const auditExportService = AuditExportService.getInstance({ logger });
@@ -294,10 +296,12 @@ const commanderService = CommanderService.getInstance({
 commandRegistry.init({
   io,
   sessionManager,
-  workspaceManager
+  workspaceManager,
+  pagerService
 });
 policyService.init({ userSettingsService, commandRegistry });
 schedulerService.init({ userSettingsService, commandRegistry });
+pagerService.init({ sessionManager });
 threadService.init({ workspaceManager, sessionManager });
 auditExportService.init({ activityFeed, schedulerService, userSettingsService });
 
@@ -5485,6 +5489,50 @@ app.post('/api/scheduler/jobs/from-template', express.json(), async (req, res) =
     const status = message.toLowerCase().includes('unknown scheduler template') ? 404 : 500;
     logger.error('Failed to create scheduler job from template', { error: message, stack: error.stack, status });
     res.status(status).json({ ok: false, error: 'Failed to create scheduler job from template', message });
+  }
+});
+
+app.get('/api/pager/jobs', (req, res) => {
+  try {
+    const id = String(req.query.id || '').trim();
+    const status = pagerService.getStatus({ id: id || undefined });
+    res.json(status);
+  } catch (error) {
+    logger.error('Failed to get pager jobs', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get pager jobs', message: error.message });
+  }
+});
+
+app.post('/api/pager/jobs', express.json(), async (req, res) => {
+  try {
+    const options = (req.body && typeof req.body === 'object') ? req.body : {};
+    const job = await pagerService.startJob(options);
+    res.status(201).json({ ok: true, job });
+  } catch (error) {
+    const message = String(error?.message || error);
+    const status = message.toLowerCase().includes('no target sessions') || message.toLowerCase().includes('no live sessions')
+      ? 400
+      : 500;
+    logger.error('Failed to start pager job', { error: message, stack: error.stack, status });
+    res.status(status).json({ ok: false, error: 'Failed to start pager job', message });
+  }
+});
+
+app.post('/api/pager/jobs/:id/stop', express.json(), (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      return res.status(400).json({ ok: false, error: 'id is required' });
+    }
+    const reason = String(req.body?.reason || 'manual').trim() || 'manual';
+    const result = pagerService.stopJob(id, { reason });
+    if (!result?.ok) {
+      return res.status(404).json({ ok: false, error: result?.error || `Job not found: ${id}` });
+    }
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    logger.error('Failed to stop pager job', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to stop pager job', message: error.message });
   }
 });
 

@@ -83,6 +83,32 @@ class VoiceCommandService {
         command: 'queue-next',
         extractParams: () => ({})
       },
+      // Pager / Pollcat controls
+      {
+        patterns: [
+          /(?:pager|pollcat)\s+status/i,
+          /status\s+(?:pager|pollcat)/i,
+          /list\s+(?:pager|pollcat)\s+jobs/i,
+        ],
+        command: 'pager-status',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
+          /(?:stop|cancel|disable)\s+(?:pager|pollcat)\s+([a-z0-9._:-]+)/i,
+          /(?:stop|cancel|disable)\s+(?:pager|pollcat)\s+job\s+([a-z0-9._:-]+)/i,
+        ],
+        command: 'pager-stop',
+        extractParams: (match) => ({ id: String(match?.[1] || '').trim() })
+      },
+      {
+        patterns: [
+          /(?:start|run|enable)\s+(?:pager|pollcat)\s+(?:for\s+)?([a-z0-9._:-]+)/i,
+          /(?:pager|pollcat)\s+(?:for\s+)?([a-z0-9._:-]+)\s+(?:start|on)/i,
+        ],
+        command: 'pager-start',
+        extractParams: (match) => ({ sessionId: String(match?.[1] || '').trim() })
+      },
       // Open Queue (blockers)
       {
         patterns: [
@@ -1321,6 +1347,9 @@ Command patterns:
 - "open advice" → open-advice
 - "open commander" → open-commander
 - "open settings" → open-settings
+- "pager status" → pager-status
+- "start pager for work1-claude" → pager-start { sessionId }
+- "stop pager pager-work1" → pager-stop { id }
 
 Worktree matching:
 - "zoo game work 1" → worktreeId: "zoo-game-work1"

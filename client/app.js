@@ -1874,6 +1874,31 @@ class ClaudeOrchestrator {
       });
     }
 
+    const pagerRefresh = document.getElementById('pager-refresh');
+    if (pagerRefresh) {
+      pagerRefresh.addEventListener('click', () => {
+        this.refreshPagerStatus().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
+    const pagerStart = document.getElementById('pager-start');
+    if (pagerStart) {
+      pagerStart.addEventListener('click', () => {
+        this.startPagerFromSettings().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
+    const pagerStop = document.getElementById('pager-stop');
+    if (pagerStop) {
+      pagerStop.addEventListener('click', () => {
+        this.stopPagerFromSettings().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
+
 	    // License controls
 	    const licenseReload = document.getElementById('license-reload');
 	    if (licenseReload) {
@@ -11001,6 +11026,132 @@ class ClaudeOrchestrator {
       return false;
     }
   }
+
+  async fetchPagerStatus() {
+    const res = await fetch('/api/pager/jobs', { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Pager status failed (${res.status})`));
+    }
+    return data;
+  }
+
+  renderPagerStatus(status) {
+    const outputEl = document.getElementById('pager-status-output');
+    if (!outputEl) return;
+    const jobs = Array.isArray(status?.jobs) ? status.jobs : [];
+    const defaults = (status?.defaults && typeof status.defaults === 'object') ? status.defaults : {};
+    const nudgeEl = document.getElementById('pager-nudge-text');
+    const intervalEl = document.getElementById('pager-interval-seconds');
+    const maxPingsEl = document.getElementById('pager-max-pings');
+    const maxRuntimeEl = document.getElementById('pager-max-runtime-minutes');
+    const doneEnabledEl = document.getElementById('pager-done-check-enabled');
+    const doneTokenEl = document.getElementById('pager-done-token');
+
+    if (nudgeEl && !nudgeEl.value) nudgeEl.value = String(defaults.nudgeText || 'next');
+    if (intervalEl && !intervalEl.value) intervalEl.value = String(defaults.intervalSeconds || 300);
+    if (maxPingsEl && !maxPingsEl.value) maxPingsEl.value = String(defaults.maxPings || 24);
+    if (maxRuntimeEl && !maxRuntimeEl.value) maxRuntimeEl.value = String(defaults.maxRuntimeMinutes || 120);
+    if (doneEnabledEl && !doneEnabledEl.dataset.initialized) {
+      doneEnabledEl.checked = defaults.doneCheck?.enabled === true;
+      doneEnabledEl.dataset.initialized = '1';
+    }
+    if (doneTokenEl && !doneTokenEl.value) doneTokenEl.value = String(defaults.doneCheck?.token || 'PAGER_DONE');
+
+    const running = jobs.filter((row) => row?.status === 'running');
+    const rows = jobs.slice(0, 12).map((row) => {
+      const id = String(row?.id || '');
+      const state = String(row?.status || 'unknown');
+      const targetCount = Array.isArray(row?.sessionIds) ? row.sessionIds.length : 0;
+      const pingCount = Number(row?.pingsSent || 0);
+      const reason = row?.stopReason ? ` | reason: ${row.stopReason}` : '';
+      return `- ${id} | ${state} | targets: ${targetCount} | pings: ${pingCount}${reason}`;
+    }).join('\\n');
+
+    outputEl.textContent = [
+      `running jobs: ${running.length}`,
+      `total jobs: ${jobs.length}`,
+      '',
+      'jobs:',
+      rows || '(none)'
+    ].join('\\n');
+  }
+
+  async refreshPagerStatus() {
+    const outputEl = document.getElementById('pager-status-output');
+    if (outputEl) outputEl.textContent = 'Loading pager…';
+    const status = await this.fetchPagerStatus();
+    this.renderPagerStatus(status);
+    return status;
+  }
+
+  async startPagerFromSettings() {
+    const sessionId = String(document.getElementById('pager-session-id')?.value || '').trim();
+    if (!sessionId) {
+      this.showToast?.('Enter a session id first', 'warning');
+      return false;
+    }
+
+    const intervalSeconds = Number(document.getElementById('pager-interval-seconds')?.value);
+    const maxPings = Number(document.getElementById('pager-max-pings')?.value);
+    const maxRuntimeMinutes = Number(document.getElementById('pager-max-runtime-minutes')?.value);
+    const nudgeText = String(document.getElementById('pager-nudge-text')?.value || '').trim();
+    const customInstruction = String(document.getElementById('pager-custom-instruction')?.value || '').trim();
+    const doneCheckEnabled = !!document.getElementById('pager-done-check-enabled')?.checked;
+    const doneToken = String(document.getElementById('pager-done-token')?.value || '').trim();
+    const outputEl = document.getElementById('pager-status-output');
+    if (outputEl) outputEl.textContent = 'Starting pager…';
+
+    const payload = {
+      sessionId,
+      intervalSeconds,
+      maxPings,
+      maxRuntimeMinutes,
+      nudgeText: nudgeText || 'next',
+      customInstruction,
+      doneCheckEnabled,
+      doneToken
+    };
+
+    const res = await fetch('/api/pager/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Failed to start pager (${res.status})`));
+    }
+
+    const stopIdEl = document.getElementById('pager-stop-id');
+    if (stopIdEl) stopIdEl.value = String(data?.job?.id || '');
+    this.showToast?.(`Pager started: ${data?.job?.id || '(unknown)'}`, 'success');
+    await this.refreshPagerStatus().catch(() => {});
+    return true;
+  }
+
+  async stopPagerFromSettings() {
+    const id = String(document.getElementById('pager-stop-id')?.value || '').trim();
+    if (!id) {
+      this.showToast?.('Enter pager job id first', 'warning');
+      return false;
+    }
+
+    const outputEl = document.getElementById('pager-status-output');
+    if (outputEl) outputEl.textContent = `Stopping pager ${id}…`;
+    const res = await fetch(`/api/pager/jobs/${encodeURIComponent(id)}/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'manual-from-ui' })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Failed to stop pager (${res.status})`));
+    }
+    this.showToast?.(`Pager stopped: ${id}`, 'success');
+    await this.refreshPagerStatus().catch(() => {});
+    return true;
+  }
   
   installAuthFetchShim() {
     if (window.__claudeOrchestratorFetchAuthInstalled) return;
@@ -12311,6 +12462,9 @@ class ClaudeOrchestrator {
 
     if (document.getElementById('scheduler-status-output')) {
       this.refreshSchedulerStatus().catch(() => {});
+    }
+    if (document.getElementById('pager-status-output')) {
+      this.refreshPagerStatus().catch(() => {});
     }
 
     const trelloMeUsername = document.getElementById('trello-me-username');
