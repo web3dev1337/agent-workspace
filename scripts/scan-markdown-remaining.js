@@ -9,7 +9,8 @@ function parseArgs(argv) {
   const args = {
     scope: 'all', // all | recent | added
     sinceDays: 7,
-    out: null
+    out: null,
+    format: null // markdown | json
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -46,6 +47,18 @@ function parseArgs(argv) {
       args.out = a.split('=').slice(1).join('=').trim() || null;
       continue;
     }
+    if (a === '--format') {
+      args.format = String(argv[++i] || '').trim().toLowerCase() || null;
+      continue;
+    }
+    if (a.startsWith('--format=')) {
+      args.format = a.split('=').slice(1).join('=').trim().toLowerCase() || null;
+      continue;
+    }
+    if (a === '--json') {
+      args.format = 'json';
+      continue;
+    }
   }
 
   if (!['all', 'recent', 'added'].includes(args.scope)) {
@@ -53,6 +66,9 @@ function parseArgs(argv) {
   }
   if (!Number.isFinite(args.sinceDays) || args.sinceDays <= 0) {
     throw new Error(`Invalid --since-days: ${args.sinceDays}`);
+  }
+  if (args.format && !['markdown', 'md', 'json'].includes(args.format)) {
+    throw new Error(`Invalid --format: ${args.format} (expected markdown|json)`);
   }
 
   return args;
@@ -169,12 +185,48 @@ function mdEscape(s) {
   return String(s || '').replace(/`/g, '\\`');
 }
 
-function renderReport({ scope, sinceDays, files }) {
-  const stamp = new Date().toISOString().slice(0, 10);
+function resolveOutputFormat(args, outPath) {
+  const requested = String(args?.format || '').trim().toLowerCase();
+  if (requested === 'json') return 'json';
+  if (requested === 'markdown' || requested === 'md') return 'markdown';
+  if (outPath && /\.json$/i.test(String(outPath))) return 'json';
+  return 'markdown';
+}
 
+function buildSummary(files) {
   const scanned = files.length;
   const withRemaining = files.filter(f => f.remainingCount > 0);
   const withoutRemaining = files.filter(f => f.remainingCount === 0);
+  return {
+    scanned,
+    withRemaining: withRemaining.length,
+    withoutRemaining: withoutRemaining.length
+  };
+}
+
+function renderJsonReport({ scope, sinceDays, files }) {
+  const summary = buildSummary(files);
+  return JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    scope,
+    sinceDays: Number(sinceDays),
+    summary,
+    filesWithRemaining: files
+      .filter(f => f.remainingCount > 0)
+      .sort((a, b) => b.remainingCount - a.remainingCount || a.filePath.localeCompare(b.filePath)),
+    filesWithoutRemaining: files
+      .filter(f => f.remainingCount === 0)
+      .map(f => f.filePath)
+      .sort((a, b) => a.localeCompare(b))
+  }, null, 2);
+}
+
+function renderReport({ scope, sinceDays, files }) {
+  const stamp = new Date().toISOString().slice(0, 10);
+
+  const withRemaining = files.filter(f => f.remainingCount > 0);
+  const withoutRemaining = files.filter(f => f.remainingCount === 0);
+  const summary = buildSummary(files);
 
   const lines = [];
   lines.push(`# Remaining work from markdowns (${scope})`);
@@ -197,9 +249,9 @@ function renderReport({ scope, sinceDays, files }) {
   }
 
   lines.push('## Summary');
-  lines.push(`- Scanned: ${scanned}`);
-  lines.push(`- With remaining markers: ${withRemaining.length}`);
-  lines.push(`- With no remaining markers: ${withoutRemaining.length}`);
+  lines.push(`- Scanned: ${summary.scanned}`);
+  lines.push(`- With remaining markers: ${summary.withRemaining}`);
+  lines.push(`- With no remaining markers: ${summary.withoutRemaining}`);
   lines.push('');
 
   lines.push('## Files with remaining items');
@@ -288,7 +340,10 @@ function main() {
       return scanMarkdown(filePath, content);
     });
 
-  const report = renderReport({ scope: args.scope, sinceDays: args.sinceDays, files: scans });
+  const format = resolveOutputFormat(args, outPath);
+  const report = format === 'json'
+    ? renderJsonReport({ scope: args.scope, sinceDays: args.sinceDays, files: scans })
+    : renderReport({ scope: args.scope, sinceDays: args.sinceDays, files: scans });
 
   if (outPath) {
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
@@ -300,4 +355,14 @@ function main() {
   process.stdout.write(report);
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  parseArgs,
+  scanMarkdown,
+  renderReport,
+  renderJsonReport,
+  resolveOutputFormat
+};
