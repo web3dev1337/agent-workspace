@@ -238,6 +238,7 @@ Acceptance:
 ---
 
 ### PR M4.2 — Team/shared config baseline
+Status: Done
 Scope:
 - Add signed/shared manifest option for team-visible defaults.
 - Keep private local override layer.
@@ -249,6 +250,17 @@ Files (expected):
 
 Acceptance:
 - Teams can share workflow defaults without leaking private local data.
+- Shipped in PR #TBD:
+  - added `server/configPromoterService.js` to promote/attach/resolve team service-stack baselines with shared/encrypted storage and optional signature verification.
+  - added `server/encryptedStore.js` reusable AES-256-GCM JSON encrypt/decrypt helpers for shared config artifacts.
+  - added team baseline APIs:
+    - `GET /api/workspaces/:id/service-stack/team`
+    - `POST /api/workspaces/:id/service-stack/team/promote`
+    - `POST /api/workspaces/:id/service-stack/team/attach`
+    - `DELETE /api/workspaces/:id/service-stack/team`
+    - `PUT /api/workspaces/:id/service-stack/local-override`
+  - updated service-stack resolution/runtime to apply shared baseline + private local override layering.
+  - added unit coverage in `tests/unit/configPromoterService.test.js` and expanded `tests/unit/workspaceServiceStackService.test.js`.
 
 ---
 

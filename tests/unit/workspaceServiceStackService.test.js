@@ -1,7 +1,8 @@
 const {
   MAX_SERVICES,
   normalizeServiceManifest,
-  getWorkspaceServiceManifest
+  getWorkspaceServiceManifest,
+  mergeServiceManifests
 } = require('../../server/workspaceServiceStackService');
 
 describe('workspaceServiceStackService', () => {
@@ -109,5 +110,25 @@ describe('workspaceServiceStackService', () => {
     expect(stackB.services).toHaveLength(1);
     expect(stackA.services[0].name).toBe('A');
     expect(stackB.services[0].name).toBe('B');
+  });
+
+  test('merges shared baseline with local override by service id', () => {
+    const merged = mergeServiceManifests(
+      {
+        services: [
+          { id: 'api', name: 'API', command: 'npm run dev', order: 1 }
+        ]
+      },
+      {
+        services: [
+          { id: 'api', name: 'API', command: 'npm run dev:local', order: 1 },
+          { id: 'worker', name: 'Worker', command: 'npm run worker', order: 2 }
+        ]
+      }
+    );
+
+    expect(merged.services).toHaveLength(2);
+    expect(merged.services.find((item) => item.id === 'api')?.command).toBe('npm run dev:local');
+    expect(merged.services.find((item) => item.id === 'worker')?.command).toBe('npm run worker');
   });
 });
