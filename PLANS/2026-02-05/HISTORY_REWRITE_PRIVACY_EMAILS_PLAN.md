@@ -233,3 +233,4 @@ Status notes (2026-02-08):
 - Added `scripts/execute-history-rewrite.js` and `npm run history-rewrite:execute:plan` as a guarded maintenance-window rewrite executor (plan by default; explicit confirm required for execution/push).
 - Added `scripts/create-public-snapshot-repo.js` and `npm run prep:public-snapshot-repo` to generate the alternative single-commit public snapshot repo path.
 - Executed `npm run prep:public-snapshot-repo` to create a local single-commit public snapshot repository (non-destructive path complete).
+- Added `scripts/generate-release-readiness-report.js` and `npm run report:release-readiness` to produce an objective readiness summary (public-release audits + remaining-work state + snapshot existence), with optional strict history scan via `--include-history`.
