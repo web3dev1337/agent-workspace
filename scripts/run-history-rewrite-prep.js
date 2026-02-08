@@ -8,6 +8,7 @@ const { spawnSync } = require('child_process');
 function parseArgs(argv) {
   const args = {
     outDir: '',
+    reportDir: '',
     strict: false,
     json: false,
     applyTools: false
@@ -19,6 +20,12 @@ function parseArgs(argv) {
 
     if ((token === '--out' || token === '--out-dir') && next) {
       args.outDir = next;
+      index += 1;
+      continue;
+    }
+
+    if ((token === '--report-dir' || token === '--reports') && next) {
+      args.reportDir = next;
       index += 1;
       continue;
     }
@@ -59,6 +66,50 @@ function runNodeScript(scriptPath, scriptArgs) {
   };
 }
 
+function ensureDir(targetPath) {
+  fs.mkdirSync(targetPath, { recursive: true });
+}
+
+function buildMarkdownReport(report) {
+  const lines = [];
+  lines.push('# History rewrite prep pipeline report');
+  lines.push('');
+  lines.push(`Generated: ${report.generatedAt}`);
+  lines.push(`Out dir: ${report.outDir}`);
+  lines.push(`Strict mode: ${report.strict ? 'yes' : 'no'}`);
+  lines.push(`Success: ${report.success ? 'yes' : 'no'}`);
+  lines.push('');
+  lines.push('## Steps');
+  lines.push('');
+  for (const step of report.steps) {
+    lines.push(`- ${step.id}: ${step.ok ? 'ok' : 'fail'} (exit ${step.status})`);
+  }
+  lines.push('');
+  return `${lines.join('\n')}\n`;
+}
+
+function writeReports(report, reportDir) {
+  const resolved = path.resolve(reportDir);
+  ensureDir(resolved);
+
+  fs.writeFileSync(path.join(resolved, 'prep-report.json'), `${JSON.stringify(report, null, 2)}\n`);
+  fs.writeFileSync(path.join(resolved, 'prep-report.md'), buildMarkdownReport(report));
+
+  for (const step of report.steps) {
+    const fileName = `${step.id}.json`;
+    fs.writeFileSync(path.join(resolved, fileName), `${JSON.stringify({
+      id: step.id,
+      ok: step.ok,
+      status: step.status,
+      enforced: step.enforced || false,
+      stdout: step.stdout,
+      stderr: step.stderr
+    }, null, 2)}\n`);
+  }
+
+  return resolved;
+}
+
 function toRelativeScript(repoRoot, scriptFileName) {
   return path.join(repoRoot, 'scripts', scriptFileName);
 }
@@ -85,6 +136,7 @@ function main() {
   const report = {
     generatedAt: new Date().toISOString(),
     outDir,
+    reportDir: '',
     strict: args.strict,
     steps: []
   };
@@ -127,11 +179,18 @@ function main() {
   const success = report.steps.every((step) => step.ok);
   report.success = success;
 
+  if (args.reportDir) {
+    const resolvedReportDir = path.resolve(args.reportDir);
+    report.reportDir = resolvedReportDir;
+    writeReports(report, resolvedReportDir);
+  }
+
   if (args.json) {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } else {
     process.stdout.write('History rewrite prep pipeline\n');
     process.stdout.write(`- outDir: ${outDir}\n`);
+    if (report.reportDir) process.stdout.write(`- reportDir: ${report.reportDir}\n`);
     for (const step of report.steps) {
       process.stdout.write(`- ${step.id}: ${step.ok ? 'ok' : 'fail'} (exit ${step.status})\n`);
       const firstLine = step.stdout.trim().split(/\r?\n/).filter(Boolean)[0];
