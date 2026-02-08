@@ -13,6 +13,8 @@ Status:
 - ✅ Skin selector exists (Settings → Skin).
 - ✅ Blue skin uses requested primary `#0f67fd` and works in light + dark.
 - ✅ Skin intensity shipped (Settings → Skin intensity; persisted via `ui.skinIntensity`).
+- ✅ Additional skins shipped (Purple/Emerald/Amber + High Contrast).
+- ✅ Theme gallery shipped (clickable swatches in Settings).
 - ✅ Color audit exists (`PLANS/2026-01-31/UI_COLOR_AUDIT.md`).
 - ✅ Started tokenizing a few hard-coded accents (YOLO highlight + warning accents) to respect skins.
 
@@ -21,7 +23,6 @@ Remaining work:
 - Decide + document which UI surfaces are “accent tinted” vs neutral across skins:
   - selected rows/tiles, active tabs, focused buttons, modals/overlays
   - Queue/Tasks/Review Console overlays
-- Add 1–2 additional skins as validation of the architecture (e.g. Purple/Emerald) and QA light+dark readability.
 
 Primary sources:
 - `PLANS/2026-01-31/THEMING_SKINS_BLUE_MODE_PLAN.md`
