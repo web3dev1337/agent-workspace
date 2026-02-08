@@ -7601,6 +7601,7 @@ class ClaudeOrchestrator {
 	  setupDiagnosticsPanel() {
 	    const btn = document.getElementById('diagnostics-refresh');
 	    const btnFirstRun = document.getElementById('diagnostics-first-run');
+	    const btnInstallWizard = document.getElementById('diagnostics-install-wizard');
 	    const btnRepairSafe = document.getElementById('diagnostics-repair-safe');
 	    const out = document.getElementById('diagnostics-output');
 	    const statusEl = document.getElementById('diagnostics-status');
@@ -7608,7 +7609,8 @@ class ClaudeOrchestrator {
 	    if (!btn || !out) return;
 	    const state = {
 	      base: null,
-	      firstRun: null
+	      firstRun: null,
+	      wizard: null
 	    };
 
 	    const renderRepairActions = (firstRunData) => {
@@ -7629,7 +7631,7 @@ class ClaudeOrchestrator {
 	        .join('');
 	    };
 
-	    const render = (data, firstRunData = null) => {
+	    const render = (data, firstRunData = null, wizardData = null) => {
 	      const lines = [];
 	      const platform = String(data?.platform || '');
 	      lines.push(`platform: ${platform || 'unknown'}`);
@@ -7680,6 +7682,33 @@ class ClaudeOrchestrator {
 	        });
 	      }
 
+	      if (wizardData?.summary) {
+	        lines.push('');
+	        lines.push('install-wizard:');
+	        lines.push(`  ready: ${wizardData.summary.ready ? 'yes' : 'no'}`);
+	        lines.push(`  blocking: ${Number(wizardData.summary.blockingCount || 0)}`);
+	        lines.push(`  warnings: ${Number(wizardData.summary.warningCount || 0)}`);
+	        const steps = Array.isArray(wizardData?.steps) ? wizardData.steps : [];
+	        steps.forEach((step) => {
+	          const status = String(step?.status || 'unknown').trim();
+	          const sev = String(step?.severity || 'info').trim();
+	          const title = String(step?.title || step?.id || 'step').trim();
+	          const msg = String(step?.message || '').trim();
+	          const auto = String(step?.autoFixActionId || '').trim();
+	          const cmd = String(step?.command || '').trim();
+	          const actionHints = [];
+	          if (auto) actionHints.push(`auto:${auto}`);
+	          if (cmd) actionHints.push(`cmd:${cmd}`);
+	          const hint = actionHints.length ? ` [${actionHints.join(' | ')}]` : '';
+	          lines.push(`  ${status} [${sev}] ${title}${msg ? `: ${msg}` : ''}${hint}`);
+	        });
+	        const guidance = Array.isArray(wizardData?.guidance) ? wizardData.guidance : [];
+	        guidance.slice(0, 5).forEach((line) => {
+	          const text = String(line || '').trim();
+	          if (text) lines.push(`  hint: ${text}`);
+	        });
+	      }
+
 	      out.textContent = lines.join('\n').trim() || 'No diagnostics available.';
 	    };
 
@@ -7704,9 +7733,20 @@ class ClaudeOrchestrator {
 	      return data;
 	    };
 
+	    const refreshInstallWizard = async () => {
+	      const res = await fetch('/api/diagnostics/install-wizard');
+	      const data = await res.json().catch(() => ({}));
+	      if (!res.ok || data?.ok === false) {
+	        throw new Error(String(data?.error || `HTTP ${res.status}`));
+	      }
+	      state.wizard = data;
+	      return data;
+	    };
+
 	    const refresh = async (mode = 'all') => {
 	      btn.disabled = true;
 	      if (btnFirstRun) btnFirstRun.disabled = true;
+	      if (btnInstallWizard) btnInstallWizard.disabled = true;
 	      if (btnRepairSafe) btnRepairSafe.disabled = true;
 	      if (statusEl) statusEl.textContent = 'Loading…';
 	      try {
@@ -7714,11 +7754,13 @@ class ClaudeOrchestrator {
 	          await refreshBase();
 	        } else if (mode === 'first-run') {
 	          await refreshFirstRun();
+	        } else if (mode === 'install-wizard') {
+	          await Promise.all([refreshBase(), refreshFirstRun(), refreshInstallWizard()]);
 	        } else {
-	          await Promise.all([refreshBase(), refreshFirstRun()]);
+	          await Promise.all([refreshBase(), refreshFirstRun(), refreshInstallWizard()]);
 	        }
-	        render(state.base, state.firstRun);
-	        const stamp = String(state.firstRun?.generatedAt || state.base?.generatedAt || '');
+	        render(state.base, state.firstRun, state.wizard);
+	        const stamp = String(state.wizard?.generatedAt || state.firstRun?.generatedAt || state.base?.generatedAt || '');
 	        if (statusEl) statusEl.textContent = `Updated: ${stamp}`;
 	      } catch (err) {
 	        out.textContent = `Failed to load diagnostics: ${String(err?.message || err)}`;
@@ -7727,12 +7769,14 @@ class ClaudeOrchestrator {
 	      } finally {
 	        btn.disabled = false;
 	        if (btnFirstRun) btnFirstRun.disabled = false;
+	        if (btnInstallWizard) btnInstallWizard.disabled = false;
 	        if (btnRepairSafe) btnRepairSafe.disabled = false;
 	      }
 	    };
 
 	    btn.addEventListener('click', () => refresh('all'));
 	    btnFirstRun?.addEventListener('click', () => refresh('first-run'));
+	    btnInstallWizard?.addEventListener('click', () => refresh('install-wizard'));
 	    btnRepairSafe?.addEventListener('click', async () => {
 	      btnRepairSafe.disabled = true;
 	      if (statusEl) statusEl.textContent = 'Running safe auto-fix…';
@@ -7751,7 +7795,8 @@ class ClaudeOrchestrator {
 	          await refreshFirstRun();
 	        }
 	        if (!state.base) await refreshBase();
-	        render(state.base, state.firstRun);
+	        await refreshInstallWizard().catch(() => {});
+	        render(state.base, state.firstRun, state.wizard);
 
 	        const appliedCount = Number(data?.appliedCount || 0);
 	        const failedCount = Number(data?.failedCount || 0);
@@ -7793,14 +7838,15 @@ class ClaudeOrchestrator {
 	        } else {
 	          this.showToast?.(String(repair?.message || 'Repair completed'), 'success');
 	        }
-	        if (data?.diagnostics) {
-	          state.firstRun = data.diagnostics;
-	          renderRepairActions(state.firstRun);
-	        } else {
-	          await refreshFirstRun();
-	        }
-	        if (!state.base) await refreshBase();
-	        render(state.base, state.firstRun);
+		        if (data?.diagnostics) {
+		          state.firstRun = data.diagnostics;
+		          renderRepairActions(state.firstRun);
+		        } else {
+		          await refreshFirstRun();
+		        }
+		        if (!state.base) await refreshBase();
+		        await refreshInstallWizard().catch(() => {});
+		        render(state.base, state.firstRun, state.wizard);
 	        if (statusEl) statusEl.textContent = `Repair completed: ${action}`;
 	      } catch (error) {
 	        this.showToast?.(`Repair failed: ${String(error?.message || error)}`, 'error');

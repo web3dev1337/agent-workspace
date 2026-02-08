@@ -153,7 +153,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - added Settings preview action to inspect generated schedule id/command/safety before adding.
 
 ### P1-05: Public release install UX (Windows-first)
-- Status: Ready
+- Status: Done
 - Size: M
 - Deliverables:
   - installer post-install checks
@@ -162,6 +162,11 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Acceptance criteria:
   - setup success rate improved for first-time Windows users
   - support checklist reduced to one guided flow
+- Shipped in PR #TBD:
+  - added install wizard diagnostics model (`collectInstallWizard`) that presents ordered blocking/warning setup steps.
+  - added install wizard endpoints (`/api/diagnostics/install-wizard`, `/api/diagnostics/post-install`) for one guided post-install flow.
+  - added diagnostics UI actions for `Post-install check` + `Fix environment wizard` and rendered actionable step summaries in the existing panel.
+  - added unit coverage for install wizard output/actions in `tests/unit/diagnosticsService.test.js`.
 
 ---
 

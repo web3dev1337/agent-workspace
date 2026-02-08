@@ -239,6 +239,141 @@ function collectRepairActions(checks) {
   return actions;
 }
 
+function toInstallWizardStep({
+  check,
+  title,
+  help = '',
+  defaultCommand = null,
+  details = null
+} = {}) {
+  const status = String(check?.status || 'unknown').trim().toLowerCase();
+  const severity = String(check?.severity || 'warning').trim().toLowerCase();
+  const repairActions = Array.isArray(check?.repairActions) ? check.repairActions : [];
+  const safeAction = repairActions.find((action) => String(action?.kind || '').trim().toLowerCase() === 'safe') || null;
+  const manualAction = repairActions.find((action) => String(action?.kind || '').trim().toLowerCase() === 'manual') || null;
+  const command = defaultCommand || String(manualAction?.command || '').trim() || null;
+
+  return {
+    id: String(check?.id || '').trim(),
+    title: String(title || check?.name || '').trim(),
+    status,
+    severity,
+    blocking: severity === 'blocking',
+    message: String(check?.message || '').trim() || null,
+    details: details || check?.details || null,
+    help: String(help || '').trim() || null,
+    autoFixActionId: safeAction ? String(safeAction.id || '').trim() : null,
+    command
+  };
+}
+
+function buildInstallWizardReport(firstRunDiagnostics, baseDiagnostics) {
+  const firstRun = (firstRunDiagnostics && typeof firstRunDiagnostics === 'object') ? firstRunDiagnostics : {};
+  const base = (baseDiagnostics && typeof baseDiagnostics === 'object') ? baseDiagnostics : {};
+  const checks = Array.isArray(firstRun?.checks) ? firstRun.checks : [];
+  const byId = new Map(checks.map((check) => [String(check?.id || '').trim(), check]));
+  const platform = String(base?.platform || firstRun?.platform || process.platform || '').trim();
+
+  const shellId = platform === 'win32' ? 'powershell' : 'bash';
+  const shellCheck = {
+    id: 'shell-runtime',
+    name: shellId === 'powershell' ? 'PowerShell runtime' : 'bash runtime',
+    status: base?.platformSmoke?.checks?.shell?.ok ? 'pass' : 'fail',
+    severity: 'blocking',
+    message: base?.platformSmoke?.checks?.shell?.ok ? `${shellId} is available` : `${shellId} is missing`,
+    details: base?.platformSmoke?.checks?.shell?.error || null,
+    repairActions: []
+  };
+
+  const steps = [
+    toInstallWizardStep({
+      check: shellCheck,
+      title: shellId === 'powershell' ? 'PowerShell runtime' : 'Shell runtime',
+      help: shellId === 'powershell'
+        ? 'Commander relies on PowerShell for reliable session execution on Windows.'
+        : 'Shell runtime is required for terminal session commands.'
+    }),
+    toInstallWizardStep({
+      check: byId.get('git-installed'),
+      title: 'Install Git',
+      help: 'Git is required for all worktree and PR workflows.'
+    }),
+    toInstallWizardStep({
+      check: byId.get('gh-installed'),
+      title: 'Install GitHub CLI',
+      help: 'Review Console PR data, merge, and review actions require gh.'
+    }),
+    toInstallWizardStep({
+      check: byId.get('gh-auth'),
+      title: 'Authenticate GitHub CLI',
+      help: 'Run login once, then verify before using review workflows.',
+      defaultCommand: 'gh auth login && gh auth status'
+    }),
+    toInstallWizardStep({
+      check: byId.get('node-pty-loaded'),
+      title: 'Repair terminal runtime (node-pty)',
+      help: 'If this fails, the terminal grid cannot attach PTYs reliably.'
+    }),
+    toInstallWizardStep({
+      check: byId.get('orchestrator-home'),
+      title: 'Create ~/.orchestrator',
+      help: 'Stores workspace/session metadata and local settings.'
+    }),
+    toInstallWizardStep({
+      check: byId.get('orchestrator-workspaces'),
+      title: 'Create ~/.orchestrator/workspaces',
+      help: 'Workspace definitions must be writable to persist tabs/worktrees.'
+    }),
+    toInstallWizardStep({
+      check: byId.get('repo-scan-root'),
+      title: 'Create ~/GitHub scan root',
+      help: 'Repo discovery uses ~/GitHub by default.'
+    }),
+    toInstallWizardStep({
+      check: byId.get('claude-cli'),
+      title: 'Install Claude CLI',
+      help: 'Required for Claude agent sessions.'
+    }),
+    toInstallWizardStep({
+      check: byId.get('codex-cli'),
+      title: 'Install Codex CLI',
+      help: 'Required for Codex agent sessions.'
+    })
+  ].filter((step) => step.id);
+
+  const blockingCount = steps.filter((step) => step.status === 'fail' && step.blocking).length;
+  const warningCount = steps.filter((step) => step.status === 'fail' && !step.blocking).length;
+  const actionable = steps.filter((step) => step.status === 'fail').map((step) => ({
+    id: step.id,
+    title: step.title,
+    autoFixActionId: step.autoFixActionId,
+    command: step.command
+  }));
+
+  const guidance = [];
+  if (platform === 'win32') {
+    guidance.push('Windows-first flow: run PowerShell as your default shell for Commander sessions.');
+    guidance.push('If terminal startup fails after dependency updates, run: npm rebuild node-pty');
+    guidance.push('After gh login, rerun post-install checks before using Review Console merge/review actions.');
+  } else {
+    guidance.push('Linux flow: ensure bash, git, and gh are in PATH before launching orchestrator.');
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    platform,
+    summary: {
+      ready: blockingCount === 0,
+      blockingCount,
+      warningCount,
+      totalSteps: steps.length
+    },
+    steps,
+    actionable,
+    guidance
+  };
+}
+
 async function collectFirstRunDiagnostics(options = {}) {
   const data = await collectDiagnostics();
   const homeDir = String(options.homeDir || data?.env?.homeDir || os.homedir() || '').trim();
@@ -499,4 +634,18 @@ async function runFirstRunSafeRepairs({ rootDir, homeDir } = {}) {
   };
 }
 
-module.exports = { collectDiagnostics, collectFirstRunDiagnostics, runFirstRunRepair, runFirstRunSafeRepairs };
+async function collectInstallWizard({ rootDir, homeDir } = {}) {
+  const [base, firstRun] = await Promise.all([
+    collectDiagnostics(),
+    collectFirstRunDiagnostics({ rootDir, homeDir })
+  ]);
+  return buildInstallWizardReport(firstRun, base);
+}
+
+module.exports = {
+  collectDiagnostics,
+  collectFirstRunDiagnostics,
+  collectInstallWizard,
+  runFirstRunRepair,
+  runFirstRunSafeRepairs
+};
