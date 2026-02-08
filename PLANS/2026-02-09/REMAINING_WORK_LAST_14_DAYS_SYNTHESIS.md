@@ -6,6 +6,7 @@ Inputs:
 - `PLANS/2026-02-08/REMAINING_WORK_NOW.md`
 - merged PR history through `#699`
 - merged PR history through `#701`
+- merged PR history through `#703`
 
 ## Actionable implementation backlog
 
@@ -34,3 +35,4 @@ Inputs:
 - Scanner actionable mode is now strict for explicit tasks only:
   - `--actionable-only` includes `doc/backlog` files only when they contain unchecked checklist items and/or `TODO`/`FIXME`.
   - Heuristic-only “What’s left / Next steps” prose is excluded from actionable output.
+  - Guide/audit/memory docs are excluded from actionable mode classification (for example: `WINDOWS_BUILD_GUIDE.md`, `scripts/README.md`, `ai-memory/*`).
