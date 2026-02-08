@@ -8,8 +8,10 @@ describe('AuditExportService', () => {
   let activityPath;
   let schedulerPath;
   let service;
+  let originalSigningSecret;
 
   beforeEach(() => {
+    originalSigningSecret = process.env.ORCHESTRATOR_AUDIT_SIGNING_SECRET;
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-audit-export-'));
     activityPath = path.join(tmpDir, 'activity.jsonl');
     schedulerPath = path.join(tmpDir, 'scheduler-audit.log');
@@ -47,6 +49,10 @@ describe('AuditExportService', () => {
                 emails: true,
                 tokens: true,
                 homePaths: true
+              },
+              signing: {
+                enabled: true,
+                keyId: 'test-key'
               }
             }
           }
@@ -56,6 +62,8 @@ describe('AuditExportService', () => {
   });
 
   afterEach(() => {
+    if (originalSigningSecret === undefined) delete process.env.ORCHESTRATOR_AUDIT_SIGNING_SECRET;
+    else process.env.ORCHESTRATOR_AUDIT_SIGNING_SECRET = originalSigningSecret;
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch {
@@ -99,5 +107,31 @@ describe('AuditExportService', () => {
     expect(status.ok).toBe(true);
     expect(status.sources.activity.count).toBe(1);
     expect(status.sources.scheduler.count).toBe(1);
+    expect(status.signing.enabled).toBe(true);
+  });
+
+  test('signPayload returns deterministic signature with secret', async () => {
+    process.env.ORCHESTRATOR_AUDIT_SIGNING_SECRET = 'fixture-secret-123';
+    const payload = await service.exportJson({
+      sources: 'activity,scheduler',
+      sinceMs: Date.now() - 60_000,
+      limit: 100
+    });
+    const signedA = service.signPayload(payload);
+    const signedB = service.signPayload(payload);
+    expect(signedA.algorithm).toBe('hmac-sha256');
+    expect(signedA.keyId).toBe('test-key');
+    expect(signedA.value).toMatch(/^[a-f0-9]{64}$/);
+    expect(signedA.value).toBe(signedB.value);
+  });
+
+  test('signPayload throws when signing secret is missing', async () => {
+    delete process.env.ORCHESTRATOR_AUDIT_SIGNING_SECRET;
+    const payload = await service.exportJson({
+      sources: 'activity',
+      sinceMs: Date.now() - 60_000,
+      limit: 100
+    });
+    expect(() => service.signPayload(payload)).toThrow('Missing ORCHESTRATOR_AUDIT_SIGNING_SECRET');
   });
 });
