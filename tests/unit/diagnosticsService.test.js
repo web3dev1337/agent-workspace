@@ -133,4 +133,31 @@ describe('diagnosticsService platform smoke', () => {
     expect(result.skippedManualCount).toBeGreaterThan(0);
     expect(result.diagnostics?.summary).toBeTruthy();
   });
+
+  test('collectInstallWizard returns guided post-install steps with actions', async () => {
+    const fs = require('fs');
+    const os = require('os');
+    const path = require('path');
+
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'diag-home-install-wizard-'));
+    mockChildProcess();
+    const { collectInstallWizard } = require('../../server/diagnosticsService');
+
+    const data = await collectInstallWizard({ homeDir: tmpHome });
+    expect(data).toBeTruthy();
+    expect(data.summary).toBeTruthy();
+    expect(Array.isArray(data.steps)).toBe(true);
+    expect(data.steps.length).toBeGreaterThan(5);
+    expect(Array.isArray(data.actionable)).toBe(true);
+    expect(Array.isArray(data.guidance)).toBe(true);
+
+    const stepIds = new Set(data.steps.map((step) => step.id));
+    expect(stepIds.has('git-installed')).toBe(true);
+    expect(stepIds.has('gh-auth')).toBe(true);
+    expect(stepIds.has('node-pty-loaded')).toBe(true);
+
+    const ghAuth = data.steps.find((step) => step.id === 'gh-auth');
+    expect(ghAuth).toBeTruthy();
+    expect(String(ghAuth.command || '')).toContain('gh auth login');
+  });
 });

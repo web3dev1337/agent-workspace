@@ -91,7 +91,7 @@ const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
 const sessionRecoveryService = require('./sessionRecoveryService');
-const { collectDiagnostics, collectFirstRunDiagnostics, runFirstRunRepair, runFirstRunSafeRepairs } = require('./diagnosticsService');
+const { collectDiagnostics, collectFirstRunDiagnostics, collectInstallWizard, runFirstRunRepair, runFirstRunSafeRepairs } = require('./diagnosticsService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { PagerService } = require('./pagerService');
@@ -2924,6 +2924,26 @@ app.get('/api/diagnostics/first-run', async (req, res) => {
   } catch (error) {
     logger.error('Failed to collect first-run diagnostics', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to collect first-run diagnostics' });
+  }
+});
+
+app.get('/api/diagnostics/install-wizard', async (req, res) => {
+  try {
+    const data = await collectInstallWizard();
+    res.json({ ok: true, ...data });
+  } catch (error) {
+    logger.error('Failed to collect install wizard diagnostics', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to collect install wizard diagnostics' });
+  }
+});
+
+app.get('/api/diagnostics/post-install', async (req, res) => {
+  try {
+    const data = await collectInstallWizard();
+    res.json({ ok: true, ...data });
+  } catch (error) {
+    logger.error('Failed to collect post-install diagnostics', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to collect post-install diagnostics' });
   }
 });
 
