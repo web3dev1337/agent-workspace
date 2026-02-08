@@ -12,6 +12,7 @@ This file is the canonical short list after syncing the Phase 5 execution plan a
 1. History rewrite or new squashed public repo (intentional separate step)
    - Source: `PLANS/2026-02-05/HISTORY_REWRITE_PRIVACY_EMAILS_PLAN.md`
    - Reason still open: destructive operation, intentionally deferred.
+   - Prep available now: `npm run audit:history-authors` (non-destructive author-email audit + mailmap template output).
 
 ## Notes on scanner noise
 
