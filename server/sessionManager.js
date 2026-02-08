@@ -823,23 +823,8 @@ class SessionManager extends EventEmitter {
           session.deliveredBufferLength = session.buffer.length;
         }
 
-        // Update status based on output (for Claude sessions)
-        if (config.type === 'claude' && this.statusDetector) {
-          const recovery = session.workspace ? sessionRecoveryService.getSession(session.workspace, sessionId) : null;
-          const agent = recovery?.lastAgent || null;
-          const newStatus = this.statusDetector.detectStatus(sessionId, session.buffer, { agent });
-          if (newStatus !== session.status) {
-            this.maybeApplyStatusUpdate(sessionId, session, newStatus);
-          } else if (session.pendingStatus && session.pendingStatus !== newStatus) {
-            // Detector re-affirmed the current status; cancel any stale pending transition.
-            if (session.pendingStatusTimer) {
-              clearTimeout(session.pendingStatusTimer);
-              session.pendingStatusTimer = null;
-            }
-            session.pendingStatus = null;
-            session.pendingStatusDueAt = null;
-          }
-        }
+        // Update status based on output.
+        this.refreshSessionStatus(sessionId, session);
         
         // Keep buffer size manageable
         if (session.buffer.length > this.maxBufferSize) {
@@ -942,6 +927,9 @@ class SessionManager extends EventEmitter {
       // Monitor for fork bombs (every 5 seconds)
       session.processMonitor = setInterval(() => {
         this.checkProcessLimit(session);
+        // Re-evaluate status even when there is no new output, so sessions can
+        // transition out of "busy" after quiet periods.
+        this.refreshSessionStatus(session.id, session);
       }, 5000);
       
     } catch (error) {
@@ -1977,6 +1965,32 @@ class SessionManager extends EventEmitter {
       });
     }
   }
+
+  refreshSessionStatus(sessionId, session) {
+    if (!this.statusDetector || !session) return;
+
+    const type = String(session.type || '').trim().toLowerCase();
+    if (type !== 'claude' && type !== 'codex') return;
+
+    const workspaceId = String(session.workspace || '').trim();
+    const recovery = workspaceId
+      ? sessionRecoveryService.getSession(workspaceId, sessionId)
+      : null;
+    const agent = recovery?.lastAgent || (type === 'codex' ? 'codex' : null);
+
+    const newStatus = this.statusDetector.detectStatus(sessionId, session.buffer || '', { agent });
+    if (newStatus !== session.status) {
+      this.maybeApplyStatusUpdate(sessionId, session, newStatus);
+    } else if (session.pendingStatus && session.pendingStatus !== newStatus) {
+      // Detector re-affirmed the current status; cancel any stale pending transition.
+      if (session.pendingStatusTimer) {
+        clearTimeout(session.pendingStatusTimer);
+        session.pendingStatusTimer = null;
+      }
+      session.pendingStatus = null;
+      session.pendingStatusDueAt = null;
+    }
+  }
   
   maybeApplyStatusUpdate(sessionId, session, newStatus) {
     const now = Date.now();
@@ -2718,6 +2732,11 @@ class SessionManager extends EventEmitter {
     });
     logger.info('Executing Claude command', { sessionId, command: resolvedCommand.command, provider: resolvedCommand.provider });
     
+    // Mark terminal busy immediately when launching an agent command.
+    if (session.status !== 'busy') {
+      this.applyStatusUpdate(sessionId, session, 'busy');
+    }
+
     // Send the command to the terminal
     this.writeToSession(sessionId, `${commandToRun}\n`);
     
@@ -2787,6 +2806,11 @@ class SessionManager extends EventEmitter {
       } else {
         command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, finalConfig);
         logger.info('Executing agent command', { sessionId, command });
+      }
+
+      // Mark terminal busy immediately when launching an agent command.
+      if (session.status !== 'busy') {
+        this.applyStatusUpdate(sessionId, session, 'busy');
       }
 
       // Send the command to the terminal
