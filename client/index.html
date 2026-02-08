@@ -537,6 +537,14 @@
                             <input id="pager-session-id" type="text" placeholder="work1-claude" style="width: 220px;" />
                         </label>
                         <label>
+                            Workspace id:
+                            <input id="pager-workspace-id" type="text" placeholder="zoo-hytopia" style="width: 220px;" />
+                        </label>
+                        <label>
+                            Tier filter:
+                            <input id="pager-tier-set" type="text" placeholder="3,4" style="width: 120px;" />
+                        </label>
+                        <label>
                             Interval (sec):
                             <input id="pager-interval-seconds" type="number" min="5" step="5" value="300" style="width: 110px;" />
                         </label>
@@ -555,6 +563,13 @@
                             <input id="pager-nudge-text" type="text" value="next" style="width: 220px;" />
                         </label>
                         <label>
+                            Custom mode:
+                            <select id="pager-custom-instruction-mode" style="width: 120px;">
+                                <option value="append">append</option>
+                                <option value="replace">replace</option>
+                            </select>
+                        </label>
+                        <label>
                             <input type="checkbox" id="pager-done-check-enabled" />
                             Done-check enabled
                         </label>
@@ -571,6 +586,7 @@
                     </div>
                     <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
                         <button class="btn-secondary" type="button" id="pager-refresh">Refresh pager</button>
+                        <button class="btn-secondary" type="button" id="pager-save-defaults">Save pager defaults</button>
                         <button class="btn-secondary" type="button" id="pager-start">Start pager</button>
                         <button class="btn-secondary" type="button" id="pager-stop">Stop pager</button>
                     </div>

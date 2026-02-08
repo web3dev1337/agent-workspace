@@ -111,6 +111,8 @@ describe('SchedulerService', () => {
       expect(ids).toContain('discord-queue-cadence');
       expect(ids).toContain('workspace-refresh-snapshot');
       expect(ids).toContain('queue-conveyor-t3');
+      expect(ids).toContain('stuck-session-nudge');
+      expect(ids).toContain('daily-health-digest');
     } finally {
       service.stop();
     }

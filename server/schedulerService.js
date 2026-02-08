@@ -181,11 +181,25 @@ class SchedulerService {
         }
       },
       {
+        id: 'stuck-session-nudge',
+        name: 'Stuck Session Nudge',
+        category: 'review',
+        risk: 'safe',
+        description: 'Open blockers view to surface stalled sessions quickly.',
+        defaults: {
+          intervalMinutes: 45,
+          command: 'queue-blockers',
+          params: {},
+          safetyMode: 'safe',
+          enabled: false
+        }
+      },
+      {
         id: 'stuck-task-check',
         name: 'Stuck Task Check',
         category: 'review',
         risk: 'safe',
-        description: 'Open blockers view to surface blocked items quickly.',
+        description: 'Legacy alias for stuck-session-nudge.',
         defaults: {
           intervalMinutes: 45,
           command: 'queue-blockers',
@@ -203,6 +217,20 @@ class SchedulerService {
         defaults: {
           intervalMinutes: 60,
           command: 'queue-triage',
+          params: {},
+          safetyMode: 'safe',
+          enabled: false
+        }
+      },
+      {
+        id: 'daily-health-digest',
+        name: 'Daily Health Digest',
+        category: 'health',
+        risk: 'safe',
+        description: 'Open advisor health dashboard on a daily cadence.',
+        defaults: {
+          intervalMinutes: 1440,
+          command: 'open-advice',
           params: {},
           safetyMode: 'safe',
           enabled: false
