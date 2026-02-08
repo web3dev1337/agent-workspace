@@ -7,6 +7,8 @@ const DiffStats = ({ stats }) => {
   const { additions = 0, deletions = 0, changes = 0, files = 0 } = stats;
   const total = additions + deletions;
   const additionPercent = total > 0 ? (additions / total) * 100 : 0;
+  const hasAdditions = Number(additions) > 0;
+  const hasDeletions = Number(deletions) > 0;
 
   return (
     <div className="diff-stats">
@@ -14,11 +16,13 @@ const DiffStats = ({ stats }) => {
         <span className="stat-value">{files}</span>
         <span className="stat-label">files</span>
       </div>
-      <div className="stat-item additions">
-        <span className="stat-value">+{additions}</span>
-        <span className="stat-label">additions</span>
-      </div>
-      {deletions > 0 && (
+      {hasAdditions && (
+        <div className="stat-item additions">
+          <span className="stat-value">+{additions}</span>
+          <span className="stat-label">additions</span>
+        </div>
+      )}
+      {hasDeletions && (
         <div className="stat-item deletions">
           <span className="stat-value">-{deletions}</span>
           <span className="stat-label">deletions</span>
@@ -35,7 +39,7 @@ const DiffStats = ({ stats }) => {
           className="diff-bar-additions" 
           style={{ width: `${additionPercent}%` }}
         ></div>
-        {deletions > 0 && (
+        {hasDeletions && (
           <div 
             className="diff-bar-deletions" 
             style={{ width: `${100 - additionPercent}%` }}

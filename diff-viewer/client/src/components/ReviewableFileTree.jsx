@@ -269,7 +269,7 @@ const renderTree = (tree, selectedFile, onFileSelect, reviewState, toggleFileRev
           <span className="file-icon">{getFileIcon(name)}</span>
           <span className="file-name">{name}</span>
           <span className="file-stats">
-            <span className="additions">+{node.additions || 0}</span>
+            {(node.additions || 0) > 0 && <span className="additions">+{node.additions}</span>}
             {(node.deletions || 0) > 0 && <span className="deletions">-{node.deletions}</span>}
           </span>
         </div>
