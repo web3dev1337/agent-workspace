@@ -76,3 +76,5 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #699 — scanner actionable-only mode (`--actionable-only`) + generated-scan classification
 - #700 — docs sync: remaining-work history through PR #699
 - #701 — strict actionable scan filtering (exclude heuristic-only prose from `--actionable-only`)
+- #702 — docs sync: remaining-work history through PR #701
+- #703 — actionable scan classifier refinement (exclude guide/audit/memory docs)
