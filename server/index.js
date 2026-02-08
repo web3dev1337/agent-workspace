@@ -71,6 +71,7 @@ const { PullRequestService } = require('./pullRequestService');
 const { ProcessTaskService } = require('./processTaskService');
 const { ProcessStatusService } = require('./processStatusService');
 const { ProcessTelemetryService } = require('./processTelemetryService');
+const { ProcessTelemetryBenchmarkService } = require('./processTelemetryBenchmarkService');
 const { ProcessProjectDashboardService } = require('./processProjectDashboardService');
 const { ProcessProjectHealthService } = require('./processProjectHealthService');
 const { ProcessAdvisorService } = require('./processAdvisorService');
@@ -274,6 +275,11 @@ const proOnly = requirePro(licenseService);
 const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager, userSettingsService });
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
 const telemetrySnapshotService = TelemetrySnapshotService.getInstance();
+const processTelemetryBenchmarkService = ProcessTelemetryBenchmarkService.getInstance({
+  processTelemetryService,
+  processStatusService,
+  telemetrySnapshotService
+});
 const processProjectDashboardService = ProcessProjectDashboardService.getInstance({ pullRequestService, taskRecordService });
 const processProjectHealthService = ProcessProjectHealthService.getInstance({ taskRecordService });
 const promptArtifactService = PromptArtifactService.getInstance();
@@ -4232,6 +4238,77 @@ app.get('/api/process/telemetry/details', async (req, res) => {
   } catch (error) {
     logger.error('Failed to fetch process telemetry details', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch process telemetry details' });
+  }
+});
+
+app.get('/api/process/telemetry/benchmarks', async (req, res) => {
+  try {
+    const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
+    const bucketMinutes = req.query.bucketMinutes ? Number(req.query.bucketMinutes) : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const force = String(req.query.force || '').toLowerCase() === 'true';
+    const data = await processTelemetryBenchmarkService.getBenchmarkDashboard({
+      lookbackHours,
+      bucketMinutes,
+      limit,
+      force
+    });
+    res.json(data);
+  } catch (error) {
+    logger.error('Failed to fetch telemetry benchmark dashboard', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to fetch telemetry benchmark dashboard' });
+  }
+});
+
+app.post('/api/process/telemetry/benchmarks/snapshots', express.json({ limit: '2mb' }), async (req, res) => {
+  try {
+    const lookbackHours = req.body?.lookbackHours ? Number(req.body.lookbackHours) : undefined;
+    const bucketMinutes = req.body?.bucketMinutes ? Number(req.body.bucketMinutes) : undefined;
+    const label = typeof req.body?.label === 'string' ? req.body.label : '';
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes : '';
+
+    const created = await processTelemetryBenchmarkService.captureSnapshot({
+      lookbackHours,
+      bucketMinutes,
+      label,
+      notes
+    });
+    res.json({
+      ...created,
+      url: `/api/process/telemetry/snapshots/${created.id}`
+    });
+  } catch (error) {
+    logger.error('Failed to create telemetry benchmark snapshot', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to create telemetry benchmark snapshot' });
+  }
+});
+
+app.get('/api/process/telemetry/benchmarks/release-notes', async (req, res) => {
+  try {
+    const currentId = req.query.currentId ? String(req.query.currentId) : 'live';
+    const baselineId = req.query.baselineId ? String(req.query.baselineId) : '';
+    const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
+    const bucketMinutes = req.query.bucketMinutes ? Number(req.query.bucketMinutes) : undefined;
+    const download = String(req.query.download || '').toLowerCase() === 'true';
+
+    const payload = await processTelemetryBenchmarkService.buildReleaseNotes({
+      currentId,
+      baselineId,
+      lookbackHours,
+      bucketMinutes
+    });
+
+    if (download) {
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="telemetry-release-notes-${Date.now()}.md"`);
+      res.send(payload.markdown + '\n');
+      return;
+    }
+
+    res.json(payload);
+  } catch (error) {
+    logger.error('Failed to build telemetry release notes', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to build telemetry release notes' });
   }
 });
 

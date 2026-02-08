@@ -750,6 +750,8 @@ class Dashboard {
 		            <button class="btn-secondary" type="button" id="dashboard-telemetry-download">Download CSV</button>
 		            <button class="btn-secondary" type="button" id="dashboard-telemetry-download-json">Download JSON</button>
 		            <button class="btn-secondary" type="button" id="dashboard-telemetry-snapshot" title="Create a snapshot link for this telemetry view">Copy snapshot link</button>
+		            <button class="btn-secondary" type="button" id="dashboard-telemetry-benchmark" title="Capture benchmark snapshot for release tracking">Capture benchmark</button>
+		            <button class="btn-secondary" type="button" id="dashboard-telemetry-release-notes" title="Copy benchmark release-notes summary">Copy release notes</button>
 		          </div>
 		        </div>
 		        <div id="dashboard-telemetry-body" class="dashboard-telemetry-body">Loading…</div>
@@ -782,6 +784,16 @@ class Dashboard {
 		      const hours = Number(lookbackEl?.value ?? 24);
 		      const bucket = Number(bucketEl?.value ?? 60);
 		      await this.createTelemetrySnapshotLink({ lookbackHours: hours, bucketMinutes: bucket });
+		    });
+		    overlay.querySelector('#dashboard-telemetry-benchmark')?.addEventListener('click', async () => {
+		      const hours = Number(lookbackEl?.value ?? 24);
+		      const bucket = Number(bucketEl?.value ?? 60);
+		      await this.createTelemetryBenchmarkSnapshot({ lookbackHours: hours, bucketMinutes: bucket });
+		    });
+		    overlay.querySelector('#dashboard-telemetry-release-notes')?.addEventListener('click', async () => {
+		      const hours = Number(lookbackEl?.value ?? 24);
+		      const bucket = Number(bucketEl?.value ?? 60);
+		      await this.copyTelemetryReleaseNotes({ lookbackHours: hours, bucketMinutes: bucket });
 		    });
 		    overlay.querySelector('#dashboard-telemetry-refresh')?.addEventListener('click', () => {
 		      this.loadTelemetryDetails({ lookbackHours: Number(lookbackEl?.value ?? 24), bucketMinutes: Number(bucketEl?.value ?? 60) });
@@ -2771,16 +2783,24 @@ class Dashboard {
 	    const bucket = Number(bucketMinutes);
 	    const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 24;
 	    const safeBucket = Number.isFinite(bucket) && bucket > 0 ? bucket : 60;
-	    const url = `/api/process/telemetry/details?lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}`;
+	    const detailsUrl = `/api/process/telemetry/details?lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}`;
+	    const benchmarkUrl = `/api/process/telemetry/benchmarks?lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}&limit=8`;
 
 	    try {
-	      const res = await fetch(url).catch(() => null);
-	      const data = res ? await res.json().catch(() => ({})) : {};
-	      if (!res || !res.ok) {
+	      const [detailsRes, benchmarkRes] = await Promise.all([
+	        fetch(detailsUrl).catch(() => null),
+	        fetch(benchmarkUrl).catch(() => null)
+	      ]);
+
+	      const data = detailsRes ? await detailsRes.json().catch(() => ({})) : {};
+	      if (!detailsRes || !detailsRes.ok) {
 	        body.textContent = 'Failed to load.';
 	        return;
 	      }
-	      body.innerHTML = this.renderTelemetryDetails(data);
+	      const benchmark = benchmarkRes && benchmarkRes.ok
+	        ? await benchmarkRes.json().catch(() => null)
+	        : null;
+	      body.innerHTML = this.renderTelemetryDetails(data, benchmark);
 	    } catch {
 	      body.textContent = 'Failed to load.';
 	    }
@@ -2810,6 +2830,53 @@ class Dashboard {
 	    }
 	  }
 
+	  async createTelemetryBenchmarkSnapshot({ lookbackHours = 24, bucketMinutes = 60 } = {}) {
+	    const hours = Number(lookbackHours);
+	    const bucket = Number(bucketMinutes);
+	    const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 24;
+	    const safeBucket = Number.isFinite(bucket) && bucket > 0 ? bucket : 60;
+	    const defaultLabel = `release ${new Date().toISOString().slice(0, 10)}`;
+	    const label = window.prompt('Benchmark label (release/tag)', defaultLabel);
+	    if (label === null) return;
+
+	    try {
+	      const res = await fetch('/api/process/telemetry/benchmarks/snapshots', {
+	        method: 'POST',
+	        headers: { 'Content-Type': 'application/json' },
+	        body: JSON.stringify({
+	          label,
+	          lookbackHours: safeHours,
+	          bucketMinutes: safeBucket
+	        })
+	      }).catch(() => null);
+	      const data = res ? await res.json().catch(() => ({})) : {};
+	      if (!res || !res.ok) throw new Error(data?.error || 'Failed to create benchmark snapshot');
+	      try { this.orchestrator?.showToast?.(`Benchmark saved: ${String(data?.label || 'snapshot')}`, 'success'); } catch {}
+	      this.loadTelemetryDetails({ lookbackHours: safeHours, bucketMinutes: safeBucket });
+	    } catch (e) {
+	      try { this.orchestrator?.showToast?.(String(e?.message || e), 'error'); } catch {}
+	    }
+	  }
+
+	  async copyTelemetryReleaseNotes({ lookbackHours = 24, bucketMinutes = 60 } = {}) {
+	    const hours = Number(lookbackHours);
+	    const bucket = Number(bucketMinutes);
+	    const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 24;
+	    const safeBucket = Number.isFinite(bucket) && bucket > 0 ? bucket : 60;
+	    const url = `/api/process/telemetry/benchmarks/release-notes?currentId=live&lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}`;
+	    try {
+	      const res = await fetch(url).catch(() => null);
+	      const data = res ? await res.json().catch(() => ({})) : {};
+	      if (!res || !res.ok) throw new Error(data?.error || 'Failed to build release notes');
+	      const markdown = String(data?.markdown || '').trim();
+	      if (!markdown) throw new Error('Release notes were empty');
+	      await this.copyToClipboard(markdown);
+	      try { this.orchestrator?.showToast?.('Release notes copied', 'success'); } catch {}
+	    } catch (e) {
+	      try { this.orchestrator?.showToast?.(String(e?.message || e), 'error'); } catch {}
+	    }
+	  }
+
 	  async copyToClipboard(text) {
 	    const t = String(text || '');
 	    if (!t) return;
@@ -2828,7 +2895,7 @@ class Dashboard {
 	    }
 	  }
 
-	  renderTelemetryDetails(data) {
+	  renderTelemetryDetails(data, benchmarkData = null) {
 	    const escapeHtml = (value) => String(value ?? '')
 	      .replace(/&/g, '&amp;')
 	      .replace(/</g, '&lt;')
@@ -2902,6 +2969,7 @@ class Dashboard {
 
 	    const reviewHist = data?.histograms?.reviewSeconds;
 	    const promptHist = data?.histograms?.promptChars;
+	    const benchmarkSection = this.renderTelemetryBenchmark(benchmarkData);
 
 	    return `
 	      <div class="dashboard-telemetry-meta">
@@ -2934,6 +3002,70 @@ class Dashboard {
 	          <div class="telemetry-chart-title">Prompt size distribution</div>
 	          ${histogram(promptHist, { formatLabel: (v) => `${Math.round(Number(v) || 0)}` })}
 	        </div>
+	      </div>
+	      ${benchmarkSection}
+	    `;
+	  }
+
+	  renderTelemetryBenchmark(data) {
+	    const escapeHtml = (value) => String(value ?? '')
+	      .replace(/&/g, '&amp;')
+	      .replace(/</g, '&lt;')
+	      .replace(/>/g, '&gt;');
+	    const rows = Array.isArray(data?.rows) ? data.rows : [];
+	    if (!rows.length) {
+	      return `
+	        <div class="telemetry-chart-card">
+	          <div class="telemetry-chart-title">Release benchmark</div>
+	          <div class="telemetry-empty">No benchmark snapshots captured yet.</div>
+	        </div>
+	      `;
+	    }
+
+	    const formatSeconds = (value) => {
+	      const n = Number(value);
+	      if (!Number.isFinite(n) || n <= 0) return '—';
+	      if (n < 60) return `${Math.round(n)}s`;
+	      if (n < 3600) return `${Math.round(n / 60)}m`;
+	      return `${(n / 3600).toFixed(1)}h`;
+	    };
+	    const sign = (value) => {
+	      const n = Number(value);
+	      if (!Number.isFinite(n)) return '—';
+	      return n > 0 ? `+${Math.round(n)}` : `${Math.round(n)}`;
+	    };
+
+	    const listHtml = rows.slice(0, 6).map((row) => {
+	      const metrics = row?.metrics || {};
+	      const onboarding = Number(metrics?.onboarding?.score ?? 0);
+	      const runtime = Number(metrics?.runtime?.score ?? 0);
+	      const review = Number(metrics?.review?.score ?? 0);
+	      const cycle = metrics?.review?.avgReviewSeconds;
+	      const done = Number(metrics?.review?.doneCount ?? 0);
+	      const merged = Number(metrics?.review?.prMergedCount ?? 0);
+	      const delta = row?.deltaFromPrevious || null;
+	      const deltaText = delta
+	        ? `Δ onboarding ${sign(delta.onboardingScore)} • runtime ${sign(delta.runtimeScore)} • review ${sign(delta.reviewScore)}`
+	        : 'Δ baseline n/a';
+	      return `
+	        <div class="dashboard-telemetry-meta" style="display:flex; justify-content:space-between; gap:10px; border-top:1px solid var(--border-color); padding-top:8px;">
+	          <div style="min-width:0;">
+	            <div><strong>${escapeHtml(String(row?.label || row?.id || 'snapshot'))}</strong> <span style="opacity:0.7;">(${escapeHtml(String(row?.createdAt || ''))})</span></div>
+	            <div style="opacity:0.85;">${escapeHtml(deltaText)}</div>
+	          </div>
+	          <div style="text-align:right; white-space:nowrap;">
+	            <div>onboarding <strong>${onboarding}</strong> • runtime <strong>${runtime}</strong> • review <strong>${review}</strong></div>
+	            <div style="opacity:0.85;">cycle <strong>${escapeHtml(formatSeconds(cycle))}</strong> • done <strong>${done}</strong> • merged <strong>${merged}</strong></div>
+	          </div>
+	        </div>
+	      `;
+	    }).join('');
+
+	    return `
+	      <div class="telemetry-chart-card">
+	        <div class="telemetry-chart-title">Release benchmark snapshots</div>
+	        <div style="opacity:0.85; margin-bottom:6px;">Track onboarding, runtime and review metrics across releases.</div>
+	        ${listHtml}
 	      </div>
 	    `;
 	  }
