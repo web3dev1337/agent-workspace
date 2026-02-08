@@ -15,6 +15,7 @@ This file is the canonical short list after syncing the Phase 5 execution plan a
    - Prep available now:
      - `npm run setup:history-rewrite-tools` (non-destructive dependency bootstrap guidance for `git-filter-repo`/`gitleaks`)
      - `npm run prep:history-rewrite:pipeline` (non-destructive one-command prep pipeline: tool check + workkit + preflight)
+     - `npm run prep:history-rewrite:pipeline -- --report-dir <dir>` (persists JSON/markdown prep artifacts for audit trail)
      - `npm run prep:history-rewrite:mailmap-finalize -- --workkit-dir <dir>` (fills mailmap noreply placeholders from configured/explicit target email)
      - `npm run audit:history-authors` (non-destructive author-email audit + mailmap template output)
      - `npm run prep:history-rewrite` (non-destructive private workkit: runbook + removal-path list + filter-repo helper script)
