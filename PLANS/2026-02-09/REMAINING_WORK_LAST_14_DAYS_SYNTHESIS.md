@@ -7,6 +7,7 @@ Inputs:
 - merged PR history through `#699`
 - merged PR history through `#701`
 - merged PR history through `#703`
+- merged PR history through `#704`
 
 ## Actionable implementation backlog
 
