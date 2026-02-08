@@ -13734,10 +13734,61 @@ class ClaudeOrchestrator {
     return Array.isArray(data?.threads) ? data.threads : [];
   }
 
+  loadProjectChatsThreadPrefs() {
+    try {
+      const raw = localStorage.getItem('project-chats:thread-prefs');
+      const parsed = raw ? JSON.parse(raw) : {};
+      const pinned = Array.isArray(parsed?.pinned) ? parsed.pinned.map(String).filter(Boolean) : [];
+      const recent = Array.isArray(parsed?.recent) ? parsed.recent.map(String).filter(Boolean) : [];
+      return { pinned, recent };
+    } catch {
+      return { pinned: [], recent: [] };
+    }
+  }
+
+  saveProjectChatsThreadPrefs(state) {
+    const pinned = Array.isArray(state?.pinnedThreadIds) ? state.pinnedThreadIds.map(String).filter(Boolean).slice(0, 200) : [];
+    const recent = Array.isArray(state?.recentThreadIds) ? state.recentThreadIds.map(String).filter(Boolean).slice(0, 200) : [];
+    try {
+      localStorage.setItem('project-chats:thread-prefs', JSON.stringify({ pinned, recent }));
+    } catch {
+      // ignore
+    }
+  }
+
+  togglePinnedProjectChatsThread(state, threadId) {
+    const id = String(threadId || '').trim();
+    if (!id || !state) return;
+    const pinned = new Set(Array.isArray(state.pinnedThreadIds) ? state.pinnedThreadIds : []);
+    if (pinned.has(id)) pinned.delete(id);
+    else pinned.add(id);
+    state.pinnedThreadIds = Array.from(pinned).slice(0, 200);
+    this.saveProjectChatsThreadPrefs(state);
+  }
+
+  markRecentProjectChatsThread(state, threadId) {
+    const id = String(threadId || '').trim();
+    if (!id || !state) return;
+    const recent = [id, ...(Array.isArray(state.recentThreadIds) ? state.recentThreadIds : []).filter((x) => String(x) !== id)];
+    state.recentThreadIds = recent.slice(0, 200);
+    this.saveProjectChatsThreadPrefs(state);
+  }
+
   renderProjectChatsProjects(modal, state) {
     const listEl = modal.querySelector('#projects-chats-projects-list');
     if (!listEl) return;
-    const rows = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
+    const query = String(state?.projectQuery || '').trim().toLowerCase();
+    const rows = (Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [])
+      .filter((workspace) => {
+        if (!query) return true;
+        const id = String(workspace?.id || '').toLowerCase();
+        const name = String(workspace?.name || '').toLowerCase();
+        return id.includes(query) || name.includes(query);
+      });
+    if (!rows.length) {
+      listEl.innerHTML = '<li class="projects-chats-empty">No matching projects.</li>';
+      return;
+    }
     listEl.innerHTML = rows.map((workspace) => {
       const id = String(workspace?.id || '').trim();
       const active = id && id === state.selectedWorkspaceId;
@@ -13765,8 +13816,47 @@ class ClaudeOrchestrator {
       return;
     }
 
-    listEl.innerHTML = rows.map((thread) => {
+    const query = String(state?.threadQuery || '').trim().toLowerCase();
+    const pinnedIds = new Set(Array.isArray(state?.pinnedThreadIds) ? state.pinnedThreadIds : []);
+    const recentIds = Array.isArray(state?.recentThreadIds) ? state.recentThreadIds : [];
+    const recentRank = new Map();
+    recentIds.forEach((id, index) => {
+      recentRank.set(String(id), index);
+    });
+
+    const filteredRows = rows.filter((thread) => {
+      if (!query) return true;
+      const haystack = [
+        thread?.title,
+        thread?.worktreeId,
+        thread?.provider,
+        thread?.status,
+        thread?.id
+      ].map((x) => String(x || '').toLowerCase()).join(' ');
+      return haystack.includes(query);
+    });
+
+    if (!filteredRows.length) {
+      listEl.innerHTML = '<div class="projects-chats-empty">No chats match this filter.</div>';
+      return;
+    }
+
+    filteredRows.sort((a, b) => {
+      const aId = String(a?.id || '');
+      const bId = String(b?.id || '');
+      const aPinned = pinnedIds.has(aId);
+      const bPinned = pinnedIds.has(bId);
+      if (aPinned !== bPinned) return aPinned ? -1 : 1;
+      const aRecent = recentRank.has(aId);
+      const bRecent = recentRank.has(bId);
+      if (aRecent !== bRecent) return aRecent ? -1 : 1;
+      if (aRecent && bRecent) return Number(recentRank.get(aId)) - Number(recentRank.get(bId));
+      return String(b?.updatedAt || '').localeCompare(String(a?.updatedAt || ''));
+    });
+
+    listEl.innerHTML = filteredRows.map((thread) => {
       const threadId = this.escapeHtml(thread?.id || '');
+      const rawThreadId = String(thread?.id || '').trim();
       const title = this.escapeHtml(thread?.title || thread?.worktreeId || 'Chat');
       const worktree = this.escapeHtml(thread?.worktreeId || 'n/a');
       const provider = this.escapeHtml(thread?.provider || 'claude');
@@ -13774,6 +13864,8 @@ class ClaudeOrchestrator {
       const updatedAt = this.escapeHtml(thread?.updatedAt || '');
       const sessions = Array.isArray(thread?.sessionIds) ? thread.sessionIds : [];
       const sessionMeta = sessions.length ? `${sessions.length} session${sessions.length === 1 ? '' : 's'}` : 'no session';
+      const pinned = pinnedIds.has(rawThreadId);
+      const recent = recentRank.has(rawThreadId);
       return `
         <div class="projects-chats-item">
           <div class="projects-chats-item-title">${title}</div>
@@ -13782,10 +13874,13 @@ class ClaudeOrchestrator {
             <span>🤖 ${provider}</span>
             <span>status: ${status}</span>
             <span>${this.escapeHtml(sessionMeta)}</span>
+            ${pinned ? '<span>📌 pinned</span>' : ''}
+            ${recent ? '<span>🕘 recent</span>' : ''}
             <span>${updatedAt}</span>
           </div>
           <div class="projects-chats-item-actions">
             <button type="button" class="btn-secondary" data-thread-open="${threadId}">Open</button>
+            <button type="button" class="btn-secondary" data-thread-pin="${threadId}">${pinned ? 'Unpin' : 'Pin'}</button>
             <button type="button" class="btn-secondary" data-thread-close="${threadId}">Close</button>
             <button type="button" class="btn-secondary" data-thread-archive="${threadId}">Archive</button>
           </div>
@@ -13874,7 +13969,10 @@ class ClaudeOrchestrator {
         </div>
         <div class="projects-chats-shell">
           <aside class="projects-chats-projects">
-            <div class="projects-chats-toolbar"><strong>Projects</strong></div>
+            <div class="projects-chats-toolbar">
+              <strong>Projects</strong>
+              <input type="text" id="projects-chats-project-search" class="search-input projects-chats-search-input" placeholder="Filter projects…" />
+            </div>
             <ul id="projects-chats-projects-list" class="projects-chats-projects-list"></ul>
           </aside>
           <section class="projects-chats-main">
@@ -13890,6 +13988,9 @@ class ClaudeOrchestrator {
                 <button class="button-primary" type="button" data-project-chats-new="true">+ New Chat</button>
               </div>
             </div>
+            <div class="projects-chats-toolbar">
+              <input type="text" id="projects-chats-thread-search" class="search-input projects-chats-search-input" placeholder="Search chats…" />
+            </div>
             ${simpleCfg.showHints ? `
               <div class="projects-chats-hint mono">Tip: Alt+P opens this shell. Use New Chat to create a worktree + agent session + thread in one step.</div>
             ` : ''}
@@ -13903,10 +14004,15 @@ class ClaudeOrchestrator {
     document.body.appendChild(modal);
 
     const workspaces = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
+    const threadPrefs = this.loadProjectChatsThreadPrefs();
     const state = {
       selectedWorkspaceId: String(this.currentWorkspace?.id || workspaces[0]?.id || '').trim() || null,
       includeArchived: false,
-      threadsByWorkspace: new Map()
+      threadsByWorkspace: new Map(),
+      projectQuery: '',
+      threadQuery: '',
+      pinnedThreadIds: threadPrefs.pinned,
+      recentThreadIds: threadPrefs.recent
     };
 
     const loadThreads = async (workspaceId) => {
@@ -13978,7 +14084,20 @@ class ClaudeOrchestrator {
         const threadId = String(openBtn.getAttribute('data-thread-open') || '').trim();
         const rows = state.threadsByWorkspace.get(state.selectedWorkspaceId) || [];
         const thread = rows.find((item) => String(item?.id || '') === threadId);
-        if (thread) await this.openThreadFromProjectChats(thread);
+        if (thread) {
+          this.markRecentProjectChatsThread(state, threadId);
+          render();
+          await this.openThreadFromProjectChats(thread);
+        }
+        return;
+      }
+
+      const pinBtn = event.target.closest('[data-thread-pin]');
+      if (pinBtn) {
+        const threadId = String(pinBtn.getAttribute('data-thread-pin') || '').trim();
+        if (!threadId) return;
+        this.togglePinnedProjectChatsThread(state, threadId);
+        render();
         return;
       }
 
@@ -14029,6 +14148,18 @@ class ClaudeOrchestrator {
       }
     });
 
+    const projectSearchEl = modal.querySelector('#projects-chats-project-search');
+    projectSearchEl?.addEventListener('input', () => {
+      state.projectQuery = String(projectSearchEl.value || '').trim();
+      render();
+    });
+
+    const threadSearchEl = modal.querySelector('#projects-chats-thread-search');
+    threadSearchEl?.addEventListener('input', () => {
+      state.threadQuery = String(threadSearchEl.value || '').trim();
+      render();
+    });
+
     render();
     if (state.selectedWorkspaceId) {
       try {
@@ -14038,6 +14169,18 @@ class ClaudeOrchestrator {
       }
       render();
     }
+
+    const preloadWorkspaceThreads = async () => {
+      const ids = workspaces
+        .map((workspace) => String(workspace?.id || '').trim())
+        .filter((id) => id && !state.threadsByWorkspace.has(id));
+      if (!ids.length) return;
+      await Promise.allSettled(ids.map((id) => loadThreads(id)));
+      if (document.body.contains(modal)) render();
+    };
+    setTimeout(() => {
+      preloadWorkspaceThreads().catch(() => {});
+    }, 0);
   }
 
   async showPRsPanel() {
