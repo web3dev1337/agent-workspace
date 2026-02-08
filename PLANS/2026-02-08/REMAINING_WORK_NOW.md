@@ -36,6 +36,10 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 
 ## Last merged sequence for closure
 
+Maintenance policy:
+- Do not append pure docs-only sync PRs whose sole purpose is updating this merged-sequence log (`docs/sync-remaining-history-*`).
+- Only append PRs that ship behavior, tooling, tests, or policy changes.
+
 - #662 — pager defaults + tier-target filtering
 - #663 — mark M4 automation milestones complete
 - #664 — REST thread lifecycle aliases (`POST/PATCH/DELETE /api/threads`)
@@ -84,3 +88,4 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #707 — docs sync: remaining-work history through PR #706
 - #708 — release-readiness gate now enforces zero actionable markdown backlog
 - #709 — docs sync: remaining-work history through PR #708
+- #710 — docs sync: remaining-work history through PR #709 (final sync before maintenance policy)
