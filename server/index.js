@@ -98,6 +98,7 @@ const { SchedulerService } = require('./schedulerService');
 const { PagerService } = require('./pagerService');
 const { ThreadService } = require('./threadService');
 const { PolicyBundleService } = require('./policyBundleService');
+const { ConfigPromoterService } = require('./configPromoterService');
 const { normalizeServiceManifest, getWorkspaceServiceManifest } = require('./workspaceServiceStackService');
 const { ServiceStackRuntimeService } = require('./serviceStackRuntimeService');
 const {
@@ -302,6 +303,7 @@ const serviceStackRuntimeService = ServiceStackRuntimeService.getInstance({ logg
 const policyService = PolicyService.getInstance({ logger });
 const auditExportService = AuditExportService.getInstance({ logger });
 const policyBundleService = PolicyBundleService.getInstance({ policyService, userSettingsService });
+const configPromoterService = ConfigPromoterService.getInstance({ logger });
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -320,7 +322,7 @@ policyService.init({ userSettingsService, commandRegistry });
 schedulerService.init({ userSettingsService, commandRegistry });
 pagerService.init({ sessionManager });
 threadService.init({ workspaceManager, sessionManager });
-serviceStackRuntimeService.init({ workspaceManager, sessionManager, io });
+serviceStackRuntimeService.init({ workspaceManager, sessionManager, configPromoterService, io });
 auditExportService.init({ activityFeed, schedulerService, userSettingsService });
 
 const loadPlugins = async () => {
@@ -1274,13 +1276,28 @@ app.post('/api/workspaces/import', async (req, res) => {
   }
 });
 
+const resolveWorkspaceServiceStackManifest = (workspace, options = {}) => {
+  if (configPromoterService && typeof configPromoterService.resolveWorkspaceManifest === 'function') {
+    return configPromoterService.resolveWorkspaceManifest(workspace, options);
+  }
+  return getWorkspaceServiceManifest(workspace);
+};
+
+const getLocalServiceStackField = (workspace) => {
+  const hasShared = !!(workspace && workspace.serviceStackShared && typeof workspace.serviceStackShared === 'object');
+  return hasShared ? 'serviceStackLocal' : 'serviceStack';
+};
+
 app.get('/api/workspaces/:id/service-stack', (req, res) => {
   try {
     const workspaceId = String(req.params?.id || '').trim();
     if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
     const workspace = workspaceManager.getWorkspace(workspaceId);
     if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
-    const manifest = getWorkspaceServiceManifest(workspace);
+    const manifest = resolveWorkspaceServiceStackManifest(workspace, {
+      passphrase: req.query?.passphrase,
+      signingSecret: req.query?.signingSecret
+    });
     res.json({ ok: true, workspaceId, manifest });
   } catch (error) {
     logger.error('Failed to get workspace service stack', { error: error.message, stack: error.stack });
@@ -1295,7 +1312,10 @@ app.get('/api/workspaces/:id/service-stack/export', (req, res) => {
     const workspace = workspaceManager.getWorkspace(workspaceId);
     if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
 
-    const manifest = getWorkspaceServiceManifest(workspace);
+    const manifest = resolveWorkspaceServiceStackManifest(workspace, {
+      passphrase: req.query?.passphrase,
+      signingSecret: req.query?.signingSecret
+    });
     const payload = {
       workspaceId,
       workspaceName: String(workspace.name || workspaceId),
@@ -1323,8 +1343,9 @@ app.put('/api/workspaces/:id/service-stack', express.json(), async (req, res) =>
     const incoming = req.body?.manifest ?? req.body ?? {};
     const manifest = normalizeServiceManifest(incoming, { strict: true });
 
+    const localField = getLocalServiceStackField(workspace);
     const updated = await workspaceManager.updateWorkspace(workspaceId, {
-      serviceStack: {
+      [localField]: {
         ...manifest,
         updatedAt: new Date().toISOString()
       }
@@ -1333,8 +1354,9 @@ app.put('/api/workspaces/:id/service-stack', express.json(), async (req, res) =>
     res.json({
       ok: true,
       workspaceId,
-      count: Array.isArray(updated?.serviceStack?.services) ? updated.serviceStack.services.length : 0,
-      manifest: getWorkspaceServiceManifest(updated)
+      localField,
+      count: Array.isArray(updated?.[localField]?.services) ? updated[localField].services.length : 0,
+      manifest: resolveWorkspaceServiceStackManifest(updated)
     });
   } catch (error) {
     logger.error('Failed to update workspace service stack', { error: error.message, stack: error.stack });
@@ -1351,8 +1373,9 @@ app.post('/api/workspaces/:id/service-stack/import', express.json(), async (req,
 
     const incoming = req.body?.manifest ?? req.body ?? {};
     const manifest = normalizeServiceManifest(incoming, { strict: true });
+    const localField = getLocalServiceStackField(workspace);
     const updated = await workspaceManager.updateWorkspace(workspaceId, {
-      serviceStack: {
+      [localField]: {
         ...manifest,
         updatedAt: new Date().toISOString()
       }
@@ -1361,12 +1384,216 @@ app.post('/api/workspaces/:id/service-stack/import', express.json(), async (req,
     res.json({
       ok: true,
       workspaceId,
+      localField,
       imported: Array.isArray(manifest.services) ? manifest.services.length : 0,
-      manifest: getWorkspaceServiceManifest(updated)
+      manifest: resolveWorkspaceServiceStackManifest(updated)
     });
   } catch (error) {
     logger.error('Failed to import workspace service stack', { error: error.message, stack: error.stack });
     res.status(400).json({ ok: false, error: 'Failed to import workspace service stack', message: error.message });
+  }
+});
+
+app.get('/api/workspaces/:id/service-stack/team', async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
+
+    const pointer = workspace?.serviceStackShared && typeof workspace.serviceStackShared === 'object'
+      ? workspace.serviceStackShared
+      : null;
+
+    let baseline = null;
+    let signatureVerified = null;
+    if (pointer) {
+      try {
+        const readResult = await configPromoterService.readTeamManifest({
+          workspace,
+          pointer,
+          passphrase: req.query?.passphrase,
+          signingSecret: req.query?.signingSecret
+        });
+        baseline = readResult.manifest;
+        signatureVerified = readResult.signatureVerified;
+      } catch (error) {
+        return res.status(400).json({ ok: false, error: 'Failed to read team baseline', message: error.message });
+      }
+    }
+
+    const localManifest = getWorkspaceServiceManifest({ serviceStack: workspace?.serviceStackLocal || workspace?.serviceStack || { services: [] } });
+    const resolved = resolveWorkspaceServiceStackManifest(workspace, {
+      passphrase: req.query?.passphrase,
+      signingSecret: req.query?.signingSecret
+    });
+
+    res.json({
+      ok: true,
+      workspaceId,
+      pointer,
+      baseline,
+      localManifest,
+      resolvedManifest: resolved,
+      signatureVerified
+    });
+  } catch (error) {
+    logger.error('Failed to get workspace team service stack baseline', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get workspace team service stack baseline', message: error.message });
+  }
+});
+
+app.post('/api/workspaces/:id/service-stack/team/promote', express.json(), async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const visibility = String(body.visibility || 'shared').trim().toLowerCase();
+    const promote = await configPromoterService.writeTeamManifest({
+      workspace,
+      manifest: resolveWorkspaceServiceStackManifest(workspace, {
+        passphrase: body.passphrase,
+        signingSecret: body.signingSecret
+      }),
+      visibility,
+      repoRoot: body.repoRoot,
+      relPath: body.relPath,
+      passphrase: body.passphrase,
+      signed: body.signed === true,
+      signingSecret: body.signingSecret
+    });
+
+    const updates = {
+      serviceStackShared: {
+        ...promote.pointer,
+        requireSignature: body.requireSignature === true
+      }
+    };
+    if (!workspace.serviceStackLocal && workspace.serviceStack) {
+      updates.serviceStackLocal = workspace.serviceStack;
+    }
+
+    const updated = await workspaceManager.updateWorkspace(workspaceId, updates);
+    res.json({
+      ok: true,
+      workspaceId,
+      pointer: updated.serviceStackShared,
+      resolvedManifest: resolveWorkspaceServiceStackManifest(updated, {
+        passphrase: body.passphrase,
+        signingSecret: body.signingSecret
+      })
+    });
+  } catch (error) {
+    logger.error('Failed to promote workspace team service stack baseline', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: 'Failed to promote workspace team service stack baseline', message: error.message });
+  }
+});
+
+app.post('/api/workspaces/:id/service-stack/team/attach', express.json(), async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const readResult = await configPromoterService.readTeamManifest({
+      workspace,
+      pointer: {
+        repoRoot: body.repoRoot,
+        relPath: body.relPath,
+        visibility: body.visibility,
+        signed: body.signed === true,
+        requireSignature: body.requireSignature === true
+      },
+      repoRoot: body.repoRoot,
+      relPath: body.relPath,
+      visibility: body.visibility,
+      passphrase: body.passphrase,
+      signingSecret: body.signingSecret
+    });
+
+    const updates = {
+      serviceStackShared: {
+        ...readResult.pointer,
+        requireSignature: body.requireSignature === true
+      }
+    };
+    if (!workspace.serviceStackLocal && workspace.serviceStack) {
+      updates.serviceStackLocal = workspace.serviceStack;
+    }
+    const updated = await workspaceManager.updateWorkspace(workspaceId, updates);
+
+    res.json({
+      ok: true,
+      workspaceId,
+      pointer: updated.serviceStackShared,
+      baseline: readResult.manifest,
+      signatureVerified: readResult.signatureVerified,
+      resolvedManifest: resolveWorkspaceServiceStackManifest(updated, {
+        passphrase: body.passphrase,
+        signingSecret: body.signingSecret
+      })
+    });
+  } catch (error) {
+    logger.error('Failed to attach workspace team service stack baseline', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: 'Failed to attach workspace team service stack baseline', message: error.message });
+  }
+});
+
+app.put('/api/workspaces/:id/service-stack/local-override', express.json(), async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
+
+    const incoming = req.body?.manifest ?? req.body ?? {};
+    const manifest = normalizeServiceManifest(incoming, { strict: true });
+    const updated = await workspaceManager.updateWorkspace(workspaceId, {
+      serviceStackLocal: {
+        ...manifest,
+        updatedAt: new Date().toISOString()
+      }
+    });
+
+    res.json({
+      ok: true,
+      workspaceId,
+      localCount: Array.isArray(updated?.serviceStackLocal?.services) ? updated.serviceStackLocal.services.length : 0,
+      resolvedManifest: resolveWorkspaceServiceStackManifest(updated, {
+        passphrase: req.body?.passphrase,
+        signingSecret: req.body?.signingSecret
+      })
+    });
+  } catch (error) {
+    logger.error('Failed to update local service stack override', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: 'Failed to update local service stack override', message: error.message });
+  }
+});
+
+app.delete('/api/workspaces/:id/service-stack/team', express.json(), async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
+
+    const updated = await workspaceManager.updateWorkspace(workspaceId, {
+      serviceStackShared: null
+    });
+
+    res.json({
+      ok: true,
+      workspaceId,
+      manifest: resolveWorkspaceServiceStackManifest(updated)
+    });
+  } catch (error) {
+    logger.error('Failed to detach workspace team service stack baseline', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: 'Failed to detach workspace team service stack baseline', message: error.message });
   }
 });
 

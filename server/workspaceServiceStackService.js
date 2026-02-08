@@ -158,8 +158,28 @@ function getWorkspaceServiceManifest(workspace) {
   return normalizeServiceManifest(source, { strict: false });
 }
 
+function mergeServiceManifests(baseManifest, overrideManifest) {
+  const base = normalizeServiceManifest(baseManifest || { services: [] }, { strict: false });
+  const override = normalizeServiceManifest(overrideManifest || { services: [] }, { strict: false });
+
+  const byId = new Map();
+  for (const service of base.services) {
+    byId.set(service.id, service);
+  }
+  for (const service of override.services) {
+    byId.set(service.id, service);
+  }
+
+  const services = Array.from(byId.values()).sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name));
+  return {
+    manifestVersion: 1,
+    services
+  };
+}
+
 module.exports = {
   MAX_SERVICES,
   normalizeServiceManifest,
-  getWorkspaceServiceManifest
+  getWorkspaceServiceManifest,
+  mergeServiceManifests
 };

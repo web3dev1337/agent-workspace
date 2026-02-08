@@ -5,9 +5,17 @@ const { getWorkspaceServiceManifest } = require('./workspaceServiceStackService'
 const { getShellKind, buildShellCommand } = require('./utils/shellCommand');
 
 class ServiceStackRuntimeService {
-  constructor({ workspaceManager = null, sessionManager = null, io = null, logger = console, monitorIntervalMs = 5000 } = {}) {
+  constructor({
+    workspaceManager = null,
+    sessionManager = null,
+    configPromoterService = null,
+    io = null,
+    logger = console,
+    monitorIntervalMs = 5000
+  } = {}) {
     this.workspaceManager = workspaceManager;
     this.sessionManager = sessionManager;
+    this.configPromoterService = configPromoterService;
     this.io = io;
     this.logger = logger;
     this.monitorIntervalMs = Number.isFinite(monitorIntervalMs) ? monitorIntervalMs : 5000;
@@ -22,9 +30,10 @@ class ServiceStackRuntimeService {
     return ServiceStackRuntimeService.instance;
   }
 
-  init({ workspaceManager, sessionManager, io } = {}) {
+  init({ workspaceManager, sessionManager, configPromoterService, io } = {}) {
     if (workspaceManager) this.workspaceManager = workspaceManager;
     if (sessionManager) this.sessionManager = sessionManager;
+    if (configPromoterService) this.configPromoterService = configPromoterService;
     if (io) this.io = io;
     this.startMonitor();
   }
@@ -74,7 +83,9 @@ class ServiceStackRuntimeService {
 
   getManifestServices(workspaceId, { serviceIds = [] } = {}) {
     const workspace = this.getWorkspace(workspaceId);
-    const manifest = getWorkspaceServiceManifest(workspace);
+    const manifest = (this.configPromoterService && typeof this.configPromoterService.resolveWorkspaceManifest === 'function')
+      ? this.configPromoterService.resolveWorkspaceManifest(workspace)
+      : getWorkspaceServiceManifest(workspace);
     const selected = new Set((Array.isArray(serviceIds) ? serviceIds : [])
       .map((id) => String(id || '').trim().toLowerCase())
       .filter(Boolean));
