@@ -9,21 +9,9 @@ This file is the canonical short list after syncing the Phase 5 execution plan a
 
 ## Remaining destructive / optional work
 
-1. History rewrite or new squashed public repo (intentional separate step)
-   - Source: `PLANS/2026-02-05/HISTORY_REWRITE_PRIVACY_EMAILS_PLAN.md`
-   - Reason still open: destructive operation, intentionally deferred.
-   - Prep available now:
-     - `npm run setup:history-rewrite-tools` (non-destructive dependency bootstrap guidance for `git-filter-repo`/`gitleaks`)
-     - `npm run prep:history-rewrite:pipeline` (non-destructive one-command prep pipeline: tool check + workkit + preflight)
-     - `npm run prep:history-rewrite:pipeline -- --report-dir <dir>` (persists JSON/markdown prep artifacts for audit trail)
-     - `npm run prep:history-rewrite:mailmap-finalize -- --workkit-dir <dir>` (fills mailmap noreply placeholders from configured/explicit target email)
-     - `npm run history-rewrite:execute:plan -- --workkit-dir <dir> --clone-dir <fresh-clone>` (guarded execution planner; explicit confirm required for rewrite/push)
-     - `npm run prep:public-snapshot-repo -- --out-dir <dir>` (alternative non-destructive path: generate one-commit public snapshot repo)
-     - `npm run audit:history-authors` (non-destructive author-email audit + mailmap template output)
-     - `npm run prep:history-rewrite` (non-destructive private workkit: runbook + removal-path list + filter-repo helper script)
-     - `npm run check:history-rewrite-readiness -- --workkit-dir <dir>` (non-destructive advisory preflight)
-     - `npm run check:history-rewrite-readiness:strict -- --workkit-dir <dir>` (non-destructive strict gate for rewrite maintenance window)
-     - `npm run check:history-rewrite-result` (post-rewrite strict validator for emails + blocked history paths)
+- None required for the current release-readiness target.
+- The non-destructive “single-commit public snapshot repo” path is now implemented and executed.
+- Optional follow-up (only if desired): rewrite canonical repository history in-place using the guarded executor and strict checks.
 
 ## Notes on scanner noise
 
@@ -41,3 +29,14 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #664 — REST thread lifecycle aliases (`POST/PATCH/DELETE /api/threads`)
 - #665 — sync M0-M4 milestone statuses with shipped PRs
 - #666 — append merged PR tracking updates in the Phase 5 plan
+- #667 — canonical remaining-work snapshot
+- #668 — history author audit tooling
+- #669 — rewrite execution-prep workkit generator
+- #670 — rewrite readiness preflight gate
+- #671 — rewrite tool bootstrap helper
+- #672 — one-command rewrite prep pipeline
+- #673 — post-rewrite result verifier
+- #674 — mailmap finalize helper
+- #675 — persisted prep report artifacts
+- #676 — guarded rewrite executor
+- #677 — public snapshot repo generator
