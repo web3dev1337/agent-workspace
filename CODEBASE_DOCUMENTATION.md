@@ -55,6 +55,7 @@ server/sessionRecoveryService.js   - Session recovery state persistence (CWD, ag
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
 server/auditExportService.js       - Redacted audit export across activity + scheduler logs (JSON/CSV)
 server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
+server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
 ```
 
 ### Multi-Workspace System (Core Feature)
@@ -386,6 +387,10 @@ DELETE /api/workspaces/:id        - Delete workspace
 POST /api/workspaces/:id/switch   - Switch to workspace
 GET /api/user-settings            - Get user preferences
 PUT /api/user-settings            - Update user preferences
+
+GET /api/process/telemetry/benchmarks                         - Live + snapshot benchmark rows for onboarding/runtime/review comparisons
+POST /api/process/telemetry/benchmarks/snapshots              - Capture a named benchmark snapshot for release tracking
+GET /api/process/telemetry/benchmarks/release-notes           - Build markdown release notes comparing current vs baseline benchmark
 ```
 
 ### WebSocket Events

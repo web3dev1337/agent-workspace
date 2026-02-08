@@ -173,11 +173,16 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 ## P2 Tickets (medium)
 
 ### P2-01: Competitor telemetry benchmark dashboard
-- Status: Later
+- Status: Done
 - Size: S
 - Deliverables:
   - local metrics comparing onboarding/runtime/review cycle-time over releases
   - export snapshot for release notes
+- Shipped in PR #TBD:
+  - added benchmark capture + comparison service (`server/processTelemetryBenchmarkService.js`) with onboarding/runtime/review composite metrics.
+  - added benchmark API routes for dashboard comparisons, benchmark snapshots, and markdown release-notes export.
+  - added telemetry overlay controls for capturing benchmark snapshots and copying release-notes summaries.
+  - added unit tests covering benchmark capture, comparisons, and release-note generation.
 
 ### P2-02: Team governance pack
 - Status: Later
