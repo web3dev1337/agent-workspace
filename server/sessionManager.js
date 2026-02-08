@@ -2419,6 +2419,68 @@ class SessionManager extends EventEmitter {
     return null;
   }
 
+  getAllSessionEntries({ workspaceId = null } = {}) {
+    const wsFilter = String(workspaceId || '').trim();
+    const entries = [];
+    const seen = new Set();
+
+    const pushEntry = (sessionId, session, fallbackWorkspaceId = null) => {
+      const sid = String(sessionId || '').trim();
+      if (!sid || seen.has(sid) || !session) return;
+      const sessionWorkspaceId = String(session.workspace || fallbackWorkspaceId || '').trim() || null;
+      if (wsFilter && sessionWorkspaceId !== wsFilter) return;
+      seen.add(sid);
+      entries.push([sid, session, sessionWorkspaceId]);
+    };
+
+    for (const [sessionId, session] of this.sessions.entries()) {
+      pushEntry(sessionId, session, this.workspace?.id || null);
+    }
+
+    for (const [workspaceIdKey, map] of this.workspaceSessionMaps.entries()) {
+      if (!map || typeof map.entries !== 'function') continue;
+      for (const [sessionId, session] of map.entries()) {
+        pushEntry(sessionId, session, workspaceIdKey);
+      }
+    }
+
+    return entries;
+  }
+
+  getSessionIdsForWorktree({ workspaceId = null, worktreeKey = null } = {}) {
+    const keyRaw = String(worktreeKey || '').trim().toLowerCase();
+    if (!keyRaw) return [];
+
+    const keyTokenMatch = keyRaw.match(/(work\d+|main|master)$/i);
+    const keyToken = String(keyTokenMatch?.[1] || keyRaw).trim().toLowerCase();
+    const out = [];
+
+    for (const [sessionId, session] of this.getAllSessionEntries({ workspaceId })) {
+      const sid = String(sessionId || '').trim();
+      if (!sid || !session) continue;
+
+      const sidLower = sid.toLowerCase();
+      const sessionWorktreeId = String(session.worktreeId || '').trim().toLowerCase();
+      const sessionRepoName = String(session.repositoryName || '').trim().toLowerCase();
+      const composedKey = sessionRepoName && sessionWorktreeId
+        ? `${sessionRepoName}-${sessionWorktreeId}`
+        : '';
+
+      const matches = (
+        sidLower === keyRaw
+        || sidLower.includes(`${keyRaw}-`)
+        || (sessionWorktreeId && sessionWorktreeId === keyRaw)
+        || (composedKey && composedKey === keyRaw)
+        || (sessionWorktreeId && sessionWorktreeId === keyToken)
+      );
+
+      if (!matches) continue;
+      out.push(sid);
+    }
+
+    return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b));
+  }
+
   closeSession(sessionId, { clearRecovery = false } = {}) {
     const session = this.getSessionById(sessionId);
     if (!session) return false;

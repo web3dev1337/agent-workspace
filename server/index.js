@@ -2242,7 +2242,7 @@ app.post('/api/threads/:id/close', express.json(), (req, res) => {
     const thread = threadService.closeThread(threadId);
     if (clearSessions) {
       for (const sessionId of Array.isArray(thread.sessionIds) ? thread.sessionIds : []) {
-        sessionManager.closeSession(sessionId, { clearRecovery: false });
+        sessionManager.closeSession(sessionId, { clearRecovery: true });
       }
     }
     res.json({ ok: true, thread });
@@ -2326,28 +2326,26 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
       // best-effort
     }
 
-    // If this is the active workspace, close sessions but DON'T reinitialize all
+    // Close associated sessions even when this workspace isn't currently active.
+    // This prevents orphan PTYs/recovery entries when users manage worktrees from other tabs/views.
+    const relatedSessionIds = sessionManager.getSessionIdsForWorktree({
+      workspaceId,
+      worktreeKey: String(worktreeId || '').trim()
+    });
+    const uniqueSessionIds = Array.from(new Set([...(removedTerminalIds || []), ...(relatedSessionIds || [])]));
+    uniqueSessionIds.forEach((sessionId) => {
+      const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
+      if (ok) io.emit('session-closed', { sessionId });
+    });
+
+    // If this is the active workspace, refresh SessionManager's workspace reference.
     if (workspaceManager.getActiveWorkspace()?.id === workspaceId) {
-      // Set flag to prevent auto-restart of Claude sessions during deletion
       const previousFlag = sessionManager.isWorkspaceSwitching;
       sessionManager.isWorkspaceSwitching = true;
-
       try {
-        // Close sessions for removed terminals by ID.
-        // Mixed-repo worktrees often use a key like `${repoName}-${worktreeId}` for config removal,
-        // while the session's internal `worktreeId` is just `workN`. Closing by removed terminal IDs
-        // prevents "agent closed but server orphaned" drift.
-        const uniqueSessionIds = Array.from(new Set(removedTerminalIds));
-        uniqueSessionIds.forEach((sessionId) => {
-          const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
-          if (ok) io.emit('session-closed', { sessionId });
-        });
-
-        // Update the SessionManager workspace reference without reinitializing all sessions
         const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
         sessionManager.setWorkspace(refreshedWorkspace);
       } finally {
-        // Restore the previous flag state after deletion completes
         sessionManager.isWorkspaceSwitching = previousFlag;
       }
     }
