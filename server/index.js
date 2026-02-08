@@ -97,6 +97,7 @@ const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { PagerService } = require('./pagerService');
 const { ThreadService } = require('./threadService');
+const { PolicyBundleService } = require('./policyBundleService');
 const {
   getLifecyclePolicy,
   parseWorktreeKey,
@@ -297,6 +298,7 @@ const pagerService = PagerService.getInstance({ logger });
 const threadService = ThreadService.getInstance({ logger });
 const policyService = PolicyService.getInstance({ logger });
 const auditExportService = AuditExportService.getInstance({ logger });
+const policyBundleService = PolicyBundleService.getInstance({ policyService, userSettingsService });
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -1811,6 +1813,56 @@ app.get('/api/policy/status', (req, res) => {
   }
 });
 
+app.get('/api/policy/templates', requirePolicyAction('read'), (req, res) => {
+  try {
+    const templates = policyBundleService.listTemplates();
+    res.json({
+      ok: true,
+      count: templates.length,
+      templates,
+      policyRole: req.policyRole || policyService.resolveRole(req).role
+    });
+  } catch (error) {
+    logger.error('Failed to list policy templates', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to list policy templates' });
+  }
+});
+
+app.post('/api/policy/bundles/export', requirePolicyAction('read'), express.json({ limit: '2mb' }), (req, res) => {
+  try {
+    const bundle = policyBundleService.exportBundle({
+      templateId: req.body?.templateId,
+      policy: req.body?.policy,
+      orgName: req.body?.orgName,
+      notes: req.body?.notes,
+      createdBy: req.body?.createdBy || req.policyRole || null
+    });
+    res.json({
+      ok: true,
+      bundle
+    });
+  } catch (error) {
+    logger.error('Failed to export policy bundle', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: error.message || 'Failed to export policy bundle' });
+  }
+});
+
+app.post('/api/policy/bundles/import', requirePolicyAction('write'), express.json({ limit: '2mb' }), (req, res) => {
+  try {
+    const bundle = req.body?.bundle || req.body;
+    const mode = req.body?.mode || 'replace';
+    const result = policyBundleService.importBundle(bundle, { mode });
+    io.emit('user-settings-updated', userSettingsService.getAllSettings());
+    res.json({
+      ok: true,
+      ...result
+    });
+  } catch (error) {
+    logger.error('Failed to import policy bundle', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: error.message || 'Failed to import policy bundle' });
+  }
+});
+
 app.get('/api/audit/status', requirePolicyAction('read'), async (req, res) => {
   try {
     const status = await auditExportService.getStatus();
@@ -1837,18 +1889,49 @@ app.get('/api/audit/export', requirePolicyAction('audit_export'), proOnly, async
     const sources = typeof req.query?.sources === 'string' ? req.query.sources : '';
     const redactRaw = String(req.query?.redact ?? '').trim().toLowerCase();
     const redact = redactRaw ? !['0', 'false', 'no', 'off'].includes(redactRaw) : undefined;
+    const signedRaw = String(req.query?.signed ?? '').trim().toLowerCase();
+    const signed = ['1', 'true', 'yes', 'on'].includes(signedRaw);
+    if (signed) {
+      const signing = auditExportService.getSigningConfig();
+      if (!signing.enabled) {
+        return res.status(400).json({ ok: false, error: 'Audit signing is disabled (global.audit.signing.enabled=false)' });
+      }
+      if (!signing.hasSecret) {
+        return res.status(400).json({ ok: false, error: 'Missing ORCHESTRATOR_AUDIT_SIGNING_SECRET for signed export' });
+      }
+    }
 
     if (format === 'csv') {
       const payload = await auditExportService.exportCsv({ sources, sinceMs, limit, redact });
+      if (signed) {
+        const signature = auditExportService.signPayload({
+          generatedAt: payload.generatedAt,
+          count: payload.count,
+          sources: payload.sources,
+          redacted: payload.redacted,
+          csv: payload.csv
+        });
+        res.setHeader('X-Audit-Signature', signature.value);
+        res.setHeader('X-Audit-Signature-Alg', signature.algorithm);
+        res.setHeader('X-Audit-Signature-KeyId', signature.keyId);
+      }
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="audit-export-${Date.now()}.csv"`);
       return res.send(payload.csv);
     }
 
     const payload = await auditExportService.exportJson({ sources, sinceMs, limit, redact });
+    const jsonBody = signed
+      ? {
+        ok: true,
+        signed: true,
+        signature: auditExportService.signPayload(payload),
+        payload
+      }
+      : payload;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="audit-export-${Date.now()}.json"`);
-    return res.send(`${JSON.stringify(payload, null, 2)}\n`);
+    return res.send(`${JSON.stringify(jsonBody, null, 2)}\n`);
   } catch (error) {
     logger.error('Failed to export audit logs', { error: error.message, stack: error.stack });
     return res.status(500).json({ ok: false, error: 'Failed to export audit logs' });
