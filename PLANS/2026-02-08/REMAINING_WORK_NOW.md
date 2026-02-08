@@ -60,3 +60,4 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #683 — voice/commander queue selection by PR number + optional repo hint (`select pr 492 in zoo-game`)
 - #684 — docs sync: queue PR-number selection helper marked completed in Phase 4 remaining-work snapshot
 - #685 — docs sync: commander typed freeform parse route marked completed (`/api/commander/execute-text`)
+- #686 — provider-agnostic agent provider API surface (`server/agentProviderService.js` + `/api/agent-providers/*` + plugin service wiring)
