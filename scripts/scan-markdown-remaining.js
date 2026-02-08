@@ -173,12 +173,17 @@ function scanMarkdown(filePath, content) {
     /\/CHECKLIST\.md$/i.test(filePath) ||
     /\/CHECKLISTS?\//i.test(filePath) ||
     /\/OPTIMAL_ORCHESTRATOR_PROCESS\.md$/i.test(filePath);
+  const isNonBacklogDoc =
+    /^ai-memory\//i.test(filePath) ||
+    /^scripts\/README\.md$/i.test(filePath) ||
+    /^WINDOWS_.*GUIDE\.md$/i.test(filePath) ||
+    /^PUBLIC_RELEASE_AUDIT_.*\.md$/i.test(filePath);
   const isGeneratedScan =
     /\/REMAINING_WORK_.*(SCAN|FULL)\.md$/i.test(filePath) ||
     /\/REMAINING_MARKDOWNS_.*SCAN\.md$/i.test(filePath) ||
     /\/REMAINING_WORK_FROM_.*\.md$/i.test(filePath);
   const isPlanish = /^PLANS\//.test(filePath);
-  const isLikelyTemplate = isTemplate || (/COWORKER_SETUP_GUIDE\.md$/i.test(filePath) && isPlanish);
+  const isLikelyTemplate = isTemplate || isNonBacklogDoc || (/COWORKER_SETUP_GUIDE\.md$/i.test(filePath) && isPlanish);
   let classification = 'doc/backlog';
   if (isLikelyTemplate) classification = 'template/guide';
   if (isGeneratedScan) classification = 'generated-scan';
