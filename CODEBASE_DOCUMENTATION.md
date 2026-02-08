@@ -55,6 +55,7 @@ server/sessionRecoveryService.js   - Session recovery state persistence (CWD, ag
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
 server/policyBundleService.js      - Policy template catalog + bundle export/import for team governance profiles
 server/pluginLoaderService.js      - Plugin manifest validation/compatibility, command registration safety, and client slot metadata
+server/agentProviderService.js     - Provider abstraction layer for Claude/Codex/future agents (sessions, resume plans, history search, transcript fetch)
 server/workspaceServiceStackService.js - Workspace service-stack manifest normalization/validation (services, env, restart policy, healthchecks)
 server/configPromoterService.js    - Team/shared service-stack baseline promotion + attach/resolve with optional signature verification
 server/encryptedStore.js           - Reusable AES-256-GCM encrypted JSON store helper for shared config artifacts
@@ -406,6 +407,11 @@ GET /api/policy/templates                                    - Built-in team gov
 POST /api/policy/bundles/export                              - Export policy bundle (template/current/custom) for sharing
 POST /api/policy/bundles/import                              - Apply policy bundle (replace/merge) into global settings
 GET /api/audit/export?signed=1                               - Signed audit export (HMAC-SHA256; requires signing enabled + secret)
+GET /api/agent-providers                                      - List registered agent providers and capabilities
+GET /api/agent-providers/:providerId/sessions                 - List provider sessions from SessionManager
+POST /api/agent-providers/:providerId/resume-plan             - Build provider-specific resume command/config plan
+GET /api/agent-providers/:providerId/history/search           - Provider-scoped history search (conversation index source-aware)
+GET /api/agent-providers/:providerId/history/:id              - Provider-scoped transcript retrieval
 ```
 
 ### WebSocket Events

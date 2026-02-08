@@ -42,8 +42,10 @@ Status:
 - ✅ Commander typed freeform parsing is available via `POST /api/commander/execute-text` (rules first, LLM fallback via the same voice pipeline).
 
 Remaining work:
-- Provider plugin interface (Claude/Codex/future) to keep the architecture clean:
-  - `listSessions`, `resume`, `searchHistory`, `getTranscript`, etc.
+- ✅ Provider plugin interface (Claude/Codex/future) shipped via `server/agentProviderService.js`:
+  - `listSessions`, `resume` plan generation, `searchHistory`, `getTranscript`
+  - REST surface: `/api/agent-providers/*`
+  - Plugin wiring: provider service is now available in plugin loader service context
 
 Primary source:
 - `PLANS/2026-01-31/FULL_UI_CONTROL_VIA_COMMANDS_GAP_ANALYSIS.md`
