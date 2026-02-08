@@ -35,7 +35,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - fresh machine can run diagnostics in <10s
   - all blocking prerequisites reported in one view
   - at least 3 high-frequency setup failures have one-click repair
-- Shipped in PR #TBD:
+- Shipped in PR #651:
   - added `POST /api/diagnostics/first-run/repair-safe` for bulk safe repairs from first-run diagnostics.
   - added Settings → Diagnostics button `Auto-fix safe issues` wired to run safe repairs and refresh check state.
   - added unit coverage for bulk safe repair flow (`runFirstRunSafeRepairs`).
@@ -56,7 +56,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - closing/removing actions leave no stale active sessions
   - session recovery only shows truly recoverable sessions
   - unit coverage for all lifecycle transitions
-- Shipped in PR #TBD:
+- Shipped in PR #653:
   - added explicit lifecycle policy module + `GET /api/lifecycle/policy`.
   - tightened worktree removal matching to avoid false positives (`work1` no longer matches `work10`).
   - synchronized remove-worktree cleanup with linked thread status/session references.
@@ -74,7 +74,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - no page-level vertical scroll at 1440p for standard PRs
   - route mode opens directly into diff-dominant layout
   - explicit keyboard flow: next/approve/changes/merge without mouse-heavy navigation
-- Shipped in PR #TBD:
+- Shipped in PR #654:
   - added `throughput` Review Console preset and made Review Route apply it by default.
   - added diff-first throughput grid layout tuning and paired terminal side-by-side enforcement.
   - added Review Console PR action controls + keyboard flow (`Alt+Shift+N/A/C/M`) for next/approve/changes/merge.
@@ -102,7 +102,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Acceptance criteria:
   - thread open action <300ms perceived latency on warm cache
   - keyboard-only flow works for project select + chat open + new chat
-- Shipped in PR #TBD:
+- Shipped in PR #652:
   - added project and thread search inputs in Projects + Chats shell.
   - added pinned and recent thread ordering with per-thread pin/unpin controls.
   - added background preloading of workspace thread lists for faster project switches.
@@ -117,7 +117,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Acceptance criteria:
   - adding a command updates discovery/help without manual sync work
   - CI fails on command/action drift
-- Shipped in PR #TBD:
+- Shipped in PR #648:
   - Added `scripts/check-command-surface-drift.js` to verify `server/commandRegistry.js` commander actions are all handled in `client/app.js`.
   - Added `npm run check:command-surface`.
   - Added CI enforcement in `.github/workflows/tests.yml` and `.github/workflows/windows.yml`.
@@ -132,7 +132,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Acceptance criteria:
   - invalid plugin manifests fail with clear diagnostics
   - plugin command namespace collisions are prevented
-- Shipped in PR #TBD:
+- Shipped in PR #649:
   - `server/pluginLoaderService.js` now validates manifest schema/version (`manifestVersion: 1`), id/path safety, capabilities, and compatibility constraints.
   - plugin command registration now enforces namespace/collision checks and per-plugin command caps.
   - tests added for invalid manifest version, command collisions, and command-cap overflow.
@@ -147,7 +147,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Acceptance criteria:
   - non-technical user can create safe schedule without editing raw JSON
   - blocked dangerous commands surface clear policy reason
-- Shipped in PR #TBD:
+- Shipped in PR #650:
   - expanded `SchedulerService` template catalog with review/integration/maintenance templates.
   - added shared template build logic + dry-run API path (`/api/scheduler/jobs/from-template/preview`).
   - added Settings preview action to inspect generated schedule id/command/safety before adding.
@@ -162,7 +162,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Acceptance criteria:
   - setup success rate improved for first-time Windows users
   - support checklist reduced to one guided flow
-- Shipped in PR #TBD:
+- Shipped in PR #655:
   - added install wizard diagnostics model (`collectInstallWizard`) that presents ordered blocking/warning setup steps.
   - added install wizard endpoints (`/api/diagnostics/install-wizard`, `/api/diagnostics/post-install`) for one guided post-install flow.
   - added diagnostics UI actions for `Post-install check` + `Fix environment wizard` and rendered actionable step summaries in the existing panel.
@@ -178,7 +178,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Deliverables:
   - local metrics comparing onboarding/runtime/review cycle-time over releases
   - export snapshot for release notes
-- Shipped in PR #TBD:
+- Shipped in PR #656:
   - added benchmark capture + comparison service (`server/processTelemetryBenchmarkService.js`) with onboarding/runtime/review composite metrics.
   - added benchmark API routes for dashboard comparisons, benchmark snapshots, and markdown release-notes export.
   - added telemetry overlay controls for capturing benchmark snapshots and copying release-notes summaries.
@@ -191,7 +191,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - richer policy templates by role/persona
   - shareable org policy bundles
   - signed audit exports for compliance workflows
-- Shipped in PR #TBD:
+- Shipped in PR #657:
   - added policy template + bundle service (`server/policyBundleService.js`) with export/import API routes for org-shareable governance configs.
   - added policy API routes to list templates and apply bundles (`/api/policy/templates`, `/api/policy/bundles/export`, `/api/policy/bundles/import`).
   - added signed audit export support (HMAC-SHA256 envelopes/headers) gated by settings + secret (`global.audit.signing.enabled`, `ORCHESTRATOR_AUDIT_SIGNING_SECRET`).
@@ -203,7 +203,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 - Deliverables:
   - modular client extension points
   - plugin UI slots and lifecycle APIs
-- Shipped in PR #TBD:
+- Shipped in PR #658:
   - added client plugin host (`client/plugin-host.js`) with slot fetch/cache, lifecycle hooks, and typed action runner (`open_url`, `open_route`, `copy_text`, `commander_action`).
   - added plugin client-surface API route (`GET /api/plugins/client-surface`) exposing normalized slot items from loaded plugin manifests.
   - added dashboard integration for plugin-provided telemetry actions (`dashboard.telemetry.actions`) without hardcoding plugin IDs.
