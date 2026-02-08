@@ -217,11 +217,11 @@ function buildSummary(files) {
 }
 
 function filterScansForActionable(files) {
-  return (Array.isArray(files) ? files : []).filter((scan) =>
-    scan &&
-    scan.classification === 'doc/backlog' &&
-    Number(scan.remainingCount || 0) > 0
-  );
+  return (Array.isArray(files) ? files : []).filter((scan) => {
+    if (!scan || scan.classification !== 'doc/backlog') return false;
+    const explicitCount = Number(scan?.unchecked?.length || 0) + Number(scan?.todoFixme?.length || 0);
+    return explicitCount > 0;
+  });
 }
 
 function renderJsonReport({ scope, sinceDays, files, actionableOnly = false }) {
@@ -269,7 +269,7 @@ function renderReport({ scope, sinceDays, files, actionableOnly = false }) {
     lines.push('');
   }
   if (actionableOnly === true) {
-    lines.push('Actionable filter: enabled (`doc/backlog` files with remaining markers only).');
+    lines.push('Actionable filter: enabled (`doc/backlog` files with explicit markers only: unchecked and/or TODO/FIXME).');
     lines.push('');
   }
 
