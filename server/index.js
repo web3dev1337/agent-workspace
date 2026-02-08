@@ -98,6 +98,7 @@ const { SchedulerService } = require('./schedulerService');
 const { PagerService } = require('./pagerService');
 const { ThreadService } = require('./threadService');
 const { PolicyBundleService } = require('./policyBundleService');
+const { normalizeServiceManifest, getWorkspaceServiceManifest } = require('./workspaceServiceStackService');
 const {
   getLifecyclePolicy,
   parseWorktreeKey,
@@ -1267,6 +1268,102 @@ app.post('/api/workspaces/import', async (req, res) => {
   } catch (error) {
     logger.error('Failed to import workspace', { error: error.message, stack: error.stack });
     res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/workspaces/:id/service-stack', (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
+    const manifest = getWorkspaceServiceManifest(workspace);
+    res.json({ ok: true, workspaceId, manifest });
+  } catch (error) {
+    logger.error('Failed to get workspace service stack', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get workspace service stack', message: error.message });
+  }
+});
+
+app.get('/api/workspaces/:id/service-stack/export', (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
+
+    const manifest = getWorkspaceServiceManifest(workspace);
+    const payload = {
+      workspaceId,
+      workspaceName: String(workspace.name || workspaceId),
+      exportedAt: new Date().toISOString(),
+      ...manifest
+    };
+
+    const filename = `${workspaceId}.service-stack.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(payload, null, 2));
+  } catch (error) {
+    logger.error('Failed to export workspace service stack', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to export workspace service stack', message: error.message });
+  }
+});
+
+app.put('/api/workspaces/:id/service-stack', express.json(), async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
+
+    const incoming = req.body?.manifest ?? req.body ?? {};
+    const manifest = normalizeServiceManifest(incoming, { strict: true });
+
+    const updated = await workspaceManager.updateWorkspace(workspaceId, {
+      serviceStack: {
+        ...manifest,
+        updatedAt: new Date().toISOString()
+      }
+    });
+
+    res.json({
+      ok: true,
+      workspaceId,
+      count: Array.isArray(updated?.serviceStack?.services) ? updated.serviceStack.services.length : 0,
+      manifest: getWorkspaceServiceManifest(updated)
+    });
+  } catch (error) {
+    logger.error('Failed to update workspace service stack', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: 'Failed to update workspace service stack', message: error.message });
+  }
+});
+
+app.post('/api/workspaces/:id/service-stack/import', express.json(), async (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
+    const workspace = workspaceManager.getWorkspace(workspaceId);
+    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
+
+    const incoming = req.body?.manifest ?? req.body ?? {};
+    const manifest = normalizeServiceManifest(incoming, { strict: true });
+    const updated = await workspaceManager.updateWorkspace(workspaceId, {
+      serviceStack: {
+        ...manifest,
+        updatedAt: new Date().toISOString()
+      }
+    });
+
+    res.json({
+      ok: true,
+      workspaceId,
+      imported: Array.isArray(manifest.services) ? manifest.services.length : 0,
+      manifest: getWorkspaceServiceManifest(updated)
+    });
+  } catch (error) {
+    logger.error('Failed to import workspace service stack', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: 'Failed to import workspace service stack', message: error.message });
   }
 });
 
