@@ -1,4 +1,5 @@
 const os = require('os');
+const fs = require('fs');
 const path = require('path');
 const util = require('util');
 const { execFile } = require('child_process');
@@ -189,4 +190,270 @@ async function collectDiagnostics() {
   };
 }
 
-module.exports = { collectDiagnostics };
+function findToolResult(data, id) {
+  const list = Array.isArray(data?.tools) ? data.tools : [];
+  return list.find((item) => String(item?.id || '') === String(id || '')) || null;
+}
+
+function createCheck({
+  id,
+  name,
+  pass,
+  severity = 'warning',
+  passMessage = 'ok',
+  failMessage = 'failed',
+  details = null,
+  repairActions = []
+}) {
+  return {
+    id: String(id || '').trim(),
+    name: String(name || '').trim(),
+    severity: pass ? 'info' : String(severity || 'warning').trim().toLowerCase(),
+    status: pass ? 'pass' : 'fail',
+    message: pass ? String(passMessage || 'ok') : String(failMessage || 'failed'),
+    details: details || null,
+    repairActions: Array.isArray(repairActions) ? repairActions : []
+  };
+}
+
+function isWritableDirectory(dirPath) {
+  try {
+    fs.accessSync(dirPath, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function collectRepairActions(checks) {
+  const seen = new Set();
+  const actions = [];
+  for (const check of checks || []) {
+    for (const action of Array.isArray(check?.repairActions) ? check.repairActions : []) {
+      const id = String(action?.id || '').trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      actions.push(action);
+    }
+  }
+  return actions;
+}
+
+async function collectFirstRunDiagnostics(options = {}) {
+  const data = await collectDiagnostics();
+  const homeDir = String(options.homeDir || data?.env?.homeDir || os.homedir() || '').trim();
+  const rootDir = String(options.rootDir || path.resolve(__dirname, '..')).trim();
+  const orchestratorDir = path.join(homeDir, '.orchestrator');
+  const workspacesDir = path.join(orchestratorDir, 'workspaces');
+  const githubRoot = path.join(homeDir, 'GitHub');
+
+  const git = findToolResult(data, 'git');
+  const gh = findToolResult(data, 'gh');
+  const ghAuth = findToolResult(data, 'ghAuth');
+  const claude = findToolResult(data, 'claude');
+  const codex = findToolResult(data, 'codex');
+
+  const checks = [];
+
+  checks.push(createCheck({
+    id: 'git-installed',
+    name: 'Git installed',
+    pass: !!git?.ok,
+    severity: 'blocking',
+    passMessage: String(git?.version || 'Git available'),
+    failMessage: 'Git is required for worktree and PR workflows',
+    details: git?.error || null
+  }));
+
+  checks.push(createCheck({
+    id: 'node-pty-loaded',
+    name: 'node-pty available',
+    pass: !!data?.nodePty?.ok,
+    severity: 'blocking',
+    passMessage: 'node-pty loaded successfully',
+    failMessage: 'node-pty is missing or failed to load',
+    details: data?.nodePty?.error || null,
+    repairActions: [
+      {
+        id: 'rebuild-node-pty',
+        label: 'Rebuild node-pty',
+        kind: 'safe',
+        command: 'npm rebuild node-pty'
+      }
+    ]
+  }));
+
+  checks.push(createCheck({
+    id: 'orchestrator-home',
+    name: 'Orchestrator data directory',
+    pass: fs.existsSync(orchestratorDir) && isWritableDirectory(orchestratorDir),
+    severity: 'warning',
+    passMessage: orchestratorDir,
+    failMessage: `Missing or not writable: ${orchestratorDir}`,
+    repairActions: [
+      {
+        id: 'ensure-orchestrator-home',
+        label: 'Create ~/.orchestrator',
+        kind: 'safe'
+      }
+    ]
+  }));
+
+  checks.push(createCheck({
+    id: 'orchestrator-workspaces',
+    name: 'Workspace store directory',
+    pass: fs.existsSync(workspacesDir) && isWritableDirectory(workspacesDir),
+    severity: 'warning',
+    passMessage: workspacesDir,
+    failMessage: `Missing or not writable: ${workspacesDir}`,
+    repairActions: [
+      {
+        id: 'ensure-workspaces-dir',
+        label: 'Create ~/.orchestrator/workspaces',
+        kind: 'safe'
+      }
+    ]
+  }));
+
+  checks.push(createCheck({
+    id: 'repo-scan-root',
+    name: 'Repo scan root (~/GitHub)',
+    pass: fs.existsSync(githubRoot) && isWritableDirectory(githubRoot),
+    severity: 'warning',
+    passMessage: githubRoot,
+    failMessage: `Repo root missing or not writable: ${githubRoot}`,
+    repairActions: [
+      {
+        id: 'ensure-github-root',
+        label: 'Create ~/GitHub',
+        kind: 'safe'
+      }
+    ]
+  }));
+
+  checks.push(createCheck({
+    id: 'gh-installed',
+    name: 'GitHub CLI installed',
+    pass: !!gh?.ok,
+    severity: 'warning',
+    passMessage: String(gh?.version || 'gh available'),
+    failMessage: 'gh is not installed (PR/review features will be limited)',
+    details: gh?.error || null
+  }));
+
+  checks.push(createCheck({
+    id: 'gh-auth',
+    name: 'GitHub CLI authentication',
+    pass: !gh?.ok ? false : !!ghAuth?.ok,
+    severity: 'warning',
+    passMessage: 'gh auth is ready',
+    failMessage: !gh?.ok ? 'gh not installed, cannot verify auth' : 'gh is not authenticated',
+    details: ghAuth?.error || null,
+    repairActions: [
+      {
+        id: 'gh-auth-login',
+        label: 'Run gh auth login',
+        kind: 'manual',
+        command: 'gh auth login'
+      }
+    ]
+  }));
+
+  checks.push(createCheck({
+    id: 'claude-cli',
+    name: 'Claude CLI',
+    pass: !!claude?.ok,
+    severity: 'warning',
+    passMessage: String(claude?.version || 'claude available'),
+    failMessage: 'Claude CLI not found (Claude sessions unavailable)',
+    details: claude?.error || null
+  }));
+
+  checks.push(createCheck({
+    id: 'codex-cli',
+    name: 'Codex CLI',
+    pass: !!codex?.ok,
+    severity: 'warning',
+    passMessage: String(codex?.version || 'codex available'),
+    failMessage: 'Codex CLI not found (Codex sessions unavailable)',
+    details: codex?.error || null
+  }));
+
+  const blockingCount = checks.filter((check) => check.status === 'fail' && check.severity === 'blocking').length;
+  const warningCount = checks.filter((check) => check.status === 'fail' && check.severity !== 'blocking').length;
+  const repairActions = collectRepairActions(checks);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    platform: process.platform,
+    rootDir,
+    paths: {
+      homeDir,
+      orchestratorDir,
+      workspacesDir,
+      githubRoot
+    },
+    summary: {
+      ready: blockingCount === 0,
+      blockingCount,
+      warningCount,
+      totalChecks: checks.length,
+      repairableCount: repairActions.length
+    },
+    checks,
+    repairActions
+  };
+}
+
+async function runFirstRunRepair({ action, rootDir, homeDir } = {}) {
+  const actionId = String(action || '').trim();
+  const resolvedRoot = String(rootDir || path.resolve(__dirname, '..')).trim();
+  const resolvedHomeDir = String(homeDir || os.homedir() || '').trim();
+  const orchestratorDir = path.join(resolvedHomeDir, '.orchestrator');
+  const workspacesDir = path.join(orchestratorDir, 'workspaces');
+  const githubRoot = path.join(resolvedHomeDir, 'GitHub');
+
+  if (!actionId) {
+    throw new Error('repair action is required');
+  }
+
+  if (actionId === 'ensure-orchestrator-home') {
+    fs.mkdirSync(orchestratorDir, { recursive: true });
+    return { ok: true, action: actionId, message: `Created ${orchestratorDir}` };
+  }
+
+  if (actionId === 'ensure-workspaces-dir') {
+    fs.mkdirSync(workspacesDir, { recursive: true });
+    return { ok: true, action: actionId, message: `Created ${workspacesDir}` };
+  }
+
+  if (actionId === 'ensure-github-root') {
+    fs.mkdirSync(githubRoot, { recursive: true });
+    return { ok: true, action: actionId, message: `Created ${githubRoot}` };
+  }
+
+  if (actionId === 'rebuild-node-pty') {
+    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const { stdout, stderr } = await execFileAsync(npmCmd, ['rebuild', 'node-pty'], {
+      cwd: resolvedRoot,
+      timeout: 180000,
+      windowsHide: true,
+      maxBuffer: 4 * 1024 * 1024
+    });
+    const output = String(stdout || stderr || '').trim();
+    return { ok: true, action: actionId, message: 'Rebuilt node-pty', output };
+  }
+
+  if (actionId === 'gh-auth-login') {
+    return {
+      ok: false,
+      manual: true,
+      action: actionId,
+      message: 'Interactive login required. Run `gh auth login` in a terminal.'
+    };
+  }
+
+  throw new Error(`Unknown repair action: ${actionId}`);
+}
+
+module.exports = { collectDiagnostics, collectFirstRunDiagnostics, runFirstRunRepair };
