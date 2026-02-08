@@ -34,6 +34,7 @@
     "prep:history-rewrite:mailmap-finalize": "node scripts/finalize-history-rewrite-mailmap.js",
     "prep:public-snapshot-repo": "node scripts/create-public-snapshot-repo.js",
     "history-rewrite:execute:plan": "node scripts/execute-history-rewrite.js",
+    "report:release-readiness": "node scripts/generate-release-readiness-report.js",
     "setup:history-rewrite-tools": "node scripts/setup-history-rewrite-tools.js",
     "check:history-rewrite-readiness": "node scripts/check-history-rewrite-readiness.js",
     "check:history-rewrite-readiness:strict": "node scripts/check-history-rewrite-readiness.js --strict --require-gitleaks",
