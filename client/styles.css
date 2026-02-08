@@ -8888,11 +8888,17 @@ header h1 {
   display: flex;
   gap: 6px;
   align-items: center;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .tasks-view-btn.active {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15);
+}
+
+.tasks-view-btn {
+  white-space: nowrap;
 }
 
 .tasks-filter {
@@ -8954,6 +8960,33 @@ header h1 {
   gap: var(--space-md);
   align-items: center;
   flex-wrap: wrap;
+}
+
+#queue-panel .tasks-toolbar {
+  align-items: flex-start;
+  row-gap: 8px;
+}
+
+#queue-panel .tasks-search {
+  flex: 1 1 300px;
+  min-width: min(300px, 100%);
+}
+
+#queue-panel .tasks-view-toggle[aria-label="Review filters"] {
+  flex: 1 1 100%;
+}
+
+@media (max-width: 1200px) {
+  #queue-panel .tasks-view-toggle[aria-label="Queue mode"],
+  #queue-panel .tasks-view-toggle[aria-label="Review tier"],
+  #queue-panel .tasks-view-toggle[aria-label="Queue navigation"] {
+    flex: 1 1 100%;
+  }
+
+  #queue-panel #queue-pairing,
+  #queue-panel #queue-refresh {
+    flex: 0 0 auto;
+  }
 }
 
 .tasks-launch-defaults {
