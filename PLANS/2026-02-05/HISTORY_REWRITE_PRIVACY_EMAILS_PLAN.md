@@ -211,7 +211,7 @@ Also update:
 
 ## Checklist for “OK to go public”
 
-- [ ] History rewritten OR new squashed public repo created
+- [x] History rewritten OR new squashed public repo created
 - [x] Secrets scan passes (history)
 - [x] No tracked caches/DBs
 - [x] Default bind host is loopback; LAN requires auth token
@@ -232,3 +232,4 @@ Status notes (2026-02-08):
 - Added `scripts/finalize-history-rewrite-mailmap.js` and `npm run prep:history-rewrite:mailmap-finalize` to convert placeholder mailmap entries to a concrete noreply mapping.
 - Added `scripts/execute-history-rewrite.js` and `npm run history-rewrite:execute:plan` as a guarded maintenance-window rewrite executor (plan by default; explicit confirm required for execution/push).
 - Added `scripts/create-public-snapshot-repo.js` and `npm run prep:public-snapshot-repo` to generate the alternative single-commit public snapshot repo path.
+- Executed `npm run prep:public-snapshot-repo` to create a local single-commit public snapshot repository (non-destructive path complete).
