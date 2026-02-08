@@ -39,7 +39,8 @@
     "check:history-rewrite-readiness": "node scripts/check-history-rewrite-readiness.js",
     "check:history-rewrite-readiness:strict": "node scripts/check-history-rewrite-readiness.js --strict --require-gitleaks",
     "check:history-rewrite-result": "node scripts/verify-history-rewrite-result.js",
-    "check:history-rewrite-result:advisory": "node scripts/verify-history-rewrite-result.js --advisory"
+    "check:history-rewrite-result:advisory": "node scripts/verify-history-rewrite-result.js --advisory",
+    "check:public-snapshot-repo": "node scripts/verify-public-snapshot-repo.js"
   },
   "keywords": [
     "claude",
