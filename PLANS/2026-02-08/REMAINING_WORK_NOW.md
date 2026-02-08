@@ -69,3 +69,4 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #692 — review console defaults to throughput diff-first preset
 - #693 — diff viewer hides zero-value add/delete counters (`+0`/`-0`)
 - #694 — docs sync: remaining-work scan and shipped PR refs backfilled (`#648-#658`)
+- #695 — docs sync: append PR #694 in merged-sequence closure log
