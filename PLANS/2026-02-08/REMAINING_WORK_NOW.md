@@ -19,6 +19,7 @@ This file is the canonical short list after syncing the Phase 5 execution plan a
      - `npm run prep:history-rewrite` (non-destructive private workkit: runbook + removal-path list + filter-repo helper script)
      - `npm run check:history-rewrite-readiness -- --workkit-dir <dir>` (non-destructive advisory preflight)
      - `npm run check:history-rewrite-readiness:strict -- --workkit-dir <dir>` (non-destructive strict gate for rewrite maintenance window)
+     - `npm run check:history-rewrite-result` (post-rewrite strict validator for emails + blocked history paths)
 
 ## Notes on scanner noise
 
