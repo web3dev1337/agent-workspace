@@ -2447,9 +2447,12 @@ class SessionManager extends EventEmitter {
     return entries;
   }
 
-  getSessionIdsForWorktree({ workspaceId = null, worktreeKey = null } = {}) {
+  getSessionIdsForWorktree({ workspaceId = null, worktreeKey = null, sessionTypes = null } = {}) {
     const keyRaw = String(worktreeKey || '').trim().toLowerCase();
     if (!keyRaw) return [];
+    const typeSet = Array.isArray(sessionTypes)
+      ? new Set(sessionTypes.map((type) => String(type || '').trim().toLowerCase()).filter(Boolean))
+      : null;
 
     const keyTokenMatch = keyRaw.match(/(work\d+|main|master)$/i);
     const keyToken = String(keyTokenMatch?.[1] || keyRaw).trim().toLowerCase();
@@ -2458,6 +2461,10 @@ class SessionManager extends EventEmitter {
     for (const [sessionId, session] of this.getAllSessionEntries({ workspaceId })) {
       const sid = String(sessionId || '').trim();
       if (!sid || !session) continue;
+      if (typeSet) {
+        const type = String(session.type || '').trim().toLowerCase();
+        if (!typeSet.has(type)) continue;
+      }
 
       const sidLower = sid.toLowerCase();
       const sessionWorktreeId = String(session.worktreeId || '').trim().toLowerCase();
@@ -2479,6 +2486,33 @@ class SessionManager extends EventEmitter {
     }
 
     return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b));
+  }
+
+  getSessionGroupIds(sessionId, { workspaceId = null, sessionTypes = ['claude', 'codex', 'server'] } = {}) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return [];
+
+    const session = this.getSessionById(sid);
+    if (!session) return [sid];
+
+    const ws = String(workspaceId || session?.workspace || '').trim() || null;
+    const worktreeId = String(session?.worktreeId || '').trim().toLowerCase();
+    const repositoryName = String(session?.repositoryName || '').trim().toLowerCase();
+    const parsedWorktreeId = worktreeId || String(sid).replace(/-(claude|codex|server)$/i, '').split('-').pop()?.toLowerCase() || '';
+    const composedKey = repositoryName && parsedWorktreeId ? `${repositoryName}-${parsedWorktreeId}` : '';
+
+    const group = new Set([sid]);
+    const keys = [composedKey, parsedWorktreeId].filter(Boolean);
+    for (const key of keys) {
+      const ids = this.getSessionIdsForWorktree({
+        workspaceId: ws,
+        worktreeKey: key,
+        sessionTypes
+      });
+      ids.forEach((id) => group.add(id));
+    }
+
+    return Array.from(group).sort((a, b) => a.localeCompare(b));
   }
 
   closeSession(sessionId, { clearRecovery = false } = {}) {
