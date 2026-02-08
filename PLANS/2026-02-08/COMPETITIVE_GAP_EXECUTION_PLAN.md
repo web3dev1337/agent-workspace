@@ -379,3 +379,35 @@ On every merged PR, append:
 - merged commit
 - pass/fail against acceptance criteria
 - follow-up tasks if any
+
+Recent merged tracking entries:
+
+- PR: `https://github.com/web3dev1337/claude-orchestrator/pull/659`
+  - merge commit: `e1fc87487faf307c2ff42503de6a3a2bf2d427e1`
+  - acceptance: pass (`M3.1` service-stack manifest APIs + validation/test coverage)
+  - follow-up: none
+
+- PR: `https://github.com/web3dev1337/claude-orchestrator/pull/660`
+  - merge commit: `9ed0108253dc254f93b4165880fd8dd1e12b99cf`
+  - acceptance: pass (`M3.2` runtime controls + restart policy + tests)
+  - follow-up: none
+
+- PR: `https://github.com/web3dev1337/claude-orchestrator/pull/661`
+  - merge commit: `731fbcb840789156af207acb3a7f8e56fbfe3402`
+  - acceptance: pass (`M4.2` team/shared baseline layering + tests)
+  - follow-up: none
+
+- PR: `https://github.com/web3dev1337/claude-orchestrator/pull/662`
+  - merge commit: `6ef1fac3c145d856e7c721850f1cf10641666c68`
+  - acceptance: pass (`M4.1`/`M4.3` scheduler template expansion + pager defaults/tier targeting)
+  - follow-up: none
+
+- PR: `https://github.com/web3dev1337/claude-orchestrator/pull/664`
+  - merge commit: `fb15a98ce222fa62183660af02d8b56a87f37048`
+  - acceptance: pass (`M1.2` API parity for thread lifecycle routes, backward compatible aliases)
+  - follow-up: none
+
+- PR: `https://github.com/web3dev1337/claude-orchestrator/pull/665`
+  - merge commit: `b86e1c2dc6482ca30094c6712f33ce04c2608143`
+  - acceptance: pass (execution-plan status sync to shipped M0-M4 milestones)
+  - follow-up: none
