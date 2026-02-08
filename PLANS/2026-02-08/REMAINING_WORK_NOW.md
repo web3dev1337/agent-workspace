@@ -65,3 +65,6 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #688 — lifecycle close/remove consistency pass for paired worktree sessions (tab close + destroy + clear paths)
 - #689 — review-console pairing stability across providers (Codex agent + server pairing/order paths)
 - #690 — Codex parity in agent workflows (tiering/view filters/thread focus/GitHub link detection)
+- #691 — docs sync: remaining-work log refreshed through PR #690
+- #692 — review console defaults to throughput diff-first preset
+- #693 — diff viewer hides zero-value add/delete counters (`+0`/`-0`)
