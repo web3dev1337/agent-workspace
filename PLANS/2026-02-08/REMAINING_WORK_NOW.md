@@ -70,3 +70,5 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #693 — diff viewer hides zero-value add/delete counters (`+0`/`-0`)
 - #694 — docs sync: remaining-work scan and shipped PR refs backfilled (`#648-#658`)
 - #695 — docs sync: append PR #694 in merged-sequence closure log
+- #696 — docs sync: remaining-work references aligned through PR #695
+- #697 — scanner output-mode hardening (`scan-markdown-remaining` JSON mode + tests)

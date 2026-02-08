@@ -4,7 +4,7 @@ Date: 2026-02-09
 Inputs:
 - `PLANS/2026-02-09/REMAINING_WORK_LAST_14_DAYS_SCAN.md`
 - `PLANS/2026-02-08/REMAINING_WORK_NOW.md`
-- merged PR history through `#695`
+- merged PR history through `#697`
 
 ## Actionable implementation backlog
 
