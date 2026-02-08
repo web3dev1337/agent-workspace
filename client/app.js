@@ -8279,14 +8279,33 @@ class ClaudeOrchestrator {
       return a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
     };
 
+    // Extract worktree ID from path (e.g., "work4" from ".../zoo-game/work4")
+    const pathParts = target.split('/').filter(Boolean);
+    const worktreeId = pathParts[pathParts.length - 1] || '';
+    // Also get repo name for better matching (e.g., "zoo-game" from ".../zoo-game/work4")
+    const repoName = pathParts.length >= 2 ? pathParts[pathParts.length - 2] : '';
+
     const sessionIds = [];
     for (const [sessionId, session] of this.sessions) {
       if (!sessionId || !session) continue;
       if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
+
+      // Try matching by cwd first
       const cwd = session?.config?.cwd || session?.cwd || '';
-      if (!cwd) continue;
-      if (!overlaps(cwd, target)) continue;
-      sessionIds.push(String(sessionId));
+      if (cwd && overlaps(cwd, target)) {
+        sessionIds.push(String(sessionId));
+        continue;
+      }
+
+      // Fallback: match by worktree ID pattern in session ID (e.g., "zoo-game-work4-claude")
+      const sid = String(sessionId).toLowerCase();
+      const wid = worktreeId.toLowerCase();
+      if (wid && (sid.includes(`-${wid}-`) || sid.endsWith(`-${wid}`))) {
+        // Extra check: if we have repo name, make sure it matches too
+        if (!repoName || sid.includes(repoName.toLowerCase())) {
+          sessionIds.push(String(sessionId));
+        }
+      }
     }
 
     // Stable ordering: keep pairs adjacent, always put Agent left of Server.
@@ -8469,15 +8488,19 @@ class ClaudeOrchestrator {
 
     const reviewConsoleConfig = reviewConsole ? this.getReviewConsoleConfig() : null;
     if (reviewConsole) {
+      modal.classList.add('review-console-mode');
       if (reviewConsoleConfig?.fullscreen) modal.classList.add('fullscreen');
       else modal.classList.add('docked');
+    } else {
+      modal.classList.remove('review-console-mode');
     }
 
     const titleEl = modal.querySelector('#worktree-inspector-title');
     if (titleEl) {
       const fallback = p.replace(/\\/g, '/').split('/').filter(Boolean).slice(-2).join('/');
       const safe = String(label || fallback || 'Worktree').trim();
-      titleEl.textContent = `${reviewConsole ? 'Review Console' : 'Worktree Inspector'} • ${safe}`;
+      // For Review Console, title is in the rc-header now, so just set a minimal title
+      titleEl.textContent = reviewConsole ? '' : `Worktree Inspector • ${safe}`;
     }
 
     const bodyEl = modal.querySelector('#worktree-inspector-body');
@@ -8542,21 +8565,48 @@ class ClaudeOrchestrator {
 		        const shortPath = escapeHtml(p.split('/').slice(-2).join('/'));
 
 		        if (reviewConsole) {
-		          // Super compact header for Review Console
+		          // Single-row unified header for Review Console
 		          const mergeable = String(pr?.mergeable || '').trim().toUpperCase();
 		          const isDraft = !!pr?.isDraft;
 		          const canMerge = prUrl && prState === 'open' && !isDraft && (!mergeable || mergeable === 'MERGEABLE');
-		          const mergeBtn = canMerge
-		            ? `<button class="rc-tiny-btn" type="button" data-pr-merge="${escapeHtml(prUrl)}" title="Merge PR">✓ Merge</button>`
-		            : '';
+		          const rcFullscreen = rc?.fullscreen !== false;
+		          const tinyBtn = (dataAttr, key, text, active, title) => {
+		            return `<button class="rc-tiny-btn ${active ? 'active' : ''}" type="button" data-${dataAttr}="${escapeHtml(key)}" title="${escapeHtml(title || '')}">${escapeHtml(text)}</button>`;
+		          };
 
 		          return `
 		            <div class="rc-header">
-		              <span class="rc-header-path" title="${escapeHtml(p)}">${shortPath}</span>
-		              <span class="rc-header-branch">🌿 ${branch}</span>
-		              ${prUrl ? `<a class="rc-header-pr" href="${escapeHtml(prUrl)}" target="_blank" title="Open PR">${escapeHtml(prText)}</a>` : ''}
-		              ${mergeBtn}
-		              <button class="rc-tiny-btn" type="button" data-close-inspector="true" title="Close">✕</button>
+		              <span class="rc-header-left">
+		                <span class="rc-header-path" title="${escapeHtml(p)}">${shortPath}</span>
+		                <span class="rc-header-branch">🌿 ${branch}</span>
+		                ${prUrl ? `<a class="rc-header-pr" href="${escapeHtml(prUrl)}" target="_blank" title="Open PR">${escapeHtml(prText)}</a>` : ''}
+		              </span>
+		              <span class="rc-header-toggles">
+		                ${tinyBtn('review-window', 'fullscreen', '⛶', rcFullscreen, 'Fullscreen')}
+		                ${tinyBtn('review-window', 'docked', '▐', !rcFullscreen, 'Docked')}
+		                <span class="rc-sep">|</span>
+		                ${tinyBtn('review-section', 'terminals', 'Terminals', rcSections.terminals !== false, 'Toggle terminals')}
+		                ${tinyBtn('review-section', 'commits', 'Commits', rcSections.commits !== false, 'Toggle commits')}
+		                ${tinyBtn('review-section', 'diff', 'Diff', rcSections.diff !== false, 'Toggle diff')}
+		              </span>
+		              <span class="rc-header-right">
+		                ${reviewTaskId ? `
+		                  <button class="rc-tiny-btn" type="button" data-review-start="true" title="Start review timer">⏱ Start</button>
+		                  <button class="rc-tiny-btn" type="button" data-review-stop="true" title="Stop review timer">⏹ Stop</button>
+		                  <select class="rc-outcome-select" data-review-outcome="true" title="Review outcome">
+		                    <option value="" ${reviewOutcomeValue ? '' : 'selected'}>(outcome)</option>
+		                    <option value="approved" ${reviewOutcomeValue === 'approved' ? 'selected' : ''}>approved</option>
+		                    <option value="needs_fix" ${reviewOutcomeValue === 'needs_fix' ? 'selected' : ''}>needs_fix</option>
+		                    <option value="commented" ${reviewOutcomeValue === 'commented' ? 'selected' : ''}>commented</option>
+		                    <option value="skipped" ${reviewOutcomeValue === 'skipped' ? 'selected' : ''}>skipped</option>
+		                  </select>
+		                  <button class="rc-tiny-btn" type="button" data-review-toggle-details="true" title="Notes">📝</button>
+		                  <button class="rc-tiny-btn" type="button" data-queue-nav="prev" title="Previous">◀</button>
+		                  <button class="rc-tiny-btn" type="button" data-queue-nav="next" title="Next">▶</button>
+		                ` : ''}
+		                ${canMerge ? `<button class="rc-merge-btn" type="button" data-pr-merge="${escapeHtml(prUrl)}" title="Merge PR">✓ Merge</button>` : ''}
+		                <button class="rc-tiny-btn rc-close-btn" type="button" data-close-inspector="true" title="Close">✕</button>
+		              </span>
 		            </div>
 		          `;
 		        }
@@ -8582,30 +8632,10 @@ class ClaudeOrchestrator {
 				        return `<div class="worktree-inspector-header">${parts.join('')}</div>`;
 				      })();
 
-			      const layoutPanel = reviewConsole ? (() => {
-			        const tinyBtn = (dataAttr, key, text, active, title) => {
-			          return `<button class="rc-tiny-btn ${active ? 'active' : ''}" type="button" data-${dataAttr}="${escapeHtml(key)}" title="${escapeHtml(title || '')}">${escapeHtml(text)}</button>`;
-			        };
-			        const rcFullscreen = rc?.fullscreen !== false;
+			      // Layout bar now integrated into rc-header for review console
+		      const layoutPanel = '';
 
-			        return `
-			          <div class="rc-layout-bar">
-			            <span class="rc-layout-group">
-			              ${tinyBtn('review-window', 'fullscreen', '⛶', rcFullscreen, 'Fullscreen')}
-			              ${tinyBtn('review-window', 'docked', '▐', !rcFullscreen, 'Docked')}
-			            </span>
-				            <span class="rc-layout-sep">|</span>
-				            <span class="rc-layout-group">
-				              ${tinyBtn('review-section', 'terminals', 'T', rcSections.terminals !== false, 'Terminals')}
-				              ${tinyBtn('review-section', 'files', 'F', rcSections.files !== false, 'Files')}
-				              ${tinyBtn('review-section', 'commits', 'C', rcSections.commits !== false, 'Commits')}
-				              ${tinyBtn('review-section', 'diff', 'D', rcSections.diff !== false, 'Diff')}
-				            </span>
-				          </div>
-			        `;
-			      })() : '';
-
-			      const reviewPanel = reviewTaskId ? `
+		      const reviewPanel = reviewTaskId ? `
 			        <div class="worktree-inspector-panel worktree-inspector-review-panel">
 			          <div class="worktree-inspector-review-controls">
 			            <button class="btn-secondary" type="button" data-review-start="true" title="Start review timer">⏱ Start</button>
@@ -8618,13 +8648,8 @@ class ClaudeOrchestrator {
 			              <option value="skipped" ${reviewOutcomeValue === 'skipped' ? 'selected' : ''}>skipped</option>
 			            </select>
 			            <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-review-toggle-details="true" title="Show/hide notes and ticket actions">📝 Notes</button>
-			            ${reviewConsole ? `
-			              <span style="flex:1"></span>
-			              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-queue-nav="prev" title="Queue: previous item">◀ Prev</button>
-			              <button class="btn-secondary worktree-inspector-mini-btn" type="button" data-queue-nav="next" title="Queue: next item">Next ▶</button>
-			            ` : ''}
 			          </div>
-			          <div class="worktree-inspector-review-details ${reviewConsole ? 'hidden' : ''}" data-review-details="true">
+			          <div class="worktree-inspector-review-details" data-review-details="true">
 			            <div class="worktree-inspector-review-meta">
 			              <div><span style="opacity:0.8;">started:</span> <span id="worktree-inspector-review-started" class="mono">${escapeHtml(reviewStartedAt || '—')}</span></div>
 			              <div><span style="opacity:0.8;">ended:</span> <span id="worktree-inspector-review-ended" class="mono">${escapeHtml(reviewEndedAt || (reviewStartedAt ? 'running…' : '—'))}</span></div>
@@ -9120,12 +9145,14 @@ class ClaudeOrchestrator {
 		        const diffPanelEl = bodyEl.querySelector('[data-rc-panel="diff"]');
 
 		        const updateGrid = () => {
-		          const visible = [terminalsPanelEl, filesPanelEl, commitsPanelEl, diffPanelEl]
+		          const visible = [terminalsPanelEl, commitsPanelEl, diffPanelEl]
 		            .filter(Boolean)
 		            .filter(el => !el.classList.contains('hidden')).length;
+		          const terminalsHidden = terminalsPanelEl?.classList.contains('hidden');
 		          if (gridEl) {
 		            gridEl.classList.toggle('hidden', visible === 0);
 		            gridEl.classList.toggle('one-column', visible === 1);
+		            gridEl.classList.toggle('terminals-hidden', terminalsHidden);
 		          }
 		          if (emptyEl) emptyEl.classList.toggle('hidden', visible !== 0);
 		        };
@@ -9383,6 +9410,9 @@ class ClaudeOrchestrator {
 	      bodyEl.querySelector('[data-pr-url]')?.addEventListener('click', (e) => {
 	        const url = e.target?.dataset?.prUrl;
 	        if (url) this.openPRLink(url);
+	      });
+	      bodyEl.querySelector('[data-close-inspector]')?.addEventListener('click', () => {
+	        this.closeWorktreeInspector();
 	      });
 	      bodyEl.querySelector('[data-ticket-open]')?.addEventListener('click', (e) => {
 	        const url = e.target?.dataset?.ticketOpen;
@@ -11375,6 +11405,9 @@ class ClaudeOrchestrator {
 		      this.reviewConsoleHotkeysCleanup = () => {
 		        document.removeEventListener('keydown', onReviewHotkey, true);
 		      };
+		      bodyEl.querySelector('[data-close-inspector]')?.addEventListener('click', () => {
+		        this.closeWorktreeInspector();
+		      });
 	    } catch (err) {
       bodyEl.innerHTML = `
         <div style="opacity:0.9; margin-bottom:10px;">Failed to load PR details.</div>
