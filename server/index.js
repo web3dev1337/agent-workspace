@@ -2961,11 +2961,22 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
       if (ok) io.emit('session-closed', { sessionId });
     });
 
+    const removedSessionIdSet = new Set(
+      uniqueSessionIds
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)
+    );
+
     // Sync thread records tied to this worktree so they don't keep stale session references.
     let updatedThreadCount = 0;
     try {
       const candidateThreads = threadService.list({ workspaceId, includeArchived: true });
       for (const thread of candidateThreads) {
+        const threadSessionIds = Array.isArray(thread?.sessionIds)
+          ? thread.sessionIds.map((sid) => String(sid || '').trim()).filter(Boolean)
+          : [];
+        const sessionMatched = threadSessionIds.some((sid) => removedSessionIdSet.has(sid));
+
         const threadWorktree = String(thread?.worktreeId || '').trim().toLowerCase();
         const threadRepo = String(thread?.repositoryName || '').trim().toLowerCase();
         const worktreeMatched = !!threadWorktree && (
@@ -2973,7 +2984,7 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
           || threadWorktree === parsedWorktree.key
         );
         const repoMatched = !parsedWorktree.repositoryName || !threadRepo || threadRepo === parsedWorktree.repositoryName;
-        if (!worktreeMatched || !repoMatched) continue;
+        if (!sessionMatched && (!worktreeMatched || !repoMatched)) continue;
         const nextPatch = (String(thread?.status || '').trim().toLowerCase() === 'archived')
           ? { sessionIds: [] }
           : { status: 'closed', sessionIds: [] };
@@ -3008,6 +3019,7 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
       success: true,
       removedTerminals: removedCount,
       closedSessions: uniqueSessionIds.length,
+      removedSessionIds: uniqueSessionIds,
       updatedThreads: updatedThreadCount,
       lifecycle: {
         action: 'remove-worktree',
@@ -3696,7 +3708,31 @@ app.get('/api/recovery/:workspaceId', async (req, res) => {
       allowSessionIds: allowSessionIds.length ? allowSessionIds : null,
       pruneMissing: true
     });
-    res.json(recoveryInfo);
+
+    let configuredWorktreeCount = 0;
+    if (workspace) {
+      if (Array.isArray(workspace.terminals)) {
+        const keys = new Set();
+        workspace.terminals
+          .filter((t) => t && typeof t === 'object' && t.visible !== false)
+          .forEach((t) => {
+            const repo = String(t?.repository?.name || '').trim().toLowerCase();
+            const wt = String(t?.worktree || '').trim().toLowerCase();
+            const key = repo && wt ? `${repo}-${wt}` : wt || String(t?.id || '').trim().toLowerCase();
+            if (key) keys.add(key);
+          });
+        configuredWorktreeCount = keys.size;
+      } else {
+        const pairs = Number(workspace?.terminals?.pairs || 0);
+        if (Number.isFinite(pairs) && pairs > 0) configuredWorktreeCount = pairs;
+      }
+    }
+
+    res.json({
+      ...recoveryInfo,
+      configuredTerminalCount: allowSessionIds.length,
+      configuredWorktreeCount
+    });
   } catch (error) {
     logger.error('Failed to get recovery info', { error: error.message });
     res.status(500).json({ error: error.message });
