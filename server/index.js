@@ -91,7 +91,7 @@ const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
 const sessionRecoveryService = require('./sessionRecoveryService');
-const { collectDiagnostics, collectFirstRunDiagnostics, runFirstRunRepair } = require('./diagnosticsService');
+const { collectDiagnostics, collectFirstRunDiagnostics, runFirstRunRepair, runFirstRunSafeRepairs } = require('./diagnosticsService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { PagerService } = require('./pagerService');
@@ -2855,6 +2855,19 @@ app.post('/api/diagnostics/first-run/repair', requirePolicyAction('write'), expr
       action: String(req.body?.action || '').trim() || null
     });
     res.status(400).json({ ok: false, error: String(error?.message || 'Failed to run repair') });
+  }
+});
+
+app.post('/api/diagnostics/first-run/repair-safe', requirePolicyAction('write'), async (req, res) => {
+  try {
+    const result = await runFirstRunSafeRepairs();
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    logger.error('Failed to run first-run safe repairs', {
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ ok: false, error: String(error?.message || 'Failed to run safe repairs') });
   }
 });
 

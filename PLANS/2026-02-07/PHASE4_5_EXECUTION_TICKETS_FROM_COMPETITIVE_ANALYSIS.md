@@ -24,7 +24,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
 ## P0 Tickets (critical)
 
 ### P0-01: One-command onboarding diagnostics and auto-fix
-- Status: Ready
+- Status: Done
 - Size: M
 - Why: competitors win on time-to-first-value
 - Deliverables:
@@ -35,6 +35,10 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - fresh machine can run diagnostics in <10s
   - all blocking prerequisites reported in one view
   - at least 3 high-frequency setup failures have one-click repair
+- Shipped in PR #TBD:
+  - added `POST /api/diagnostics/first-run/repair-safe` for bulk safe repairs from first-run diagnostics.
+  - added Settings → Diagnostics button `Auto-fix safe issues` wired to run safe repairs and refresh check state.
+  - added unit coverage for bulk safe repair flow (`runFirstRunSafeRepairs`).
 
 ### P0-02: Lifecycle consistency for workspace/worktree/session close/remove
 - Status: Ready
