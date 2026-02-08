@@ -219,6 +219,7 @@ Acceptance:
 ## Milestone M4 — Automation UX and governance
 
 ### PR M4.1 — Cron/workflow templates
+Status: Done
 Scope:
 - Extend scheduler UI with templates:
   - review route sweep
@@ -234,6 +235,10 @@ Files (expected):
 
 Acceptance:
 - Non-expert users can create useful automations without raw JSON editing.
+- Shipped in PR #662:
+  - expanded scheduler template catalog with `stuck-session-nudge` and `daily-health-digest`.
+  - preserved existing dry-run preview flow (`POST /api/scheduler/jobs/from-template/preview`) and status panel recent-run visibility.
+  - validated via `npm run test:unit`, `npm run test:e2e:safe`, and `npm run check:command-surface`.
 
 ---
 
@@ -250,7 +255,7 @@ Files (expected):
 
 Acceptance:
 - Teams can share workflow defaults without leaking private local data.
-- Shipped in PR #TBD:
+- Shipped in PR #661:
   - added `server/configPromoterService.js` to promote/attach/resolve team service-stack baselines with shared/encrypted storage and optional signature verification.
   - added `server/encryptedStore.js` reusable AES-256-GCM JSON encrypt/decrypt helpers for shared config artifacts.
   - added team baseline APIs:
@@ -265,6 +270,7 @@ Acceptance:
 ---
 
 ### PR M4.3 — Pager/Pollcat automation service
+Status: Done
 Scope:
 - Add first-class pager jobs that can nudge stalled agent sessions (`next` + Enter).
 - Implement profile model:
@@ -295,6 +301,11 @@ Acceptance:
 - Pager can run with custom per-job instructions.
 - Pager sends input using the required two-step pattern (`next`, then `\\r`).
 - Pager terminates cleanly on done condition or explicit stop command.
+- Shipped in PR #662:
+  - added global pager defaults under `global.pager` with UI save action and runtime profile merge.
+  - added per-job custom instruction mode (`append`/`replace`), workspace targeting, and tier-filtered target selection.
+  - extended pager status snapshots with filtered-target and tier metadata.
+  - validated via `tests/unit/pagerService.test.js` and full suite checks.
 
 ## 5) Cross-platform release gates (each merge)
 
