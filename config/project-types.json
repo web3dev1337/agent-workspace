@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "website",
+      "name": "Website",
+      "description": "Frontend and full-stack web projects",
+      "basePath": "websites",
+      "keywords": ["website", "web app", "frontend", "landing page", "portfolio", "blog"],
+      "defaultTemplateId": "website-starter",
+      "defaultRepositoryType": "website",
+      "defaultLaunchSettingsType": "website",
+      "buttonProfileId": "website",
+      "frameworkIds": ["web-generic"]
+    },
+    {
+      "id": "game",
+      "name": "Game",
+      "description": "Game projects across engines and frameworks",
+      "basePath": "games",
+      "keywords": ["game", "hytopia", "unity", "godot", "gaming", "monogame"],
+      "defaultTemplateId": "hytopia-game-starter",
+      "defaultRepositoryType": "hytopia-game",
+      "defaultLaunchSettingsType": "hytopia-game",
+      "buttonProfileId": "hytopia-game",
+      "frameworkIds": ["hytopia", "monogame"]
+    },
+    {
+      "id": "tool",
+      "name": "Tool",
+      "description": "Developer tools, automations, and CLIs",
+      "basePath": "tools",
+      "keywords": ["tool", "cli", "utility", "automation", "script"],
+      "defaultTemplateId": "node-typescript-tool",
+      "defaultRepositoryType": "tool-project",
+      "defaultLaunchSettingsType": "website",
+      "buttonProfileId": "tool",
+      "frameworkIds": ["nodejs"]
+    },
+    {
+      "id": "api",
+      "name": "API",
+      "description": "Backend APIs and services",
+      "basePath": "apis",
+      "keywords": ["api", "backend", "server", "service", "rest", "graphql"],
+      "defaultTemplateId": "node-typescript-tool",
+      "defaultRepositoryType": "tool-project",
+      "defaultLaunchSettingsType": "website",
+      "buttonProfileId": "tool",
+      "frameworkIds": ["nodejs"]
+    },
+    {
+      "id": "library",
+      "name": "Library",
+      "description": "Reusable packages and SDKs",
+      "basePath": "libraries",
+      "keywords": ["library", "package", "module", "npm", "sdk"],
+      "defaultTemplateId": "node-typescript-tool",
+      "defaultRepositoryType": "tool-project",
+      "defaultLaunchSettingsType": "website",
+      "buttonProfileId": "tool",
+      "frameworkIds": ["nodejs"]
+    },
+    {
+      "id": "writing",
+      "name": "Writing",
+      "description": "Documentation and writing work",
+      "basePath": "writing",
+      "keywords": ["writing", "docs", "book", "article", "documentation"],
+      "defaultTemplateId": "generic-empty",
+      "defaultRepositoryType": "writing",
+      "defaultLaunchSettingsType": "writing",
+      "buttonProfileId": "writing",
+      "frameworkIds": ["generic"]
+    },
+    {
+      "id": "other",
+      "name": "Other",
+      "description": "Miscellaneous projects",
+      "basePath": "projects",
+      "keywords": [],
+      "defaultTemplateId": "generic-empty",
+      "defaultRepositoryType": "generic",
+      "defaultLaunchSettingsType": "website",
+      "buttonProfileId": "generic",
+      "frameworkIds": ["generic"]
+    }
+  ],
+  "frameworks": [
+    {
+      "id": "web-generic",
+      "name": "Web",
+      "description": "Generic web stack",
+      "categoryId": "website",
+      "defaultTemplateId": "website-starter",
+      "templateIds": ["website-starter", "node-typescript-tool"]
+    },
+    {
+      "id": "hytopia",
+      "name": "Hytopia",
+      "description": "Hytopia game development",
+      "categoryId": "game",
+      "defaultTemplateId": "hytopia-game-starter",
+      "templateIds": ["hytopia-game-starter"]
+    },
+    {
+      "id": "monogame",
+      "name": "MonoGame",
+      "description": "MonoGame projects",
+      "categoryId": "game",
+      "defaultTemplateId": "generic-empty",
+      "templateIds": ["generic-empty"]
+    },
+    {
+      "id": "nodejs",
+      "name": "Node.js",
+      "description": "Node.js tooling and services",
+      "categoryId": "tool",
+      "defaultTemplateId": "node-typescript-tool",
+      "templateIds": ["node-typescript-tool", "generic-empty"]
+    },
+    {
+      "id": "generic",
+      "name": "Generic",
+      "description": "Generic projects",
+      "categoryId": "other",
+      "defaultTemplateId": "generic-empty",
+      "templateIds": ["generic-empty"]
+    }
+  ],
+  "templates": [
+    {
+      "id": "website-starter",
+      "name": "Website Starter",
+      "description": "Simple website scaffold",
+      "frameworkId": "web-generic",
+      "scaffoldPath": "templates/scaffolds/website",
+      "defaultRepositoryType": "website",
+      "defaultLaunchSettingsType": "website",
+      "buttonProfileId": "website"
+    },
+    {
+      "id": "hytopia-game-starter",
+      "name": "Hytopia Starter",
+      "description": "Hytopia game scaffold",
+      "frameworkId": "hytopia",
+      "scaffoldPath": "templates/scaffolds/hytopia-game",
+      "defaultRepositoryType": "hytopia-game",
+      "defaultLaunchSettingsType": "hytopia-game",
+      "buttonProfileId": "hytopia-game"
+    },
+    {
+      "id": "node-typescript-tool",
+      "name": "Node TypeScript",
+      "description": "Node.js + TypeScript starter",
+      "frameworkId": "nodejs",
+      "scaffoldPath": "templates/scaffolds/cli-tool",
+      "defaultRepositoryType": "tool-project",
+      "defaultLaunchSettingsType": "website",
+      "buttonProfileId": "tool"
+    },
+    {
+      "id": "generic-empty",
+      "name": "Empty Project",
+      "description": "Minimal scaffold",
+      "frameworkId": "generic",
+      "scaffoldPath": "templates/scaffolds/generic",
+      "defaultRepositoryType": "generic",
+      "defaultLaunchSettingsType": "writing",
+      "buttonProfileId": "generic"
+    }
+  ]
+}
