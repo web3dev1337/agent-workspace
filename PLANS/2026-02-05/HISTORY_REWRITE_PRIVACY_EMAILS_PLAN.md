@@ -83,6 +83,16 @@ Non-destructive prep helper now available:
   - Optional auto-install attempt:
     - `npm run setup:history-rewrite-tools -- --apply`
   - Supports `--only git-filter-repo` / `--only gitleaks` when you need one specific dependency.
+- One-command prep pipeline:
+  - `npm run prep:history-rewrite:pipeline`
+  - Optional strict maintenance-window gate in one run:
+    - `npm run prep:history-rewrite:pipeline -- --strict`
+  - Optional auto-tool bootstrap attempt:
+    - `npm run prep:history-rewrite:pipeline -- --apply-tools`
+  - Pipeline runs:
+    - dependency bootstrap check
+    - workkit generation
+    - readiness preflight check
 - Full private execution prep workkit:
   - `npm run prep:history-rewrite`
   - Optional custom output directory:
@@ -182,3 +192,4 @@ Status notes (2026-02-08):
 - Added `scripts/generate-history-rewrite-workkit.js` and `npm run prep:history-rewrite` to produce a private rewrite runbook + command kit for a controlled maintenance-window execution.
 - Added `scripts/check-history-rewrite-readiness.js` and `npm run check:history-rewrite-readiness` to enforce a non-destructive preflight gate before any rewrite maintenance window.
 - Added `scripts/setup-history-rewrite-tools.js` and `npm run setup:history-rewrite-tools` for cross-platform dependency bootstrap guidance (`git-filter-repo`, `gitleaks`).
+- Added `scripts/run-history-rewrite-prep.js` and `npm run prep:history-rewrite:pipeline` for one-command non-destructive prep orchestration.
