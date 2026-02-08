@@ -5520,6 +5520,23 @@ app.post('/api/scheduler/jobs/from-template', express.json(), async (req, res) =
   }
 });
 
+app.post('/api/scheduler/jobs/from-template/preview', express.json(), async (req, res) => {
+  try {
+    const templateId = String(req.body?.templateId || '').trim();
+    if (!templateId) {
+      return res.status(400).json({ ok: false, error: 'templateId is required' });
+    }
+    const options = (req.body?.options && typeof req.body.options === 'object') ? req.body.options : {};
+    const result = await schedulerService.previewScheduleFromTemplate(templateId, options);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    const message = String(error?.message || error);
+    const status = message.toLowerCase().includes('unknown scheduler template') ? 404 : 500;
+    logger.error('Failed to preview scheduler template job', { error: message, stack: error.stack, status });
+    res.status(status).json({ ok: false, error: 'Failed to preview scheduler template job', message });
+  }
+});
+
 app.get('/api/pager/jobs', (req, res) => {
   try {
     const id = String(req.query.id || '').trim();
