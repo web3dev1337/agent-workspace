@@ -610,44 +610,7 @@ class ClaudeOrchestrator {
         } catch {
           // ignore
         }
-        // Remove session from local state
-        this.sessions.delete(sessionId);
-        this.visibleTerminals.delete(sessionId);
-
-        // Remove terminal wrapper from UI (scope to the active grid to avoid cross-tab collisions)
-        const grid = this.getTerminalGrid();
-        const wrapperId = this.getSessionDomId('wrapper', sessionId);
-        let wrapper = document.getElementById(wrapperId);
-        if (wrapper && grid && !grid.contains(wrapper)) wrapper = null;
-        if (wrapper) {
-          console.log(`Removing terminal wrapper from DOM: ${sessionId}`);
-          wrapper.remove();
-        } else {
-          // Fallback for older DOM shapes
-          const terminalId = this.getSessionDomId('terminal', sessionId);
-          let terminalElement = document.getElementById(terminalId);
-          if (terminalElement && grid && !grid.contains(terminalElement)) terminalElement = null;
-          if (terminalElement) {
-            console.log(`Removing terminal element from DOM: ${sessionId}`);
-            terminalElement.remove();
-          }
-        }
-
-        // Remove from terminal manager
-        if (this.terminalManager) {
-          this.terminalManager.destroyTerminal(sessionId);
-        }
-
-        // Rebuild sidebar to reflect changes
-        this.buildSidebar();
-        this.updateTerminalGrid();
-
-        // Reflow the grid after removing terminal
-        if (this.terminalManager && this.terminalManager.fitAllTerminals) {
-          setTimeout(() => {
-            this.terminalManager.fitAllTerminals();
-          }, 100);
-        }
+        this.removeSessionFromClientState(sessionId, { rebuildUi: true });
       });
 
       // ============ COMMANDER UI CONTROL ============
@@ -3396,9 +3359,10 @@ class ClaudeOrchestrator {
       const sidebarStatus = worktree.claude?.status || worktree.server?.status || 'idle';
 
       const agentId = worktree.claude?.agent || worktree.server?.agent || null;
+      const noAgentRunning = sidebarStatus === 'idle' && !agentId;
       const statusTitleParts = [
-        `Status: ${sidebarStatus}`,
-        agentId ? `Agent: ${agentId}` : null
+        `Status: ${noAgentRunning ? 'idle (no AI running)' : sidebarStatus}`,
+        agentId ? `Agent: ${agentId}` : (noAgentRunning ? 'Agent: none' : null)
       ].filter(Boolean);
       const statusTitle = statusTitleParts.join(' • ');
 
@@ -12758,13 +12722,31 @@ class ClaudeOrchestrator {
 	            .catch(() => {});
 	        });
 
-	        // Update local workspace reference with the updated configuration
-		        if (result.updatedWorkspace && this.currentWorkspace?.id === wsId) {
-		          this.currentWorkspace = result.updatedWorkspace;
-		        }
+	        // Update workspace references with the updated configuration.
+	        if (result.updatedWorkspace) {
+	          if (this.currentWorkspace?.id === wsId) {
+	            this.currentWorkspace = result.updatedWorkspace;
+	          }
+	          if (this.tabManager?.tabs && this.tabManager.tabs instanceof Map) {
+	            for (const [, tab] of this.tabManager.tabs) {
+	              if (tab?.workspaceId === wsId) {
+	                tab.workspace = result.updatedWorkspace;
+	              }
+	            }
+	          }
+	        }
 
-        // Rebuild sidebar to reflect removal (without clearing terminal content)
-        this.buildSidebar();
+	        const removedSessionIds = Array.isArray(result?.removedSessionIds)
+	          ? result.removedSessionIds.map((sid) => String(sid || '').trim()).filter(Boolean)
+	          : [];
+	        removedSessionIds.forEach((sid) => this.removeSessionFromClientState(sid, { rebuildUi: false }));
+
+	        // Rebuild once after batch removals.
+	        this.buildSidebar();
+	        this.updateTerminalGrid();
+	        if (this.terminalManager?.fitAllTerminals) {
+	          setTimeout(() => this.terminalManager.fitAllTerminals(), 100);
+	        }
       } else {
         const error = await response.text();
         this.showError(`Failed to remove worktree: ${error}`);
@@ -12836,6 +12818,95 @@ class ClaudeOrchestrator {
 	    });
 
 	    return ids;
+	  }
+
+	  removeSessionFromAllTabStates(sessionId) {
+	    const sid = String(sessionId || '').trim();
+	    if (!sid || !this.tabManager?.tabs || !(this.tabManager.tabs instanceof Map)) return;
+
+	    const wrapperId = this.getSessionDomId('wrapper', sid);
+	    const terminalId = this.getSessionDomId('terminal', sid);
+
+	    for (const [, tab] of this.tabManager.tabs) {
+	      if (!tab) continue;
+	      tab.sessions?.delete?.(sid);
+	      tab.uiState?.visibleTerminals?.delete?.(sid);
+	      tab.uiState?.sessionActivity?.delete?.(sid);
+	      tab.uiState?.githubLinks?.delete?.(sid);
+	      tab.uiState?.githubLinkLogs?.delete?.(sid);
+	      tab.uiState?.serverStatuses?.delete?.(sid);
+	      tab.uiState?.serverPorts?.delete?.(sid);
+	      tab.uiState?.dismissedStartupUI?.delete?.(sid);
+	      tab.uiState?.sessionAgentPreferences?.delete?.(sid);
+	      tab.uiState?.autoStartApplied?.delete?.(sid);
+	      tab.uiState?.worktreeConfigs?.delete?.(sid);
+
+	      if (tab.terminals?.has?.(sid)) {
+	        const termData = tab.terminals.get(sid);
+	        if (tab.id !== this.currentTabId) {
+	          try { termData?.xtermInstance?.dispose?.(); } catch {}
+	        }
+	        tab.terminals.delete(sid);
+	      }
+
+	      const container = tab.containerElement || null;
+	      if (container) {
+	        let wrapper = document.getElementById(wrapperId);
+	        if (wrapper && !container.contains(wrapper)) wrapper = null;
+	        if (wrapper) wrapper.remove();
+
+	        let terminalEl = document.getElementById(terminalId);
+	        if (terminalEl && !container.contains(terminalEl)) terminalEl = null;
+	        if (terminalEl) terminalEl.remove();
+	      }
+	    }
+	  }
+
+	  removeSessionFromClientState(sessionId, { rebuildUi = true } = {}) {
+	    const sid = String(sessionId || '').trim();
+	    if (!sid) return;
+
+	    this.removeSessionFromAllTabStates(sid);
+
+	    this.sessions.delete(sid);
+	    this.visibleTerminals.delete(sid);
+	    this.sessionActivity.delete(sid);
+	    this.githubLinks.delete(sid);
+	    this.githubLinkLogs.delete(sid);
+	    this.serverStatuses.delete(sid);
+	    this.serverPorts.delete(sid);
+	    this.dismissedStartupUI.delete(sid);
+	    this.sessionAgentPreferences.delete(sid);
+	    this.autoStartApplied.delete(sid);
+	    this.worktreeConfigs.delete(sid);
+
+	    const grid = this.getTerminalGrid();
+	    const wrapperId = this.getSessionDomId('wrapper', sid);
+	    let wrapper = document.getElementById(wrapperId);
+	    if (wrapper && grid && !grid.contains(wrapper)) wrapper = null;
+	    if (wrapper) {
+	      wrapper.remove();
+	    } else {
+	      const terminalId = this.getSessionDomId('terminal', sid);
+	      let terminalElement = document.getElementById(terminalId);
+	      if (terminalElement && grid && !grid.contains(terminalElement)) terminalElement = null;
+	      if (terminalElement) terminalElement.remove();
+	    }
+
+	    if (this.terminalManager) {
+	      this.terminalManager.destroyTerminal(sid);
+	    }
+
+	    if (!rebuildUi) return;
+
+	    this.buildSidebar();
+	    this.updateTerminalGrid();
+
+	    if (this.terminalManager && this.terminalManager.fitAllTerminals) {
+	      setTimeout(() => {
+	        this.terminalManager.fitAllTerminals();
+	      }, 100);
+	    }
 	  }
 
 	  /**

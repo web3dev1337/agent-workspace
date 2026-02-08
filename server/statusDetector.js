@@ -13,11 +13,12 @@ const logger = winston.createLogger({
 });
 
 // Configuration constants
-// Keep "busy" for longer silence windows (Claude can think silently for minutes).
-// This primarily reduces green/orange/grey flicker during long tool runs.
-const ASSUME_BUSY_SINCE_OUTPUT_MS = 180000; // 3 minutes
-// When we have strong evidence a Claude session is active, use a longer quiet window.
-const ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS = 600000; // 10 minutes
+// Keep "busy" briefly after output to avoid status flicker.
+// SessionManager now re-evaluates status on an interval, so these windows
+// can stay short enough to avoid "busy forever" false positives.
+const ASSUME_BUSY_SINCE_OUTPUT_MS = 30000; // 30s
+const ASSUME_BUSY_SINCE_OUTPUT_AGENT_MS = 90000; // 90s
+const ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS = 120000; // 2m
 
 class StatusDetector {
   constructor() {
@@ -190,16 +191,23 @@ class StatusDetector {
       }
     }
 
-    // 6. Check if last line looks like a shell/input prompt (not Claude waiting prompt)
-    // Only classify as idle when Claude is NOT likely active.
+    // 6. Shell prompt means no active AI is currently running in this terminal.
+    // If we observe an explicit shell prompt, clear claudeLikely so stale
+    // Claude activity doesn't keep the session marked busy.
+    if (this.looksLikeShellPrompt(trimmedLastNonEmptyLine)) {
+      state.claudeLikely = false;
+      return 'idle';
+    }
+
+    // 7. Generic prompt fallback (only when Claude is not likely active).
     if (!state.claudeLikely && this.looksLikePrompt(trimmedLastNonEmptyLine)) {
       return 'idle';
     }
 
-    // 7. Default: assume busy for a while after the last output (Claude can think silently)
-    const isAgentTerminal = String(sessionId || '').includes('-claude');
+    // 8. Default: assume busy for a short quiet window after output.
+    const isAgentTerminal = /-(claude|codex)$/.test(String(sessionId || ''));
     const assumeBusyWindowMs = (state.claudeLikely || isAgentTerminal)
-      ? ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS
+      ? (state.claudeLikely ? ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS : ASSUME_BUSY_SINCE_OUTPUT_AGENT_MS)
       : ASSUME_BUSY_SINCE_OUTPUT_MS;
     if (timeSinceOutput < assumeBusyWindowMs && buffer.length > 100) {
       return 'busy';
@@ -221,6 +229,20 @@ class StatusDetector {
     ];
 
     return promptPatterns.some(pattern => pattern.test(line));
+  }
+
+  looksLikeShellPrompt(line) {
+    const shellPromptPatterns = [
+      /^\$$/,
+      /^#$/,
+      /^PS .*>$/i,            // PowerShell prompt
+      /^\w+@[\w.-]+:.*[\$#]$/, // user@host:path$
+      /^\(.*\)\s*[\$#]$/,     // (venv) $
+      /^.*[\/~].*[\$#]$/,     // path-based prompts ending in $/#
+      /^bash-[\d.]+\$$/i
+    ];
+
+    return shellPromptPatterns.some(pattern => pattern.test(line));
   }
 
   // Reset state (useful when session changes)
