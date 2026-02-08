@@ -10,7 +10,8 @@ function parseArgs(argv) {
     scope: 'all', // all | recent | added
     sinceDays: 7,
     out: null,
-    format: null // markdown | json
+    format: null, // markdown | json
+    actionableOnly: false
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -57,6 +58,10 @@ function parseArgs(argv) {
     }
     if (a === '--json') {
       args.format = 'json';
+      continue;
+    }
+    if (a === '--actionable-only') {
+      args.actionableOnly = true;
       continue;
     }
   }
@@ -168,8 +173,15 @@ function scanMarkdown(filePath, content) {
     /\/CHECKLIST\.md$/i.test(filePath) ||
     /\/CHECKLISTS?\//i.test(filePath) ||
     /\/OPTIMAL_ORCHESTRATOR_PROCESS\.md$/i.test(filePath);
+  const isGeneratedScan =
+    /\/REMAINING_WORK_.*(SCAN|FULL)\.md$/i.test(filePath) ||
+    /\/REMAINING_MARKDOWNS_.*SCAN\.md$/i.test(filePath) ||
+    /\/REMAINING_WORK_FROM_.*\.md$/i.test(filePath);
   const isPlanish = /^PLANS\//.test(filePath);
   const isLikelyTemplate = isTemplate || (/COWORKER_SETUP_GUIDE\.md$/i.test(filePath) && isPlanish);
+  let classification = 'doc/backlog';
+  if (isLikelyTemplate) classification = 'template/guide';
+  if (isGeneratedScan) classification = 'generated-scan';
 
   return {
     filePath,
@@ -177,7 +189,7 @@ function scanMarkdown(filePath, content) {
     todoFixme,
     remainingSections,
     remainingCount: unchecked.length + todoFixme.length + remainingSections.reduce((acc, s) => acc + (s?.items?.length || 0), 0),
-    classification: isLikelyTemplate ? 'template/guide' : 'doc/backlog'
+    classification
   };
 }
 
@@ -204,12 +216,21 @@ function buildSummary(files) {
   };
 }
 
-function renderJsonReport({ scope, sinceDays, files }) {
+function filterScansForActionable(files) {
+  return (Array.isArray(files) ? files : []).filter((scan) =>
+    scan &&
+    scan.classification === 'doc/backlog' &&
+    Number(scan.remainingCount || 0) > 0
+  );
+}
+
+function renderJsonReport({ scope, sinceDays, files, actionableOnly = false }) {
   const summary = buildSummary(files);
   return JSON.stringify({
     generatedAt: new Date().toISOString(),
     scope,
     sinceDays: Number(sinceDays),
+    actionableOnly: actionableOnly === true,
     summary,
     filesWithRemaining: files
       .filter(f => f.remainingCount > 0)
@@ -221,7 +242,7 @@ function renderJsonReport({ scope, sinceDays, files }) {
   }, null, 2);
 }
 
-function renderReport({ scope, sinceDays, files }) {
+function renderReport({ scope, sinceDays, files, actionableOnly = false }) {
   const stamp = new Date().toISOString().slice(0, 10);
 
   const withRemaining = files.filter(f => f.remainingCount > 0);
@@ -245,6 +266,10 @@ function renderReport({ scope, sinceDays, files }) {
     lines.push('');
   } else {
     lines.push('Scope: all tracked markdown files (`git ls-files \"*.md\"`).');
+    lines.push('');
+  }
+  if (actionableOnly === true) {
+    lines.push('Actionable filter: enabled (`doc/backlog` files with remaining markers only).');
     lines.push('');
   }
 
@@ -339,11 +364,12 @@ function main() {
       const content = fs.readFileSync(abs, 'utf8');
       return scanMarkdown(filePath, content);
     });
+  const filesForReport = args.actionableOnly ? filterScansForActionable(scans) : scans;
 
   const format = resolveOutputFormat(args, outPath);
   const report = format === 'json'
-    ? renderJsonReport({ scope: args.scope, sinceDays: args.sinceDays, files: scans })
-    : renderReport({ scope: args.scope, sinceDays: args.sinceDays, files: scans });
+    ? renderJsonReport({ scope: args.scope, sinceDays: args.sinceDays, files: filesForReport, actionableOnly: args.actionableOnly })
+    : renderReport({ scope: args.scope, sinceDays: args.sinceDays, files: filesForReport, actionableOnly: args.actionableOnly });
 
   if (outPath) {
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
@@ -364,5 +390,6 @@ module.exports = {
   scanMarkdown,
   renderReport,
   renderJsonReport,
-  resolveOutputFormat
+  resolveOutputFormat,
+  filterScansForActionable
 };
