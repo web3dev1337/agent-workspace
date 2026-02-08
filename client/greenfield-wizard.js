@@ -31,21 +31,37 @@ class GreenfieldWizard {
   }
 
   async loadCategories() {
+    const mapCategory = (category) => ({
+      id: String(category?.id || '').trim(),
+      path: String(category?.basePathResolved || category?.path || category?.basePath || '').trim(),
+      keywords: Array.isArray(category?.keywords) ? category.keywords : []
+    });
+
     try {
-      const response = await fetch(`${this.serverUrl}/api/greenfield/categories`);
+      const taxonomy = await this.orchestrator?.ensureProjectTypeTaxonomy?.();
+      if (taxonomy && Array.isArray(taxonomy.categories) && taxonomy.categories.length) {
+        this.categories = taxonomy.categories.map(mapCategory).filter((item) => item.id);
+        console.log('Loaded categories from project-type taxonomy:', this.categories);
+        return;
+      }
+
+      const response = await fetch(`${this.serverUrl}/api/project-types/categories`);
       if (response.ok) {
-        this.categories = await response.json();
+        const categories = await response.json();
+        this.categories = Array.isArray(categories) ? categories.map(mapCategory).filter((item) => item.id) : [];
         console.log('Loaded categories:', this.categories);
+        return;
       }
     } catch (error) {
       console.error('Failed to load categories:', error);
-      this.categories = [
-        { id: 'website', path: '~/GitHub/websites', keywords: ['website'] },
-        { id: 'game', path: '~/GitHub/games', keywords: ['game'] },
-        { id: 'tool', path: '~/GitHub/tools', keywords: ['tool'] },
-        { id: 'other', path: '~/GitHub/projects', keywords: [] }
-      ];
     }
+
+    this.categories = [
+      { id: 'website', path: '~/GitHub/websites', keywords: ['website'] },
+      { id: 'game', path: '~/GitHub/games', keywords: ['game'] },
+      { id: 'tool', path: '~/GitHub/tools', keywords: ['tool'] },
+      { id: 'other', path: '~/GitHub/projects', keywords: [] }
+    ];
   }
 
   renderWizard() {

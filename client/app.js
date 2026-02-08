@@ -69,6 +69,8 @@ class ClaudeOrchestrator {
     this.workspaceTypes = {};
     this.frameworks = {};
     this.workspaceHierarchy = {};
+    this.projectTypeTaxonomy = null;
+    this.projectTypeTaxonomyLoadedAt = 0;
     this.cascadedConfigs = {};  // Fully merged configs (Global → Category → Framework → Project)
     this.worktreeConfigs = new Map(); // Worktree-specific configs (sessionId → config)
     this.worktreeTags = new Map(); // Worktree path → tags (e.g., readyForReview)
@@ -248,6 +250,38 @@ class ClaudeOrchestrator {
     return String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').trim();
   }
 
+  async ensureProjectTypeTaxonomy({ force = false } = {}) {
+    if (!force && this.projectTypeTaxonomy && Array.isArray(this.projectTypeTaxonomy.categories)) {
+      return this.projectTypeTaxonomy;
+    }
+
+    try {
+      const response = await fetch('/api/project-types');
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(payload?.error || `HTTP ${response.status}`));
+      }
+
+      const categories = Array.isArray(payload?.categories) ? payload.categories : [];
+      const frameworks = Array.isArray(payload?.frameworks) ? payload.frameworks : [];
+      const templates = Array.isArray(payload?.templates) ? payload.templates : [];
+
+      this.projectTypeTaxonomy = {
+        version: Number(payload?.version || 1),
+        gitHubRoot: String(payload?.gitHubRoot || '').trim(),
+        categories,
+        frameworks,
+        templates,
+        meta: (payload?.meta && typeof payload.meta === 'object') ? payload.meta : {}
+      };
+      this.projectTypeTaxonomyLoadedAt = Date.now();
+      return this.projectTypeTaxonomy;
+    } catch (error) {
+      console.warn('Failed to load project-type taxonomy:', error);
+      return this.projectTypeTaxonomy;
+    }
+  }
+
   reserveWorktree(repoPath, worktreeId, { ttlMs } = {}) {
     const repo = this.normalizeWorktreePath(repoPath);
     const id = String(worktreeId || '').trim();
@@ -325,7 +359,8 @@ class ClaudeOrchestrator {
       // Initialize Greenfield wizard for new project creation
       if (typeof GreenfieldWizard !== 'undefined') {
         this.greenfieldWizard = new GreenfieldWizard(this);
-        document.getElementById('greenfield-btn')?.addEventListener('click', () => {
+        document.getElementById('greenfield-btn')?.addEventListener('click', async () => {
+          await this.ensureProjectTypeTaxonomy();
           this.greenfieldWizard.show();
         });
         console.log('Greenfield wizard initialized');
@@ -433,7 +468,8 @@ class ClaudeOrchestrator {
 	      this.installAuthFetchShim();
 	      
 	      // Connect to server
-	      await this.connectToServer();
+      await this.connectToServer();
+      await this.ensureProjectTypeTaxonomy();
 
       // Hook panels that depend on socket events
       this.activityFeedPanel?.onSocketConnected?.(this.socket);
@@ -5241,7 +5277,9 @@ class ClaudeOrchestrator {
 
       case 'open-greenfield':
         if (this.greenfieldWizard) {
-          this.greenfieldWizard.show();
+          this.ensureProjectTypeTaxonomy().finally(() => {
+            this.greenfieldWizard.show();
+          });
         }
         break;
 

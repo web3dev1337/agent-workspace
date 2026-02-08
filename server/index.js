@@ -56,6 +56,7 @@ const { WorktreeHelper } = require('./worktreeHelper');
 const AgentManager = require('./agentManager');
 const { PortRegistry } = require('./portRegistry');
 const { GreenfieldService } = require('./greenfieldService');
+const { ProjectTypeService } = require('./projectTypeService');
 const { ContinuityService } = require('./continuityService');
 const { QuickLinksService } = require('./quickLinksService');
 const { ProductLauncherService } = require('./productLauncherService');
@@ -255,8 +256,10 @@ const notificationService = new NotificationService(io);
 const worktreeHelper = new WorktreeHelper();
 const portRegistry = PortRegistry.getInstance();
 const greenfieldService = GreenfieldService.getInstance();
+const projectTypeService = ProjectTypeService.getInstance({ logger });
 greenfieldService.setSessionManager(sessionManager);
 greenfieldService.setIO(io);
+greenfieldService.setProjectTypeService(projectTypeService);
 const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
 const activityFeed = ActivityFeedService.getInstance();
@@ -1190,6 +1193,45 @@ app.get('/api/workspace-types', (req, res) => {
   } catch (error) {
     logger.error('Failed to get workspace types', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get workspace types' });
+  }
+});
+
+app.get('/api/project-types', (req, res) => {
+  try {
+    res.json(projectTypeService.getTaxonomy());
+  } catch (error) {
+    logger.error('Failed to get project-types taxonomy', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get project-types taxonomy' });
+  }
+});
+
+app.get('/api/project-types/categories', (req, res) => {
+  try {
+    res.json(projectTypeService.getCategories());
+  } catch (error) {
+    logger.error('Failed to get project-type categories', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get project-type categories' });
+  }
+});
+
+app.get('/api/project-types/frameworks', (req, res) => {
+  try {
+    const categoryId = String(req.query.categoryId || '').trim();
+    res.json(projectTypeService.getFrameworks({ categoryId }));
+  } catch (error) {
+    logger.error('Failed to get project-type frameworks', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get project-type frameworks' });
+  }
+});
+
+app.get('/api/project-types/templates', (req, res) => {
+  try {
+    const categoryId = String(req.query.categoryId || '').trim();
+    const frameworkId = String(req.query.frameworkId || '').trim();
+    res.json(projectTypeService.getTemplates({ categoryId, frameworkId }));
+  } catch (error) {
+    logger.error('Failed to get project-type templates', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Failed to get project-type templates' });
   }
 });
 
@@ -3988,7 +4030,11 @@ app.post('/api/greenfield/create-full', async (req, res) => {
 
 // Get greenfield categories
 app.get('/api/greenfield/categories', (req, res) => {
-  const categories = greenfieldService.getCategories();
+  const categories = projectTypeService.getCategories().map((cat) => ({
+    id: cat.id,
+    path: cat.basePathResolved || cat.basePath || '',
+    keywords: Array.isArray(cat.keywords) ? cat.keywords : []
+  }));
   res.json(categories);
 });
 
@@ -3998,11 +4044,11 @@ app.post('/api/greenfield/detect-category', (req, res) => {
   if (!description) {
     return res.status(400).json({ error: 'description is required' });
   }
-  const category = greenfieldService.detectCategory(description);
-  const categoryConfig = greenfieldService.categories[category];
+  const category = projectTypeService.detectCategory(description);
+  const categoryConfig = projectTypeService.getCategoryById(category);
   res.json({
     category,
-    path: categoryConfig.path
+    path: categoryConfig?.basePathResolved || categoryConfig?.basePath || ''
   });
 });
 
