@@ -5269,8 +5269,15 @@ class ClaudeOrchestrator {
           break;
         }
 
-        const requestedWorkspace = String(
-          params?.workspace ?? params?.workspaceId ?? params?.workspaceName ?? ''
+        const requestedProject = String(
+          params?.project
+          ?? params?.projectId
+          ?? params?.workspace
+          ?? params?.workspaceId
+          ?? params?.workspaceName
+          ?? params?.repository
+          ?? params?.repo
+          ?? ''
         ).trim();
 
         (async () => {
@@ -5281,23 +5288,23 @@ class ClaudeOrchestrator {
             return;
           }
 
-          if (requestedWorkspace) {
-            const lookup = requestedWorkspace.toLowerCase();
-            const available = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
-            const match = available.find((w) => {
-              const id = String(w?.id || '').trim().toLowerCase();
-              const name = String(w?.name || '').trim().toLowerCase();
-              return id === lookup || name === lookup;
-            }) || available.find((w) => {
-              const id = String(w?.id || '').trim().toLowerCase();
-              const name = String(w?.name || '').trim().toLowerCase();
-              return id.includes(lookup) || name.includes(lookup);
+          if (requestedProject) {
+            const lookup = requestedProject.toLowerCase();
+            const buttons = Array.from(modal.querySelectorAll('[data-project-id]'));
+            const matchButton = buttons.find((btn) => {
+              const id = String(btn.getAttribute('data-project-id') || '').trim().toLowerCase();
+              const label = String(btn.textContent || '').trim().toLowerCase();
+              return id === lookup || label === lookup;
+            }) || buttons.find((btn) => {
+              const id = String(btn.getAttribute('data-project-id') || '').trim().toLowerCase();
+              const label = String(btn.textContent || '').trim().toLowerCase();
+              return id.includes(lookup) || label.includes(lookup);
             });
 
-            if (match?.id) {
-              modal.querySelector(`[data-project-id="${this.cssEscape(match.id)}"]`)?.click?.();
+            if (matchButton) {
+              matchButton.click?.();
             } else {
-              this.showToast?.(`Workspace not found: ${requestedWorkspace}`, 'warning');
+              this.showToast?.(`Project not found: ${requestedProject}`, 'warning');
               return;
             }
           }
@@ -14135,10 +14142,12 @@ class ClaudeOrchestrator {
     return (Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : []).find((workspace) => String(workspace?.id || '') === id) || null;
   }
 
-  async fetchThreadsForWorkspace(workspaceId, { includeArchived = false } = {}) {
-    const id = String(workspaceId || '').trim();
-    if (!id) return [];
-    const query = new URLSearchParams({ workspaceId: id });
+  async fetchThreads({ workspaceId = null, projectId = null, includeArchived = false } = {}) {
+    const query = new URLSearchParams();
+    const ws = String(workspaceId || '').trim();
+    const project = String(projectId || '').trim();
+    if (ws) query.set('workspaceId', ws);
+    if (project) query.set('projectId', project);
     if (includeArchived) query.set('includeArchived', 'true');
     const res = await fetch(`/api/threads?${query.toString()}`);
     const data = await res.json().catch(() => ({}));
@@ -14146,6 +14155,140 @@ class ClaudeOrchestrator {
       throw new Error(String(data?.error || data?.message || `Failed to load threads (${res.status})`));
     }
     return Array.isArray(data?.threads) ? data.threads : [];
+  }
+
+  async fetchThreadsForWorkspace(workspaceId, { includeArchived = false } = {}) {
+    const id = String(workspaceId || '').trim();
+    if (!id) return [];
+    return this.fetchThreads({ workspaceId: id, includeArchived });
+  }
+
+  buildProjectChatsProjectId({ repositoryPath, repositoryName } = {}) {
+    const repoPath = this.normalizeWorktreePath(repositoryPath);
+    if (repoPath) return `repo:${repoPath}`;
+    const repoName = String(repositoryName || '').trim().toLowerCase();
+    if (repoName) return `repo-name:${repoName}`;
+    return '';
+  }
+
+  buildProjectChatsCatalog() {
+    const out = new Map();
+    const workspaces = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
+
+    const ensureProject = ({
+      workspace,
+      repositoryPath,
+      repositoryName,
+      repositoryType = '',
+      githubUrl = ''
+    }) => {
+      const repoPath = this.normalizeWorktreePath(repositoryPath);
+      const repoName = String(repositoryName || '').trim() || (repoPath ? repoPath.split('/').pop() : '');
+      const projectId = this.buildProjectChatsProjectId({ repositoryPath: repoPath, repositoryName: repoName });
+      if (!projectId) return;
+
+      if (!out.has(projectId)) {
+        out.set(projectId, {
+          id: projectId,
+          repositoryPath: repoPath || '',
+          repositoryName: repoName || projectId,
+          repositoryType: String(repositoryType || '').trim() || 'generic',
+          githubUrl: String(githubUrl || '').trim() || '',
+          workspaceIds: new Set(),
+          workspaceNames: new Set()
+        });
+      }
+
+      const project = out.get(projectId);
+      if (workspace?.id) project.workspaceIds.add(String(workspace.id));
+      if (workspace?.name) project.workspaceNames.add(String(workspace.name));
+      if (!project.repositoryType && repositoryType) project.repositoryType = String(repositoryType).trim();
+      if (!project.githubUrl && githubUrl) project.githubUrl = String(githubUrl).trim();
+    };
+
+    for (const workspace of workspaces) {
+      if (!workspace || typeof workspace !== 'object') continue;
+      const fallbackGithubUrl = String(workspace?.repository?.remote || '').trim();
+      if (Array.isArray(workspace.terminals)) {
+        const seenRepoPaths = new Set();
+        for (const terminal of workspace.terminals) {
+          const repoPath = this.normalizeWorktreePath(terminal?.repository?.path);
+          const repoName = String(terminal?.repository?.name || '').trim();
+          const repoType = String(terminal?.repository?.type || '').trim();
+          const dedupeKey = repoPath || repoName.toLowerCase();
+          if (!dedupeKey || seenRepoPaths.has(dedupeKey)) continue;
+          seenRepoPaths.add(dedupeKey);
+          ensureProject({
+            workspace,
+            repositoryPath: repoPath,
+            repositoryName: repoName,
+            repositoryType: repoType,
+            githubUrl: String(terminal?.repository?.remote || fallbackGithubUrl || '').trim()
+          });
+        }
+      } else {
+        const repoPath = this.normalizeWorktreePath(workspace?.repository?.path || '');
+        const repoNameFromPath = repoPath ? repoPath.split('/').pop() : '';
+        ensureProject({
+          workspace,
+          repositoryPath: repoPath,
+          repositoryName: workspace?.repository?.name || repoNameFromPath || workspace?.name,
+          repositoryType: workspace?.repository?.type || workspace?.type,
+          githubUrl: fallbackGithubUrl
+        });
+      }
+    }
+
+    return Array.from(out.values())
+      .map((project) => ({
+        ...project,
+        workspaceIds: Array.from(project.workspaceIds),
+        workspaceNames: Array.from(project.workspaceNames),
+        githubLinked: /github\.com/i.test(String(project.githubUrl || ''))
+      }))
+      .sort((a, b) => String(a.repositoryName || a.id).localeCompare(String(b.repositoryName || b.id)));
+  }
+
+  projectChatsMatchesProject(project, thread) {
+    if (!project || !thread) return false;
+    const threadProjectId = String(thread?.projectId || '').trim();
+    if (threadProjectId && threadProjectId === project.id) return true;
+
+    const threadRepoPath = this.normalizeWorktreePath(thread?.repositoryPath || '');
+    if (threadRepoPath && threadRepoPath === this.normalizeWorktreePath(project.repositoryPath)) return true;
+
+    const threadRepoName = String(thread?.repositoryName || '').trim().toLowerCase();
+    const projectRepoName = String(project?.repositoryName || '').trim().toLowerCase();
+    if (threadRepoName && projectRepoName && threadRepoName === projectRepoName) return true;
+
+    return false;
+  }
+
+  projectChatsReindexThreads(state, allThreads = []) {
+    const projects = Array.isArray(state?.projects) ? state.projects : [];
+    state.threadsByProject = new Map();
+    projects.forEach((project) => state.threadsByProject.set(project.id, []));
+
+    for (const thread of Array.isArray(allThreads) ? allThreads : []) {
+      const match = projects.find((project) => this.projectChatsMatchesProject(project, thread));
+      if (!match) continue;
+      if (!state.threadsByProject.has(match.id)) state.threadsByProject.set(match.id, []);
+      state.threadsByProject.get(match.id).push(thread);
+    }
+  }
+
+  resolveWorkspaceForProjectChatsProject(project) {
+    if (!project) return null;
+    const currentWorkspaceId = String(this.currentWorkspace?.id || '').trim();
+    const workspaceIds = Array.isArray(project.workspaceIds) ? project.workspaceIds.map((id) => String(id || '').trim()).filter(Boolean) : [];
+    if (currentWorkspaceId && workspaceIds.includes(currentWorkspaceId)) {
+      return this.getWorkspaceById(currentWorkspaceId);
+    }
+    for (const workspaceId of workspaceIds) {
+      const ws = this.getWorkspaceById(workspaceId);
+      if (ws) return ws;
+    }
+    return null;
   }
 
   loadProjectChatsThreadPrefs() {
@@ -14192,37 +14335,44 @@ class ClaudeOrchestrator {
     const listEl = modal.querySelector('#projects-chats-projects-list');
     if (!listEl) return;
     const query = String(state?.projectQuery || '').trim().toLowerCase();
-    const rows = (Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [])
-      .filter((workspace) => {
+    const rows = (Array.isArray(state?.projects) ? state.projects : [])
+      .filter((project) => {
         if (!query) return true;
-        const id = String(workspace?.id || '').toLowerCase();
-        const name = String(workspace?.name || '').toLowerCase();
-        return id.includes(query) || name.includes(query);
+        const id = String(project?.id || '').toLowerCase();
+        const name = String(project?.repositoryName || '').toLowerCase();
+        const repoPath = String(project?.repositoryPath || '').toLowerCase();
+        return id.includes(query) || name.includes(query) || repoPath.includes(query);
       });
     if (!rows.length) {
       listEl.innerHTML = '<li class="projects-chats-empty">No matching projects.</li>';
       return;
     }
-    listEl.innerHTML = rows.map((workspace) => {
-      const id = String(workspace?.id || '').trim();
-      const active = id && id === state.selectedWorkspaceId;
-      const label = this.escapeHtml(workspace?.name || id || 'Workspace');
-      const badge = active ? ' • active' : '';
-      return `<li class="projects-chats-project-item"><button type="button" class="projects-chats-project-btn ${active ? 'active' : ''}" data-project-id="${this.escapeHtml(id)}">${label}${badge}</button></li>`;
+    listEl.innerHTML = rows.map((project) => {
+      const id = String(project?.id || '').trim();
+      const active = id && id === state.selectedProjectId;
+      const label = this.escapeHtml(project?.repositoryName || id || 'Project');
+      const scopeBits = [];
+      if (project?.githubLinked) scopeBits.push('github');
+      if (Array.isArray(project?.workspaceIds) && project.workspaceIds.length) {
+        scopeBits.push(`${project.workspaceIds.length} workspace${project.workspaceIds.length === 1 ? '' : 's'}`);
+      }
+      const meta = scopeBits.length ? ` <span class="projects-chats-project-scope">(${this.escapeHtml(scopeBits.join(' • '))})</span>` : '';
+      const badge = active ? ' • selected' : '';
+      return `<li class="projects-chats-project-item"><button type="button" class="projects-chats-project-btn ${active ? 'active' : ''}" data-project-id="${this.escapeHtml(id)}">${label}${meta}${badge}</button></li>`;
     }).join('');
   }
 
   renderProjectChatsThreads(modal, state) {
-    const workspace = this.getWorkspaceById(state.selectedWorkspaceId);
+    const project = state?.projectIndex?.get?.(state.selectedProjectId) || null;
     const titleEl = modal.querySelector('#projects-chats-selected-name');
     const listEl = modal.querySelector('#projects-chats-list');
     if (!titleEl || !listEl) return;
 
-    const selectedName = workspace?.name || state.selectedWorkspaceId || 'No workspace';
+    const selectedName = project?.repositoryName || state.selectedProjectId || 'No project';
     titleEl.textContent = selectedName;
 
-    const rows = Array.isArray(state.threadsByWorkspace.get(state.selectedWorkspaceId))
-      ? state.threadsByWorkspace.get(state.selectedWorkspaceId)
+    const rows = Array.isArray(state.threadsByProject.get(state.selectedProjectId))
+      ? state.threadsByProject.get(state.selectedProjectId)
       : [];
 
     if (!rows.length) {
@@ -14304,30 +14454,57 @@ class ClaudeOrchestrator {
   }
 
   async createThreadFromProjectChats(modal, state) {
-    const workspaceId = String(state.selectedWorkspaceId || '').trim();
-    if (!workspaceId) {
-      this.showToast?.('Select a workspace first', 'warning');
+    const projectId = String(state.selectedProjectId || '').trim();
+    if (!projectId) {
+      this.showToast?.('Select a project first', 'warning');
       return null;
     }
-    const workspace = this.getWorkspaceById(workspaceId);
+    const project = state?.projectIndex?.get?.(projectId) || null;
+    const workspace = this.resolveWorkspaceForProjectChatsProject(project);
     if (!workspace) {
-      this.showToast?.('Workspace not found', 'error');
+      this.showToast?.('No workspace found for selected project', 'error');
       return null;
     }
 
-    const terminal0 = Array.isArray(workspace?.terminals) ? workspace.terminals[0] : null;
-    const repositoryPath = terminal0?.repository?.path || workspace?.repository?.path || '';
-    const repositoryName = terminal0?.repository?.name || workspace?.repository?.name || '';
-    const repositoryType = terminal0?.repository?.type || workspace?.repository?.type || workspace?.type || 'generic';
+    const workspaceId = String(workspace.id || '').trim();
+    const repositoryPath = String(project?.repositoryPath || workspace?.repository?.path || '').trim();
+    const pathName = repositoryPath ? this.normalizeWorktreePath(repositoryPath).split('/').pop() : '';
+    const repositoryName = String(project?.repositoryName || workspace?.repository?.name || pathName || '').trim();
+    const repositoryType = String(project?.repositoryType || workspace?.repository?.type || workspace?.type || 'generic').trim();
+    if (!repositoryPath) {
+      this.showToast?.('Selected project has no repository path configured', 'error');
+      return null;
+    }
+
+    // Noob/simple mode default: if this project already has a worktree in the target
+    // workspace, reuse it for a new chat instead of mutating workspace structure.
+    let reuseWorktreeId = null;
+    if (Array.isArray(workspace?.terminals)) {
+      const match = workspace.terminals.find((terminal) => {
+        const repoPath = this.normalizeWorktreePath(terminal?.repository?.path || '');
+        const projectPath = this.normalizeWorktreePath(repositoryPath);
+        if (repoPath && projectPath) return repoPath === projectPath;
+        const repoName = String(terminal?.repository?.name || '').trim().toLowerCase();
+        return !!repoName && repoName === String(repositoryName || '').trim().toLowerCase();
+      });
+      reuseWorktreeId = String(match?.worktree || '').trim() || null;
+    } else {
+      const pairs = Number(workspace?.terminals?.pairs || 0);
+      if (Number.isFinite(pairs) && pairs > 0) {
+        reuseWorktreeId = 'work1';
+      }
+    }
 
     const res = await fetch('/api/threads/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         workspaceId,
+        projectId,
         repositoryPath,
         repositoryName,
         repositoryType,
+        worktreeId: reuseWorktreeId,
         socketId: this.socket?.id || null,
         startTier: 3
       })
@@ -14337,8 +14514,8 @@ class ClaudeOrchestrator {
       throw new Error(String(data?.error || data?.message || 'Failed to create chat'));
     }
 
-    const threads = await this.fetchThreadsForWorkspace(workspaceId, { includeArchived: state.includeArchived });
-    state.threadsByWorkspace.set(workspaceId, threads);
+    const threads = await this.fetchThreads({ includeArchived: state.includeArchived });
+    this.projectChatsReindexThreads(state, threads);
     this.renderProjectChatsThreads(modal, state);
     return data?.thread || null;
   }
@@ -14360,7 +14537,9 @@ class ClaudeOrchestrator {
 
     const worktreeId = String(thread.worktreeId || '').trim();
     if (worktreeId) {
-      this.showOnlyWorktree(worktreeId);
+      const repoName = String(thread.repositoryName || '').trim();
+      const worktreeKey = repoName ? `${repoName}-${worktreeId}` : worktreeId;
+      this.showOnlyWorktree(worktreeKey);
       return;
     }
 
@@ -14374,7 +14553,7 @@ class ClaudeOrchestrator {
 
     const modal = document.createElement('div');
     modal.id = 'projects-chats-shell';
-    modal.className = 'modal projects-chats-modal';
+    modal.className = 'modal projects-chats-modal projects-chats-fullscreen';
     modal.innerHTML = `
       <div class="modal-content">
         <div class="modal-header">
@@ -14391,7 +14570,7 @@ class ClaudeOrchestrator {
           </aside>
           <section class="projects-chats-main">
             <div class="projects-chats-toolbar">
-              <div id="projects-chats-selected-name">Workspace</div>
+              <div id="projects-chats-selected-name">Project</div>
               <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <label style="display:flex; gap:6px; align-items:center;">
                   <input id="projects-chats-include-archived" type="checkbox" />
@@ -14406,7 +14585,7 @@ class ClaudeOrchestrator {
               <input type="text" id="projects-chats-thread-search" class="search-input projects-chats-search-input" placeholder="Search chats…" />
             </div>
             ${simpleCfg.showHints ? `
-              <div class="projects-chats-hint mono">Tip: Alt+P opens this shell. Use New Chat to create a worktree + agent session + thread in one step.</div>
+              <div class="projects-chats-hint mono">Tip: Alt+P opens this shell. New Chat reuses an existing worktree when available; otherwise it creates one.</div>
             ` : ''}
             <div id="projects-chats-list" class="projects-chats-list">
               <div class="projects-chats-empty">Loading…</div>
@@ -14417,22 +14596,23 @@ class ClaudeOrchestrator {
     `;
     document.body.appendChild(modal);
 
-    const workspaces = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
+    const projects = this.buildProjectChatsCatalog();
     const threadPrefs = this.loadProjectChatsThreadPrefs();
     const state = {
-      selectedWorkspaceId: String(this.currentWorkspace?.id || workspaces[0]?.id || '').trim() || null,
+      projects,
+      projectIndex: new Map(projects.map((project) => [String(project.id || ''), project])),
+      selectedProjectId: String(projects[0]?.id || '').trim() || null,
       includeArchived: false,
-      threadsByWorkspace: new Map(),
+      threadsByProject: new Map(),
       projectQuery: '',
       threadQuery: '',
       pinnedThreadIds: threadPrefs.pinned,
       recentThreadIds: threadPrefs.recent
     };
 
-    const loadThreads = async (workspaceId) => {
-      if (!workspaceId) return [];
-      const threads = await this.fetchThreadsForWorkspace(workspaceId, { includeArchived: state.includeArchived });
-      state.threadsByWorkspace.set(workspaceId, threads);
+    const loadThreads = async () => {
+      const threads = await this.fetchThreads({ includeArchived: state.includeArchived });
+      this.projectChatsReindexThreads(state, threads);
       return threads;
     };
 
@@ -14450,24 +14630,17 @@ class ClaudeOrchestrator {
 
       const projectBtn = event.target.closest('[data-project-id]');
       if (projectBtn) {
-        const workspaceId = String(projectBtn.getAttribute('data-project-id') || '').trim();
-        if (!workspaceId || workspaceId === state.selectedWorkspaceId) return;
-        state.selectedWorkspaceId = workspaceId;
-        if (!state.threadsByWorkspace.has(workspaceId)) {
-          try {
-            await loadThreads(workspaceId);
-          } catch (error) {
-            this.showToast?.(`Failed to load chats: ${String(error?.message || error)}`, 'error');
-          }
-        }
+        const projectId = String(projectBtn.getAttribute('data-project-id') || '').trim();
+        if (!projectId || projectId === state.selectedProjectId) return;
+        state.selectedProjectId = projectId;
         render();
         return;
       }
 
       if (event.target.closest('[data-project-chats-refresh="true"]')) {
-        if (!state.selectedWorkspaceId) return;
+        if (!state.selectedProjectId) return;
         try {
-          await loadThreads(state.selectedWorkspaceId);
+          await loadThreads();
           render();
         } catch (error) {
           this.showToast?.(`Failed to refresh chats: ${String(error?.message || error)}`, 'error');
@@ -14496,7 +14669,7 @@ class ClaudeOrchestrator {
       const openBtn = event.target.closest('[data-thread-open]');
       if (openBtn) {
         const threadId = String(openBtn.getAttribute('data-thread-open') || '').trim();
-        const rows = state.threadsByWorkspace.get(state.selectedWorkspaceId) || [];
+        const rows = state.threadsByProject.get(state.selectedProjectId) || [];
         const thread = rows.find((item) => String(item?.id || '') === threadId);
         if (thread) {
           this.markRecentProjectChatsThread(state, threadId);
@@ -14523,7 +14696,7 @@ class ClaudeOrchestrator {
           const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/close`, { method: 'POST' });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || data?.ok === false) throw new Error(String(data?.error || data?.message || 'Failed to close chat'));
-          await loadThreads(state.selectedWorkspaceId);
+          await loadThreads();
           render();
         } catch (error) {
           this.showToast?.(`Failed to close chat: ${String(error?.message || error)}`, 'error');
@@ -14539,7 +14712,7 @@ class ClaudeOrchestrator {
           const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/archive`, { method: 'POST' });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || data?.ok === false) throw new Error(String(data?.error || data?.message || 'Failed to archive chat'));
-          await loadThreads(state.selectedWorkspaceId);
+          await loadThreads();
           render();
         } catch (error) {
           this.showToast?.(`Failed to archive chat: ${String(error?.message || error)}`, 'error');
@@ -14550,12 +14723,12 @@ class ClaudeOrchestrator {
     const includeArchivedEl = modal.querySelector('#projects-chats-include-archived');
     includeArchivedEl?.addEventListener('change', async (event) => {
       state.includeArchived = !!event.target.checked;
-      if (!state.selectedWorkspaceId) {
+      if (!state.selectedProjectId) {
         render();
         return;
       }
       try {
-        await loadThreads(state.selectedWorkspaceId);
+        await loadThreads();
         render();
       } catch (error) {
         this.showToast?.(`Failed to load chats: ${String(error?.message || error)}`, 'error');
@@ -14575,26 +14748,14 @@ class ClaudeOrchestrator {
     });
 
     render();
-    if (state.selectedWorkspaceId) {
+    if (state.selectedProjectId) {
       try {
-        await loadThreads(state.selectedWorkspaceId);
+        await loadThreads();
       } catch (error) {
         this.showToast?.(`Failed to load chats: ${String(error?.message || error)}`, 'error');
       }
       render();
     }
-
-    const preloadWorkspaceThreads = async () => {
-      const ids = workspaces
-        .map((workspace) => String(workspace?.id || '').trim())
-        .filter((id) => id && !state.threadsByWorkspace.has(id));
-      if (!ids.length) return;
-      await Promise.allSettled(ids.map((id) => loadThreads(id)));
-      if (document.body.contains(modal)) render();
-    };
-    setTimeout(() => {
-      preloadWorkspaceThreads().catch(() => {});
-    }, 0);
   }
 
   async showPRsPanel() {

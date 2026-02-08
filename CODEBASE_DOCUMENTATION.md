@@ -167,6 +167,11 @@ client/plugin-host.js              - Client plugin runtime for UI slots/actions
 ├─ Loads: `/api/plugins/client-surface` slot actions with cache/refresh support
 ├─ Exposes: `window.orchestratorPluginHost`
 └─ Supports actions: open_url, open_route, copy_text, commander_action
+
+client/app.js                      - Projects + Chats shell (repo-centric)
+├─ Projects are grouped by repository (GitHub-linked when available, local repos supported)
+├─ Threads are indexed per project id (`repo:<normalized-path>`) instead of workspace-only grouping
+└─ Projects + Chats runs fullscreen and can still launch worktree sessions via thread create flow
 ```
 
 ### Tabbed Workspace System (NEW)
@@ -401,6 +406,7 @@ PUT /api/workspaces/:id           - Update workspace configuration
 DELETE /api/workspaces/:id        - Delete workspace
 POST /api/workspaces/:id/switch   - Switch to workspace
 POST /api/workspaces/remove-worktree - Remove worktree from workspace config, close linked sessions, keep files on disk
+GET /api/threads?projectId=...    - List thread records scoped to a repository-level project id
 GET /api/user-settings            - Get user preferences
 PUT /api/user-settings            - Update user preferences
 
