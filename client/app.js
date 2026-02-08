@@ -9479,23 +9479,62 @@ class ClaudeOrchestrator {
 		        }
 
 		        const lists = Array.isArray(listsData?.lists) ? listsData.lists : [];
-		        ticketListEl.innerHTML = `<option value="">Move ticket…</option>` + lists
-		          .filter((l) => !!l?.id)
-		          .map((l) => `<option value="${escapeHtml(l.id)}">${escapeHtml(l.name || l.id)}</option>`)
-		          .join('');
-
 		        const key = `${providerId}:${boardId}`;
 		        const doneListId = String(this.userSettings?.global?.ui?.tasks?.boardConventions?.[key]?.doneListId || '').trim();
+		        const forTestListId = String(this.userSettings?.global?.ui?.tasks?.boardConventions?.[key]?.forTestListId || '').trim();
 		        const listIds = new Set(lists.map((l) => String(l?.id || '').trim()).filter(Boolean));
-		        if (doneListId && listIds.has(doneListId)) ticketListEl.value = doneListId;
+		        const listMeta = lists
+		          .filter((l) => !!l?.id)
+		          .map((l) => {
+		            const id = String(l.id || '').trim();
+		            const name = String(l.name || id).trim() || id;
+		            const tags = [];
+		            if (id === currentListId) tags.push('Current');
+		            if (id === doneListId) tags.push('Done');
+		            if (id === forTestListId) tags.push('For Test');
+		            const tagWeight = tags.includes('Current') ? 0 : (tags.length ? 1 : 2);
+		            return {
+		              id,
+		              name,
+		              pos: Number(l?.pos || 0),
+		              tags,
+		              tagWeight
+		            };
+		          })
+		          .sort((a, b) => {
+		            if (a.tagWeight !== b.tagWeight) return a.tagWeight - b.tagWeight;
+		            if (a.pos !== b.pos) return a.pos - b.pos;
+		            return a.name.localeCompare(b.name);
+		          });
+
+		        ticketListEl.innerHTML = `<option value="">Move ticket…</option>` + listMeta
+		          .map((l) => {
+		            const suffix = l.tags.length ? ` (${l.tags.join(', ')})` : '';
+		            return `<option value="${escapeHtml(l.id)}">${escapeHtml(`${l.name}${suffix}`)}</option>`;
+		          })
+		          .join('');
+
+		        if (forTestListId && listIds.has(forTestListId)) ticketListEl.value = forTestListId;
+		        else if (doneListId && listIds.has(doneListId)) ticketListEl.value = doneListId;
 		        else if (currentListId && listIds.has(currentListId)) ticketListEl.value = currentListId;
 
 		        ticketListEl.disabled = false;
 		        ticketMoveListBtn.disabled = !String(ticketListEl.value || '').trim();
-		        if (ticketStatusEl) ticketStatusEl.textContent = `Ticket: trello:${cardId}`;
+		        if (ticketStatusEl) {
+		          const byId = new Map(listMeta.map((l) => [l.id, l]));
+		          const currentName = byId.get(currentListId)?.name || currentListId || 'unknown';
+		          const selectedName = byId.get(String(ticketListEl.value || '').trim())?.name || '';
+		          const selectedText = selectedName ? ` • selected: ${selectedName}` : '';
+		          ticketStatusEl.textContent = `Ticket: trello:${cardId} • current: ${currentName}${selectedText}`;
+		        }
 
 		        ticketListEl.addEventListener('change', () => {
 		          ticketMoveListBtn.disabled = !String(ticketListEl.value || '').trim();
+		          if (ticketStatusEl) {
+		            const selected = ticketListEl.options[ticketListEl.selectedIndex]?.textContent || '';
+		            const selectedText = selected ? ` • selected: ${selected}` : '';
+		            ticketStatusEl.textContent = `Ticket: trello:${cardId}${selectedText}`;
+		          }
 		        });
 
 		        ticketMoveListBtn.addEventListener('click', async () => {

@@ -56,3 +56,4 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #679 — one-command release-readiness report
 - #680 — snapshot verifier + report integration
 - #681 — git identity guardrails in release-readiness report
+- #682 — Review Console richer ticket move picker (list-name-forward labels with Current/Done/For Test tags)
