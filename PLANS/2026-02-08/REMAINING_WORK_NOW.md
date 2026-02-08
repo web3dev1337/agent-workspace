@@ -14,6 +14,7 @@ This file is the canonical short list after syncing the Phase 5 execution plan a
    - Reason still open: destructive operation, intentionally deferred.
    - Prep available now:
      - `npm run setup:history-rewrite-tools` (non-destructive dependency bootstrap guidance for `git-filter-repo`/`gitleaks`)
+     - `npm run prep:history-rewrite:pipeline` (non-destructive one-command prep pipeline: tool check + workkit + preflight)
      - `npm run audit:history-authors` (non-destructive author-email audit + mailmap template output)
      - `npm run prep:history-rewrite` (non-destructive private workkit: runbook + removal-path list + filter-repo helper script)
      - `npm run check:history-rewrite-readiness -- --workkit-dir <dir>` (non-destructive advisory preflight)
