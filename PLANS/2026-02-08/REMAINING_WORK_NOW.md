@@ -6,6 +6,12 @@ This file is the canonical short list after syncing the Phase 5 execution plan a
 
 - None currently open in the tracked M0-M4 execution slices.
 - Execution status is synced in `PLANS/2026-02-08/COMPETITIVE_GAP_EXECUTION_PLAN.md`.
+- One-command verification report:
+  - `npm run report:release-readiness`
+  - Optional artifacts:
+    - `npm run report:release-readiness -- --json-out /tmp/release-readiness.json --md-out /tmp/release-readiness.md`
+  - Optional strict history scan:
+    - `npm run report:release-readiness -- --include-history`
 
 ## Remaining destructive / optional work
 
