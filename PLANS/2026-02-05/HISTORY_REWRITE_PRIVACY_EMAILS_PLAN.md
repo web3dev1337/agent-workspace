@@ -88,6 +88,10 @@ Non-destructive prep helper now available:
     - `paths-to-remove.txt` (history removal path list)
     - `run-filter-repo.sh` + `history-rewrite-runbook.md` (execution helpers)
   - This is still non-destructive; no rewrite commands are executed automatically.
+- Rewrite readiness gate:
+  - Advisory mode: `npm run check:history-rewrite-readiness -- --workkit-dir /tmp/history-rewrite-workkit`
+  - Strict gate mode: `npm run check:history-rewrite-readiness:strict -- --workkit-dir /tmp/history-rewrite-workkit`
+  - Strict mode fails fast when required prerequisites are missing (repo identity, clean worktree, filter-repo, gitleaks, workkit files).
 
 ### 3) Rewrite: remove files/directories from all history
 
@@ -171,3 +175,4 @@ Status notes (2026-02-06):
 Status notes (2026-02-08):
 - Added `scripts/audit-history-authors.js` and `npm run audit:history-authors` so rewrite inputs can be prepared safely before any destructive history operation.
 - Added `scripts/generate-history-rewrite-workkit.js` and `npm run prep:history-rewrite` to produce a private rewrite runbook + command kit for a controlled maintenance-window execution.
+- Added `scripts/check-history-rewrite-readiness.js` and `npm run check:history-rewrite-readiness` to enforce a non-destructive preflight gate before any rewrite maintenance window.
