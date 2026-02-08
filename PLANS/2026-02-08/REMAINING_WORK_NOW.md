@@ -57,3 +57,4 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #680 — snapshot verifier + report integration
 - #681 — git identity guardrails in release-readiness report
 - #682 — Review Console richer ticket move picker (list-name-forward labels with Current/Done/For Test tags)
+- #683 — voice/commander queue selection by PR number + optional repo hint (`select pr 492 in zoo-game`)
