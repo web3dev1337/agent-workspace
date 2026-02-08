@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 
 function clampInt(value, { min, max, fallback }) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -64,6 +65,51 @@ class AuditExportService {
           ? fromSettings.redaction
           : {})
       }
+    };
+  }
+
+  getSigningConfig() {
+    const cfg = this.getConfig();
+    const signing = cfg?.signing && typeof cfg.signing === 'object' ? cfg.signing : {};
+    const enabled = signing.enabled === true;
+    const algorithm = 'hmac-sha256';
+    const keyId = String(signing.keyId || process.env.ORCHESTRATOR_AUDIT_SIGNING_KEY_ID || 'local-default').trim() || 'local-default';
+    const secret = String(process.env.ORCHESTRATOR_AUDIT_SIGNING_SECRET || '').trim();
+    return { enabled, algorithm, keyId, hasSecret: !!secret, secret };
+  }
+
+  toCanonicalJson(value) {
+    const stable = (input) => {
+      if (Array.isArray(input)) return input.map(stable);
+      if (input && typeof input === 'object') {
+        const out = {};
+        for (const key of Object.keys(input).sort()) {
+          out[key] = stable(input[key]);
+        }
+        return out;
+      }
+      return input;
+    };
+    return JSON.stringify(stable(value));
+  }
+
+  signPayload(payload) {
+    const cfg = this.getSigningConfig();
+    if (!cfg.enabled) {
+      throw new Error('Audit signing is disabled in settings');
+    }
+    if (!cfg.hasSecret) {
+      throw new Error('Missing ORCHESTRATOR_AUDIT_SIGNING_SECRET for signing');
+    }
+    const canonical = this.toCanonicalJson(payload);
+    const signature = crypto
+      .createHmac('sha256', cfg.secret)
+      .update(canonical)
+      .digest('hex');
+    return {
+      algorithm: cfg.algorithm,
+      keyId: cfg.keyId,
+      value: signature
     };
   }
 
@@ -270,6 +316,12 @@ class AuditExportService {
     return {
       ok: true,
       config: this.getConfig(),
+      signing: {
+        enabled: this.getSigningConfig().enabled,
+        algorithm: this.getSigningConfig().algorithm,
+        keyId: this.getSigningConfig().keyId,
+        ready: this.getSigningConfig().enabled && this.getSigningConfig().hasSecret
+      },
       sources: {
         activity: { path: activityPath, count: activityRows.length },
         scheduler: { path: schedulerPath, count: schedulerRows.length }

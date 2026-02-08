@@ -53,6 +53,7 @@ server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
+server/policyBundleService.js      - Policy template catalog + bundle export/import for team governance profiles
 server/auditExportService.js       - Redacted audit export across activity + scheduler logs (JSON/CSV)
 server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
 server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
@@ -391,6 +392,10 @@ PUT /api/user-settings            - Update user preferences
 GET /api/process/telemetry/benchmarks                         - Live + snapshot benchmark rows for onboarding/runtime/review comparisons
 POST /api/process/telemetry/benchmarks/snapshots              - Capture a named benchmark snapshot for release tracking
 GET /api/process/telemetry/benchmarks/release-notes           - Build markdown release notes comparing current vs baseline benchmark
+GET /api/policy/templates                                    - Built-in team governance policy templates
+POST /api/policy/bundles/export                              - Export policy bundle (template/current/custom) for sharing
+POST /api/policy/bundles/import                              - Apply policy bundle (replace/merge) into global settings
+GET /api/audit/export?signed=1                               - Signed audit export (HMAC-SHA256; requires signing enabled + secret)
 ```
 
 ### WebSocket Events

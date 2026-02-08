@@ -185,12 +185,17 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - added unit tests covering benchmark capture, comparisons, and release-note generation.
 
 ### P2-02: Team governance pack
-- Status: Later
+- Status: Done
 - Size: L
 - Deliverables:
   - richer policy templates by role/persona
   - shareable org policy bundles
   - signed audit exports for compliance workflows
+- Shipped in PR #TBD:
+  - added policy template + bundle service (`server/policyBundleService.js`) with export/import API routes for org-shareable governance configs.
+  - added policy API routes to list templates and apply bundles (`/api/policy/templates`, `/api/policy/bundles/export`, `/api/policy/bundles/import`).
+  - added signed audit export support (HMAC-SHA256 envelopes/headers) gated by settings + secret (`global.audit.signing.enabled`, `ORCHESTRATOR_AUDIT_SIGNING_SECRET`).
+  - added tests for policy bundle workflows and audit signing behavior.
 
 ### P2-03: Client plugin surface (post-modularization)
 - Status: Later
