@@ -89,6 +89,12 @@ Non-destructive prep helper now available:
     - `npm run prep:history-rewrite:pipeline -- --strict`
   - Optional auto-tool bootstrap attempt:
     - `npm run prep:history-rewrite:pipeline -- --apply-tools`
+  - Optional persisted report artifacts:
+    - `npm run prep:history-rewrite:pipeline -- --report-dir /tmp/history-rewrite-reports`
+    - writes:
+      - `prep-report.json`
+      - `prep-report.md`
+      - per-step JSON files (`setup-tools.json`, `prepare-workkit.json`, `readiness-check.json`)
   - Pipeline runs:
     - dependency bootstrap check
     - workkit generation
