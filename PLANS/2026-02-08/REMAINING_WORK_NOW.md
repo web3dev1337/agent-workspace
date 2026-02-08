@@ -18,6 +18,7 @@ This file is the canonical short list after syncing the Phase 5 execution plan a
      - `npm run prep:history-rewrite:pipeline -- --report-dir <dir>` (persists JSON/markdown prep artifacts for audit trail)
      - `npm run prep:history-rewrite:mailmap-finalize -- --workkit-dir <dir>` (fills mailmap noreply placeholders from configured/explicit target email)
      - `npm run history-rewrite:execute:plan -- --workkit-dir <dir> --clone-dir <fresh-clone>` (guarded execution planner; explicit confirm required for rewrite/push)
+     - `npm run prep:public-snapshot-repo -- --out-dir <dir>` (alternative non-destructive path: generate one-commit public snapshot repo)
      - `npm run audit:history-authors` (non-destructive author-email audit + mailmap template output)
      - `npm run prep:history-rewrite` (non-destructive private workkit: runbook + removal-path list + filter-repo helper script)
      - `npm run check:history-rewrite-readiness -- --workkit-dir <dir>` (non-destructive advisory preflight)
