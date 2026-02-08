@@ -1920,6 +1920,14 @@ class ClaudeOrchestrator {
         });
       });
     }
+    const pagerSaveDefaults = document.getElementById('pager-save-defaults');
+    if (pagerSaveDefaults) {
+      pagerSaveDefaults.addEventListener('click', () => {
+        this.savePagerDefaultsFromSettings().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
     const pagerStart = document.getElementById('pager-start');
     if (pagerStart) {
       pagerStart.addEventListener('click', () => {
@@ -11723,11 +11731,13 @@ class ClaudeOrchestrator {
     const maxRuntimeEl = document.getElementById('pager-max-runtime-minutes');
     const doneEnabledEl = document.getElementById('pager-done-check-enabled');
     const doneTokenEl = document.getElementById('pager-done-token');
+    const customModeEl = document.getElementById('pager-custom-instruction-mode');
 
     if (nudgeEl && !nudgeEl.value) nudgeEl.value = String(defaults.nudgeText || 'next');
     if (intervalEl && !intervalEl.value) intervalEl.value = String(defaults.intervalSeconds || 300);
     if (maxPingsEl && !maxPingsEl.value) maxPingsEl.value = String(defaults.maxPings || 24);
     if (maxRuntimeEl && !maxRuntimeEl.value) maxRuntimeEl.value = String(defaults.maxRuntimeMinutes || 120);
+    if (customModeEl && !customModeEl.value) customModeEl.value = String(defaults.customInstructionMode || 'append');
     if (doneEnabledEl && !doneEnabledEl.dataset.initialized) {
       doneEnabledEl.checked = defaults.doneCheck?.enabled === true;
       doneEnabledEl.dataset.initialized = '1';
@@ -11739,9 +11749,12 @@ class ClaudeOrchestrator {
       const id = String(row?.id || '');
       const state = String(row?.status || 'unknown');
       const targetCount = Array.isArray(row?.sessionIds) ? row.sessionIds.length : 0;
+      const filteredCount = Array.isArray(row?.filteredSessionIds) ? row.filteredSessionIds.length : 0;
+      const tierText = Array.isArray(row?.targetTiers) && row.targetTiers.length ? ` | tiers: ${row.targetTiers.join(',')}` : '';
       const pingCount = Number(row?.pingsSent || 0);
       const reason = row?.stopReason ? ` | reason: ${row.stopReason}` : '';
-      return `- ${id} | ${state} | targets: ${targetCount} | pings: ${pingCount}${reason}`;
+      const filteredText = filteredCount > 0 ? ` | filtered: ${filteredCount}` : '';
+      return `- ${id} | ${state} | targets: ${targetCount}${filteredText}${tierText} | pings: ${pingCount}${reason}`;
     }).join('\\n');
 
     outputEl.textContent = [
@@ -11761,10 +11774,83 @@ class ClaudeOrchestrator {
     return status;
   }
 
+  syncPagerDefaultsFromGlobalSettings() {
+    const pager = (this.userSettings?.global?.pager && typeof this.userSettings.global.pager === 'object')
+      ? this.userSettings.global.pager
+      : {};
+    const doneCheck = (pager.doneCheck && typeof pager.doneCheck === 'object') ? pager.doneCheck : {};
+
+    const nudgeEl = document.getElementById('pager-nudge-text');
+    if (nudgeEl) nudgeEl.value = String(pager.nudgeText || 'next');
+    const intervalEl = document.getElementById('pager-interval-seconds');
+    if (intervalEl) intervalEl.value = String(pager.intervalSeconds || 300);
+    const maxPingsEl = document.getElementById('pager-max-pings');
+    if (maxPingsEl) maxPingsEl.value = String(pager.maxPings || 24);
+    const maxRuntimeEl = document.getElementById('pager-max-runtime-minutes');
+    if (maxRuntimeEl) maxRuntimeEl.value = String(pager.maxRuntimeMinutes || 120);
+    const doneEnabledEl = document.getElementById('pager-done-check-enabled');
+    if (doneEnabledEl) doneEnabledEl.checked = doneCheck.enabled === true;
+    const doneTokenEl = document.getElementById('pager-done-token');
+    if (doneTokenEl) doneTokenEl.value = String(doneCheck.token || 'PAGER_DONE');
+    const customInstructionEl = document.getElementById('pager-custom-instruction');
+    if (customInstructionEl) customInstructionEl.value = String(pager.customInstruction || '');
+    const customModeEl = document.getElementById('pager-custom-instruction-mode');
+    if (customModeEl) {
+      const mode = String(pager.customInstructionMode || 'append').trim().toLowerCase();
+      customModeEl.value = mode === 'replace' ? 'replace' : 'append';
+    }
+  }
+
+  async savePagerDefaultsFromSettings() {
+    if (!this.userSettings) await this.loadUserSettings();
+    if (!this.userSettings) throw new Error('User settings unavailable');
+
+    const nudgeText = String(document.getElementById('pager-nudge-text')?.value || '').trim() || 'next';
+    const intervalSeconds = Number(document.getElementById('pager-interval-seconds')?.value);
+    const maxPings = Number(document.getElementById('pager-max-pings')?.value);
+    const maxRuntimeMinutes = Number(document.getElementById('pager-max-runtime-minutes')?.value);
+    const doneCheckEnabled = !!document.getElementById('pager-done-check-enabled')?.checked;
+    const doneToken = String(document.getElementById('pager-done-token')?.value || '').trim() || 'PAGER_DONE';
+    const customInstruction = String(document.getElementById('pager-custom-instruction')?.value || '').trim();
+    const customInstructionMode = String(document.getElementById('pager-custom-instruction-mode')?.value || 'append').trim().toLowerCase() === 'replace'
+      ? 'replace'
+      : 'append';
+
+    const global = JSON.parse(JSON.stringify(this.userSettings.global || {}));
+    global.pager = {
+      ...(global.pager || {}),
+      nudgeText,
+      intervalSeconds: Number.isFinite(intervalSeconds) ? intervalSeconds : 300,
+      maxPings: Number.isFinite(maxPings) ? maxPings : 24,
+      maxRuntimeMinutes: Number.isFinite(maxRuntimeMinutes) ? maxRuntimeMinutes : 120,
+      customInstruction,
+      customInstructionMode,
+      doneCheck: {
+        ...((global.pager && global.pager.doneCheck) || {}),
+        enabled: doneCheckEnabled,
+        token: doneToken
+      }
+    };
+
+    const response = await fetch('/api/user-settings/global', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ global })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.global) {
+      throw new Error(String(data?.error || data?.message || 'Failed to save pager defaults'));
+    }
+    this.userSettings = data;
+    this.showToast?.('Pager defaults saved', 'success');
+    return true;
+  }
+
   async startPagerFromSettings() {
     const sessionId = String(document.getElementById('pager-session-id')?.value || '').trim();
-    if (!sessionId) {
-      this.showToast?.('Enter a session id first', 'warning');
+    const workspaceId = String(document.getElementById('pager-workspace-id')?.value || '').trim();
+    if (!sessionId && !workspaceId) {
+      this.showToast?.('Enter a session id or workspace id first', 'warning');
       return false;
     }
 
@@ -11773,18 +11859,28 @@ class ClaudeOrchestrator {
     const maxRuntimeMinutes = Number(document.getElementById('pager-max-runtime-minutes')?.value);
     const nudgeText = String(document.getElementById('pager-nudge-text')?.value || '').trim();
     const customInstruction = String(document.getElementById('pager-custom-instruction')?.value || '').trim();
+    const customInstructionMode = String(document.getElementById('pager-custom-instruction-mode')?.value || 'append').trim().toLowerCase() === 'replace'
+      ? 'replace'
+      : 'append';
     const doneCheckEnabled = !!document.getElementById('pager-done-check-enabled')?.checked;
     const doneToken = String(document.getElementById('pager-done-token')?.value || '').trim();
+    const tierSet = String(document.getElementById('pager-tier-set')?.value || '').trim();
+    const tiers = tierSet
+      ? tierSet.split(/[,\s]+/g).map((v) => Number(v)).filter((v) => Number.isFinite(v) && v >= 1 && v <= 4).map((v) => Math.round(v))
+      : [];
     const outputEl = document.getElementById('pager-status-output');
     if (outputEl) outputEl.textContent = 'Starting pager…';
 
     const payload = {
-      sessionId,
+      sessionId: sessionId || undefined,
+      workspaceId: workspaceId || undefined,
+      tiers,
       intervalSeconds,
       maxPings,
       maxRuntimeMinutes,
       nudgeText: nudgeText || 'next',
       customInstruction,
+      customInstructionMode,
       doneCheckEnabled,
       doneToken
     };
@@ -13174,6 +13270,7 @@ class ClaudeOrchestrator {
       this.refreshCommandCatalog().catch(() => {});
     }
     if (document.getElementById('pager-status-output')) {
+      this.syncPagerDefaultsFromGlobalSettings();
       this.refreshPagerStatus().catch(() => {});
     }
 

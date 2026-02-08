@@ -101,6 +101,19 @@ describe('UserSettingsService defaults', () => {
     expect(typeof audit.redaction.enabled).toBe('boolean');
   });
 
+  test('includes global.pager defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    const pager = defaults?.global?.pager;
+    expect(pager).toBeTruthy();
+    expect(typeof pager.nudgeText).toBe('string');
+    expect(typeof pager.intervalSeconds).toBe('number');
+    expect(typeof pager.maxPings).toBe('number');
+    expect(typeof pager.maxRuntimeMinutes).toBe('number');
+    expect(typeof pager.customInstructionMode).toBe('string');
+    expect(pager.doneCheck).toBeTruthy();
+    expect(typeof pager.doneCheck.enabled).toBe('boolean');
+  });
+
   test('mergeSettings deep-merges ui.tasks without dropping defaults', () => {
     const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
     const merged = UserSettingsService.prototype.mergeSettings.call({}, defaults, {
@@ -114,6 +127,10 @@ describe('UserSettingsService defaults', () => {
         },
         audit: {
           redaction: { emails: false }
+        },
+        pager: {
+          customInstruction: 'keep going',
+          doneCheck: { enabled: true }
         },
         ui: {
           skin: 'blue',
@@ -192,5 +209,9 @@ describe('UserSettingsService defaults', () => {
     // Keeps audit defaults while allowing partial override.
     expect(merged.global.audit.redaction.emails).toBe(false);
     expect(typeof merged.global.audit.redaction.tokens).toBe('boolean');
+    // Keeps pager defaults while allowing partial override.
+    expect(merged.global.pager.customInstruction).toBe('keep going');
+    expect(merged.global.pager.doneCheck.enabled).toBe(true);
+    expect(typeof merged.global.pager.doneCheck.token).toBe('string');
   });
 });
