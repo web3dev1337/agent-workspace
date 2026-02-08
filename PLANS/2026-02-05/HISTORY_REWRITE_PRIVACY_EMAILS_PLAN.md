@@ -78,6 +78,11 @@ Non-destructive prep helper now available:
 - Optional outputs:
   - `node scripts/audit-history-authors.js --json /tmp/history-authors.json --md /tmp/history-authors.md --mailmap /tmp/history-authors.mailmap`
 - This does not rewrite history; it only audits author/committer email usage and generates a private mailmap starter file.
+- Tool bootstrap helper:
+  - `npm run setup:history-rewrite-tools`
+  - Optional auto-install attempt:
+    - `npm run setup:history-rewrite-tools -- --apply`
+  - Supports `--only git-filter-repo` / `--only gitleaks` when you need one specific dependency.
 - Full private execution prep workkit:
   - `npm run prep:history-rewrite`
   - Optional custom output directory:
@@ -176,3 +181,4 @@ Status notes (2026-02-08):
 - Added `scripts/audit-history-authors.js` and `npm run audit:history-authors` so rewrite inputs can be prepared safely before any destructive history operation.
 - Added `scripts/generate-history-rewrite-workkit.js` and `npm run prep:history-rewrite` to produce a private rewrite runbook + command kit for a controlled maintenance-window execution.
 - Added `scripts/check-history-rewrite-readiness.js` and `npm run check:history-rewrite-readiness` to enforce a non-destructive preflight gate before any rewrite maintenance window.
+- Added `scripts/setup-history-rewrite-tools.js` and `npm run setup:history-rewrite-tools` for cross-platform dependency bootstrap guidance (`git-filter-repo`, `gitleaks`).
