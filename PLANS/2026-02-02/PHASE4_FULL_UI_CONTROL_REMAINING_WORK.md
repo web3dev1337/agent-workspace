@@ -160,5 +160,5 @@ Work needed:
 ## 8) Known UX papercuts (small but important)
 
 - Reduce or eliminate multiple “✕” close buttons that do different things without clarity.
-- Ensure Queue action bar never hides buttons off-screen (wrap/overflow).
+- DONE: Queue action bar now wraps by group and keeps controls in-frame on narrower/shorter viewports (no hidden off-screen buttons).
 - DONE: Settings panel now uses dynamic viewport height + mobile full-width fallback, keeping the full panel scrollable/usable on short viewports.
