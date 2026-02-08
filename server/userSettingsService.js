@@ -82,6 +82,20 @@ class UserSettingsService {
           },
           schedules: []
         },
+        pager: {
+          nudgeText: 'next',
+          intervalSeconds: 300,
+          enterDelayMs: 1000,
+          maxPings: 24,
+          maxRuntimeMinutes: 120,
+          customInstruction: '',
+          customInstructionMode: 'append',
+          doneCheck: {
+            enabled: false,
+            token: 'PAGER_DONE',
+            prompt: 'If you are 100% done with all requested work, reply exactly: PAGER_DONE and then stop.'
+          }
+        },
         policy: {
           enabled: false,
           defaultRole: 'admin',
@@ -458,6 +472,18 @@ class UserSettingsService {
           }
         };
       }
+      if (userSettings.global.pager) {
+        const defaultsPager = (merged.global.pager || {});
+        const next = userSettings.global.pager || {};
+        merged.global.pager = {
+          ...defaultsPager,
+          ...next,
+          doneCheck: {
+            ...(defaultsPager.doneCheck || {}),
+            ...(next.doneCheck || {})
+          }
+        };
+      }
       if (userSettings.global.policy) {
         const defaultsPolicy = (merged.global.policy || {});
         const next = userSettings.global.policy || {};
@@ -730,6 +756,19 @@ class UserSettingsService {
           safety: {
             ...(defaultsScheduler.safety || {}),
             ...(next.safety || {})
+          }
+        };
+      }
+
+      if (newGlobal.pager) {
+        const defaultsPager = (this.getDefaultSettings().global.pager || {});
+        const next = (newGlobal.pager || {});
+        this.settings.global.pager = {
+          ...defaultsPager,
+          ...next,
+          doneCheck: {
+            ...(defaultsPager.doneCheck || {}),
+            ...(next.doneCheck || {})
           }
         };
       }

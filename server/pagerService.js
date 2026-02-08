@@ -2,6 +2,8 @@ class PagerService {
   constructor({ logger = console } = {}) {
     this.logger = logger;
     this.sessionManager = null;
+    this.userSettingsService = null;
+    this.taskRecordService = null;
     this.jobs = new Map();
     this.timers = new Map();
     this.maxRecent = 200;
@@ -15,11 +17,13 @@ class PagerService {
     return PagerService.instance;
   }
 
-  init({ sessionManager } = {}) {
+  init({ sessionManager, userSettingsService, taskRecordService } = {}) {
     this.sessionManager = sessionManager || this.sessionManager;
+    this.userSettingsService = userSettingsService || this.userSettingsService;
+    this.taskRecordService = taskRecordService || this.taskRecordService;
   }
 
-  getDefaultProfile() {
+  getBuiltInProfile() {
     return {
       nudgeText: 'next',
       intervalSeconds: 300,
@@ -27,12 +31,36 @@ class PagerService {
       maxPings: 24,
       maxRuntimeMinutes: 120,
       customInstruction: '',
+      customInstructionMode: 'append',
       doneCheck: {
         enabled: false,
         token: 'PAGER_DONE',
         prompt: 'If you are 100% done with all requested work, reply exactly: PAGER_DONE and then stop.'
       }
     };
+  }
+
+  getGlobalProfileTemplate() {
+    const defaults = this.getBuiltInProfile();
+    const globalPager = this.userSettingsService?.getAllSettings?.()?.global?.pager;
+    const source = (globalPager && typeof globalPager === 'object') ? globalPager : {};
+    const doneCheck = (source.doneCheck && typeof source.doneCheck === 'object') ? source.doneCheck : {};
+    return {
+      ...defaults,
+      ...source,
+      customInstruction: String(source.customInstruction || defaults.customInstruction || '').trim(),
+      customInstructionMode: String(source.customInstructionMode || defaults.customInstructionMode || 'append').trim().toLowerCase() === 'replace'
+        ? 'replace'
+        : 'append',
+      doneCheck: {
+        ...defaults.doneCheck,
+        ...doneCheck
+      }
+    };
+  }
+
+  getDefaultProfile() {
+    return this.getGlobalProfileTemplate();
   }
 
   normalizeInt(value, fallback, min, max) {
@@ -76,9 +104,22 @@ class PagerService {
     return out;
   }
 
+  normalizeTierSet(input) {
+    const values = Array.isArray(input) ? input : String(input || '').split(/[,\s]+/g);
+    const out = [];
+    for (const value of values) {
+      const num = Number(String(value || '').trim());
+      if (!Number.isFinite(num)) continue;
+      const tier = Math.round(num);
+      if (tier >= 1 && tier <= 4 && !out.includes(tier)) out.push(tier);
+    }
+    return out.sort((a, b) => a - b);
+  }
+
   resolveTargets(input = {}) {
     const all = this.getAllSessionsMap();
     const ids = new Set();
+    const tiers = this.normalizeTierSet(input.tiers || input.tierSet || input.tier);
 
     if (Array.isArray(input.sessionIds)) {
       for (const row of input.sessionIds) {
@@ -108,20 +149,37 @@ class PagerService {
 
     const valid = [];
     const missing = [];
+    const filtered = [];
     for (const id of ids) {
       const session = this.sessionManager?.getSessionById?.(id);
       if (!session || !session.pty) {
         missing.push(id);
         continue;
       }
+      if (tiers.length) {
+        const record = this.taskRecordService?.get?.(`session:${id}`) || null;
+        const sessionTier = Number(record?.tier);
+        if (!Number.isFinite(sessionTier) || !tiers.includes(Math.round(sessionTier))) {
+          filtered.push(id);
+          continue;
+        }
+      }
       valid.push(id);
     }
 
     if (!valid.length) {
+      if (tiers.length) {
+        throw new Error(`No live sessions found for targets after tier filter [${tiers.join(', ')}]`);
+      }
       throw new Error(`No live sessions found for targets: ${missing.join(', ') || '(none)'}`);
     }
 
-    return { sessionIds: valid, missingSessionIds: missing };
+    return {
+      sessionIds: valid,
+      missingSessionIds: missing,
+      filteredSessionIds: filtered,
+      tiers
+    };
   }
 
   buildProfile(options = {}) {
@@ -131,6 +189,14 @@ class PagerService {
     const doneCheckEnabled = doneCheckEnabledRaw === undefined
       ? (doneCheckIn.enabled === true)
       : (doneCheckEnabledRaw === true || String(doneCheckEnabledRaw).toLowerCase() === 'true');
+    const customInstructionMode = String(options.customInstructionMode || defaults.customInstructionMode || 'append').trim().toLowerCase() === 'replace'
+      ? 'replace'
+      : 'append';
+    const defaultInstruction = String(defaults.customInstruction || '').trim();
+    const jobInstruction = String(options.customInstruction || '').trim();
+    const customInstruction = customInstructionMode === 'replace'
+      ? jobInstruction
+      : [defaultInstruction, jobInstruction].filter(Boolean).join(' ').trim();
 
     return {
       nudgeText: String(options.nudgeText || defaults.nudgeText || 'next').trim() || 'next',
@@ -138,7 +204,8 @@ class PagerService {
       enterDelayMs: this.normalizeInt(options.enterDelayMs, defaults.enterDelayMs, 100, 10000),
       maxPings: this.normalizeInt(options.maxPings, defaults.maxPings, 1, 100000),
       maxRuntimeMinutes: this.normalizeInt(options.maxRuntimeMinutes, defaults.maxRuntimeMinutes, 1, 10080),
-      customInstruction: String(options.customInstruction || defaults.customInstruction || '').trim(),
+      customInstruction,
+      customInstructionMode,
       doneCheck: {
         enabled: doneCheckEnabled,
         token: String(doneCheckIn.token || options.doneToken || defaults.doneCheck.token || 'PAGER_DONE').trim() || 'PAGER_DONE',
@@ -181,6 +248,8 @@ class PagerService {
       stopReason: job.stopReason,
       sessionIds: Array.isArray(job.sessionIds) ? [...job.sessionIds] : [],
       missingSessionIds: Array.isArray(job.missingSessionIds) ? [...job.missingSessionIds] : [],
+      filteredSessionIds: Array.isArray(job.filteredSessionIds) ? [...job.filteredSessionIds] : [],
+      targetTiers: Array.isArray(job.targetTiers) ? [...job.targetTiers] : [],
       profile: { ...job.profile, doneCheck: { ...(job.profile?.doneCheck || {}) } },
       pingsSent: Number(job.pingsSent || 0),
       runCount: Number(job.runCount || 0),
@@ -411,6 +480,8 @@ class PagerService {
       stopReason: null,
       sessionIds: target.sessionIds,
       missingSessionIds: target.missingSessionIds,
+      filteredSessionIds: target.filteredSessionIds,
+      targetTiers: target.tiers,
       profile,
       pingsSent: 0,
       runCount: 0,

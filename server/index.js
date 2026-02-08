@@ -320,7 +320,7 @@ commandRegistry.init({
 });
 policyService.init({ userSettingsService, commandRegistry });
 schedulerService.init({ userSettingsService, commandRegistry });
-pagerService.init({ sessionManager });
+pagerService.init({ sessionManager, userSettingsService, taskRecordService });
 threadService.init({ workspaceManager, sessionManager });
 serviceStackRuntimeService.init({ workspaceManager, sessionManager, configPromoterService, io });
 auditExportService.init({ activityFeed, schedulerService, userSettingsService });
