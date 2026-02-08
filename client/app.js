@@ -5732,6 +5732,12 @@ class ClaudeOrchestrator {
           .catch?.((err) => console.error('Failed to select queue item by PR URL:', err));
         break;
 
+      case 'queue-select-by-pr-ref':
+        this.showQueuePanel?.()
+          .then(() => setTimeout(() => this.queuePanelApi?.selectByPrRef?.({ number: params?.number, repo: params?.repo }), 50))
+          .catch?.((err) => console.error('Failed to select queue item by PR ref:', err));
+        break;
+
       case 'queue-select-by-ticket':
         this.showQueuePanel?.()
           .then(() => setTimeout(() => this.queuePanelApi?.selectByTicket?.({ ticket: params?.ticket }), 50))
@@ -24515,6 +24521,47 @@ class ClaudeOrchestrator {
               this.showToast?.('PR not found in Queue (by URL)', 'warning');
               return false;
             }
+            selectById(String(hit.id), { allowAutoOpenDiff: true });
+            return true;
+          } catch (e) {
+            this.showToast?.(String(e?.message || e), 'error');
+            return false;
+          }
+        },
+        selectByPrRef: async ({ number, repo } = {}) => {
+          try {
+            const rawNumber = String(number || '').trim();
+            if (!/^[0-9]+$/.test(rawNumber)) {
+              this.showToast?.('Missing or invalid PR number', 'warning');
+              return false;
+            }
+            const rawRepo = String(repo || '').trim().toLowerCase();
+            const repoNeedle = rawRepo.includes('/') ? rawRepo.split('/').filter(Boolean).join('/') : rawRepo;
+            if (!Array.isArray(state.tasks) || state.tasks.length === 0) {
+              await fetchTasks();
+            }
+
+            const prNumberNeedle = `/pull/${rawNumber}`;
+            const hits = (state.tasks || []).filter((task) => String(task?.url || '').includes(prNumberNeedle));
+            if (hits.length === 0) {
+              this.showToast?.(`PR #${rawNumber} not found in Queue`, 'warning');
+              return false;
+            }
+
+            let hit = hits[0];
+            if (repoNeedle) {
+              hit = hits.find((task) => {
+                const url = String(task?.url || '').toLowerCase();
+                if (!url) return false;
+                if (repoNeedle.includes('/')) return url.includes(`/${repoNeedle}/pull/`);
+                return url.includes(`/${repoNeedle}/pull/`);
+              }) || null;
+              if (!hit?.id) {
+                this.showToast?.(`PR #${rawNumber} found, but not in repo "${repoNeedle}"`, 'warning');
+                return false;
+              }
+            }
+
             selectById(String(hit.id), { allowAutoOpenDiff: true });
             return true;
           } catch (e) {

@@ -206,6 +206,14 @@ describe('VoiceCommandService (rule parsing)', () => {
     const refresh = voiceCommandService.parseWithRules('refresh queue');
     expect(refresh.command).toBe('queue-refresh');
 
+    const selPrRef = voiceCommandService.parseWithRules('select pr 492 in zoo-game');
+    expect(selPrRef.command).toBe('queue-select-by-pr-ref');
+    expect(selPrRef.params).toEqual({ number: '492', repo: 'zoo-game' });
+
+    const selPrRefNoRepo = voiceCommandService.parseWithRules('select pull request 492');
+    expect(selPrRefNoRepo.command).toBe('queue-select-by-pr-ref');
+    expect(selPrRefNoRepo.params).toEqual({ number: '492' });
+
     const selTicket = voiceCommandService.parseWithRules('select ticket trello:abc123');
     expect(selTicket.command).toBe('queue-select-by-ticket');
     expect(selTicket.params).toEqual({ ticket: 'trello:abc123' });
