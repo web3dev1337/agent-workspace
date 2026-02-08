@@ -164,6 +164,7 @@ Acceptance:
 ## Milestone M3 — Solo-like process stacks
 
 ### PR M3.1 — Service stack manifest schema
+Status: Done
 Scope:
 - Add local manifest schema for workspace services:
   - command, cwd, env refs, restart policy, healthcheck hints.
@@ -177,6 +178,14 @@ Files (expected):
 
 Acceptance:
 - Workspace can persist and load service stack definitions.
+- Shipped in PR #TBD:
+  - added `server/workspaceServiceStackService.js` with strict/non-strict normalization for service manifests.
+  - added service stack endpoints:
+    - `GET /api/workspaces/:id/service-stack`
+    - `GET /api/workspaces/:id/service-stack/export`
+    - `PUT /api/workspaces/:id/service-stack`
+    - `POST /api/workspaces/:id/service-stack/import`
+  - added unit coverage in `tests/unit/workspaceServiceStackService.test.js`.
 
 ---
 

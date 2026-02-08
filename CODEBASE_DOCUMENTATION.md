@@ -55,6 +55,7 @@ server/sessionRecoveryService.js   - Session recovery state persistence (CWD, ag
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
 server/policyBundleService.js      - Policy template catalog + bundle export/import for team governance profiles
 server/pluginLoaderService.js      - Plugin manifest validation/compatibility, command registration safety, and client slot metadata
+server/workspaceServiceStackService.js - Workspace service-stack manifest normalization/validation (services, env, restart policy, healthchecks)
 server/auditExportService.js       - Redacted audit export across activity + scheduler logs (JSON/CSV)
 server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
 server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
