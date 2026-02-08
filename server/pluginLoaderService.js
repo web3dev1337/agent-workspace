@@ -14,6 +14,7 @@ class PluginLoaderService {
     this.lastLoadedAt = null;
     this.supportedManifestVersions = new Set([1]);
     this.allowedCommandSurfaces = new Set(['commander', 'voice', 'ui', 'scheduler']);
+    this.allowedClientActionTypes = new Set(['open_url', 'open_route', 'copy_text', 'commander_action']);
     this.orchestratorVersion = this.loadOrchestratorVersion();
   }
 
@@ -223,6 +224,9 @@ class PluginLoaderService {
           surfaces: allowedSurfaces.length ? allowedSurfaces : null,
           maxCommands
         },
+        client: {
+          slots: Array.isArray(manifest?.client?.slots) ? manifest.client.slots : []
+        },
         loadedAt: new Date().toISOString()
       };
       this.loadedPlugins.push(loaded);
@@ -260,6 +264,9 @@ class PluginLoaderService {
         surfaces: [],
         maxCommands: 64
       },
+      client: {
+        slots: []
+      },
       compatibility: {}
     };
   }
@@ -276,6 +283,67 @@ class PluginLoaderService {
       if (!out.includes(surface)) out.push(surface);
     }
     return out;
+  }
+
+  normalizeClientSlots(input) {
+    if (!Array.isArray(input)) return [];
+    const out = [];
+    const seenIds = new Set();
+    for (const item of input) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new Error('Each client slot entry must be an object');
+      }
+      const id = String(item.id || '').trim().toLowerCase();
+      const slot = String(item.slot || '').trim().toLowerCase();
+      const label = String(item.label || '').trim();
+      const description = String(item.description || '').trim();
+      if (!id || !/^[a-z0-9][a-z0-9._-]{1,79}$/.test(id)) throw new Error(`Invalid client slot id: ${item.id}`);
+      if (seenIds.has(id)) throw new Error(`Duplicate client slot id: ${id}`);
+      if (!slot || !/^[a-z0-9][a-z0-9._-]{1,79}$/.test(slot)) throw new Error(`Invalid client slot target: ${item.slot}`);
+      if (!label) throw new Error(`Missing client slot label for id: ${id}`);
+
+      const action = item.action;
+      if (!action || typeof action !== 'object' || Array.isArray(action)) {
+        throw new Error(`Missing client action for slot id: ${id}`);
+      }
+      const type = String(action.type || '').trim().toLowerCase();
+      if (!this.allowedClientActionTypes.has(type)) throw new Error(`Unsupported client action type: ${action.type}`);
+
+      const normalizedAction = { type };
+      if (type === 'open_url') {
+        const url = String(action.url || '').trim();
+        if (!/^https?:\/\//i.test(url)) throw new Error(`Invalid open_url action url for slot id: ${id}`);
+        normalizedAction.url = url;
+      }
+      if (type === 'open_route') {
+        const route = String(action.route || '').trim();
+        if (!route || !route.startsWith('/')) throw new Error(`Invalid open_route action route for slot id: ${id}`);
+        normalizedAction.route = route;
+      }
+      if (type === 'copy_text') {
+        normalizedAction.text = String(action.text || '');
+      }
+      if (type === 'commander_action') {
+        const commanderAction = String(action.commanderAction || action.action || '').trim();
+        if (!commanderAction) throw new Error(`Missing commanderAction for slot id: ${id}`);
+        normalizedAction.commanderAction = commanderAction;
+        if (action.payload && typeof action.payload === 'object' && !Array.isArray(action.payload)) {
+          normalizedAction.payload = action.payload;
+        }
+      }
+
+      const order = Number(item.order);
+      out.push({
+        id,
+        slot,
+        label,
+        description,
+        order: Number.isFinite(order) ? order : 0,
+        action: normalizedAction
+      });
+      seenIds.add(id);
+    }
+    return out.sort((a, b) => (a.order - b.order) || a.id.localeCompare(b.id));
   }
 
   normalizeManifest(pluginId, manifest, manifestPath) {
@@ -332,6 +400,16 @@ class PluginLoaderService {
         }
         normalized.capabilities.maxCommands = maxCommands;
       }
+    }
+
+    const client = manifest.client;
+    if (client !== undefined) {
+      if (!client || typeof client !== 'object' || Array.isArray(client)) {
+        throw new Error('Manifest client must be an object');
+      }
+      normalized.client = {
+        slots: this.normalizeClientSlots(client.slots || [])
+      };
     }
 
     const compatibility = manifest.compatibility;

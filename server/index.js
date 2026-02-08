@@ -5731,6 +5731,48 @@ app.get('/api/plugins', (req, res) => {
   }
 });
 
+app.get('/api/plugins/client-surface', (req, res) => {
+  try {
+    const slotFilter = String(req.query?.slot || '').trim().toLowerCase();
+    const status = pluginLoaderService.getStatus();
+    const loaded = Array.isArray(status?.loaded) ? status.loaded : [];
+
+    const slots = [];
+    for (const plugin of loaded) {
+      const pluginId = String(plugin?.id || '').trim();
+      const pluginName = String(plugin?.name || pluginId).trim();
+      const list = Array.isArray(plugin?.client?.slots) ? plugin.client.slots : [];
+      for (const slot of list) {
+        const slotName = String(slot?.slot || '').trim().toLowerCase();
+        if (!slotName) continue;
+        if (slotFilter && slotName !== slotFilter) continue;
+        slots.push({
+          pluginId,
+          pluginName,
+          id: slot.id,
+          slot: slotName,
+          label: slot.label,
+          description: slot.description || '',
+          order: Number.isFinite(Number(slot.order)) ? Number(slot.order) : 0,
+          action: slot.action || null
+        });
+      }
+    }
+
+    slots.sort((a, b) => {
+      if (a.slot !== b.slot) return a.slot.localeCompare(b.slot);
+      if (a.order !== b.order) return a.order - b.order;
+      if (a.pluginId !== b.pluginId) return a.pluginId.localeCompare(b.pluginId);
+      return String(a.id || '').localeCompare(String(b.id || ''));
+    });
+
+    res.json({ ok: true, count: slots.length, slots });
+  } catch (error) {
+    logger.error('Failed to get plugin client surface', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get plugin client surface' });
+  }
+});
+
 app.post('/api/plugins/reload', async (req, res) => {
   try {
     const status = await loadPlugins();
