@@ -138,6 +138,7 @@ Because `main` is usually checked out in the `master/` worktree, **do not try to
 ## Git Workflow Notes
 - Always work on fresh branches from updated main
 - If `git fetch origin main:main` fails, use `git fetch origin main && git checkout -b feature/name origin/main`
+- Never provide delivery estimates in weeks; provide dependency-ordered execution slices instead.
 
 ## Code Style Guidelines
 
