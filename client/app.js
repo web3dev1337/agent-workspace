@@ -1649,6 +1649,14 @@ class ClaudeOrchestrator {
         this.updateGlobalUserSetting('sessionRecovery.skipPermissions', e.target.checked);
       });
     }
+    const recoveryPruneBtn = document.getElementById('recovery-prune-old');
+    if (recoveryPruneBtn) {
+      recoveryPruneBtn.addEventListener('click', () => {
+        this.pruneOldRecoverablesFromSettings().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
 
     // Template management buttons
     document.getElementById('reset-to-defaults').addEventListener('click', () => {
@@ -11243,6 +11251,36 @@ class ClaudeOrchestrator {
     await this.refreshPagerStatus().catch(() => {});
     return true;
   }
+
+  async pruneOldRecoverablesFromSettings() {
+    const workspaceId = String(this.currentWorkspace?.id || '').trim();
+    const statusEl = document.getElementById('recovery-prune-status');
+    const daysEl = document.getElementById('recovery-prune-days');
+    const daysRaw = Number(daysEl?.value);
+    const days = Number.isFinite(daysRaw) && daysRaw >= 1 ? Math.round(daysRaw) : 7;
+
+    if (!workspaceId) {
+      if (statusEl) statusEl.textContent = 'No active workspace selected.';
+      this.showToast?.('Open a workspace first to prune recoverables', 'warning');
+      return false;
+    }
+
+    if (statusEl) statusEl.textContent = `Pruning recoverables older than ${days} day(s) in ${workspaceId}…`;
+    const res = await fetch(`/api/recovery/${encodeURIComponent(workspaceId)}/prune`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ olderThanDays: days })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success === false) {
+      throw new Error(String(data?.error || data?.message || `Failed to prune recoverables (${res.status})`));
+    }
+
+    const prunedCount = Number(data?.prunedCount || 0);
+    if (statusEl) statusEl.textContent = `Pruned ${prunedCount} recoverable session(s) older than ${days} day(s) in ${workspaceId}.`;
+    this.showToast?.(`Pruned ${prunedCount} old recoverable session(s)`, 'success');
+    return true;
+  }
   
   installAuthFetchShim() {
     if (window.__claudeOrchestratorFetchAuthInstalled) return;
@@ -12631,6 +12669,15 @@ class ClaudeOrchestrator {
     const recoverySkipPermissions = document.getElementById('recovery-skip-permissions');
     if (recoverySkipPermissions) {
       recoverySkipPermissions.checked = recoverySettings.skipPermissions !== false; // Default to true
+    }
+    const recoveryPruneDays = document.getElementById('recovery-prune-days');
+    if (recoveryPruneDays && !String(recoveryPruneDays.value || '').trim()) {
+      recoveryPruneDays.value = '7';
+    }
+    const recoveryPruneStatus = document.getElementById('recovery-prune-status');
+    if (recoveryPruneStatus) {
+      const wsId = String(this.currentWorkspace?.id || '').trim();
+      recoveryPruneStatus.textContent = `Current workspace: ${wsId || '(none)'}`;
     }
 
     // Update per-terminal settings UI
