@@ -444,6 +444,21 @@ class VoiceCommandService {
         command: 'queue-select-by-pr-url',
         extractParams: (match) => ({ url: String(match?.[1] || '').trim() })
       },
+      // Queue: select by PR number + optional repo hint
+      {
+        patterns: [
+          /^select\s+(?:pr|pull\s+request)\s+#?([0-9]+)(?:\s+in\s+([a-zA-Z0-9._/-]+))?$/i,
+        ],
+        command: 'queue-select-by-pr-ref',
+        extractParams: (match) => {
+          const number = String(match?.[1] || '').trim();
+          const repo = String(match?.[2] || '').trim();
+          return {
+            number,
+            ...(repo ? { repo } : {})
+          };
+        }
+      },
       // Queue: select by ticket (trello)
       {
         patterns: [

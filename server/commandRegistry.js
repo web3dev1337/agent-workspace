@@ -1026,6 +1026,23 @@ class CommandRegistry {
       }
     });
 
+    this.register('queue-select-by-pr-ref', {
+      category: 'process',
+      description: 'Select a Queue item by PR number with optional repo hint',
+      params: [
+        { name: 'number', required: true, description: 'Pull request number (e.g. 492)' },
+        { name: 'repo', required: false, description: 'Optional repo hint (e.g. zoo-game or owner/repo)' }
+      ],
+      examples: [
+        { params: { number: '492', repo: 'zoo-game' }, description: 'Select PR #492 in queue for zoo-game' },
+        { params: { number: '492' }, description: 'Select PR #492 across queue items' }
+      ],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-select-by-pr-ref', ...params });
+        return { message: 'Queue: select by PR number' };
+      }
+    });
+
     this.register('queue-select-by-ticket', {
       category: 'process',
       description: 'Select a Queue item by ticket reference (trello URL / trello:<shortLink> / <shortLink>)',
