@@ -130,4 +130,7 @@ node scripts/scan-markdown-remaining.js --scope recent --since-days 14 --output 
 
 # Actionable-only view (filters template/generated-scan noise)
 node scripts/scan-markdown-remaining.js --scope all --actionable-only
+
+# Backlog-only view (keeps backlog docs with remaining markers, including heuristic sections)
+node scripts/scan-markdown-remaining.js --scope recent --since-days 30 --backlog-only
 ```
