@@ -9,6 +9,7 @@ Inputs:
 - merged PR history through `#703`
 - merged PR history through `#704`
 - merged PR history through `#706`
+- merged PR history through `#708`
 
 ## Actionable implementation backlog
 
@@ -38,3 +39,5 @@ Inputs:
   - `--actionable-only` includes `doc/backlog` files only when they contain unchecked checklist items and/or `TODO`/`FIXME`.
   - Heuristic-only “What’s left / Next steps” prose is excluded from actionable output.
   - Guide/audit/memory docs are excluded from actionable mode classification (for example: `WINDOWS_BUILD_GUIDE.md`, `scripts/README.md`, `ai-memory/*`).
+- Release-readiness report now includes an actionable markdown gate:
+  - `npm run report:release-readiness` fails the readiness gate if actionable markdown backlog is non-zero.
