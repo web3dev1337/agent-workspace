@@ -48,6 +48,13 @@ If you don’t need to keep history:
 Pros: simplest, avoids history leaks entirely.
 Cons: loses blame/history/PR linkage.
 
+Automated helper for this path:
+- `npm run prep:public-snapshot-repo`
+- Optional output directory:
+  - `npm run prep:public-snapshot-repo -- --out-dir /tmp/claude-orchestrator-public`
+- Output is a new local git repo with tracked files copied and a single initial commit.
+- This does not touch the current repo history.
+
 ---
 
 ## Operational plan (history rewrite)
@@ -224,3 +231,4 @@ Status notes (2026-02-08):
 - Added `scripts/verify-history-rewrite-result.js` and `npm run check:history-rewrite-result` for post-rewrite pass/fail verification.
 - Added `scripts/finalize-history-rewrite-mailmap.js` and `npm run prep:history-rewrite:mailmap-finalize` to convert placeholder mailmap entries to a concrete noreply mapping.
 - Added `scripts/execute-history-rewrite.js` and `npm run history-rewrite:execute:plan` as a guarded maintenance-window rewrite executor (plan by default; explicit confirm required for execution/push).
+- Added `scripts/create-public-snapshot-repo.js` and `npm run prep:public-snapshot-repo` to generate the alternative single-commit public snapshot repo path.
