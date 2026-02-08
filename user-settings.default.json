@@ -28,6 +28,20 @@
       },
       "schedules": []
     },
+    "pager": {
+      "nudgeText": "next",
+      "intervalSeconds": 300,
+      "enterDelayMs": 1000,
+      "maxPings": 24,
+      "maxRuntimeMinutes": 120,
+      "customInstruction": "",
+      "customInstructionMode": "append",
+      "doneCheck": {
+        "enabled": false,
+        "token": "PAGER_DONE",
+        "prompt": "If you are 100% done with all requested work, reply exactly: PAGER_DONE and then stop."
+      }
+    },
     "policy": {
       "enabled": false,
       "defaultRole": "admin",

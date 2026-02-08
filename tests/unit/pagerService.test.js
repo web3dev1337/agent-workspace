@@ -2,8 +2,16 @@ const { PagerService } = require('../../server/pagerService');
 
 describe('PagerService', () => {
   const buildSessionManager = () => {
-    const session = {
+    const sessionA = {
       id: 'work1-claude',
+      type: 'claude',
+      workspace: 'ws-1',
+      pty: { write: jest.fn() },
+      status: 'idle',
+      buffer: ''
+    };
+    const sessionB = {
+      id: 'work2-claude',
       type: 'claude',
       workspace: 'ws-1',
       pty: { write: jest.fn() },
@@ -12,23 +20,53 @@ describe('PagerService', () => {
     };
     const writes = [];
     const sessionManager = {
-      sessions: new Map([['work1-claude', session]]),
-      workspaceSessionMaps: new Map([
-        ['ws-1', new Map([['work1-claude', session]])]
+      sessions: new Map([
+        ['work1-claude', sessionA],
+        ['work2-claude', sessionB]
       ]),
-      getSessionById: jest.fn((id) => (id === 'work1-claude' ? session : null)),
+      workspaceSessionMaps: new Map([
+        ['ws-1', new Map([
+          ['work1-claude', sessionA],
+          ['work2-claude', sessionB]
+        ])]
+      ]),
+      getSessionById: jest.fn((id) => ({
+        'work1-claude': sessionA,
+        'work2-claude': sessionB
+      }[id] || null)),
       writeToSession: jest.fn((id, data) => {
         writes.push({ id, data });
-        return id === 'work1-claude';
+        return id === 'work1-claude' || id === 'work2-claude';
       })
     };
-    return { sessionManager, session, writes };
+    const taskRecordService = {
+      get: jest.fn((id) => ({
+        'session:work1-claude': { tier: 3 },
+        'session:work2-claude': { tier: 1 }
+      }[id] || null))
+    };
+    const userSettingsService = {
+      getAllSettings: jest.fn(() => ({
+        global: {
+          pager: {
+            customInstruction: 'global-instruction',
+            customInstructionMode: 'append',
+            doneCheck: {
+              enabled: false,
+              token: 'PAGER_DONE',
+              prompt: 'If complete, reply PAGER_DONE'
+            }
+          }
+        }
+      }))
+    };
+    return { sessionManager, taskRecordService, userSettingsService, sessionA, sessionB, writes };
   };
 
   test('starts a pager job and sends two-step input', async () => {
-    const { sessionManager, writes } = buildSessionManager();
+    const { sessionManager, taskRecordService, userSettingsService, writes } = buildSessionManager();
     const service = new PagerService({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } });
-    service.init({ sessionManager });
+    service.init({ sessionManager, taskRecordService, userSettingsService });
 
     const job = await service.startJob({
       sessionId: 'work1-claude',
@@ -36,12 +74,13 @@ describe('PagerService', () => {
       enterDelayMs: 1,
       maxPings: 1,
       maxRuntimeMinutes: 120,
-      nudgeText: 'next'
+      nudgeText: 'next',
+      customInstruction: 'job-instruction'
     });
 
     expect(job.id).toBeTruthy();
     expect(writes.length).toBe(2);
-    expect(writes[0]).toEqual({ id: 'work1-claude', data: 'next' });
+    expect(writes[0]).toEqual({ id: 'work1-claude', data: 'next global-instruction job-instruction' });
     expect(writes[1]).toEqual({ id: 'work1-claude', data: '\r' });
 
     const status = service.getStatus();
@@ -50,9 +89,9 @@ describe('PagerService', () => {
   });
 
   test('stops when done token is detected', async () => {
-    const { sessionManager, session } = buildSessionManager();
+    const { sessionManager, taskRecordService, userSettingsService, sessionA } = buildSessionManager();
     const service = new PagerService({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } });
-    service.init({ sessionManager });
+    service.init({ sessionManager, taskRecordService, userSettingsService });
 
     const job = await service.startJob({
       sessionId: 'work1-claude',
@@ -65,7 +104,7 @@ describe('PagerService', () => {
     const activeJob = service.jobs.get(job.id);
     expect(activeJob.status).toBe('running');
 
-    session.buffer += '\nall done PAGER_DONE\n';
+    sessionA.buffer += '\nall done PAGER_DONE\n';
     await service.tickJob(job.id);
 
     const finalJob = service.jobs.get(job.id);
@@ -74,9 +113,9 @@ describe('PagerService', () => {
   });
 
   test('stops manually by id', async () => {
-    const { sessionManager } = buildSessionManager();
+    const { sessionManager, taskRecordService, userSettingsService } = buildSessionManager();
     const service = new PagerService({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } });
-    service.init({ sessionManager });
+    service.init({ sessionManager, taskRecordService, userSettingsService });
 
     const job = await service.startJob({
       sessionId: 'work1-claude',
@@ -88,5 +127,22 @@ describe('PagerService', () => {
     const result = service.stopJob(job.id, { reason: 'manual-test' });
     expect(result.ok).toBe(true);
     expect(result.job.stopReason).toBe('manual-test');
+  });
+
+  test('supports workspace + tier filtering for targets', async () => {
+    const { sessionManager, taskRecordService, userSettingsService, writes } = buildSessionManager();
+    const service = new PagerService({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } });
+    service.init({ sessionManager, taskRecordService, userSettingsService });
+
+    const job = await service.startJob({
+      workspaceId: 'ws-1',
+      tiers: [3],
+      enterDelayMs: 1,
+      maxPings: 1
+    });
+
+    expect(job.sessionIds).toEqual(['work1-claude']);
+    expect(job.filteredSessionIds).toContain('work2-claude');
+    expect(writes.every((row) => row.id === 'work1-claude')).toBe(true);
   });
 });
