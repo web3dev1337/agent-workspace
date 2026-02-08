@@ -93,6 +93,12 @@ Non-destructive prep helper now available:
     - dependency bootstrap check
     - workkit generation
     - readiness preflight check
+- Post-rewrite verification helper:
+  - Strict: `npm run check:history-rewrite-result`
+  - Advisory: `npm run check:history-rewrite-result:advisory`
+  - Checks:
+    - custom author/committer emails are removed (or explicitly allowed)
+    - blocked history paths are absent across `git log --all --name-only`
 - Full private execution prep workkit:
   - `npm run prep:history-rewrite`
   - Optional custom output directory:
@@ -193,3 +199,4 @@ Status notes (2026-02-08):
 - Added `scripts/check-history-rewrite-readiness.js` and `npm run check:history-rewrite-readiness` to enforce a non-destructive preflight gate before any rewrite maintenance window.
 - Added `scripts/setup-history-rewrite-tools.js` and `npm run setup:history-rewrite-tools` for cross-platform dependency bootstrap guidance (`git-filter-repo`, `gitleaks`).
 - Added `scripts/run-history-rewrite-prep.js` and `npm run prep:history-rewrite:pipeline` for one-command non-destructive prep orchestration.
+- Added `scripts/verify-history-rewrite-result.js` and `npm run check:history-rewrite-result` for post-rewrite pass/fail verification.
