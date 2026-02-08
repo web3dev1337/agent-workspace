@@ -61,3 +61,7 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #684 — docs sync: queue PR-number selection helper marked completed in Phase 4 remaining-work snapshot
 - #685 — docs sync: commander typed freeform parse route marked completed (`/api/commander/execute-text`)
 - #686 — provider-agnostic agent provider API surface (`server/agentProviderService.js` + `/api/agent-providers/*` + plugin service wiring)
+- #687 — docs sync: provider interface foundation reflected in remaining-work tracking
+- #688 — lifecycle close/remove consistency pass for paired worktree sessions (tab close + destroy + clear paths)
+- #689 — review-console pairing stability across providers (Codex agent + server pairing/order paths)
+- #690 — Codex parity in agent workflows (tiering/view filters/thread focus/GitHub link detection)
