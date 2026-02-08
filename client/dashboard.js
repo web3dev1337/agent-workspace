@@ -3843,6 +3843,23 @@ class Dashboard {
       let sessions = recoveryInfo.sessions || [];
       let savedAt = recoveryInfo.savedAt ? new Date(recoveryInfo.savedAt).toLocaleString() : 'Unknown';
       let savedAtRaw = String(recoveryInfo.savedAt || '').trim();
+      let configuredTerminalCount = Number(recoveryInfo?.configuredTerminalCount || 0);
+      let configuredWorktreeCount = Number(recoveryInfo?.configuredWorktreeCount || 0);
+
+      const formatRecoverySummary = () => {
+        let scope = '';
+        if (configuredTerminalCount > 0 || configuredWorktreeCount > 0) {
+          const wtText = configuredWorktreeCount > 0
+            ? `${configuredWorktreeCount} worktree${configuredWorktreeCount !== 1 ? 's' : ''}`
+            : null;
+          const termText = configuredTerminalCount > 0
+            ? `${configuredTerminalCount} terminal${configuredTerminalCount !== 1 ? 's' : ''}`
+            : null;
+          const details = [wtText, termText].filter(Boolean).join(' / ');
+          if (details) scope = ` (${details} configured in workspace)`;
+        }
+        return `Found ${sessions.length} recoverable session${sessions.length !== 1 ? 's' : ''} from ${savedAt}${scope}`;
+      };
 
       const modal = document.createElement('div');
       modal.id = 'recovery-dialog';
@@ -3854,7 +3871,7 @@ class Dashboard {
             <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
           </div>
           <div class="recovery-info">
-            Found ${sessions.length} recoverable session${sessions.length !== 1 ? 's' : ''} from ${savedAt}
+            ${formatRecoverySummary()}
           </div>
           <div class="recovery-sessions">
             ${sessions.length === 0 ? '<div class="no-recovery">No sessions to recover</div>' :
@@ -3994,9 +4011,11 @@ class Dashboard {
           sessions = next?.sessions || [];
           savedAt = next?.savedAt ? new Date(next.savedAt).toLocaleString() : savedAt;
           savedAtRaw = String(next?.savedAt || savedAtRaw || '').trim();
+          configuredTerminalCount = Number(next?.configuredTerminalCount ?? configuredTerminalCount);
+          configuredWorktreeCount = Number(next?.configuredWorktreeCount ?? configuredWorktreeCount);
 
           if (infoEl) {
-            infoEl.textContent = `Found ${sessions.length} recoverable session${sessions.length !== 1 ? 's' : ''} from ${savedAt}`;
+            infoEl.textContent = formatRecoverySummary();
           }
           renderSessions();
         } catch (error) {

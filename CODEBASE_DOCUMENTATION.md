@@ -32,6 +32,7 @@ server/index.js                    - Express server with Socket.IO
 server/sessionManager.js           - Terminal session lifecycle management
 ├─ Manages: PTY processes, session tracking, cleanup
 ├─ Key methods: createSession(), destroySession(), getActiveSessions()
+├─ Status model: periodic status re-evaluation prevents stale "busy" lights after output quiets down
 └─ Uses: node-pty for terminal emulation
 
 server/statusDetector.js           - Claude Code session monitoring
@@ -52,6 +53,8 @@ server/claudeVersionChecker.js     - Claude Code version detection
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
+├─ Recovery filtering: stale/non-configured session entries are pruned when requested by workspace-scoped APIs
+└─ Recovery metadata: recovery payload includes configured terminal/worktree counts for UI context
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
 server/policyBundleService.js      - Policy template catalog + bundle export/import for team governance profiles
 server/pluginLoaderService.js      - Plugin manifest validation/compatibility, command registration safety, and client slot metadata
@@ -397,6 +400,7 @@ POST /api/workspaces              - Create new workspace
 PUT /api/workspaces/:id           - Update workspace configuration
 DELETE /api/workspaces/:id        - Delete workspace
 POST /api/workspaces/:id/switch   - Switch to workspace
+POST /api/workspaces/remove-worktree - Remove worktree from workspace config, close linked sessions, keep files on disk
 GET /api/user-settings            - Get user preferences
 PUT /api/user-settings            - Update user preferences
 
