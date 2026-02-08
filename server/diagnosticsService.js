@@ -456,4 +456,47 @@ async function runFirstRunRepair({ action, rootDir, homeDir } = {}) {
   throw new Error(`Unknown repair action: ${actionId}`);
 }
 
-module.exports = { collectDiagnostics, collectFirstRunDiagnostics, runFirstRunRepair };
+async function runFirstRunSafeRepairs({ rootDir, homeDir } = {}) {
+  const diagnosticsBefore = await collectFirstRunDiagnostics({ rootDir, homeDir });
+  const allActions = Array.isArray(diagnosticsBefore?.repairActions) ? diagnosticsBefore.repairActions : [];
+  const safeActions = allActions.filter((action) => String(action?.kind || '').trim().toLowerCase() === 'safe');
+  const manualActions = allActions.filter((action) => String(action?.kind || '').trim().toLowerCase() !== 'safe');
+  const results = [];
+
+  for (const action of safeActions) {
+    const actionId = String(action?.id || '').trim();
+    if (!actionId) continue;
+    try {
+      const result = await runFirstRunRepair({ action: actionId, rootDir, homeDir });
+      results.push({
+        action: actionId,
+        ok: !!result?.ok,
+        manual: !!result?.manual,
+        message: String(result?.message || '').trim() || null
+      });
+    } catch (error) {
+      results.push({
+        action: actionId,
+        ok: false,
+        manual: false,
+        message: String(error?.message || error || 'repair failed')
+      });
+    }
+  }
+
+  const diagnostics = await collectFirstRunDiagnostics({ rootDir, homeDir });
+  const appliedCount = results.filter((result) => result.ok).length;
+  const failedCount = results.filter((result) => !result.ok).length;
+
+  return {
+    ok: failedCount === 0,
+    attemptedCount: safeActions.length,
+    appliedCount,
+    failedCount,
+    skippedManualCount: manualActions.length,
+    results,
+    diagnostics
+  };
+}
+
+module.exports = { collectDiagnostics, collectFirstRunDiagnostics, runFirstRunRepair, runFirstRunSafeRepairs };

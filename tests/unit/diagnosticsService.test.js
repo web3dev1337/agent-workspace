@@ -111,4 +111,26 @@ describe('diagnosticsService platform smoke', () => {
       else process.env.HOME = oldHome;
     }
   });
+
+  test('runFirstRunSafeRepairs runs safe actions and skips manual ones', async () => {
+    const fs = require('fs');
+    const os = require('os');
+    const path = require('path');
+
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'diag-home-safe-repair-'));
+    mockChildProcess();
+    const { runFirstRunSafeRepairs } = require('../../server/diagnosticsService');
+
+    const result = await runFirstRunSafeRepairs({ homeDir: tmpHome });
+
+    expect(result).toBeTruthy();
+    expect(typeof result.attemptedCount).toBe('number');
+    expect(result.attemptedCount).toBeGreaterThan(0);
+    expect(result.appliedCount).toBeGreaterThan(0);
+    expect(Array.isArray(result.results)).toBe(true);
+    expect(fs.existsSync(path.join(tmpHome, '.orchestrator'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpHome, '.orchestrator', 'workspaces'))).toBe(true);
+    expect(result.skippedManualCount).toBeGreaterThan(0);
+    expect(result.diagnostics?.summary).toBeTruthy();
+  });
 });
