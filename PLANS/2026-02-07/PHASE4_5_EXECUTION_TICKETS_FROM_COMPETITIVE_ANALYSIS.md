@@ -63,7 +63,7 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - added lifecycle policy unit tests for parsing/matching/default behavior.
 
 ### P0-03: Review Route dense layout defaults (throughput mode)
-- Status: Ready
+- Status: Done
 - Size: M
 - Why: review throughput is core differentiator
 - Deliverables:
@@ -74,6 +74,10 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - no page-level vertical scroll at 1440p for standard PRs
   - route mode opens directly into diff-dominant layout
   - explicit keyboard flow: next/approve/changes/merge without mouse-heavy navigation
+- Shipped in PR #TBD:
+  - added `throughput` Review Console preset and made Review Route apply it by default.
+  - added diff-first throughput grid layout tuning and paired terminal side-by-side enforcement.
+  - added Review Console PR action controls + keyboard flow (`Alt+Shift+N/A/C/M`) for next/approve/changes/merge.
 
 ### P0-04: Voice/Commander parity for simple Projects+Chats workflow
 - Status: Done (PR #635)

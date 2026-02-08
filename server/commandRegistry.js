@@ -426,12 +426,12 @@ class CommandRegistry {
 
     this.register('review-console-set-preset', {
       category: 'review-console',
-      description: 'Set Review Console preset layout (Default/Review/Deep/Terminals/Code)',
+      description: 'Set Review Console preset layout (Default/Review/Throughput/Deep/Terminals/Code)',
       params: [
-        { name: 'preset', required: true, description: 'Preset: default|review|deep|terminals|code' }
+        { name: 'preset', required: true, description: 'Preset: default|review|throughput|deep|terminals|code' }
       ],
       examples: [
-        { params: { preset: 'review' }, description: 'Terminals + Files + Diff' }
+        { params: { preset: 'throughput' }, description: 'Diff-first compact review flow' }
       ],
       handler: (params, { io }) => {
         io.emit('commander-action', { action: 'review-console-set-preset', ...params });
