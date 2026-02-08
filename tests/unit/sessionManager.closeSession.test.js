@@ -119,4 +119,54 @@ describe('SessionManager.closeSession', () => {
     const ids = sm.getSessionIdsForWorktree({ workspaceId: 'ws2', worktreeKey: 'hytopia-work7' });
     expect(ids).toEqual(['hytopia-work7-claude', 'hytopia-work7-server']);
   });
+
+  test('getSessionGroupIds returns paired sessions scoped to workspace', () => {
+    const io = { emit: jest.fn() };
+    const sm = new SessionManager(io, null);
+
+    sm.sessions.set('zoo-game-work2-claude', {
+      id: 'zoo-game-work2-claude',
+      type: 'claude',
+      workspace: 'ws1',
+      repositoryName: 'zoo-game',
+      worktreeId: 'work2',
+      pty: null
+    });
+    sm.sessions.set('zoo-game-work2-server', {
+      id: 'zoo-game-work2-server',
+      type: 'server',
+      workspace: 'ws1',
+      repositoryName: 'zoo-game',
+      worktreeId: 'work2',
+      pty: null
+    });
+
+    const otherWorkspace = new Map();
+    otherWorkspace.set('other-repo-work2-claude', {
+      id: 'other-repo-work2-claude',
+      type: 'claude',
+      workspace: 'ws2',
+      repositoryName: 'other-repo',
+      worktreeId: 'work2',
+      pty: null
+    });
+    otherWorkspace.set('other-repo-work2-server', {
+      id: 'other-repo-work2-server',
+      type: 'server',
+      workspace: 'ws2',
+      repositoryName: 'other-repo',
+      worktreeId: 'work2',
+      pty: null
+    });
+    sm.workspaceSessionMaps.set('ws2', otherWorkspace);
+
+    const ids = sm.getSessionGroupIds('zoo-game-work2-claude');
+    expect(ids).toEqual(['zoo-game-work2-claude', 'zoo-game-work2-server']);
+  });
+
+  test('getSessionGroupIds returns original id when session is missing', () => {
+    const io = { emit: jest.fn() };
+    const sm = new SessionManager(io, null);
+    expect(sm.getSessionGroupIds('missing-work9-claude')).toEqual(['missing-work9-claude']);
+  });
 });
