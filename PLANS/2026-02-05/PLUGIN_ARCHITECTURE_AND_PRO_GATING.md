@@ -136,10 +136,9 @@ Low refactor (plugin scripts + server registry):
 - higher long-term maintenance risk
 
 Medium refactor (panel registry + modular UI):
-- 1–2 weeks depending on how much UI is touched
+- 3-6 implementation slices depending on how much UI is touched
 - pays down complexity and enables real plugins
 
 High refactor (full framework migration):
-- 2–6+ weeks
+- 8+ implementation slices
 - best long-term, but not necessary to start selling
-
