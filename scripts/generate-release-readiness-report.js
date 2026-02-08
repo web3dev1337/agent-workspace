@@ -84,6 +84,15 @@ function parseJsonSafe(raw) {
   }
 }
 
+function classifyEmail(email) {
+  const value = String(email || '').trim().toLowerCase();
+  if (!value) return 'empty';
+  if (value.endsWith('@users.noreply.github.com')) return 'noreply';
+  if (value.includes('localhost') || value.includes('localdomain')) return 'local';
+  if (value.endsWith('@example.com') || value.endsWith('@example.org') || value.endsWith('@example.net')) return 'example';
+  return 'custom';
+}
+
 function getGitState(repoRoot) {
   const branch = run('git', ['branch', '--show-current'], { cwd: repoRoot });
   const aheadBehind = run('git', ['rev-list', '--left-right', '--count', 'HEAD...origin/main'], { cwd: repoRoot });
@@ -102,6 +111,25 @@ function getGitState(repoRoot) {
     ahead,
     behind,
     clean: String(clean.stdout || '').trim().length === 0
+  };
+}
+
+function getGitIdentityStatus(repoRoot) {
+  const effectiveEmailOut = run('git', ['config', 'user.email'], { cwd: repoRoot });
+  const effectiveEmail = String(effectiveEmailOut.stdout || '').trim();
+  const globalEmailOut = run('git', ['config', '--global', 'user.email'], { cwd: repoRoot });
+  const globalEmail = String(globalEmailOut.stdout || '').trim();
+
+  const effectiveEmailClass = classifyEmail(effectiveEmail);
+  const globalEmailClass = classifyEmail(globalEmail);
+
+  return {
+    effectiveEmail,
+    effectiveEmailClass,
+    effectiveIsNoreply: effectiveEmailClass === 'noreply',
+    globalEmail,
+    globalEmailClass,
+    globalIsNoreply: globalEmailClass === 'noreply'
   };
 }
 
@@ -166,6 +194,8 @@ function buildMarkdown(report) {
   lines.push('');
   lines.push(`- Git clean: ${report.checks.git.clean ? 'yes' : 'no'}`);
   lines.push(`- Ahead/behind origin/main: ${report.checks.git.ahead}/${report.checks.git.behind}`);
+  lines.push(`- Effective git email noreply: ${report.checks.gitIdentity.effectiveIsNoreply ? 'yes' : 'no'}`);
+  lines.push(`- Global git email noreply: ${report.checks.gitIdentity.globalIsNoreply ? 'yes' : 'no'}`);
   lines.push(`- Remaining-work line present: ${report.checks.remainingWork.isComplete ? 'yes' : 'no'}`);
   lines.push(`- Public release audit: ${report.checks.publicReleaseAudit.ok ? 'pass' : 'fail'}`);
   if (report.checks.publicReleaseHistoryAudit) {
@@ -179,7 +209,8 @@ function buildMarkdown(report) {
   if (report.checks.snapshotVerification.parsed) {
     lines.push(`- Snapshot commit count: ${report.checks.snapshotVerification.parsed.commitCount}`);
   }
-  lines.push(`- History custom email count (info): ${report.checks.historyAuthors.customEmails}`);
+  lines.push(`- History custom email count (canonical/info): ${report.checks.historyAuthors.customEmails}`);
+  lines.push(`- History custom email warning enabled: ${report.checks.historyAuthors.warningEnabled ? 'yes' : 'no'}`);
   lines.push('');
   return `${lines.join('\n')}\n`;
 }
@@ -190,6 +221,7 @@ function main() {
 
   const checks = {};
   checks.git = getGitState(repoRoot);
+  checks.gitIdentity = getGitIdentityStatus(repoRoot);
   checks.remainingWork = getRemainingWorkStatus(repoRoot);
   checks.snapshot = getSnapshotStatus(repoRoot, args.snapshotDir);
   checks.snapshotVerification = getSnapshotVerification(repoRoot, args.snapshotDir);
@@ -200,7 +232,7 @@ function main() {
     : null;
 
   const historyAuthorAudit = runNodeScript(repoRoot, 'scripts/audit-history-authors.js', ['--json', '/tmp/release-readiness-history-authors.json']);
-  checks.historyAuthors = { ok: historyAuthorAudit.ok, customEmails: -1 };
+  checks.historyAuthors = { ok: historyAuthorAudit.ok, customEmails: -1, warningEnabled: args.includeHistory };
   if (historyAuthorAudit.ok) {
     const parsed = parseJsonSafe(fs.readFileSync('/tmp/release-readiness-history-authors.json', 'utf8'));
     checks.historyAuthors.customEmails = parsed ? Number(parsed.customEmails || 0) : -1;
@@ -218,7 +250,9 @@ function main() {
   const warnings = [
     !checks.git.clean,
     checks.git.ahead !== 0 || checks.git.behind !== 0,
-    checks.historyAuthors.customEmails > 0
+    !checks.gitIdentity.effectiveIsNoreply,
+    !checks.gitIdentity.globalIsNoreply,
+    checks.historyAuthors.warningEnabled && checks.historyAuthors.customEmails > 0
   ].filter(Boolean).length;
 
   const report = {
