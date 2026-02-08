@@ -10,6 +10,15 @@ const anthropic = new Anthropic({
 
 const dbCache = getCache();
 
+function formatDeltaSummary(additions, deletions) {
+  const add = Number(additions || 0);
+  const del = Number(deletions || 0);
+  const parts = [];
+  if (add > 0) parts.push(`+${add}`);
+  if (del > 0) parts.push(`-${del}`);
+  return parts.join('/') || 'no line delta';
+}
+
 // Generate AI summary for PR/commit
 router.post('/generate', async (req, res) => {
   try {
@@ -52,7 +61,7 @@ Be specific and reference actual file names and changes. Keep summaries under 50
 
 Title: ${metadata.title || metadata.message}
 ${metadata.body ? `Description: ${metadata.body}` : ''}
-Stats: ${diffData.stats.files} files, +${diffData.stats.additions}/-${diffData.stats.deletions}
+Stats: ${diffData.stats.files} files, ${formatDeltaSummary(diffData.stats.additions, diffData.stats.deletions)}
 
 Key file changes:
 ${diffContext}
@@ -190,7 +199,7 @@ function prepareDiffContext(diffData, metadata) {
   if (fileGroups.source.length > 0) {
     context += '\nSource code changes:\n';
     fileGroups.source.slice(0, 10).forEach(file => {
-      context += `- ${file.filename}: ${file.status} (+${file.additions}/-${file.deletions})\n`;
+      context += `- ${file.filename}: ${file.status} (${formatDeltaSummary(file.additions, file.deletions)})\n`;
       if (file.semanticChanges) {
         context += `  Semantic: ${JSON.stringify(file.semanticChanges)}\n`;
       }
