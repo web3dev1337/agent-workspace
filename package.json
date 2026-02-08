@@ -27,7 +27,8 @@
     "test:coverage": "jest --coverage",
     "check:command-surface": "node scripts/check-command-surface-drift.js",
     "audit:public-release": "node scripts/public-release-audit.js",
-    "audit:public-release:history": "node scripts/public-release-audit.js --history-secrets"
+    "audit:public-release:history": "node scripts/public-release-audit.js --history-secrets",
+    "audit:history-authors": "node scripts/audit-history-authors.js"
   },
   "keywords": [
     "claude",
