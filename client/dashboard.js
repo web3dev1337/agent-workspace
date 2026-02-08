@@ -753,6 +753,7 @@ class Dashboard {
 		            <button class="btn-secondary" type="button" id="dashboard-telemetry-benchmark" title="Capture benchmark snapshot for release tracking">Capture benchmark</button>
 		            <button class="btn-secondary" type="button" id="dashboard-telemetry-release-notes" title="Copy benchmark release-notes summary">Copy release notes</button>
 		          </div>
+		          <div class="dashboard-telemetry-actions" id="dashboard-telemetry-plugin-actions"></div>
 		        </div>
 		        <div id="dashboard-telemetry-body" class="dashboard-telemetry-body">Loading…</div>
 		      </div>
@@ -798,6 +799,7 @@ class Dashboard {
 		    overlay.querySelector('#dashboard-telemetry-refresh')?.addEventListener('click', () => {
 		      this.loadTelemetryDetails({ lookbackHours: Number(lookbackEl?.value ?? 24), bucketMinutes: Number(bucketEl?.value ?? 60) });
 		    });
+		    this.loadTelemetryPluginActions(overlay).catch(() => {});
 
 	    const onKey = (e) => {
 	      if (e.key !== 'Escape') return;
@@ -2892,6 +2894,39 @@ class Dashboard {
 	      window.prompt('Copy link:', t);
 	    } catch {
 	      // ignore
+	    }
+	  }
+
+	  async loadTelemetryPluginActions(overlay) {
+	    const holder = overlay?.querySelector?.('#dashboard-telemetry-plugin-actions');
+	    if (!holder) return;
+	    holder.innerHTML = '';
+	    const host = window.orchestratorPluginHost;
+	    if (!host || typeof host.refresh !== 'function') return;
+	    try {
+	      await host.refresh({ slot: 'dashboard.telemetry.actions', force: true });
+	      const items = host.getSlotItems('dashboard.telemetry.actions');
+	      if (!items.length) return;
+	      for (const item of items) {
+	        const btn = document.createElement('button');
+	        btn.type = 'button';
+	        btn.className = 'btn-secondary';
+	        btn.textContent = String(item?.label || item?.id || 'Plugin');
+	        const desc = String(item?.description || '').trim();
+	        if (desc) btn.title = desc;
+	        btn.addEventListener('click', async () => {
+	          try {
+	            const result = await host.runAction(item, { orchestrator: this.orchestrator });
+	            if (result?.ok) return;
+	            this.orchestrator?.showToast?.(String(result?.error || 'Plugin action failed'), 'error');
+	          } catch (error) {
+	            this.orchestrator?.showToast?.(String(error?.message || error), 'error');
+	          }
+	        });
+	        holder.appendChild(btn);
+	      }
+	    } catch {
+	      // ignore plugin slot errors in dashboard
 	    }
 	  }
 

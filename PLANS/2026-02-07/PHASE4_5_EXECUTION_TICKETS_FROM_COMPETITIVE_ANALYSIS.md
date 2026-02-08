@@ -198,12 +198,16 @@ Convert competitive gap findings into an execution-ready backlog with acceptance
   - added tests for policy bundle workflows and audit signing behavior.
 
 ### P2-03: Client plugin surface (post-modularization)
-- Status: Later
+- Status: Done
 - Size: L
 - Deliverables:
   - modular client extension points
   - plugin UI slots and lifecycle APIs
-- Note: defer until `client/app.js` modularization reaches safe threshold.
+- Shipped in PR #TBD:
+  - added client plugin host (`client/plugin-host.js`) with slot fetch/cache, lifecycle hooks, and typed action runner (`open_url`, `open_route`, `copy_text`, `commander_action`).
+  - added plugin client-surface API route (`GET /api/plugins/client-surface`) exposing normalized slot items from loaded plugin manifests.
+  - added dashboard integration for plugin-provided telemetry actions (`dashboard.telemetry.actions`) without hardcoding plugin IDs.
+  - extended plugin manifest validation/status with `client.slots` schema checks and added unit coverage for valid/invalid slot manifests.
 
 ---
 
