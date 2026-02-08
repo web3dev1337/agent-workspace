@@ -12,6 +12,7 @@ class WorkspaceWizard {
     const { blank = false } = options;
     console.log('Opening workspace creation wizard...');
 
+    await this.orchestrator?.ensureProjectTypeTaxonomy?.();
     this.data = {};
 
     if (blank) {
