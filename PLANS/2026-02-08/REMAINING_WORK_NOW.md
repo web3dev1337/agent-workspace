@@ -13,6 +13,7 @@ This file is the canonical short list after syncing the Phase 5 execution plan a
    - Source: `PLANS/2026-02-05/HISTORY_REWRITE_PRIVACY_EMAILS_PLAN.md`
    - Reason still open: destructive operation, intentionally deferred.
    - Prep available now:
+     - `npm run setup:history-rewrite-tools` (non-destructive dependency bootstrap guidance for `git-filter-repo`/`gitleaks`)
      - `npm run audit:history-authors` (non-destructive author-email audit + mailmap template output)
      - `npm run prep:history-rewrite` (non-destructive private workkit: runbook + removal-path list + filter-repo helper script)
      - `npm run check:history-rewrite-readiness -- --workkit-dir <dir>` (non-destructive advisory preflight)
