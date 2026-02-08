@@ -64,3 +64,10 @@ playwright-report/
 
 # Diff viewer cache (contains derived data; never commit)
 diff-viewer/cache/
+
+# Debug/temp scripts
+inspect-layout.js
+a.out
+
+# Local backups
+claude_backups/
