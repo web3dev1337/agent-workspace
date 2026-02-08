@@ -169,6 +169,8 @@ class SchedulerService {
       {
         id: 'review-route-sweep',
         name: 'Review Route Sweep',
+        category: 'review',
+        risk: 'safe',
         description: 'Open the review route and refresh the queue context.',
         defaults: {
           intervalMinutes: 30,
@@ -181,6 +183,8 @@ class SchedulerService {
       {
         id: 'stuck-task-check',
         name: 'Stuck Task Check',
+        category: 'review',
+        risk: 'safe',
         description: 'Open blockers view to surface blocked items quickly.',
         defaults: {
           intervalMinutes: 45,
@@ -193,6 +197,8 @@ class SchedulerService {
       {
         id: 'dependency-blocked-report',
         name: 'Dependency Blocked Report',
+        category: 'review',
+        risk: 'safe',
         description: 'Open queue triage focused on dependency issues.',
         defaults: {
           intervalMinutes: 60,
@@ -205,10 +211,54 @@ class SchedulerService {
       {
         id: 'health-snapshot',
         name: 'Health Snapshot',
+        category: 'health',
+        risk: 'safe',
         description: 'Open advice/health context to review project readiness.',
         defaults: {
           intervalMinutes: 90,
           command: 'open-advice',
+          params: {},
+          safetyMode: 'safe',
+          enabled: false
+        }
+      },
+      {
+        id: 'queue-conveyor-t3',
+        name: 'Queue Conveyor T3',
+        category: 'review',
+        risk: 'safe',
+        description: 'Advance to the next T3 review item in queue conveyor mode.',
+        defaults: {
+          intervalMinutes: 30,
+          command: 'queue-conveyor-t3',
+          params: {},
+          safetyMode: 'safe',
+          enabled: false
+        }
+      },
+      {
+        id: 'discord-queue-cadence',
+        name: 'Discord Queue Cadence',
+        category: 'integration',
+        risk: 'caution',
+        description: 'Trigger Discord queue processing in the Services workspace.',
+        defaults: {
+          intervalMinutes: 20,
+          command: 'discord-process-queue',
+          params: {},
+          safetyMode: 'safe',
+          enabled: false
+        }
+      },
+      {
+        id: 'workspace-refresh-snapshot',
+        name: 'Workspace Refresh Snapshot',
+        category: 'maintenance',
+        risk: 'safe',
+        description: 'Refresh branches, ports, and terminal visibility across sessions.',
+        defaults: {
+          intervalMinutes: 60,
+          command: 'refresh-all',
           params: {},
           safetyMode: 'safe',
           enabled: false
@@ -234,17 +284,18 @@ class SchedulerService {
     return candidate;
   }
 
-  async createScheduleFromTemplate(templateId, options = {}) {
+  resolveTemplate(templateId) {
     const id = String(templateId || '').trim();
     if (!id) throw new Error('templateId is required');
-
-    const templates = this.getTemplates();
-    const template = templates.find((item) => String(item.id || '') === id);
+    const template = this.getTemplates().find((item) => String(item.id || '') === id);
     if (!template) throw new Error(`Unknown scheduler template: ${id}`);
+    return template;
+  }
 
+  buildScheduleFromTemplate(templateId, options = {}) {
+    const template = this.resolveTemplate(templateId);
     const cfg = this.getConfig();
     const existingIds = new Set((Array.isArray(cfg.schedules) ? cfg.schedules : []).map((schedule) => String(schedule?.id || '').trim()));
-
     const base = template.defaults || {};
     const nowIso = new Date().toISOString();
     const intervalMinutes = Number(options.intervalMinutes);
@@ -276,6 +327,36 @@ class SchedulerService {
 
     const schedule = this.normalizeSchedule(rawSchedule, cfg.schedules.length);
     if (!schedule) throw new Error('Failed to normalize schedule from template');
+
+    const safety = this.isCommandAllowed(schedule, cfg);
+    const command =
+      (this.commandRegistry && typeof this.commandRegistry.getCommand === 'function')
+        ? this.commandRegistry.getCommand(schedule.command)
+        : null;
+
+    return {
+      cfg,
+      nowIso,
+      template,
+      schedule,
+      safety,
+      command
+    };
+  }
+
+  async previewScheduleFromTemplate(templateId, options = {}) {
+    const built = this.buildScheduleFromTemplate(templateId, options);
+    return {
+      template: built.template,
+      schedule: built.schedule,
+      safety: built.safety,
+      command: built.command || null
+    };
+  }
+
+  async createScheduleFromTemplate(templateId, options = {}) {
+    const built = this.buildScheduleFromTemplate(templateId, options);
+    const { cfg, nowIso, template, schedule } = built;
 
     const nextSchedules = (Array.isArray(cfg.schedules) ? cfg.schedules : []).concat([schedule]);
     const config = await this.updateConfig({ schedules: nextSchedules });
