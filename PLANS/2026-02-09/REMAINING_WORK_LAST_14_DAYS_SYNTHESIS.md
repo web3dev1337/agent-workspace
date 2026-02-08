@@ -11,6 +11,7 @@ Inputs:
 - merged PR history through `#706`
 - merged PR history through `#708`
 - merged PR history through `#709`
+- merged PR history through `#710`
 
 ## Actionable implementation backlog
 
@@ -42,3 +43,6 @@ Inputs:
   - Guide/audit/memory docs are excluded from actionable mode classification (for example: `WINDOWS_BUILD_GUIDE.md`, `scripts/README.md`, `ai-memory/*`).
 - Release-readiness report now includes an actionable markdown gate:
   - `npm run report:release-readiness` fails the readiness gate if actionable markdown backlog is non-zero.
+- Maintenance rule for this synthesis chain:
+  - Do not create recursive docs-only sync PRs just to append the latest prior docs-sync PR number.
+  - Update this synthesis only when there is a substantive product/tooling/policy change.
