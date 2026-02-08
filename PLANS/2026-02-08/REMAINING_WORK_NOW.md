@@ -72,3 +72,5 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #695 — docs sync: append PR #694 in merged-sequence closure log
 - #696 — docs sync: remaining-work references aligned through PR #695
 - #697 — scanner output-mode hardening (`scan-markdown-remaining` JSON mode + tests)
+- #698 — docs sync: remaining-work references aligned through PR #697
+- #699 — scanner actionable-only mode (`--actionable-only`) + generated-scan classification
