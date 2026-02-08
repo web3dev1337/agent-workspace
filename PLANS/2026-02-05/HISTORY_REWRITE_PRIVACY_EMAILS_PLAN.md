@@ -99,6 +99,11 @@ Non-destructive prep helper now available:
   - Checks:
     - custom author/committer emails are removed (or explicitly allowed)
     - blocked history paths are absent across `git log --all --name-only`
+- Mailmap finalizer helper:
+  - `npm run prep:history-rewrite:mailmap-finalize -- --workkit-dir /tmp/history-rewrite-workkit`
+  - Optional explicit target:
+    - `npm run prep:history-rewrite:mailmap-finalize -- --workkit-dir /tmp/history-rewrite-workkit --target-email <id+user@users.noreply.github.com>`
+  - Replaces `REPLACE_WITH_NOREPLY_EMAIL` placeholders in `mailmap.private.txt` with a real noreply email (default from global git config).
 - Full private execution prep workkit:
   - `npm run prep:history-rewrite`
   - Optional custom output directory:
@@ -200,3 +205,4 @@ Status notes (2026-02-08):
 - Added `scripts/setup-history-rewrite-tools.js` and `npm run setup:history-rewrite-tools` for cross-platform dependency bootstrap guidance (`git-filter-repo`, `gitleaks`).
 - Added `scripts/run-history-rewrite-prep.js` and `npm run prep:history-rewrite:pipeline` for one-command non-destructive prep orchestration.
 - Added `scripts/verify-history-rewrite-result.js` and `npm run check:history-rewrite-result` for post-rewrite pass/fail verification.
+- Added `scripts/finalize-history-rewrite-mailmap.js` and `npm run prep:history-rewrite:mailmap-finalize` to convert placeholder mailmap entries to a concrete noreply mapping.
