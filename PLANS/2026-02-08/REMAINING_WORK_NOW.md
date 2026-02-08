@@ -83,3 +83,4 @@ Those are not active implementation backlog unless explicitly promoted into a ne
 - #706 — backlog-only markdown scan mode (`--backlog-only`) + docs/tests
 - #707 — docs sync: remaining-work history through PR #706
 - #708 — release-readiness gate now enforces zero actionable markdown backlog
+- #709 — docs sync: remaining-work history through PR #708
