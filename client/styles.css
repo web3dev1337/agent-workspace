@@ -860,6 +860,29 @@ header h1 {
   border-bottom: 1px solid var(--border-color);
 }
 
+.terminal-intent-haiku {
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--accent-primary) 8%, var(--bg-secondary));
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terminal-intent-haiku[data-state="loading"] {
+  opacity: 0.72;
+}
+
+.terminal-intent-haiku[data-state="error"] {
+  color: var(--accent-warning);
+}
+
 .terminal-title {
   font-weight: 600;
   font-size: 0.875rem;
