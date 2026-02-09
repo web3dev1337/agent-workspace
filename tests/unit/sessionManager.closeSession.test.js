@@ -169,4 +169,29 @@ describe('SessionManager.closeSession', () => {
     const sm = new SessionManager(io, null);
     expect(sm.getSessionGroupIds('missing-work9-claude')).toEqual(['missing-work9-claude']);
   });
+
+  test('closeSession attempts process tree cleanup for PTY pid', () => {
+    const io = { emit: jest.fn() };
+    const sm = new SessionManager(io, null);
+
+    const killSpy = jest.spyOn(process, 'kill').mockImplementation(() => true);
+    const ptyKill = jest.fn();
+    sm.sessions.set('work3-claude', {
+      id: 'work3-claude',
+      type: 'claude',
+      workspace: 'ws3',
+      pty: { pid: 43210, kill: ptyKill }
+    });
+
+    const ok = sm.closeSession('work3-claude', { clearRecovery: true });
+    expect(ok).toBe(true);
+    expect(ptyKill).toHaveBeenCalled();
+    if (process.platform === 'win32') {
+      expect(killSpy).not.toHaveBeenCalled();
+    } else {
+      expect(killSpy).toHaveBeenCalledWith(-43210, 'SIGTERM');
+    }
+
+    killSpy.mockRestore();
+  });
 });
