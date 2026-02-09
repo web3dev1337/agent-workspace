@@ -123,12 +123,23 @@ describe('StatusDetector', () => {
       expect(status).toBe('idle');
     });
 
-    it('should keep agent terminals busy for longer quiet windows', () => {
+    it('should not keep agent terminals busy after long quiet windows', () => {
       const agentSessionId = 'work1-claude';
       const buffer = `Starting work...\n${'Working '.repeat(30)}\nstill working`;
       const state = detector.getState(agentSessionId);
       state.lastBufferLength = buffer.length;
       state.lastOutputTime = Date.now() - 240000; // 4 minutes of silence
+      state.claudeLikely = false;
+      const status = detector.detectStatus(agentSessionId, buffer);
+      expect(status).toBe('idle');
+    });
+
+    it('should treat trailing ellipsis as busy only when output is recent', () => {
+      const agentSessionId = 'work2-claude';
+      const buffer = `Working through tasks...\nChecking files...\nStill running...`;
+      const state = detector.getState(agentSessionId);
+      state.lastBufferLength = buffer.length;
+      state.lastOutputTime = Date.now();
       state.claudeLikely = false;
       const status = detector.detectStatus(agentSessionId, buffer);
       expect(status).toBe('busy');
