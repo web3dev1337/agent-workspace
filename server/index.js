@@ -2964,6 +2964,18 @@ app.get('/api/threads', (req, res) => {
   }
 });
 
+app.get('/api/thread-projects', (req, res) => {
+  try {
+    const workspaceId = String(req.query.workspaceId || '').trim();
+    const includeArchived = String(req.query.includeArchived || '').trim().toLowerCase() === 'true';
+    const projects = threadService.listProjects({ workspaceId, includeArchived });
+    res.json({ ok: true, count: projects.length, projects });
+  } catch (error) {
+    logger.error('Failed to list thread projects', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to list thread projects', message: error.message });
+  }
+});
+
 app.post('/api/threads', express.json(), handleCreateThread);
 app.post('/api/threads/create', express.json(), handleCreateThread);
 
