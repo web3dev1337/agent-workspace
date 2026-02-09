@@ -3373,6 +3373,27 @@ class ClaudeOrchestrator {
     return agentId ? 'idle' : 'no-agent';
   }
 
+  getStatusTitleForVisualStatus(status) {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (normalized === 'no-agent') return 'no AI running';
+    if (normalized === 'ready-new') return 'waiting (new session)';
+    if (normalized === 'waiting') return 'waiting for your input';
+    if (normalized === 'busy') return 'busy';
+    if (normalized === 'idle') return 'idle';
+    return normalized || 'unknown';
+  }
+
+  getVisualStatusForSession(sessionId, status, session = null) {
+    const sid = String(sessionId || '').trim();
+    const row = session || this.sessions.get(sid) || null;
+    const raw = String(status || row?.status || '').trim().toLowerCase() || 'idle';
+    if (raw !== 'idle' && raw !== 'waiting' && raw !== 'busy') return raw;
+
+    const worktreeKey = this.getSessionWorktreeKey(sid, row);
+    if (!worktreeKey) return raw;
+    return this.getSidebarVisualStatusForWorktree(worktreeKey, raw);
+  }
+
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
     if (!worktreeList) return;
@@ -4683,8 +4704,9 @@ class ClaudeOrchestrator {
       if (existing) clearTimeout(existing);
 
       const apply = (next) => {
-        statusElement.className = `status-indicator ${next}`;
-        statusElement.title = next;
+        const visual = this.getVisualStatusForSession(sessionId, next, session);
+        statusElement.className = `status-indicator ${visual}`;
+        statusElement.title = this.getStatusTitleForVisualStatus(visual);
       };
 
       const shouldDelayIdle = (next) =>
