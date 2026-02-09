@@ -66,6 +66,7 @@ server/threadService.js            - Workspace/project thread persistence (`~/.o
 ├─ New chat reuse: thread creation prefers an existing repo worktree without an active thread before allocating a new `workN`
 ├─ Project aggregation: `listProjects()` returns repository-level chat rollups across one/many workspaces
 └─ Lifecycle: create/list/close/archive + session association updates
+server/discordIntegrationService.js - Discord queue orchestration bridge (Services workspace ensure/start, signed queue verification, invocation idempotency, JSONL audit log for processing dispatch/replay/fail paths)
 server/intentHaikuService.js       - Session intent summarizer for context-switch hints (optional Anthropic Haiku model, heuristic fallback)
 server/threadWorktreeSelection.js  - Repository/worktree normalization + reuse-first candidate selection for thread creation
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
@@ -452,6 +453,9 @@ GET /api/project-types/categories - Project categories with resolved base paths
 GET /api/project-types/frameworks?categoryId=... - Framework catalog (optionally scoped by category)
 GET /api/project-types/templates?frameworkId=...&categoryId=... - Template catalog (optionally scoped)
 POST /api/projects/create-workspace - Create project scaffold + matching workspace in one request
+GET /api/discord/status            - Discord queue + services health/status (counts + signature status)
+POST /api/discord/ensure-services  - Ensure Services workspace/session bootstrap; accepts optional `dangerousModeOverride`
+POST /api/discord/process-queue    - Dispatch queue processing prompt with optional `Idempotency-Key`/`idempotencyKey`, queue signature verification, idempotent replay, and audit logging
 POST /api/sessions/intent-haiku   - Generate <=200 char intent summary for an active Claude/Codex session
 GET /api/greenfield/categories    - Greenfield category list (taxonomy-backed)
 POST /api/greenfield/detect-category - Infer category from description (taxonomy keyword matching)
