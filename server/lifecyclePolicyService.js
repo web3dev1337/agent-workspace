@@ -36,11 +36,36 @@ function normalizeToken(raw) {
   return String(raw || '').trim().toLowerCase();
 }
 
+function stripSessionTypeSuffix(value) {
+  return normalizeToken(value).replace(/-(claude|codex|server)$/i, '');
+}
+
+function normalizeWorktreeToken(raw) {
+  const value = normalizeToken(raw);
+  if (!value) return '';
+  const noSuffix = stripSessionTypeSuffix(value);
+  const pathParts = noSuffix.split(/[\\/]+/).filter(Boolean);
+  const tail = pathParts[pathParts.length - 1] || noSuffix;
+  return tail;
+}
+
 function parseWorktreeKey(raw) {
   const keyRaw = String(raw || '').trim();
-  const key = normalizeToken(keyRaw);
+  const key = stripSessionTypeSuffix(keyRaw);
   if (!key) {
     return { raw: '', key: '', repositoryName: '', worktreeId: '' };
+  }
+
+  const slashParts = key.split('/').filter(Boolean);
+  if (slashParts.length > 1) {
+    const worktreeId = normalizeWorktreeToken(slashParts[slashParts.length - 1]);
+    const repositoryName = normalizeToken(slashParts.slice(0, -1).join('/'));
+    return {
+      raw: keyRaw,
+      key,
+      repositoryName,
+      worktreeId
+    };
   }
 
   const match = key.match(/^(.*)-(work\d+|main|master)$/i);
@@ -57,20 +82,34 @@ function parseWorktreeKey(raw) {
     raw: keyRaw,
     key,
     repositoryName: '',
-    worktreeId: key
+    worktreeId: normalizeWorktreeToken(key)
   };
 }
 
 function parseTerminalIdentity(terminal) {
   const repositoryName = normalizeToken(terminal?.repository?.name);
-  const worktreeId = normalizeToken(terminal?.worktree);
   const terminalId = normalizeToken(terminal?.id);
+  const terminalKey = stripSessionTypeSuffix(terminalId);
+  const worktreeId = (
+    normalizeWorktreeToken(terminal?.worktree)
+    || normalizeWorktreeToken(terminal?.worktreeId)
+    || normalizeWorktreeToken(terminal?.worktreePath)
+    || (() => {
+      if (!terminalKey) return '';
+      if (repositoryName && terminalKey.startsWith(`${repositoryName}-`)) {
+        return normalizeWorktreeToken(terminalKey.slice(repositoryName.length + 1));
+      }
+      const tokens = terminalKey.split('-').filter(Boolean);
+      return normalizeWorktreeToken(tokens[tokens.length - 1] || '');
+    })()
+  );
   const composedKey = repositoryName && worktreeId ? `${repositoryName}-${worktreeId}` : '';
 
   return {
     repositoryName,
     worktreeId,
     terminalId,
+    terminalKey,
     composedKey
   };
 }
@@ -91,6 +130,7 @@ function terminalMatchesWorktree(terminal, parsedWorktree) {
   }
   if (targetWorktree && identity.worktreeId === targetWorktree) return true;
   if (targetKey && identity.terminalId === targetKey) return true;
+  if (targetKey && identity.terminalKey === targetKey) return true;
   return false;
 }
 

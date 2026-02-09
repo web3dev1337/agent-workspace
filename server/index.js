@@ -2779,6 +2779,10 @@ function parseClearSessionsInput(req) {
   return undefined;
 }
 
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function closeThreadSessions(sessionIds = []) {
   const ids = Array.isArray(sessionIds) ? sessionIds : [];
   const toClose = new Set();
@@ -3046,12 +3050,16 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
 
     // Defensive fallback for older terminal configs where id/worktree metadata is inconsistent.
     if (updatedWorkspace.terminals.length === originalTerminalCount) {
+      const keyExpr = parsedWorktree.key ? new RegExp(`(^|[-_/])${escapeRegex(parsedWorktree.key)}($|[-_/])`, 'i') : null;
+      const worktreeExpr = parsedWorktree.worktreeId ? new RegExp(`(^|[-_/])${escapeRegex(parsedWorktree.worktreeId)}($|[-_/])`, 'i') : null;
       updatedWorkspace.terminals = originalTerminals.filter((terminal) => {
         const sid = String(terminal?.id || '').trim().toLowerCase();
         const fallbackMatch = (
           sid === parsedWorktree.key
           || (parsedWorktree.key && sid.includes(`${parsedWorktree.key}-`))
           || (parsedWorktree.worktreeId && sid.includes(`-${parsedWorktree.worktreeId}-`))
+          || (!!keyExpr && keyExpr.test(sid))
+          || (!!worktreeExpr && worktreeExpr.test(sid))
         );
         if (fallbackMatch && terminal?.id) removedTerminalIds.push(String(terminal.id));
         return !fallbackMatch;
