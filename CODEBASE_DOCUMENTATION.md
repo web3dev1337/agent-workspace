@@ -275,7 +275,7 @@ scripts/public-release-audit.js    - Public-release safety audit automation
 ├─ Checks: tracked cache/DB artifacts, public-doc path hygiene, loopback/auth defaults
 └─ Optional: full-history gitleaks scan (`--history-secrets`)
 
-scripts/create-project.js          - Taxonomy-driven project scaffold generator (templates, git init, optional GitHub remote, worktree bootstrap)
+scripts/create-project.js          - Taxonomy-driven project scaffold generator (template/project-kit source resolution, optional post-create hooks, git init, optional GitHub remote, worktree bootstrap)
 ```
 
 ## Advanced Diff Viewer Component

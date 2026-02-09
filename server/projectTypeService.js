@@ -141,6 +141,7 @@ const FALLBACK_TAXONOMY = {
       description: 'Simple website scaffold',
       frameworkId: 'web-generic',
       scaffoldPath: 'templates/scaffolds/website',
+      projectKitPath: 'templates/project-kits/website-starter',
       defaultRepositoryType: 'website',
       defaultLaunchSettingsType: 'website',
       buttonProfileId: 'website'
@@ -151,6 +152,7 @@ const FALLBACK_TAXONOMY = {
       description: 'Hytopia game scaffold',
       frameworkId: 'hytopia',
       scaffoldPath: 'templates/scaffolds/hytopia-game',
+      projectKitPath: 'templates/project-kits/hytopia-game-starter',
       defaultRepositoryType: 'hytopia-game',
       defaultLaunchSettingsType: 'hytopia-game',
       buttonProfileId: 'hytopia-game'
@@ -161,6 +163,7 @@ const FALLBACK_TAXONOMY = {
       description: 'Node.js + TypeScript starter',
       frameworkId: 'nodejs',
       scaffoldPath: 'templates/scaffolds/cli-tool',
+      projectKitPath: 'templates/project-kits/node-typescript-tool',
       defaultRepositoryType: 'tool-project',
       defaultLaunchSettingsType: 'website',
       buttonProfileId: 'tool'
@@ -171,6 +174,7 @@ const FALLBACK_TAXONOMY = {
       description: 'Minimal scaffold',
       frameworkId: 'generic',
       scaffoldPath: 'templates/scaffolds/generic',
+      projectKitPath: 'templates/project-kits/generic-empty',
       defaultRepositoryType: 'generic',
       defaultLaunchSettingsType: 'writing',
       buttonProfileId: 'generic'
@@ -246,6 +250,10 @@ class ProjectTypeService {
         description: normalizeString(row?.description),
         frameworkId: normalizeString(row?.frameworkId),
         scaffoldPath: normalizeString(row?.scaffoldPath),
+        projectKitPath: normalizeString(row?.projectKitPath),
+        postCreateCommands: Array.isArray(row?.postCreateCommands)
+          ? row.postCreateCommands.map((item) => normalizeString(item)).filter(Boolean)
+          : [],
         defaultRepositoryType: normalizeString(row?.defaultRepositoryType) || 'generic',
         defaultLaunchSettingsType: normalizeString(row?.defaultLaunchSettingsType) || 'website',
         buttonProfileId: normalizeString(row?.buttonProfileId) || 'generic'
