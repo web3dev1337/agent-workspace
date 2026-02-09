@@ -197,6 +197,7 @@ class Dashboard {
         <div class="workspace-grid">
           ${inactiveWorkspaces.map(ws => this.generateWorkspaceCard(ws, false)).join('')}
           ${this.generateCreateWorkspaceCard()}
+          ${this.generateCreateProjectCard()}
         </div>
       </div>
 
@@ -3208,6 +3209,28 @@ class Dashboard {
     `;
   }
 
+  generateCreateProjectCard() {
+    return `
+      <div class="workspace-card create-card create-project-card">
+        <div class="workspace-card-header">
+          <span class="workspace-icon">✨</span>
+          <div class="workspace-info">
+            <h3>New Project</h3>
+            <p class="workspace-type">Greenfield Flow</p>
+          </div>
+        </div>
+
+        <div class="workspace-card-body">
+          <p>Create a brand-new project, scaffold it, and open a workspace in one flow</p>
+        </div>
+
+        <div class="workspace-card-footer">
+          <button class="btn-primary workspace-create-project-btn">Create Project</button>
+        </div>
+      </div>
+    `;
+  }
+
   generateQuickLinksHTML() {
     // Get globalShortcuts from config
     const globalShortcuts = this.orchestrator.orchestratorConfig?.globalShortcuts || [];
@@ -3316,6 +3339,13 @@ class Dashboard {
       });
     }
 
+    const createProjectBtn = document.querySelector('.workspace-create-project-btn');
+    if (createProjectBtn) {
+      createProjectBtn.addEventListener('click', () => {
+        this.showCreateProjectWizard();
+      });
+    }
+
     // ESC: return to tabbed workspaces if dashboard was opened from there
     if (this._escHandler) {
       document.removeEventListener('keydown', this._escHandler);
@@ -3360,6 +3390,16 @@ class Dashboard {
     } catch (err) {
       this.orchestrator?.showToast?.(`Cleanup failed: ${String(err?.message || err)}`, 'error');
     }
+  }
+
+  showCreateProjectWizard() {
+    if (typeof this.orchestrator?.openGreenfieldWizard === 'function') {
+      this.orchestrator.openGreenfieldWizard().catch((error) => {
+        this.orchestrator?.showToast?.(`Failed to open New Project wizard: ${String(error?.message || error)}`, 'error');
+      });
+      return;
+    }
+    this.orchestrator?.showToast?.('New Project wizard is unavailable in this build', 'warning');
   }
 
   async openWorkspace(workspaceId) {

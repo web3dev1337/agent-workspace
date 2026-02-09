@@ -155,14 +155,15 @@ client/workspace-wizard.js         - Workspace creation wizard
 
 client/greenfield-wizard.js        - New-project wizard (greenfield creation flow)
 ├─ Uses project taxonomy categories before rendering
-└─ Calls `/api/greenfield/*` creation APIs for full project bootstrap
+├─ Uses socket `create-new-project` with REST fallback (`POST /api/projects/create-workspace`)
+└─ Full-screen wizard UI for project scaffolding + workspace creation
 
 client/workspace-tab-manager.js    - Multi-workspace tab management (NEW)
 ├─ Features: Browser-like tabs for multiple workspaces
 ├─ Manages: Tab creation, switching, state preservation
 ├─ XTerm lifecycle: Proper hide/show with fit() handling
 ├─ Notifications: Badge counts for inactive tabs
-└─ Keyboard shortcuts: Ctrl+Tab, Ctrl+W, Ctrl+T, Ctrl+1-9
+└─ Keyboard shortcuts: Alt+←/→, Alt+W, Alt+N, Alt+Shift+N, Alt+1-9
 
 client/styles/tabs.css             - Tab bar styling
 ├─ Features: Tab UI, badges, animations
@@ -221,7 +222,13 @@ TabState Structure:
 - Alt+← / Alt+→ to cycle tabs (previous/next)
 - Alt+1-9 to jump to specific tab
 - Alt+N for new workspace
+- Alt+Shift+N for full-screen New Project wizard
 - Alt+W to close current tab
+
+Dashboard notes:
+- "Create Workspace" card remains for workspace-only setup
+- "New Project" card opens the greenfield wizard directly
+- Terminal headers include a `✨` quick action to open the New Project wizard from any session
 
 ```
 

@@ -360,8 +360,7 @@ class ClaudeOrchestrator {
       if (typeof GreenfieldWizard !== 'undefined') {
         this.greenfieldWizard = new GreenfieldWizard(this);
         document.getElementById('greenfield-btn')?.addEventListener('click', async () => {
-          await this.ensureProjectTypeTaxonomy();
-          this.greenfieldWizard.show();
+          await this.openGreenfieldWizard();
         });
         console.log('Greenfield wizard initialized');
       }
@@ -2100,7 +2099,7 @@ class ClaudeOrchestrator {
 
     // Keyboard: Alt+1/2/3/4 set tier filter; Alt+0 or Alt+A sets All; Alt+N sets None.
     document.addEventListener('keydown', (e) => {
-      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
 
       // Ignore when typing in inputs/selects/contenteditable.
       const t = e.target;
@@ -2997,6 +2996,13 @@ class ClaudeOrchestrator {
         showWhen: 'always',
         terminalType: 'claude'
       },
+      newProject: {
+        icon: '✨',
+        title: 'Create New Project',
+        action: 'openGreenfieldWizard',
+        showWhen: 'always',
+        terminalType: 'both'
+      },
 
       // Server terminal buttons
       play: {
@@ -3086,8 +3092,9 @@ class ClaudeOrchestrator {
     const buttonDefs = cascadedConfig.buttons[terminalType] || {};
     const buttons = [];
 
-    // Always add focus button first
+    // Always add focus + create-project quick action first
     buttons.push(this.renderButton('focus', this.buttonRegistry.focus, sessionId));
+    buttons.push(this.renderButton('newProject', this.buttonRegistry.newProject, sessionId));
 
     // Render configured buttons
     for (const [buttonId, buttonConfig] of Object.entries(buttonDefs)) {
@@ -3119,6 +3126,7 @@ class ClaudeOrchestrator {
       showClaudeStartupModal: `window.orchestrator.showClaudeStartupModal('${sessionId}')`,
       refreshTerminal: `window.orchestrator.refreshTerminal('${sessionId}')`,
       showCodeReviewDropdown: `window.orchestrator.showCodeReviewDropdown('${sessionId}')`,
+      openGreenfieldWizard: `window.orchestrator.openGreenfieldWizard()`,
       playInHytopia: `window.orchestrator.playInHytopia('${sessionId}')`,
       copyLocalhostUrl: `window.orchestrator.copyLocalhostUrl('${sessionId}')`,
       openHytopiaWebsite: `window.orchestrator.openHytopiaWebsite()`,
@@ -3138,6 +3146,7 @@ class ClaudeOrchestrator {
     if (terminalType === 'claude') {
       return [
         this.renderButton('focus', this.buttonRegistry.focus, sessionId),
+        this.renderButton('newProject', this.buttonRegistry.newProject, sessionId),
         this.renderButton('claudeStart', this.buttonRegistry.claudeStart, sessionId),
         this.renderButton('claudeModal', this.buttonRegistry.claudeModal, sessionId),
         this.renderButton('refresh', this.buttonRegistry.refresh, sessionId),
@@ -3148,6 +3157,7 @@ class ClaudeOrchestrator {
     } else {
       return [
         this.renderButton('focus', this.buttonRegistry.focus, sessionId),
+        this.renderButton('newProject', this.buttonRegistry.newProject, sessionId),
         this.renderButton('build', this.buttonRegistry.build, sessionId),
         this.renderButton('interrupt', this.buttonRegistry.interrupt, sessionId),
         this.renderButton('kill', this.buttonRegistry.kill, sessionId)
@@ -5276,11 +5286,9 @@ class ClaudeOrchestrator {
         break;
 
       case 'open-greenfield':
-        if (this.greenfieldWizard) {
-          this.ensureProjectTypeTaxonomy().finally(() => {
-            this.greenfieldWizard.show();
-          });
-        }
+        this.openGreenfieldWizard().catch((error) => {
+          this.showToast?.(`Failed to open New Project wizard: ${String(error?.message || error)}`, 'error');
+        });
         break;
 
       case 'open-settings':
@@ -7240,6 +7248,21 @@ class ClaudeOrchestrator {
         });
       }
     }, 60);
+  }
+
+  async openGreenfieldWizard() {
+    if (!this.greenfieldWizard) {
+      this.showToast?.('New Project wizard is unavailable in this build', 'warning');
+      return;
+    }
+
+    try {
+      await this.ensureProjectTypeTaxonomy();
+    } catch (error) {
+      console.warn('Failed to preload project taxonomy:', error);
+    }
+
+    await this.greenfieldWizard.show();
   }
   
 	  syncSettingsUI() {
