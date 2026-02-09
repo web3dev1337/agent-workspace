@@ -163,7 +163,7 @@ client/workspace-wizard.js         - Workspace creation wizard
 
 client/greenfield-wizard.js        - New-project wizard (greenfield creation flow)
 ├─ Uses project taxonomy categories before rendering
-├─ Uses socket `create-new-project` with REST fallback (`POST /api/projects/create-workspace`)
+├─ Calls `orchestrator.createProjectWorkspace(options)` to centralize socket + REST fallback (`POST /api/projects/create-workspace`)
 ├─ Category → framework → template drilldown based on taxonomy relationships
 ├─ Workspace-context suggestion (repo type -> recommended template/framework defaults)
 └─ Full-screen wizard UI for project scaffolding + workspace creation
