@@ -94,6 +94,7 @@ server/workspaceTypes.js            - Workspace type definitions
 
 server/worktreeHelper.js            - Git worktree operations wrapper
 ├─ Operations: Create, delete, manage git worktrees
+├─ Bootstrap helper: `createProjectWorktrees({ projectPath, count, baseBranch })` for initial `workN` creation
 ├─ Integration: Seamless workspace-worktree coordination
 └─ Safety: Path validation and cleanup handling
 ```
@@ -280,7 +281,7 @@ scripts/public-release-audit.js    - Public-release safety audit automation
 ├─ Checks: tracked cache/DB artifacts, public-doc path hygiene, loopback/auth defaults
 └─ Optional: full-history gitleaks scan (`--history-secrets`)
 
-scripts/create-project.js          - Taxonomy-driven project scaffold generator (template/project-kit source resolution, optional post-create hooks, git init, optional GitHub remote, worktree bootstrap)
+scripts/create-project.js          - Taxonomy-driven project scaffold generator (template/project-kit source resolution, optional post-create hooks, git init, optional GitHub remote, worktree bootstrap via WorktreeHelper)
 ```
 
 ## Advanced Diff Viewer Component
