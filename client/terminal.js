@@ -1150,6 +1150,7 @@ class TerminalManager {
     if (data === '\r' || data === '\n') {
       // Enter pressed: save command to history, clear buffer
       if (buf.trim()) {
+        this.orchestrator?.handleTerminalCommandExecuted?.(sessionId, buf);
         this.orchestrator?.socket?.emit('command-executed', { sessionId, command: buf });
       }
       this.inputBuffers.set(sessionId, '');
