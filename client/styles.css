@@ -1440,12 +1440,51 @@ header h1 {
 }
 
 .projects-chats-modal .modal-content {
-  max-width: min(1200px, 96vw);
-  width: min(1200px, 96vw);
-  max-height: 90vh;
+  max-width: 100vw;
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.projects-chats-modal .modal-header {
+  padding-inline: 16px;
+}
+
+.projects-chats-modal .projects-chats-shell {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.greenfield-wizard-modal {
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
+}
+
+.greenfield-wizard-modal .greenfield-fullscreen-content {
+  width: 100vw;
+  max-width: 100vw !important;
+  height: 100vh;
+  max-height: 100vh !important;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.greenfield-wizard-modal .wizard-header,
+.greenfield-wizard-modal .wizard-progress,
+.greenfield-wizard-modal .wizard-footer {
+  padding-inline: clamp(12px, 2vw, 24px);
+}
+
+.greenfield-wizard-modal .wizard-body {
+  max-height: none;
 }
 
 .projects-chats-shell {
@@ -6040,6 +6079,15 @@ header h1 {
 .workspace-card.create-card:hover {
   border-color: var(--accent-warning);
   background: rgba(210, 153, 34, 0.1);
+}
+
+.workspace-card.create-project-card {
+  border-color: color-mix(in srgb, var(--accent-primary) 55%, var(--border-color));
+}
+
+.workspace-card.create-project-card:hover {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
 }
 
 .workspace-card-header {
