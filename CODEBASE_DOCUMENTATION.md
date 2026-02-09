@@ -173,6 +173,7 @@ client/greenfield-wizard.js        - New-project wizard (greenfield creation flo
 ├─ Uses project taxonomy categories before rendering
 ├─ Calls `orchestrator.createProjectWorkspace(options)` to centralize socket + REST fallback (`POST /api/projects/create-workspace`)
 ├─ Category → framework → template drilldown based on taxonomy relationships
+├─ GitHub controls: supports optional local-only creation (`createGithub=false`), explicit repo target (`owner/repo` or URL), and optional GitHub org/user prefix
 ├─ Workspace-context suggestion (repo type -> recommended template/framework defaults)
 └─ Full-screen wizard UI for project scaffolding + workspace creation
 
