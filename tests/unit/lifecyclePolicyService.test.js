@@ -22,6 +22,13 @@ describe('lifecyclePolicyService', () => {
     expect(parsed.key).toBe('zoo-game-work6');
   });
 
+  test('parseWorktreeKey supports slash-form repository/worktree keys', () => {
+    const parsed = parseWorktreeKey('hytopia/zoo-game/work3');
+    expect(parsed.repositoryName).toBe('hytopia/zoo-game');
+    expect(parsed.worktreeId).toBe('work3');
+    expect(parsed.key).toBe('hytopia/zoo-game/work3');
+  });
+
   test('parseTerminalIdentity extracts repo/worktree metadata', () => {
     const identity = parseTerminalIdentity({
       id: 'zoo-game-work6-claude',
@@ -31,6 +38,16 @@ describe('lifecyclePolicyService', () => {
     expect(identity.repositoryName).toBe('zoo-game');
     expect(identity.worktreeId).toBe('work6');
     expect(identity.composedKey).toBe('zoo-game-work6');
+  });
+
+  test('parseTerminalIdentity normalizes worktree id from worktreePath fallback', () => {
+    const identity = parseTerminalIdentity({
+      id: 'legacy-session',
+      repository: { name: 'incremental-game' },
+      worktreePath: '/home/user/GitHub/games/monogame/incremental-game/work2'
+    });
+    expect(identity.worktreeId).toBe('work2');
+    expect(identity.composedKey).toBe('incremental-game-work2');
   });
 
   test('terminalMatchesWorktree avoids false positives like work1 vs work10', () => {
@@ -47,6 +64,15 @@ describe('lifecyclePolicyService', () => {
     };
     expect(terminalMatchesWorktree(work1Terminal, parsed)).toBe(true);
     expect(terminalMatchesWorktree(work10Terminal, parsed)).toBe(false);
+  });
+
+  test('terminalMatchesWorktree matches fallback terminal id keys without explicit worktree field', () => {
+    const parsed = parseWorktreeKey('epic-survivors-work9');
+    const terminal = {
+      id: 'epic-survivors-work9-server',
+      repository: { name: 'epic-survivors' }
+    };
+    expect(terminalMatchesWorktree(terminal, parsed)).toBe(true);
   });
 
   test('thread action close-session defaults can be overridden', () => {
