@@ -11146,6 +11146,36 @@ header h1 {
   border-bottom: 1px solid var(--border-color);
 }
 
+.recovery-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+
+.recovery-metric-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.recovery-metric-primary {
+  border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-primary) 14%, var(--bg-tertiary));
+  color: var(--text-primary);
+}
+
+.recovery-summary-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .recovery-note {
   padding: var(--space-xs) var(--space-lg);
   font-size: 0.8rem;
