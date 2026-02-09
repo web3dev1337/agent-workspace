@@ -184,6 +184,79 @@ class ThreadService {
       .sort((a, b) => Date.parse(String(b.lastActivityAt || b.updatedAt || 0)) - Date.parse(String(a.lastActivityAt || a.updatedAt || 0)));
   }
 
+  listProjects({ workspaceId, includeArchived = false } = {}) {
+    this.ensureLoaded();
+    const rows = this.list({ workspaceId, status: 'all', includeArchived: true });
+    const projects = new Map();
+
+    for (const thread of rows) {
+      if (!thread) continue;
+      const workspaceIdValue = String(thread.workspaceId || '').trim();
+      if (!workspaceIdValue) continue;
+      const projectId = String(thread.projectId || this.deriveProjectId(thread, workspaceIdValue) || '').trim();
+      if (!projectId) continue;
+
+      if (!projects.has(projectId)) {
+        projects.set(projectId, {
+          projectId,
+          repositoryName: String(thread.repositoryName || '').trim() || null,
+          repositoryPath: String(thread.repositoryPath || '').trim() || null,
+          repositoryType: String(thread.repositoryType || '').trim() || null,
+          workspaceIds: new Set(),
+          activeThreadCount: 0,
+          closedThreadCount: 0,
+          archivedThreadCount: 0,
+          latestActivityAt: String(thread.lastActivityAt || thread.updatedAt || thread.createdAt || '').trim() || null
+        });
+      }
+
+      const project = projects.get(projectId);
+      project.workspaceIds.add(workspaceIdValue);
+      if (!project.repositoryName && thread.repositoryName) project.repositoryName = String(thread.repositoryName).trim();
+      if (!project.repositoryPath && thread.repositoryPath) project.repositoryPath = String(thread.repositoryPath).trim();
+      if (!project.repositoryType && thread.repositoryType) project.repositoryType = String(thread.repositoryType).trim();
+
+      const status = String(thread.status || '').trim().toLowerCase();
+      if (status === 'archived') project.archivedThreadCount += 1;
+      else if (status === 'closed') project.closedThreadCount += 1;
+      else project.activeThreadCount += 1;
+
+      const currentActivity = Date.parse(String(project.latestActivityAt || 0));
+      const candidateActivity = Date.parse(String(thread.lastActivityAt || thread.updatedAt || thread.createdAt || 0));
+      if (Number.isFinite(candidateActivity) && (!Number.isFinite(currentActivity) || candidateActivity > currentActivity)) {
+        project.latestActivityAt = new Date(candidateActivity).toISOString();
+      }
+    }
+
+    const output = [];
+    for (const project of projects.values()) {
+      const nonArchivedCount = project.activeThreadCount + project.closedThreadCount;
+      if (!includeArchived && nonArchivedCount <= 0) continue;
+
+      const workspaceIds = Array.from(project.workspaceIds).sort((a, b) => a.localeCompare(b));
+      const workspaceNames = workspaceIds.map((id) => {
+        const workspace = this.workspaceManager?.getWorkspace?.(id);
+        return String(workspace?.name || id).trim();
+      });
+
+      output.push({
+        projectId: project.projectId,
+        repositoryName: project.repositoryName || null,
+        repositoryPath: project.repositoryPath || null,
+        repositoryType: project.repositoryType || null,
+        workspaceIds,
+        workspaceNames,
+        threadCount: includeArchived ? (nonArchivedCount + project.archivedThreadCount) : nonArchivedCount,
+        activeThreadCount: project.activeThreadCount,
+        closedThreadCount: project.closedThreadCount,
+        archivedThreadCount: project.archivedThreadCount,
+        latestActivityAt: project.latestActivityAt || null
+      });
+    }
+
+    return output.sort((a, b) => Date.parse(String(b.latestActivityAt || 0)) - Date.parse(String(a.latestActivityAt || 0)));
+  }
+
   getById(threadId) {
     this.ensureLoaded();
     const id = this.normalizeId(threadId);
