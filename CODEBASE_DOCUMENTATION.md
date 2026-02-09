@@ -245,6 +245,7 @@ Dashboard notes:
 - "Create Workspace" card remains for workspace-only setup
 - "New Project" card opens the greenfield wizard directly
 - Terminal headers include a `✨` quick action to open the New Project wizard from any session
+- Recovery prompt explicitly separates "recoverable sessions" from total configured worktree/terminal counts
 
 ```
 
