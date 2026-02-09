@@ -1,0 +1,20 @@
+{
+  "name": "{{projectName}}",
+  "version": "1.0.0",
+  "description": "A CLI tool",
+  "bin": {
+    "{{projectName}}": "./bin/cli.js"
+  },
+  "scripts": {
+    "dev": "node bin/cli.js",
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
