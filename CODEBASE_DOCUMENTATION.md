@@ -66,6 +66,7 @@ server/threadService.js            - Workspace/project thread persistence (`~/.o
 ├─ New chat reuse: thread creation prefers an existing repo worktree without an active thread before allocating a new `workN`
 ├─ Project aggregation: `listProjects()` returns repository-level chat rollups across one/many workspaces
 └─ Lifecycle: create/list/close/archive + session association updates
+server/intentHaikuService.js       - Session intent summarizer for context-switch hints (optional Anthropic Haiku model, heuristic fallback)
 server/threadWorktreeSelection.js  - Repository/worktree normalization + reuse-first candidate selection for thread creation
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
 server/policyBundleService.js      - Policy template catalog + bundle export/import for team governance profiles
@@ -151,6 +152,7 @@ client/app.js                      - Main client application
 ├─ Manages: UI state, socket connections, terminal grid
 ├─ Features: 16-terminal layout, real-time updates, session switching
 ├─ Command Palette: header `⌘ Commands` button + `Ctrl/Cmd+K` searchable command launcher for command-catalog actions
+├─ Intent hints: compact "intent haiku" strip above each agent terminal, refreshed from `POST /api/sessions/intent-haiku`
 ├─ Projects + Chats automation: `project-chats-new` Commander/voice action supports explicit workspace + repository targeting
 ├─ Projects + Chats list: repository-first aggregation (project-centric view) while preserving workspace context for mixed workspaces
 ├─ Projects + Chats data source: prefers server-aggregated repository projects from `GET /api/thread-projects` with client fallback aggregation
@@ -450,6 +452,7 @@ GET /api/project-types/categories - Project categories with resolved base paths
 GET /api/project-types/frameworks?categoryId=... - Framework catalog (optionally scoped by category)
 GET /api/project-types/templates?frameworkId=...&categoryId=... - Template catalog (optionally scoped)
 POST /api/projects/create-workspace - Create project scaffold + matching workspace in one request
+POST /api/sessions/intent-haiku   - Generate <=200 char intent summary for an active Claude/Codex session
 GET /api/greenfield/categories    - Greenfield category list (taxonomy-backed)
 POST /api/greenfield/detect-category - Infer category from description (taxonomy keyword matching)
 GET /api/user-settings            - Get user preferences
