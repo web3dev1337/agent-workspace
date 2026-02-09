@@ -14539,6 +14539,20 @@ class ClaudeOrchestrator {
     return Array.isArray(data?.threads) ? data.threads : [];
   }
 
+  async fetchThreadProjects({ workspaceId = '', includeArchived = false } = {}) {
+    const query = new URLSearchParams();
+    const ws = String(workspaceId || '').trim();
+    if (ws) query.set('workspaceId', ws);
+    if (includeArchived) query.set('includeArchived', 'true');
+    const suffix = query.toString();
+    const res = await fetch(`/api/thread-projects${suffix ? `?${suffix}` : ''}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Failed to load projects (${res.status})`));
+    }
+    return Array.isArray(data?.projects) ? data.projects : [];
+  }
+
   loadProjectChatsThreadPrefs() {
     try {
       const raw = localStorage.getItem('project-chats:thread-prefs');
@@ -14580,6 +14594,45 @@ class ClaudeOrchestrator {
   }
 
   buildProjectChatsProjectRows(state) {
+    const serverRows = Array.isArray(state?.projectRows) ? state.projectRows : [];
+    if (serverRows.length) {
+      const selectedWorkspaceId = String(state?.selectedWorkspaceId || '').trim();
+      const currentWorkspaceId = String(this.currentWorkspace?.id || '').trim();
+      const rows = serverRows.map((row) => {
+        const workspaceIds = Array.isArray(row?.workspaceIds) ? row.workspaceIds.map((id) => String(id || '').trim()).filter(Boolean) : [];
+        const workspaceNames = Array.isArray(row?.workspaceNames) ? row.workspaceNames.map((name) => String(name || '').trim()).filter(Boolean) : [];
+        const repoPath = String(row?.repositoryPath || '').trim();
+        const repoName = String(row?.repositoryName || '').trim()
+          || (repoPath ? repoPath.split(/[\\/]/).filter(Boolean).pop() : '')
+          || (workspaceNames[0] || workspaceIds[0] || 'Repository');
+        const repoType = String(row?.repositoryType || '').trim();
+        const repoKey = this.getProjectChatsRepositoryKey({ path: repoPath, name: repoName });
+        const uniqueKey = String(row?.projectId || repoKey || workspaceIds[0] || '').trim() || `project:${repoName.toLowerCase()}`;
+        let preferredWorkspaceId = workspaceIds[0] || '';
+        if (selectedWorkspaceId && workspaceIds.includes(selectedWorkspaceId)) preferredWorkspaceId = selectedWorkspaceId;
+        else if (currentWorkspaceId && workspaceIds.includes(currentWorkspaceId)) preferredWorkspaceId = currentWorkspaceId;
+        return {
+          uniqueKey,
+          repoKey,
+          repoName,
+          repoPath,
+          repoType,
+          workspaceIds,
+          workspaceNames,
+          defaultWorkspaceIds: workspaceIds.slice(),
+          preferredWorkspaceId
+        };
+      });
+      rows.sort((a, b) => {
+        const repoCmp = String(a.repoName || a.repoPath || a.uniqueKey || '').localeCompare(String(b.repoName || b.repoPath || b.uniqueKey || ''));
+        if (repoCmp !== 0) return repoCmp;
+        const aWs = String(a.workspaceNames?.[0] || a.workspaceIds?.[0] || '');
+        const bWs = String(b.workspaceNames?.[0] || b.workspaceIds?.[0] || '');
+        return aWs.localeCompare(bWs);
+      });
+      return rows;
+    }
+
     const workspaces = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
     const byRepo = new Map();
 
@@ -14995,6 +15048,7 @@ class ClaudeOrchestrator {
       selectedWorkspaceId: String(this.currentWorkspace?.id || workspaces[0]?.id || '').trim() || null,
       includeArchived: false,
       threadsByWorkspace: new Map(),
+      projectRows: [],
       selectedRepositoryByWorkspace: new Map(),
       projectQuery: '',
       threadQuery: '',
@@ -15007,6 +15061,15 @@ class ClaudeOrchestrator {
       const threads = await this.fetchThreadsForWorkspace(workspaceId, { includeArchived: state.includeArchived });
       state.threadsByWorkspace.set(workspaceId, threads);
       return threads;
+    };
+
+    const loadProjects = async () => {
+      try {
+        state.projectRows = await this.fetchThreadProjects({ includeArchived: state.includeArchived });
+      } catch {
+        state.projectRows = [];
+      }
+      return state.projectRows;
     };
 
     const render = () => {
@@ -15058,7 +15121,10 @@ class ClaudeOrchestrator {
       if (event.target.closest('[data-project-chats-refresh="true"]')) {
         if (!state.selectedWorkspaceId) return;
         try {
-          await loadThreads(state.selectedWorkspaceId);
+          await Promise.all([
+            loadThreads(state.selectedWorkspaceId),
+            loadProjects()
+          ]);
           render();
         } catch (error) {
           this.showToast?.(`Failed to refresh chats: ${String(error?.message || error)}`, 'error');
@@ -15076,6 +15142,7 @@ class ClaudeOrchestrator {
       if (event.target.closest('[data-project-chats-new="true"]')) {
         try {
           const created = await this.createThreadFromProjectChats(modal, state);
+          await loadProjects();
           render();
           if (created) await this.openThreadFromProjectChats(created);
         } catch (error) {
@@ -15114,7 +15181,10 @@ class ClaudeOrchestrator {
           const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/close`, { method: 'POST' });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || data?.ok === false) throw new Error(String(data?.error || data?.message || 'Failed to close chat'));
-          await loadThreads(state.selectedWorkspaceId);
+          await Promise.all([
+            loadThreads(state.selectedWorkspaceId),
+            loadProjects()
+          ]);
           render();
         } catch (error) {
           this.showToast?.(`Failed to close chat: ${String(error?.message || error)}`, 'error');
@@ -15130,7 +15200,10 @@ class ClaudeOrchestrator {
           const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/archive`, { method: 'POST' });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || data?.ok === false) throw new Error(String(data?.error || data?.message || 'Failed to archive chat'));
-          await loadThreads(state.selectedWorkspaceId);
+          await Promise.all([
+            loadThreads(state.selectedWorkspaceId),
+            loadProjects()
+          ]);
           render();
         } catch (error) {
           this.showToast?.(`Failed to archive chat: ${String(error?.message || error)}`, 'error');
@@ -15142,11 +15215,15 @@ class ClaudeOrchestrator {
     includeArchivedEl?.addEventListener('change', async (event) => {
       state.includeArchived = !!event.target.checked;
       if (!state.selectedWorkspaceId) {
+        await loadProjects().catch(() => {});
         render();
         return;
       }
       try {
-        await loadThreads(state.selectedWorkspaceId);
+        await Promise.all([
+          loadThreads(state.selectedWorkspaceId),
+          loadProjects()
+        ]);
         render();
       } catch (error) {
         this.showToast?.(`Failed to load chats: ${String(error?.message || error)}`, 'error');
@@ -15178,6 +15255,11 @@ class ClaudeOrchestrator {
       render();
     });
 
+    try {
+      await loadProjects();
+    } catch {
+      // keep UI functional with fallback project rows
+    }
     render();
     if (state.selectedWorkspaceId) {
       try {
@@ -15194,6 +15276,7 @@ class ClaudeOrchestrator {
         .filter((id) => id && !state.threadsByWorkspace.has(id));
       if (!ids.length) return;
       await Promise.allSettled(ids.map((id) => loadThreads(id)));
+      await loadProjects().catch(() => {});
       if (document.body.contains(modal)) render();
     };
     setTimeout(() => {
