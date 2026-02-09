@@ -38,6 +38,7 @@ server/sessionManager.js           - Terminal session lifecycle management
 
 server/statusDetector.js           - Claude Code session monitoring
 ├─ Detects: Claude sessions, branch changes, status updates
+├─ Busy/idle heuristics: tool/typing signals are recency-gated to avoid stale "busy forever" states
 ├─ Events: session-detected, branch-changed, status-updated
 └─ Polling: Configurable intervals for status checks
 
