@@ -12944,10 +12944,11 @@ class ClaudeOrchestrator {
 	        if (this.terminalManager?.fitAllTerminals) {
 	          setTimeout(() => this.terminalManager.fitAllTerminals(), 100);
 	        }
-      } else {
-        const error = await response.text();
-        this.showError(`Failed to remove worktree: ${error}`);
-      }
+	      } else {
+	        const payload = await response.json().catch(() => ({}));
+	        const message = String(payload?.error || payload?.message || `HTTP ${response.status}`);
+	        this.showError(`Failed to remove worktree: ${message}`);
+	      }
 
     } catch (error) {
       console.error('Error removing worktree from workspace:', error);
