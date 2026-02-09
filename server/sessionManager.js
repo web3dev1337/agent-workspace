@@ -2422,6 +2422,8 @@ class SessionManager extends EventEmitter {
       session.pendingStatusTimer = null;
     }
 
+    const ptyPid = Number(session?.pty?.pid);
+
     // Kill the PTY process if it exists
     if (session.pty) {
       try {
@@ -2434,8 +2436,44 @@ class SessionManager extends EventEmitter {
       }
     }
 
+    // Best-effort process tree cleanup to avoid orphaned agent subprocesses
+    // after terminals are closed/removed.
+    this.bestEffortKillProcessTree(ptyPid, { sessionId });
+
     // Remove from sessions map
     sessionMap.delete(sessionId);
+  }
+
+  bestEffortKillProcessTree(pid, { sessionId = null } = {}) {
+    const numericPid = Number(pid);
+    if (!Number.isFinite(numericPid) || numericPid <= 0) return;
+
+    if (process.platform === 'win32') {
+      const { execFile } = require('child_process');
+      execFile(
+        'taskkill',
+        ['/PID', String(numericPid), '/T', '/F'],
+        { windowsHide: true, timeout: 2500 },
+        () => {}
+      );
+      return;
+    }
+
+    try {
+      process.kill(-numericPid, 'SIGTERM');
+      return;
+    } catch (groupError) {
+      try {
+        process.kill(numericPid, 'SIGTERM');
+      } catch (singleError) {
+        logger.debug('Failed to send SIGTERM during process tree cleanup', {
+          sessionId,
+          pid: numericPid,
+          groupError: groupError.message,
+          singleError: singleError.message
+        });
+      }
+    }
   }
 
   getSessionById(sessionId) {
