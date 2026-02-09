@@ -7149,23 +7149,55 @@ app.get('/api/discord/status', async (req, res) => {
   }
 });
 
+function parseDiscordBoolean(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return null;
+  if (['1', 'true', 'yes', 'on'].includes(text)) return true;
+  if (['0', 'false', 'no', 'off'].includes(text)) return false;
+  return null;
+}
+
 app.post('/api/discord/ensure-services', async (req, res) => {
   try {
-    const status = await discordIntegrationService.ensureDiscordServices({ sessionManager, workspaceManager });
+    const dangerousModeOverride = parseDiscordBoolean(req.body?.dangerousModeOverride);
+    const status = await discordIntegrationService.ensureDiscordServices({
+      sessionManager,
+      workspaceManager,
+      dangerousModeOverride
+    });
     res.json(status);
   } catch (error) {
     logger.error('Failed to ensure Discord services', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to ensure Discord services', message: error.message });
+    const statusCode = Number(error?.statusCode || 0) || 500;
+    res.status(statusCode).json({ ok: false, error: 'Failed to ensure Discord services', message: error.message, details: error?.details || undefined });
   }
 });
 
 app.post('/api/discord/process-queue', async (req, res) => {
   try {
-    const result = await discordIntegrationService.processDiscordQueue({ sessionManager, workspaceManager });
+    const bodyIdempotencyKey = String(req.body?.idempotencyKey || '').trim();
+    const headerIdempotencyKey = String(req.headers['idempotency-key'] || '').trim();
+    const idempotencyKey = bodyIdempotencyKey || headerIdempotencyKey || null;
+    const dangerousModeOverride = parseDiscordBoolean(req.body?.dangerousModeOverride);
+    const requestId = String(req.body?.requestId || req.headers['x-request-id'] || '').trim() || null;
+    const actor = String(req.body?.actor || req.headers['x-user-id'] || req.ip || '').trim() || null;
+
+    const result = await discordIntegrationService.processDiscordQueue({
+      sessionManager,
+      workspaceManager,
+      logger,
+      idempotencyKey,
+      requestId,
+      actor,
+      dangerousModeOverride
+    });
     res.json(result);
   } catch (error) {
     logger.error('Failed to process Discord queue', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to process Discord queue', message: error.message });
+    const statusCode = Number(error?.statusCode || 0) || 500;
+    res.status(statusCode).json({ ok: false, error: 'Failed to process Discord queue', message: error.message, details: error?.details || undefined });
   }
 });
 
