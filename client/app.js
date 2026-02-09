@@ -5285,6 +5285,23 @@ class ClaudeOrchestrator {
       details: output.substring(output.indexOf('[Error]'), output.indexOf('[Error]') + 100)
     });
   }
+
+  handleTerminalCommandExecuted(sessionId, command) {
+    const sid = String(sessionId || '').trim();
+    const raw = String(command || '').trim();
+    if (!sid || !raw) return;
+
+    const session = this.sessions.get(sid);
+    if (!session) return;
+    const type = String(session?.type || '').trim().toLowerCase();
+    if (type !== 'claude' && type !== 'codex') return;
+
+    const normalized = raw.replace(/^\//, '').trim().toLowerCase();
+    if (normalized !== 'new' && normalized !== 'clear') return;
+
+    session.hasUserInput = false;
+    this.updateSidebarStatus(sid, String(session.status || 'idle').trim().toLowerCase() || 'idle');
+  }
   
   sendTerminalInput(sessionId, data) {
     if (!this.socket || !this.socket.connected) {
