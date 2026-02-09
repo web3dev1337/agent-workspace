@@ -3425,6 +3425,7 @@ class ClaudeOrchestrator {
 	      if (tierSessionId && !this.matchesWorkflowMode(tierSessionId)) continue;
 
 	      const tierBadge = tier ? `<span class="worktree-tier-badge tier-${tier}" title="Tier ${tier}">T${tier}</span>` : '';
+        const workspaceIdJson = JSON.stringify(String(this.currentWorkspace?.id || ''));
 
 	      item.innerHTML = `
 	        <div class="worktree-header">
@@ -3452,7 +3453,7 @@ class ClaudeOrchestrator {
               R
             </button>
             <button class="delete-worktree-btn"
-                    onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}')"
+                    onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}', { workspaceId: ${workspaceIdJson} })"
                     title="Remove worktree from workspace (closes terminal processes, keeps files on disk)">
               🗑
             </button>
@@ -5088,7 +5089,9 @@ class ClaudeOrchestrator {
 		    const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
 		    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
 		    const removeLabel = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId;
-		    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}')" title="Remove worktree from workspace (closes all terminal processes, keeps files on disk)">🗑</button>`;
+      const workspaceId = String(session?.workspace || this.currentWorkspace?.id || '').trim();
+      const workspaceIdJson = JSON.stringify(workspaceId);
+		    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}', { workspaceId: ${workspaceIdJson} })" title="Remove worktree from workspace (closes all terminal processes, keeps files on disk)">🗑</button>`;
 		  }
 
 					  getSessionCloseButtonHTML(sessionId) {
