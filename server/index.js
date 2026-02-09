@@ -107,6 +107,7 @@ const {
   getLifecyclePolicy,
   parseWorktreeKey,
   terminalMatchesWorktree,
+  sessionRecordMatchesWorktree,
   shouldCloseSessionsForThreadAction
 } = require('./lifecyclePolicyService');
 const { PolicyService } = require('./policyService');
@@ -3182,24 +3183,6 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
       }
     }
 
-    if (removedCount === 0) {
-      return res.status(404).json({ error: 'Worktree not found in workspace' });
-    }
-
-    // Save updated workspace configuration
-    await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
-
-    // Always clear recovery entries for removed terminals (even if the workspace isn't active).
-    try {
-      await sessionRecoveryService.loadWorkspaceState(workspaceId);
-      for (const sid of dedupedRemovedTerminalIds) {
-        if (!sid) continue;
-        sessionRecoveryService.clearSession(workspaceId, sid);
-      }
-    } catch {
-      // best-effort
-    }
-
     // Close associated sessions even when this workspace isn't currently active.
     // This prevents orphan PTYs/recovery entries when users manage worktrees from other tabs/views.
     const relatedSessionIds = new Set([
@@ -3212,7 +3195,44 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
         worktreeKey: parsedWorktree.worktreeId
       })
     ]);
-    const uniqueSessionIds = Array.from(new Set([...(dedupedRemovedTerminalIds || []), ...Array.from(relatedSessionIds)]));
+    let recoveryMatchedSessionIds = [];
+    try {
+      await sessionRecoveryService.loadWorkspaceState(workspaceId);
+      const recoverySessions = sessionRecoveryService.getAllSessions(workspaceId);
+      recoveryMatchedSessionIds = Object.entries(recoverySessions || {})
+        .filter(([sid, record]) => sessionRecordMatchesWorktree(sid, record, parsedWorktree))
+        .map(([sid]) => String(sid || '').trim())
+        .filter(Boolean);
+    } catch {
+      recoveryMatchedSessionIds = [];
+    }
+
+    const shouldCleanupOrphans = relatedSessionIds.size > 0 || recoveryMatchedSessionIds.length > 0;
+    if (removedCount === 0 && !shouldCleanupOrphans) {
+      return res.status(404).json({ error: 'Worktree not found in workspace' });
+    }
+
+    // Save updated workspace configuration only when terminals were removed from config.
+    if (removedCount > 0) {
+      await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+    }
+
+    const uniqueSessionIds = Array.from(new Set([
+      ...(dedupedRemovedTerminalIds || []),
+      ...Array.from(relatedSessionIds),
+      ...(recoveryMatchedSessionIds || [])
+    ]));
+
+    // Always clear recovery entries for all matched sessions (even if the workspace isn't active).
+    for (const sid of uniqueSessionIds) {
+      if (!sid) continue;
+      try {
+        sessionRecoveryService.clearSession(workspaceId, sid);
+      } catch {
+        // best-effort
+      }
+    }
+
     uniqueSessionIds.forEach((sessionId) => {
       const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
       if (ok) io.emit('session-closed', { sessionId });
@@ -3268,6 +3288,7 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
       workspaceId,
       worktreeId,
       removedTerminals: removedCount,
+      orphanCleanupOnly: removedCount === 0,
       closedSessions: uniqueSessionIds.length,
       updatedThreads: updatedThreadCount
     });
