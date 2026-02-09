@@ -178,9 +178,20 @@ class ThreadService {
     if (!workspaceId) throw new Error('workspaceId is required');
 
     const worktreeId = String(input.worktreeId || '').trim();
+    const requestedRepoPath = String(input.repositoryPath || '').trim();
+    const requestedRepoName = String(input.repositoryName || '').trim().toLowerCase();
+    const matchesRepository = (thread) => {
+      const threadRepoPath = String(thread?.repositoryPath || '').trim();
+      const threadRepoName = String(thread?.repositoryName || '').trim().toLowerCase();
+      if (requestedRepoPath && threadRepoPath) return threadRepoPath === requestedRepoPath;
+      if (requestedRepoName && threadRepoName) return threadRepoName === requestedRepoName;
+      if (requestedRepoPath || requestedRepoName) return false;
+      return true;
+    };
     const existingActive = this.threads.find((thread) =>
       thread.workspaceId === workspaceId
       && thread.worktreeId === worktreeId
+      && matchesRepository(thread)
       && thread.status === 'active'
     );
     if (existingActive) {

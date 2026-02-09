@@ -2531,10 +2531,14 @@ function pickNextWorktreeIdForWorkspace(workspace, { repositoryPath } = {}) {
 
 function resolveThreadRepositoryContext(workspace, { repositoryPath, repositoryName, repositoryType } = {}) {
   const repoPathExplicit = normalizeRepositoryPath(repositoryPath);
+  const repoNameExplicit = String(repositoryName || '').trim().toLowerCase();
   const mixedTerminals = Array.isArray(workspace?.terminals) ? workspace.terminals : [];
   const repoFromMixed = mixedTerminals.find((terminal) => {
     const p = normalizeRepositoryPath(terminal?.repository?.path);
     return !!repoPathExplicit && !!p && p === repoPathExplicit;
+  }) || mixedTerminals.find((terminal) => {
+    const n = String(terminal?.repository?.name || '').trim().toLowerCase();
+    return !!repoNameExplicit && !!n && n === repoNameExplicit;
   }) || mixedTerminals[0];
 
   const resolvedPath = repoPathExplicit
