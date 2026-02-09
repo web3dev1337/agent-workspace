@@ -3,6 +3,7 @@ const {
   parseWorktreeKey,
   parseTerminalIdentity,
   terminalMatchesWorktree,
+  sessionRecordMatchesWorktree,
   shouldCloseSessionsForThreadAction
 } = require('../../server/lifecyclePolicyService');
 
@@ -73,6 +74,32 @@ describe('lifecyclePolicyService', () => {
       repository: { name: 'epic-survivors' }
     };
     expect(terminalMatchesWorktree(terminal, parsed)).toBe(true);
+  });
+
+  test('sessionRecordMatchesWorktree matches recovery records by composed repo/worktree key', () => {
+    const parsed = parseWorktreeKey('incremental-game-work2');
+    const matched = sessionRecordMatchesWorktree('incremental-game-work2-claude', {
+      repositoryName: 'incremental-game',
+      worktreeId: 'work2'
+    }, parsed);
+    expect(matched).toBe(true);
+  });
+
+  test('sessionRecordMatchesWorktree avoids work1/work10 false positives', () => {
+    const parsed = parseWorktreeKey('zoo-game-work1');
+    const matched = sessionRecordMatchesWorktree('zoo-game-work10-claude', {
+      repositoryName: 'zoo-game',
+      worktreeId: 'work10'
+    }, parsed);
+    expect(matched).toBe(false);
+  });
+
+  test('sessionRecordMatchesWorktree matches by worktree token when repository is missing', () => {
+    const parsed = parseWorktreeKey('work6');
+    const matched = sessionRecordMatchesWorktree('legacy-session-work6-server', {
+      worktreePath: '/home/ab/GitHub/games/hytopia/zoo/work6'
+    }, parsed);
+    expect(matched).toBe(true);
   });
 
   test('thread action close-session defaults can be overridden', () => {
