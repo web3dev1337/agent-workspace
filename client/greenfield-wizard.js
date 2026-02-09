@@ -376,30 +376,65 @@ class GreenfieldWizard {
     this.showProgress();
 
     try {
-      const response = await fetch(`${this.serverUrl}/api/greenfield/create-full`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: this.data.name,
-          description: this.data.description,
-          category: this.data.category,
-          isPrivate: this.data.isPrivate,
-          worktreeCount: this.data.worktreeCount,
-          spawnClaude: this.data.spawnClaude,
-          yolo: this.data.yolo
-        })
-      });
+      const payload = {
+        name: this.data.name,
+        description: this.data.description,
+        category: this.data.category,
+        private: this.data.isPrivate,
+        createGithub: true,
+        allowGitHubFailure: true,
+        push: true,
+        initGit: true,
+        worktreeCount: this.data.worktreeCount,
+        spawnClaude: this.data.spawnClaude,
+        yolo: this.data.yolo
+      };
 
-      const result = await response.json();
+      let result = null;
+      if (this.orchestrator?.socket?.connected) {
+        result = await new Promise((resolve, reject) => {
+          let settled = false;
+          const timeout = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            reject(new Error('Project creation timed out'));
+          }, 180000);
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create project');
+          this.orchestrator.socket.emit('create-new-project', payload, (response) => {
+            if (settled) return;
+            clearTimeout(timeout);
+            settled = true;
+            if (!response || response.ok === false) {
+              reject(new Error(String(response?.error || 'Failed to create project')));
+              return;
+            }
+            resolve(response);
+          });
+        });
+      } else {
+        const response = await fetch(`${this.serverUrl}/api/projects/create-workspace`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        result = await response.json();
+        if (!response.ok || result?.ok === false) {
+          throw new Error(result?.error || 'Failed to create project');
+        }
       }
 
-      console.log('Project created:', result);
+      const normalizedResult = {
+        ...(result?.project || result || {}),
+        workspace: result?.workspace || null
+      };
+      if (!normalizedResult.repoUrl && normalizedResult.remoteUrl) {
+        normalizedResult.repoUrl = normalizedResult.remoteUrl;
+      }
+
+      console.log('Project created:', normalizedResult);
 
       // Show success message
-      this.showSuccess(result);
+      this.showSuccess(normalizedResult);
 
     } catch (error) {
       console.error('Failed to create project:', error);

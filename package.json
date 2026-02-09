@@ -24,6 +24,7 @@
     "test:e2e:diff-viewer": "node scripts/run-e2e-diff-viewer.js",
     "test:e2e:proxy": "ORCHESTRATOR_TEST_PORT=4001 CLIENT_TEST_PORT=4100 playwright test --config playwright.proxy.config.js",
     "test:e2e:headed": "playwright test --headed",
+    "test:create-project": "jest tests/unit/createProjectScript.test.js",
     "test:coverage": "jest --coverage",
     "check:command-surface": "node scripts/check-command-surface-drift.js",
     "audit:public-release": "node scripts/public-release-audit.js",
