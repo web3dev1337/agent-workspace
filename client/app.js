@@ -5473,6 +5473,9 @@ class ClaudeOrchestrator {
               if (workspaceBtn) {
                 workspaceBtn.setAttribute('data-project-force-workspace', matchedWorkspaceId);
                 workspaceBtn.click();
+              } else {
+                this.showToast?.(`Workspace could not be selected: ${requestedWorkspace}`, 'warning');
+                return;
               }
             } else {
               this.showToast?.(`Workspace not found: ${requestedWorkspace}`, 'warning');
@@ -5507,6 +5510,7 @@ class ClaudeOrchestrator {
                 repositorySelect.dispatchEvent(new Event('change', { bubbles: true }));
               } else {
                 this.showToast?.(`Repository not found: ${requestedRepository}`, 'warning');
+                return;
               }
             }
           }
