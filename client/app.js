@@ -5457,9 +5457,23 @@ class ClaudeOrchestrator {
             if (match?.id) {
               matchedWorkspaceId = String(match.id || '').trim();
               const workspaceBtn = await waitFor(
-                () => modal.querySelector(`[data-project-workspace-id="${this.cssEscape(matchedWorkspaceId)}"]`)
+                () => {
+                  const buttons = Array.from(modal.querySelectorAll('[data-project-workspace-id]'));
+                  return buttons.find((button) => {
+                    const primaryId = String(button?.getAttribute('data-project-workspace-id') || '').trim();
+                    if (primaryId === matchedWorkspaceId) return true;
+                    const ids = String(button?.getAttribute('data-project-workspaces') || '')
+                      .split(',')
+                      .map((value) => String(value || '').trim())
+                      .filter(Boolean);
+                    return ids.includes(matchedWorkspaceId);
+                  }) || null;
+                }
               );
-              workspaceBtn?.click?.();
+              if (workspaceBtn) {
+                workspaceBtn.setAttribute('data-project-force-workspace', matchedWorkspaceId);
+                workspaceBtn.click();
+              }
             } else {
               this.showToast?.(`Workspace not found: ${requestedWorkspace}`, 'warning');
               return;
@@ -14561,12 +14575,9 @@ class ClaudeOrchestrator {
     this.saveProjectChatsThreadPrefs(state);
   }
 
-  renderProjectChatsProjects(modal, state) {
-    const listEl = modal.querySelector('#projects-chats-projects-list');
-    if (!listEl) return;
-    const query = String(state?.projectQuery || '').trim().toLowerCase();
+  buildProjectChatsProjectRows(state) {
     const workspaces = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
-    const projectRows = [];
+    const byRepo = new Map();
 
     for (const workspace of workspaces) {
       const workspaceId = String(workspace?.id || '').trim();
@@ -14578,49 +14589,97 @@ class ClaudeOrchestrator {
       const repos = this.getWorkspaceRepositoryOptions(workspace, threads);
 
       if (!repos.length) {
-        projectRows.push({
-          workspaceId,
-          workspaceName,
+        const key = `workspace:${workspaceId}`;
+        byRepo.set(key, {
+          uniqueKey: key,
           repoKey: '',
           repoName: workspaceName,
           repoPath: '',
-          isDefault: true
+          repoType: '',
+          workspaceIds: [workspaceId],
+          workspaceNames: [workspaceName],
+          defaultWorkspaceIds: [workspaceId]
         });
         continue;
       }
 
       repos.forEach((repo, index) => {
+        const repoKey = this.getProjectChatsRepositoryKey(repo);
+        const uniqueKey = repoKey || `workspace:${workspaceId}`;
         const repoName = String(repo?.name || '').trim()
           || String(repo?.path || '').trim().split(/[\\/]/).filter(Boolean).pop()
           || workspaceName;
-        projectRows.push({
-          workspaceId,
-          workspaceName,
-          repoKey: this.getProjectChatsRepositoryKey(repo),
-          repoName,
-          repoPath: String(repo?.path || '').trim(),
-          repoType: String(repo?.type || '').trim(),
-          isDefault: index === 0
-        });
+        const repoPath = String(repo?.path || '').trim();
+        const repoType = String(repo?.type || '').trim();
+
+        if (!byRepo.has(uniqueKey)) {
+          byRepo.set(uniqueKey, {
+            uniqueKey,
+            repoKey,
+            repoName,
+            repoPath,
+            repoType,
+            workspaceIds: [],
+            workspaceNames: [],
+            defaultWorkspaceIds: []
+          });
+        }
+
+        const row = byRepo.get(uniqueKey);
+        if (!row.workspaceIds.includes(workspaceId)) row.workspaceIds.push(workspaceId);
+        if (!row.workspaceNames.includes(workspaceName)) row.workspaceNames.push(workspaceName);
+        if (index === 0 && !row.defaultWorkspaceIds.includes(workspaceId)) row.defaultWorkspaceIds.push(workspaceId);
+        if (!row.repoName && repoName) row.repoName = repoName;
+        if (!row.repoPath && repoPath) row.repoPath = repoPath;
+        if (!row.repoType && repoType) row.repoType = repoType;
       });
     }
 
+    const selectedWorkspaceId = String(state?.selectedWorkspaceId || '').trim();
+    const currentWorkspaceId = String(this.currentWorkspace?.id || '').trim();
+
+    const rows = Array.from(byRepo.values()).map((row) => {
+      const workspaceIds = Array.isArray(row.workspaceIds) ? row.workspaceIds.filter(Boolean) : [];
+      let preferredWorkspaceId = workspaceIds[0] || '';
+      if (selectedWorkspaceId && workspaceIds.includes(selectedWorkspaceId)) preferredWorkspaceId = selectedWorkspaceId;
+      else if (currentWorkspaceId && workspaceIds.includes(currentWorkspaceId)) preferredWorkspaceId = currentWorkspaceId;
+
+      return {
+        ...row,
+        workspaceIds,
+        workspaceNames: Array.isArray(row.workspaceNames) ? row.workspaceNames.filter(Boolean) : [],
+        defaultWorkspaceIds: Array.isArray(row.defaultWorkspaceIds) ? row.defaultWorkspaceIds.filter(Boolean) : [],
+        preferredWorkspaceId
+      };
+    });
+
+    rows.sort((a, b) => {
+      const repoCmp = String(a.repoName || a.repoPath || a.uniqueKey || '').localeCompare(String(b.repoName || b.repoPath || b.uniqueKey || ''));
+      if (repoCmp !== 0) return repoCmp;
+      const aWs = String(a.workspaceNames?.[0] || a.workspaceIds?.[0] || '');
+      const bWs = String(b.workspaceNames?.[0] || b.workspaceIds?.[0] || '');
+      return aWs.localeCompare(bWs);
+    });
+
+    return rows;
+  }
+
+  renderProjectChatsProjects(modal, state) {
+    const listEl = modal.querySelector('#projects-chats-projects-list');
+    if (!listEl) return;
+    const query = String(state?.projectQuery || '').trim().toLowerCase();
+    const projectRows = this.buildProjectChatsProjectRows(state);
     const filteredRows = projectRows
       .filter((row) => {
         if (!query) return true;
         const haystack = [
-          row.workspaceId,
-          row.workspaceName,
+          ...(Array.isArray(row.workspaceIds) ? row.workspaceIds : []),
+          ...(Array.isArray(row.workspaceNames) ? row.workspaceNames : []),
           row.repoName,
           row.repoPath,
           row.repoType
         ].map((value) => String(value || '').toLowerCase()).join(' ');
         return haystack.includes(query);
-      })
-      .sort((a, b) => {
-        const wsCmp = String(a.workspaceName || a.workspaceId || '').localeCompare(String(b.workspaceName || b.workspaceId || ''));
-        if (wsCmp !== 0) return wsCmp;
-        return String(a.repoName || '').localeCompare(String(b.repoName || ''));
       });
 
     if (!filteredRows.length) {
@@ -14629,17 +14688,26 @@ class ClaudeOrchestrator {
     }
 
     listEl.innerHTML = filteredRows.map((row) => {
-      const wsId = String(row.workspaceId || '').trim();
-      const selectedRepoKey = String(state?.selectedRepositoryByWorkspace?.get(wsId) || '').trim();
-      const active = wsId
-        && wsId === state.selectedWorkspaceId
+      const selectedWorkspaceId = String(state?.selectedWorkspaceId || '').trim();
+      const selectedRepoKey = String(state?.selectedRepositoryByWorkspace?.get(selectedWorkspaceId) || '').trim();
+      const workspaceIds = Array.isArray(row.workspaceIds) ? row.workspaceIds : [];
+      const active = selectedWorkspaceId
+        && workspaceIds.includes(selectedWorkspaceId)
         && (selectedRepoKey
           ? row.repoKey === selectedRepoKey
-          : !!row.isDefault);
+          : row.defaultWorkspaceIds.includes(selectedWorkspaceId));
       const repoLabel = this.escapeHtml(row.repoName || 'Repository');
-      const workspaceLabel = this.escapeHtml(row.workspaceName || wsId || 'Workspace');
+      const workspaceSummaryRaw = (() => {
+        const names = Array.isArray(row.workspaceNames) ? row.workspaceNames : [];
+        if (!names.length) return 'Workspace';
+        if (names.length === 1) return names[0];
+        return `${names[0]} +${names.length - 1}`;
+      })();
+      const workspaceSummary = this.escapeHtml(workspaceSummaryRaw);
+      const workspaceCsv = this.escapeHtml(workspaceIds.join(','));
+      const preferredWorkspaceId = this.escapeHtml(String(row.preferredWorkspaceId || '').trim());
       const badge = active ? ' • active' : '';
-      return `<li class="projects-chats-project-item"><button type="button" class="projects-chats-project-btn ${active ? 'active' : ''}" data-project-workspace-id="${this.escapeHtml(wsId)}" data-project-repo-key="${this.escapeHtml(row.repoKey || '')}" title="${workspaceLabel}">${repoLabel} <span class="projects-chats-project-subtle">(${workspaceLabel})</span>${badge}</button></li>`;
+      return `<li class="projects-chats-project-item"><button type="button" class="projects-chats-project-btn ${active ? 'active' : ''}" data-project-workspace-id="${preferredWorkspaceId}" data-project-workspaces="${workspaceCsv}" data-project-repo-key="${this.escapeHtml(row.repoKey || '')}" data-project-row-key="${this.escapeHtml(row.uniqueKey || '')}" title="${workspaceSummary}">${repoLabel} <span class="projects-chats-project-subtle">(${workspaceSummary})</span>${badge}</button></li>`;
     }).join('');
   }
 
@@ -14951,7 +15019,18 @@ class ClaudeOrchestrator {
 
       const projectBtn = event.target.closest('[data-project-workspace-id]');
       if (projectBtn) {
-        const workspaceId = String(projectBtn.getAttribute('data-project-workspace-id') || '').trim();
+        const forcedWorkspaceId = String(projectBtn.getAttribute('data-project-force-workspace') || '').trim();
+        if (forcedWorkspaceId) projectBtn.removeAttribute('data-project-force-workspace');
+        const workspaceCandidates = String(projectBtn.getAttribute('data-project-workspaces') || '')
+          .split(',')
+          .map((value) => String(value || '').trim())
+          .filter(Boolean);
+        let workspaceId = forcedWorkspaceId || String(projectBtn.getAttribute('data-project-workspace-id') || '').trim();
+        if (!workspaceId && workspaceCandidates.length) workspaceId = workspaceCandidates[0];
+        const currentWorkspaceId = String(state.selectedWorkspaceId || '').trim();
+        if (!forcedWorkspaceId && currentWorkspaceId && workspaceCandidates.includes(currentWorkspaceId)) {
+          workspaceId = currentWorkspaceId;
+        }
         const repoKey = String(projectBtn.getAttribute('data-project-repo-key') || '').trim();
         if (!workspaceId) return;
         if (repoKey) state.selectedRepositoryByWorkspace.set(workspaceId, repoKey);
