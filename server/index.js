@@ -2529,12 +2529,31 @@ function pickNextWorktreeIdForWorkspace(workspace, { repositoryPath } = {}) {
   return `work${Math.max(1, pairs + 1)}`;
 }
 
+function normalizeRepositoryRootForWorktrees(value) {
+  const normalized = normalizeRepositoryPath(value);
+  if (!normalized) return '';
+
+  const base = path.basename(normalized).toLowerCase();
+  if (base === 'master') {
+    return normalizeRepositoryPath(path.dirname(normalized));
+  }
+
+  if (/^work\d+$/.test(base)) {
+    const parent = normalizeRepositoryPath(path.dirname(normalized));
+    if (parent && fs.existsSync(path.join(parent, 'master'))) {
+      return parent;
+    }
+  }
+
+  return normalized;
+}
+
 function resolveThreadRepositoryContext(workspace, { repositoryPath, repositoryName, repositoryType } = {}) {
-  const repoPathExplicit = normalizeRepositoryPath(repositoryPath);
+  const repoPathExplicit = normalizeRepositoryRootForWorktrees(repositoryPath);
   const repoNameExplicit = String(repositoryName || '').trim().toLowerCase();
   const mixedTerminals = Array.isArray(workspace?.terminals) ? workspace.terminals : [];
   const repoFromMixed = mixedTerminals.find((terminal) => {
-    const p = normalizeRepositoryPath(terminal?.repository?.path);
+    const p = normalizeRepositoryRootForWorktrees(terminal?.repository?.path);
     return !!repoPathExplicit && !!p && p === repoPathExplicit;
   }) || mixedTerminals.find((terminal) => {
     const n = String(terminal?.repository?.name || '').trim().toLowerCase();
@@ -2542,8 +2561,8 @@ function resolveThreadRepositoryContext(workspace, { repositoryPath, repositoryN
   }) || mixedTerminals[0];
 
   const resolvedPath = repoPathExplicit
-    || normalizeRepositoryPath(repoFromMixed?.repository?.path)
-    || normalizeRepositoryPath(workspace?.repository?.path);
+    || normalizeRepositoryRootForWorktrees(repoFromMixed?.repository?.path)
+    || normalizeRepositoryRootForWorktrees(workspace?.repository?.path);
 
   const fallbackRepoName = (() => {
     if (!resolvedPath) return '';
@@ -2581,7 +2600,7 @@ async function ensureWorkspaceMixedWorktree({
     throw error;
   }
 
-  const repoPath = normalizeRepositoryPath(repositoryPath);
+  const repoPath = normalizeRepositoryRootForWorktrees(repositoryPath);
   if (!repoPath) {
     const error = new Error('repositoryPath is required');
     error.statusCode = 400;
@@ -2632,10 +2651,11 @@ async function ensureWorkspaceMixedWorktree({
   let alreadyExists = false;
   const terminalList = Array.isArray(updatedWorkspace.terminals) ? updatedWorkspace.terminals : [];
   const existingIds = new Set(terminalList.map((terminal) => terminal?.id));
-  if (existingIds.has(newTerminals[0].id) || existingIds.has(newTerminals[1].id)) {
+  const missingTerminals = newTerminals.filter((terminal) => !existingIds.has(terminal.id));
+  if (missingTerminals.length === 0) {
     alreadyExists = true;
   } else {
-    updatedWorkspace.terminals = terminalList.concat(newTerminals);
+    updatedWorkspace.terminals = terminalList.concat(missingTerminals);
   }
 
   const tempWorkspace = {
@@ -2659,7 +2679,8 @@ async function ensureWorkspaceMixedWorktree({
       worktreeId: worktree,
       worktreePath,
       repositoryName: repoName,
-      repositoryType: repoType
+      repositoryType: repoType,
+      includeExistingSessions: true
     });
   }
 
@@ -2677,7 +2698,7 @@ async function ensureWorkspaceMixedWorktree({
   return {
     workspace: refreshedWorkspace,
     alreadyExists,
-    terminalIds: alreadyExists ? [] : newTerminals.map((terminal) => terminal.id),
+    terminalIds: alreadyExists ? [] : missingTerminals.map((terminal) => terminal.id),
     sessions,
     worktreeId: worktree,
     worktreePath,

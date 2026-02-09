@@ -14272,18 +14272,33 @@ class ClaudeOrchestrator {
   }
 
   getProjectChatsRepositoryKey(repo) {
-    const path = String(repo?.path || '').trim();
+    const path = this.normalizeProjectChatsRepositoryPath(repo?.path);
     if (path) return `path:${path}`;
     const name = String(repo?.name || '').trim().toLowerCase();
     if (name) return `name:${name}`;
     return '';
   }
 
+  normalizeProjectChatsRepositoryPath(inputPath) {
+    const raw = String(inputPath || '').trim().replace(/[\\/]+$/, '');
+    if (!raw) return '';
+    const parts = raw.split(/[\\/]+/).filter(Boolean);
+    if (!parts.length) return raw;
+    const base = String(parts[parts.length - 1] || '').toLowerCase();
+    if (base === 'master') {
+      return raw.replace(/[\\/]+master$/i, '');
+    }
+    if (/^work\d+$/.test(base)) {
+      return raw.replace(/[\\/]+work\d+$/i, '');
+    }
+    return raw;
+  }
+
   getWorkspaceRepositoryOptions(workspace, threads = []) {
     const rows = [];
     const pushRepo = ({ path, name, type } = {}) => {
       const next = {
-        path: String(path || '').trim(),
+        path: this.normalizeProjectChatsRepositoryPath(path),
         name: String(name || '').trim(),
         type: String(type || '').trim()
       };
@@ -14487,7 +14502,7 @@ class ClaudeOrchestrator {
     const repositoryScopedRows = selectedRepositoryKey
       ? rows.filter((thread) => {
         const key = this.getProjectChatsRepositoryKey({
-          path: thread?.repositoryPath,
+          path: this.normalizeProjectChatsRepositoryPath(thread?.repositoryPath),
           name: thread?.repositoryName
         });
         return !!key && key === selectedRepositoryKey;
@@ -14602,7 +14617,7 @@ class ClaudeOrchestrator {
       if (key) state.selectedRepositoryByWorkspace.set(workspaceId, key);
     }
 
-    const repositoryPath = String(selectedRepository?.path || workspace?.repository?.path || '').trim();
+    const repositoryPath = this.normalizeProjectChatsRepositoryPath(selectedRepository?.path || workspace?.repository?.path || '');
     const repositoryName = String(selectedRepository?.name || workspace?.repository?.name || '').trim();
     const repositoryType = String(selectedRepository?.type || workspace?.repository?.type || workspace?.type || 'generic').trim();
 
