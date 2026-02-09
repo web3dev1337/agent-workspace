@@ -76,5 +76,70 @@ describe('SessionManager.createSessionsForWorktree', () => {
     const matches = sm.worktrees.filter((w) => w.id === 'dupe-work3');
     expect(matches).toHaveLength(1);
   });
-});
 
+  test('reuses existing sessions instead of creating duplicate PTYs', async () => {
+    const sm = makeSessionManager();
+    sm.setupGitWatcherForWorktree = jest.fn();
+
+    await sm.createSessionsForWorktree({
+      worktreeId: 'work4',
+      worktreePath: '/tmp/reuse-repo/work4',
+      repositoryName: 'reuse-repo',
+      repositoryType: 'node'
+    });
+
+    await sm.createSessionsForWorktree({
+      worktreeId: 'work4',
+      worktreePath: '/tmp/reuse-repo/work4',
+      repositoryName: 'reuse-repo',
+      repositoryType: 'node',
+      includeExistingSessions: true
+    });
+
+    expect(sm.createSession).toHaveBeenCalledTimes(2);
+    expect(sm.sessions.has('reuse-repo-work4-claude')).toBe(true);
+    expect(sm.sessions.has('reuse-repo-work4-server')).toBe(true);
+  });
+
+  test('includes existing sessions in payload when requested', async () => {
+    const sm = makeSessionManager();
+    sm.setupGitWatcherForWorktree = jest.fn();
+
+    sm.sessions.set('existing-repo-work5-claude', {
+      id: 'existing-repo-work5-claude',
+      type: 'claude',
+      worktreeId: 'work5',
+      repositoryName: 'existing-repo',
+      repositoryType: 'node',
+      status: 'waiting',
+      branch: 'feature/x',
+      config: { cwd: '/tmp/existing-repo/work5' }
+    });
+    sm.sessions.set('existing-repo-work5-server', {
+      id: 'existing-repo-work5-server',
+      type: 'server',
+      worktreeId: 'work5',
+      repositoryName: 'existing-repo',
+      repositoryType: 'node',
+      status: 'idle',
+      branch: 'feature/x',
+      config: { cwd: '/tmp/existing-repo/work5' }
+    });
+
+    const payload = await sm.createSessionsForWorktree({
+      worktreeId: 'work5',
+      worktreePath: '/tmp/existing-repo/work5',
+      repositoryName: 'existing-repo',
+      repositoryType: 'node',
+      includeExistingSessions: true
+    });
+
+    expect(sm.createSession).not.toHaveBeenCalled();
+    expect(Object.keys(payload).sort()).toEqual([
+      'existing-repo-work5-claude',
+      'existing-repo-work5-server'
+    ]);
+    expect(payload['existing-repo-work5-claude'].status).toBe('waiting');
+    expect(payload['existing-repo-work5-server'].status).toBe('idle');
+  });
+});
