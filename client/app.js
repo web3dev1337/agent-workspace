@@ -7346,6 +7346,60 @@ class ClaudeOrchestrator {
 
     await this.greenfieldWizard.show();
   }
+
+  async createProjectWorkspace(options = {}) {
+    const payload = (options && typeof options === 'object') ? { ...options } : {};
+
+    if (this.socket?.connected) {
+      const socketResult = await new Promise((resolve, reject) => {
+        let settled = false;
+        const timeout = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          reject(new Error('Project creation timed out'));
+        }, 180000);
+
+        this.socket.emit('create-new-project', payload, (response) => {
+          if (settled) return;
+          clearTimeout(timeout);
+          settled = true;
+          if (!response || response.ok === false) {
+            reject(new Error(String(response?.error || 'Failed to create project')));
+            return;
+          }
+          resolve(response);
+        });
+      });
+
+      const normalized = {
+        ...(socketResult?.project || socketResult || {}),
+        workspace: socketResult?.workspace || null
+      };
+      if (!normalized.repoUrl && normalized.remoteUrl) {
+        normalized.repoUrl = normalized.remoteUrl;
+      }
+      return normalized;
+    }
+
+    const response = await fetch('/api/projects/create-workspace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result?.ok === false) {
+      throw new Error(String(result?.error || `Failed to create project (${response.status})`));
+    }
+
+    const normalized = {
+      ...(result?.project || result || {}),
+      workspace: result?.workspace || null
+    };
+    if (!normalized.repoUrl && normalized.remoteUrl) {
+      normalized.repoUrl = normalized.remoteUrl;
+    }
+    return normalized;
+  }
   
 	  syncSettingsUI() {
 	    // Sync checkbox states with settings
