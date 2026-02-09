@@ -13,9 +13,11 @@
 2. Click `New Project` card.
 3. Complete wizard steps:
    - Describe project
-   - Configure category/privacy/worktree count
+   - Configure category -> framework -> template, plus privacy/worktree count
    - Review and create
 4. On success, click `Open Workspace`.
+
+If you open the wizard while focused in an existing workspace/worktree, it now pre-suggests framework/template defaults from the current repository type when possible.
 
 Quick entrypoints:
 - `Alt+Shift+N` opens the New Project wizard.
