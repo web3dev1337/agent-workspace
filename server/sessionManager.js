@@ -1990,6 +1990,20 @@ class SessionManager extends EventEmitter {
     const agent = recovery?.lastAgent || (type === 'codex' ? 'codex' : null);
 
     const newStatus = this.statusDetector.detectStatus(sessionId, session.buffer || '', { agent });
+    if (newStatus === 'idle' && workspaceId && recovery?.lastAgent) {
+      const recentOutput = this.statusDetector.stripControlSequences((session.buffer || '').slice(-2000));
+      const recentLines = recentOutput.split('\n');
+      const lastNonEmptyLine = this.statusDetector.getLastNonEmptyLine(recentLines).trim();
+      const recentAll = this.statusDetector.getLastNonEmptyLines(recentLines, 6).join('\n');
+      if (this.statusDetector.hasExplicitShellIndicator(recentAll, lastNonEmptyLine)) {
+        try {
+          sessionRecoveryService.clearAgent(workspaceId, sessionId);
+        } catch {
+          // best-effort cleanup; status update still proceeds
+        }
+      }
+    }
+
     if (newStatus !== session.status) {
       this.maybeApplyStatusUpdate(sessionId, session, newStatus);
     } else if (session.pendingStatus && session.pendingStatus !== newStatus) {

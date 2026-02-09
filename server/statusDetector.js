@@ -53,6 +53,14 @@ class StatusDetector {
     // Per-session state (StatusDetector is shared across sessions).
     this.sessionState = new Map(); // sessionId -> { lastBufferLength, lastOutputTime, claudeLikely, agent }
   }
+
+  stripControlSequences(text) {
+    const input = String(text || '');
+    return input
+      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+      .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')
+      .replace(/\x1b[()][A-Za-z0-9]/g, '');
+  }
   
   getState(sessionId) {
     if (!this.sessionState.has(sessionId)) {
@@ -107,7 +115,7 @@ class StatusDetector {
     const hasRecentOutput = timeSinceOutput < assumeBusyWindowMs;
 
     // Get recent output for analysis
-    const recentOutput = buffer.slice(-2000);
+    const recentOutput = this.stripControlSequences(buffer.slice(-2000));
     const lines = recentOutput.split('\n');
     const lastFewLines = lines.slice(-10).join('\n');
     const lastNonEmptyLine = this.getLastNonEmptyLine(lines);
@@ -205,11 +213,7 @@ class StatusDetector {
     // 6. Shell prompt means no active AI is currently running in this terminal.
     // If we observe an explicit shell prompt, clear claudeLikely so stale
     // Claude activity doesn't keep the session marked busy.
-    if (
-      /Type 'claude' to start a new Claude session\./i.test(recentAll)
-      || /Claude session ended\./i.test(recentAll)
-      || this.looksLikeShellPrompt(trimmedLastNonEmptyLine)
-    ) {
+    if (this.hasExplicitShellIndicator(recentAll, trimmedLastNonEmptyLine)) {
       state.claudeLikely = false;
       return 'idle';
     }
@@ -225,6 +229,16 @@ class StatusDetector {
     }
 
     return 'idle';
+  }
+
+  hasExplicitShellIndicator(recentAll, trimmedLastNonEmptyLine = '') {
+    const normalizedRecent = this.stripControlSequences(recentAll || '');
+    const normalizedLine = this.stripControlSequences(trimmedLastNonEmptyLine || '').trim();
+    return (
+      /Type 'claude' to start a new Claude session\./i.test(normalizedRecent)
+      || /Claude session ended\./i.test(normalizedRecent)
+      || this.looksLikeShellPrompt(normalizedLine)
+    );
   }
   
   looksLikePrompt(line) {
