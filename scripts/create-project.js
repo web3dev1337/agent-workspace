@@ -191,22 +191,41 @@ async function createWorktrees(projectPath, count) {
   return worktrees;
 }
 
-async function wireRemote({ masterPath, repo, githubOrg, createGithub = false, isPrivate = true, push = false }) {
+async function wireRemote({
+  masterPath,
+  repo,
+  githubOrg,
+  createGithub = false,
+  isPrivate = true,
+  push = false,
+  allowGitHubFailure = true
+}) {
   const spec = resolveRemoteSpec(repo, githubOrg);
   if (!spec.remoteUrl && !spec.slug) {
-    return { remoteUrl: null, repoSlug: null, createdViaGh: false };
+    return { remoteUrl: null, repoSlug: null, createdViaGh: false, warnings: [] };
   }
 
   if (createGithub && spec.shouldCreate && spec.slug) {
     const visibility = isPrivate ? '--private' : '--public';
     const args = ['repo', 'create', spec.slug, visibility, '--source=.', '--remote=origin'];
     if (push) args.push('--push');
-    await runCommand('gh', args, { cwd: masterPath });
-    return {
-      remoteUrl: spec.remoteUrl,
-      repoSlug: spec.slug,
-      createdViaGh: true
-    };
+    try {
+      await runCommand('gh', args, { cwd: masterPath });
+      return {
+        remoteUrl: spec.remoteUrl,
+        repoSlug: spec.slug,
+        createdViaGh: true,
+        warnings: []
+      };
+    } catch (error) {
+      if (!allowGitHubFailure) throw error;
+      return {
+        remoteUrl: null,
+        repoSlug: spec.slug,
+        createdViaGh: false,
+        warnings: [`GitHub repo creation failed: ${error.message}`]
+      };
+    }
   }
 
   await runCommand('git', ['remote', 'add', 'origin', spec.remoteUrl], { cwd: masterPath });
@@ -217,7 +236,8 @@ async function wireRemote({ masterPath, repo, githubOrg, createGithub = false, i
   return {
     remoteUrl: spec.remoteUrl,
     repoSlug: spec.slug,
-    createdViaGh: false
+    createdViaGh: false,
+    warnings: []
   };
 }
 
@@ -326,7 +346,7 @@ async function createProject(options = {}) {
 
   const initGit = options.initGit !== undefined ? parseBool(options.initGit, true) : true;
   const worktreeCount = Math.max(0, Number(options.worktreeCount || options.worktrees || 0) || 0);
-  let remoteInfo = { remoteUrl: null, repoSlug: null, createdViaGh: false };
+  let remoteInfo = { remoteUrl: null, repoSlug: null, createdViaGh: false, warnings: [] };
   let additionalWorktrees = [];
 
   if (initGit) {
@@ -339,7 +359,8 @@ async function createProject(options = {}) {
         githubOrg: options.githubOrg || options.github_org,
         createGithub: parseBool(options.createGithub, false),
         isPrivate: parseBool(options.private, true),
-        push: parseBool(options.push, false)
+        push: parseBool(options.push, false),
+        allowGitHubFailure: parseBool(options.allowGitHubFailure, true)
       });
     }
 
@@ -365,6 +386,7 @@ async function createProject(options = {}) {
     remoteUrl: remoteInfo.remoteUrl,
     repoSlug: remoteInfo.repoSlug,
     createdViaGh: remoteInfo.createdViaGh,
+    warnings: Array.isArray(remoteInfo.warnings) ? remoteInfo.warnings : [],
     worktrees
   };
 }
