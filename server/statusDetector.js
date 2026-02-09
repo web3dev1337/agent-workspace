@@ -16,9 +16,9 @@ const logger = winston.createLogger({
 // Keep "busy" briefly after output to avoid status flicker.
 // SessionManager now re-evaluates status on an interval, so these windows
 // can stay short enough to avoid "busy forever" false positives.
-const ASSUME_BUSY_SINCE_OUTPUT_MS = 30000; // 30s
-const ASSUME_BUSY_SINCE_OUTPUT_AGENT_MS = 90000; // 90s
-const ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS = 120000; // 2m
+const ASSUME_BUSY_SINCE_OUTPUT_MS = 8000; // 8s
+const ASSUME_BUSY_SINCE_OUTPUT_AGENT_MS = 15000; // 15s
+const ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS = 30000; // 30s
 
 class StatusDetector {
   constructor() {
@@ -194,7 +194,11 @@ class StatusDetector {
     // 6. Shell prompt means no active AI is currently running in this terminal.
     // If we observe an explicit shell prompt, clear claudeLikely so stale
     // Claude activity doesn't keep the session marked busy.
-    if (this.looksLikeShellPrompt(trimmedLastNonEmptyLine)) {
+    if (
+      /Type 'claude' to start a new Claude session\./i.test(recentAll)
+      || /Claude session ended\./i.test(recentAll)
+      || this.looksLikeShellPrompt(trimmedLastNonEmptyLine)
+    ) {
       state.claudeLikely = false;
       return 'idle';
     }
@@ -221,11 +225,15 @@ class StatusDetector {
     const promptPatterns = [
       /^>$/,
       /^\$$/,
+      /^%$/,
       /^>>>$/,
       /^claude>$/i,
       /^assistant>$/i,
+      /^codex>$/i,
+      /^❯$/,
       /^\w+[@:~].*[\$#>]$/,  // user@host:~$ or similar
       /^\(.*\)\s*\$$/,        // (venv) $ style prompts
+      /^.+\s[❯»›]$/,
     ];
 
     return promptPatterns.some(pattern => pattern.test(line));
@@ -235,11 +243,16 @@ class StatusDetector {
     const shellPromptPatterns = [
       /^\$$/,
       /^#$/,
+      /^%$/,
       /^PS .*>$/i,            // PowerShell prompt
-      /^\w+@[\w.-]+:.*[\$#]$/, // user@host:path$
-      /^\(.*\)\s*[\$#]$/,     // (venv) $
-      /^.*[\/~].*[\$#]$/,     // path-based prompts ending in $/#
-      /^bash-[\d.]+\$$/i
+      /^\w+@[\w.-]+:.*[\$#%]$/, // user@host:path$
+      /^\(.*\)\s*[\$#%]$/,     // (venv) $
+      /^.*[\/~].*[\$#%]$/,     // path-based prompts ending in $/#/%
+      /^bash-[\d.]+\$$/i,
+      /^zsh-[\d.]+%$/i,
+      /^.+\s[❯»›]$/,
+      /^.+[\/~].*[❯»›]$/,
+      /^❯$/
     ];
 
     return shellPromptPatterns.some(pattern => pattern.test(line));
