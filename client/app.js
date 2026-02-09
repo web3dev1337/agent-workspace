@@ -5418,6 +5418,9 @@ class ClaudeOrchestrator {
         const requestedWorkspace = String(
           params?.workspace ?? params?.workspaceId ?? params?.workspaceName ?? ''
         ).trim();
+        const requestedRepository = String(
+          params?.repository ?? params?.repo ?? params?.repositoryName ?? params?.project ?? ''
+        ).trim();
 
         (async () => {
           await this.showProjectChatsShell?.();
@@ -5427,6 +5430,17 @@ class ClaudeOrchestrator {
             return;
           }
 
+          const waitFor = async (finder, timeoutMs = 2500) => {
+            const startedAt = Date.now();
+            while ((Date.now() - startedAt) < timeoutMs) {
+              const found = finder();
+              if (found) return found;
+              await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+            return null;
+          };
+
+          let matchedWorkspaceId = '';
           if (requestedWorkspace) {
             const lookup = requestedWorkspace.toLowerCase();
             const available = Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : [];
@@ -5441,16 +5455,54 @@ class ClaudeOrchestrator {
             });
 
             if (match?.id) {
-              modal.querySelector(`[data-project-id="${this.cssEscape(match.id)}"]`)?.click?.();
+              matchedWorkspaceId = String(match.id || '').trim();
+              const workspaceBtn = await waitFor(
+                () => modal.querySelector(`[data-project-workspace-id="${this.cssEscape(matchedWorkspaceId)}"]`)
+              );
+              workspaceBtn?.click?.();
             } else {
               this.showToast?.(`Workspace not found: ${requestedWorkspace}`, 'warning');
               return;
             }
           }
 
-          setTimeout(() => {
-            modal.querySelector('[data-project-chats-new="true"]')?.click?.();
-          }, 100);
+          if (requestedRepository) {
+            const lookup = requestedRepository.toLowerCase();
+            if (!matchedWorkspaceId) {
+              const repositoryRow = await waitFor(() => {
+                const buttons = Array.from(modal.querySelectorAll('[data-project-repo-key]'));
+                return buttons.find((button) => {
+                  const key = String(button?.getAttribute('data-project-repo-key') || '').toLowerCase();
+                  const text = String(button?.textContent || '').toLowerCase();
+                  return (key && key.includes(lookup)) || (text && text.includes(lookup));
+                }) || null;
+              });
+              repositoryRow?.click?.();
+            }
+
+            const repositorySelect = await waitFor(() => modal.querySelector('#projects-chats-repo-select'));
+            if (repositorySelect) {
+              const options = Array.from(repositorySelect.options || []);
+              const selectedOption = options.find((option) => {
+                const value = String(option?.value || '').toLowerCase();
+                const text = String(option?.text || option?.label || '').toLowerCase();
+                return value.includes(lookup) || text.includes(lookup);
+              }) || null;
+              if (selectedOption) {
+                repositorySelect.value = selectedOption.value;
+                repositorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+              } else {
+                this.showToast?.(`Repository not found: ${requestedRepository}`, 'warning');
+              }
+            }
+          }
+
+          const newChatBtn = await waitFor(() => modal.querySelector('[data-project-chats-new="true"]'));
+          if (!newChatBtn) {
+            this.showToast?.('New Chat action is unavailable right now', 'warning');
+            return;
+          }
+          newChatBtn.click();
         })().catch((error) => {
           this.showToast?.(`Failed to create chat: ${String(error?.message || error)}`, 'error');
         });
