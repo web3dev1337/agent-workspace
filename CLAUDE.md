@@ -8,10 +8,6 @@
 ## 🚨 IMPORTANT: ALWAYS PROVIDE PR URL 🚨
 **When creating any pull request, ALWAYS provide the PR URL in your response to the user. This is mandatory for all PRs.**
 
-## Mermaid Markdown Safety (GitHub)
-- Use quoted Mermaid labels when text contains special characters like `/`, `:`, `(`, `)`, or `.`.
-- Example: `API["POST /api/discord/process-queue"]` (not `API[/api/discord/process-queue]`).
-
 ## Resume / Context Reset (read this if you lose context)
 
 If you ever lose context mid-run, do **not** improvise. Resume from these files:

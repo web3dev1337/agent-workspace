@@ -113,6 +113,9 @@ sequenceDiagram
 2. Signed queue verification added (`DISCORD_QUEUE_SIGNING_SECRET`, `DISCORD_REQUIRE_SIGNED_QUEUE`).
 3. Queue and invocation idempotency added (task-level dedupe plus request-level replay via idempotency key).
 4. JSONL audit logging added for queue processing outcomes.
+5. Discord endpoints now support dedicated auth (`DISCORD_API_TOKEN`) with loopback-only fallback when no token is configured.
+6. Queue processing endpoint rate limiting added to prevent repeated trigger spam.
+7. Queue JSON parse failures now return explicit errors; empty queue runs are a no-op instead of dispatching unnecessary agent prompts.
 
 ### Longer term
 1. Replace file-poll queue with a bounded broker/stream abstraction (Redis stream, NATS, or SQLite job table) with ack/retry/dead-letter support.

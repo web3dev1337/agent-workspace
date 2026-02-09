@@ -60,6 +60,33 @@ async function readJsonIfExists(filePath) {
   }
 }
 
+async function readJsonWithDiagnostics(filePath) {
+  try {
+    const text = await fs.readFile(filePath, 'utf8');
+    if (!String(text || '').trim()) {
+      return { exists: true, json: null, parseError: null, empty: true };
+    }
+    try {
+      return { exists: true, json: JSON.parse(text), parseError: null, empty: false };
+    } catch (error) {
+      return {
+        exists: true,
+        json: null,
+        parseError: {
+          message: String(error?.message || 'Invalid JSON'),
+          code: 'INVALID_JSON'
+        },
+        empty: false
+      };
+    }
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      return { exists: false, json: null, parseError: null, empty: true };
+    }
+    throw error;
+  }
+}
+
 async function statIfExists(filePath) {
   try {
     return await fs.stat(filePath);
@@ -109,7 +136,8 @@ function getDefaults() {
     idempotencyStorePath: path.join(queueDir, 'process-idempotency.json'),
     idempotencyTtlMs: parseInteger(process.env.DISCORD_QUEUE_IDEMPOTENCY_TTL_MS, 24 * 60 * 60 * 1000),
     processingLockTtlMs: parseInteger(process.env.DISCORD_PROCESS_QUEUE_LOCK_TTL_MS, 5 * 60 * 1000),
-    queueAuditLogPath
+    queueAuditLogPath,
+    allowDangerousModeOverride: normalizeBoolean(process.env.DISCORD_ALLOW_DANGEROUS_OVERRIDE, false)
   };
 }
 
@@ -421,6 +449,15 @@ async function appendAuditEvent(defaults, event) {
   await fs.appendFile(defaults.queueAuditLogPath, line, 'utf8');
 }
 
+function enforceDangerousModeOverridePolicy({ defaults, dangerousModeOverride }) {
+  if (dangerousModeOverride !== true) return;
+  if (defaults.allowDangerousModeOverride) return;
+  throw createHttpError(
+    403,
+    'dangerousModeOverride=true is disabled. Set DISCORD_ALLOW_DANGEROUS_OVERRIDE=true to allow it.'
+  );
+}
+
 function deriveFallbackInvocationKey({ queueInfo, defaults }) {
   const stableTaskIds = queueInfo.uniqueTasks.map((task) => task.idempotencyKey).sort();
   const base = stableStringify({
@@ -468,11 +505,12 @@ function buildSafeQueueProcessorPrompt({ defaults, queueInfo, requestId, invocat
 async function getDiscordStatus({ sessionManager, workspaceManager } = {}) {
   const defaults = getDefaults();
 
-  const [pendingJson, pendingStat] = await Promise.all([
-    readJsonIfExists(defaults.pendingTasksPath),
+  const [pendingState, pendingStat] = await Promise.all([
+    readJsonWithDiagnostics(defaults.pendingTasksPath),
     statIfExists(defaults.pendingTasksPath)
   ]);
 
+  const pendingJson = pendingState.parseError ? null : pendingState.json;
   const queueInfo = normalizeQueueInput(pendingJson, defaults);
 
   const hasWorkspace = !!workspaceManager?.getWorkspace?.(defaults.servicesWorkspaceId);
@@ -496,10 +534,13 @@ async function getDiscordStatus({ sessionManager, workspaceManager } = {}) {
       pendingRawCount: queueInfo.rawCount,
       duplicateCount: queueInfo.duplicateCount,
       pendingUpdatedAt: pendingStat ? pendingStat.mtime.toISOString() : null,
+      pendingJsonValid: !pendingState.parseError,
+      pendingJsonError: pendingState.parseError?.message || null,
       signature: queueInfo.signature
     },
     processor: {
-      dangerousModeDefault: defaults.processorDangerousModeDefault
+      dangerousModeDefault: defaults.processorDangerousModeDefault,
+      allowDangerousModeOverride: defaults.allowDangerousModeOverride
     },
     bot: {
       repoPath: defaults.botRepoPath
@@ -512,6 +553,7 @@ async function ensureDiscordServices({ sessionManager, workspaceManager, dangero
   if (!sessionManager) throw new Error('sessionManager is required');
 
   const defaults = getDefaults();
+  enforceDangerousModeOverridePolicy({ defaults, dangerousModeOverride });
   const dangerousModeEnabled = resolveDangerousModeEnabled({
     override: (dangerousModeOverride === true || dangerousModeOverride === false) ? dangerousModeOverride : null,
     defaults
@@ -562,9 +604,49 @@ async function processDiscordQueue({
   const defaults = getDefaults();
   const runRequestId = String(requestId || crypto.randomUUID()).trim();
   const runActor = String(actor || 'unknown').trim();
+  enforceDangerousModeOverridePolicy({ defaults, dangerousModeOverride });
 
-  const pendingJson = await readJsonIfExists(defaults.pendingTasksPath);
+  const pendingState = await readJsonWithDiagnostics(defaults.pendingTasksPath);
+  if (pendingState.parseError) {
+    throw createHttpError(
+      422,
+      `Discord queue JSON is invalid: ${pendingState.parseError.message}`,
+      { queuePath: defaults.pendingTasksPath }
+    );
+  }
+  const pendingJson = pendingState.json;
   const queueInfo = normalizeQueueInput(pendingJson, defaults);
+
+  if (queueInfo.uniqueCount <= 0) {
+    const noTaskResult = {
+      ok: true,
+      sent: false,
+      reason: 'NO_PENDING_TASKS',
+      requestId: runRequestId,
+      processorSessionId: defaults.processorSessionId,
+      queue: {
+        rawCount: queueInfo.rawCount,
+        uniqueCount: queueInfo.uniqueCount,
+        duplicateCount: queueInfo.duplicateCount
+      }
+    };
+    await appendAuditEvent(defaults, {
+      event: 'discord-queue-process-noop',
+      requestId: runRequestId,
+      actor: runActor,
+      reason: 'NO_PENDING_TASKS',
+      counts: {
+        raw: queueInfo.rawCount,
+        unique: queueInfo.uniqueCount,
+        duplicates: queueInfo.duplicateCount
+      }
+    }).catch(() => {});
+    logger?.info?.('Discord queue process skipped (no pending tasks)', {
+      requestId: runRequestId,
+      actor: runActor
+    });
+    return noTaskResult;
+  }
 
   if (queueInfo.signature.required && !queueInfo.signature.verified) {
     const error = createHttpError(400, `Discord queue signature verification failed: ${queueInfo.signature.reason}`, {
