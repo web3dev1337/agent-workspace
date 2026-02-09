@@ -3457,6 +3457,8 @@ class ClaudeOrchestrator {
 
 	      const tierBadge = tier ? `<span class="worktree-tier-badge tier-${tier}" title="Tier ${tier}">T${tier}</span>` : '';
         const workspaceIdJson = JSON.stringify(String(this.currentWorkspace?.id || ''));
+        const worktreeIdJson = JSON.stringify(String(worktree.id || ''));
+        const displayNameJson = JSON.stringify(String(displayName || ''));
 
 	      item.innerHTML = `
 	        <div class="worktree-header">
@@ -3484,7 +3486,7 @@ class ClaudeOrchestrator {
               R
             </button>
             <button class="delete-worktree-btn"
-                    onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.deleteWorktree('${worktree.id}', '${displayName}', { workspaceId: ${workspaceIdJson} })"
+                    onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.deleteWorktree(${worktreeIdJson}, ${displayNameJson}, { workspaceId: ${workspaceIdJson} })"
                     title="Remove worktree from workspace (closes terminal processes, keeps files on disk)">
               🗑
             </button>
@@ -5122,21 +5124,24 @@ class ClaudeOrchestrator {
 		    const worktreeKey = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
 		    const removeLabel = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId;
       const workspaceId = String(session?.workspace || this.currentWorkspace?.id || '').trim();
+      const worktreeKeyJson = JSON.stringify(String(worktreeKey || ''));
+      const removeLabelJson = JSON.stringify(String(removeLabel || ''));
       const workspaceIdJson = JSON.stringify(workspaceId);
-		    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree('${worktreeKey}', '${removeLabel}', { workspaceId: ${workspaceIdJson} })" title="Remove worktree from workspace (closes all terminal processes, keeps files on disk)">🗑</button>`;
+		    return `<button class="control-btn danger terminal-close-btn" onclick="window.orchestrator.deleteWorktree(${worktreeKeyJson}, ${removeLabelJson}, { workspaceId: ${workspaceIdJson} })" title="Remove worktree from workspace (closes all terminal processes, keeps files on disk)">🗑</button>`;
 		  }
 
 					  getSessionCloseButtonHTML(sessionId) {
 					    const sid = String(sessionId || '').trim();
 					    if (!sid) return '';
 					    const session = this.sessions.get(sid);
-					    const stopBtn = `<button class="control-btn terminal-process-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.requestCloseSession('${sid}')" title="Close terminal process (kills agent/server for this worktree, keeps worktree in workspace)">×</button>`;
+              const sidJson = JSON.stringify(sid);
+					    const stopBtn = `<button class="control-btn terminal-process-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.requestCloseSession(${sidJson})" title="Close terminal process (kills agent/server for this worktree, keeps worktree in workspace)">×</button>`;
 
 					    // Reduce UI confusion: show the "remove worktree" button only once per pair (on the Agent tile).
 					    // Server tiles keep their server controls; removal is done from the Agent tile or sidebar.
 					    if (String(session?.type || '').toLowerCase() === 'server') return stopBtn;
 
-					    const removeBtn = `<button class="control-btn danger terminal-session-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.removeWorktreeForSession('${sid}')" title="Remove worktree from workspace (closes all terminal processes, keeps files on disk)">🗑</button>`;
+					    const removeBtn = `<button class="control-btn danger terminal-session-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.removeWorktreeForSession(${sidJson})" title="Remove worktree from workspace (closes all terminal processes, keeps files on disk)">🗑</button>`;
 					    return `${stopBtn}\n${removeBtn}`;
 					  }
   
