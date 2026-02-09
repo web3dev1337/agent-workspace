@@ -113,6 +113,12 @@ const { PolicyService } = require('./policyService');
 const { AuditExportService } = require('./auditExportService');
 const { getInstance: getCommandHistoryService } = require('./commandHistoryService');
 const { evaluateBindSecurity } = require('./networkSecurityPolicy');
+const {
+  normalizeRepositoryPath,
+  normalizeRepositoryRootForWorktrees,
+  normalizeThreadWorktreeId,
+  pickReusableWorktreeId
+} = require('./threadWorktreeSelection');
 const multer = require('multer');
 
 // Configure multer for audio file uploads
@@ -2493,20 +2499,6 @@ app.get('/api/sessions/:sessionId/log', (req, res) => {
   }
 });
 
-function normalizeRepositoryPath(value) {
-  return String(value || '').trim().replace(/[\\/]+$/, '');
-}
-
-function normalizeThreadWorktreeId(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (!raw) return '';
-  const direct = raw.match(/^work(\d+)$/);
-  if (direct) return `work${Number(direct[1])}`;
-  const digits = raw.match(/(\d+)/);
-  if (digits) return `work${Number(digits[1])}`;
-  return '';
-}
-
 function pickNextWorktreeIdForWorkspace(workspace, { repositoryPath } = {}) {
   const repoPathNorm = normalizeRepositoryPath(repositoryPath);
 
@@ -2527,25 +2519,6 @@ function pickNextWorktreeIdForWorkspace(workspace, { repositoryPath } = {}) {
 
   const pairs = Number(workspace?.terminals?.pairs || 0);
   return `work${Math.max(1, pairs + 1)}`;
-}
-
-function normalizeRepositoryRootForWorktrees(value) {
-  const normalized = normalizeRepositoryPath(value);
-  if (!normalized) return '';
-
-  const base = path.basename(normalized).toLowerCase();
-  if (base === 'master') {
-    return normalizeRepositoryPath(path.dirname(normalized));
-  }
-
-  if (/^work\d+$/.test(base)) {
-    const parent = normalizeRepositoryPath(path.dirname(normalized));
-    if (parent && fs.existsSync(path.join(parent, 'master'))) {
-      return parent;
-    }
-  }
-
-  return normalized;
 }
 
 function resolveThreadRepositoryContext(workspace, { repositoryPath, repositoryName, repositoryType } = {}) {
@@ -2584,6 +2557,26 @@ function inferThreadSessionIds({ repositoryName, worktreeId } = {}) {
   return [`${worktree}-claude`, `${worktree}-server`];
 }
 
+function pickExistingThreadWorktreeForRepository({ workspace, workspaceId, repositoryPath, repositoryName } = {}) {
+  const resolvedWorkspaceId = String(workspaceId || workspace?.id || '').trim();
+  if (!resolvedWorkspaceId || !workspace) return '';
+
+  const activeThreads = threadService.list({
+    workspaceId: resolvedWorkspaceId,
+    status: 'active',
+    includeArchived: true
+  });
+  const sessionEntries = sessionManager.getAllSessionEntries({ workspaceId: resolvedWorkspaceId });
+
+  return pickReusableWorktreeId({
+    workspace,
+    repositoryPath,
+    repositoryName,
+    threadRows: activeThreads,
+    sessionRows: sessionEntries
+  });
+}
+
 async function ensureWorkspaceMixedWorktree({
   workspaceId,
   repositoryPath,
@@ -2607,7 +2600,18 @@ async function ensureWorkspaceMixedWorktree({
     throw error;
   }
 
-  const worktree = normalizeThreadWorktreeId(worktreeId) || pickNextWorktreeIdForWorkspace(workspace, { repositoryPath: repoPath });
+  const requestedWorktree = normalizeThreadWorktreeId(worktreeId);
+  const reusableWorktree = requestedWorktree
+    ? ''
+    : pickExistingThreadWorktreeForRepository({
+      workspace,
+      workspaceId,
+      repositoryPath: repoPath,
+      repositoryName
+    });
+  const worktree = requestedWorktree
+    || reusableWorktree
+    || pickNextWorktreeIdForWorkspace(workspace, { repositoryPath: repoPath });
   const repoName = String(repositoryName || path.basename(repoPath)).trim();
   const repoType = String(repositoryType || workspace?.repository?.type || workspace?.type || 'generic').trim();
   const worktreePath = path.join(repoPath, worktree);
