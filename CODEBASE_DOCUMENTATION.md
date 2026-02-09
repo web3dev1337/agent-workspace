@@ -150,6 +150,7 @@ client/app.js                       - Config pre-fetching & caching
 client/app.js                      - Main client application
 ├─ Manages: UI state, socket connections, terminal grid
 ├─ Features: 16-terminal layout, real-time updates, session switching
+├─ Command Palette: header `⌘ Commands` button + `Ctrl/Cmd+K` searchable command launcher for command-catalog actions
 ├─ Projects + Chats automation: `project-chats-new` Commander/voice action supports explicit workspace + repository targeting
 ├─ Projects + Chats list: repository-first aggregation (project-centric view) while preserving workspace context for mixed workspaces
 ├─ Projects + Chats data source: prefers server-aggregated repository projects from `GET /api/thread-projects` with client fallback aggregation
@@ -239,6 +240,7 @@ TabState Structure:
 - Click "+" button to open new workspace
 - Click tab to switch
 - Click "×" to close tab (confirms if terminals active)
+- `Ctrl/Cmd+K` opens the command palette for quick command execution
 - Alt+← / Alt+→ to cycle tabs (previous/next)
 - Alt+1-9 to jump to specific tab
 - Alt+N for new workspace

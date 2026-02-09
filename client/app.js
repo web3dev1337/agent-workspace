@@ -386,6 +386,11 @@ class ClaudeOrchestrator {
       document.getElementById('project-chats-btn')?.addEventListener('click', () => {
         this.showProjectChatsShell();
       });
+      document.getElementById('command-palette-btn')?.addEventListener('click', () => {
+        this.showCommandPalette().catch((error) => {
+          this.showToast?.(`Failed to open command palette: ${String(error?.message || error)}`, 'error');
+        });
+      });
       document.getElementById('review-route-btn')?.addEventListener('click', () => {
         this.openReviewRoute();
       });
@@ -2162,6 +2167,24 @@ class ClaudeOrchestrator {
       e.stopPropagation();
       this.setWorkflowMode(mode);
       this.showToast(`Mode: ${mode}`, 'info');
+    });
+
+    // Keyboard: Ctrl/Cmd+K opens command palette.
+    document.addEventListener('keydown', (e) => {
+      const lower = String(e.key || '').toLowerCase();
+      const openShortcut = (lower === 'k' && (e.ctrlKey || e.metaKey) && !e.altKey);
+      if (!openShortcut) return;
+
+      // Ignore when typing in inputs/selects/contenteditable.
+      const t = e.target;
+      const tag = String(t?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || t?.isContentEditable) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      this.showCommandPalette().catch((error) => {
+        this.showToast?.(`Failed to open command palette: ${String(error?.message || error)}`, 'error');
+      });
     });
 
     // Keyboard: Alt+P opens the simple Projects + Chats shell.
@@ -11988,6 +12011,221 @@ class ClaudeOrchestrator {
       throw new Error(String(data?.error || data?.message || `Command catalog failed (${res.status})`));
     }
     return data;
+  }
+
+  commandHasRequiredParams(command) {
+    const params = Array.isArray(command?.params) ? command.params : [];
+    return params.some((param) => param?.required === true);
+  }
+
+  getCommandPaletteRows(query = '') {
+    const q = String(query || '').trim().toLowerCase();
+    const all = Array.isArray(this.commandCatalogCache) ? this.commandCatalogCache : [];
+    const rows = all
+      .filter((command) => {
+        const surfaces = Array.isArray(command?.surfaces) ? command.surfaces : [];
+        return surfaces.includes('ui') || surfaces.includes('commander');
+      })
+      .filter((command) => {
+        if (!q) return true;
+        const haystack = [
+          command?.name,
+          command?.category,
+          command?.description,
+          ...(Array.isArray(command?.aliases) ? command.aliases : [])
+        ]
+          .map((value) => String(value || '').toLowerCase())
+          .join(' ');
+        return haystack.includes(q);
+      })
+      .sort((a, b) => {
+        const aRequired = this.commandHasRequiredParams(a) ? 1 : 0;
+        const bRequired = this.commandHasRequiredParams(b) ? 1 : 0;
+        if (aRequired !== bRequired) return aRequired - bRequired;
+        const aName = String(a?.name || '');
+        const bName = String(b?.name || '');
+        return aName.localeCompare(bName);
+      });
+    return rows.slice(0, 60);
+  }
+
+  async executeCommanderCommand(command, params = {}) {
+    const name = String(command || '').trim();
+    if (!name) throw new Error('command is required');
+    const res = await fetch('/api/commander/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: name, params })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) {
+      throw new Error(String(data?.error || data?.message || `Command failed (${res.status})`));
+    }
+    return data;
+  }
+
+  renderCommandPaletteList(modal, state) {
+    const listEl = modal.querySelector('#command-palette-list');
+    const summaryEl = modal.querySelector('#command-palette-summary');
+    if (!listEl) return;
+
+    const rows = this.getCommandPaletteRows(state.query);
+    state.rows = rows;
+    if (!rows.length) {
+      state.selectedIndex = -1;
+      listEl.innerHTML = '<div class="command-palette-empty">No commands match this search.</div>';
+      if (summaryEl) summaryEl.textContent = '0 commands';
+      return;
+    }
+
+    if (!Number.isFinite(state.selectedIndex) || state.selectedIndex < 0 || state.selectedIndex >= rows.length) {
+      const firstRunnable = rows.findIndex((row) => !this.commandHasRequiredParams(row));
+      state.selectedIndex = firstRunnable >= 0 ? firstRunnable : 0;
+    }
+
+    listEl.innerHTML = rows.map((row, index) => {
+      const isActive = index === state.selectedIndex;
+      const requiresParams = this.commandHasRequiredParams(row);
+      const aliasText = Array.isArray(row?.aliases) && row.aliases.length ? `aliases: ${row.aliases.join(', ')}` : '';
+      const title = [String(row?.description || ''), aliasText].filter(Boolean).join(' • ');
+      const badge = requiresParams
+        ? '<span class="command-palette-badge requires">requires params</span>'
+        : '<span class="command-palette-badge runnable">ready</span>';
+      return `
+        <button type="button"
+                class="command-palette-item ${isActive ? 'active' : ''} ${requiresParams ? 'requires-params' : ''}"
+                data-command-palette-run="${this.escapeHtml(String(row?.name || ''))}"
+                data-command-palette-index="${index}"
+                title="${this.escapeHtml(title)}">
+          <div class="command-palette-item-title">${this.escapeHtml(String(row?.name || ''))}</div>
+          <div class="command-palette-item-meta">${this.escapeHtml(String(row?.category || 'general'))} • ${this.escapeHtml(String(row?.description || ''))}</div>
+          ${badge}
+        </button>
+      `;
+    }).join('');
+
+    if (summaryEl) {
+      const runnableCount = rows.filter((row) => !this.commandHasRequiredParams(row)).length;
+      summaryEl.textContent = `${rows.length} commands • ${runnableCount} runnable`;
+    }
+  }
+
+  async showCommandPalette(initialQuery = '') {
+    const existing = document.getElementById('command-palette-modal');
+    if (existing) existing.remove();
+
+    if (!Array.isArray(this.commandCatalogCache) || this.commandCatalogCache.length === 0) {
+      try {
+        const data = await this.fetchCommandCatalog();
+        this.commandCatalogCache = Array.isArray(data?.commands) ? data.commands : [];
+      } catch (error) {
+        this.showToast?.(`Failed to load command catalog: ${String(error?.message || error)}`, 'error');
+        return;
+      }
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'command-palette-modal';
+    modal.className = 'modal command-palette-modal';
+    modal.innerHTML = `
+      <div class="modal-content command-palette-content">
+        <div class="modal-header">
+          <h2>⌘ Command Palette</h2>
+          <button class="close-btn" type="button" data-command-palette-close="true">×</button>
+        </div>
+        <div class="command-palette-toolbar">
+          <input id="command-palette-search" type="text" class="search-input command-palette-search" placeholder="Search command name, alias, or description…" />
+          <span id="command-palette-summary" class="command-palette-summary">Loading…</span>
+        </div>
+        <div id="command-palette-list" class="command-palette-list"></div>
+        <div class="command-palette-hint mono">Enter run • ↑/↓ move • Esc close</div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const searchEl = modal.querySelector('#command-palette-search');
+    const state = {
+      query: String(initialQuery || '').trim(),
+      rows: [],
+      selectedIndex: 0
+    };
+
+    const close = () => {
+      modal.remove();
+    };
+
+    const runSelected = async (index = state.selectedIndex) => {
+      const row = state.rows[index];
+      if (!row) return;
+      if (this.commandHasRequiredParams(row)) {
+        this.showToast?.(`Command requires parameters: ${row.name}`, 'warning');
+        return;
+      }
+      try {
+        await this.executeCommanderCommand(row.name, {});
+        this.showToast?.(`Ran command: ${row.name}`, 'success');
+        close();
+      } catch (error) {
+        this.showToast?.(`Command failed: ${String(error?.message || error)}`, 'error');
+      }
+    };
+
+    const moveSelection = (delta) => {
+      if (!state.rows.length) return;
+      const size = state.rows.length;
+      const next = (state.selectedIndex + delta + size) % size;
+      state.selectedIndex = next;
+      this.renderCommandPaletteList(modal, state);
+      const rowEl = modal.querySelector(`[data-command-palette-index="${next}"]`);
+      rowEl?.scrollIntoView?.({ block: 'nearest' });
+    };
+
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal || event.target.closest('[data-command-palette-close="true"]')) {
+        close();
+        return;
+      }
+      const runBtn = event.target.closest('[data-command-palette-run]');
+      if (!runBtn) return;
+      const index = Number(runBtn.getAttribute('data-command-palette-index'));
+      if (!Number.isFinite(index)) return;
+      state.selectedIndex = index;
+      runSelected(index).catch(() => {});
+    });
+
+    modal.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close();
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        moveSelection(1);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        moveSelection(-1);
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        runSelected().catch(() => {});
+      }
+    });
+
+    if (searchEl) {
+      searchEl.value = state.query;
+      searchEl.addEventListener('input', () => {
+        state.query = String(searchEl.value || '').trim();
+        state.selectedIndex = 0;
+        this.renderCommandPaletteList(modal, state);
+      });
+      requestAnimationFrame(() => searchEl.focus());
+    }
+
+    this.renderCommandPaletteList(modal, state);
   }
 
   renderCommandCatalog(payload) {
