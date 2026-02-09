@@ -63,6 +63,7 @@ server/threadService.js            - Workspace/project thread persistence (`~/.o
 ├─ Project identity: `projectId` is repository-scoped (`repo-path:*` / `repo-name:*`) instead of workspace-scoped when repository context is available
 ├─ Repository normalization: thread/worktree creation normalizes `.../master` and `.../workN` paths to repository root
 ├─ New chat reuse: thread creation prefers an existing repo worktree without an active thread before allocating a new `workN`
+├─ Project aggregation: `listProjects()` returns repository-level chat rollups across one/many workspaces
 └─ Lifecycle: create/list/close/archive + session association updates
 server/threadWorktreeSelection.js  - Repository/worktree normalization + reuse-first candidate selection for thread creation
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
@@ -434,6 +435,7 @@ DELETE /api/workspaces/:id        - Delete workspace
 POST /api/workspaces/:id/switch   - Switch to workspace
 POST /api/workspaces/remove-worktree - Remove worktree from workspace config (mixed terminal arrays and numeric `terminals.pairs` modes), close linked sessions, keep files on disk
 GET /api/threads                  - List project/workspace chats (`workspaceId` required)
+GET /api/thread-projects          - List repository-level chat projects aggregated from threads (optionally `workspaceId` scoped)
 POST /api/threads                 - Create thread + ensure mixed worktree/session context
 POST /api/threads/create          - Alias for thread creation API used by Projects + Chats shell (idempotent for existing worktrees/sessions)
 POST /api/threads/:id/close       - Mark thread closed and close linked sessions

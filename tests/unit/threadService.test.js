@@ -109,4 +109,59 @@ describe('ThreadService', () => {
     expect(withArchived.length).toBe(1);
     expect(withArchived[0].status).toBe('archived');
   });
+
+  test('aggregates repository-level projects across workspaces', () => {
+    const service = new ThreadService({ logger: { info: () => {}, warn: () => {}, error: () => {} } });
+    service.init({
+      workspaceManager: {
+        getWorkspace: (workspaceId) => {
+          if (workspaceId === 'workspace-a') return { id: 'workspace-a', name: 'Workspace A' };
+          if (workspaceId === 'workspace-b') return { id: 'workspace-b', name: 'Workspace B' };
+          return null;
+        }
+      }
+    });
+
+    const first = service.createThread({
+      workspaceId: 'workspace-a',
+      worktreeId: 'work1',
+      repositoryName: 'incremental-game',
+      repositoryPath: '/tmp/incremental-game/master',
+      title: 'Repo 1 active'
+    });
+    const second = service.createThread({
+      workspaceId: 'workspace-b',
+      worktreeId: 'work2',
+      repositoryName: 'incremental-game',
+      repositoryPath: '/tmp/incremental-game/work2',
+      title: 'Repo 1 closed'
+    });
+    service.closeThread(second.id);
+
+    const archived = service.createThread({
+      workspaceId: 'workspace-a',
+      worktreeId: 'work9',
+      repositoryName: 'epic-survivors',
+      repositoryPath: '/tmp/epic-survivors/master',
+      title: 'Repo 2 archived'
+    });
+    service.archiveThread(archived.id);
+
+    const projects = service.listProjects();
+    expect(projects.length).toBe(1);
+    expect(projects[0].projectId).toBe('repo-path:/tmp/incremental-game');
+    expect(projects[0].workspaceIds).toEqual(['workspace-a', 'workspace-b']);
+    expect(projects[0].workspaceNames).toEqual(['Workspace A', 'Workspace B']);
+    expect(projects[0].activeThreadCount).toBe(1);
+    expect(projects[0].closedThreadCount).toBe(1);
+    expect(projects[0].archivedThreadCount).toBe(0);
+    expect(projects[0].threadCount).toBe(2);
+
+    const withArchived = service.listProjects({ includeArchived: true });
+    expect(withArchived.length).toBe(2);
+    const archivedProject = withArchived.find((row) => row.projectId === 'repo-path:/tmp/epic-survivors');
+    expect(archivedProject).toBeTruthy();
+    expect(archivedProject.archivedThreadCount).toBe(1);
+    expect(archivedProject.threadCount).toBe(1);
+  });
 });
