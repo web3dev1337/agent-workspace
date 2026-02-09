@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
 const { ProjectTypeService } = require('../server/projectTypeService');
+const { WorktreeHelper } = require('../server/worktreeHelper');
 
 function normalizeString(value) {
   return String(value || '').trim();
@@ -283,21 +284,6 @@ async function initializeGitRepo(masterPath) {
   await runCommand('git', ['-c', 'user.name=Claude Orchestrator', '-c', 'user.email=orchestrator@local', 'commit', '-m', 'Initial scaffold'], { cwd: masterPath });
 }
 
-async function createWorktrees(projectPath, count) {
-  const worktrees = [];
-  const masterPath = path.join(projectPath, 'master');
-  const total = Math.max(0, Number(count) || 0);
-
-  for (let i = 1; i <= total; i += 1) {
-    const worktreeId = `work${i}`;
-    const worktreePath = path.join(projectPath, worktreeId);
-    await runCommand('git', ['worktree', 'add', '-B', worktreeId, `../${worktreeId}`, 'master'], { cwd: masterPath });
-    worktrees.push({ id: worktreeId, path: worktreePath });
-  }
-
-  return worktrees;
-}
-
 async function wireRemote({
   masterPath,
   repo,
@@ -405,6 +391,7 @@ function resolveProjectSpec(service, options = {}) {
 async function createProject(options = {}) {
   const logger = options.logger || console;
   const service = options.projectTypeService || ProjectTypeService.getInstance({ logger });
+  const worktreeHelper = options.worktreeHelper || new WorktreeHelper();
   const spec = resolveProjectSpec(service, options);
 
   const projectPath = path.join(spec.basePath, spec.name);
@@ -486,7 +473,11 @@ async function createProject(options = {}) {
     }
 
     if (worktreeCount > 0) {
-      additionalWorktrees = await createWorktrees(projectPath, worktreeCount);
+      additionalWorktrees = await worktreeHelper.createProjectWorktrees({
+        projectPath,
+        count: worktreeCount,
+        baseBranch: 'master'
+      });
     }
   }
 
