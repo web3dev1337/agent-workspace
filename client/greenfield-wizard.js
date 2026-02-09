@@ -8,6 +8,8 @@ class GreenfieldWizard {
       name: '',
       description: '',
       category: '',
+      framework: '',
+      template: '',
       detectedCategory: '',
       isPrivate: true,
       worktreeCount: 8,
@@ -15,6 +17,9 @@ class GreenfieldWizard {
       yolo: true
     };
     this.categories = [];
+    this.frameworks = [];
+    this.templates = [];
+    this.contextSuggestion = null;
     // Always use same-origin API requests; the dev server proxies `/api` to the backend.
     this.serverUrl = window.location.origin;
     this._onEscape = null;
@@ -23,46 +28,266 @@ class GreenfieldWizard {
   async show() {
     console.log('Opening greenfield project wizard...');
 
-    // Fetch available categories
-    await this.loadCategories();
+    // Fetch taxonomy and derive defaults before rendering.
+    this.contextSuggestion = null;
+    await this.loadTaxonomy();
+    this.applyContextSuggestion();
+    this.ensureValidSelection();
 
     // Show wizard modal
     this.renderWizard();
     this.showStep(1);
   }
 
-  async loadCategories() {
-    const mapCategory = (category) => ({
-      id: String(category?.id || '').trim(),
-      path: String(category?.basePathResolved || category?.path || category?.basePath || '').trim(),
-      keywords: Array.isArray(category?.keywords) ? category.keywords : []
-    });
-
+  async loadTaxonomy() {
     try {
       const taxonomy = await this.orchestrator?.ensureProjectTypeTaxonomy?.();
-      if (taxonomy && Array.isArray(taxonomy.categories) && taxonomy.categories.length) {
-        this.categories = taxonomy.categories.map(mapCategory).filter((item) => item.id);
-        console.log('Loaded categories from project-type taxonomy:', this.categories);
+      if (taxonomy && Array.isArray(taxonomy.categories) && taxonomy.categories.length && Array.isArray(taxonomy.templates)) {
+        this.categories = taxonomy.categories.map((category) => ({
+          id: String(category?.id || '').trim(),
+          name: String(category?.name || category?.id || '').trim(),
+          description: String(category?.description || '').trim(),
+          path: String(category?.basePathResolved || category?.path || category?.basePath || '').trim(),
+          keywords: Array.isArray(category?.keywords) ? category.keywords : [],
+          defaultTemplateId: String(category?.defaultTemplateId || '').trim(),
+          frameworkIds: Array.isArray(category?.frameworkIds) ? category.frameworkIds.map((id) => String(id || '').trim()).filter(Boolean) : []
+        })).filter((item) => item.id);
+        this.frameworks = Array.isArray(taxonomy.frameworks) ? taxonomy.frameworks.map((framework) => ({
+          id: String(framework?.id || '').trim(),
+          name: String(framework?.name || framework?.id || '').trim(),
+          description: String(framework?.description || '').trim(),
+          categoryId: String(framework?.categoryId || '').trim(),
+          defaultTemplateId: String(framework?.defaultTemplateId || '').trim(),
+          templateIds: Array.isArray(framework?.templateIds) ? framework.templateIds.map((id) => String(id || '').trim()).filter(Boolean) : []
+        })).filter((item) => item.id) : [];
+        this.templates = taxonomy.templates.map((template) => ({
+          id: String(template?.id || '').trim(),
+          name: String(template?.name || template?.id || '').trim(),
+          description: String(template?.description || '').trim(),
+          categoryId: String(template?.categoryId || '').trim(),
+          frameworkId: String(template?.frameworkId || '').trim(),
+          defaultRepositoryType: String(template?.defaultRepositoryType || '').trim()
+        })).filter((item) => item.id);
+        console.log('Loaded project taxonomy:', {
+          categories: this.categories.length,
+          frameworks: this.frameworks.length,
+          templates: this.templates.length
+        });
         return;
       }
 
-      const response = await fetch(`${this.serverUrl}/api/project-types/categories`);
+      const response = await fetch(`${this.serverUrl}/api/project-types`);
       if (response.ok) {
-        const categories = await response.json();
-        this.categories = Array.isArray(categories) ? categories.map(mapCategory).filter((item) => item.id) : [];
-        console.log('Loaded categories:', this.categories);
+        const payload = await response.json();
+        this.categories = Array.isArray(payload?.categories) ? payload.categories.map((category) => ({
+          id: String(category?.id || '').trim(),
+          name: String(category?.name || category?.id || '').trim(),
+          description: String(category?.description || '').trim(),
+          path: String(category?.basePathResolved || category?.path || category?.basePath || '').trim(),
+          keywords: Array.isArray(category?.keywords) ? category.keywords : [],
+          defaultTemplateId: String(category?.defaultTemplateId || '').trim(),
+          frameworkIds: Array.isArray(category?.frameworkIds) ? category.frameworkIds.map((id) => String(id || '').trim()).filter(Boolean) : []
+        })).filter((item) => item.id) : [];
+        this.frameworks = Array.isArray(payload?.frameworks) ? payload.frameworks.map((framework) => ({
+          id: String(framework?.id || '').trim(),
+          name: String(framework?.name || framework?.id || '').trim(),
+          description: String(framework?.description || '').trim(),
+          categoryId: String(framework?.categoryId || '').trim(),
+          defaultTemplateId: String(framework?.defaultTemplateId || '').trim(),
+          templateIds: Array.isArray(framework?.templateIds) ? framework.templateIds.map((id) => String(id || '').trim()).filter(Boolean) : []
+        })).filter((item) => item.id) : [];
+        this.templates = Array.isArray(payload?.templates) ? payload.templates.map((template) => ({
+          id: String(template?.id || '').trim(),
+          name: String(template?.name || template?.id || '').trim(),
+          description: String(template?.description || '').trim(),
+          categoryId: String(template?.categoryId || '').trim(),
+          frameworkId: String(template?.frameworkId || '').trim(),
+          defaultRepositoryType: String(template?.defaultRepositoryType || '').trim()
+        })).filter((item) => item.id) : [];
         return;
       }
     } catch (error) {
-      console.error('Failed to load categories:', error);
+      console.error('Failed to load project taxonomy:', error);
     }
 
     this.categories = [
-      { id: 'website', path: '~/GitHub/websites', keywords: ['website'] },
-      { id: 'game', path: '~/GitHub/games', keywords: ['game'] },
-      { id: 'tool', path: '~/GitHub/tools', keywords: ['tool'] },
-      { id: 'other', path: '~/GitHub/projects', keywords: [] }
+      { id: 'website', name: 'Website', path: '~/GitHub/websites', keywords: ['website'], defaultTemplateId: 'website-starter', frameworkIds: ['web-generic'] },
+      { id: 'game', name: 'Game', path: '~/GitHub/games', keywords: ['game'], defaultTemplateId: 'hytopia-game-starter', frameworkIds: ['hytopia', 'monogame'] },
+      { id: 'tool', name: 'Tool', path: '~/GitHub/tools', keywords: ['tool'], defaultTemplateId: 'node-typescript-tool', frameworkIds: ['nodejs'] },
+      { id: 'other', name: 'Other', path: '~/GitHub/projects', keywords: [], defaultTemplateId: 'generic-empty', frameworkIds: ['generic'] }
     ];
+    this.frameworks = [
+      { id: 'web-generic', name: 'Web', categoryId: 'website', defaultTemplateId: 'website-starter', templateIds: ['website-starter'] },
+      { id: 'hytopia', name: 'Hytopia', categoryId: 'game', defaultTemplateId: 'hytopia-game-starter', templateIds: ['hytopia-game-starter'] },
+      { id: 'monogame', name: 'MonoGame', categoryId: 'game', defaultTemplateId: 'generic-empty', templateIds: ['generic-empty'] },
+      { id: 'nodejs', name: 'Node.js', categoryId: 'tool', defaultTemplateId: 'node-typescript-tool', templateIds: ['node-typescript-tool', 'generic-empty'] },
+      { id: 'generic', name: 'Generic', categoryId: 'other', defaultTemplateId: 'generic-empty', templateIds: ['generic-empty'] }
+    ];
+    this.templates = [
+      { id: 'website-starter', name: 'Website Starter', description: 'Simple website scaffold', categoryId: 'website', frameworkId: 'web-generic', defaultRepositoryType: 'website' },
+      { id: 'hytopia-game-starter', name: 'Hytopia Starter', description: 'Hytopia game scaffold', categoryId: 'game', frameworkId: 'hytopia', defaultRepositoryType: 'hytopia-game' },
+      { id: 'node-typescript-tool', name: 'Node TypeScript', description: 'Node.js + TypeScript starter', categoryId: 'tool', frameworkId: 'nodejs', defaultRepositoryType: 'tool-project' },
+      { id: 'generic-empty', name: 'Empty Project', description: 'Minimal scaffold', categoryId: 'other', frameworkId: 'generic', defaultRepositoryType: 'generic' }
+    ];
+  }
+
+  getCategoryById(categoryId) {
+    const id = String(categoryId || '').trim();
+    return this.categories.find((category) => category.id === id) || null;
+  }
+
+  getFrameworkById(frameworkId) {
+    const id = String(frameworkId || '').trim();
+    return this.frameworks.find((framework) => framework.id === id) || null;
+  }
+
+  getTemplateById(templateId) {
+    const id = String(templateId || '').trim();
+    return this.templates.find((template) => template.id === id) || null;
+  }
+
+  getFrameworksForCategory(categoryId) {
+    const id = String(categoryId || '').trim();
+    if (!id) return [];
+    const byCategory = this.frameworks.filter((framework) => framework.categoryId === id);
+    if (byCategory.length) return byCategory;
+    const category = this.getCategoryById(id);
+    if (!category) return [];
+    return this.frameworks.filter((framework) => (category.frameworkIds || []).includes(framework.id));
+  }
+
+  getTemplatesForFramework(frameworkId) {
+    const id = String(frameworkId || '').trim();
+    if (!id) return [];
+    const framework = this.getFrameworkById(id);
+    if (!framework) return [];
+    const ids = Array.isArray(framework.templateIds) ? framework.templateIds : [];
+    const byFrameworkId = this.templates.filter((template) => template.frameworkId === id);
+    if (ids.length) {
+      const idSet = new Set(ids);
+      const ordered = [];
+      for (const templateId of ids) {
+        const row = this.getTemplateById(templateId);
+        if (row) ordered.push(row);
+      }
+      for (const row of byFrameworkId) {
+        if (!idSet.has(row.id)) ordered.push(row);
+      }
+      return ordered;
+    }
+    return byFrameworkId;
+  }
+
+  getTemplatesForCategory(categoryId) {
+    const id = String(categoryId || '').trim();
+    if (!id) return [];
+    return this.templates.filter((template) => template.categoryId === id);
+  }
+
+  getSelectedCategory() {
+    return this.getCategoryById(this.data.category);
+  }
+
+  getSelectedFramework() {
+    return this.getFrameworkById(this.data.framework);
+  }
+
+  getSelectedTemplate() {
+    return this.getTemplateById(this.data.template);
+  }
+
+  getCurrentRepositoryTypeHint() {
+    const sessionId = this.orchestrator?.focusedTerminalInfo?.sessionId || this.orchestrator?.lastInteractedSessionId || '';
+    const session = sessionId && this.orchestrator?.sessions?.get ? this.orchestrator.sessions.get(sessionId) : null;
+    if (session?.repositoryType) return String(session.repositoryType).trim();
+
+    const workspace = this.orchestrator?.currentWorkspace || null;
+    if (!workspace) return '';
+
+    if (workspace.workspaceType === 'mixed-repo') {
+      const terminals = Array.isArray(workspace.terminals) ? workspace.terminals : workspace.terminals?.pairs;
+      const first = Array.isArray(terminals) && terminals.length ? terminals[0] : null;
+      return String(first?.repository?.type || '').trim();
+    }
+
+    return String(workspace.type || '').trim();
+  }
+
+  applyContextSuggestion() {
+    const repoType = this.getCurrentRepositoryTypeHint();
+    if (!repoType) return;
+
+    const template = this.templates.find((row) => String(row?.defaultRepositoryType || '').trim().toLowerCase() === repoType.toLowerCase());
+    if (!template) return;
+
+    const framework = this.getFrameworkById(template.frameworkId);
+    const categoryId = template.categoryId || framework?.categoryId || '';
+    if (!categoryId) return;
+
+    this.contextSuggestion = {
+      repositoryType: repoType,
+      categoryId,
+      frameworkId: framework?.id || '',
+      templateId: template.id
+    };
+
+    if (!this.data.category) this.data.category = categoryId;
+    if (!this.data.framework && framework?.id) this.data.framework = framework.id;
+    if (!this.data.template) this.data.template = template.id;
+  }
+
+  ensureValidSelection() {
+    if (!this.data.category && this.categories.length) {
+      this.data.category = this.categories[0].id;
+    }
+
+    const category = this.getSelectedCategory();
+    if (!category) return;
+
+    const frameworks = this.getFrameworksForCategory(category.id);
+    if (!frameworks.length) {
+      this.data.framework = '';
+      this.data.template = '';
+      return;
+    }
+
+    const selectedFramework = frameworks.find((framework) => framework.id === this.data.framework);
+    const framework = selectedFramework || frameworks[0];
+    this.data.framework = framework.id;
+
+    const templates = this.getTemplatesForFramework(framework.id);
+    if (!templates.length) {
+      this.data.template = '';
+      return;
+    }
+
+    const preferredTemplateId = this.data.template
+      || framework.defaultTemplateId
+      || category.defaultTemplateId
+      || templates[0].id;
+    const selectedTemplate = templates.find((template) => template.id === preferredTemplateId) || templates[0];
+    this.data.template = selectedTemplate.id;
+  }
+
+  setCategory(categoryId) {
+    const next = String(categoryId || '').trim();
+    if (!next) return;
+    this.data.category = next;
+    this.ensureValidSelection();
+  }
+
+  setFramework(frameworkId) {
+    const next = String(frameworkId || '').trim();
+    if (!next) return;
+    this.data.framework = next;
+    this.ensureValidSelection();
+  }
+
+  setTemplate(templateId) {
+    const next = String(templateId || '').trim();
+    if (!next) return;
+    this.data.template = next;
+    this.ensureValidSelection();
   }
 
   renderWizard() {
@@ -115,6 +340,9 @@ class GreenfieldWizard {
 
   showStep(step) {
     this.currentStep = step;
+    if (step === 2 || step === 3) {
+      this.ensureValidSelection();
+    }
 
     // Update progress indicators
     document.querySelectorAll('#greenfield-wizard .step-indicator').forEach((el, index) => {
@@ -141,6 +369,9 @@ class GreenfieldWizard {
   }
 
   renderDescriptionStep() {
+    const detectedCategory = this.getCategoryById(this.data.detectedCategory);
+    const suggestedTemplate = this.getTemplateById(this.contextSuggestion?.templateId || '');
+    const suggestedFramework = this.getFrameworkById(this.contextSuggestion?.frameworkId || '');
     return `
       <div class="wizard-step">
         <h3>What do you want to build?</h3>
@@ -163,10 +394,19 @@ class GreenfieldWizard {
           <p class="field-help">Describe what you want to build. Claude will use this to understand the project.</p>
         </div>
 
+        ${this.contextSuggestion ? `
+        <div class="detected-category">
+          <span class="category-label">Workspace suggestion:</span>
+          <span class="category-value">${suggestedTemplate?.name || this.contextSuggestion.templateId}</span>
+          <span class="category-path">based on current repo type ${this.contextSuggestion.repositoryType}</span>
+          ${suggestedFramework ? `<span class="category-path">framework: ${suggestedFramework.name}</span>` : ''}
+        </div>
+        ` : ''}
+
         ${this.data.detectedCategory ? `
         <div class="detected-category">
           <span class="category-label">Detected category:</span>
-          <span class="category-value">${this.data.detectedCategory}</span>
+          <span class="category-value">${detectedCategory?.name || this.data.detectedCategory}</span>
           <span class="category-path">${this.getCategoryPath(this.data.detectedCategory)}</span>
         </div>
         ` : ''}
@@ -175,23 +415,55 @@ class GreenfieldWizard {
   }
 
   renderConfigureStep() {
-    const categoryOptions = this.categories.map(c => `
+    this.ensureValidSelection();
+    const category = this.getSelectedCategory();
+    const frameworks = this.getFrameworksForCategory(category?.id);
+    const templates = this.getTemplatesForFramework(this.data.framework);
+
+    const categoryOptions = this.categories.map((c) => `
       <option value="${c.id}" ${this.data.category === c.id ? 'selected' : ''}>
-        ${c.id} (${c.path})
+        ${(c.name || c.id)} (${c.path})
       </option>
     `).join('');
+    const frameworkOptions = frameworks.map((framework) => `
+      <option value="${framework.id}" ${this.data.framework === framework.id ? 'selected' : ''}>
+        ${framework.name || framework.id}
+      </option>
+    `).join('');
+    const templateOptions = templates.map((template) => `
+      <option value="${template.id}" ${this.data.template === template.id ? 'selected' : ''}>
+        ${template.name || template.id}
+      </option>
+    `).join('');
+    const selectedTemplate = this.getSelectedTemplate();
 
     return `
       <div class="wizard-step">
         <h3>Configure Project</h3>
-        <p class="step-description">Fine-tune how your project will be set up.</p>
+        <p class="step-description">Pick category, framework, and template before we scaffold your project.</p>
 
         <div class="form-group">
           <label for="gf-category">Category</label>
-          <select id="gf-category" onchange="window.greenfieldWizard.updateData('category', this.value)">
+          <select id="gf-category" onchange="window.greenfieldWizard.setCategory(this.value); window.greenfieldWizard.showStep(2);">
             ${categoryOptions}
           </select>
-          <p class="field-help">Determines the folder location</p>
+          <p class="field-help">Determines the base folder: ${category?.path || '~/GitHub/projects'}</p>
+        </div>
+
+        <div class="form-group">
+          <label for="gf-framework">Framework</label>
+          <select id="gf-framework" onchange="window.greenfieldWizard.setFramework(this.value); window.greenfieldWizard.showStep(2);">
+            ${frameworkOptions || '<option value="">(none)</option>'}
+          </select>
+          <p class="field-help">${this.getSelectedFramework()?.description || 'Framework-specific defaults and template options'}</p>
+        </div>
+
+        <div class="form-group">
+          <label for="gf-template">Template</label>
+          <select id="gf-template" onchange="window.greenfieldWizard.setTemplate(this.value); window.greenfieldWizard.showStep(2);">
+            ${templateOptions || '<option value="">(none)</option>'}
+          </select>
+          <p class="field-help">${selectedTemplate?.description || 'Scaffold starter kit'}</p>
         </div>
 
         <div class="form-group">
@@ -237,6 +509,9 @@ class GreenfieldWizard {
   renderReviewStep() {
     const categoryPath = this.getCategoryPath(this.data.category);
     const fullPath = `${categoryPath}/${this.data.name}`;
+    const selectedCategory = this.getSelectedCategory();
+    const selectedFramework = this.getSelectedFramework();
+    const selectedTemplate = this.getSelectedTemplate();
 
     return `
       <div class="wizard-step">
@@ -253,6 +528,15 @@ class GreenfieldWizard {
           </div>
           <div class="review-item">
             <strong>Location:</strong> ${fullPath}
+          </div>
+          <div class="review-item">
+            <strong>Category:</strong> ${selectedCategory?.name || this.data.category || '(not set)'}
+          </div>
+          <div class="review-item">
+            <strong>Framework:</strong> ${selectedFramework?.name || this.data.framework || '(not set)'}
+          </div>
+          <div class="review-item">
+            <strong>Template:</strong> ${selectedTemplate?.name || this.data.template || '(not set)'}
           </div>
           <div class="review-item">
             <strong>GitHub:</strong> ${this.data.isPrivate ? 'Private' : 'Public'} repository
@@ -285,7 +569,7 @@ class GreenfieldWizard {
   }
 
   getCategoryPath(categoryId) {
-    const cat = this.categories.find(c => c.id === categoryId);
+    const cat = this.getCategoryById(categoryId);
     return cat?.path || '~/GitHub/projects';
   }
 
@@ -304,17 +588,11 @@ class GreenfieldWizard {
         if (response.ok) {
           const result = await response.json();
           this.data.detectedCategory = result.category;
-          if (!this.data.category) {
-            this.data.category = result.category;
+          if (!this.data.category && result.category) {
+            this.setCategory(result.category);
           }
 
-          // Update UI
-          const detected = document.querySelector('.detected-category');
-          if (detected) {
-            detected.querySelector('.category-value').textContent = result.category;
-            detected.querySelector('.category-path').textContent = result.path;
-          } else {
-            // Re-render to show detected category
+          if (this.currentStep === 1) {
             this.showStep(1);
           }
         }
@@ -326,10 +604,14 @@ class GreenfieldWizard {
 
   updateData(key, value) {
     this.data[key] = value;
+    if (key === 'worktreeCount') {
+      const n = Number(value);
+      this.data.worktreeCount = Number.isFinite(n) ? Math.min(8, Math.max(1, Math.round(n))) : 1;
+    }
 
-    // Re-render if on review step
-    if (this.currentStep === 3) {
-      this.showStep(3);
+    // Re-render active step for dynamic controls and summaries.
+    if (this.currentStep === 2 || this.currentStep === 3) {
+      this.showStep(this.currentStep);
     }
   }
 
@@ -365,6 +647,22 @@ class GreenfieldWizard {
         if (!this.data.category) {
           this.data.category = this.data.detectedCategory || 'other';
         }
+        this.ensureValidSelection();
+        return true;
+      case 2:
+        this.ensureValidSelection();
+        if (!this.data.category) {
+          alert('Please select a category');
+          return false;
+        }
+        if (!this.data.framework) {
+          alert('Please select a framework');
+          return false;
+        }
+        if (!this.data.template) {
+          alert('Please select a template');
+          return false;
+        }
         return true;
       default:
         return true;
@@ -391,6 +689,8 @@ class GreenfieldWizard {
         name: this.data.name,
         description: this.data.description,
         category: this.data.category,
+        framework: this.data.framework,
+        template: this.data.template,
         private: this.data.isPrivate,
         createGithub: true,
         allowGitHubFailure: true,
@@ -482,6 +782,8 @@ class GreenfieldWizard {
         <div class="success-details">
           <p><strong>Project:</strong> ${this.data.name}</p>
           <p><strong>Location:</strong> ${result.projectPath}</p>
+          <p><strong>Framework:</strong> ${this.getSelectedFramework()?.name || this.data.framework || '—'}</p>
+          <p><strong>Template:</strong> ${this.getSelectedTemplate()?.name || this.data.template || '—'}</p>
           ${result.repoUrl ? `<p><strong>GitHub:</strong> <a href="${result.repoUrl}" target="_blank">${result.repoUrl}</a></p>` : ''}
           <p><strong>Worktrees:</strong> ${result.worktrees?.map(w => w.id).join(', ')}</p>
           ${result.claudeSession ? `<p><strong>Claude:</strong> Started in work1</p>` : ''}
