@@ -58,6 +58,8 @@ node scripts/create-project.js \
 - Taxonomy options missing:
   - Verify `config/project-types.json` exists and is valid JSON.
   - Check `/api/project-types` response in browser devtools.
+- Template files missing:
+  - Ensure either `templates/project-kits/<template-id>` or the fallback `templates/scaffolds/*` path exists.
 - Wizard fails with workspace creation error:
   - Inspect server logs for `create-new-project` or `/api/projects/create-workspace`.
   - Confirm target base paths are writable.
