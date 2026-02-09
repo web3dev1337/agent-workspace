@@ -194,4 +194,36 @@ describe('SessionManager.closeSession', () => {
 
     killSpy.mockRestore();
   });
+
+  test('closeSession escalates to SIGKILL when process target stays alive', () => {
+    if (process.platform === 'win32') return;
+
+    jest.useFakeTimers();
+
+    const io = { emit: jest.fn() };
+    const sm = new SessionManager(io, null);
+    sm.processTreeKillGraceMs = 10;
+
+    const killSpy = jest.spyOn(process, 'kill').mockImplementation(() => true);
+    const ptyKill = jest.fn();
+    sm.sessions.set('work4-claude', {
+      id: 'work4-claude',
+      type: 'claude',
+      workspace: 'ws4',
+      pty: { pid: 54321, kill: ptyKill }
+    });
+
+    const ok = sm.closeSession('work4-claude', { clearRecovery: true });
+    expect(ok).toBe(true);
+    expect(ptyKill).toHaveBeenCalled();
+    expect(killSpy).toHaveBeenCalledWith(-54321, 'SIGTERM');
+
+    jest.advanceTimersByTime(11);
+
+    expect(killSpy).toHaveBeenCalledWith(-54321, 0);
+    expect(killSpy).toHaveBeenCalledWith(-54321, 'SIGKILL');
+
+    killSpy.mockRestore();
+    jest.useRealTimers();
+  });
 });
