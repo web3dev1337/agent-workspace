@@ -3886,19 +3886,20 @@ class Dashboard {
       let configuredTerminalCount = Number(recoveryInfo?.configuredTerminalCount || 0);
       let configuredWorktreeCount = Number(recoveryInfo?.configuredWorktreeCount || 0);
 
-      const formatRecoverySummary = () => {
-        let scope = '';
-        if (configuredTerminalCount > 0 || configuredWorktreeCount > 0) {
-          const wtText = configuredWorktreeCount > 0
-            ? `${configuredWorktreeCount} worktree${configuredWorktreeCount !== 1 ? 's' : ''}`
-            : null;
-          const termText = configuredTerminalCount > 0
-            ? `${configuredTerminalCount} terminal${configuredTerminalCount !== 1 ? 's' : ''}`
-            : null;
-          const details = [wtText, termText].filter(Boolean).join(' / ');
-          if (details) scope = ` Workspace has ${details} configured; recoverable count only covers sessions with resumable state.`;
-        }
-        return `Recoverable: ${sessions.length} session${sessions.length !== 1 ? 's' : ''} from ${savedAt}.${scope}`;
+      const renderRecoverySummaryHtml = () => {
+        const recoverableLabel = `${sessions.length} recoverable`;
+        const worktreeLabel = `${configuredWorktreeCount || 0} configured worktree${configuredWorktreeCount === 1 ? '' : 's'}`;
+        const terminalLabel = `${configuredTerminalCount || 0} configured terminal${configuredTerminalCount === 1 ? '' : 's'}`;
+        return `
+          <div class="recovery-metrics">
+            <span class="recovery-metric-pill recovery-metric-primary">${recoverableLabel}</span>
+            <span class="recovery-metric-pill">${worktreeLabel}</span>
+            <span class="recovery-metric-pill">${terminalLabel}</span>
+          </div>
+          <div class="recovery-summary-text">
+            Last recovery snapshot: ${savedAt}
+          </div>
+        `;
       };
 
       const modal = document.createElement('div');
@@ -3911,10 +3912,10 @@ class Dashboard {
             <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
           </div>
           <div class="recovery-info">
-            ${formatRecoverySummary()}
+            ${renderRecoverySummaryHtml()}
           </div>
           <div class="recovery-note">
-            Opening this workspace still shows all configured worktrees/terminals.
+            Recoverable sessions are only terminals with resumable agent/shell state. Opening the workspace still loads all configured worktrees/terminals.
           </div>
           <div class="recovery-sessions">
             ${sessions.length === 0 ? '<div class="no-recovery">No sessions to recover</div>' :
@@ -4058,7 +4059,7 @@ class Dashboard {
           configuredWorktreeCount = Number(next?.configuredWorktreeCount ?? configuredWorktreeCount);
 
           if (infoEl) {
-            infoEl.textContent = formatRecoverySummary();
+            infoEl.innerHTML = renderRecoverySummaryHtml();
           }
           renderSessions();
         } catch (error) {
