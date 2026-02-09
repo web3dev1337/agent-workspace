@@ -2599,6 +2599,17 @@ async function ensureWorkspaceMixedWorktree({
     error.statusCode = 400;
     throw error;
   }
+  if (!fs.existsSync(repoPath)) {
+    const error = new Error(`Repository path not found: ${repoPath}`);
+    error.statusCode = 400;
+    throw error;
+  }
+  const masterPath = path.join(repoPath, 'master');
+  if (!fs.existsSync(masterPath)) {
+    const error = new Error(`Repository root is missing master directory: ${masterPath}`);
+    error.statusCode = 400;
+    throw error;
+  }
 
   const requestedWorktree = normalizeThreadWorktreeId(worktreeId);
   const reusableWorktree = requestedWorktree
@@ -2678,6 +2689,11 @@ async function ensureWorkspaceMixedWorktree({
         normalized.includes('repository path')
         || normalized.includes('master directory not found')
         || normalized.includes('neither master nor main branch found')
+        || normalized.includes('repository root is missing master directory')
+        || normalized.includes('already exists')
+        || normalized.includes('already checked out')
+        || normalized.includes('invalid workspace config')
+        || normalized.includes('workspace not found')
         || normalized.includes('failed to execute git command')
         || normalized.includes('git command failed')
         ? 400
@@ -2687,7 +2703,21 @@ async function ensureWorkspaceMixedWorktree({
   }
 
   if (updatedWorkspace !== workspace || !alreadyExists) {
-    await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+    try {
+      await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
+    } catch (error) {
+      const message = String(error?.message || '').trim();
+      const normalized = message.toLowerCase();
+      const wrapped = new Error(message || 'Failed to update workspace');
+      wrapped.statusCode = Number(error?.statusCode)
+        || (
+          normalized.includes('invalid workspace config')
+          || normalized.includes('workspace not found')
+          ? 400
+          : 500
+        );
+      throw wrapped;
+    }
   }
 
   const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
@@ -2892,7 +2922,6 @@ async function handleCreateThread(req, res) {
 
     const created = threadService.createThread({
       workspaceId: workspaceIdValue,
-      projectId: workspaceIdValue,
       title: String(title || `${result.repositoryName}/${result.worktreeId}`).trim(),
       worktreeId: result.worktreeId,
       worktreePath: result.worktreePath,
