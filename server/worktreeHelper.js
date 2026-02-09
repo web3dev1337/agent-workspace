@@ -19,6 +19,47 @@ const logger = winston.createLogger({
 class WorktreeHelper {
   constructor() {}
 
+  async resolvePreferredBaseBranch(masterPath, preferredBranch = 'master') {
+    const preferred = String(preferredBranch || '').trim() || 'master';
+    const candidates = preferred === 'master'
+      ? ['master', 'main']
+      : [preferred, 'master', 'main'];
+
+    for (const branch of candidates) {
+      try {
+        await this.executeGitCommand(`git rev-parse --verify ${branch}`, masterPath);
+        return branch;
+      } catch (error) {
+        // Try next candidate
+      }
+    }
+
+    throw new Error(`No usable base branch found (${candidates.join(', ')})`);
+  }
+
+  async createProjectWorktrees({ projectPath, count = 0, baseBranch = 'master' } = {}) {
+    const root = String(projectPath || '').trim();
+    if (!root) throw new Error('projectPath is required');
+
+    const total = Math.max(0, Number(count) || 0);
+    if (total === 0) return [];
+
+    const masterPath = path.join(root, 'master');
+    await fs.access(masterPath);
+
+    const resolvedBaseBranch = await this.resolvePreferredBaseBranch(masterPath, baseBranch);
+    const created = [];
+
+    for (let i = 1; i <= total; i += 1) {
+      const worktreeId = `work${i}`;
+      const worktreePath = path.join(root, worktreeId);
+      await this.executeGitCommand(`git worktree add -B ${worktreeId} ../${worktreeId} ${resolvedBaseBranch}`, masterPath);
+      created.push({ id: worktreeId, path: worktreePath });
+    }
+
+    return created;
+  }
+
   async createWorktree(workspace, worktreeId) {
     logger.info(`Creating worktree ${worktreeId} for workspace ${workspace.name}`);
 
