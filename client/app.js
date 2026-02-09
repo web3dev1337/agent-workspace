@@ -76,6 +76,11 @@ class ClaudeOrchestrator {
     this.worktreeTags = new Map(); // Worktree path → tags (e.g., readyForReview)
     this.taskRecords = new Map(); // taskId → record (tier/risk/pFail/promptRef)
     this.commandCatalogCache = []; // Cached /api/commands/catalog payload for local filtering
+    this.intentHaikuBySession = new Map(); // sessionId -> { summary, source, generatedAt }
+    this.intentHaikuTimers = new Map(); // sessionId -> timeout id
+    this.intentHaikuInFlight = new Set(); // sessionIds currently fetching
+    this.intentHaikuLastFetchedAt = new Map(); // sessionId -> epoch ms
+    this.intentHaikuRefreshMs = 4500;
 
     // Launch helpers (ticket/card → worktree → agent → auto-prompt)
     this.pendingAutoPrompts = new Map(); // sessionId -> { text, createdAt, sentAt }
@@ -115,6 +120,134 @@ class ClaudeOrchestrator {
     const el = target && target.nodeType === 1 ? target : null;
     if (!el) return false;
     return !!el.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]');
+  }
+
+  isAgentSession(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return false;
+    const type = String(this.sessions.get(sid)?.type || '').trim().toLowerCase();
+    return type === 'claude' || type === 'codex' || /-(claude|codex)$/.test(sid);
+  }
+
+  getSessionIntentHaikuFallback(sessionId) {
+    const sid = String(sessionId || '').trim();
+    const session = this.sessions.get(sid);
+    const status = String(session?.status || '').trim().toLowerCase();
+    if (status === 'waiting') return 'Context is loaded; likely waiting for your next prompt.';
+    if (status === 'busy') return 'Reading terminal activity to infer intent...';
+    return 'Tracking this terminal to infer likely intent...';
+  }
+
+  getSessionIntentHaikuText(sessionId) {
+    const sid = String(sessionId || '').trim();
+    const row = this.intentHaikuBySession.get(sid);
+    const summary = String(row?.summary || '').trim();
+    return summary || this.getSessionIntentHaikuFallback(sid);
+  }
+
+  renderSessionIntentHaiku(sessionId, { pending = false, error = false } = {}) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+    const el = document.getElementById(this.getSessionDomId('intent-haiku', sid));
+    if (!el) return;
+
+    const row = this.intentHaikuBySession.get(sid) || null;
+    const text = this.getSessionIntentHaikuText(sid);
+    el.textContent = text;
+    el.dataset.state = error ? 'error' : (pending ? 'loading' : 'ready');
+
+    const source = String(row?.source || '').trim();
+    const generatedAt = String(row?.generatedAt || '').trim();
+    const bits = [];
+    bits.push('Intent hint');
+    if (source) bits.push(`source: ${source}`);
+    if (generatedAt) bits.push(`updated: ${generatedAt}`);
+    el.title = bits.join(' | ');
+  }
+
+  pruneIntentHaikuState(activeSessionIds = null) {
+    const active = activeSessionIds instanceof Set
+      ? activeSessionIds
+      : new Set(Array.from(this.sessions.keys()).map((sid) => String(sid || '').trim()).filter(Boolean));
+
+    for (const sid of Array.from(this.intentHaikuBySession.keys())) {
+      if (active.has(sid)) continue;
+      this.intentHaikuBySession.delete(sid);
+      this.intentHaikuLastFetchedAt.delete(sid);
+      this.intentHaikuInFlight.delete(sid);
+      const timer = this.intentHaikuTimers.get(sid);
+      if (timer) clearTimeout(timer);
+      this.intentHaikuTimers.delete(sid);
+    }
+  }
+
+  scheduleSessionIntentHaikuRefresh(sessionId, { delayMs = 2400, force = false } = {}) {
+    const sid = String(sessionId || '').trim();
+    if (!sid || !this.isAgentSession(sid)) return;
+
+    const existing = this.intentHaikuTimers.get(sid);
+    if (existing) clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+      this.intentHaikuTimers.delete(sid);
+      this.fetchSessionIntentHaiku(sid, { force }).catch(() => {});
+    }, Math.max(250, Number(delayMs) || 0));
+    this.intentHaikuTimers.set(sid, timer);
+  }
+
+  refreshIntentHaikusForAgentSessions({ delayMs = 1400, force = false } = {}) {
+    for (const sessionId of this.sessions.keys()) {
+      if (!this.isAgentSession(sessionId)) continue;
+      this.scheduleSessionIntentHaikuRefresh(sessionId, { delayMs, force });
+    }
+  }
+
+  async fetchSessionIntentHaiku(sessionId, { force = false } = {}) {
+    const sid = String(sessionId || '').trim();
+    if (!sid || !this.isAgentSession(sid)) return null;
+
+    if (this.intentHaikuInFlight.has(sid)) return null;
+
+    const now = Date.now();
+    const last = this.intentHaikuLastFetchedAt.get(sid) || 0;
+    if (!force && (now - last) < this.intentHaikuRefreshMs) return null;
+
+    this.intentHaikuInFlight.add(sid);
+    this.intentHaikuLastFetchedAt.set(sid, now);
+    this.renderSessionIntentHaiku(sid, { pending: true, error: false });
+
+    try {
+      const response = await fetch('/api/sessions/intent-haiku', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sid, force: !!force })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.ok === false) {
+        throw new Error(String(payload?.error || payload?.message || `Intent hint failed (${response.status})`));
+      }
+
+      const summary = String(payload?.summary || '').trim() || this.getSessionIntentHaikuFallback(sid);
+      this.intentHaikuBySession.set(sid, {
+        summary,
+        source: String(payload?.source || '').trim() || 'heuristic',
+        generatedAt: String(payload?.generatedAt || '').trim() || new Date().toISOString()
+      });
+      this.renderSessionIntentHaiku(sid, { pending: false, error: false });
+      return summary;
+    } catch (error) {
+      if (!this.intentHaikuBySession.has(sid)) {
+        this.intentHaikuBySession.set(sid, {
+          summary: this.getSessionIntentHaikuFallback(sid),
+          source: 'fallback',
+          generatedAt: new Date().toISOString()
+        });
+      }
+      this.renderSessionIntentHaiku(sid, { pending: false, error: true });
+      return null;
+    } finally {
+      this.intentHaikuInFlight.delete(sid);
+    }
   }
 
   hashStringToBase36(value) {
@@ -593,6 +726,7 @@ class ClaudeOrchestrator {
         // Detect GitHub URLs in agent sessions
         if (/-claude$|-codex$/.test(String(sessionId || ''))) {
           this.detectGitHubLinks(sessionId, data);
+          this.scheduleSessionIntentHaikuRefresh(sessionId, { delayMs: 3200 });
         }
 
         // Fast-path branch refresh when git reports a branch change in output.
@@ -618,6 +752,10 @@ class ClaudeOrchestrator {
       this.socket.on('status-update', ({ sessionId, status }) => {
         this.updateSessionStatus(sessionId, status);
         this.maybeAutoSendPrompt(sessionId, status);
+        if (this.isAgentSession(sessionId)) {
+          const delayMs = status === 'waiting' ? 1200 : 2600;
+          this.scheduleSessionIntentHaikuRefresh(sessionId, { delayMs });
+        }
       });
       
       this.socket.on('branch-update', ({ sessionId, branch, remoteUrl, defaultBranch, existingPR }) => {
@@ -2868,6 +3006,8 @@ class ClaudeOrchestrator {
       // Debug: console.log(`Added terminal ${sessionId} to visible set, activity: ${this.sessionActivity.get(sessionId)}`);
     }
 
+    this.pruneIntentHaikuState(new Set(Object.keys(sessionStates)));
+
     this.lastSessionsWorkspaceId = currentWorkspaceId;
     
     // Hide loading message FIRST
@@ -2881,6 +3021,7 @@ class ClaudeOrchestrator {
 
     // Show all visible terminals
     this.updateTerminalGrid();
+    this.refreshIntentHaikusForAgentSessions({ delayMs: 1400, force: true });
 
     // Check for auto-start after a delay to let terminals initialize
     setTimeout(() => {
@@ -4594,12 +4735,14 @@ class ClaudeOrchestrator {
 		    const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
 		    const branchMeta = this.formatBranchLabel(session.branch || '', { context: 'terminal' });
 		    const branchRefreshId = (() => { try { return encodeURIComponent(String(sessionId || '')); } catch { return ''; } })();
-		    const ticketMeta = this.getTicketMetaForSession(sessionId, session);
-		    const ticketChip = ticketMeta?.label ? (
-		      ticketMeta.url
-		      ? `<a class="terminal-ticket" href="${this.escapeHtml(ticketMeta.url)}" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(ticketMeta.tooltip || ticketMeta.title || ticketMeta.label)}">🧾 ${this.escapeHtml(ticketMeta.label)}</a>`
-		      : `<span class="terminal-ticket" title="${this.escapeHtml(ticketMeta.tooltip || ticketMeta.title || ticketMeta.label)}">🧾 ${this.escapeHtml(ticketMeta.label)}</span>`
-		    ) : '';
+	    const ticketMeta = this.getTicketMetaForSession(sessionId, session);
+	    const ticketChip = ticketMeta?.label ? (
+	      ticketMeta.url
+	      ? `<a class="terminal-ticket" href="${this.escapeHtml(ticketMeta.url)}" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(ticketMeta.tooltip || ticketMeta.title || ticketMeta.label)}">🧾 ${this.escapeHtml(ticketMeta.label)}</a>`
+	      : `<span class="terminal-ticket" title="${this.escapeHtml(ticketMeta.tooltip || ticketMeta.title || ticketMeta.label)}">🧾 ${this.escapeHtml(ticketMeta.label)}</span>`
+	    ) : '';
+      const intentHaikuId = this.getSessionDomId('intent-haiku', sessionId);
+      const intentHaikuText = this.escapeHtml(this.getSessionIntentHaikuText(sessionId));
 			    wrapper.innerHTML = `
 			      <div class="terminal-header">
 			        <div class="terminal-title">
@@ -4625,6 +4768,7 @@ class ClaudeOrchestrator {
 			          ` : ''}
 		        </div>
 			      </div>
+          ${isAgentSession ? `<div class="terminal-intent-haiku" id="${intentHaikuId}" data-state="loading">${intentHaikuText}</div>` : ''}
 	      <div class="terminal-body">
 	        <div class="terminal" id="${this.getSessionDomId('terminal', sessionId)}"></div>
 	        ${isAgentSession ? `
@@ -4680,7 +4824,11 @@ class ClaudeOrchestrator {
 	    } catch {
 	      // ignore
 	    }
-    
+
+    if (isAgentSession) {
+      this.renderSessionIntentHaiku(sessionId, { pending: false, error: false });
+    }
+
     return wrapper;
   }
   
@@ -5374,8 +5522,15 @@ class ClaudeOrchestrator {
         this.buildSidebar();
       }
     }
-    
+
     this.socket.emit('terminal-input', { sessionId, data });
+
+    // Intent hint refresh is intentionally delayed/debounced so it updates shortly
+    // after user input instead of on every keystroke.
+    if (this.isAgentSession(sessionId)) {
+      const looksLikeTypedText = String(data || '').trim().length > 0 && !/^[\x00-\x1f\x7f]+$/.test(String(data || ''));
+      this.scheduleSessionIntentHaikuRefresh(sessionId, { delayMs: looksLikeTypedText ? 1800 : 2800 });
+    }
   }
 
   interruptSession(sessionId) {
@@ -13415,6 +13570,12 @@ class ClaudeOrchestrator {
 	    this.sessionAgentPreferences.delete(sid);
 	    this.autoStartApplied.delete(sid);
 	    this.worktreeConfigs.delete(sid);
+      this.intentHaikuBySession.delete(sid);
+      this.intentHaikuInFlight.delete(sid);
+      this.intentHaikuLastFetchedAt.delete(sid);
+      const intentTimer = this.intentHaikuTimers.get(sid);
+      if (intentTimer) clearTimeout(intentTimer);
+      this.intentHaikuTimers.delete(sid);
 
 	    const grid = this.getTerminalGrid();
 	    const wrapperId = this.getSessionDomId('wrapper', sid);
