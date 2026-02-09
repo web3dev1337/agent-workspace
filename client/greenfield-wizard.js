@@ -376,14 +376,18 @@ class GreenfieldWizard {
     this.showProgress();
 
     try {
-      const response = await fetch(`${this.serverUrl}/api/greenfield/create-full`, {
+      const response = await fetch(`${this.serverUrl}/api/projects/create-workspace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: this.data.name,
           description: this.data.description,
           category: this.data.category,
-          isPrivate: this.data.isPrivate,
+          private: this.data.isPrivate,
+          createGithub: true,
+          allowGitHubFailure: true,
+          push: true,
+          initGit: true,
           worktreeCount: this.data.worktreeCount,
           spawnClaude: this.data.spawnClaude,
           yolo: this.data.yolo
