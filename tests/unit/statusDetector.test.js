@@ -176,6 +176,12 @@ describe('StatusDetector', () => {
       const status = detector.detectStatus(sessionId, buffer);
       expect(status).toBe('idle');
     });
+
+    it('should detect idle status from ANSI-colored shell prompts', () => {
+      const buffer = '\u001b[32mab@host\u001b[0m:\u001b[34m~/repo\u001b[0m$ ';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('idle');
+    });
   });
 
   describe('looksLikePrompt', () => {
@@ -208,6 +214,18 @@ describe('StatusDetector', () => {
       detector.reset();
 
       expect(detector.sessionState.size).toBe(0);
+    });
+  });
+
+  describe('hasExplicitShellIndicator', () => {
+    it('should detect shell indicator from no-agent banner', () => {
+      const recentAll = "Claude session ended.\nType 'claude' to start a new Claude session.";
+      expect(detector.hasExplicitShellIndicator(recentAll, '')).toBe(true);
+    });
+
+    it('should detect shell indicator from ANSI prompt line', () => {
+      const recentAll = '\u001b[32mab@host\u001b[0m:\u001b[34m~/repo\u001b[0m$';
+      expect(detector.hasExplicitShellIndicator(recentAll, '\u001b[32mab@host\u001b[0m:\u001b[34m~/repo\u001b[0m$')).toBe(true);
     });
   });
 
