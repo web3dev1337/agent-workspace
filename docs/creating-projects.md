@@ -34,12 +34,21 @@ Typical example:
 
 ```bash
 node scripts/create-project.js \
-  --category games \
+  --category game \
   --framework hytopia \
-  --template basic \
+  --template hytopia-game-starter \
   --name my-new-project \
-  --init-git \
-  --create-worktree work1
+  --init-git true \
+  --worktree-count 1
+```
+
+Optional template hook controls:
+
+```bash
+node scripts/create-project.js \
+  --name my-new-project \
+  --run-post-create true \
+  --allow-post-create-failure true
 ```
 
 ## Troubleshooting
@@ -48,7 +57,7 @@ node scripts/create-project.js \
   - Re-run with GitHub creation disabled, then set remote manually.
 - Taxonomy options missing:
   - Verify `config/project-types.json` exists and is valid JSON.
-  - Check `/api/project-types/taxonomy` response in browser devtools.
+  - Check `/api/project-types` response in browser devtools.
 - Wizard fails with workspace creation error:
   - Inspect server logs for `create-new-project` or `/api/projects/create-workspace`.
   - Confirm target base paths are writable.
