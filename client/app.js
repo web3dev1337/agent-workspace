@@ -4639,6 +4639,9 @@ class ClaudeOrchestrator {
     const previousStatus = session ? session.status : null;
     if (session) {
       session.status = status;
+      if (status === 'idle' && /-(claude|codex)$/.test(String(sessionId || ''))) {
+        session.agent = null;
+      }
       this.refreshTier1Busy();
 
       // Track that user has interacted if going from waiting to busy
@@ -6244,6 +6247,10 @@ class ClaudeOrchestrator {
     // If it's a Claude session that restarted, only show the startup UI if Claude is not running
     if (sessionId.includes('-claude')) {
       const session = this.sessions.get(sessionId);
+      if (session) {
+        session.agent = null;
+        session.hasUserInput = false;
+      }
       const isClaudeRunning = session && session.status !== 'idle';
 
       // Only show startup UI if Claude is NOT running
@@ -27897,21 +27904,6 @@ class ClaudeOrchestrator {
 	        if (sessionWorktreeId === worktreeId) return true;
 	      }
 	    }
-
-    // Also check mixed-repo workspace config for explicitly assigned worktrees
-    if (this.currentWorkspace.terminals && Array.isArray(this.currentWorkspace.terminals)) {
-      const repoNameMatch = repoNameOverride ? repoNameOverride.toLowerCase() : '';
-      return this.currentWorkspace.terminals.some(terminal => {
-        if (terminal.worktree !== worktreeId) return false;
-        if (terminal.repository?.path === repoPath) {
-          return true; // This worktree is assigned in workspace config
-        }
-        if (repoNameMatch && (terminal.repository?.name || '').toLowerCase() === repoNameMatch) {
-          return true; // Match by repo name when paths differ
-        }
-        return false;
-      });
-    }
 
     // No active sessions for this worktree - it's available
     return false;

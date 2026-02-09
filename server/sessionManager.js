@@ -866,6 +866,16 @@ class SessionManager extends EventEmitter {
             signal,
             exitCode
           });
+
+          // This terminal is now plain shell; stale recovery agent markers
+          // make the UI think an AI is still attached/running.
+          if (workspaceId) {
+            try {
+              sessionRecoveryService.clearAgent(workspaceId, sessionId);
+            } catch {
+              // best-effort
+            }
+          }
           
           // Remove the old session
           this.sessions.delete(sessionId);
@@ -2568,6 +2578,14 @@ class SessionManager extends EventEmitter {
     // For Claude sessions, restart as a clean shell
     // This allows user to use the agent selection UI to choose how to start
     if (config.type === 'claude') {
+      const workspaceId = session.workspace || null;
+      if (workspaceId) {
+        try {
+          sessionRecoveryService.clearAgent(workspaceId, sessionId);
+        } catch {
+          // best-effort
+        }
+      }
       config.command = getDefaultShell();
       config.args = buildShellArgs(`cd "${config.cwd}"`);
     }
