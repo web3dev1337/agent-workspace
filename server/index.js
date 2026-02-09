@@ -912,6 +912,44 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('create-new-project', async (payload = {}, callback) => {
+    try {
+      const result = await workspaceManager.createProjectWorkspace(payload || {});
+      let claudeSession = null;
+      if (payload?.spawnClaude) {
+        const work1Path = path.join(result?.project?.projectPath || '', 'work1');
+        claudeSession = await greenfieldService.spawnClaudeInProject(
+          work1Path,
+          result?.project?.name,
+          String(payload?.description || ''),
+          payload?.yolo !== false
+        );
+      }
+
+      const workspaces = await workspaceManager.listWorkspacesEnriched();
+
+      io.emit('workspaces-list', workspaces);
+      socket.emit('project-created', {
+        project: { ...(result.project || {}), claudeSession },
+        workspace: result.workspace
+      });
+
+      if (typeof callback === 'function') {
+        callback({
+          ok: true,
+          project: { ...(result.project || {}), claudeSession },
+          workspace: result.workspace
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to create new project via socket', { error: error.message, stack: error.stack });
+      if (typeof callback === 'function') {
+        callback({ ok: false, error: error.message });
+      }
+      socket.emit('error', { message: 'Failed to create new project', error: error.message });
+    }
+  });
+
   // Add sessions for a new worktree without destroying existing sessions
   socket.on('add-worktree-sessions', async ({ worktreeId, worktreePath, repositoryName, repositoryType, repositoryRoot, startTier }) => {
     try {
@@ -1266,6 +1304,36 @@ app.post('/api/workspaces', async (req, res) => {
   } catch (error) {
     logger.error('Failed to create workspace', { error: error.message, stack: error.stack });
     res.status(400).json({ error: error.message, stack: error.stack });
+  }
+});
+
+app.post('/api/projects/create-workspace', express.json(), async (req, res) => {
+  try {
+    const result = await workspaceManager.createProjectWorkspace(req.body || {});
+    let claudeSession = null;
+    if (req.body?.spawnClaude) {
+      const work1Path = path.join(result?.project?.projectPath || '', 'work1');
+      claudeSession = await greenfieldService.spawnClaudeInProject(
+        work1Path,
+        result?.project?.name,
+        String(req.body?.description || ''),
+        req.body?.yolo !== false
+      );
+    }
+    const project = {
+      ...(result.project || {}),
+      claudeSession,
+      repoUrl: result?.project?.remoteUrl || null
+    };
+    res.json({
+      ok: true,
+      ...project,
+      project,
+      workspace: result.workspace
+    });
+  } catch (error) {
+    logger.error('Failed to create project workspace', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: error.message });
   }
 });
 
