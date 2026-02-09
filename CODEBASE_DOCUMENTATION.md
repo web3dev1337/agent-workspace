@@ -262,6 +262,8 @@ scripts/migrate-to-workspaces.js   - Migration script for legacy workspaces
 scripts/public-release-audit.js    - Public-release safety audit automation
 ├─ Checks: tracked cache/DB artifacts, public-doc path hygiene, loopback/auth defaults
 └─ Optional: full-history gitleaks scan (`--history-secrets`)
+
+scripts/create-project.js          - Taxonomy-driven project scaffold generator (templates, git init, optional GitHub remote, worktree bootstrap)
 ```
 
 ## Advanced Diff Viewer Component
@@ -315,6 +317,7 @@ git-command: {command, args}                   - Execute git command
 switch-workspace: {workspaceId}                - Switch to different workspace
 create-workspace: {config}                     - Create new workspace
 get-workspaces: {}                             - Request workspace list
+create-new-project: {name, category, template, ...} - Create project scaffold + workspace in one socket action
 close-tab: {tabId}                             - Close workspace tab and cleanup sessions (NEW)
 ```
 
@@ -410,6 +413,7 @@ GET /api/project-types            - Full project taxonomy (categories/frameworks
 GET /api/project-types/categories - Project categories with resolved base paths
 GET /api/project-types/frameworks?categoryId=... - Framework catalog (optionally scoped by category)
 GET /api/project-types/templates?frameworkId=...&categoryId=... - Template catalog (optionally scoped)
+POST /api/projects/create-workspace - Create project scaffold + matching workspace in one request
 GET /api/greenfield/categories    - Greenfield category list (taxonomy-backed)
 POST /api/greenfield/detect-category - Infer category from description (taxonomy keyword matching)
 GET /api/user-settings            - Get user preferences
