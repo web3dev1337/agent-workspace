@@ -114,7 +114,7 @@ const {
 const { PolicyService } = require('./policyService');
 const { AuditExportService } = require('./auditExportService');
 const { getInstance: getCommandHistoryService } = require('./commandHistoryService');
-const { evaluateBindSecurity } = require('./networkSecurityPolicy');
+const { evaluateBindSecurity, isLoopbackHost } = require('./networkSecurityPolicy');
 const {
   normalizeRepositoryPath,
   normalizeRepositoryRootForWorktrees,
@@ -7139,6 +7139,104 @@ app.get('/api/commander/prompt', (req, res) => {
 // Discord Bot (Claudesworth) Integration
 // =====================================
 
+const DISCORD_API_TOKEN = String(process.env.DISCORD_API_TOKEN || '').trim();
+const discordQueueRateLimitWindowMs = (() => {
+  const parsed = Number(process.env.DISCORD_PROCESS_QUEUE_RATE_LIMIT_WINDOW_MS);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 60_000;
+  return Math.round(parsed);
+})();
+const discordQueueRateLimitMax = (() => {
+  const parsed = Number(process.env.DISCORD_PROCESS_QUEUE_RATE_LIMIT_MAX);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 8;
+  return Math.max(1, Math.round(parsed));
+})();
+const discordQueueRateLimitStore = new Map();
+
+function normalizeIpAddress(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('::ffff:')) return raw.slice(7);
+  return raw;
+}
+
+function isLoopbackRequest(req) {
+  const remoteAddress = normalizeIpAddress(req?.socket?.remoteAddress || req?.connection?.remoteAddress || '');
+  const requestIp = normalizeIpAddress(req?.ip || '');
+  const forwarded = String(req?.headers?.['x-forwarded-for'] || '')
+    .split(',')[0]
+    .trim();
+  const forwardedIp = normalizeIpAddress(forwarded);
+
+  const candidates = [remoteAddress, requestIp, forwardedIp].filter(Boolean);
+  if (!candidates.length) return false;
+  return candidates.every((candidate) => isLoopbackHost(candidate) || candidate === '::1');
+}
+
+function timingSafeTokenMatch(left, right) {
+  const leftBuffer = Buffer.from(String(left || ''), 'utf8');
+  const rightBuffer = Buffer.from(String(right || ''), 'utf8');
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function extractDiscordRequestToken(req) {
+  const explicit = String(req?.headers?.['x-discord-token'] || '').trim();
+  if (explicit) return explicit;
+  const authHeader = String(req?.headers?.authorization || '').trim();
+  if (/^bearer\s+/i.test(authHeader)) {
+    return authHeader.replace(/^bearer\s+/i, '').trim();
+  }
+  return '';
+}
+
+function requireDiscordAccess(req, res, next) {
+  if (AUTH_TOKEN) return next();
+
+  if (DISCORD_API_TOKEN) {
+    const provided = extractDiscordRequestToken(req);
+    if (!provided || !timingSafeTokenMatch(provided, DISCORD_API_TOKEN)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized Discord request' });
+    }
+    return next();
+  }
+
+  if (!isLoopbackRequest(req)) {
+    return res.status(403).json({
+      ok: false,
+      error: 'Discord endpoints require loopback access or DISCORD_API_TOKEN'
+    });
+  }
+  return next();
+}
+
+function checkDiscordProcessQueueRateLimit(req) {
+  const actorHint = String(req?.headers?.['x-user-id'] || '').trim();
+  const keyBase = actorHint || normalizeIpAddress(req?.ip || req?.socket?.remoteAddress || '') || 'unknown';
+  const key = `discord-process:${keyBase}`;
+  const nowMs = Date.now();
+
+  const current = discordQueueRateLimitStore.get(key) || { startedAtMs: nowMs, count: 0 };
+  if ((nowMs - current.startedAtMs) >= discordQueueRateLimitWindowMs) {
+    current.startedAtMs = nowMs;
+    current.count = 0;
+  }
+  current.count += 1;
+  discordQueueRateLimitStore.set(key, current);
+
+  if (current.count > discordQueueRateLimitMax) {
+    const retryAfterMs = Math.max(0, discordQueueRateLimitWindowMs - (nowMs - current.startedAtMs));
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.ceil(retryAfterMs / 1000),
+      limit: discordQueueRateLimitMax,
+      windowMs: discordQueueRateLimitWindowMs
+    };
+  }
+  return { allowed: true };
+}
+
+app.use('/api/discord', requireDiscordAccess);
+
 app.get('/api/discord/status', async (req, res) => {
   try {
     const status = await discordIntegrationService.getDiscordStatus({ sessionManager, workspaceManager });
@@ -7177,6 +7275,18 @@ app.post('/api/discord/ensure-services', async (req, res) => {
 
 app.post('/api/discord/process-queue', async (req, res) => {
   try {
+    const rateLimit = checkDiscordProcessQueueRateLimit(req);
+    if (!rateLimit.allowed) {
+      res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
+      return res.status(429).json({
+        ok: false,
+        error: 'Rate limit exceeded for discord queue processing',
+        retryAfterSeconds: rateLimit.retryAfterSeconds,
+        limit: rateLimit.limit,
+        windowMs: rateLimit.windowMs
+      });
+    }
+
     const bodyIdempotencyKey = String(req.body?.idempotencyKey || '').trim();
     const headerIdempotencyKey = String(req.headers['idempotency-key'] || '').trim();
     const idempotencyKey = bodyIdempotencyKey || headerIdempotencyKey || null;

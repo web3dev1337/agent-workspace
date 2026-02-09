@@ -88,7 +88,7 @@ describe('discordIntegrationService', () => {
     process.env.DISCORD_BOT_SESSION_ID = 'bot-test';
     process.env.DISCORD_PROCESSOR_SESSION_ID = 'processor-test';
 
-    await fs.writeFile(path.join(dir, 'pending-tasks.json'), JSON.stringify([], null, 2));
+    await fs.writeFile(path.join(dir, 'pending-tasks.json'), JSON.stringify([{ id: 'task-1' }], null, 2));
 
     const ws = { id: 'services-test' };
     const workspaceManager = {
@@ -248,5 +248,93 @@ describe('discordIntegrationService', () => {
     expect(first.ok).toBe(true);
     expect(second.idempotentReplay).toBe(true);
     expect(sessionManager.writeToSession).toHaveBeenCalledTimes(1);
+  });
+
+  test('processDiscordQueue returns no-op when there are no pending tasks', async () => {
+    const dir = await makeTempDir('orchestrator-discord-queue-');
+    process.env.DISCORD_QUEUE_DIR = dir;
+    process.env.DISCORD_SERVICES_WORKSPACE_ID = 'services-test';
+    process.env.DISCORD_BOT_SESSION_ID = 'bot-test';
+    process.env.DISCORD_PROCESSOR_SESSION_ID = 'processor-test';
+
+    await fs.writeFile(path.join(dir, 'pending-tasks.json'), JSON.stringify([], null, 2));
+
+    const ws = { id: 'services-test' };
+    const workspaceManager = {
+      getWorkspace: () => ws,
+      createWorkspace: async () => ws
+    };
+    const sessionManager = {
+      ensureWorkspaceSessions: jest.fn(async () => ({})),
+      getSessionById: () => ({ pty: {}, status: 'idle' }),
+      writeToSession: jest.fn(() => true)
+    };
+
+    const result = await processDiscordQueue({
+      sessionManager,
+      workspaceManager,
+      idempotencyKey: 'noop-run'
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.sent).toBe(false);
+    expect(result.reason).toBe('NO_PENDING_TASKS');
+    expect(sessionManager.writeToSession).not.toHaveBeenCalled();
+  });
+
+  test('processDiscordQueue rejects invalid queue JSON payload', async () => {
+    const dir = await makeTempDir('orchestrator-discord-queue-');
+    process.env.DISCORD_QUEUE_DIR = dir;
+    process.env.DISCORD_SERVICES_WORKSPACE_ID = 'services-test';
+    process.env.DISCORD_BOT_SESSION_ID = 'bot-test';
+    process.env.DISCORD_PROCESSOR_SESSION_ID = 'processor-test';
+
+    await fs.writeFile(path.join(dir, 'pending-tasks.json'), '{ invalid-json', 'utf8');
+
+    const ws = { id: 'services-test' };
+    const workspaceManager = {
+      getWorkspace: () => ws,
+      createWorkspace: async () => ws
+    };
+    const sessionManager = {
+      ensureWorkspaceSessions: jest.fn(async () => ({})),
+      getSessionById: () => ({ pty: {}, status: 'idle' }),
+      writeToSession: jest.fn(() => true)
+    };
+
+    await expect(processDiscordQueue({
+      sessionManager,
+      workspaceManager,
+      idempotencyKey: 'invalid-json'
+    })).rejects.toMatchObject({ statusCode: 422 });
+  });
+
+  test('dangerousModeOverride=true is blocked unless explicitly allowed', async () => {
+    const dir = await makeTempDir('orchestrator-discord-queue-');
+    process.env.DISCORD_QUEUE_DIR = dir;
+    process.env.DISCORD_SERVICES_WORKSPACE_ID = 'services-test';
+    process.env.DISCORD_BOT_SESSION_ID = 'bot-test';
+    process.env.DISCORD_PROCESSOR_SESSION_ID = 'processor-test';
+    process.env.DISCORD_ALLOW_DANGEROUS_OVERRIDE = 'false';
+
+    await fs.writeFile(path.join(dir, 'pending-tasks.json'), JSON.stringify([{ id: 'task-1' }], null, 2));
+
+    const ws = { id: 'services-test' };
+    const workspaceManager = {
+      getWorkspace: () => ws,
+      createWorkspace: async () => ws
+    };
+    const sessionManager = {
+      ensureWorkspaceSessions: jest.fn(async () => ({})),
+      getSessionById: () => ({ pty: {}, status: 'idle' }),
+      writeToSession: jest.fn(() => true)
+    };
+
+    await expect(processDiscordQueue({
+      sessionManager,
+      workspaceManager,
+      dangerousModeOverride: true,
+      idempotencyKey: 'danger-override-disallowed'
+    })).rejects.toMatchObject({ statusCode: 403 });
   });
 });
