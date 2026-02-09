@@ -36,6 +36,10 @@ function normalizeToken(raw) {
   return String(raw || '').trim().toLowerCase();
 }
 
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function stripSessionTypeSuffix(value) {
   return normalizeToken(value).replace(/-(claude|codex|server)$/i, '');
 }
@@ -134,6 +138,53 @@ function terminalMatchesWorktree(terminal, parsedWorktree) {
   return false;
 }
 
+function sessionRecordMatchesWorktree(sessionId, record = {}, parsedWorktree) {
+  const parsed = parsedWorktree && typeof parsedWorktree === 'object'
+    ? parsedWorktree
+    : parseWorktreeKey(parsedWorktree);
+  const targetKey = normalizeToken(parsed?.key);
+  const targetRepo = normalizeToken(parsed?.repositoryName);
+  const targetWorktree = normalizeToken(parsed?.worktreeId);
+  if (!targetKey && !targetWorktree) return false;
+
+  const sid = normalizeToken(sessionId || record?.sessionId || record?.id);
+  const sidKey = stripSessionTypeSuffix(sid);
+  const repositoryName = normalizeToken(record?.repositoryName);
+  const worktreeId = (
+    normalizeWorktreeToken(record?.worktreeId)
+    || normalizeWorktreeToken(record?.worktreePath)
+    || normalizeWorktreeToken(record?.lastCwd)
+    || normalizeWorktreeToken(record?.lastAgentCwd)
+    || (() => {
+      if (!sidKey) return '';
+      if (repositoryName && sidKey.startsWith(`${repositoryName}-`)) {
+        return normalizeWorktreeToken(sidKey.slice(repositoryName.length + 1));
+      }
+      const tokens = sidKey.split('-').filter(Boolean);
+      return normalizeWorktreeToken(tokens[tokens.length - 1] || '');
+    })()
+  );
+  const composedKey = repositoryName && worktreeId ? `${repositoryName}-${worktreeId}` : '';
+
+  if (composedKey && targetKey && composedKey === targetKey) return true;
+  if (targetRepo && targetWorktree) {
+    return repositoryName === targetRepo && worktreeId === targetWorktree;
+  }
+  if (targetWorktree && worktreeId === targetWorktree) return true;
+  if (targetKey && sidKey === targetKey) return true;
+
+  if (targetKey && sidKey) {
+    const keyExpr = new RegExp(`(^|[-_/])${escapeRegex(targetKey)}($|[-_/])`, 'i');
+    if (keyExpr.test(sidKey)) return true;
+  }
+  if (targetWorktree && sidKey) {
+    const worktreeExpr = new RegExp(`(^|[-_/])${escapeRegex(targetWorktree)}($|[-_/])`, 'i');
+    if (worktreeExpr.test(sidKey)) return true;
+  }
+
+  return false;
+}
+
 function shouldCloseSessionsForThreadAction(action, requested) {
   if (typeof requested === 'boolean') return requested;
   const normalizedAction = normalizeToken(action);
@@ -151,5 +202,6 @@ module.exports = {
   parseWorktreeKey,
   parseTerminalIdentity,
   terminalMatchesWorktree,
+  sessionRecordMatchesWorktree,
   shouldCloseSessionsForThreadAction
 };
