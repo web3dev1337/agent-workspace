@@ -3080,21 +3080,25 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
 
     // Remove terminals associated with this worktree from configuration
     const updatedWorkspace = { ...workspace };
-    const originalTerminals = Array.isArray(updatedWorkspace.terminals) ? updatedWorkspace.terminals : [];
+    const terminalsListMode = Array.isArray(updatedWorkspace.terminals);
+    const terminalsPairsArrayMode = Array.isArray(updatedWorkspace?.terminals?.pairs);
+    const originalTerminals = terminalsListMode
+      ? updatedWorkspace.terminals
+      : (terminalsPairsArrayMode ? updatedWorkspace.terminals.pairs : []);
     const originalTerminalCount = originalTerminals.length;
     const removedTerminalIds = [];
 
-    updatedWorkspace.terminals = originalTerminals.filter((terminal) => {
+    let nextTerminals = originalTerminals.filter((terminal) => {
       const matched = terminalMatchesWorktree(terminal, parsedWorktree);
       if (matched && terminal?.id) removedTerminalIds.push(String(terminal.id));
       return !matched;
     });
 
     // Defensive fallback for older terminal configs where id/worktree metadata is inconsistent.
-    if (updatedWorkspace.terminals.length === originalTerminalCount) {
+    if (nextTerminals.length === originalTerminalCount) {
       const keyExpr = parsedWorktree.key ? new RegExp(`(^|[-_/])${escapeRegex(parsedWorktree.key)}($|[-_/])`, 'i') : null;
       const worktreeExpr = parsedWorktree.worktreeId ? new RegExp(`(^|[-_/])${escapeRegex(parsedWorktree.worktreeId)}($|[-_/])`, 'i') : null;
-      updatedWorkspace.terminals = originalTerminals.filter((terminal) => {
+      nextTerminals = originalTerminals.filter((terminal) => {
         const sid = String(terminal?.id || '').trim().toLowerCase();
         const fallbackMatch = (
           sid === parsedWorktree.key
@@ -3108,20 +3112,37 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
       });
     }
 
+    if (terminalsListMode) {
+      updatedWorkspace.terminals = nextTerminals;
+    } else if (terminalsPairsArrayMode) {
+      updatedWorkspace.terminals = {
+        ...updatedWorkspace.terminals,
+        pairs: nextTerminals
+      };
+    }
+
     const dedupedRemovedTerminalIds = Array.from(new Set(removedTerminalIds));
 
-    const removedCount = originalTerminalCount - updatedWorkspace.terminals.length;
+    let removedCount = originalTerminalCount - nextTerminals.length;
+
+    // Single-repo workspaces typically store a numeric terminals.pairs count instead of terminal entries.
+    // Support removing by worktree number in that mode.
+    const numericPairs = Number(updatedWorkspace?.terminals?.pairs);
+    if (removedCount === 0 && !terminalsListMode && !terminalsPairsArrayMode && Number.isFinite(numericPairs) && numericPairs > 0) {
+      const worktreeToken = String(parsedWorktree.worktreeId || parsedWorktree.key || '').trim();
+      const match = worktreeToken.match(/work(\d+)/i);
+      const worktreeNum = match ? Number(match[1]) : NaN;
+      if (Number.isFinite(worktreeNum) && worktreeNum >= 1 && worktreeNum <= numericPairs) {
+        updatedWorkspace.terminals = {
+          ...(updatedWorkspace.terminals || {}),
+          pairs: Math.max(0, numericPairs - 1)
+        };
+        removedCount = 1;
+      }
+    }
 
     if (removedCount === 0) {
       return res.status(404).json({ error: 'Worktree not found in workspace' });
-    }
-
-    // For single-repo workspaces, also update the pairs count
-    if (workspace.workspaceType !== 'mixed-repo' && workspace.terminals?.pairs) {
-      const worktreeNum = parseInt(parsedWorktree.worktreeId.replace(/.*work/, ''));
-      if (workspace.terminals.pairs >= worktreeNum) {
-        updatedWorkspace.terminals.pairs = workspace.terminals.pairs - 1;
-      }
     }
 
     // Save updated workspace configuration
