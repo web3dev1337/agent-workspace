@@ -70,7 +70,7 @@ function parseArgs(argv = []) {
 }
 
 function printHelp() {
-  console.log(`Usage: node scripts/create-project.js [options]\n\nOptions:\n  --name <slug>              Project name (required; kebab-case)\n  --description <text>       Project description\n  --category <id>            Category id from project taxonomy\n  --framework <id>           Framework id from project taxonomy\n  --template <id>            Template id from project taxonomy\n  --base-path <path>         Override category base path\n  --repo <url-or-slug>       Optional remote URL or GitHub slug\n  --github-org <org>         GitHub org/user for slug repos\n  --create-github <bool>     Create repo via gh CLI when repo is slug (default: false)\n  --private <bool>           Visibility for gh repo create (default: true)\n  --push <bool>              Push initial commit (default: false)\n  --init-git <bool>          Initialize git (default: true)\n  --worktree-count <n>       Create work1..workN (default: 0)\n  --help                     Show this help\n`);
+  console.log(`Usage: node scripts/create-project.js [options]\n\nOptions:\n  --name <slug>                     Project name (required; kebab-case)\n  --description <text>              Project description\n  --category <id>                   Category id from project taxonomy\n  --framework <id>                  Framework id from project taxonomy\n  --template <id>                   Template id from project taxonomy\n  --base-path <path>                Override category base path\n  --repo <url-or-slug>              Optional remote URL or GitHub slug\n  --github-org <org>                GitHub org/user for slug repos\n  --create-github <bool>            Create repo via gh CLI when repo is slug (default: false)\n  --private <bool>                  Visibility for gh repo create (default: true)\n  --push <bool>                     Push initial commit (default: false)\n  --init-git <bool>                 Initialize git (default: true)\n  --worktree-count <n>              Create work1..workN (default: 0)\n  --run-post-create <bool>          Run template post-create hooks (default: true)\n  --allow-post-create-failure <bool>Continue when post-create command fails (default: true)\n  --help                            Show this help\n`);
 }
 
 function resolveRemoteSpec(repoValue, githubOrg = '') {
@@ -167,6 +167,113 @@ function runCommand(command, args, options = {}) {
       }
     });
   });
+}
+
+function runShellCommand(command, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, {
+      cwd: options.cwd || process.cwd(),
+      stdio: options.stdio || ['ignore', 'pipe', 'pipe'],
+      shell: options.shell || true
+    });
+
+    let stdout = '';
+    let stderr = '';
+    if (child.stdout) {
+      child.stdout.on('data', (chunk) => {
+        stdout += String(chunk || '');
+      });
+    }
+    if (child.stderr) {
+      child.stderr.on('data', (chunk) => {
+        stderr += String(chunk || '');
+      });
+    }
+
+    child.on('error', (error) => reject(error));
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
+      } else {
+        reject(new Error(`${command} failed (${code})\n${stderr || stdout}`));
+      }
+    });
+  });
+}
+
+function buildTemplateSourceCandidates(template = {}) {
+  const out = [];
+  const push = (value) => {
+    const next = normalizeString(value);
+    if (!next || out.includes(next)) return;
+    out.push(next);
+  };
+
+  push(template.scaffoldPath);
+  push(template.projectKitPath);
+
+  const scaffoldPath = normalizeString(template.scaffoldPath);
+  if (scaffoldPath.startsWith('templates/scaffolds/')) {
+    push(scaffoldPath.replace(/^templates\/scaffolds\//, 'templates/project-kits/'));
+  } else if (scaffoldPath.startsWith('templates/project-kits/')) {
+    push(scaffoldPath.replace(/^templates\/project-kits\//, 'templates/scaffolds/'));
+  }
+
+  const templateId = normalizeString(template.id);
+  if (templateId) {
+    push(`templates/project-kits/${templateId}`);
+  }
+
+  return out;
+}
+
+function resolveTemplateSourceDir(template = {}) {
+  const candidates = buildTemplateSourceCandidates(template)
+    .map((candidate) => (path.isAbsolute(candidate) ? candidate : path.resolve(path.join(__dirname, '..', candidate))));
+
+  for (const candidatePath of candidates) {
+    try {
+      const stat = fs.statSync(candidatePath);
+      if (stat.isDirectory()) return { sourcePath: candidatePath, checkedPaths: candidates };
+    } catch {
+      // ignore missing candidate
+    }
+  }
+
+  return { sourcePath: '', checkedPaths: candidates };
+}
+
+function normalizeCommandList(raw) {
+  const out = [];
+  for (const item of Array.isArray(raw) ? raw : []) {
+    const value = normalizeString(item);
+    if (!value) continue;
+    out.push(value);
+  }
+  return out;
+}
+
+async function runPostCreateCommands(commands = [], { cwd, vars = {}, allowFailure = true, logger = console } = {}) {
+  const executed = [];
+  const warnings = [];
+  const normalized = normalizeCommandList(commands);
+  for (const command of normalized) {
+    const rendered = replaceTemplateVars(command, vars);
+    try {
+      const result = await runShellCommand(rendered, { cwd });
+      executed.push({
+        command: rendered,
+        stdout: result.stdout || '',
+        stderr: result.stderr || ''
+      });
+    } catch (error) {
+      const message = `Post-create command failed: ${rendered} :: ${error.message}`;
+      if (!allowFailure) throw new Error(message);
+      warnings.push(message);
+      logger.warn?.(message);
+    }
+  }
+  return { executed, warnings };
 }
 
 async function initializeGitRepo(masterPath) {
@@ -303,7 +410,8 @@ async function createProject(options = {}) {
   const projectPath = path.join(spec.basePath, spec.name);
   const masterPath = path.join(projectPath, 'master');
   const metadataPath = path.join(projectPath, 'project.json');
-  const templateSource = path.resolve(path.join(__dirname, '..', spec.template.scaffoldPath || ''));
+  const templateSourceResolution = resolveTemplateSourceDir(spec.template);
+  const templateSource = templateSourceResolution.sourcePath;
 
   if (fs.existsSync(projectPath)) {
     throw new Error(`Project already exists: ${projectPath}`);
@@ -319,7 +427,7 @@ async function createProject(options = {}) {
     frameworkId: spec.framework?.id || ''
   };
 
-  if (fs.existsSync(templateSource)) {
+  if (templateSource) {
     await copyTemplateTree(templateSource, masterPath, templateVars);
   } else {
     await fsp.writeFile(path.join(masterPath, 'README.md'), `# ${spec.name}\n\n${spec.description || 'New project scaffold.'}\n`, 'utf8');
@@ -348,6 +456,19 @@ async function createProject(options = {}) {
   const worktreeCount = Math.max(0, Number(options.worktreeCount || options.worktrees || 0) || 0);
   let remoteInfo = { remoteUrl: null, repoSlug: null, createdViaGh: false, warnings: [] };
   let additionalWorktrees = [];
+  let postCreate = { executed: [], warnings: [] };
+
+  const postCreateCommands = normalizeCommandList(options.postCreateCommands || spec.template.postCreateCommands || []);
+  const runPostCreate = options.runPostCreate !== undefined ? parseBool(options.runPostCreate, true) : true;
+  const allowPostCreateFailure = options.allowPostCreateFailure !== undefined ? parseBool(options.allowPostCreateFailure, true) : true;
+  if (runPostCreate && postCreateCommands.length) {
+    postCreate = await runPostCreateCommands(postCreateCommands, {
+      cwd: masterPath,
+      vars: templateVars,
+      allowFailure: allowPostCreateFailure,
+      logger
+    });
+  }
 
   if (initGit) {
     await initializeGitRepo(masterPath);
@@ -383,10 +504,19 @@ async function createProject(options = {}) {
     repositoryType: projectMetadata.repositoryType,
     launchSettingsType: projectMetadata.launchSettingsType,
     buttonProfileId: projectMetadata.buttonProfileId,
+    templateSourcePath: templateSource || null,
+    templateSourceCandidates: templateSourceResolution.checkedPaths,
     remoteUrl: remoteInfo.remoteUrl,
     repoSlug: remoteInfo.repoSlug,
     createdViaGh: remoteInfo.createdViaGh,
-    warnings: Array.isArray(remoteInfo.warnings) ? remoteInfo.warnings : [],
+    warnings: [
+      ...(Array.isArray(remoteInfo.warnings) ? remoteInfo.warnings : []),
+      ...(Array.isArray(postCreate.warnings) ? postCreate.warnings : [])
+    ],
+    postCreate: {
+      executed: Array.isArray(postCreate.executed) ? postCreate.executed : [],
+      warnings: Array.isArray(postCreate.warnings) ? postCreate.warnings : []
+    },
     worktrees
   };
 }
@@ -416,5 +546,8 @@ module.exports = {
   resolveProjectSpec,
   parseArgs,
   toKebabCase,
-  resolveRemoteSpec
+  resolveRemoteSpec,
+  buildTemplateSourceCandidates,
+  resolveTemplateSourceDir,
+  runPostCreateCommands
 };
