@@ -147,6 +147,7 @@ client/app.js                       - Config pre-fetching & caching
 client/app.js                      - Main client application
 ├─ Manages: UI state, socket connections, terminal grid
 ├─ Features: 16-terminal layout, real-time updates, session switching
+├─ Status UI: visual state mapping for `busy`, `waiting`, `ready-new`, and `no-agent`
 └─ Dependencies: Socket.IO client, terminal emulation
 
 client/terminal.js                 - Terminal component implementation

@@ -1128,6 +1128,10 @@ header h1 {
   background: var(--status-idle);
 }
 
+.status-indicator.no-agent {
+  background: color-mix(in srgb, var(--status-idle) 55%, transparent);
+}
+
 .status-indicator.busy {
   background: var(--status-busy);
 }
@@ -1135,6 +1139,11 @@ header h1 {
 .status-indicator.waiting {
   background: var(--status-waiting);
   animation: pulse 1s infinite;
+}
+
+.status-indicator.ready-new {
+  background: var(--status-waiting);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--status-waiting) 32%, transparent);
 }
 
 .status-indicator.ready {
@@ -4919,6 +4928,16 @@ header h1 {
 .focused-terminal-title .status-indicator.waiting {
   background: var(--status-waiting);
   box-shadow: 0 0 10px var(--status-waiting);
+}
+
+.focused-terminal-title .status-indicator.no-agent {
+  background: color-mix(in srgb, var(--status-idle) 55%, transparent);
+  box-shadow: none;
+}
+
+.focused-terminal-title .status-indicator.ready-new {
+  background: var(--status-waiting);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--status-waiting) 32%, transparent);
 }
 
 /* Focus mode controls */
