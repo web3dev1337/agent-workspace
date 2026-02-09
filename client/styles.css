@@ -1544,6 +1544,11 @@ header h1 {
   background: color-mix(in srgb, var(--accent-primary) 24%, transparent);
 }
 
+.projects-chats-project-subtle {
+  opacity: 0.65;
+  font-size: 11px;
+}
+
 .projects-chats-main {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
