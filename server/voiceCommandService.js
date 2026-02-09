@@ -706,12 +706,29 @@ class VoiceCommandService {
       {
         patterns: [
           /^(?:new|create|start)\s+(?:chat|thread)$/i,
+          /^(?:new|create|start)\s+(?:chat|thread)\s+in\s+(.+?)\s+(?:for|repo|repository)\s+(.+)$/i,
+          /^(?:new|create|start)\s+(?:chat|thread)\s+(?:for|repo|repository)\s+(.+?)\s+in\s+(.+)$/i,
+          /^(?:new|create|start)\s+(?:chat|thread)\s+(?:for|repo|repository)\s+(.+)$/i,
           /^(?:new|create|start)\s+(?:chat|thread)\s+in\s+(.+)$/i,
         ],
         command: 'project-chats-new',
         extractParams: (match) => {
-          const workspace = String(match?.[1] || '').trim();
-          return workspace ? { workspace } : {};
+          const raw = String(match?.[0] || '').toLowerCase();
+          const first = String(match?.[1] || '').trim();
+          const second = String(match?.[2] || '').trim();
+          if (first && second) {
+            if (/\sin\s+.+\s+(?:for|repo|repository)\s+/.test(raw)) {
+              return { workspace: first, repository: second };
+            }
+            return { repository: first, workspace: second };
+          }
+          if (first) {
+            if (/(?:for|repo|repository)\s+/.test(raw) && !/\sin\s+/.test(raw)) {
+              return { repository: first };
+            }
+            return { workspace: first };
+          }
+          return {};
         }
       },
       // Open settings
@@ -1385,6 +1402,7 @@ Command patterns:
 - "open advice" → open-advice
 - "open projects and chats" → open-project-chats
 - "new chat" → project-chats-new
+- "new chat in zoo game for incremental-game" → project-chats-new { workspace, repository }
 - "open commander" → open-commander
 - "open settings" → open-settings
 - "pager status" → pager-status

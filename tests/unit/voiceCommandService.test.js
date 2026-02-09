@@ -82,6 +82,18 @@ describe('VoiceCommandService (rule parsing)', () => {
     expect(newChatInWorkspace.command).toBe('project-chats-new');
     expect(newChatInWorkspace.params).toEqual({ workspace: 'Zoo Game' });
 
+    const newChatForRepo = voiceCommandService.parseWithRules('new chat for incremental-game');
+    expect(newChatForRepo.command).toBe('project-chats-new');
+    expect(newChatForRepo.params).toEqual({ repository: 'incremental-game' });
+
+    const newChatWorkspaceRepo = voiceCommandService.parseWithRules('new chat in Zoo Game for incremental-game');
+    expect(newChatWorkspaceRepo.command).toBe('project-chats-new');
+    expect(newChatWorkspaceRepo.params).toEqual({ workspace: 'Zoo Game', repository: 'incremental-game' });
+
+    const newChatRepoWorkspace = voiceCommandService.parseWithRules('new chat for incremental-game in Zoo Game');
+    expect(newChatRepoWorkspace.command).toBe('project-chats-new');
+    expect(newChatRepoWorkspace.params).toEqual({ repository: 'incremental-game', workspace: 'Zoo Game' });
+
     const telemetry = voiceCommandService.parseWithRules('open telemetry');
     expect(telemetry.command).toBe('open-telemetry');
 
