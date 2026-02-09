@@ -491,6 +491,12 @@ body {
   background: var(--text-tertiary);
 }
 
+.status-dot.no-agent {
+  background: transparent;
+  border: 1px solid var(--text-tertiary);
+  opacity: 0.85;
+}
+
 .status-dot.waiting {
   background: var(--accent-success);
 }
@@ -11107,6 +11113,13 @@ header h1 {
 .recovery-info {
   padding: var(--space-sm) var(--space-lg);
   background: var(--bg-secondary);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.recovery-note {
+  padding: var(--space-xs) var(--space-lg);
   font-size: 0.8rem;
   color: var(--text-muted);
   border-bottom: 1px solid var(--border-color);
