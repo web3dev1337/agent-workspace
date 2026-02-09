@@ -14758,7 +14758,7 @@ class ClaudeOrchestrator {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data?.ok === false) {
-      throw new Error(String(data?.error || data?.message || 'Failed to create chat'));
+      throw new Error(String(data?.message || data?.error || 'Failed to create chat'));
     }
 
     const refreshedThreads = await this.fetchThreadsForWorkspace(workspaceId, { includeArchived: state.includeArchived });
