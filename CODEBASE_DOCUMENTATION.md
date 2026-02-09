@@ -427,7 +427,7 @@ POST /api/workspaces              - Create new workspace
 PUT /api/workspaces/:id           - Update workspace configuration
 DELETE /api/workspaces/:id        - Delete workspace
 POST /api/workspaces/:id/switch   - Switch to workspace
-POST /api/workspaces/remove-worktree - Remove worktree from workspace config, close linked sessions, keep files on disk
+POST /api/workspaces/remove-worktree - Remove worktree from workspace config (mixed terminal arrays and numeric `terminals.pairs` modes), close linked sessions, keep files on disk
 GET /api/threads                  - List project/workspace chats (`workspaceId` required)
 POST /api/threads                 - Create thread + ensure mixed worktree/session context
 POST /api/threads/create          - Alias for thread creation API used by Projects + Chats shell (idempotent for existing worktrees/sessions)
