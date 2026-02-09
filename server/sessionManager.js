@@ -93,6 +93,7 @@ class SessionManager extends EventEmitter {
     this.statusIdleHoldMs = parseInt(process.env.STATUS_IDLE_HOLD_MS || '6000');
     // Default to 30s to keep branch labels reasonably fresh without relying on user git commands.
     this.branchRefreshMs = parseInt(process.env.BRANCH_REFRESH_MS || '30000');
+    this.processTreeKillGraceMs = parseInt(process.env.PROCESS_TREE_KILL_GRACE_MS || '1200');
     this.conversationSnapshotTtlMs = parseInt(process.env.CONVERSATION_SNAPSHOT_TTL_MS || '5000');
     this.conversationSnapshotCache = { timestamp: 0, files: null };
 
@@ -2459,12 +2460,14 @@ class SessionManager extends EventEmitter {
       return;
     }
 
+    let killTarget = null;
     try {
       process.kill(-numericPid, 'SIGTERM');
-      return;
+      killTarget = -numericPid;
     } catch (groupError) {
       try {
         process.kill(numericPid, 'SIGTERM');
+        killTarget = numericPid;
       } catch (singleError) {
         logger.debug('Failed to send SIGTERM during process tree cleanup', {
           sessionId,
@@ -2473,6 +2476,29 @@ class SessionManager extends EventEmitter {
           singleError: singleError.message
         });
       }
+    }
+    if (!killTarget || this.processTreeKillGraceMs <= 0) return;
+
+    const escalationTimer = setTimeout(() => {
+      if (!this.isProcessTargetAlive(killTarget)) return;
+      try {
+        process.kill(killTarget, 'SIGKILL');
+      } catch {
+        // best-effort
+      }
+    }, this.processTreeKillGraceMs);
+    if (typeof escalationTimer.unref === 'function') escalationTimer.unref();
+  }
+
+  isProcessTargetAlive(targetPid) {
+    const target = Number(targetPid);
+    if (!Number.isFinite(target) || target === 0) return false;
+    try {
+      process.kill(target, 0);
+      return true;
+    } catch (error) {
+      if (error?.code === 'EPERM') return true;
+      return false;
     }
   }
 
