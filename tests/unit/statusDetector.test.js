@@ -94,14 +94,13 @@ describe('StatusDetector', () => {
       expect(status).toBe('busy');
     });
 
-    it('should not classify shell prompts as idle when Claude is likely active', () => {
-      // "$" can appear in code blocks/snippets while Claude is working; do not flip to idle.
+    it('should classify explicit shell prompts as idle even if Claude was previously active', () => {
       const state = detector.getState(sessionId);
       state.lastOutputTime = Date.now();
       state.lastBufferLength = 0;
       const buffer = `Welcome to Claude Code!\n${'Example output '.repeat(20)}\n$`;
       const status = detector.detectStatus(sessionId, buffer);
-      expect(status).toBe('busy');
+      expect(status).toBe('idle');
     });
 
     it('should detect idle status after quiet period', () => {
@@ -114,14 +113,14 @@ describe('StatusDetector', () => {
       expect(status).toBe('idle');
     });
 
-    it('should keep Claude sessions busy for longer quiet windows', () => {
+    it('should return idle after long quiet windows for Claude sessions', () => {
       const buffer = `Welcome to Claude Code!\n${'Working '.repeat(30)}\nstill working`;
       const state = detector.getState(sessionId);
       state.lastBufferLength = buffer.length;
       state.lastOutputTime = Date.now() - 240000; // 4 minutes of silence
       state.claudeLikely = true;
       const status = detector.detectStatus(sessionId, buffer);
-      expect(status).toBe('busy');
+      expect(status).toBe('idle');
     });
 
     it('should keep agent terminals busy for longer quiet windows', () => {
@@ -147,6 +146,24 @@ describe('StatusDetector', () => {
       const status = detector.detectStatus(sessionId, buffer, { agent: 'codex' });
       expect(status).toBe('waiting');
       expect(detector.getState(sessionId).claudeLikely).toBe(false);
+    });
+
+    it('should detect idle status from zsh-style prompt', () => {
+      const buffer = '/home/<user>/GitHub/project %';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('idle');
+    });
+
+    it('should detect idle status from starship-style prompt glyph', () => {
+      const buffer = '~/GitHub/project ❯';
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('idle');
+    });
+
+    it('should detect idle status from no-agent banner', () => {
+      const buffer = "Claude session ended.\nType 'claude' to start a new Claude session.";
+      const status = detector.detectStatus(sessionId, buffer);
+      expect(status).toBe('idle');
     });
   });
 
