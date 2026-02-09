@@ -913,7 +913,17 @@ io.on('connection', (socket) => {
   });
 
   socket.on('create-new-project', async (payload = {}, callback) => {
+    const requestMeta = {
+      name: String(payload?.name || payload?.projectName || '').trim() || null,
+      category: String(payload?.category || payload?.categoryId || '').trim() || null,
+      framework: String(payload?.framework || payload?.frameworkId || '').trim() || null,
+      template: String(payload?.template || payload?.templateId || '').trim() || null,
+      worktreeCount: Number(payload?.worktreeCount || payload?.worktrees || 0) || null,
+      spawnClaude: payload?.spawnClaude === true,
+      socketId: socket.id
+    };
     try {
+      logger.info('Socket project creation requested', requestMeta);
       const result = await workspaceManager.createProjectWorkspace(payload || {});
       let claudeSession = null;
       if (payload?.spawnClaude) {
@@ -941,8 +951,14 @@ io.on('connection', (socket) => {
           workspace: result.workspace
         });
       }
+      logger.info('Socket project creation succeeded', {
+        ...requestMeta,
+        workspaceId: result?.workspace?.id || null,
+        projectPath: result?.project?.projectPath || null,
+        claudeSessionId: claudeSession?.sessionId || null
+      });
     } catch (error) {
-      logger.error('Failed to create new project via socket', { error: error.message, stack: error.stack });
+      logger.error('Failed to create new project via socket', { ...requestMeta, error: error.message, stack: error.stack });
       if (typeof callback === 'function') {
         callback({ ok: false, error: error.message });
       }
@@ -1308,7 +1324,16 @@ app.post('/api/workspaces', async (req, res) => {
 });
 
 app.post('/api/projects/create-workspace', express.json(), async (req, res) => {
+  const requestMeta = {
+    name: String(req.body?.name || req.body?.projectName || '').trim() || null,
+    category: String(req.body?.category || req.body?.categoryId || '').trim() || null,
+    framework: String(req.body?.framework || req.body?.frameworkId || '').trim() || null,
+    template: String(req.body?.template || req.body?.templateId || '').trim() || null,
+    worktreeCount: Number(req.body?.worktreeCount || req.body?.worktrees || 0) || null,
+    spawnClaude: req.body?.spawnClaude === true
+  };
   try {
+    logger.info('API project creation requested', requestMeta);
     const result = await workspaceManager.createProjectWorkspace(req.body || {});
     let claudeSession = null;
     if (req.body?.spawnClaude) {
@@ -1331,8 +1356,14 @@ app.post('/api/projects/create-workspace', express.json(), async (req, res) => {
       project,
       workspace: result.workspace
     });
+    logger.info('API project creation succeeded', {
+      ...requestMeta,
+      workspaceId: result?.workspace?.id || null,
+      projectPath: result?.project?.projectPath || null,
+      claudeSessionId: claudeSession?.sessionId || null
+    });
   } catch (error) {
-    logger.error('Failed to create project workspace', { error: error.message, stack: error.stack });
+    logger.error('Failed to create project workspace', { ...requestMeta, error: error.message, stack: error.stack });
     res.status(400).json({ ok: false, error: error.message });
   }
 });
