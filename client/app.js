@@ -3340,21 +3340,34 @@ class ClaudeOrchestrator {
   }
 
   getSidebarAgentIdForWorktree(worktreeKey) {
+    const session = this.getSidebarAgentSessionForWorktree(worktreeKey);
+    if (!session) return null;
+    const agentId = String(session?.agent || '').trim();
+    return agentId || null;
+  }
+
+  getSidebarAgentSessionForWorktree(worktreeKey) {
     const target = String(worktreeKey || '').trim();
     if (!target) return null;
+    let fallback = null;
     for (const [sessionId, session] of this.sessions) {
       const type = String(session?.type || '').trim().toLowerCase();
       if (type !== 'claude' && type !== 'codex') continue;
       const key = this.getSessionWorktreeKey(sessionId, session);
       if (key !== target) continue;
-      const agentId = String(session?.agent || '').trim();
-      if (agentId) return agentId;
+      if (type === 'claude') return session;
+      if (!fallback) fallback = session;
     }
-    return null;
+    return fallback;
   }
 
   getSidebarVisualStatusForWorktree(worktreeKey, status) {
     const normalized = String(status || '').trim().toLowerCase() || 'idle';
+    if (normalized === 'waiting') {
+      const agentSession = this.getSidebarAgentSessionForWorktree(worktreeKey);
+      if (agentSession && !agentSession.hasUserInput) return 'ready-new';
+      return 'waiting';
+    }
     if (normalized !== 'idle') return normalized;
     const agentId = this.getSidebarAgentIdForWorktree(worktreeKey);
     return agentId ? 'idle' : 'no-agent';
@@ -3434,11 +3447,16 @@ class ClaudeOrchestrator {
       // Single-dot sidebar status: prefer the agent (Claude) status
       const sidebarStatus = worktree.claude?.status || worktree.server?.status || 'idle';
       const sidebarStatusVisual = this.getSidebarVisualStatusForWorktree(worktree.id, sidebarStatus);
+      const agentSession = this.getSidebarAgentSessionForWorktree(worktree.id);
 
       const agentId = this.getSidebarAgentIdForWorktree(worktree.id) || worktree.claude?.agent || worktree.server?.agent || null;
       const noAgentRunning = sidebarStatus === 'idle' && !agentId;
+      const freshWaiting = sidebarStatus === 'waiting' && agentSession && !agentSession.hasUserInput;
+      const statusLabel = noAgentRunning
+        ? 'idle (no AI running)'
+        : (freshWaiting ? 'waiting (new session)' : sidebarStatus);
       const statusTitleParts = [
-        `Status: ${noAgentRunning ? 'idle (no AI running)' : sidebarStatus}`,
+        `Status: ${statusLabel}`,
         agentId ? `Agent: ${agentId}` : (noAgentRunning ? 'Agent: none' : null)
       ].filter(Boolean);
       const statusTitle = statusTitleParts.join(' • ');
