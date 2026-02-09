@@ -3896,9 +3896,9 @@ class Dashboard {
             ? `${configuredTerminalCount} terminal${configuredTerminalCount !== 1 ? 's' : ''}`
             : null;
           const details = [wtText, termText].filter(Boolean).join(' / ');
-          if (details) scope = ` (${details} configured in workspace)`;
+          if (details) scope = ` Workspace has ${details} configured; recoverable count only covers sessions with resumable state.`;
         }
-        return `Found ${sessions.length} recoverable session${sessions.length !== 1 ? 's' : ''} from ${savedAt}${scope}`;
+        return `Recoverable: ${sessions.length} session${sessions.length !== 1 ? 's' : ''} from ${savedAt}.${scope}`;
       };
 
       const modal = document.createElement('div');
@@ -3912,6 +3912,9 @@ class Dashboard {
           </div>
           <div class="recovery-info">
             ${formatRecoverySummary()}
+          </div>
+          <div class="recovery-note">
+            Opening this workspace still shows all configured worktrees/terminals.
           </div>
           <div class="recovery-sessions">
             ${sessions.length === 0 ? '<div class="no-recovery">No sessions to recover</div>' :
