@@ -3330,6 +3330,36 @@ class ClaudeOrchestrator {
     return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}', 'development')" title="Start Server (dev)">▶S</button>`;
   }
 
+  getSessionWorktreeKey(sessionId, session = null) {
+    const sid = String(sessionId || '').trim();
+    const row = session || this.sessions.get(sid) || null;
+    if (!sid && !row) return '';
+    const worktreeId = String(row?.worktreeId || sid.split('-')[0] || '').trim();
+    const repositoryName = String(row?.repositoryName || this.extractRepositoryName(sid) || '').trim();
+    return repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+  }
+
+  getSidebarAgentIdForWorktree(worktreeKey) {
+    const target = String(worktreeKey || '').trim();
+    if (!target) return null;
+    for (const [sessionId, session] of this.sessions) {
+      const type = String(session?.type || '').trim().toLowerCase();
+      if (type !== 'claude' && type !== 'codex') continue;
+      const key = this.getSessionWorktreeKey(sessionId, session);
+      if (key !== target) continue;
+      const agentId = String(session?.agent || '').trim();
+      if (agentId) return agentId;
+    }
+    return null;
+  }
+
+  getSidebarVisualStatusForWorktree(worktreeKey, status) {
+    const normalized = String(status || '').trim().toLowerCase() || 'idle';
+    if (normalized !== 'idle') return normalized;
+    const agentId = this.getSidebarAgentIdForWorktree(worktreeKey);
+    return agentId ? 'idle' : 'no-agent';
+  }
+
   buildSidebar() {
     const worktreeList = document.getElementById('worktree-list');
     if (!worktreeList) return;
@@ -3403,8 +3433,9 @@ class ClaudeOrchestrator {
 
       // Single-dot sidebar status: prefer the agent (Claude) status
       const sidebarStatus = worktree.claude?.status || worktree.server?.status || 'idle';
+      const sidebarStatusVisual = this.getSidebarVisualStatusForWorktree(worktree.id, sidebarStatus);
 
-      const agentId = worktree.claude?.agent || worktree.server?.agent || null;
+      const agentId = this.getSidebarAgentIdForWorktree(worktree.id) || worktree.claude?.agent || worktree.server?.agent || null;
       const noAgentRunning = sidebarStatus === 'idle' && !agentId;
       const statusTitleParts = [
         `Status: ${noAgentRunning ? 'idle (no AI running)' : sidebarStatus}`,
@@ -3430,7 +3461,7 @@ class ClaudeOrchestrator {
 	      item.innerHTML = `
 	        <div class="worktree-header">
 	          <div class="worktree-title">
-	            <span class="status-dot worktree-status-dot ${sidebarStatus}" title="${this.escapeHtml(statusTitle)}"></span>
+	            <span class="status-dot worktree-status-dot ${sidebarStatusVisual}" title="${this.escapeHtml(statusTitle)}"></span>
 	            <div class="worktree-text">
 	              <div class="worktree-name" title="${this.escapeHtml(displayName)}">${displayName}</div>
 	              <div class="worktree-meta">
@@ -4698,9 +4729,8 @@ class ClaudeOrchestrator {
   
   updateSidebarStatus(sessionId, status) {
     const session = this.sessions.get(sessionId);
-    const worktreeId = session?.worktreeId || sessionId.split('-')[0];
-    const repositoryName = session?.repositoryName || this.extractRepositoryName(sessionId);
-    const key = repositoryName ? `${repositoryName}-${worktreeId}` : worktreeId;
+    const key = this.getSessionWorktreeKey(sessionId, session);
+    if (!key) return;
 
     // Sidebar status is the agent status. Ignore server updates to keep the sidebar compact.
     if (!/-claude$|-codex$/.test(sessionId)) return;
@@ -4713,15 +4743,17 @@ class ClaudeOrchestrator {
       if (!this.sidebarStatusUi) this.sidebarStatusUi = new Map();
       if (!this.sidebarStatusUiTimers) this.sidebarStatusUiTimers = new Map();
 
+      const nextVisual = this.getSidebarVisualStatusForWorktree(key, status);
       const prev = this.sidebarStatusUi.get(key) || 'idle';
-      if (prev === status) return;
+      if (prev === nextVisual) return;
 
       const existing = this.sidebarStatusUiTimers.get(key);
       if (existing) clearTimeout(existing);
 
       const apply = (next) => {
-        dot.className = `status-dot worktree-status-dot ${next}`;
-        this.sidebarStatusUi.set(key, next);
+        const visualNext = this.getSidebarVisualStatusForWorktree(key, next);
+        dot.className = `status-dot worktree-status-dot ${visualNext}`;
+        this.sidebarStatusUi.set(key, visualNext);
       };
 
       const shouldDelayIdle = (next) =>
