@@ -501,6 +501,10 @@ body {
   background: var(--accent-success);
 }
 
+.status-dot.ready-new {
+  background: #3b82f6;
+}
+
 .status-dot.busy {
   background: var(--accent-warning);
   animation: pulse 1s infinite;
