@@ -23,6 +23,7 @@ Quick entrypoints:
 - `Alt+Shift+N` opens the New Project wizard.
 - Terminal header `✨` button opens the same wizard.
 - Settings -> Command Catalog -> `New Project Wizard` button opens the same wizard.
+- `Ctrl/Cmd+K` opens Command Palette; run `open-new-project`.
 
 GitHub behavior:
 - Enable `Create GitHub Repository` to create/push a repo during project creation.
