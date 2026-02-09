@@ -48,7 +48,6 @@ class StatusDetector {
     // Patterns that suggest Claude is typing (busy) - more conservative
     this.typingPatterns = [
       /∴ Thinking…/,                   // Thinking indicator
-      /\.\.\.$/m,                      // Ends with ellipsis (still going)
     ];
 
     // Per-session state (StatusDetector is shared across sessions).
@@ -101,6 +100,11 @@ class StatusDetector {
       state.lastBufferLength = buffer.length;
     }
     const timeSinceOutput = now - state.lastOutputTime;
+    const isAgentTerminal = /-(claude|codex)$/.test(String(sessionId || ''));
+    const assumeBusyWindowMs = (state.claudeLikely || isAgentTerminal)
+      ? (state.claudeLikely ? ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS : ASSUME_BUSY_SINCE_OUTPUT_AGENT_MS)
+      : ASSUME_BUSY_SINCE_OUTPUT_MS;
+    const hasRecentOutput = timeSinceOutput < assumeBusyWindowMs;
 
     // Get recent output for analysis
     const recentOutput = buffer.slice(-2000);
@@ -172,8 +176,9 @@ class StatusDetector {
     }
 
     // 4. Active tool usage (definitely busy)
-    for (const pattern of this.toolPatterns) {
-      if (pattern.test(lastFewLines)) {
+    if (hasRecentOutput) {
+      for (const pattern of this.toolPatterns) {
+        if (!pattern.test(lastFewLines)) continue;
         state.claudeLikely = true;
         // Completion is only considered reliable when it is the last non-empty line (handled above).
         // Do not suppress tool activity because an older "Cost:" line is still visible in scrollback.
@@ -183,12 +188,18 @@ class StatusDetector {
     }
 
     // 5. Check typing/thinking patterns
-    for (const pattern of this.typingPatterns) {
-      if (pattern.test(lastFewLines)) {
+    if (hasRecentOutput) {
+      for (const pattern of this.typingPatterns) {
+        if (!pattern.test(lastFewLines)) continue;
         state.claudeLikely = true;
         logger.debug('Typing pattern detected - busy');
         return 'busy';
       }
+    }
+    if (hasRecentOutput && /(\.\.\.|…)$/.test(trimmedLastNonEmptyLine)) {
+      state.claudeLikely = true;
+      logger.debug('Trailing ellipsis detected - busy');
+      return 'busy';
     }
 
     // 6. Shell prompt means no active AI is currently running in this terminal.
@@ -209,10 +220,6 @@ class StatusDetector {
     }
 
     // 8. Default: assume busy for a short quiet window after output.
-    const isAgentTerminal = /-(claude|codex)$/.test(String(sessionId || ''));
-    const assumeBusyWindowMs = (state.claudeLikely || isAgentTerminal)
-      ? (state.claudeLikely ? ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS : ASSUME_BUSY_SINCE_OUTPUT_AGENT_MS)
-      : ASSUME_BUSY_SINCE_OUTPUT_MS;
     if (timeSinceOutput < assumeBusyWindowMs && buffer.length > 100) {
       return 'busy';
     }
