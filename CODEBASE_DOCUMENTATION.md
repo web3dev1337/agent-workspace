@@ -54,6 +54,7 @@ server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
 ├─ Recovery filtering: stale/non-configured session entries are pruned when requested by workspace-scoped APIs
+├─ Agent clearing: `clearAgent()` resets stale `lastAgent` markers when a Claude/Codex terminal falls back to plain shell
 └─ Recovery metadata: recovery payload includes configured terminal/worktree counts for UI context
 server/threadService.js            - Workspace/project thread persistence (`~/.orchestrator/threads.json`)
 ├─ Thread identity: active-thread de-dup scopes by workspace + worktree + repository context
