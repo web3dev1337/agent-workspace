@@ -135,6 +135,7 @@
       "description": "Simple website scaffold",
       "frameworkId": "web-generic",
       "scaffoldPath": "templates/scaffolds/website",
+      "projectKitPath": "templates/project-kits/website-starter",
       "defaultRepositoryType": "website",
       "defaultLaunchSettingsType": "website",
       "buttonProfileId": "website"
@@ -145,6 +146,7 @@
       "description": "Hytopia game scaffold",
       "frameworkId": "hytopia",
       "scaffoldPath": "templates/scaffolds/hytopia-game",
+      "projectKitPath": "templates/project-kits/hytopia-game-starter",
       "defaultRepositoryType": "hytopia-game",
       "defaultLaunchSettingsType": "hytopia-game",
       "buttonProfileId": "hytopia-game"
@@ -155,6 +157,7 @@
       "description": "Node.js + TypeScript starter",
       "frameworkId": "nodejs",
       "scaffoldPath": "templates/scaffolds/cli-tool",
+      "projectKitPath": "templates/project-kits/node-typescript-tool",
       "defaultRepositoryType": "tool-project",
       "defaultLaunchSettingsType": "website",
       "buttonProfileId": "tool"
@@ -165,6 +168,7 @@
       "description": "Minimal scaffold",
       "frameworkId": "generic",
       "scaffoldPath": "templates/scaffolds/generic",
+      "projectKitPath": "templates/project-kits/generic-empty",
       "defaultRepositoryType": "generic",
       "defaultLaunchSettingsType": "writing",
       "buttonProfileId": "generic"

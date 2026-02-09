@@ -1,7 +1,13 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { createProject, parseArgs, resolveRemoteSpec } = require('../../scripts/create-project');
+const {
+  createProject,
+  parseArgs,
+  resolveRemoteSpec,
+  buildTemplateSourceCandidates,
+  resolveTemplateSourceDir
+} = require('../../scripts/create-project');
 const { ProjectTypeService } = require('../../server/projectTypeService');
 
 describe('create-project script', () => {
@@ -39,6 +45,26 @@ describe('create-project script', () => {
     expect(resolveRemoteSpec('demo-repo', 'acme').slug).toBe('acme/demo-repo');
   });
 
+  test('buildTemplateSourceCandidates includes scaffold and project-kit compatibility paths', () => {
+    const candidates = buildTemplateSourceCandidates({
+      id: 'website-starter',
+      scaffoldPath: 'templates/scaffolds/website'
+    });
+    expect(candidates).toContain('templates/scaffolds/website');
+    expect(candidates).toContain('templates/project-kits/website');
+    expect(candidates).toContain('templates/project-kits/website-starter');
+  });
+
+  test('resolveTemplateSourceDir prefers first existing template source', () => {
+    const existingDir = path.join(tmpRoot, 'kit');
+    fs.mkdirSync(existingDir, { recursive: true });
+    const resolved = resolveTemplateSourceDir({
+      scaffoldPath: '/tmp/does-not-exist',
+      projectKitPath: existingDir
+    });
+    expect(resolved.sourcePath).toBe(existingDir);
+  });
+
   test('creates project scaffold and metadata without git', async () => {
     const result = await createProject({
       name: 'demo-tool',
@@ -58,5 +84,49 @@ describe('create-project script', () => {
     const metadata = JSON.parse(fs.readFileSync(result.metadataPath, 'utf8'));
     expect(metadata.templateId).toBe('node-typescript-tool');
     expect(metadata.categoryId).toBe('tool');
+  });
+
+  test('runs template post-create commands with template variables', async () => {
+    const scaffoldDir = path.join(tmpRoot, 'custom-scaffold');
+    fs.mkdirSync(scaffoldDir, { recursive: true });
+    fs.writeFileSync(path.join(scaffoldDir, 'README.md'), '# {{projectName}}\n', 'utf8');
+
+    const projectTypeService = {
+      detectCategory: () => 'other',
+      getCategoryById: () => ({
+        id: 'other',
+        basePathResolved: tmpRoot,
+        defaultTemplateId: 'custom-template'
+      }),
+      getFrameworks: () => [],
+      getTemplates: (filters = {}) => {
+        const template = {
+          id: 'custom-template',
+          frameworkId: '',
+          scaffoldPath: scaffoldDir,
+          defaultRepositoryType: 'generic',
+          defaultLaunchSettingsType: 'writing',
+          buttonProfileId: 'generic',
+          postCreateCommands: ['printf "{{projectName}}" > post-create.txt']
+        };
+        if (filters?.frameworkId || filters?.categoryId) return [template];
+        return [template];
+      }
+    };
+
+    const result = await createProject({
+      name: 'hook-project',
+      category: 'other',
+      template: 'custom-template',
+      initGit: false,
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      projectTypeService
+    });
+
+    const hookFile = path.join(result.masterPath, 'post-create.txt');
+    expect(fs.existsSync(hookFile)).toBe(true);
+    expect(fs.readFileSync(hookFile, 'utf8')).toBe('hook-project');
+    expect(Array.isArray(result.postCreate.executed)).toBe(true);
+    expect(result.postCreate.executed.length).toBe(1);
   });
 });
