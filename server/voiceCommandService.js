@@ -691,6 +691,16 @@ class VoiceCommandService {
         command: 'open-commander',
         extractParams: () => ({})
       },
+      // Open New Project wizard
+      {
+        patterns: [
+          /^(?:open|show)\s+(?:the\s+)?(?:new\s+)?project(?:\s+wizard)?$/i,
+          /^(?:create|start)\s+(?:a\s+)?new\s+project$/i,
+          /^(?:open|show)\s+new\s+project\s+wizard$/i,
+        ],
+        command: 'open-new-project',
+        extractParams: () => ({})
+      },
       // Open projects + chats shell (simple mode)
       {
         patterns: [
@@ -1404,6 +1414,7 @@ Command patterns:
 - "new chat" → project-chats-new
 - "new chat in zoo game for incremental-game" → project-chats-new { workspace, repository }
 - "open commander" → open-commander
+- "open new project" → open-new-project
 - "open settings" → open-settings
 - "pager status" → pager-status
 - "start pager for work1-claude" → pager-start { sessionId }
