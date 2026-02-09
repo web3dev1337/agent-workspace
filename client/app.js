@@ -1950,6 +1950,14 @@ class ClaudeOrchestrator {
         });
       });
     }
+    const commandCatalogOpenNewProject = document.getElementById('command-catalog-open-new-project');
+    if (commandCatalogOpenNewProject) {
+      commandCatalogOpenNewProject.addEventListener('click', () => {
+        this.openGreenfieldWizard().catch((error) => {
+          this.showToast?.(String(error?.message || error), 'error');
+        });
+      });
+    }
     const commandCatalogFilter = document.getElementById('command-catalog-filter');
     if (commandCatalogFilter) {
       commandCatalogFilter.addEventListener('input', () => {

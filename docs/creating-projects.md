@@ -13,7 +13,7 @@
 2. Click `New Project` card.
 3. Complete wizard steps:
    - Describe project
-   - Configure category -> framework -> template, plus privacy/worktree count
+   - Configure category -> framework -> template, plus GitHub mode/repo target/worktree count
    - Review and create
 4. On success, click `Open Workspace`.
 
@@ -22,6 +22,15 @@ If you open the wizard while focused in an existing workspace/worktree, it now p
 Quick entrypoints:
 - `Alt+Shift+N` opens the New Project wizard.
 - Terminal header `✨` button opens the same wizard.
+- Settings -> Command Catalog -> `New Project Wizard` button opens the same wizard.
+
+GitHub behavior:
+- Enable `Create GitHub Repository` to create/push a repo during project creation.
+- Disable it for local-first projects (no remote required).
+- Optional `Repository Target` accepts:
+  - `owner/repo`
+  - `repo-name` (uses optional `GitHub Org/User` as prefix)
+  - Full remote URL (`https://...` or `git@...`)
 
 ## CLI Fallback
 Use the scaffold CLI directly:
