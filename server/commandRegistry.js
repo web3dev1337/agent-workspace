@@ -571,11 +571,13 @@ class CommandRegistry {
       category: 'ui',
       description: 'Create a new chat in the Projects + Chats shell',
       params: [
-        { name: 'workspace', required: false, description: 'Optional workspace id or name for where to create the chat' }
+        { name: 'workspace', required: false, description: 'Optional workspace id or name for where to create the chat' },
+        { name: 'repository', required: false, description: 'Optional repository name/path hint to target a specific project within the workspace' }
       ],
       examples: [
         { params: {}, description: 'Create a chat in the currently selected workspace' },
-        { params: { workspace: 'zoo-game' }, description: 'Create a chat in the zoo-game workspace' }
+        { params: { workspace: 'zoo-game' }, description: 'Create a chat in the zoo-game workspace' },
+        { params: { workspace: 'zoo-gamabc', repository: 'incremental-game' }, description: 'Create a chat in a specific repository inside a mixed workspace' }
       ],
       aliases: ['new-chat', 'create-chat', 'new-thread'],
       handler: (params, { io }) => {
