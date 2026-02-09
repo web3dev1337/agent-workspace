@@ -76,6 +76,30 @@ class ThreadService {
     return out;
   }
 
+  normalizeRepositoryPathForProjectId(rawPath) {
+    const raw = String(rawPath || '').trim().replace(/[\\/]+$/, '');
+    if (!raw) return '';
+    const parts = raw.split(/[\\/]+/).filter(Boolean);
+    const base = String(parts[parts.length - 1] || '').toLowerCase();
+    if (base === 'master') {
+      return raw.replace(/[\\/]+master$/i, '');
+    }
+    if (/^work\d+$/.test(base)) {
+      return raw.replace(/[\\/]+work\d+$/i, '');
+    }
+    return raw;
+  }
+
+  deriveProjectId(thread = {}, workspaceId = '') {
+    const repositoryPath = this.normalizeRepositoryPathForProjectId(thread?.repositoryPath || thread?.worktreePath || '');
+    if (repositoryPath) return `repo-path:${repositoryPath}`;
+
+    const repositoryName = String(thread?.repositoryName || '').trim().toLowerCase();
+    if (repositoryName) return `repo-name:${repositoryName}`;
+
+    return String(workspaceId || '').trim();
+  }
+
   normalizeThread(thread, index = 0) {
     if (!thread || typeof thread !== 'object') return null;
 
@@ -88,10 +112,16 @@ class ThreadService {
     const workspaceId = String(thread.workspaceId || thread.projectId || '').trim();
     if (!workspaceId) return null;
 
+    const explicitProjectId = String(thread.projectId || '').trim();
+    const migrateWorkspaceScopedProjectId = !!explicitProjectId && explicitProjectId === workspaceId;
+    const projectId = (!explicitProjectId || migrateWorkspaceScopedProjectId)
+      ? this.deriveProjectId(thread, workspaceId)
+      : explicitProjectId;
+
     return {
       id,
       workspaceId,
-      projectId: String(thread.projectId || workspaceId).trim() || workspaceId,
+      projectId: projectId || workspaceId,
       title: String(thread.title || `${thread.repositoryName || workspaceId}/${thread.worktreeId || 'chat'}`).trim(),
       worktreeId: String(thread.worktreeId || '').trim() || null,
       worktreePath: String(thread.worktreePath || '').trim() || null,
