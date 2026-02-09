@@ -103,6 +103,7 @@ const { PolicyBundleService } = require('./policyBundleService');
 const { ConfigPromoterService } = require('./configPromoterService');
 const { normalizeServiceManifest, getWorkspaceServiceManifest } = require('./workspaceServiceStackService');
 const { ServiceStackRuntimeService } = require('./serviceStackRuntimeService');
+const { IntentHaikuService } = require('./intentHaikuService');
 const {
   getLifecyclePolicy,
   parseWorktreeKey,
@@ -312,6 +313,7 @@ const pluginLoaderService = PluginLoaderService.getInstance({ logger });
 const schedulerService = SchedulerService.getInstance({ logger });
 const pagerService = PagerService.getInstance({ logger });
 const threadService = ThreadService.getInstance({ logger });
+const intentHaikuService = IntentHaikuService.getInstance({ logger });
 const serviceStackRuntimeService = ServiceStackRuntimeService.getInstance({ logger });
 const policyService = PolicyService.getInstance({ logger });
 const auditExportService = AuditExportService.getInstance({ logger });
@@ -335,6 +337,7 @@ policyService.init({ userSettingsService, commandRegistry });
 schedulerService.init({ userSettingsService, commandRegistry });
 pagerService.init({ sessionManager, userSettingsService, taskRecordService });
 threadService.init({ workspaceManager, sessionManager });
+intentHaikuService.setSessionManager(sessionManager);
 serviceStackRuntimeService.init({ workspaceManager, sessionManager, configPromoterService, io });
 auditExportService.init({ activityFeed, schedulerService, userSettingsService });
 
@@ -485,6 +488,7 @@ io.on('connection', (socket) => {
     if (command && command.trim()) {
       const commandHistory = getCommandHistoryService();
       commandHistory.addCommand(sessionId, command);
+      intentHaikuService.noteCommand(sessionId, command);
     }
   });
 
@@ -2497,6 +2501,35 @@ app.get('/api/sessions/:sessionId/log', (req, res) => {
   } catch (error) {
     logger.error('Failed to get session log', { sessionId: req.params.sessionId, error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to get session log' });
+  }
+});
+
+app.post('/api/sessions/intent-haiku', async (req, res) => {
+  try {
+    const sessionId = String(req.body?.sessionId || '').trim();
+    if (!sessionId) {
+      return res.status(400).json({ ok: false, error: 'sessionId is required' });
+    }
+
+    const force = req.body?.force === true;
+    const payload = await intentHaikuService.summarizeSession(sessionId, { force });
+    return res.json({
+      ok: true,
+      sessionId,
+      summary: payload.summary,
+      source: payload.source,
+      generatedAt: payload.generatedAt
+    });
+  } catch (error) {
+    const code = String(error?.code || '').trim();
+    if (code === 'SESSION_NOT_FOUND') {
+      return res.status(404).json({ ok: false, error: error.message });
+    }
+    if (code === 'UNSUPPORTED_SESSION_TYPE') {
+      return res.status(400).json({ ok: false, error: error.message });
+    }
+    logger.error('Failed to generate intent haiku', { error: error.message, stack: error.stack });
+    return res.status(500).json({ ok: false, error: 'Failed to generate intent haiku' });
   }
 });
 
