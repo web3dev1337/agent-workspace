@@ -211,6 +211,20 @@ class SessionRecoveryService {
   }
 
   /**
+   * Clear agent-specific recovery markers when a terminal returns to plain shell.
+   */
+  clearAgent(workspaceId, sessionId) {
+    return this.updateSession(workspaceId, sessionId, {
+      lastAgent: null,
+      lastMode: null,
+      lastAgentCommand: null,
+      lastAgentCwd: null,
+      lastConversationId: null,
+      lastConversationPath: null
+    });
+  }
+
+  /**
    * Mark session as running a server
    */
   updateServer(workspaceId, sessionId, command, portOrMeta) {
