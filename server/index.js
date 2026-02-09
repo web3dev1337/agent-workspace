@@ -2667,7 +2667,24 @@ async function ensureWorkspaceMixedWorktree({
     repository: { path: repoPath, masterBranch: 'master' },
     worktrees: { enabled: true, namingPattern: 'work{n}', autoCreate: true }
   };
-  await worktreeHelper.createWorktree(tempWorkspace, worktree);
+  try {
+    await worktreeHelper.createWorktree(tempWorkspace, worktree);
+  } catch (error) {
+    const message = String(error?.message || '').trim();
+    const normalized = message.toLowerCase();
+    const wrapped = new Error(message || 'Failed to prepare worktree');
+    wrapped.statusCode = Number(error?.statusCode)
+      || (
+        normalized.includes('repository path')
+        || normalized.includes('master directory not found')
+        || normalized.includes('neither master nor main branch found')
+        || normalized.includes('failed to execute git command')
+        || normalized.includes('git command failed')
+        ? 400
+        : 500
+      );
+    throw wrapped;
+  }
 
   if (updatedWorkspace !== workspace || !alreadyExists) {
     await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
