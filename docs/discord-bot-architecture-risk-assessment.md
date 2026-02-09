@@ -37,17 +37,17 @@ This document describes how the current Discord integration works in Claude Orch
 ### Component diagram
 ```mermaid
 flowchart LR
-  D[Discord Server / Users] --> B[External Discord Bot Repo]
-  B --> Q[(~/.claude/discord-queue/*.json)]
+  D["Discord Server and Users"] --> B["External Discord Bot Repo"]
+  B --> Q["Queue files (~/.claude/discord-queue/*.json)"]
 
-  U[Orchestrator UI / Voice / Scheduler] --> API[/api/discord/process-queue]
-  API --> S[discordIntegrationService]
-  S --> WM[WorkspaceManager]
-  S --> SM[SessionManager]
+  U["Orchestrator UI / Voice / Scheduler"] --> API["POST /api/discord/process-queue"]
+  API --> S["discordIntegrationService"]
+  S --> WM["WorkspaceManager"]
+  S --> SM["SessionManager"]
 
-  WM --> WS[(Services Workspace Config)]
-  SM --> T1[Bot Terminal: npm run dev]
-  SM --> T2[Processor Terminal: claude --continue]
+  WM --> WS["Services Workspace Config"]
+  SM --> T1["Bot Terminal: npm run dev"]
+  SM --> T2["Processor Terminal: claude --continue"]
 
   Q --> S
   S --> T2
@@ -107,6 +107,12 @@ sequenceDiagram
 2. Add signed queue envelope format (HMAC) so orchestrator can verify queue producer authenticity.
 3. Add per-task idempotency keys to avoid duplicate processing.
 4. Add structured audit logs for every queue-processing invocation and outcome.
+
+### Implemented hardening in this branch
+1. Processor session defaults to `claude --continue`, with explicit dangerous-mode override support.
+2. Signed queue verification added (`DISCORD_QUEUE_SIGNING_SECRET`, `DISCORD_REQUIRE_SIGNED_QUEUE`).
+3. Queue and invocation idempotency added (task-level dedupe plus request-level replay via idempotency key).
+4. JSONL audit logging added for queue processing outcomes.
 
 ### Longer term
 1. Replace file-poll queue with a bounded broker/stream abstraction (Redis stream, NATS, or SQLite job table) with ack/retry/dead-letter support.
