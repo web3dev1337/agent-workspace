@@ -14196,6 +14196,92 @@ class ClaudeOrchestrator {
     return (Array.isArray(this.availableWorkspaces) ? this.availableWorkspaces : []).find((workspace) => String(workspace?.id || '') === id) || null;
   }
 
+  getProjectChatsRepositoryKey(repo) {
+    const path = String(repo?.path || '').trim();
+    if (path) return `path:${path}`;
+    const name = String(repo?.name || '').trim().toLowerCase();
+    if (name) return `name:${name}`;
+    return '';
+  }
+
+  getWorkspaceRepositoryOptions(workspace, threads = []) {
+    const rows = [];
+    const pushRepo = ({ path, name, type } = {}) => {
+      const next = {
+        path: String(path || '').trim(),
+        name: String(name || '').trim(),
+        type: String(type || '').trim()
+      };
+      const key = this.getProjectChatsRepositoryKey(next);
+      if (!key) return;
+      if (rows.some((row) => this.getProjectChatsRepositoryKey(row) === key)) return;
+      rows.push(next);
+    };
+
+    const terminals = Array.isArray(workspace?.terminals)
+      ? workspace.terminals
+      : [];
+    terminals.forEach((terminal) => {
+      pushRepo({
+        path: terminal?.repository?.path,
+        name: terminal?.repository?.name,
+        type: terminal?.repository?.type
+      });
+    });
+
+    pushRepo({
+      path: workspace?.repository?.path,
+      name: workspace?.repository?.name,
+      type: workspace?.repository?.type || workspace?.type
+    });
+
+    const threadRows = Array.isArray(threads) ? threads : [];
+    threadRows.forEach((thread) => {
+      pushRepo({
+        path: thread?.repositoryPath,
+        name: thread?.repositoryName,
+        type: thread?.repositoryType
+      });
+    });
+
+    rows.sort((a, b) => String(a?.name || a?.path || '').localeCompare(String(b?.name || b?.path || '')));
+    return rows;
+  }
+
+  getPreferredProjectChatsRepository(workspace, options, state, threads = []) {
+    const workspaceId = String(workspace?.id || '').trim();
+    if (!workspaceId || !Array.isArray(options) || !options.length) return null;
+    if (!state.selectedRepositoryByWorkspace) state.selectedRepositoryByWorkspace = new Map();
+
+    const selectedKey = String(state.selectedRepositoryByWorkspace.get(workspaceId) || '').trim();
+    if (selectedKey) {
+      const found = options.find((repo) => this.getProjectChatsRepositoryKey(repo) === selectedKey);
+      if (found) return found;
+    }
+
+    const maybeSessionId = this.focusedTerminalInfo?.sessionId || this.lastInteractedSessionId || '';
+    if (String(this.currentWorkspace?.id || '').trim() === workspaceId && maybeSessionId && this.sessions?.has(maybeSessionId)) {
+      const session = this.sessions.get(maybeSessionId);
+      const focusedPath = String(session?.config?.repositoryPath || session?.repositoryPath || session?.cwd || '').trim();
+      const focusedName = String(session?.repositoryName || this.extractRepositoryName(maybeSessionId) || '').trim().toLowerCase();
+      const focused = options.find((repo) => (focusedPath && String(repo?.path || '').trim() === focusedPath)
+        || (focusedName && String(repo?.name || '').trim().toLowerCase() === focusedName));
+      if (focused) return focused;
+    }
+
+    const recentThread = (Array.isArray(threads) ? threads : []).slice()
+      .sort((a, b) => String(b?.updatedAt || '').localeCompare(String(a?.updatedAt || '')))[0];
+    if (recentThread) {
+      const fromThreadPath = String(recentThread?.repositoryPath || '').trim();
+      const fromThreadName = String(recentThread?.repositoryName || '').trim().toLowerCase();
+      const fromThread = options.find((repo) => (fromThreadPath && String(repo?.path || '').trim() === fromThreadPath)
+        || (fromThreadName && String(repo?.name || '').trim().toLowerCase() === fromThreadName));
+      if (fromThread) return fromThread;
+    }
+
+    return options[0];
+  }
+
   async fetchThreadsForWorkspace(workspaceId, { includeArchived = false } = {}) {
     const id = String(workspaceId || '').trim();
     if (!id) return [];
@@ -14277,16 +14363,63 @@ class ClaudeOrchestrator {
     const workspace = this.getWorkspaceById(state.selectedWorkspaceId);
     const titleEl = modal.querySelector('#projects-chats-selected-name');
     const listEl = modal.querySelector('#projects-chats-list');
+    const repoSelectEl = modal.querySelector('#projects-chats-repo-select');
     if (!titleEl || !listEl) return;
 
-    const selectedName = workspace?.name || state.selectedWorkspaceId || 'No workspace';
-    titleEl.textContent = selectedName;
-
+    const workspaceId = String(state.selectedWorkspaceId || '').trim();
     const rows = Array.isArray(state.threadsByWorkspace.get(state.selectedWorkspaceId))
       ? state.threadsByWorkspace.get(state.selectedWorkspaceId)
       : [];
+    const repositoryOptions = this.getWorkspaceRepositoryOptions(workspace, rows);
+    const preferredRepository = this.getPreferredProjectChatsRepository(workspace, repositoryOptions, state, rows);
+    let selectedRepositoryKey = workspaceId ? String(state.selectedRepositoryByWorkspace.get(workspaceId) || '').trim() : '';
+    let selectedRepository = repositoryOptions.find((repo) => this.getProjectChatsRepositoryKey(repo) === selectedRepositoryKey) || null;
+    if (!selectedRepository && preferredRepository) {
+      selectedRepository = preferredRepository;
+      selectedRepositoryKey = this.getProjectChatsRepositoryKey(preferredRepository);
+      if (workspaceId && selectedRepositoryKey) {
+        state.selectedRepositoryByWorkspace.set(workspaceId, selectedRepositoryKey);
+      }
+    }
 
-    if (!rows.length) {
+    if (repoSelectEl) {
+      if (!repositoryOptions.length) {
+        repoSelectEl.innerHTML = '<option value="">No repository context</option>';
+        repoSelectEl.disabled = true;
+      } else {
+        repoSelectEl.disabled = false;
+        repoSelectEl.innerHTML = repositoryOptions.map((repo) => {
+          const key = this.escapeHtml(this.getProjectChatsRepositoryKey(repo));
+          const labelName = String(repo?.name || '').trim();
+          const pathLabel = String(repo?.path || '').trim().split(/[\\/]/).filter(Boolean).pop() || 'repository';
+          const labelType = String(repo?.type || '').trim();
+          const label = labelType
+            ? `${labelName || pathLabel} (${labelType})`
+            : (labelName || pathLabel);
+          return `<option value="${key}">${this.escapeHtml(label)}</option>`;
+        }).join('');
+        const fallbackKey = this.getProjectChatsRepositoryKey(selectedRepository || repositoryOptions[0]);
+        repoSelectEl.value = fallbackKey || this.getProjectChatsRepositoryKey(repositoryOptions[0]);
+      }
+    }
+
+    const selectedName = workspace?.name || state.selectedWorkspaceId || 'No workspace';
+    const selectedRepoLabel = selectedRepository
+      ? (String(selectedRepository?.name || '').trim() || String(selectedRepository?.path || '').trim().split(/[\\/]/).filter(Boolean).pop() || 'Repository')
+      : '';
+    titleEl.textContent = selectedRepoLabel ? `${selectedName} / ${selectedRepoLabel}` : selectedName;
+
+    const repositoryScopedRows = selectedRepositoryKey
+      ? rows.filter((thread) => {
+        const key = this.getProjectChatsRepositoryKey({
+          path: thread?.repositoryPath,
+          name: thread?.repositoryName
+        });
+        return !!key && key === selectedRepositoryKey;
+      })
+      : rows;
+
+    if (!repositoryScopedRows.length) {
       listEl.innerHTML = '<div class="projects-chats-empty">No chats yet for this project.</div>';
       return;
     }
@@ -14299,11 +14432,12 @@ class ClaudeOrchestrator {
       recentRank.set(String(id), index);
     });
 
-    const filteredRows = rows.filter((thread) => {
+    const filteredRows = repositoryScopedRows.filter((thread) => {
       if (!query) return true;
       const haystack = [
         thread?.title,
         thread?.worktreeId,
+        thread?.repositoryName,
         thread?.provider,
         thread?.status,
         thread?.id
@@ -14334,6 +14468,7 @@ class ClaudeOrchestrator {
       const rawThreadId = String(thread?.id || '').trim();
       const title = this.escapeHtml(thread?.title || thread?.worktreeId || 'Chat');
       const worktree = this.escapeHtml(thread?.worktreeId || 'n/a');
+      const repository = this.escapeHtml(thread?.repositoryName || 'unknown-repo');
       const provider = this.escapeHtml(thread?.provider || 'claude');
       const status = this.escapeHtml(thread?.status || 'active');
       const updatedAt = this.escapeHtml(thread?.updatedAt || '');
@@ -14345,6 +14480,7 @@ class ClaudeOrchestrator {
         <div class="projects-chats-item">
           <div class="projects-chats-item-title">${title}</div>
           <div class="projects-chats-item-meta">
+            <span>📦 ${repository}</span>
             <span>🌿 ${worktree}</span>
             <span>🤖 ${provider}</span>
             <span>status: ${status}</span>
@@ -14376,10 +14512,28 @@ class ClaudeOrchestrator {
       return null;
     }
 
-    const terminal0 = Array.isArray(workspace?.terminals) ? workspace.terminals[0] : null;
-    const repositoryPath = terminal0?.repository?.path || workspace?.repository?.path || '';
-    const repositoryName = terminal0?.repository?.name || workspace?.repository?.name || '';
-    const repositoryType = terminal0?.repository?.type || workspace?.repository?.type || workspace?.type || 'generic';
+    const threads = Array.isArray(state.threadsByWorkspace.get(workspaceId))
+      ? state.threadsByWorkspace.get(workspaceId)
+      : [];
+    const repositoryOptions = this.getWorkspaceRepositoryOptions(workspace, threads);
+    const preferredRepository = this.getPreferredProjectChatsRepository(workspace, repositoryOptions, state, threads);
+    const selectedRepositoryKey = String(state.selectedRepositoryByWorkspace.get(workspaceId) || '').trim();
+    const selectedRepository = repositoryOptions.find((repo) => this.getProjectChatsRepositoryKey(repo) === selectedRepositoryKey)
+      || preferredRepository
+      || repositoryOptions[0]
+      || null;
+    if (selectedRepository) {
+      const key = this.getProjectChatsRepositoryKey(selectedRepository);
+      if (key) state.selectedRepositoryByWorkspace.set(workspaceId, key);
+    }
+
+    const repositoryPath = String(selectedRepository?.path || workspace?.repository?.path || '').trim();
+    const repositoryName = String(selectedRepository?.name || workspace?.repository?.name || '').trim();
+    const repositoryType = String(selectedRepository?.type || workspace?.repository?.type || workspace?.type || 'generic').trim();
+
+    if (!repositoryPath && !repositoryName) {
+      throw new Error('Repository context is required');
+    }
 
     const res = await fetch('/api/threads/create', {
       method: 'POST',
@@ -14398,8 +14552,8 @@ class ClaudeOrchestrator {
       throw new Error(String(data?.error || data?.message || 'Failed to create chat'));
     }
 
-    const threads = await this.fetchThreadsForWorkspace(workspaceId, { includeArchived: state.includeArchived });
-    state.threadsByWorkspace.set(workspaceId, threads);
+    const refreshedThreads = await this.fetchThreadsForWorkspace(workspaceId, { includeArchived: state.includeArchived });
+    state.threadsByWorkspace.set(workspaceId, refreshedThreads);
     this.renderProjectChatsThreads(modal, state);
     return data?.thread || null;
   }
@@ -14450,14 +14604,15 @@ class ClaudeOrchestrator {
             </div>
             <ul id="projects-chats-projects-list" class="projects-chats-projects-list"></ul>
           </aside>
-          <section class="projects-chats-main">
-            <div class="projects-chats-toolbar">
-              <div id="projects-chats-selected-name">Workspace</div>
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <label style="display:flex; gap:6px; align-items:center;">
-                  <input id="projects-chats-include-archived" type="checkbox" />
-                  Archived
-                </label>
+	          <section class="projects-chats-main">
+	            <div class="projects-chats-toolbar">
+	              <div id="projects-chats-selected-name">Workspace</div>
+	              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+	                <select id="projects-chats-repo-select" class="search-input projects-chats-search-input" style="min-width:220px;"></select>
+	                <label style="display:flex; gap:6px; align-items:center;">
+	                  <input id="projects-chats-include-archived" type="checkbox" />
+	                  Archived
+	                </label>
                 <button class="btn-secondary" type="button" data-project-chats-review-route="true">Review Route</button>
                 <button class="btn-secondary" type="button" data-project-chats-refresh="true">Refresh</button>
                 <button class="button-primary" type="button" data-project-chats-new="true">+ New Chat</button>
@@ -14484,6 +14639,7 @@ class ClaudeOrchestrator {
       selectedWorkspaceId: String(this.currentWorkspace?.id || workspaces[0]?.id || '').trim() || null,
       includeArchived: false,
       threadsByWorkspace: new Map(),
+      selectedRepositoryByWorkspace: new Map(),
       projectQuery: '',
       threadQuery: '',
       pinnedThreadIds: threadPrefs.pinned,
@@ -14621,6 +14777,19 @@ class ClaudeOrchestrator {
       } catch (error) {
         this.showToast?.(`Failed to load chats: ${String(error?.message || error)}`, 'error');
       }
+    });
+
+    const repositorySelectEl = modal.querySelector('#projects-chats-repo-select');
+    repositorySelectEl?.addEventListener('change', () => {
+      const workspaceId = String(state.selectedWorkspaceId || '').trim();
+      if (!workspaceId) return;
+      const selectedKey = String(repositorySelectEl.value || '').trim();
+      if (!selectedKey) {
+        state.selectedRepositoryByWorkspace.delete(workspaceId);
+      } else {
+        state.selectedRepositoryByWorkspace.set(workspaceId, selectedKey);
+      }
+      render();
     });
 
     const projectSearchEl = modal.querySelector('#projects-chats-project-search');

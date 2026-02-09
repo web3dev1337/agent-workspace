@@ -63,6 +63,29 @@ describe('ThreadService', () => {
     expect(service.list({ workspaceId: 'zoo-game' }).length).toBe(1);
   });
 
+  test('does not collide active threads across repos with same worktree id', () => {
+    const service = new ThreadService({ logger: { info: () => {}, warn: () => {}, error: () => {} } });
+    service.init({});
+
+    const first = service.createThread({
+      workspaceId: 'zoo-game',
+      worktreeId: 'work1',
+      repositoryName: 'incremental-game',
+      repositoryPath: '/tmp/incremental-game',
+      title: 'Incremental'
+    });
+    const second = service.createThread({
+      workspaceId: 'zoo-game',
+      worktreeId: 'work1',
+      repositoryName: 'epic-survivors',
+      repositoryPath: '/tmp/epic-survivors',
+      title: 'Survivors'
+    });
+
+    expect(second.id).not.toBe(first.id);
+    expect(service.list({ workspaceId: 'zoo-game' }).length).toBe(2);
+  });
+
   test('close and archive transitions are persisted', () => {
     const service = new ThreadService({ logger: { info: () => {}, warn: () => {}, error: () => {} } });
     service.init({});

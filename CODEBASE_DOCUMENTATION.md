@@ -55,6 +55,9 @@ server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
 ├─ Recovery filtering: stale/non-configured session entries are pruned when requested by workspace-scoped APIs
 └─ Recovery metadata: recovery payload includes configured terminal/worktree counts for UI context
+server/threadService.js            - Workspace/project thread persistence (`~/.orchestrator/threads.json`)
+├─ Thread identity: active-thread de-dup scopes by workspace + worktree + repository context
+└─ Lifecycle: create/list/close/archive + session association updates
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
 server/policyBundleService.js      - Policy template catalog + bundle export/import for team governance profiles
 server/pluginLoaderService.js      - Plugin manifest validation/compatibility, command registration safety, and client slot metadata
@@ -418,6 +421,11 @@ PUT /api/workspaces/:id           - Update workspace configuration
 DELETE /api/workspaces/:id        - Delete workspace
 POST /api/workspaces/:id/switch   - Switch to workspace
 POST /api/workspaces/remove-worktree - Remove worktree from workspace config, close linked sessions, keep files on disk
+GET /api/threads                  - List project/workspace chats (`workspaceId` required)
+POST /api/threads                 - Create thread + ensure mixed worktree/session context
+POST /api/threads/create          - Alias for thread creation API used by Projects + Chats shell
+POST /api/threads/:id/close       - Mark thread closed and close linked sessions
+POST /api/threads/:id/archive     - Archive thread (hidden unless includeArchived=true)
 GET /api/project-types            - Full project taxonomy (categories/frameworks/templates + metadata)
 GET /api/project-types/categories - Project categories with resolved base paths
 GET /api/project-types/frameworks?categoryId=... - Framework catalog (optionally scoped by category)
