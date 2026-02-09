@@ -453,9 +453,9 @@ GET /api/project-types/categories - Project categories with resolved base paths
 GET /api/project-types/frameworks?categoryId=... - Framework catalog (optionally scoped by category)
 GET /api/project-types/templates?frameworkId=...&categoryId=... - Template catalog (optionally scoped)
 POST /api/projects/create-workspace - Create project scaffold + matching workspace in one request
-GET /api/discord/status            - Discord queue + services health/status (counts + signature status)
-POST /api/discord/ensure-services  - Ensure Services workspace/session bootstrap; accepts optional `dangerousModeOverride`
-POST /api/discord/process-queue    - Dispatch queue processing prompt with optional `Idempotency-Key`/`idempotencyKey`, queue signature verification, idempotent replay, and audit logging
+GET /api/discord/status            - Discord queue + services health/status (counts + signature status); endpoint can be gated by `DISCORD_API_TOKEN`
+POST /api/discord/ensure-services  - Ensure Services workspace/session bootstrap; accepts optional `dangerousModeOverride` (gated by `DISCORD_ALLOW_DANGEROUS_OVERRIDE`)
+POST /api/discord/process-queue    - Dispatch queue processing prompt with optional `Idempotency-Key`/`idempotencyKey`, queue signature verification, idempotent replay, audit logging, and per-endpoint rate limiting
 POST /api/sessions/intent-haiku   - Generate <=200 char intent summary for an active Claude/Codex session
 GET /api/greenfield/categories    - Greenfield category list (taxonomy-backed)
 POST /api/greenfield/detect-category - Infer category from description (taxonomy keyword matching)
