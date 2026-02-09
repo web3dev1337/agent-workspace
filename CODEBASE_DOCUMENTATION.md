@@ -57,6 +57,7 @@ server/sessionRecoveryService.js   - Session recovery state persistence (CWD, ag
 └─ Recovery metadata: recovery payload includes configured terminal/worktree counts for UI context
 server/threadService.js            - Workspace/project thread persistence (`~/.orchestrator/threads.json`)
 ├─ Thread identity: active-thread de-dup scopes by workspace + worktree + repository context
+├─ Repository normalization: thread/worktree creation normalizes `.../master` and `.../workN` paths to repository root
 └─ Lifecycle: create/list/close/archive + session association updates
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
 server/policyBundleService.js      - Policy template catalog + bundle export/import for team governance profiles
@@ -423,7 +424,7 @@ POST /api/workspaces/:id/switch   - Switch to workspace
 POST /api/workspaces/remove-worktree - Remove worktree from workspace config, close linked sessions, keep files on disk
 GET /api/threads                  - List project/workspace chats (`workspaceId` required)
 POST /api/threads                 - Create thread + ensure mixed worktree/session context
-POST /api/threads/create          - Alias for thread creation API used by Projects + Chats shell
+POST /api/threads/create          - Alias for thread creation API used by Projects + Chats shell (idempotent for existing worktrees/sessions)
 POST /api/threads/:id/close       - Mark thread closed and close linked sessions
 POST /api/threads/:id/archive     - Archive thread (hidden unless includeArchived=true)
 GET /api/project-types            - Full project taxonomy (categories/frameworks/templates + metadata)
