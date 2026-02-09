@@ -514,6 +514,7 @@ class CommandRegistry {
     this.register('open-new-project', {
       category: 'ui',
       description: 'Open the New Project / Greenfield wizard',
+      aliases: ['new-project', 'create-project', 'open-greenfield'],
       params: [],
       examples: [],
       handler: (params, { io }) => {

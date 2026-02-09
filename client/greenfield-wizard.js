@@ -10,6 +10,9 @@ class GreenfieldWizard {
       category: '',
       framework: '',
       template: '',
+      repo: '',
+      githubOrg: '',
+      createGithub: true,
       detectedCategory: '',
       isPrivate: true,
       worktreeCount: 8,
@@ -419,6 +422,7 @@ class GreenfieldWizard {
     const category = this.getSelectedCategory();
     const frameworks = this.getFrameworksForCategory(category?.id);
     const templates = this.getTemplatesForFramework(this.data.framework);
+    const repoPreview = this.getRepositoryTargetPreview();
 
     const categoryOptions = this.categories.map((c) => `
       <option value="${c.id}" ${this.data.category === c.id ? 'selected' : ''}>
@@ -468,12 +472,42 @@ class GreenfieldWizard {
 
         <div class="form-group">
           <label class="checkbox-label">
+            <input type="checkbox" id="gf-create-github" ${this.data.createGithub ? 'checked' : ''}
+                   onchange="window.greenfieldWizard.updateData('createGithub', this.checked)">
+            Create GitHub Repository
+          </label>
+          <p class="field-help">Disable for local-first projects that are not ready for GitHub yet</p>
+        </div>
+
+        <div class="form-group">
+          <label for="gf-repo-target">Repository Target (optional)</label>
+          <input type="text" id="gf-repo-target" value="${this.data.repo || ''}"
+                 placeholder="owner/repo, repo-name, or full git URL"
+                 oninput="window.greenfieldWizard.updateData('repo', this.value)">
+          <p class="field-help">${this.data.createGithub ? 'GitHub slug/URL to create or attach' : 'Optional existing remote URL/slug to attach'}</p>
+          ${repoPreview ? `<p class="field-help">Resolved target: <code>${repoPreview}</code></p>` : ''}
+        </div>
+
+        ${this.data.createGithub ? `
+        <div class="form-group">
+          <label for="gf-github-org">GitHub Org/User (optional)</label>
+          <input type="text" id="gf-github-org" value="${this.data.githubOrg || ''}"
+                 placeholder="web3dev1337"
+                 oninput="window.greenfieldWizard.updateData('githubOrg', this.value)">
+          <p class="field-help">Used when repository target is just a repo name</p>
+        </div>
+        ` : ''}
+
+        ${this.data.createGithub ? `
+        <div class="form-group">
+          <label class="checkbox-label">
             <input type="checkbox" id="gf-private" ${this.data.isPrivate ? 'checked' : ''}
                    onchange="window.greenfieldWizard.updateData('isPrivate', this.checked)">
             Private Repository
           </label>
           <p class="field-help">Create a private GitHub repository (recommended)</p>
         </div>
+        ` : ''}
 
         <div class="form-group">
           <label for="gf-worktree-count">Number of Worktrees</label>
@@ -512,6 +546,7 @@ class GreenfieldWizard {
     const selectedCategory = this.getSelectedCategory();
     const selectedFramework = this.getSelectedFramework();
     const selectedTemplate = this.getSelectedTemplate();
+    const repoPreview = this.getRepositoryTargetPreview();
 
     return `
       <div class="wizard-step">
@@ -539,8 +574,13 @@ class GreenfieldWizard {
             <strong>Template:</strong> ${selectedTemplate?.name || this.data.template || '(not set)'}
           </div>
           <div class="review-item">
-            <strong>GitHub:</strong> ${this.data.isPrivate ? 'Private' : 'Public'} repository
+            <strong>GitHub:</strong> ${this.data.createGithub ? `${this.data.isPrivate ? 'Private' : 'Public'} repository` : 'Skip GitHub creation'}
           </div>
+          ${repoPreview ? `
+          <div class="review-item">
+            <strong>Repository Target:</strong> ${repoPreview}
+          </div>
+          ` : ''}
           <div class="review-item">
             <strong>Worktrees:</strong> master + work1-work${this.data.worktreeCount}
           </div>
@@ -554,8 +594,10 @@ class GreenfieldWizard {
           <ol>
             <li>Create folder: <code>${fullPath}/master</code></li>
             <li>Initialize git repository</li>
-            <li>Create GitHub repo (${this.data.isPrivate ? 'private' : 'public'})</li>
-            <li>Push initial commit</li>
+            ${this.data.createGithub
+              ? `<li>Create GitHub repo (${this.data.isPrivate ? 'private' : 'public'})${repoPreview ? ` as <code>${repoPreview}</code>` : ''}</li>`
+              : '<li>Skip GitHub repo creation (local-only for now)</li>'}
+            ${this.data.createGithub || repoPreview ? '<li>Push initial commit</li>' : ''}
             <li>Create ${this.data.worktreeCount} worktrees</li>
             <li>Save PROJECT_BRIEF.md with your description</li>
             ${this.data.spawnClaude ? '<li>Start Claude Code in work1 with context</li>' : ''}
@@ -571,6 +613,24 @@ class GreenfieldWizard {
   getCategoryPath(categoryId) {
     const cat = this.getCategoryById(categoryId);
     return cat?.path || '~/GitHub/projects';
+  }
+
+  getRepositoryTargetPreview() {
+    const repo = String(this.data.repo || '').trim();
+    const githubOrg = String(this.data.githubOrg || '').trim().replace(/^@+/, '').replace(/\/+$/, '');
+    const fallback = String(this.data.name || '').trim();
+    const candidate = repo || (this.data.createGithub ? fallback : '');
+    if (!candidate) return '';
+
+    if (/^(https?:\/\/|git@)/i.test(candidate)) {
+      return candidate;
+    }
+
+    if (candidate.includes('/')) {
+      return candidate;
+    }
+
+    return githubOrg ? `${githubOrg}/${candidate}` : candidate;
   }
 
   async updateDescription(value) {
@@ -603,7 +663,17 @@ class GreenfieldWizard {
   }
 
   updateData(key, value) {
-    this.data[key] = value;
+    if (key === 'repo') {
+      this.data.repo = String(value || '').trim();
+    } else if (key === 'githubOrg') {
+      this.data.githubOrg = String(value || '')
+        .trim()
+        .replace(/^@+/, '')
+        .replace(/^https?:\/\/github\.com\//i, '')
+        .replace(/\/+$/, '');
+    } else {
+      this.data[key] = value;
+    }
     if (key === 'worktreeCount') {
       const n = Number(value);
       this.data.worktreeCount = Number.isFinite(n) ? Math.min(8, Math.max(1, Math.round(n))) : 1;
@@ -685,14 +755,19 @@ class GreenfieldWizard {
     this.showProgress();
 
     try {
+      const repoInput = String(this.data.repo || '').trim();
+      const repoTarget = repoInput || (this.data.createGithub ? this.data.name : '');
+      const githubOrg = String(this.data.githubOrg || '').trim();
       const payload = {
         name: this.data.name,
         description: this.data.description,
         category: this.data.category,
         framework: this.data.framework,
         template: this.data.template,
+        repo: repoTarget || undefined,
+        githubOrg: githubOrg || undefined,
         private: this.data.isPrivate,
-        createGithub: true,
+        createGithub: this.data.createGithub,
         allowGitHubFailure: true,
         push: true,
         initGit: true,
