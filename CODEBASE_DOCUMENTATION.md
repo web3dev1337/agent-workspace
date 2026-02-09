@@ -58,7 +58,9 @@ server/sessionRecoveryService.js   - Session recovery state persistence (CWD, ag
 server/threadService.js            - Workspace/project thread persistence (`~/.orchestrator/threads.json`)
 ├─ Thread identity: active-thread de-dup scopes by workspace + worktree + repository context
 ├─ Repository normalization: thread/worktree creation normalizes `.../master` and `.../workN` paths to repository root
+├─ New chat reuse: thread creation prefers an existing repo worktree without an active thread before allocating a new `workN`
 └─ Lifecycle: create/list/close/archive + session association updates
+server/threadWorktreeSelection.js  - Repository/worktree normalization + reuse-first candidate selection for thread creation
 server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
 server/policyBundleService.js      - Policy template catalog + bundle export/import for team governance profiles
 server/pluginLoaderService.js      - Plugin manifest validation/compatibility, command registration safety, and client slot metadata
