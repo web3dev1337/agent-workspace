@@ -32,7 +32,7 @@ server/index.js                    - Express server with Socket.IO
 server/sessionManager.js           - Terminal session lifecycle management
 ├─ Manages: PTY processes, session tracking, cleanup
 ├─ Key methods: createSession(), destroySession(), getActiveSessions()
-├─ Cleanup hardening: closing sessions sends best-effort process-tree termination by PTY pid to reduce orphaned agent processes
+├─ Cleanup hardening: closing sessions sends process-tree SIGTERM and a grace-timed SIGKILL fallback by PTY pid to reduce orphaned agent processes
 ├─ Status model: periodic status re-evaluation prevents stale "busy" lights after output quiets down
 └─ Uses: node-pty for terminal emulation
 
