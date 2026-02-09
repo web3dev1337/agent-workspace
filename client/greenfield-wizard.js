@@ -17,6 +17,7 @@ class GreenfieldWizard {
     this.categories = [];
     // Always use same-origin API requests; the dev server proxies `/api` to the backend.
     this.serverUrl = window.location.origin;
+    this._onEscape = null;
   }
 
   async show() {
@@ -67,17 +68,17 @@ class GreenfieldWizard {
   renderWizard() {
     // Remove existing wizard
     const existing = document.getElementById('greenfield-wizard');
-    if (existing) existing.remove();
+    if (existing) this.closeWizard();
 
     // Create wizard modal
     const wizard = document.createElement('div');
     wizard.id = 'greenfield-wizard';
     wizard.className = 'modal greenfield-wizard-modal';
     wizard.innerHTML = `
-      <div class="modal-content wizard-content">
+      <div class="modal-content wizard-content greenfield-fullscreen-content">
         <div class="wizard-header">
           <h2>New Project</h2>
-          <button class="close-btn" onclick="this.closest('.modal').remove()">X</button>
+          <button class="close-btn" onclick="window.greenfieldWizard.closeWizard()">×</button>
         </div>
 
         <div class="wizard-progress">
@@ -99,6 +100,16 @@ class GreenfieldWizard {
     `;
 
     document.body.appendChild(wizard);
+    wizard.addEventListener('click', (event) => {
+      if (event.target === wizard) {
+        this.closeWizard();
+      }
+    });
+    this._onEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      this.closeWizard();
+    };
+    document.addEventListener('keydown', this._onEscape);
     window.greenfieldWizard = this;
   }
 
@@ -482,7 +493,7 @@ class GreenfieldWizard {
             Open Workspace
           </button>
           ` : ''}
-          <button class="btn-secondary" onclick="document.getElementById('greenfield-wizard').remove()">
+          <button class="btn-secondary" onclick="window.greenfieldWizard.closeWizard()">
             Close
           </button>
         </div>
@@ -502,7 +513,7 @@ class GreenfieldWizard {
           <button class="btn-secondary" onclick="window.greenfieldWizard.showStep(3)">
             Try Again
           </button>
-          <button class="btn-secondary" onclick="document.getElementById('greenfield-wizard').remove()">
+          <button class="btn-secondary" onclick="window.greenfieldWizard.closeWizard()">
             Close
           </button>
         </div>
@@ -511,8 +522,17 @@ class GreenfieldWizard {
     document.querySelector('#greenfield-wizard .wizard-footer').style.display = 'flex';
   }
 
+  closeWizard() {
+    const wizard = document.getElementById('greenfield-wizard');
+    if (wizard) wizard.remove();
+    if (this._onEscape) {
+      document.removeEventListener('keydown', this._onEscape);
+      this._onEscape = null;
+    }
+  }
+
   async openWorkspace(workspaceId) {
-    document.getElementById('greenfield-wizard').remove();
+    this.closeWizard();
 
     // Switch to the new workspace
     if (this.orchestrator && this.orchestrator.socket) {
