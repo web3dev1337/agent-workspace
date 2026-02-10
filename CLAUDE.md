@@ -36,7 +36,15 @@ Tier tagging persistence:
 
 ## Launching Agents from Trello
 
-**Zoo Hytopia board:** `691e5516c77f3e9c9fd89f61` | **AB T3 Que list:** `697feb0865aa4467a08831d9` | **Doing list:** `6925438b0b925067fa40387a` | **For Test list:** `694ae391dd96d4a461ff4ec2`
+### Board-to-Repo Mapping
+**CRITICAL:** Always check `~/.claude/TRELLO_BOARDS.md` for the full board/list/repo mapping. Do NOT assume a board maps to a specific repo - look it up!
+
+| Board | Board ID | Repo Path | Repo Type |
+|-------|----------|-----------|-----------|
+| Zoo Hytopia | `691e5516c77f3e9c9fd89f61` | `~/GitHub/games/hytopia/zoo-game/` | `hytopia-game` |
+| Arcade World | `694a07bae349c125d4568094` | `~/GitHub/games/hytopia/games/hytopia-2d-game-test/` | `hytopia-game` |
+
+Each board has its own **AB T3 Que**, **Doing**, and **Test** lists - IDs differ per board. Always look up the correct list ID from `TRELLO_BOARDS.md`.
 
 **Get card with agent field:**
 ```bash
