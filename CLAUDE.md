@@ -329,8 +329,9 @@ GET /api/workspaces/active
 # Returns: { id: "workspace-id", name: "Workspace Name" }
 # Falls back to persisted config if in-memory state is null
 
-# View all sessions
+# View all sessions — returns {"sessions":[...]} NOT bare array!
 GET /api/commander/sessions
+# jq: use '.sessions[]' not '.[]'
 
 # Send to another session
 POST /api/commander/send-to-session  { sessionId: "...", input: "..." }
