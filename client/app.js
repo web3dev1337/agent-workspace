@@ -11319,9 +11319,10 @@ class ClaudeOrchestrator {
           const outcome = String(item?.outcome || '').trim().toLowerCase();
           const claimedBy = String(item?.claimedBy || '').trim();
 
-          if (routeFilters.tier === '3' && tier !== 3) return false;
-          if (routeFilters.tier === '4' && tier !== 4) return false;
-          if (routeFilters.tier === 't3plus' && (!(Number.isFinite(tier) && tier >= 3))) return false;
+          const hasTier = Number.isFinite(tier) && tier > 0;
+          if (routeFilters.tier === '3' && hasTier && tier !== 3) return false;
+          if (routeFilters.tier === '4' && hasTier && tier !== 4) return false;
+          if (routeFilters.tier === 't3plus' && hasTier && tier < 3) return false;
 
           if (routeFilters.risk !== 'all' && risk !== routeFilters.risk) return false;
           if (routeFilters.unreviewed && (item?.reviewed || item?.done)) return false;
