@@ -16095,6 +16095,7 @@ class ClaudeOrchestrator {
           </div>
           <button class="btn-primary" id="tasks-new-card" title="Create a new card">➕ New</button>
           <button class="btn-secondary" id="tasks-refresh">🔄 Refresh</button>
+          <button class="btn-primary" id="tasks-batch-launch" title="Launch all cards in this list as agents" style="display:none">🚀 Launch List</button>
         </div>
 
         <div class="tasks-body">
@@ -16139,6 +16140,7 @@ class ClaudeOrchestrator {
     const hideEmptyEl = modal.querySelector('#tasks-hide-empty');
     const newCardBtn = modal.querySelector('#tasks-new-card');
     const refreshBtn = modal.querySelector('#tasks-refresh');
+    const batchLaunchBtn = modal.querySelector('#tasks-batch-launch');
     const viewListBtn = modal.querySelector('#tasks-view-list');
     const viewBoardBtn = modal.querySelector('#tasks-view-board');
     const contentEl = modal.querySelector('.tasks-content');
@@ -20239,6 +20241,7 @@ class ClaudeOrchestrator {
 
           const cards = await fetchCards({ refresh: force });
           renderCards(cards);
+          syncBatchLaunchBtn();
         } else {
           const isCombined = state.boardId === COMBINED_VIEW_ID;
           if (isCombined) {
@@ -20571,6 +20574,7 @@ class ClaudeOrchestrator {
       state.listId = listEl.value || '';
       localStorage.setItem('tasks-list', state.listId);
       await refreshAll({ force: true });
+      syncBatchLaunchBtn();
     });
 
     if (searchEl) {
@@ -20610,6 +20614,106 @@ class ClaudeOrchestrator {
 
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => refreshAll({ force: true }));
+    }
+
+    const syncBatchLaunchBtn = () => {
+      if (!batchLaunchBtn) return;
+      const m = getBoardMapping(state.provider, state.boardId);
+      const hasList = state.listId && state.listId !== '__all__';
+      const hasMapping = !!(m && m.localPath && isBoardEnabled(state.provider, state.boardId));
+      batchLaunchBtn.style.display = (hasList && hasMapping) ? '' : 'none';
+    };
+
+    if (batchLaunchBtn) {
+      batchLaunchBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const m = getBoardMapping(state.provider, state.boardId);
+        if (!m || !m.localPath) return this.showToast('Board mapping not configured', 'warning');
+        const listName = (state.lists || []).find(l => l.id === state.listId)?.name || state.listId;
+        const defaults = readLaunchDefaults({ mappingTier: m.defaultStartTier });
+        const cardCount = (cardsEl.querySelectorAll('.task-card-row') || []).length;
+
+        const dlg = document.createElement('div');
+        dlg.className = 'modal-overlay';
+        dlg.innerHTML = `
+          <div class="modal" style="max-width:420px;padding:20px">
+            <h3 style="margin:0 0 12px">Launch ${cardCount} cards from "${listName}"</h3>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <label>Agent
+                <select id="bl-agent" class="tasks-select" style="width:100%">
+                  <option value="">Auto-detect (from card)</option>
+                  <option value="claude">Claude</option>
+                  <option value="codex">Codex</option>
+                </select>
+              </label>
+              <label>Tier
+                <select id="bl-tier" class="tasks-select" style="width:100%">
+                  <option value="1" ${defaults.tier===1?'selected':''}>T1 - Focus</option>
+                  <option value="2" ${defaults.tier===2?'selected':''}>T2 - Review</option>
+                  <option value="3" ${defaults.tier===3?'selected':''}>T3 - Background</option>
+                  <option value="4" ${defaults.tier===4?'selected':''}>T4 - Lowest</option>
+                </select>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px">
+                <input type="checkbox" id="bl-move" checked /> Move cards to Doing list
+              </label>
+              <label>Limit (optional) <input type="number" id="bl-limit" class="search-input" placeholder="All" min="1" style="width:100%"></label>
+              <label style="display:flex;align-items:center;gap:6px">
+                <input type="checkbox" id="bl-dry" /> Dry run (preview only)
+              </label>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+              <button class="btn-secondary" id="bl-cancel">Cancel</button>
+              <button class="btn-primary" id="bl-go">Launch</button>
+            </div>
+          </div>`;
+        document.body.appendChild(dlg);
+
+        dlg.querySelector('#bl-cancel').onclick = () => dlg.remove();
+        dlg.querySelector('#bl-go').onclick = async () => {
+          const agent = dlg.querySelector('#bl-agent').value || null;
+          const tier = Number(dlg.querySelector('#bl-tier').value) || 3;
+          const move = dlg.querySelector('#bl-move').checked;
+          const limit = Number(dlg.querySelector('#bl-limit').value) || null;
+          const dryRun = dlg.querySelector('#bl-dry').checked;
+          dlg.querySelector('#bl-go').disabled = true;
+          dlg.querySelector('#bl-go').textContent = 'Launching...';
+
+          try {
+            const conventions = m.conventions || {};
+            const doingListId = conventions.doingListId || null;
+            const res = await fetch('/api/tasks/batch-launch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                provider: state.provider,
+                boardId: state.boardId,
+                listId: state.listId,
+                agentOverride: agent,
+                tierOverride: tier,
+                moveToListId: move ? doingListId : null,
+                limit,
+                dryRun
+              })
+            });
+            const data = await res.json();
+            dlg.remove();
+            if (data.dryRun) {
+              this.showToast(`Dry run: ${data.summary?.total || 0} cards would launch`, 'info');
+              console.log('Batch launch dry run:', data);
+            } else if (data.success) {
+              this.showToast(`Launched ${data.summary?.launched || 0} of ${data.summary?.total || 0} cards`, 'success');
+              if (data.failed?.length) this.showToast(`${data.failed.length} failed`, 'warning');
+              refreshAll({ force: true });
+            } else {
+              this.showToast(data.error || 'Batch launch failed', 'error');
+            }
+          } catch (err) {
+            dlg.remove();
+            this.showToast(String(err?.message || err), 'error');
+          }
+        };
+      });
     }
 
     if (newCardBtn) {
