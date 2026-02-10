@@ -82,6 +82,7 @@ const { TelemetrySnapshotService } = require('./telemetrySnapshotService');
 const { TaskRecordService } = require('./taskRecordService');
 const { PromptArtifactService, safeId, sha256, formatPointerComment } = require('./promptArtifactService');
 const { TaskDependencyService } = require('./taskDependencyService');
+const { BatchLaunchService } = require('./batchLaunchService');
 const { TaskTicketingService } = require('./taskTicketingService');
 const { TaskTicketMoveService } = require('./taskTicketMoveService');
 const { PrMergeAutomationService } = require('./prMergeAutomationService');
@@ -2808,6 +2809,16 @@ async function ensureWorkspaceMixedWorktree({
     repositoryType: repoType
   };
 }
+
+const batchLaunchService = BatchLaunchService.getInstance({
+  taskTicketingService,
+  workspaceManager,
+  sessionManager,
+  taskRecordService,
+  userSettingsService,
+  ensureWorkspaceMixedWorktree,
+  io
+});
 
 app.post('/api/workspaces/create-worktree', async (req, res) => {
   try {
@@ -6442,6 +6453,20 @@ app.put('/api/tasks/cards/:cardId/custom-fields/:customFieldId', express.json(),
       statusCode: error.statusCode,
       details: error.body
     });
+  }
+});
+
+// ============================================
+// Batch Launch API
+// ============================================
+
+app.post('/api/tasks/batch-launch', express.json(), async (req, res) => {
+  try {
+    const result = await batchLaunchService.batchLaunch(req.body || {});
+    res.json(result);
+  } catch (error) {
+    logger.error('Batch launch failed', { error: error.message, stack: error.stack });
+    res.status(error.message.includes('required') ? 400 : 500).json({ error: error.message });
   }
 });
 
