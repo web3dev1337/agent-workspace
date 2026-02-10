@@ -306,6 +306,40 @@ body {
   cursor: not-allowed;
 }
 
+.worktree-session-visibility-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.worktree-session-visibility-btn:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  transform: scale(1.05);
+}
+
+.worktree-session-visibility-btn.active {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+
+.worktree-session-visibility-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .delete-worktree-btn {
   background: transparent;
   border: none;
@@ -528,11 +562,13 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
 }
 
 /* Header */
 header {
   height: var(--header-height);
+  flex: 0 0 var(--header-height);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   display: flex;
@@ -720,8 +756,10 @@ header h1 {
   /* Dynamic grid - automatically adjusts based on visible terminals */
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(4, 1fr);  /* Default 4x4 grid */
-  /* Fill all available space - account for header (60px) + tab bar (48px) + padding */
-  height: calc(100vh - var(--header-height) - 48px - 2 * var(--space-md));
+  /* Fill the remaining viewport via flex instead of hardcoded viewport math. */
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
   contain: layout;
 }
 
@@ -832,7 +870,7 @@ header h1 {
 .terminal-grid.terminal-grid-scrollable {
   overflow-y: auto;
   overflow-x: hidden;
-  align-content: start;
+  align-content: stretch;
   grid-template-rows: minmax(260px, auto);
   grid-auto-rows: minmax(260px, auto);
 }
@@ -1897,8 +1935,49 @@ header h1 {
   flex-wrap: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 4px;
+  margin-bottom: 6px;
+  padding-bottom: 2px;
   scrollbar-width: thin;
+}
+
+.review-console-header-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.rc-inline-menu {
+  position: relative;
+}
+
+.rc-inline-menu > summary {
+  list-style: none;
+}
+
+.rc-inline-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rc-inline-menu > summary.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.rc-inline-menu-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 12;
+  min-width: 360px;
+  max-width: min(88vw, 860px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  padding: 8px;
 }
 
 .worktree-inspector-header.review-console-header .worktree-inspector-chip {
@@ -1920,11 +1999,11 @@ header h1 {
   flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
-  margin-bottom: 6px;
-  padding: 4px 6px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-tertiary);
+  margin-bottom: 0;
+  padding: 2px 2px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
@@ -2055,9 +2134,21 @@ header h1 {
   overflow: auto;
 }
 
+.review-console-col > .worktree-inspector-panel {
+  flex: 1 1 auto;
+}
+
 /* Review Console should waste less vertical space than the full inspector. */
 .review-console-grid .worktree-inspector-panel {
   padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.review-console-grid .worktree-inspector-panel .worktree-inspector-panel-title-row,
+.review-console-grid .worktree-inspector-panel .worktree-inspector-diff-controls {
+  flex: 0 0 auto;
 }
 
 .review-console-col-diff,
@@ -2122,6 +2213,10 @@ header h1 {
 
 .worktree-inspector-terminals.review-console-terminals-grid {
   grid-template-columns: minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  align-content: stretch;
+  grid-auto-rows: minmax(160px, 1fr);
 }
 
 .worktree-inspector-terminals.review-console-terminals-grid.paired-layout {
@@ -2129,8 +2224,8 @@ header h1 {
 }
 
 .worktree-inspector-terminals .terminal-wrapper.review-console-terminal {
-  height: clamp(180px, 30vh, 380px);
-  min-height: 180px;
+  height: 100%;
+  min-height: 160px;
 }
 
 .rc-panel-toggle-btn {
@@ -2141,27 +2236,33 @@ header h1 {
 }
 
 .review-console-files-list {
-  max-height: 190px;
+  max-height: none;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow: auto;
 }
 
 .review-console-commits-list {
-  max-height: 180px;
+  max-height: none;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow: auto;
 }
 
 .review-console-comments-list {
-  max-height: 180px;
+  max-height: none;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow: auto;
 }
 
 .review-console-grid[data-review-preset="throughput"] .review-console-files-list {
-  max-height: 160px;
+  max-height: none;
 }
 
 .review-console-grid[data-review-preset="throughput"] .review-console-commits-list,
 .review-console-grid[data-review-preset="throughput"] .review-console-comments-list {
-  max-height: 150px;
+  max-height: none;
 }
 
 .worktree-inspector-layout-panel {
@@ -2470,10 +2571,10 @@ header h1 {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-sm);
-  margin-bottom: 6px;
+  padding: 2px 2px;
+  background: transparent;
+  border-radius: 0;
+  margin-bottom: 0;
   flex-wrap: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
@@ -9459,34 +9560,71 @@ header h1 {
 }
 
 .tasks-toolbar {
-  padding: var(--space-sm) var(--space-lg);
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-tertiary);
   display: flex;
-  gap: var(--space-md);
+  gap: var(--space-sm);
   align-items: center;
   flex-wrap: wrap;
 }
 
 #queue-panel .tasks-toolbar {
-  align-items: flex-start;
-  row-gap: 8px;
+  align-items: center;
+  row-gap: 6px;
 }
 
 #queue-panel .tasks-search {
-  flex: 1 1 300px;
-  min-width: min(300px, 100%);
+  flex: 1 1 260px;
+  min-width: min(260px, 100%);
 }
 
-#queue-panel .tasks-view-toggle[aria-label="Review filters"] {
-  flex: 1 1 100%;
+#queue-panel .tasks-toolbar-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+#queue-panel .tasks-toolbar-menu > summary {
+  list-style: none;
+}
+
+#queue-panel .tasks-toolbar-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+#queue-panel .tasks-toolbar-menu > summary.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+#queue-panel .tasks-toolbar-popover {
+  right: auto;
+  left: 0;
+  min-width: 250px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+#queue-panel .tasks-toolbar-popover .tasks-view-btn {
+  width: 100%;
 }
 
 @media (max-width: 1200px) {
   #queue-panel .tasks-view-toggle[aria-label="Queue mode"],
   #queue-panel .tasks-view-toggle[aria-label="Review tier"],
-  #queue-panel .tasks-view-toggle[aria-label="Queue navigation"] {
+  #queue-panel .tasks-view-toggle[aria-label="Queue navigation"],
+  #queue-panel .tasks-view-toggle[aria-label="Queue quick filters"] {
     flex: 1 1 100%;
+  }
+
+  #queue-panel .tasks-toolbar-menu {
+    flex: 1 1 auto;
+  }
+
+  #queue-panel .tasks-toolbar-popover {
+    min-width: min(440px, 92vw);
   }
 
   #queue-panel #queue-pairing,
@@ -9883,6 +10021,29 @@ header h1 {
   grid-template-columns: 420px 1fr;
   grid-template-rows: 1fr;
   grid-template-areas: "cards detail";
+}
+
+#queue-panel .tasks-body {
+  display: flex;
+  min-height: 0;
+}
+
+#queue-panel .tasks-cards {
+  flex: 0 0 clamp(320px, 34vw, 560px);
+  min-width: 280px;
+  max-width: 75vw;
+  resize: horizontal;
+  overflow: auto;
+}
+
+#queue-panel .tasks-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-md);
+}
+
+#queue-panel .tasks-detail-block {
+  margin-top: var(--space-sm);
 }
 
 .tasks-body.tasks-body-board {
