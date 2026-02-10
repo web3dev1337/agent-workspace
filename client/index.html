@@ -101,6 +101,10 @@
                 <button id="commander-toggle" class="header-btn commander-btn" title="Commander (Top-Level AI)">
                     🎖️ Commander
                 </button>
+                <button id="recommendations-toggle" class="icon-button" title="System Recommendations" onclick="window.recommendationsUI && window.recommendationsUI.toggle()">
+                    <span class="notification-badge recommendations-badge" id="recommendations-badge" style="display:none">0</span>
+                    🔧
+                </button>
                 <button id="notification-toggle" class="icon-button" title="Notifications">
                     <span class="notification-badge" id="notification-badge">0</span>
                     🔔
@@ -853,6 +857,18 @@
     </div>
 
     <!-- Notifications Panel -->
+    <div id="recommendations-panel" class="notifications-panel hidden" style="right: 140px;">
+        <div class="panel-header">
+            <h3>🔧 Recommendations</h3>
+            <div class="panel-actions">
+                <button onclick="window.recommendationsUI && window.recommendationsUI.dismissAll()" class="icon-button" title="Dismiss all">✕</button>
+            </div>
+        </div>
+        <div id="recommendations-list" class="notifications-list">
+            <div class="notification-empty">No recommendations</div>
+        </div>
+    </div>
+
     <div id="notifications-panel" class="notifications-panel hidden">
         <div class="panel-header">
             <h3>Notifications</h3>
@@ -879,6 +895,7 @@
     <script src="plugin-host.js"></script>
     <script src="quick-links.js"></script>
     <script src="commander-panel.js"></script>
+    <script src="recommendations.js"></script>
     <script src="dashboard.js"></script>
     <script src="workspace-switcher.js"></script>
     <script src="workspace-wizard.js"></script>
