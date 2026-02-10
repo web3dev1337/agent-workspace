@@ -36,7 +36,7 @@ Tier tagging persistence:
 
 ## Launching Agents from Trello
 
-**Zoo Hytopia board:** `<TRELLO_BOARD_ID>` | **Tier-3 queue list:** `<TRELLO_LIST_ID>`
+**Zoo Hytopia board:** `691e5516c77f3e9c9fd89f61` | **AB T3 Que list:** `697feb0865aa4467a08831d9` | **Doing list:** `6925438b0b925067fa40387a` | **For Test list:** `694ae391dd96d4a461ff4ec2`
 
 **Get card with agent field:**
 ```bash
@@ -201,6 +201,8 @@ Because `main` is usually checked out in the `master/` worktree, **do not try to
 
 **CRITICAL SAFETY:** If you are working in `claude-orchestrator-dev/`, **do not edit, pull, or run commands in the `master/` folder** unless explicitly requested — that instance may be running on port **3000**.
 
+**ALSO CRITICAL:** If Commander Claude is running FROM `master/`, **NEVER edit files in `master/`**. Even if you revert changes, nodemon will detect the file change and restart the production server, which crashes all active sessions. ALL code changes go in `claude-orchestrator-dev/` on a feature branch, then PR into main. The ONLY exception is if the user explicitly asks you to edit production.
+
 **TEST SAFETY (ports):**
 - Never use port `3000` for dev/test runs.
 - Use `npm run test:e2e:safe` (defaults to a dedicated port) for Playwright.
@@ -313,6 +315,11 @@ POST /api/commander/start-claude  { mode: 'fresh'|'continue'|'resume', yolo: tru
 
 # Send input to Commander terminal
 POST /api/commander/input  { input: "text to send" }
+
+# Get active workspace (which workspace the UI is showing)
+GET /api/workspaces/active
+# Returns: { id: "workspace-id", name: "Workspace Name" }
+# Falls back to persisted config if in-memory state is null
 
 # View all sessions
 GET /api/commander/sessions
