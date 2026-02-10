@@ -59,6 +59,7 @@ const { GreenfieldService } = require('./greenfieldService');
 const { ProjectTypeService } = require('./projectTypeService');
 const { ContinuityService } = require('./continuityService');
 const { QuickLinksService } = require('./quickLinksService');
+const { RecommendationsService } = require('./recommendationsService');
 const { ProductLauncherService } = require('./productLauncherService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
@@ -272,6 +273,7 @@ greenfieldService.setIO(io);
 greenfieldService.setProjectTypeService(projectTypeService);
 const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
+const recommendationsService = RecommendationsService.getInstance();
 const activityFeed = ActivityFeedService.getInstance();
 activityFeed.setIO(io);
 activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 3000) });
@@ -6776,6 +6778,54 @@ app.delete('/api/quick-links/recent-sessions', async (req, res) => {
   } catch (error) {
     logger.error('Failed to clear recent sessions', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to clear recent sessions' });
+  }
+});
+
+// =====================================
+// System Recommendations API
+// =====================================
+
+app.get('/api/recommendations', (req, res) => {
+  try {
+    const { status } = req.query;
+    const items = status === 'pending'
+      ? recommendationsService.getPending()
+      : recommendationsService.getAll();
+    res.json({ items });
+  } catch (error) {
+    logger.error('Failed to get recommendations', { error: error.message });
+    res.status(500).json({ error: 'Failed to get recommendations' });
+  }
+});
+
+app.post('/api/recommendations', async (req, res) => {
+  try {
+    const item = await recommendationsService.add(req.body);
+    res.json({ item });
+  } catch (error) {
+    logger.error('Failed to add recommendation', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/recommendations/:id', async (req, res) => {
+  try {
+    const { status } = req.body;
+    const item = await recommendationsService.updateStatus(req.params.id, status);
+    res.json({ item });
+  } catch (error) {
+    logger.error('Failed to update recommendation', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/recommendations/:id', async (req, res) => {
+  try {
+    await recommendationsService.remove(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to delete recommendation', { error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 

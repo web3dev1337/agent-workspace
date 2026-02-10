@@ -335,6 +335,20 @@ GET /api/commander/sessions
 
 # Send to another session
 POST /api/commander/send-to-session  { sessionId: "...", input: "..." }
+
+# System Recommendations (missing tools, suggested installs)
+GET  /api/recommendations              # returns {"items":[...]}
+POST /api/recommendations              # {"package","reason","installCmd","category"}
+PATCH /api/recommendations/:id         # {"status":"installed"|"dismissed"}
+DELETE /api/recommendations/:id        # remove entirely
+```
+
+### Logging Missing Tools
+When a command fails with "not found", POST a recommendation so the user sees it in the UI 🔧 badge:
+```bash
+curl -sS -X POST http://localhost:$PORT/api/recommendations \
+  -H "Content-Type: application/json" \
+  -d '{"package":"dos2unix","reason":"CRLF fix for WSL scripts","installCmd":"sudo apt-get install -y dos2unix","category":"apt"}'
 ```
 
 ### Quick Orchestrator Commands
