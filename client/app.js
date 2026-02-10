@@ -129,13 +129,31 @@ class ClaudeOrchestrator {
     return type === 'claude' || type === 'codex' || /-(claude|codex)$/.test(sid);
   }
 
+  isMainlineBranch(branch) {
+    const raw = String(branch || '').trim().toLowerCase();
+    if (!raw) return true;
+    const cleaned = raw
+      .replace(/^refs\/heads\//, '')
+      .replace(/^origin\//, '')
+      .replace(/^remotes\/origin\//, '');
+    return cleaned === 'main' || cleaned === 'master' || cleaned === 'trunk' || cleaned === 'default';
+  }
+
   getSessionIntentHaikuFallback(sessionId) {
     const sid = String(sessionId || '').trim();
     const session = this.sessions.get(sid);
     const status = String(session?.status || '').trim().toLowerCase();
+    const branch = String(session?.branch || '').trim();
+    const hasBranch = !!branch && branch !== 'unknown';
     if (status === 'waiting') return 'Context is loaded; likely waiting for your next prompt.';
     if (status === 'busy') return 'Reading terminal activity to infer intent...';
-    return 'Tracking this terminal to infer likely intent...';
+    if (hasBranch && !this.isMainlineBranch(branch)) {
+      return `Branch ${branch}. No recent terminal activity; likely paused between steps on this branch.`;
+    }
+    if (hasBranch) {
+      return `Branch ${branch}. No recent terminal activity; likely waiting for your next prompt.`;
+    }
+    return 'No recent terminal activity; likely waiting for your next prompt.';
   }
 
   getSessionIntentHaikuText(sessionId) {

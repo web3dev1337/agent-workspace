@@ -150,12 +150,38 @@ class IntentHaikuService {
     return 'general';
   }
 
+  isMainlineBranch(branch) {
+    const raw = String(branch || '').trim().toLowerCase();
+    if (!raw) return true;
+    const cleaned = raw
+      .replace(/^refs\/heads\//, '')
+      .replace(/^origin\//, '')
+      .replace(/^remotes\/origin\//, '');
+    return cleaned === 'main' || cleaned === 'master' || cleaned === 'trunk' || cleaned === 'default';
+  }
+
   buildHeuristicSummary(context) {
     const theme = this.detectTheme(context);
+    const status = String(context?.status || '').trim().toLowerCase();
     const branch = String(context?.branch || '').trim();
     const lastCommand = String(context?.lastCommand || '').trim();
+    const outputTail = String(context?.outputTail || '').trim();
+    const hasLiveSignal = !!lastCommand || !!outputTail;
     const branchHint = branch && branch !== 'unknown' ? `Branch ${branch}. ` : '';
     const commandHint = lastCommand ? `Last command: ${lastCommand}. ` : '';
+
+    if (!hasLiveSignal) {
+      if (status === 'busy') {
+        return this.clampSummary(`${branchHint}Command started, but output is still quiet. Likely waiting for the first result.`);
+      }
+      if (branch && branch !== 'unknown' && !this.isMainlineBranch(branch)) {
+        return this.clampSummary(`${branchHint}No recent terminal activity; likely paused between steps on this branch.`);
+      }
+      if (branch && branch !== 'unknown') {
+        return this.clampSummary(`${branchHint}No recent terminal activity; likely waiting for your next prompt.`);
+      }
+      return this.clampSummary('No recent terminal activity; likely waiting for your next prompt.');
+    }
 
     const byTheme = {
       waiting: 'Cursor is quiet; context is warm. Likely waiting for your next prompt.',
@@ -165,7 +191,7 @@ class IntentHaikuService {
       git: 'Git flow is active in this terminal. Likely preparing branch or PR state.',
       deps: 'Dependency install activity is visible. Likely wiring required packages.',
       code: 'Edits and review signals are in flight. Likely implementing the current request.',
-      general: 'Terminal context is active and evolving. Likely progressing the assigned task.'
+      general: 'Terminal context has fresh activity. Likely progressing the assigned task.'
     };
 
     const base = byTheme[theme] || byTheme.general;
