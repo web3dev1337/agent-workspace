@@ -72,6 +72,11 @@ class BatchLaunchService {
     const repoName = repoPath.split('/').filter(Boolean).pop();
     const repoType = mapping.repositoryType || 'hytopia-game';
     const defaultTier = tierOverride || mapping.defaultStartTier || 3;
+    const startingWorktreeNumber = this._getNextWorktreeNumber({
+      workspaceId: resolvedWorkspaceId,
+      repoPath,
+      repoName
+    });
 
     // Fetch custom fields for agent detection
     let customFieldDefs = [];
@@ -85,7 +90,14 @@ class BatchLaunchService {
     const boardPromptPrefix = mapping.promptPrefix || '';
 
     if (dryRun) {
-      return this._buildDryRunResponse(cards, { agentOverride, customFieldDefs, defaultTier, repoName, resolvedWorkspaceId });
+      return this._buildDryRunResponse(cards, {
+        agentOverride,
+        customFieldDefs,
+        defaultTier,
+        repoName,
+        resolvedWorkspaceId,
+        startingWorktreeNumber
+      });
     }
 
     // Sequential launch
@@ -94,18 +106,19 @@ class BatchLaunchService {
 
     for (let i = 0; i < cards.length; i++) {
       const card = cards[i];
+      const worktreeId = `work${startingWorktreeNumber + i}`;
       try {
         const result = await this._launchSingleCard({
           card, provider, boardId, resolvedWorkspaceId,
           repoPath, repoName, repoType, defaultTier,
           agentOverride, customFieldDefs,
           globalPromptPrefix, boardPromptPrefix,
-          moveToListId, worktreeIndex: i + 1
+          moveToListId, worktreeId
         });
         launched.push(result);
       } catch (err) {
-        logger.error('Failed to launch card', { cardId: card.id, cardName: card.name, error: err.message });
-        failed.push({ cardId: card.id, cardName: card.name, error: err.message, phase: err.phase || 'unknown' });
+        logger.error('Failed to launch card', { cardId: card.id, cardName: card.name, worktreeId, error: err.message });
+        failed.push({ cardId: card.id, cardName: card.name, worktreeId, error: err.message, phase: err.phase || 'unknown' });
       }
     }
 
@@ -122,7 +135,7 @@ class BatchLaunchService {
     repoPath, repoName, repoType, defaultTier,
     agentOverride, customFieldDefs,
     globalPromptPrefix, boardPromptPrefix,
-    moveToListId, worktreeIndex
+    moveToListId, worktreeId: requestedWorktreeId
   }) {
     const agentId = agentOverride || this._detectAgentFromCard(card, customFieldDefs);
     const tier = defaultTier;
@@ -137,6 +150,7 @@ class BatchLaunchService {
         repositoryPath: repoPath,
         repositoryType: repoType,
         repositoryName: repoName,
+        worktreeId: requestedWorktreeId,
         startTier: tier
       });
     } catch (err) {
@@ -145,7 +159,7 @@ class BatchLaunchService {
       throw e;
     }
 
-    const { worktreeId, sessions } = worktreeResult;
+    const { worktreeId } = worktreeResult;
     const claudeSessionId = `${repoName}-${worktreeId}-claude`;
 
     // 2. Build prompt
@@ -162,10 +176,11 @@ class BatchLaunchService {
     }).catch(err => logger.warn('Failed to link task record', { sessionId: claudeSessionId, error: err.message }));
 
     // 4. Start agent
+    const flags = (agentId === 'claude') ? ['skipPermissions'] : [];
     const agentStarted = this.sessionManager.startAgentWithConfig(claudeSessionId, {
       agentId,
       mode: 'fresh',
-      flags: ['skipPermissions']
+      flags
     });
 
     if (!agentStarted) {
@@ -256,14 +271,42 @@ class BatchLaunchService {
     return require('path').join(home, 'GitHub', localPath);
   }
 
-  _buildDryRunResponse(cards, { agentOverride, customFieldDefs, defaultTier, repoName, resolvedWorkspaceId }) {
+  _normalizePath(value) {
+    return String(value || '').replace(/\\/g, '/').replace(/\/+$/, '').trim();
+  }
+
+  _getNextWorktreeNumber({ workspaceId, repoPath, repoName } = {}) {
+    const workspace = this.workspaceManager.getWorkspace(workspaceId);
+    const terminals = Array.isArray(workspace?.terminals) ? workspace.terminals : [];
+    const targetPath = this._normalizePath(repoPath);
+    const targetName = String(repoName || '').trim().toLowerCase();
+    let max = 0;
+
+    for (const terminal of terminals) {
+      const terminalPath = this._normalizePath(terminal?.repository?.path);
+      const terminalName = String(terminal?.repository?.name || '').trim().toLowerCase();
+      const sameRepo = (targetPath && terminalPath && targetPath === terminalPath)
+        || (!targetPath && targetName && targetName === terminalName);
+      if (!sameRepo) continue;
+
+      const id = String(terminal?.worktree || terminal?.worktreeId || '').trim().toLowerCase();
+      const match = id.match(/^work(\d+)$/);
+      if (!match) continue;
+      const n = Number(match[1]);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+
+    return Math.max(1, max + 1);
+  }
+
+  _buildDryRunResponse(cards, { agentOverride, customFieldDefs, defaultTier, repoName, resolvedWorkspaceId, startingWorktreeNumber = 1 }) {
     const preview = cards.map((card, i) => ({
       cardId: card.id,
       cardName: card.name,
       agent: agentOverride || this._detectAgentFromCard(card, customFieldDefs),
       tier: defaultTier,
-      wouldCreateWorktree: `work${i + 1}`,
-      wouldCreateSession: `${repoName}-work${i + 1}-claude`,
+      wouldCreateWorktree: `work${startingWorktreeNumber + i}`,
+      wouldCreateSession: `${repoName}-work${startingWorktreeNumber + i}-claude`,
       workspaceId: resolvedWorkspaceId
     }));
     return { success: true, dryRun: true, preview, summary: { total: cards.length } };
