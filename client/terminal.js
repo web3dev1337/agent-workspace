@@ -1142,8 +1142,6 @@ class TerminalManager {
   }
 
   updateInputBuffer(sessionId, data) {
-    if (!this.autosuggestEnabled) return;
-
     let buf = this.inputBuffers.get(sessionId) || '';
 
     // Determine what happened based on the data
@@ -1154,7 +1152,7 @@ class TerminalManager {
         this.orchestrator?.socket?.emit('command-executed', { sessionId, command: buf });
       }
       this.inputBuffers.set(sessionId, '');
-      this.clearSuggestion(sessionId);
+      if (this.autosuggestEnabled) this.clearSuggestion(sessionId);
       return;
     }
 
@@ -1162,14 +1160,14 @@ class TerminalManager {
       // Backspace: remove last character
       buf = buf.slice(0, -1);
       this.inputBuffers.set(sessionId, buf);
-      this.debounceSuggest(sessionId, buf);
+      if (this.autosuggestEnabled) this.debounceSuggest(sessionId, buf);
       return;
     }
 
     if (data === '\x03' || data === '\x15' || data === '\x0c') {
       // Ctrl+C, Ctrl+U, Ctrl+L: clear the input buffer
       this.inputBuffers.set(sessionId, '');
-      this.clearSuggestion(sessionId);
+      if (this.autosuggestEnabled) this.clearSuggestion(sessionId);
       return;
     }
 
@@ -1177,7 +1175,7 @@ class TerminalManager {
       // Ctrl+W: delete last word
       buf = buf.replace(/\S+\s*$/, '');
       this.inputBuffers.set(sessionId, buf);
-      this.debounceSuggest(sessionId, buf);
+      if (this.autosuggestEnabled) this.debounceSuggest(sessionId, buf);
       return;
     }
 
@@ -1189,7 +1187,7 @@ class TerminalManager {
     // Tab - clear suggestion (shell will handle completion)
     if (data === '\t') {
       this.inputBuffers.set(sessionId, '');
-      this.clearSuggestion(sessionId);
+      if (this.autosuggestEnabled) this.clearSuggestion(sessionId);
       return;
     }
 
@@ -1197,7 +1195,7 @@ class TerminalManager {
     if (data.length === 1 && data.charCodeAt(0) >= 32) {
       buf += data;
       this.inputBuffers.set(sessionId, buf);
-      this.debounceSuggest(sessionId, buf);
+      if (this.autosuggestEnabled) this.debounceSuggest(sessionId, buf);
       return;
     }
 
@@ -1205,7 +1203,7 @@ class TerminalManager {
     if (data.length > 1 && !data.startsWith('\x1b')) {
       buf += data;
       this.inputBuffers.set(sessionId, buf);
-      this.debounceSuggest(sessionId, buf);
+      if (this.autosuggestEnabled) this.debounceSuggest(sessionId, buf);
       return;
     }
   }
