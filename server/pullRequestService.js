@@ -533,7 +533,12 @@ class PullRequestService {
 
     const args = ['pr', 'review', parsed.url, flag];
     const text = String(body || '').trim();
-    if (text) args.push('--body', text);
+    if (text) {
+      args.push('--body', text);
+    } else if (normalizedAction === 'request_changes') {
+      // gh pr review --request-changes requires --body or it opens an interactive editor
+      args.push('--body', 'Changes requested.');
+    }
 
     const { stdout } = await new Promise((resolve, reject) => {
       execFile('gh', args, { timeout: 60000, windowsHide: true }, (error, stdout, stderr) => {
