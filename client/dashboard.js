@@ -3321,14 +3321,22 @@ class Dashboard {
     const createBtn = document.querySelector('.workspace-create-btn');
     if (createBtn) {
       createBtn.addEventListener('click', () => {
-        this.showCreateWorkspaceWizard();
+        this.showCreateWorkspaceWizard().catch((error) => {
+          if (!this.orchestrator?.handleSetupError?.(error, { fallback: 'Failed to open workspace wizard' })) {
+            this.orchestrator?.showToast?.(String(error?.message || error), 'error');
+          }
+        });
       });
     }
 
     const createEmptyBtn = document.querySelector('.workspace-create-empty-btn');
     if (createEmptyBtn) {
       createEmptyBtn.addEventListener('click', () => {
-        this.createEmptyWorkspaceQuick();
+        this.createEmptyWorkspaceQuick().catch((error) => {
+          if (!this.orchestrator?.handleSetupError?.(error, { fallback: 'Failed to create empty workspace' })) {
+            this.orchestrator?.showToast?.(String(error?.message || error), 'error');
+          }
+        });
       });
     }
 
@@ -3395,7 +3403,9 @@ class Dashboard {
   showCreateProjectWizard() {
     if (typeof this.orchestrator?.openGreenfieldWizard === 'function') {
       this.orchestrator.openGreenfieldWizard().catch((error) => {
-        this.orchestrator?.showToast?.(`Failed to open New Project wizard: ${String(error?.message || error)}`, 'error');
+        if (!this.orchestrator?.handleSetupError?.(error, { fallback: 'Failed to open New Project wizard' })) {
+          this.orchestrator?.showToast?.(`Failed to open New Project wizard: ${String(error?.message || error)}`, 'error');
+        }
       });
       return;
     }
@@ -3494,19 +3504,29 @@ class Dashboard {
     });
   }
 
-  showCreateWorkspaceWizard(options = {}) {
+  async showCreateWorkspaceWizard(options = {}) {
     console.log('Opening workspace creation wizard...');
     if (!window.WorkspaceWizard) {
       console.error('WorkspaceWizard not loaded');
       return;
     }
 
+    if (typeof this.orchestrator?.ensureSetupReadyForAction === 'function') {
+      const allowed = await this.orchestrator.ensureSetupReadyForAction('open the workspace wizard', { allowLimited: true });
+      if (!allowed) return;
+    }
+
     const wizard = new WorkspaceWizard(this.orchestrator);
-    wizard.show(options);
+    await wizard.show(options);
   }
 
   async createEmptyWorkspaceQuick() {
     try {
+      if (typeof this.orchestrator?.ensureSetupReadyForAction === 'function') {
+        const allowed = await this.orchestrator.ensureSetupReadyForAction('create an empty workspace', { allowLimited: true });
+        if (!allowed) return;
+      }
+
       const timestamp = new Date();
       const stamp = timestamp.toISOString().replace(/[:T]/g, '-').slice(0, 19);
       const name = `Empty Workspace ${timestamp.toLocaleString()}`;
@@ -3574,13 +3594,16 @@ class Dashboard {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(workspaceConfig)
       });
+      const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Failed to create empty workspace');
+        if (typeof this.orchestrator?.coerceActionableError === 'function') {
+          throw this.orchestrator.coerceActionableError(payload, 'Failed to create empty workspace');
+        }
+        throw new Error(String(payload?.error || 'Failed to create empty workspace'));
       }
 
-      const workspace = await response.json();
+      const workspace = payload;
       this.workspaces.push(workspace);
 
       // Switch to new workspace
@@ -3589,7 +3612,9 @@ class Dashboard {
       this.orchestrator.showTemporaryMessage(`Empty workspace "${name}" created`, 'success');
     } catch (error) {
       console.error('Failed to create empty workspace:', error);
-      alert('Failed to create empty workspace: ' + error.message);
+      if (!this.orchestrator?.handleSetupError?.(error, { fallback: 'Failed to create empty workspace' })) {
+        alert('Failed to create empty workspace: ' + error.message);
+      }
     }
   }
 

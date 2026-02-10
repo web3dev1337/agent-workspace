@@ -12,6 +12,11 @@ class WorkspaceWizard {
     const { blank = false } = options;
     console.log('Opening workspace creation wizard...');
 
+    if (typeof this.orchestrator?.ensureSetupReadyForAction === 'function') {
+      const allowed = await this.orchestrator.ensureSetupReadyForAction('open the workspace wizard', { allowLimited: true });
+      if (!allowed) return;
+    }
+
     await this.orchestrator?.ensureProjectTypeTaxonomy?.();
     this.data = {};
 
@@ -402,6 +407,11 @@ class WorkspaceWizard {
     try {
       console.log('Creating workspace with data:', this.data);
 
+      if (typeof this.orchestrator?.ensureSetupReadyForAction === 'function') {
+        const allowed = await this.orchestrator.ensureSetupReadyForAction('create a workspace', { allowLimited: true });
+        if (!allowed) return;
+      }
+
       // Generate workspace ID
       const workspaceId = this.data.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
@@ -496,9 +506,10 @@ class WorkspaceWizard {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(workspaceConfig)
       });
+      const payload = await response.json().catch(() => ({}));
 
       if (response.ok) {
-        const workspace = await response.json();
+        const workspace = payload;
         console.log('Workspace created:', workspace);
 
         // Close wizard
@@ -510,13 +521,16 @@ class WorkspaceWizard {
         // Show success message
         this.orchestrator.showTemporaryMessage(`Workspace "${this.data.name}" created successfully!`, 'success');
       } else {
-        const error = await response.text();
-        console.error('Failed to create workspace:', error);
-        alert('Failed to create workspace: ' + error);
+        const error = (typeof this.orchestrator?.coerceActionableError === 'function')
+          ? this.orchestrator.coerceActionableError(payload, `Failed to create workspace (${response.status})`)
+          : new Error(String(payload?.error || `Failed to create workspace (${response.status})`));
+        throw error;
       }
     } catch (error) {
       console.error('Error creating workspace:', error);
-      alert('Error creating workspace: ' + error.message);
+      if (!this.orchestrator?.handleSetupError?.(error, { fallback: 'Error creating workspace' })) {
+        alert('Error creating workspace: ' + error.message);
+      }
     }
   }
 

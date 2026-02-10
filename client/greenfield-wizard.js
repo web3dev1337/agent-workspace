@@ -31,6 +31,11 @@ class GreenfieldWizard {
   async show() {
     console.log('Opening greenfield project wizard...');
 
+    if (typeof this.orchestrator?.ensureSetupReadyForAction === 'function') {
+      const allowed = await this.orchestrator.ensureSetupReadyForAction('open the New Project wizard', { allowLimited: true });
+      if (!allowed) return;
+    }
+
     // Fetch taxonomy and derive defaults before rendering.
     this.contextSuggestion = null;
     await this.loadTaxonomy();
@@ -745,6 +750,11 @@ class GreenfieldWizard {
       return;
     }
 
+    if (typeof this.orchestrator?.ensureSetupReadyForAction === 'function') {
+      const allowed = await this.orchestrator.ensureSetupReadyForAction('create a project workspace', { allowLimited: true });
+      if (!allowed) return;
+    }
+
     const createBtn = document.getElementById('gf-wizard-create');
     if (createBtn) {
       createBtn.disabled = true;
@@ -787,6 +797,7 @@ class GreenfieldWizard {
 
     } catch (error) {
       console.error('Failed to create project:', error);
+      this.orchestrator?.handleSetupError?.(error, { fallback: 'Failed to create project workspace' });
       this.showError(error.message);
 
       if (createBtn) {
@@ -804,6 +815,9 @@ class GreenfieldWizard {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result?.ok === false) {
+      if (typeof this.orchestrator?.coerceActionableError === 'function') {
+        throw this.orchestrator.coerceActionableError(result, `Failed to create project (${response.status})`);
+      }
       throw new Error(String(result?.error || `Failed to create project (${response.status})`));
     }
 
@@ -873,6 +887,9 @@ class GreenfieldWizard {
         <div class="error-actions">
           <button class="btn-secondary" onclick="window.greenfieldWizard.showStep(3)">
             Try Again
+          </button>
+          <button class="btn-secondary" onclick="window.orchestrator?.openDiagnosticsPanel?.({ refresh: true, scroll: true })">
+            Open Diagnostics
           </button>
           <button class="btn-secondary" onclick="window.greenfieldWizard.closeWizard()">
             Close
