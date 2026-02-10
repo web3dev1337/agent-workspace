@@ -88,7 +88,8 @@ class ClaudeOrchestrator {
     this.sessionVisibilityOverridesByWorkspace = this.loadSessionVisibilityOverrides();
 
     // Launch helpers (ticket/card → worktree → agent → auto-prompt)
-    this.pendingAutoPrompts = new Map(); // sessionId -> { text, createdAt, sentAt }
+    this.pendingAutoPrompts = new Map(); // sessionId -> { text, createdAt, sentAt, agentId }
+    this.pendingAutoPromptFallbackTimers = new Map(); // sessionId -> timeout
     this.pendingWorktreeLaunches = new Map(); // worktreeId -> { promptText, autoSendPrompt, agentConfig }
     // Optimistic “in-use” tracking: while a worktree is starting (sessions not yet added), treat it as in-use
     // so Quick Work / Add Worktree won’t recommend it again.
@@ -1149,7 +1150,8 @@ class ClaudeOrchestrator {
             this.pendingAutoPrompts.set(agentSessionId, {
               text: String(pending.promptText || ''),
               createdAt: Date.now(),
-              sentAt: null
+              sentAt: null,
+              agentId: String(pending?.agentConfig?.agentId || 'claude').trim().toLowerCase()
             });
           }
         }
@@ -1158,6 +1160,7 @@ class ClaudeOrchestrator {
       this.socket.on('claude-started', ({ sessionId }) => {
         // Hide + persist dismissal so it doesn't resurrect on refresh/worktree-add
         this.hideStartupUI(sessionId);
+        this.scheduleAutoPromptFallback(sessionId, 'claude');
         
         // Enable the start button now that Claude has started
         const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
@@ -1168,8 +1171,9 @@ class ClaudeOrchestrator {
 
       // Agent-agnostic equivalent (Codex/OpenCode/etc). Startup UI only exists on -claude terminals,
       // but hiding is safe and prevents resurrection when agent is started via recovery/automation.
-      this.socket.on('agent-started', ({ sessionId }) => {
+      this.socket.on('agent-started', ({ sessionId, config }) => {
         this.hideStartupUI(sessionId);
+        this.scheduleAutoPromptFallback(sessionId, config?.agentId);
       });
 
       this.socket.on('claude-update-required', (updateInfo) => {
@@ -29405,15 +29409,41 @@ class ClaudeOrchestrator {
     }
   }
 
-  maybeAutoSendPrompt(sessionId, status) {
+  scheduleAutoPromptFallback(sessionId, agentId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+
+    const pending = this.pendingAutoPrompts.get(sid);
+    if (!pending || pending.sentAt) return;
+
+    const agent = String(agentId || pending.agentId || '').trim().toLowerCase();
+    const delayMs = agent === 'codex' ? 15_000 : 8_000;
+
+    const existing = this.pendingAutoPromptFallbackTimers.get(sid);
+    if (existing) clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+      this.pendingAutoPromptFallbackTimers.delete(sid);
+      this.maybeAutoSendPrompt(sid, 'waiting', { force: true });
+    }, delayMs);
+
+    this.pendingAutoPromptFallbackTimers.set(sid, timer);
+  }
+
+  maybeAutoSendPrompt(sessionId, status, { force = false } = {}) {
     const pending = this.pendingAutoPrompts.get(sessionId);
     if (!pending || pending.sentAt) return;
     const normalized = String(status || '').toLowerCase();
-    if (normalized !== 'waiting') return;
+    if (!force && normalized !== 'waiting') return;
     if (!this.socket || !this.socket.connected) return;
 
     const text = String(pending.text || '').trim();
     if (!text) {
+      const timer = this.pendingAutoPromptFallbackTimers.get(sessionId);
+      if (timer) {
+        clearTimeout(timer);
+        this.pendingAutoPromptFallbackTimers.delete(sessionId);
+      }
       this.pendingAutoPrompts.delete(sessionId);
       return;
     }
@@ -29423,6 +29453,11 @@ class ClaudeOrchestrator {
     this.socket.emit('command-executed', { sessionId, command: text });
     pending.sentAt = Date.now();
     this.pendingAutoPrompts.set(sessionId, pending);
+    const timer = this.pendingAutoPromptFallbackTimers.get(sessionId);
+    if (timer) {
+      clearTimeout(timer);
+      this.pendingAutoPromptFallbackTimers.delete(sessionId);
+    }
 
     // Best-effort telemetry: record when we auto-sent a prompt (session task record).
     this.upsertTaskRecord(`session:${sessionId}`, {
@@ -29886,7 +29921,6 @@ class ClaudeOrchestrator {
 	    const agentConfig = this.buildAgentConfigForLaunch({ agentId, mode, yolo });
 	    const globalPromptPrefix = String(this.userSettings?.global?.ui?.tasks?.launch?.globalPromptPrefix || '').trim();
 	    const boardPromptPrefix = String(mapping?.promptPrefix || '').trim();
-	    const includeTicketTitle = this.userSettings?.global?.ui?.tasks?.launch?.includeTicketTitle === true;
 
 	    const rawPrompt = String(promptText || card?.desc || '');
 	    const rawPromptTrimmed = String(rawPrompt || '').trim();
@@ -29897,9 +29931,9 @@ class ClaudeOrchestrator {
 	    const ticketBoardId = String(boardId || '').trim();
 	    const ticketTitle = String(card?.name || '').trim();
 
-    const preface = (cardUrl || ticketCardId || (includeTicketTitle && ticketTitle)) ? [
+    const preface = (cardUrl || ticketCardId || ticketTitle) ? [
       `Task context: this work is for a ticket.`,
-      (includeTicketTitle && ticketTitle) ? `Ticket title: ${ticketTitle}` : '',
+      ticketTitle ? `Ticket title: ${ticketTitle}` : '',
       cardUrl ? `Trello card: ${cardUrl}` : '',
       ticketCardId ? `Ticket id: trello:${ticketCardId}` : '',
       ``,
@@ -29913,7 +29947,7 @@ class ClaudeOrchestrator {
       preface || '',
       rawPromptTrimmed || ''
     ].map((s) => String(s || '').replace(/\s+$/, '')).filter(Boolean).join('\n\n').trim();
-	    const autoSendPromptEffective = !!autoSendPrompt && !!rawPromptTrimmed;
+    const autoSendPromptEffective = !!autoSendPrompt && !!prompt;
 
     const recommended = this.getRecommendedWorktree(repo);
 
