@@ -211,7 +211,7 @@ class IntentHaikuService {
       const goalText = goal ? `Goal: ${goal}. ` : '';
       if (status === 'waiting') return this.clampSummary(`${branchHint}${goalText}Waiting for your next instruction.`);
       if (status === 'busy') return this.clampSummary(`${branchHint}${goalText}Actively working through the requested task.`);
-      return this.clampSummary(`${branchHint}${goalText}No recent terminal activity.`);
+      return this.clampSummary(`${branchHint}${goalText}Context cached; waiting for the next update.`);
     }
 
     if (!hasLiveSignal) {
@@ -219,12 +219,12 @@ class IntentHaikuService {
         return this.clampSummary(`${branchHint}Command started, but output is still quiet. Likely waiting for the first result.`);
       }
       if (branch && branch !== 'unknown' && !this.isMainlineBranch(branch)) {
-        return this.clampSummary(`${branchHint}No recent terminal activity; likely paused between steps on this branch.`);
+        return this.clampSummary(`${branchHint}Context cached from this branch; likely paused between steps.`);
       }
       if (branch && branch !== 'unknown') {
-        return this.clampSummary(`${branchHint}No recent terminal activity; likely waiting for your next prompt.`);
+        return this.clampSummary(`${branchHint}Context cached; likely waiting for your next prompt.`);
       }
-      return this.clampSummary('No recent terminal activity; likely waiting for your next prompt.');
+      return this.clampSummary('Context cached; likely waiting for your next prompt.');
     }
 
     const byTheme = {
