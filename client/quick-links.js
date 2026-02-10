@@ -259,20 +259,24 @@ class QuickLinks {
       <div class="quick-links-section">
         <h3>🚀 Products</h3>
         <div class="quick-links-grid" id="products-grid">
-          ${products.map(product => `
+          ${products.map(product => {
+            const productIdArg = this.escapeOnclickArg(product.id);
+            const productUrlArg = this.escapeOnclickArg(product.url || '');
+            return `
             <div class="quick-link quick-product" title="${this.escapeHtml(product.masterPath || '')}">
               <span class="quick-link-icon">${this.getIconHTML(product.icon || 'rocket')}</span>
               <span class="quick-link-label">${this.escapeHtml(product.name)}</span>
               <div class="quick-product-actions">
-                <button class="port-action-btn" onclick="event.preventDefault(); event.stopPropagation(); window.quickLinks.launchProduct(${JSON.stringify(product.id)}, ${JSON.stringify(product.url || '')})">Start</button>
-                <button class="port-action-btn" onclick="event.preventDefault(); event.stopPropagation(); window.open(${JSON.stringify(product.url || '')},'_blank')">Open</button>
-                <button class="port-action-btn" onclick="event.preventDefault(); event.stopPropagation(); window.quickLinks.copyText(${JSON.stringify(product.url || '')},'URL')">Copy</button>
+                <button class="port-action-btn" onclick="event.preventDefault(); event.stopPropagation(); window.quickLinks.launchProduct(${productIdArg}, ${productUrlArg})">Start</button>
+                <button class="port-action-btn" onclick="event.preventDefault(); event.stopPropagation(); window.open(${productUrlArg}, '_blank')">Open</button>
+                <button class="port-action-btn" onclick="event.preventDefault(); event.stopPropagation(); window.quickLinks.copyText(${productUrlArg}, 'URL')">Copy</button>
               </div>
               <button class="quick-link-remove"
-                      onclick="event.preventDefault(); event.stopPropagation(); window.quickLinks.removeProductAndRefresh(${JSON.stringify(product.id)})"
+                      onclick="event.preventDefault(); event.stopPropagation(); window.quickLinks.removeProductAndRefresh(${productIdArg})"
                       title="Remove product">×</button>
             </div>
-          `).join('')}
+          `;
+          }).join('')}
           <button class="quick-link add-favorite-btn" onclick="window.quickLinks.showAddProductModal()">
             <span class="quick-link-icon">➕</span>
             <span class="quick-link-label">Add Product</span>
@@ -292,7 +296,9 @@ class QuickLinks {
       <div class="quick-links-section">
         <h3>⭐ Favorites</h3>
         <div class="quick-links-grid" id="favorites-grid">
-          ${favorites.map((fav, index) => `
+          ${favorites.map((fav, index) => {
+            const favoriteUrlArg = this.escapeOnclickArg(fav.url || '');
+            return `
             <a href="${this.escapeHtml(fav.url)}" target="_blank" class="quick-link"
                data-url="${this.escapeHtml(fav.url)}"
                data-index="${index}"
@@ -301,10 +307,11 @@ class QuickLinks {
               <span class="quick-link-icon">${this.getIconHTML(fav.icon)}</span>
               <span class="quick-link-label">${this.escapeHtml(fav.name)}</span>
               <button class="quick-link-remove"
-                      onclick="event.preventDefault(); event.stopPropagation(); window.quickLinks.removeFavoriteAndRefresh('${this.escapeHtml(fav.url)}')"
+                      onclick="event.preventDefault(); event.stopPropagation(); window.quickLinks.removeFavoriteAndRefresh(${favoriteUrlArg})"
                       title="Remove from favorites">×</button>
             </a>
-          `).join('')}
+          `;
+          }).join('')}
           <button class="quick-link add-favorite-btn" onclick="window.quickLinks.showAddFavoriteModal()">
             <span class="quick-link-icon">➕</span>
             <span class="quick-link-label">Add Link</span>
@@ -397,8 +404,11 @@ class QuickLinks {
       <div class="quick-links-section">
         <h3>🕐 Recent Sessions</h3>
         <div class="recent-sessions-list">
-          ${recentSessions.slice(0, 5).map(session => `
-            <div class="recent-session-item" onclick="window.quickLinks.resumeSession('${session.workspaceId}', '${session.worktreeId}')">
+          ${recentSessions.slice(0, 5).map(session => {
+            const workspaceIdArg = this.escapeOnclickArg(session.workspaceId || '');
+            const worktreeIdArg = this.escapeOnclickArg(session.worktreeId || '');
+            return `
+            <div class="recent-session-item" onclick="window.quickLinks.resumeSession(${workspaceIdArg}, ${worktreeIdArg})">
               <div class="session-info">
                 <span class="session-branch">${this.escapeHtml(session.branch || 'main')}</span>
                 <span class="session-worktree">${this.escapeHtml(session.worktreeId || '')}</span>
@@ -406,7 +416,8 @@ class QuickLinks {
               <div class="session-goal">${this.escapeHtml(session.goal || 'No goal set')}</div>
               <div class="session-time">${this.formatTimeAgo(session.lastAccess)}</div>
             </div>
-          `).join('')}
+          `;
+          }).join('')}
         </div>
         ${recentSessions.length > 5 ? `
           <button class="show-all-sessions-btn" onclick="window.quickLinks.showAllRecentSessions()">
@@ -478,6 +489,10 @@ class QuickLinks {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  escapeOnclickArg(value) {
+    return this.escapeHtml(JSON.stringify(value));
   }
 
   /**
@@ -694,8 +709,11 @@ class QuickLinks {
       <div class="modal-content modal-large">
         <h3>All Recent Sessions</h3>
         <div class="all-sessions-list">
-          ${this.data.recentSessions.map(session => `
-            <div class="recent-session-item" onclick="window.quickLinks.resumeSession('${session.workspaceId}', '${session.worktreeId}'); window.quickLinks.closeAllSessionsModal();">
+          ${this.data.recentSessions.map(session => {
+            const workspaceIdArg = this.escapeOnclickArg(session.workspaceId || '');
+            const worktreeIdArg = this.escapeOnclickArg(session.worktreeId || '');
+            return `
+            <div class="recent-session-item" onclick="window.quickLinks.resumeSession(${workspaceIdArg}, ${worktreeIdArg}); window.quickLinks.closeAllSessionsModal();">
               <div class="session-info">
                 <span class="session-branch">${this.escapeHtml(session.branch || 'main')}</span>
                 <span class="session-worktree">${this.escapeHtml(session.worktreeId || '')}</span>
@@ -703,7 +721,8 @@ class QuickLinks {
               <div class="session-goal">${this.escapeHtml(session.goal || 'No goal set')}</div>
               <div class="session-time">${this.formatTimeAgo(session.lastAccess)}</div>
             </div>
-          `).join('')}
+          `;
+          }).join('')}
         </div>
         <div class="modal-actions">
           <button class="button-secondary" onclick="window.quickLinks.closeAllSessionsModal()">Close</button>
