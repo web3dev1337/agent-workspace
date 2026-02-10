@@ -8,6 +8,7 @@ class IntentHaikuService {
     this.logger = logger;
     this.sessionManager = sessionManager;
     this.lastCommandBySession = new Map();
+    this.intentSeedBySession = new Map();
     this.cacheBySession = new Map();
     this.inFlightBySession = new Map();
 
@@ -55,6 +56,47 @@ class IntentHaikuService {
     const text = String(command || '').trim();
     if (!sid || !text) return;
     this.lastCommandBySession.set(sid, text.slice(0, 400));
+    if (!this.intentSeedBySession.has(sid) && this.isLikelyIntentPrompt(text)) {
+      this.intentSeedBySession.set(sid, text.slice(0, 800));
+    }
+  }
+
+  isLikelyIntentPrompt(text) {
+    const value = String(text || '').trim();
+    if (!value) return false;
+    if (value.startsWith('/')) return false;
+
+    const wordCount = value.split(/\s+/).filter(Boolean).length;
+    if (wordCount >= 8) return true;
+    if (value.length >= 60 && wordCount >= 5) return true;
+    if (/[.?!]/.test(value) && wordCount >= 5) return true;
+
+    const lowered = value.toLowerCase();
+    if (/(^|\s)(please|can you|need to|should|fix|implement|refactor|rename|update|change)\b/.test(lowered) && wordCount >= 4) {
+      return true;
+    }
+
+    return false;
+  }
+
+  summarizeIntentSeed(seed) {
+    const raw = String(seed || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return '';
+
+    const noPrefix = raw.replace(/^(please|can you|could you|would you)\s+/i, '').trim();
+    const sentence = noPrefix.split(/[.?!]/).map((part) => part.trim()).find(Boolean) || noPrefix;
+    const clipped = sentence.length > 130 ? `${sentence.slice(0, 127).trim()}...` : sentence;
+    return clipped;
+  }
+
+  isMainlineBranch(branch) {
+    const raw = String(branch || '').trim().toLowerCase();
+    if (!raw) return true;
+    const cleaned = raw
+      .replace(/^refs\/heads\//, '')
+      .replace(/^origin\//, '')
+      .replace(/^remotes\/origin\//, '');
+    return cleaned === 'main' || cleaned === 'master' || cleaned === 'trunk' || cleaned === 'default';
   }
 
   stripAnsi(value) {
@@ -116,6 +158,7 @@ class IntentHaikuService {
     const branch = String(session?.branch || '').trim();
     const type = String(session?.type || '').trim().toLowerCase();
     const lastCommand = String(this.lastCommandBySession.get(sid) || '').trim();
+    const intentSeed = String(this.intentSeedBySession.get(sid) || '').trim();
     const outputTail = this.extractOutputTail(session?.buffer || '');
     return {
       sessionId: sid,
@@ -123,6 +166,7 @@ class IntentHaikuService {
       branch,
       type,
       lastCommand,
+      intentSeed,
       outputTail
     };
   }
@@ -132,8 +176,9 @@ class IntentHaikuService {
     const branch = String(context?.branch || '');
     const type = String(context?.type || '');
     const command = String(context?.lastCommand || '');
+    const intentSeed = String(context?.intentSeed || '').slice(0, 260);
     const output = String(context?.outputTail || '').slice(-1200);
-    return `${type}|${status}|${branch}|${command}|${output}`;
+    return `${type}|${status}|${branch}|${command}|${intentSeed}|${output}`;
   }
 
   detectTheme(context) {
@@ -152,10 +197,35 @@ class IntentHaikuService {
 
   buildHeuristicSummary(context) {
     const theme = this.detectTheme(context);
+    const status = String(context?.status || '').trim().toLowerCase();
     const branch = String(context?.branch || '').trim();
     const lastCommand = String(context?.lastCommand || '').trim();
+    const intentSeed = String(context?.intentSeed || '').trim();
+    const outputTail = String(context?.outputTail || '').trim();
+    const hasLiveSignal = !!lastCommand || !!outputTail;
     const branchHint = branch && branch !== 'unknown' ? `Branch ${branch}. ` : '';
     const commandHint = lastCommand ? `Last command: ${lastCommand}. ` : '';
+
+    if (intentSeed) {
+      const goal = this.summarizeIntentSeed(intentSeed);
+      const goalText = goal ? `Goal: ${goal}. ` : '';
+      if (status === 'waiting') return this.clampSummary(`${branchHint}${goalText}Waiting for your next instruction.`);
+      if (status === 'busy') return this.clampSummary(`${branchHint}${goalText}Actively working through the requested task.`);
+      return this.clampSummary(`${branchHint}${goalText}No recent terminal activity.`);
+    }
+
+    if (!hasLiveSignal) {
+      if (status === 'busy') {
+        return this.clampSummary(`${branchHint}Command started, but output is still quiet. Likely waiting for the first result.`);
+      }
+      if (branch && branch !== 'unknown' && !this.isMainlineBranch(branch)) {
+        return this.clampSummary(`${branchHint}No recent terminal activity; likely paused between steps on this branch.`);
+      }
+      if (branch && branch !== 'unknown') {
+        return this.clampSummary(`${branchHint}No recent terminal activity; likely waiting for your next prompt.`);
+      }
+      return this.clampSummary('No recent terminal activity; likely waiting for your next prompt.');
+    }
 
     const byTheme = {
       waiting: 'Cursor is quiet; context is warm. Likely waiting for your next prompt.',
@@ -165,7 +235,7 @@ class IntentHaikuService {
       git: 'Git flow is active in this terminal. Likely preparing branch or PR state.',
       deps: 'Dependency install activity is visible. Likely wiring required packages.',
       code: 'Edits and review signals are in flight. Likely implementing the current request.',
-      general: 'Terminal context is active and evolving. Likely progressing the assigned task.'
+      general: 'Terminal context has fresh activity. Likely progressing the assigned task.'
     };
 
     const base = byTheme[theme] || byTheme.general;
@@ -191,6 +261,7 @@ class IntentHaikuService {
           `Agent: ${context.type}`,
           `Status: ${context.status}`,
           `Branch: ${context.branch || '(unknown)'}`,
+          `Initial prompt intent: ${context.intentSeed || '(none)'}`,
           `Last command: ${context.lastCommand || '(none)'}`,
           'Recent terminal output:',
           context.outputTail || '(none)'
