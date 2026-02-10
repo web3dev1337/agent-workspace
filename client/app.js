@@ -80,10 +80,12 @@ class ClaudeOrchestrator {
     this.intentHaikuTimers = new Map(); // sessionId -> timeout id
     this.intentHaikuInFlight = new Set(); // sessionIds currently fetching
     this.intentHaikuLastFetchedAt = new Map(); // sessionId -> epoch ms
-    this.intentHaikuRefreshMs = 4500;
+    this.intentHaikuRefreshMs = 15000;
+    this.intentHaikuInitialRefreshDelayMs = 30000;
     this.intentHaikuPostPromptDelayMs = 30000;
-    this.intentHaikuLongRefreshMs = 90 * 60 * 1000;
+    this.intentHaikuLongRefreshMs = 3 * 60 * 60 * 1000;
     this.intentHaikuPolicyBySession = new Map(); // sessionId -> milestone refresh state
+    this.sessionVisibilityOverridesByWorkspace = this.loadSessionVisibilityOverrides();
 
     // Launch helpers (ticket/card → worktree → agent → auto-prompt)
     this.pendingAutoPrompts = new Map(); // sessionId -> { text, createdAt, sentAt }
@@ -142,21 +144,150 @@ class ClaudeOrchestrator {
     return cleaned === 'main' || cleaned === 'master' || cleaned === 'trunk' || cleaned === 'default';
   }
 
+  getSessionVisibilityStorageKey() {
+    return 'orchestrator-session-visibility-overrides-v1';
+  }
+
+  getSessionVisibilityWorkspaceKey(workspaceId = null) {
+    const raw = String(workspaceId || this.currentWorkspace?.id || '').trim();
+    return raw || '__default__';
+  }
+
+  loadSessionVisibilityOverrides() {
+    const byWorkspace = new Map();
+    try {
+      const raw = localStorage.getItem(this.getSessionVisibilityStorageKey());
+      const parsed = raw ? JSON.parse(raw) : {};
+      if (!parsed || typeof parsed !== 'object') return byWorkspace;
+
+      for (const [workspaceId, rows] of Object.entries(parsed)) {
+        if (!rows || typeof rows !== 'object') continue;
+        const map = new Map();
+        for (const [sessionId, hidden] of Object.entries(rows)) {
+          const sid = String(sessionId || '').trim();
+          if (!sid) continue;
+          if (hidden === false) continue;
+          // Store only hidden overrides to keep payload compact.
+          if (hidden === true) map.set(sid, false);
+        }
+        if (map.size) byWorkspace.set(String(workspaceId || '').trim() || '__default__', map);
+      }
+    } catch {
+      // ignore persisted state corruption
+    }
+    return byWorkspace;
+  }
+
+  saveSessionVisibilityOverrides() {
+    try {
+      const payload = {};
+      for (const [workspaceId, rows] of this.sessionVisibilityOverridesByWorkspace.entries()) {
+        if (!(rows instanceof Map) || rows.size === 0) continue;
+        const out = {};
+        for (const [sessionId, visible] of rows.entries()) {
+          const sid = String(sessionId || '').trim();
+          if (!sid) continue;
+          if (visible === false) out[sid] = true;
+        }
+        if (Object.keys(out).length) payload[workspaceId] = out;
+      }
+      localStorage.setItem(this.getSessionVisibilityStorageKey(), JSON.stringify(payload));
+    } catch {
+      // ignore storage failures
+    }
+  }
+
+  getSessionVisibilityOverridesForWorkspace(workspaceId = null, { create = false } = {}) {
+    const key = this.getSessionVisibilityWorkspaceKey(workspaceId);
+    let rows = this.sessionVisibilityOverridesByWorkspace.get(key);
+    if (!rows && create) {
+      rows = new Map();
+      this.sessionVisibilityOverridesByWorkspace.set(key, rows);
+    }
+    return rows || null;
+  }
+
+  getSessionVisibilityOverride(sessionId, { workspaceId = null } = {}) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return null;
+    const rows = this.getSessionVisibilityOverridesForWorkspace(workspaceId);
+    if (!rows) return null;
+    if (!rows.has(sid)) return null;
+    return rows.get(sid);
+  }
+
+  setSessionVisibilityOverride(sessionId, visible = null, { workspaceId = null } = {}) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+    const rows = this.getSessionVisibilityOverridesForWorkspace(workspaceId, { create: true });
+    if (!rows) return;
+
+    if (visible === false) rows.set(sid, false);
+    else rows.delete(sid);
+
+    if (rows.size === 0) {
+      const key = this.getSessionVisibilityWorkspaceKey(workspaceId);
+      this.sessionVisibilityOverridesByWorkspace.delete(key);
+    }
+
+    this.saveSessionVisibilityOverrides();
+  }
+
+  clearSessionVisibilityOverride(sessionId, { allWorkspaces = false } = {}) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return;
+    if (!allWorkspaces) {
+      this.setSessionVisibilityOverride(sid, null);
+      return;
+    }
+
+    for (const [workspaceId, rows] of this.sessionVisibilityOverridesByWorkspace.entries()) {
+      if (!(rows instanceof Map)) continue;
+      rows.delete(sid);
+      if (rows.size === 0) this.sessionVisibilityOverridesByWorkspace.delete(workspaceId);
+    }
+    this.saveSessionVisibilityOverrides();
+  }
+
+  isSessionVisibleByWorktreeSelection(sessionId, session = null) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return false;
+    const row = session || this.sessions.get(sid) || null;
+    const backgroundLaunch = !!row?.backgroundLaunch;
+    const visibleByWorktreeToggle = this.visibleTerminals.has(sid)
+      || ((this.workflowMode === 'background' || this.workflowMode === 'all') && backgroundLaunch);
+    if (!visibleByWorktreeToggle) return false;
+
+    const override = this.getSessionVisibilityOverride(sid, { workspaceId: row?.workspace || null });
+    if (override === false) return false;
+    return true;
+  }
+
+  toggleSessionVisibility(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid || !this.sessions.has(sid)) return;
+    const session = this.sessions.get(sid);
+    const currentlyVisible = this.isSessionVisibleByWorktreeSelection(sid, session);
+    this.setSessionVisibilityOverride(sid, currentlyVisible ? false : null, { workspaceId: session?.workspace || null });
+    this.updateTerminalGrid();
+    this.buildSidebar();
+  }
+
   getSessionIntentHaikuFallback(sessionId) {
     const sid = String(sessionId || '').trim();
     const session = this.sessions.get(sid);
     const status = String(session?.status || '').trim().toLowerCase();
     const branch = String(session?.branch || '').trim();
     const hasBranch = !!branch && branch !== 'unknown';
-    if (status === 'waiting') return 'Context is loaded; likely waiting for your next prompt.';
+    if (status === 'waiting') return 'Context is cached; likely waiting for your next prompt.';
     if (status === 'busy') return 'Reading terminal activity to infer intent...';
     if (hasBranch && !this.isMainlineBranch(branch)) {
-      return `Branch ${branch}. No recent terminal activity; likely paused between steps on this branch.`;
+      return `Branch ${branch}. Context is cached from this branch; likely paused between steps.`;
     }
     if (hasBranch) {
-      return `Branch ${branch}. No recent terminal activity; likely waiting for your next prompt.`;
+      return `Branch ${branch}. Context is cached; likely waiting for your next prompt.`;
     }
-    return 'No recent terminal activity; likely waiting for your next prompt.';
+    return 'Context is cached; likely waiting for your next prompt.';
   }
 
   getSessionIntentHaikuText(sessionId) {
@@ -1437,6 +1568,18 @@ class ClaudeOrchestrator {
           if (worktreeId) {
             this.refreshWorktreeBranch(worktreeId, { showToast: true });
           }
+          return;
+        }
+
+        const visibilityBtn = e.target.closest('.worktree-session-visibility-btn');
+        if (visibilityBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          const enc = String(visibilityBtn.dataset.sessionVisibilitySession || '').trim();
+          if (!enc) return;
+          let sessionId = enc;
+          try { sessionId = decodeURIComponent(enc); } catch { sessionId = enc; }
+          this.toggleSessionVisibility(sessionId);
           return;
         }
 
@@ -3006,11 +3149,7 @@ class ClaudeOrchestrator {
 
   isSessionVisibleInCurrentView(sessionId) {
     const session = this.sessions.get(sessionId);
-    // Background-launched worktrees intentionally do not auto-show in Review/Focus,
-    // but they should become visible when the user explicitly switches to Background mode.
-    const backgroundLaunch = !!session?.backgroundLaunch;
-    const visibleByWorktreeToggle = this.visibleTerminals.has(sessionId)
-      || ((this.workflowMode === 'background' || this.workflowMode === 'all') && backgroundLaunch);
+    const visibleByWorktreeToggle = this.isSessionVisibleByWorktreeSelection(sessionId, session);
 
 	    return visibleByWorktreeToggle
         && this.matchesViewMode(sessionId)
@@ -3093,7 +3232,7 @@ class ClaudeOrchestrator {
     // Show all visible terminals
     this.updateTerminalGrid();
     // On load, fill missing intent hints once and rely on milestone refreshes afterward.
-    this.refreshIntentHaikusForAgentSessions({ delayMs: 1400, force: false, onlyMissing: true });
+    this.refreshIntentHaikusForAgentSessions({ delayMs: this.intentHaikuInitialRefreshDelayMs, force: false, onlyMissing: true });
 
     // Check for auto-start after a delay to let terminals initialize
     setTimeout(() => {
@@ -3694,10 +3833,10 @@ class ClaudeOrchestrator {
         continue;
       }
       
-      // Check if any session in this worktree is visible
-      const backgroundMode = this.workflowMode === 'background';
-      const isVisible = (worktree.claude && (this.visibleTerminals.has(worktree.claude.sessionId) || (backgroundMode && worktree.claude.backgroundLaunch))) ||
-                       (worktree.server && (this.visibleTerminals.has(worktree.server.sessionId) || (backgroundMode && worktree.server.backgroundLaunch)));
+      // Check if any session in this worktree is visible.
+      const claudeVisible = !!(worktree.claude && this.isSessionVisibleByWorktreeSelection(worktree.claude.sessionId, worktree.claude));
+      const serverVisible = !!(worktree.server && this.isSessionVisibleByWorktreeSelection(worktree.server.sessionId, worktree.server));
+      const isVisible = claudeVisible || serverVisible;
       
       const item = document.createElement('div');
       // Only show visibility state, not activity state (activity filtering is handled separately)
@@ -3743,6 +3882,18 @@ class ClaudeOrchestrator {
         const worktreeIdArg = this.escapeOnclickArg(String(worktree.id || ''));
         const displayNameArg = this.escapeOnclickArg(String(displayName || ''));
 
+      const encode = (value) => {
+        try { return encodeURIComponent(String(value || '')); } catch { return ''; }
+      };
+      const agentSessionEncoded = worktree.claude ? encode(worktree.claude.sessionId) : '';
+      const serverSessionEncoded = worktree.server ? encode(worktree.server.sessionId) : '';
+      const agentTitle = worktree.claude
+        ? (claudeVisible ? 'Hide agent terminal' : 'Show agent terminal')
+        : 'No agent terminal';
+      const serverTitle = worktree.server
+        ? (serverVisible ? 'Hide server terminal' : 'Show server terminal')
+        : 'No server terminal';
+
 	      item.innerHTML = `
 	        <div class="worktree-header">
 	          <div class="worktree-title">
@@ -3767,6 +3918,22 @@ class ClaudeOrchestrator {
                     title="${this.escapeHtml(readyTitle)}"
                     ${worktreePath ? '' : 'disabled'}>
               R
+            </button>
+            <button class="worktree-session-visibility-btn ${claudeVisible ? 'active' : ''}"
+                    data-session-visibility-session="${this.escapeHtml(agentSessionEncoded)}"
+                    data-session-visibility-kind="agent"
+                    aria-pressed="${claudeVisible ? 'true' : 'false'}"
+                    title="${this.escapeHtml(agentTitle)}"
+                    ${worktree.claude ? '' : 'disabled'}>
+              🤖
+            </button>
+            <button class="worktree-session-visibility-btn ${serverVisible ? 'active' : ''}"
+                    data-session-visibility-session="${this.escapeHtml(serverSessionEncoded)}"
+                    data-session-visibility-kind="server"
+                    aria-pressed="${serverVisible ? 'true' : 'false'}"
+                    title="${this.escapeHtml(serverTitle)}"
+                    ${worktree.server ? '' : 'disabled'}>
+              💻
             </button>
             <button class="delete-worktree-btn"
                     onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.deleteWorktree(${worktreeIdArg}, ${displayNameArg}, { workspaceId: ${workspaceIdArg} })"
@@ -4125,6 +4292,10 @@ class ClaudeOrchestrator {
     }
 
     // Update the grid to show only these terminals
+    for (const sid of this.visibleTerminals) {
+      const session = this.sessions.get(sid);
+      this.setSessionVisibilityOverride(sid, null, { workspaceId: session?.workspace || null });
+    }
     this.updateTerminalGrid();
     this.buildSidebar();
   }
@@ -4171,7 +4342,7 @@ class ClaudeOrchestrator {
     console.log(`Found sessions for ${worktreeIdOrKey}:`, sessions);
 
     // Check if ANY session from this worktree is currently visible
-    const anyVisible = sessions.some(id => this.visibleTerminals.has(id));
+    const anyVisible = sessions.some((id) => this.isSessionVisibleByWorktreeSelection(id, this.sessions.get(id)));
 
     // Log current state for debugging
     const claudeSessionId = sessions.find(id => id.includes('claude'));
@@ -4188,6 +4359,8 @@ class ClaudeOrchestrator {
       // Show terminals - add back to visible set
       sessions.forEach(id => {
         this.visibleTerminals.add(id);
+        const session = this.sessions.get(id);
+        this.setSessionVisibilityOverride(id, null, { workspaceId: session?.workspace || null });
       });
       console.log(`Shown worktree ${worktreeIdOrKey}`);
     }
@@ -10689,17 +10862,17 @@ class ClaudeOrchestrator {
 				        terminals: { terminals: true, files: false, commits: false, diff: false }
 				      };
 
-			      const layoutPanel = (() => {
+			      const layoutControls = (() => {
 			        const tinyBtn = (dataAttr, key, text, active, title = '') => {
 			          return `<button class="rc-tiny-btn ${active ? 'active' : ''}" type="button" data-${dataAttr}="${escapeHtml(key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(title)}">${escapeHtml(text)}</button>`;
 			        };
 
 			        return `
-			          <div class="rc-layout-bar">
-			            <span class="rc-layout-group">
-			              ${tinyBtn('review-window', 'fullscreen', '⛶', !!currentFullscreen, 'Fullscreen Review Console')}
-			              ${tinyBtn('review-window', 'docked', '▐', !currentFullscreen, 'Dock Review Console')}
-			            </span>
+				          <div class="rc-layout-bar" data-rc-layout-bar="true">
+				            <span class="rc-layout-group">
+				              ${tinyBtn('review-window', 'fullscreen', '⛶', !!currentFullscreen, 'Fullscreen Review Console')}
+				              ${tinyBtn('review-window', 'docked', '▐', !currentFullscreen, 'Dock Review Console')}
+				            </span>
 			            <span class="rc-layout-sep">|</span>
 				            <span class="rc-layout-group">
 				              ${tinyBtn('review-preset', 'throughput', 'Throughput', currentPreset === 'throughput', 'Diff-first compact review flow')}
@@ -10773,9 +10946,9 @@ class ClaudeOrchestrator {
               }
             };
             const collapsedPanels = readCollapsedPanels();
-            const reviewRouteBar = navCount > 0 ? `
-              <div class="review-console-route-bar" data-review-route-bar="true">
-                <strong style="margin-right:6px;">Route</strong>
+	            const reviewRouteBar = navCount > 0 ? `
+	              <div class="review-console-route-bar" data-review-route-bar="true">
+	                <strong style="margin-right:6px;">Route</strong>
                 <label>Tier
                   <select data-review-route-tier>
                     <option value="all" ${routeFilters.tier === 'all' ? 'selected' : ''}>All</option>
@@ -10811,12 +10984,24 @@ class ClaudeOrchestrator {
                     <option value="updated_desc" ${routeFilters.sort === 'updated_desc' ? 'selected' : ''}>Updated ↓</option>
                   </select>
                 </label>
-                <button class="btn-secondary" type="button" data-review-route-reset="true">Reset</button>
-              </div>
-            ` : '';
+	                <button class="btn-secondary" type="button" data-review-route-reset="true">Reset</button>
+	              </div>
+	            ` : '';
+	            const routeMenu = navCount > 0 ? `
+	              <details class="rc-inline-menu" data-rc-inline-menu="route">
+	                <summary class="btn-secondary" title="Route filters">🧭 Route</summary>
+	                <div class="rc-inline-menu-popover">${reviewRouteBar}</div>
+	              </details>
+	            ` : '';
+	            const layoutMenu = `
+	              <details class="rc-inline-menu" data-rc-inline-menu="layout">
+	                <summary class="btn-secondary" title="Layout and visibility controls">⚙ Layout</summary>
+	                <div class="rc-inline-menu-popover">${layoutControls}</div>
+	              </details>
+	            `;
 
-		      bodyEl.innerHTML = `
-		        <div class="worktree-inspector-header review-console-header">
+			      bodyEl.innerHTML = `
+			        <div class="worktree-inspector-header review-console-header">
 		          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
 	            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
 	              <strong>PR #${escapeHtml(pr.number || '')}</strong>
@@ -10824,29 +11009,30 @@ class ClaudeOrchestrator {
 	              ${pr.isDraft ? ' • <span style="opacity:0.85;">draft</span>' : ''}
 	              ${pr.headRefName ? ` • <span style="opacity:0.85;">${escapeHtml(pr.headRefName)}</span>` : ''}
 	            </div>
-	            <div class="worktree-inspector-subtle" style="opacity:0.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-	              ${escapeHtml(pr.title || t.title || '')}
-	            </div>
-	          </div>
-	          <span style="flex:1"></span>
-		          <div style="display:flex; gap:8px; flex-wrap:nowrap; justify-content:flex-end;">
-		            ${showNav ? `
-		              <button class="btn-secondary" type="button" data-review-nav="prev" title="Previous PR in review stack">◀ Prev</button>
-		              <span class="worktree-inspector-subtle" data-review-nav-status="true" title="Review stack (captured from Queue)">${navIndex + 1}/${navCount}</span>
-		              <button class="btn-secondary" type="button" data-review-nav="next" title="Next PR in review stack">Next ▶</button>
-		            ` : ''}
-		            <button class="btn-secondary" type="button" data-review-nav="next-unreviewed-t3" title="Next unreviewed Tier 3+ PR (Alt+Shift+N)">Next unreviewed T3+ ▶</button>
-		            <button class="btn-secondary" type="button" data-pr-approve="${escapeHtml(prUrl)}" title="Approve PR (Alt+Shift+A)">👍 Approve</button>
-		            <button class="btn-secondary" type="button" data-pr-request-changes="${escapeHtml(prUrl)}" title="Request changes (Alt+Shift+C)">🛑 Changes</button>
-		            <button class="btn-secondary" type="button" data-pr-refresh="true">🔄 Refresh</button>
-		            <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer">↗ GitHub</a>
-		            <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}">🔍 Diff</button>
-		            <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" title="Merge PR (Alt+Shift+M)" ${pr.isDraft ? 'disabled' : ''}>✅ Merge</button>
-			          </div>
-		        </div>
-            ${reviewRouteBar}
+		            <div class="worktree-inspector-subtle" style="opacity:0.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+		              ${escapeHtml(pr.title || t.title || '')}
+		            </div>
+		          </div>
+		          <span style="flex:1"></span>
+			          <div class="review-console-header-actions">
+			            ${showNav ? `
+			              <button class="btn-secondary" type="button" data-review-nav="prev" title="Previous PR in review stack">◀</button>
+			              <span class="worktree-inspector-subtle" data-review-nav-status="true" title="Review stack (captured from Queue)">${navIndex + 1}/${navCount}</span>
+			              <button class="btn-secondary" type="button" data-review-nav="next" title="Next PR in review stack">▶</button>
+			            ` : ''}
+			            <button class="btn-secondary" type="button" data-review-nav="next-unreviewed-t3" title="Next unreviewed Tier 3+ PR (Alt+Shift+N)">T3+ ▶</button>
+			            ${routeMenu}
+			            ${layoutMenu}
+			            <button class="btn-secondary" type="button" data-pr-approve="${escapeHtml(prUrl)}" title="Approve PR (Alt+Shift+A)">👍</button>
+			            <button class="btn-secondary" type="button" data-pr-request-changes="${escapeHtml(prUrl)}" title="Request changes (Alt+Shift+C)">🛑</button>
+			            <button class="btn-secondary" type="button" data-pr-refresh="true" title="Refresh PR details">🔄</button>
+			            <a class="btn-secondary" href="${escapeHtml(pr.url || prUrl)}" target="_blank" rel="noreferrer" title="Open on GitHub">↗</a>
+			            <button class="btn-secondary" type="button" data-open-diff="${escapeHtml(prUrl)}" title="Open diff viewer">🔍</button>
+			            <button class="btn-secondary" type="button" data-pr-merge="${escapeHtml(prUrl)}" title="Merge PR (Alt+Shift+M)" ${pr.isDraft ? 'disabled' : ''}>✅</button>
+				          </div>
+			        </div>
 
-				        ${warnings.length ? `
+					        ${warnings.length ? `
 			          <div class="review-console-warning">
 			            <div style="font-weight:600; margin-bottom:6px;">GitHub details may be incomplete</div>
 			            <div style="opacity:0.9;">Some GitHub API calls failed, so Files/Commits/Conversation can appear empty.</div>
@@ -10873,12 +11059,10 @@ class ClaudeOrchestrator {
 			              <button class="btn-secondary" type="button" data-pr-refresh="true" title="Retry loading PR details">🔄 Retry</button>
 			              <button class="btn-secondary" type="button" data-open-diagnostics="true" title="Open Settings → Diagnostics">🧰 Diagnostics</button>
 			            </div>
-			          </div>
-				        ` : ''}
+				          </div>
+					        ` : ''}
 
-			        ${layoutPanel}
-
-					        <div class="review-console-grid" data-rc-grid="true" data-review-preset="${escapeHtml(currentPreset)}">
+						        <div class="review-console-grid" data-rc-grid="true" data-review-preset="${escapeHtml(currentPreset)}">
 					          <div class="review-console-col review-console-col-terminals ${terminalsColumnHiddenClass}" data-rc-column="terminals">
 					            ${matchingSessionIds.length ? `
 					              <div class="worktree-inspector-panel worktree-inspector-terminals-panel ${terminalsPanelHiddenClass}" data-rc-panel="terminals">
@@ -11305,6 +11489,27 @@ class ClaudeOrchestrator {
         const routeSortEl = bodyEl.querySelector('[data-review-route-sort]');
         const routeResetBtn = bodyEl.querySelector('[data-review-route-reset="true"]');
         const panelToggleBtns = Array.from(bodyEl.querySelectorAll('[data-rc-panel-toggle]'));
+        const inlineMenus = Array.from(bodyEl.querySelectorAll('[data-rc-inline-menu]'));
+        inlineMenus.forEach((menu) => {
+          menu.addEventListener('toggle', () => {
+            if (!menu.open) return;
+            inlineMenus.forEach((other) => {
+              if (other === menu) return;
+              other.open = false;
+            });
+          });
+        });
+        const onInlineMenuOutsideClick = (event) => {
+          const target = event?.target;
+          if (!target || !bodyEl.contains(target)) return;
+          const hitMenu = target.closest?.('[data-rc-inline-menu]');
+          if (hitMenu) return;
+          inlineMenus.forEach((menu) => { menu.open = false; });
+        };
+        document.addEventListener('mousedown', onInlineMenuOutsideClick, true);
+        const cleanupInlineMenus = () => {
+          document.removeEventListener('mousedown', onInlineMenuOutsideClick, true);
+        };
 
 	      const parsePrUrlFromTaskId = (id) => {
 	        const raw = String(id || '').trim();
@@ -11909,10 +12114,11 @@ class ClaudeOrchestrator {
 		          reviewMergeBtn?.click?.();
 		        }
 		      };
-		      document.addEventListener('keydown', onReviewHotkey, true);
-		      this.reviewConsoleHotkeysCleanup = () => {
-		        document.removeEventListener('keydown', onReviewHotkey, true);
-		      };
+      document.addEventListener('keydown', onReviewHotkey, true);
+      this.reviewConsoleHotkeysCleanup = () => {
+        document.removeEventListener('keydown', onReviewHotkey, true);
+        cleanupInlineMenus();
+      };
 		      bodyEl.querySelector('[data-close-inspector]')?.addEventListener('click', () => {
 		        this.closeWorktreeInspector();
 		      });
@@ -13639,11 +13845,12 @@ class ClaudeOrchestrator {
 	    this.sessionAgentPreferences.delete(sid);
 	    this.autoStartApplied.delete(sid);
 	    this.worktreeConfigs.delete(sid);
-      this.intentHaikuBySession.delete(sid);
-      this.intentHaikuInFlight.delete(sid);
-      this.intentHaikuLastFetchedAt.delete(sid);
-      this.intentHaikuPolicyBySession.delete(sid);
-      const intentTimer = this.intentHaikuTimers.get(sid);
+    this.intentHaikuBySession.delete(sid);
+    this.intentHaikuInFlight.delete(sid);
+    this.intentHaikuLastFetchedAt.delete(sid);
+    this.intentHaikuPolicyBySession.delete(sid);
+    this.clearSessionVisibilityOverride(sid, { allWorkspaces: true });
+    const intentTimer = this.intentHaikuTimers.get(sid);
       if (intentTimer) clearTimeout(intentTimer);
       this.intentHaikuTimers.delete(sid);
 
@@ -22192,21 +22399,31 @@ class ClaudeOrchestrator {
             <button class="btn-secondary tasks-view-btn" id="queue-tier-bg" data-tier="bg" title="Background tiers (T3+T4)">T3+</button>
             <button class="btn-secondary tasks-view-btn" id="queue-tier-none" data-tier="none" title="No tier">None</button>
           </div>
-			          <div class="tasks-view-toggle" role="group" aria-label="Review filters">
-			            <button class="btn-secondary tasks-view-btn" id="queue-triage" title="Triage ordering + snooze (safe backoff)">Triage</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-blocked" title="Toggle: show blocked only (dependency-blocked items)">Blocked</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-auto-console" title="Toggle: auto-open Review Console for PR/worktree/session items">Auto Console</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-auto-next" title="Toggle: auto-advance when you complete a review">Auto Next</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-auto-fixer" title="Toggle: auto-spawn a fixer when Outcome=needs_fix and Notes is set">Auto Fixer</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-auto-recheck" title="Toggle: auto-spawn a recheck reviewer after fixes land on the PR">Auto Recheck</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t2" title="Conveyor: Tier 2 + unreviewed + auto-next (one-at-a-time)">Conveyor T2</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t3" title="Conveyor: Tier 3 + unreviewed + auto-console + auto-next (one-at-a-time)">Conveyor T3</button>
-                  <button class="btn-secondary tasks-view-btn" id="queue-review-route" title="Review Route: Tier 3+ unreviewed batch review in Review Console">Review Route</button>
-			            <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
-			          </div>
+				          <div class="tasks-view-toggle" role="group" aria-label="Queue quick filters">
+				            <button class="btn-secondary tasks-view-btn" id="queue-triage" title="Triage ordering + snooze (safe backoff)">Triage</button>
+				            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
+				            <button class="btn-secondary tasks-view-btn" id="queue-blocked" title="Toggle: show blocked only (dependency-blocked items)">Blocked</button>
+				          </div>
+				          <details class="tasks-filter tasks-toolbar-menu" id="queue-automation-menu">
+				            <summary class="btn-secondary tasks-view-btn" aria-label="Automation controls">Automation ▾</summary>
+				            <div class="tasks-filter-popover tasks-toolbar-popover" data-queue-popover="automation">
+				              <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
+				              <button class="btn-secondary tasks-view-btn" id="queue-auto-console" title="Toggle: auto-open Review Console for PR/worktree/session items">Auto Console</button>
+				              <button class="btn-secondary tasks-view-btn" id="queue-auto-next" title="Toggle: auto-advance when you complete a review">Auto Next</button>
+				              <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
+				              <button class="btn-secondary tasks-view-btn" id="queue-auto-fixer" title="Toggle: auto-spawn a fixer when Outcome=needs_fix and Notes is set">Auto Fixer</button>
+				              <button class="btn-secondary tasks-view-btn" id="queue-auto-recheck" title="Toggle: auto-spawn a recheck reviewer after fixes land on the PR">Auto Recheck</button>
+				            </div>
+				          </details>
+				          <details class="tasks-filter tasks-toolbar-menu" id="queue-workflows-menu">
+				            <summary class="btn-secondary tasks-view-btn" aria-label="Workflow controls">Flows ▾</summary>
+				            <div class="tasks-filter-popover tasks-toolbar-popover" data-queue-popover="workflows">
+				              <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t2" title="Conveyor: Tier 2 + unreviewed + auto-next (one-at-a-time)">Conveyor T2</button>
+				              <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t3" title="Conveyor: Tier 3 + unreviewed + auto-console + auto-next (one-at-a-time)">Conveyor T3</button>
+	                      <button class="btn-secondary tasks-view-btn" id="queue-review-route" title="Review Route: Tier 3+ unreviewed batch review in Review Console">Review Route</button>
+				              <button class="btn-secondary tasks-view-btn" id="queue-start-review" title="Start review from the top">Start Review</button>
+				            </div>
+				          </details>
 	          <div class="tasks-view-toggle" role="group" aria-label="Queue navigation">
 	            <button class="btn-secondary tasks-view-btn" id="queue-prev" title="Previous item (unblocked first)">Prev</button>
 	            <button class="btn-secondary tasks-view-btn" id="queue-next" title="Next item (unblocked first)">Next</button>
@@ -22257,6 +22474,26 @@ class ClaudeOrchestrator {
 		    const prevBtn = modal.querySelector('#queue-prev');
 		    const nextBtn = modal.querySelector('#queue-next');
 	    const closeBtn = modal.querySelector('#queue-close-btn');
+      const automationMenuEl = modal.querySelector('#queue-automation-menu');
+      const workflowsMenuEl = modal.querySelector('#queue-workflows-menu');
+      const toolbarMenus = [automationMenuEl, workflowsMenuEl].filter(Boolean);
+
+      if (toolbarMenus.length) {
+        toolbarMenus.forEach((menu) => {
+          menu.addEventListener('toggle', () => {
+            if (!menu.open) return;
+            toolbarMenus.forEach((other) => {
+              if (other === menu) return;
+              other.open = false;
+            });
+          });
+        });
+        modal.addEventListener('click', (event) => {
+          const hit = event?.target?.closest?.('.tasks-toolbar-menu');
+          if (hit) return;
+          toolbarMenus.forEach((menu) => { menu.open = false; });
+        });
+      }
 
       if (searchEl) {
         searchEl.value = String(state.query || '');
