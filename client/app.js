@@ -81,6 +81,9 @@ class ClaudeOrchestrator {
     this.intentHaikuInFlight = new Set(); // sessionIds currently fetching
     this.intentHaikuLastFetchedAt = new Map(); // sessionId -> epoch ms
     this.intentHaikuRefreshMs = 4500;
+    this.intentHaikuPostPromptDelayMs = 30000;
+    this.intentHaikuLongRefreshMs = 90 * 60 * 1000;
+    this.intentHaikuPolicyBySession = new Map(); // sessionId -> milestone refresh state
 
     // Launch helpers (ticket/card → worktree → agent → auto-prompt)
     this.pendingAutoPrompts = new Map(); // sessionId -> { text, createdAt, sentAt }
@@ -183,6 +186,55 @@ class ClaudeOrchestrator {
     el.title = bits.join(' | ');
   }
 
+  getIntentHaikuPolicy(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return null;
+    let policy = this.intentHaikuPolicyBySession.get(sid);
+    if (!policy) {
+      policy = {
+        postPromptScheduled: false,
+        lastPrUrl: '',
+        lastLongRefreshQueuedAt: 0
+      };
+      this.intentHaikuPolicyBySession.set(sid, policy);
+    }
+    return policy;
+  }
+
+  maybeSchedulePostPromptIntentRefresh(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid || !this.isAgentSession(sid)) return;
+    const policy = this.getIntentHaikuPolicy(sid);
+    if (!policy || policy.postPromptScheduled) return;
+    policy.postPromptScheduled = true;
+    this.scheduleSessionIntentHaikuRefresh(sid, { delayMs: this.intentHaikuPostPromptDelayMs, force: true });
+  }
+
+  maybeSchedulePrIntentRefresh(sessionId, prUrl) {
+    const sid = String(sessionId || '').trim();
+    const pr = String(prUrl || '').trim();
+    if (!sid || !this.isAgentSession(sid) || !pr) return;
+    const policy = this.getIntentHaikuPolicy(sid);
+    if (!policy) return;
+    if (policy.lastPrUrl === pr) return;
+    policy.lastPrUrl = pr;
+    this.scheduleSessionIntentHaikuRefresh(sid, { delayMs: 1200, force: true });
+  }
+
+  maybeScheduleLongSessionIntentRefresh(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid || !this.isAgentSession(sid)) return;
+    const now = Date.now();
+    const lastFetch = Number(this.intentHaikuLastFetchedAt.get(sid) || 0);
+    if (!lastFetch || (now - lastFetch) < this.intentHaikuLongRefreshMs) return;
+
+    const policy = this.getIntentHaikuPolicy(sid);
+    if (!policy) return;
+    if ((now - Number(policy.lastLongRefreshQueuedAt || 0)) < 60000) return;
+    policy.lastLongRefreshQueuedAt = now;
+    this.scheduleSessionIntentHaikuRefresh(sid, { delayMs: 3000, force: false });
+  }
+
   pruneIntentHaikuState(activeSessionIds = null) {
     const active = activeSessionIds instanceof Set
       ? activeSessionIds
@@ -193,6 +245,7 @@ class ClaudeOrchestrator {
       this.intentHaikuBySession.delete(sid);
       this.intentHaikuLastFetchedAt.delete(sid);
       this.intentHaikuInFlight.delete(sid);
+      this.intentHaikuPolicyBySession.delete(sid);
       const timer = this.intentHaikuTimers.get(sid);
       if (timer) clearTimeout(timer);
       this.intentHaikuTimers.delete(sid);
@@ -213,9 +266,13 @@ class ClaudeOrchestrator {
     this.intentHaikuTimers.set(sid, timer);
   }
 
-  refreshIntentHaikusForAgentSessions({ delayMs = 1400, force = false } = {}) {
+  refreshIntentHaikusForAgentSessions({ delayMs = 1400, force = false, onlyMissing = false } = {}) {
     for (const sessionId of this.sessions.keys()) {
       if (!this.isAgentSession(sessionId)) continue;
+      if (onlyMissing && this.intentHaikuBySession.has(sessionId)) {
+        this.renderSessionIntentHaiku(sessionId, { pending: false, error: false });
+        continue;
+      }
       this.scheduleSessionIntentHaikuRefresh(sessionId, { delayMs, force });
     }
   }
@@ -744,7 +801,7 @@ class ClaudeOrchestrator {
         // Detect GitHub URLs in agent sessions
         if (/-claude$|-codex$/.test(String(sessionId || ''))) {
           this.detectGitHubLinks(sessionId, data);
-          this.scheduleSessionIntentHaikuRefresh(sessionId, { delayMs: 3200 });
+          this.maybeScheduleLongSessionIntentRefresh(sessionId);
         }
 
         // Fast-path branch refresh when git reports a branch change in output.
@@ -770,10 +827,6 @@ class ClaudeOrchestrator {
       this.socket.on('status-update', ({ sessionId, status }) => {
         this.updateSessionStatus(sessionId, status);
         this.maybeAutoSendPrompt(sessionId, status);
-        if (this.isAgentSession(sessionId)) {
-          const delayMs = status === 'waiting' ? 1200 : 2600;
-          this.scheduleSessionIntentHaikuRefresh(sessionId, { delayMs });
-        }
       });
       
       this.socket.on('branch-update', ({ sessionId, branch, remoteUrl, defaultBranch, existingPR }) => {
@@ -3039,7 +3092,8 @@ class ClaudeOrchestrator {
 
     // Show all visible terminals
     this.updateTerminalGrid();
-    this.refreshIntentHaikusForAgentSessions({ delayMs: 1400, force: true });
+    // On load, fill missing intent hints once and rely on milestone refreshes afterward.
+    this.refreshIntentHaikusForAgentSessions({ delayMs: 1400, force: false, onlyMissing: true });
 
     // Check for auto-start after a delay to let terminals initialize
     setTimeout(() => {
@@ -4865,6 +4919,7 @@ class ClaudeOrchestrator {
       // Track that user has interacted if going from waiting to busy
       if (previousStatus === 'waiting' && status === 'busy') {
         session.hasUserInput = true;
+        this.maybeSchedulePostPromptIntentRefresh(sessionId);
       }
 
       // Only mark as active when user actually interacts (waiting -> busy transition)
@@ -5045,6 +5100,7 @@ class ClaudeOrchestrator {
         links.pr = existingPR;
         this.githubLinks.set(sessionId, links);
         console.log('Automatically detected existing PR:', existingPR);
+        this.maybeSchedulePrIntentRefresh(sessionId, existingPR);
       }
     }
     
@@ -5215,6 +5271,7 @@ class ClaudeOrchestrator {
           if (links.pr !== url) {
             links.pr = url;
             console.log('PR link detected:', url);
+            this.maybeSchedulePrIntentRefresh(sessionId, url);
           }
         } else if (url.includes('/commit/') && url.match(/\/commit\/[a-f0-9]+\/?$/)) {
           if (links.commit !== url) {
@@ -5542,13 +5599,6 @@ class ClaudeOrchestrator {
     }
 
     this.socket.emit('terminal-input', { sessionId, data });
-
-    // Intent hint refresh is intentionally delayed/debounced so it updates shortly
-    // after user input instead of on every keystroke.
-    if (this.isAgentSession(sessionId)) {
-      const looksLikeTypedText = String(data || '').trim().length > 0 && !/^[\x00-\x1f\x7f]+$/.test(String(data || ''));
-      this.scheduleSessionIntentHaikuRefresh(sessionId, { delayMs: looksLikeTypedText ? 1800 : 2800 });
-    }
   }
 
   interruptSession(sessionId) {
@@ -13591,6 +13641,7 @@ class ClaudeOrchestrator {
       this.intentHaikuBySession.delete(sid);
       this.intentHaikuInFlight.delete(sid);
       this.intentHaikuLastFetchedAt.delete(sid);
+      this.intentHaikuPolicyBySession.delete(sid);
       const intentTimer = this.intentHaikuTimers.get(sid);
       if (intentTimer) clearTimeout(intentTimer);
       this.intentHaikuTimers.delete(sid);
