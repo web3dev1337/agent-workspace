@@ -41,6 +41,40 @@
         opacity: 0.7;
         font-size: 12.5px;
       }
+      .code-badge {
+        margin-top: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: rgba(255, 255, 255, 0.08);
+        padding: 3px 10px;
+        opacity: 0.9;
+      }
+      .actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .actions button {
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        color: rgba(255, 255, 255, 0.92);
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 7px 10px;
+        cursor: pointer;
+        font-size: 12.5px;
+      }
+      .actions button:hover {
+        background: rgba(255, 255, 255, 0.16);
+      }
+      .actions button:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
       pre {
         margin: 12px 0 0;
         padding: 10px 12px;
@@ -69,26 +103,142 @@
     <div class="card">
       <h1 id="bootstrap-title">Starting Claude Orchestrator…</h1>
       <p id="bootstrap-message">Launching the local backend and connecting to your workspace.</p>
+      <div id="bootstrap-code" class="code-badge hidden"></div>
       <pre id="bootstrap-details" class="hidden"></pre>
       <p class="hint" id="bootstrap-hint">
         If this screen doesn’t advance within ~20 seconds, ensure Node is available or set
         <code>ORCHESTRATOR_NODE_PATH</code>.
       </p>
+      <div class="actions">
+        <button id="bootstrap-retry-btn" type="button" onclick="window.__orchestrator_bootstrap_retry()">Retry</button>
+        <button id="bootstrap-open-logs-btn" type="button" onclick="window.__orchestrator_bootstrap_open_logs()">Open Logs</button>
+        <button id="bootstrap-copy-btn" type="button" onclick="window.__orchestrator_bootstrap_copy_details()">Copy Details</button>
+      </div>
     </div>
 
     <script>
-      window.__orchestrator_bootstrap_error = function (title, message, details, hint) {
+      const bootstrapState = {
+        code: '',
+        title: '',
+        message: '',
+        details: '',
+        hint: '',
+        retryUrl: '',
+        logsDir: ''
+      };
+
+      function normalizePayload(args) {
+        const first = args[0];
+        if (first && typeof first === 'object' && !Array.isArray(first)) {
+          return {
+            code: String(first.code || '').trim(),
+            title: String(first.title || 'Failed to start').trim(),
+            message: String(first.message || 'The backend did not start.').trim(),
+            details: first.details == null ? '' : String(first.details),
+            hint: first.hint == null ? '' : String(first.hint),
+            retryUrl: String(first.retryUrl || '').trim(),
+            logsDir: String(first.logsDir || '').trim()
+          };
+        }
+        return {
+          code: String(args[4] || '').trim(),
+          title: String(args[0] || 'Failed to start').trim(),
+          message: String(args[1] || 'The backend did not start.').trim(),
+          details: args[2] == null ? '' : String(args[2]),
+          hint: args[3] == null ? '' : String(args[3]),
+          retryUrl: String(args[5] || '').trim(),
+          logsDir: String(args[6] || '').trim()
+        };
+      }
+
+      function toFileUrl(rawPath) {
+        const cleaned = String(rawPath || '').trim();
+        if (!cleaned) return '';
+        if (/^file:\/\//i.test(cleaned)) return cleaned;
+        const normalized = cleaned.replace(/\\/g, '/');
+        if (/^[A-Za-z]:\//.test(normalized)) return `file:///${normalized}`;
+        if (normalized.startsWith('/')) return `file://${normalized}`;
+        return '';
+      }
+
+      async function invokeTauri(command, payload) {
+        if (window.__TAURI__ && typeof window.__TAURI__.invoke === 'function') {
+          return window.__TAURI__.invoke(command, payload);
+        }
+        if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+          return window.__TAURI_INTERNALS__.invoke(command, payload);
+        }
+        throw new Error('Tauri invoke API is unavailable in bootstrap page');
+      }
+
+      function buildCopyText() {
+        const parts = [];
+        if (bootstrapState.code) parts.push(`code: ${bootstrapState.code}`);
+        if (bootstrapState.title) parts.push(`title: ${bootstrapState.title}`);
+        if (bootstrapState.message) parts.push(`message: ${bootstrapState.message}`);
+        if (bootstrapState.details) parts.push(`details:\n${bootstrapState.details}`);
+        if (bootstrapState.logsDir) parts.push(`logsDir: ${bootstrapState.logsDir}`);
+        if (bootstrapState.retryUrl) parts.push(`retryUrl: ${bootstrapState.retryUrl}`);
+        return parts.join('\n\n').trim();
+      }
+
+      async function copyText(text) {
+        const value = String(text || '');
+        if (!value) return false;
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(value);
+          return true;
+        }
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        ta.remove();
+        return !!ok;
+      }
+
+      function syncActionButtonState() {
+        const retryBtn = document.getElementById('bootstrap-retry-btn');
+        const logsBtn = document.getElementById('bootstrap-open-logs-btn');
+        if (retryBtn) retryBtn.disabled = false;
+        if (logsBtn) logsBtn.disabled = !bootstrapState.logsDir;
+      }
+
+      window.__orchestrator_bootstrap_error = function (...args) {
         try {
+          const payload = normalizePayload(args);
+          bootstrapState.code = payload.code;
+          bootstrapState.title = payload.title;
+          bootstrapState.message = payload.message;
+          bootstrapState.details = payload.details;
+          bootstrapState.hint = payload.hint;
+          bootstrapState.retryUrl = payload.retryUrl;
+          bootstrapState.logsDir = payload.logsDir;
+
           const titleEl = document.getElementById('bootstrap-title');
           const msgEl = document.getElementById('bootstrap-message');
+          const codeEl = document.getElementById('bootstrap-code');
           const detailsEl = document.getElementById('bootstrap-details');
           const hintEl = document.getElementById('bootstrap-hint');
 
-          if (titleEl) titleEl.textContent = title || 'Failed to start';
-          if (msgEl) msgEl.textContent = message || 'The backend did not start.';
+          if (titleEl) titleEl.textContent = payload.title || 'Failed to start';
+          if (msgEl) msgEl.textContent = payload.message || 'The backend did not start.';
+          if (codeEl) {
+            if (payload.code) {
+              codeEl.textContent = payload.code;
+              codeEl.classList.remove('hidden');
+            } else {
+              codeEl.textContent = '';
+              codeEl.classList.add('hidden');
+            }
+          }
           if (detailsEl) {
-            if (details) {
-              detailsEl.textContent = String(details);
+            if (payload.details) {
+              detailsEl.textContent = payload.details;
               detailsEl.classList.remove('hidden');
             } else {
               detailsEl.textContent = '';
@@ -96,14 +246,51 @@
             }
           }
           if (hintEl) {
-            hintEl.innerHTML = hint
-              ? String(hint)
+            hintEl.innerHTML = payload.hint
+              ? payload.hint
               : 'Check logs in <code>ORCHESTRATOR_DATA_DIR</code> (look for <code>logs/combined.log</code>).';
           }
+          syncActionButtonState();
         } catch (e) {
           console.error(e);
         }
       };
+
+      window.__orchestrator_bootstrap_retry = function () {
+        if (bootstrapState.retryUrl) {
+          window.location.replace(bootstrapState.retryUrl);
+          return;
+        }
+        window.location.reload();
+      };
+
+      window.__orchestrator_bootstrap_open_logs = async function () {
+        const logsDir = String(bootstrapState.logsDir || '').trim();
+        if (!logsDir) return;
+        const asFileUrl = toFileUrl(logsDir);
+        if (!asFileUrl) return;
+        try {
+          await invokeTauri('open_external', { url: asFileUrl });
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      window.__orchestrator_bootstrap_copy_details = async function () {
+        const text = buildCopyText();
+        if (!text) return;
+        try {
+          const copied = await copyText(text);
+          const msgEl = document.getElementById('bootstrap-message');
+          if (msgEl && copied) {
+            msgEl.textContent = `${bootstrapState.message || 'The backend did not start.'} (details copied)`;
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      syncActionButtonState();
     </script>
   </body>
 </html>

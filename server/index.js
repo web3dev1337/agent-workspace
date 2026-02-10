@@ -373,6 +373,298 @@ function buildPolicyDeniedPayload(decision, fallbackError = 'Forbidden by policy
   };
 }
 
+const SETUP_GATE_BLOCKED_CODE = 'SETUP_GATE_BLOCKED';
+
+function getFirstRunCheckById(firstRunDiagnostics, id) {
+  const checks = Array.isArray(firstRunDiagnostics?.checks) ? firstRunDiagnostics.checks : [];
+  return checks.find((check) => String(check?.id || '').trim() === String(id || '').trim()) || null;
+}
+
+function isPassingFirstRunCheck(check) {
+  return String(check?.status || '').trim().toLowerCase() === 'pass';
+}
+
+function getOpenDiagnosticsAction() {
+  return {
+    id: 'open-diagnostics',
+    label: 'Open Diagnostics',
+    kind: 'ui',
+    uiAction: 'open-diagnostics'
+  };
+}
+
+function buildSetupGateBlockedResponse(firstRunDiagnostics, { context = 'setup' } = {}) {
+  const checks = Array.isArray(firstRunDiagnostics?.checks) ? firstRunDiagnostics.checks : [];
+  const blockingChecks = checks
+    .filter((check) => {
+      const status = String(check?.status || '').trim().toLowerCase();
+      const severity = String(check?.severity || '').trim().toLowerCase();
+      return status === 'fail' && severity === 'blocking';
+    })
+    .map((check) => ({
+      id: String(check?.id || '').trim() || null,
+      name: String(check?.name || check?.id || 'check').trim(),
+      message: String(check?.message || '').trim() || null,
+      details: String(check?.details || '').trim() || null
+    }));
+
+  return {
+    ok: false,
+    error: 'Setup prerequisites are not satisfied. Fix blocking diagnostics before creating workspaces/projects.',
+    code: SETUP_GATE_BLOCKED_CODE,
+    context: String(context || 'setup').trim(),
+    summary: {
+      ready: false,
+      blockingCount: Number(firstRunDiagnostics?.summary?.blockingCount || 0),
+      warningCount: Number(firstRunDiagnostics?.summary?.warningCount || 0)
+    },
+    blockingChecks,
+    actions: [
+      getOpenDiagnosticsAction(),
+      {
+        id: 'refresh-first-run-checks',
+        label: 'Re-run Checks',
+        kind: 'api',
+        method: 'GET',
+        endpoint: '/api/diagnostics/first-run'
+      }
+    ],
+    diagnostics: firstRunDiagnostics
+  };
+}
+
+async function collectSetupGateBlockers() {
+  const diagnostics = await collectFirstRunDiagnostics();
+  const blockingCount = Number(diagnostics?.summary?.blockingCount || 0);
+  if (blockingCount <= 0) return null;
+  return diagnostics;
+}
+
+function getIntegrationSummary(integrations) {
+  const rows = Array.isArray(integrations) ? integrations : [];
+  const summary = {
+    total: rows.length,
+    okCount: 0,
+    warningCount: 0,
+    errorCount: 0
+  };
+  for (const row of rows) {
+    const status = String(row?.status || 'unknown').trim().toLowerCase();
+    if (status === 'ok') summary.okCount += 1;
+    else if (status === 'warning') summary.warningCount += 1;
+    else summary.errorCount += 1;
+  }
+  summary.ready = summary.errorCount === 0;
+  return summary;
+}
+
+async function collectIntegrationHealthReport() {
+  const firstRunDiagnostics = await collectFirstRunDiagnostics().catch(() => null);
+  const integrations = [];
+
+  const ghInstalledCheck = getFirstRunCheckById(firstRunDiagnostics, 'gh-installed');
+  const ghAuthCheck = getFirstRunCheckById(firstRunDiagnostics, 'gh-auth');
+  const ghInstalled = isPassingFirstRunCheck(ghInstalledCheck);
+  const ghAuthed = ghInstalled && isPassingFirstRunCheck(ghAuthCheck);
+  integrations.push({
+    id: 'github',
+    label: 'GitHub',
+    status: ghInstalled && ghAuthed ? 'ok' : 'warning',
+    summary: ghInstalled
+      ? (ghAuthed ? 'GitHub CLI is installed and authenticated.' : 'GitHub CLI is installed but not authenticated.')
+      : 'GitHub CLI is not installed.',
+    details: ghInstalled
+      ? (ghAuthed ? null : String(ghAuthCheck?.message || 'Run gh auth login to enable private repo/PR flows.').trim())
+      : String(ghInstalledCheck?.message || 'Install gh to enable GitHub repo and PR integrations.').trim(),
+    nextSteps: ghInstalled
+      ? (ghAuthed
+        ? ['GitHub integrations are ready.']
+        : ['Run gh auth login in a terminal.', 'Re-run integration checks from this panel.'])
+      : ['Install GitHub CLI from cli.github.com.', 'Run gh auth login after install.'],
+    actions: [
+      !ghInstalled ? {
+        id: 'open-github-cli-download',
+        label: 'Open gh Download',
+        kind: 'url',
+        url: 'https://cli.github.com/'
+      } : null,
+      ghInstalled && !ghAuthed ? {
+        id: 'copy-gh-auth-login',
+        label: 'Copy gh auth login',
+        kind: 'command',
+        command: 'gh auth login'
+      } : null,
+      getOpenDiagnosticsAction()
+    ].filter(Boolean)
+  });
+
+  const providers = taskTicketingService.listProviders();
+  const trelloMeta = providers.find((provider) => String(provider?.id || '').trim() === 'trello') || null;
+  const trelloConfigured = !!trelloMeta?.configured;
+  let trelloAuthOk = null;
+  let trelloError = null;
+  if (trelloConfigured) {
+    try {
+      const provider = taskTicketingService.getProvider('trello');
+      if (typeof provider?.getMe === 'function') {
+        await provider.getMe({ refresh: false });
+      }
+      trelloAuthOk = true;
+    } catch (error) {
+      trelloAuthOk = false;
+      trelloError = String(error?.message || error || 'Trello verification failed');
+    }
+  }
+  integrations.push({
+    id: 'trello',
+    label: 'Trello',
+    status: !trelloConfigured ? 'warning' : (trelloAuthOk === false ? 'error' : 'ok'),
+    summary: !trelloConfigured
+      ? 'Trello credentials are not configured.'
+      : (trelloAuthOk === false ? 'Trello credentials are configured but validation failed.' : 'Trello integration is configured.'),
+    details: trelloError,
+    nextSteps: !trelloConfigured
+      ? [
+          'Set TRELLO_API_KEY and TRELLO_TOKEN in your environment.',
+          'Or create ~/.trello-credentials with TRELLO_API_KEY=... and TRELLO_TOKEN=...'
+        ]
+      : (trelloAuthOk === false
+        ? ['Verify Trello API key/token and board permissions.', 'Re-run integration checks.']
+        : ['Trello integrations are ready.']),
+    actions: [
+      !trelloConfigured ? {
+        id: 'copy-trello-credentials-template',
+        label: 'Copy Credentials Template',
+        kind: 'command',
+        command: 'cat <<EOF > ~/.trello-credentials\nTRELLO_API_KEY=...\nTRELLO_TOKEN=...\nEOF'
+      } : null,
+      getOpenDiagnosticsAction()
+    ].filter(Boolean)
+  });
+
+  let discordStatus = null;
+  let discordError = null;
+  try {
+    discordStatus = await discordIntegrationService.getDiscordStatus({ sessionManager, workspaceManager });
+  } catch (error) {
+    discordError = String(error?.message || error || 'Failed to check Discord status');
+  }
+  const discordBotRunning = !!discordStatus?.sessions?.botRunning;
+  const discordProcessorRunning = !!discordStatus?.sessions?.processorRunning;
+  const discordWorkspaceExists = !!discordStatus?.workspace?.exists;
+  integrations.push({
+    id: 'discord',
+    label: 'Discord',
+    status: discordError
+      ? 'error'
+      : ((discordBotRunning && discordProcessorRunning) ? 'ok' : 'warning'),
+    summary: discordError
+      ? 'Discord integration status check failed.'
+      : ((discordBotRunning && discordProcessorRunning)
+        ? 'Discord services workspace is running.'
+        : 'Discord services are not fully running.'),
+    details: discordError,
+    nextSteps: discordError
+      ? ['Check server logs, then retry integration checks.']
+      : ((discordBotRunning && discordProcessorRunning)
+        ? ['Discord services are ready.']
+        : [
+            discordWorkspaceExists
+              ? 'Start the Discord bot/processor sessions.'
+              : 'Create the Services workspace and sessions.',
+            'Use Ensure Services to auto-create/start required sessions.'
+          ]),
+    actions: [
+      {
+        id: 'ensure-discord-services',
+        label: 'Ensure Services',
+        kind: 'api',
+        method: 'POST',
+        endpoint: '/api/discord/ensure-services'
+      },
+      getOpenDiagnosticsAction()
+    ]
+  });
+
+  let voiceStatus = null;
+  let voiceError = null;
+  let whisperStatus = null;
+  try {
+    voiceStatus = voiceCommandService.getLLMStatus();
+  } catch (error) {
+    voiceError = String(error?.message || error || 'Failed to check voice parser status');
+  }
+  try {
+    whisperStatus = whisperService.getStatus();
+  } catch (error) {
+    if (!voiceError) voiceError = String(error?.message || error || 'Failed to check whisper status');
+  }
+  const activeVoiceBackend = String(voiceStatus?.activeBackend || 'rules-only').trim();
+  const whisperAvailable = !!whisperStatus?.available;
+  const advancedVoiceReady = activeVoiceBackend !== 'rules-only' || whisperAvailable;
+  integrations.push({
+    id: 'voice',
+    label: 'Voice',
+    status: voiceError ? 'error' : (advancedVoiceReady ? 'ok' : 'warning'),
+    summary: voiceError
+      ? 'Voice integration status check failed.'
+      : (advancedVoiceReady
+        ? `Voice backend: ${activeVoiceBackend}${whisperAvailable ? ' + whisper' : ''}`
+        : 'Voice runs in basic rules-only mode (no optional LLM/Whisper backends).'),
+    details: voiceError,
+    nextSteps: voiceError
+      ? ['Check server logs, then retry integration checks.']
+      : (advancedVoiceReady
+        ? ['Voice integration is ready.']
+        : [
+            'Optional: configure Ollama or Anthropic API for smarter command parsing.',
+            'Optional: install Whisper backend for local transcription.'
+          ]),
+    actions: [
+      getOpenDiagnosticsAction()
+    ]
+  });
+
+  let diffStatus = null;
+  let diffError = null;
+  try {
+    diffStatus = await diffViewerService.getStatus();
+  } catch (error) {
+    diffError = String(error?.message || error || 'Failed to check Diff Viewer status');
+  }
+  const diffRunning = !!diffStatus?.running;
+  integrations.push({
+    id: 'diff',
+    label: 'Diff Viewer',
+    status: diffError ? 'error' : (diffRunning ? 'ok' : 'warning'),
+    summary: diffError
+      ? 'Diff Viewer status check failed.'
+      : (diffRunning ? 'Diff Viewer is running.' : 'Diff Viewer is not running yet.'),
+    details: diffError,
+    nextSteps: diffError
+      ? ['Check diff-viewer logs and retry.']
+      : (diffRunning
+        ? ['Diff Viewer integration is ready.']
+        : ['Use Start Diff Viewer to auto-start the service.']),
+    actions: [
+      {
+        id: 'ensure-diff-viewer',
+        label: 'Start Diff Viewer',
+        kind: 'api',
+        method: 'POST',
+        endpoint: '/api/diff-viewer/ensure'
+      },
+      getOpenDiagnosticsAction()
+    ]
+  });
+
+  return {
+    generatedAt: new Date().toISOString(),
+    summary: getIntegrationSummary(integrations),
+    integrations
+  };
+}
+
 function requirePolicyAction(action) {
   return (req, res, next) => {
     try {
@@ -936,6 +1228,16 @@ io.on('connection', (socket) => {
       socketId: socket.id
     };
     try {
+      const setupGate = await collectSetupGateBlockers();
+      if (setupGate) {
+        const blocked = buildSetupGateBlockedResponse(setupGate, { context: 'project-create' });
+        if (typeof callback === 'function') {
+          callback(blocked);
+        }
+        socket.emit('project-create-blocked', blocked);
+        return;
+      }
+
       logger.info('Socket project creation requested', requestMeta);
       const result = await workspaceManager.createProjectWorkspace(payload || {});
       let claudeSession = null;
@@ -1342,6 +1644,11 @@ app.get('/api/cascaded-config/:repositoryType', async (req, res) => {
 
 app.post('/api/workspaces', async (req, res) => {
   try {
+    const setupGate = await collectSetupGateBlockers();
+    if (setupGate) {
+      return res.status(412).json(buildSetupGateBlockedResponse(setupGate, { context: 'workspace-create' }));
+    }
+
     const workspaceData = req.body;
     logger.info('Creating workspace via API', { name: workspaceData.name });
 
@@ -1363,6 +1670,11 @@ app.post('/api/projects/create-workspace', express.json(), async (req, res) => {
     spawnClaude: req.body?.spawnClaude === true
   };
   try {
+    const setupGate = await collectSetupGateBlockers();
+    if (setupGate) {
+      return res.status(412).json(buildSetupGateBlockedResponse(setupGate, { context: 'project-create' }));
+    }
+
     logger.info('API project creation requested', requestMeta);
     const result = await workspaceManager.createProjectWorkspace(req.body || {});
     let claudeSession = null;
@@ -3951,6 +4263,19 @@ app.get('/api/diagnostics/post-install', async (req, res) => {
   } catch (error) {
     logger.error('Failed to collect post-install diagnostics', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to collect post-install diagnostics' });
+  }
+});
+
+app.get('/api/diagnostics/integrations', async (req, res) => {
+  try {
+    const data = await collectIntegrationHealthReport();
+    res.json({ ok: true, ...data });
+  } catch (error) {
+    logger.error('Failed to collect integration diagnostics', {
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ ok: false, error: 'Failed to collect integration diagnostics' });
   }
 });
 

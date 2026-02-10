@@ -4166,6 +4166,95 @@ header h1 {
   line-height: 1.35;
 }
 
+.setup-gate-modal .modal-content {
+  width: min(780px, calc(100vw - 48px));
+}
+
+.integration-health-topline {
+  margin-bottom: 10px;
+  opacity: 0.82;
+  font-size: 0.9rem;
+}
+
+.integration-health-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.integration-health-card {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.integration-health-card-ok {
+  border-left: 4px solid var(--accent-success);
+}
+
+.integration-health-card-warning {
+  border-left: 4px solid var(--accent-warning);
+}
+
+.integration-health-card-error {
+  border-left: 4px solid var(--accent-danger);
+}
+
+.integration-health-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.integration-health-name {
+  font-weight: 600;
+}
+
+.integration-health-badge {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  text-transform: uppercase;
+  opacity: 0.86;
+}
+
+.integration-health-summary {
+  font-size: 0.93rem;
+}
+
+.integration-health-details {
+  font-size: 0.84rem;
+  opacity: 0.8;
+}
+
+.integration-health-steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.integration-health-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.integration-health-subtle {
+  font-size: 0.82rem;
+  opacity: 0.7;
+}
+
+.integration-health-error {
+  color: var(--accent-danger);
+  font-size: 0.9rem;
+}
+
 .settings-toolbar input {
   flex: 1 1 auto;
   min-width: 0;

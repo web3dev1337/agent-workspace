@@ -50,6 +50,12 @@ class ClaudeOrchestrator {
     this.autoStartApplied = new Set(); // Prevent duplicate auto-start on reconnects
     this.showActiveOnly = false; // Filter toggle
     this.serverLaunchSettings = this.loadServerLaunchSettings(); // Server launch flags
+    this.setupGateState = this.loadSetupGateState();
+    this.setupGateDiagnostics = null;
+    this.setupGateFetchedAt = 0;
+    this.setupGateFetchPromise = null;
+    this.setupGateModalChoicePromise = null;
+    this.integrationHealthState = { data: null, fetchedAt: 0 };
 
     // Workspace management
     this.currentWorkspace = null;
@@ -565,6 +571,54 @@ class ClaudeOrchestrator {
     return !!this.worktreeModalKeepOpen;
   }
 
+  getSetupGateStorageKey() {
+    return 'orchestrator-setup-gate-v1';
+  }
+
+  loadSetupGateState() {
+    const fallback = {
+      completed: false,
+      mode: 'unknown',
+      completedAt: null
+    };
+    try {
+      const raw = localStorage.getItem(this.getSetupGateStorageKey());
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return fallback;
+      const modeRaw = String(parsed.mode || 'unknown').trim().toLowerCase();
+      const mode = (modeRaw === 'full' || modeRaw === 'limited') ? modeRaw : 'unknown';
+      return {
+        completed: parsed.completed === true,
+        mode,
+        completedAt: parsed.completedAt ? String(parsed.completedAt).trim() : null
+      };
+    } catch {
+      return fallback;
+    }
+  }
+
+  saveSetupGateState(nextState = {}) {
+    const prev = (this.setupGateState && typeof this.setupGateState === 'object')
+      ? this.setupGateState
+      : { completed: false, mode: 'unknown', completedAt: null };
+    const modeRaw = String(nextState.mode ?? prev.mode ?? 'unknown').trim().toLowerCase();
+    const mode = (modeRaw === 'full' || modeRaw === 'limited') ? modeRaw : 'unknown';
+    this.setupGateState = {
+      completed: nextState.completed === undefined ? !!prev.completed : !!nextState.completed,
+      mode,
+      completedAt: nextState.completedAt === undefined
+        ? (prev.completedAt || null)
+        : (nextState.completedAt ? String(nextState.completedAt).trim() : null)
+    };
+    try {
+      localStorage.setItem(this.getSetupGateStorageKey(), JSON.stringify(this.setupGateState));
+    } catch {
+      // ignore storage errors
+    }
+    return this.setupGateState;
+  }
+
   refreshWorktreeAddModals() {
     // Quick Work modal: rerender availability (recommended worktree + in-use flags)
     if (document.getElementById('quick-worktree-modal')) {
@@ -833,6 +887,11 @@ class ClaudeOrchestrator {
 
       // WIP / Queue banner (process status)
       this.startProcessStatusBanner();
+
+      // First-launch setup gate (diagnostics + optional limited mode).
+      await this.runStartupSetupGate().catch((error) => {
+        console.warn('Startup setup gate failed:', error);
+      });
       
       // Check for updates on startup
       this.checkForSettingsUpdates();
@@ -1814,6 +1873,7 @@ class ClaudeOrchestrator {
 		    // Settings UI helpers: search + section jump so the panel doesn’t feel like an endless scroll.
 		    this.setupSettingsPanelNavigation();
 		    this.setupDiagnosticsPanel();
+		    this.setupIntegrationHealthPanel();
 
 	    const tasksThemeSelect = document.getElementById('tasks-theme-select');
 	    if (tasksThemeSelect) {
@@ -2193,18 +2253,18 @@ class ClaudeOrchestrator {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' }
             });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || data?.ok === false) {
-              this.showToast?.(data?.message || 'Failed to start Discord services', 'error');
-            } else {
-              this.showToast?.('Discord services ensured', 'success');
-            }
-          } catch (err) {
-            this.showToast?.(`Failed to start Discord services: ${String(err?.message || err)}`, 'error');
-          }
-        }
-      });
-	    }
+	            const data = await res.json().catch(() => ({}));
+	            if (!res.ok || data?.ok === false) {
+	              this.showSetupIssueToast(data?.message || 'Failed to start Discord services', 'error');
+	            } else {
+	              this.showToast?.('Discord services ensured', 'success');
+	            }
+	          } catch (err) {
+	            this.showSetupIssueToast(`Failed to start Discord services: ${String(err?.message || err)}`, 'error');
+	          }
+	        }
+	      });
+		    }
 
     // Scheduler controls
     const schedulerRefresh = document.getElementById('scheduler-refresh');
@@ -2308,13 +2368,15 @@ class ClaudeOrchestrator {
       });
     }
     const commandCatalogOpenNewProject = document.getElementById('command-catalog-open-new-project');
-    if (commandCatalogOpenNewProject) {
-      commandCatalogOpenNewProject.addEventListener('click', () => {
-        this.openGreenfieldWizard().catch((error) => {
-          this.showToast?.(String(error?.message || error), 'error');
-        });
-      });
-    }
+	    if (commandCatalogOpenNewProject) {
+	      commandCatalogOpenNewProject.addEventListener('click', () => {
+	        this.openGreenfieldWizard().catch((error) => {
+	          if (!this.handleSetupError(error, { fallback: 'Failed to open New Project wizard' })) {
+	            this.showToast?.(String(error?.message || error), 'error');
+	          }
+	        });
+	      });
+	    }
     const commandCatalogFilter = document.getElementById('command-catalog-filter');
     if (commandCatalogFilter) {
       commandCatalogFilter.addEventListener('input', () => {
@@ -5812,11 +5874,13 @@ class ClaudeOrchestrator {
         }
         break;
 
-      case 'open-greenfield':
-        this.openGreenfieldWizard().catch((error) => {
-          this.showToast?.(`Failed to open New Project wizard: ${String(error?.message || error)}`, 'error');
-        });
-        break;
+	      case 'open-greenfield':
+	        this.openGreenfieldWizard().catch((error) => {
+	          if (!this.handleSetupError(error, { fallback: 'Failed to open New Project wizard' })) {
+	            this.showToast?.(`Failed to open New Project wizard: ${String(error?.message || error)}`, 'error');
+	          }
+	        });
+	        break;
 
       case 'open-settings':
         document.getElementById('settings-panel')?.classList.remove('hidden');
@@ -7851,11 +7915,75 @@ class ClaudeOrchestrator {
     }, 60);
   }
 
+  buildActionableError(message, extras = {}) {
+    const error = new Error(String(message || 'Action failed'));
+    if (extras && typeof extras === 'object') {
+      for (const [key, value] of Object.entries(extras)) {
+        error[key] = value;
+      }
+    }
+    return error;
+  }
+
+  coerceActionableError(payload, fallbackMessage) {
+    const source = (payload && typeof payload === 'object') ? payload : {};
+    return this.buildActionableError(
+      String(source.error || source.message || fallbackMessage || 'Action failed'),
+      {
+        code: String(source.code || '').trim() || null,
+        actions: Array.isArray(source.actions) ? source.actions : [],
+        diagnostics: source.diagnostics || null,
+        context: String(source.context || '').trim() || null,
+        blockingChecks: Array.isArray(source.blockingChecks) ? source.blockingChecks : []
+      }
+    );
+  }
+
+  handleSetupError(error, { fallback = 'Setup issue detected' } = {}) {
+    const code = String(error?.code || '').trim().toUpperCase();
+    const actions = Array.isArray(error?.actions) ? error.actions : [];
+    const hasOpenDiagnosticsAction = actions.some((action) => String(action?.uiAction || '').trim() === 'open-diagnostics');
+    const message = String(error?.message || fallback || 'Setup issue detected').trim();
+
+    if (code === 'SETUP_GATE_BLOCKED') {
+      if (error?.diagnostics) {
+        this.setupGateDiagnostics = error.diagnostics;
+        this.setupGateFetchedAt = Date.now();
+        this.renderSetupGateModal({
+          diagnostics: error.diagnostics,
+          reason: error?.context || 'setup'
+        });
+      }
+      this.showSetupIssueToast(message, 'error');
+      return true;
+    }
+
+    if (hasOpenDiagnosticsAction) {
+      this.showSetupIssueToast(message, 'warning');
+      return true;
+    }
+
+    const text = message.toLowerCase();
+    const setupHint = text.includes('gh auth login')
+      || text.includes('trello')
+      || text.includes('diff viewer')
+      || text.includes('discord services')
+      || text.includes('setup');
+    if (setupHint) {
+      this.showSetupIssueToast(message, text.includes('failed') ? 'error' : 'warning');
+      return true;
+    }
+    return false;
+  }
+
   async openGreenfieldWizard() {
     if (!this.greenfieldWizard) {
       this.showToast?.('New Project wizard is unavailable in this build', 'warning');
       return;
     }
+
+    const allowed = await this.ensureSetupReadyForAction('open the New Project wizard', { allowLimited: true });
+    if (!allowed) return;
 
     try {
       await this.ensureProjectTypeTaxonomy();
@@ -7868,6 +7996,14 @@ class ClaudeOrchestrator {
 
   async createProjectWorkspace(options = {}) {
     const payload = (options && typeof options === 'object') ? { ...options } : {};
+
+    const allowed = await this.ensureSetupReadyForAction('create a project workspace', { allowLimited: true });
+    if (!allowed) {
+      throw this.buildActionableError('Setup checks must pass before creating a project workspace', {
+        code: 'SETUP_GATE_BLOCKED',
+        diagnostics: this.setupGateDiagnostics
+      });
+    }
 
     if (this.socket?.connected) {
       const socketResult = await new Promise((resolve, reject) => {
@@ -7883,7 +8019,7 @@ class ClaudeOrchestrator {
           clearTimeout(timeout);
           settled = true;
           if (!response || response.ok === false) {
-            reject(new Error(String(response?.error || 'Failed to create project')));
+            reject(this.coerceActionableError(response, 'Failed to create project'));
             return;
           }
           resolve(response);
@@ -7907,7 +8043,7 @@ class ClaudeOrchestrator {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result?.ok === false) {
-      throw new Error(String(result?.error || `Failed to create project (${response.status})`));
+      throw this.coerceActionableError(result, `Failed to create project (${response.status})`);
     }
 
     const normalized = {
@@ -8297,6 +8433,302 @@ class ClaudeOrchestrator {
 	    }
 	  }
 
+	  openDiagnosticsPanel({ refresh = true, scroll = true } = {}) {
+	    try {
+	      document.getElementById('settings-panel')?.classList?.remove?.('hidden');
+	      setTimeout(() => {
+	        if (scroll) {
+	          try {
+	            document.getElementById('diagnostics-output')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+	          } catch {
+	            // ignore
+	          }
+	        }
+	        if (refresh) {
+	          try {
+	            document.getElementById('diagnostics-refresh')?.click?.();
+	          } catch {
+	            // ignore
+	          }
+	          try {
+	            document.getElementById('integration-health-refresh')?.click?.();
+	          } catch {
+	            // ignore
+	          }
+	        }
+	      }, 40);
+	    } catch {
+	      // ignore
+	    }
+	  }
+
+	  showSetupIssueToast(message, type = 'warning') {
+	    const msg = String(message || '').trim();
+	    if (!msg) return;
+	    this.showToast(msg, type, {
+	      actionLabel: 'Open Diagnostics',
+	      onAction: () => this.openDiagnosticsPanel({ refresh: true, scroll: true })
+	    });
+	  }
+
+	  getSetupGateSummary(diagnostics) {
+	    return {
+	      blockingCount: Number(diagnostics?.summary?.blockingCount || 0),
+	      warningCount: Number(diagnostics?.summary?.warningCount || 0),
+	      ready: diagnostics?.summary?.ready === true
+	    };
+	  }
+
+	  async fetchFirstRunDiagnostics({ force = false, maxAgeMs = 90_000 } = {}) {
+	    const now = Date.now();
+	    if (!force && this.setupGateDiagnostics && (now - Number(this.setupGateFetchedAt || 0)) <= maxAgeMs) {
+	      return this.setupGateDiagnostics;
+	    }
+	    if (!force && this.setupGateFetchPromise) {
+	      return this.setupGateFetchPromise;
+	    }
+
+	    const request = (async () => {
+	      const res = await fetch('/api/diagnostics/first-run');
+	      const data = await res.json().catch(() => ({}));
+	      if (!res.ok || data?.ok === false) {
+	        throw new Error(String(data?.error || `Failed to load first-run diagnostics (${res.status})`));
+	      }
+	      this.setupGateDiagnostics = data;
+	      this.setupGateFetchedAt = Date.now();
+	      return data;
+	    })();
+
+	    this.setupGateFetchPromise = request;
+	    try {
+	      return await request;
+	    } finally {
+	      this.setupGateFetchPromise = null;
+	    }
+	  }
+
+	  ensureSetupGateModal() {
+	    let modal = document.getElementById('setup-gate-modal');
+	    if (modal) return modal;
+
+	    modal = document.createElement('div');
+	    modal.id = 'setup-gate-modal';
+	    modal.className = 'modal hidden setup-gate-modal';
+	    modal.innerHTML = `
+	      <div class="modal-content large-modal">
+	        <div class="modal-header">
+	          <h3 id="setup-gate-title">Setup Check</h3>
+	          <button id="setup-gate-close" class="close-btn" type="button">✕</button>
+	        </div>
+	        <div class="modal-body" style="display:grid; gap:12px;">
+	          <p id="setup-gate-summary" style="margin:0; opacity:0.9;"></p>
+	          <div id="setup-gate-alert" class="setting-description"></div>
+	          <div id="setup-gate-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
+	            <button id="setup-gate-refresh" class="btn-secondary" type="button">Re-run Checks</button>
+	            <button id="setup-gate-repair-safe" class="btn-secondary" type="button">Auto-fix Safe Issues</button>
+	            <button id="setup-gate-open-diagnostics" class="btn-secondary" type="button">Open Diagnostics</button>
+	            <button id="setup-gate-continue-limited" class="btn-primary" type="button">Continue in Limited Mode</button>
+	            <button id="setup-gate-continue-full" class="btn-primary" type="button">Continue</button>
+	          </div>
+	          <pre id="setup-gate-checks" class="mono diagnostics-output">Loading checks…</pre>
+	        </div>
+	      </div>
+	    `;
+	    document.body.appendChild(modal);
+
+	    const close = () => {
+	      modal.classList.add('hidden');
+	    };
+
+	    modal.querySelector('#setup-gate-close')?.addEventListener('click', close);
+	    modal.addEventListener('mousedown', (event) => {
+	      if (event.target === modal) close();
+	    });
+
+	    modal.querySelector('#setup-gate-open-diagnostics')?.addEventListener('click', () => {
+	      this.openDiagnosticsPanel({ refresh: true, scroll: true });
+	    });
+
+	    modal.querySelector('#setup-gate-refresh')?.addEventListener('click', async () => {
+	      try {
+	        const data = await this.fetchFirstRunDiagnostics({ force: true, maxAgeMs: 0 });
+	        this.renderSetupGateModal({ diagnostics: data, reason: this.setupGateModalReason || 'setup' });
+	      } catch (error) {
+	        this.showSetupIssueToast(`Failed to refresh setup checks: ${String(error?.message || error)}`, 'error');
+	      }
+	    });
+
+	    modal.querySelector('#setup-gate-repair-safe')?.addEventListener('click', async () => {
+	      const btn = modal.querySelector('#setup-gate-repair-safe');
+	      if (btn) btn.disabled = true;
+	      try {
+	        const res = await fetch('/api/diagnostics/first-run/repair-safe', { method: 'POST' });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok || data?.ok === false) {
+	          throw new Error(String(data?.error || data?.message || `HTTP ${res.status}`));
+	        }
+	        const refreshed = await this.fetchFirstRunDiagnostics({ force: true, maxAgeMs: 0 });
+	        this.renderSetupGateModal({ diagnostics: refreshed, reason: this.setupGateModalReason || 'setup' });
+	        const applied = Number(data?.appliedCount || 0);
+	        this.showToast(`Auto-fix applied ${applied} issue(s)`, 'success');
+	      } catch (error) {
+	        this.showSetupIssueToast(`Safe auto-fix failed: ${String(error?.message || error)}`, 'error');
+	      } finally {
+	        if (btn) btn.disabled = false;
+	      }
+	    });
+
+	    modal.querySelector('#setup-gate-continue-limited')?.addEventListener('click', () => {
+	      this.saveSetupGateState({
+	        completed: true,
+	        mode: 'limited',
+	        completedAt: new Date().toISOString()
+	      });
+	      this.showToast('Limited mode enabled. Setup warnings remain.', 'warning', {
+	        actionLabel: 'Open Diagnostics',
+	        onAction: () => this.openDiagnosticsPanel({ refresh: true, scroll: true })
+	      });
+	      close();
+	    });
+
+	    modal.querySelector('#setup-gate-continue-full')?.addEventListener('click', () => {
+	      this.saveSetupGateState({
+	        completed: true,
+	        mode: 'full',
+	        completedAt: new Date().toISOString()
+	      });
+	      close();
+	    });
+
+	    return modal;
+	  }
+
+	  renderSetupGateModal({ diagnostics, reason = 'setup' } = {}) {
+	    const modal = this.ensureSetupGateModal();
+	    const titleEl = modal.querySelector('#setup-gate-title');
+	    const summaryEl = modal.querySelector('#setup-gate-summary');
+	    const alertEl = modal.querySelector('#setup-gate-alert');
+	    const checksEl = modal.querySelector('#setup-gate-checks');
+	    const btnLimited = modal.querySelector('#setup-gate-continue-limited');
+	    const btnFull = modal.querySelector('#setup-gate-continue-full');
+	    const btnRepair = modal.querySelector('#setup-gate-repair-safe');
+	    const btnRefresh = modal.querySelector('#setup-gate-refresh');
+	    const btnOpenDiagnostics = modal.querySelector('#setup-gate-open-diagnostics');
+
+	    this.setupGateModalReason = String(reason || 'setup').trim();
+	    this.setupGateDiagnostics = diagnostics || this.setupGateDiagnostics;
+	    const current = this.setupGateDiagnostics || {};
+	    const summary = this.getSetupGateSummary(current);
+	    const checks = Array.isArray(current?.checks) ? current.checks : [];
+
+	    const blocking = checks.filter((check) => {
+	      const status = String(check?.status || '').trim().toLowerCase();
+	      const severity = String(check?.severity || '').trim().toLowerCase();
+	      return status === 'fail' && severity === 'blocking';
+	    });
+	    const warnings = checks.filter((check) => {
+	      const status = String(check?.status || '').trim().toLowerCase();
+	      const severity = String(check?.severity || '').trim().toLowerCase();
+	      return status === 'fail' && severity !== 'blocking';
+	    });
+
+	    if (titleEl) {
+	      titleEl.textContent = summary.blockingCount > 0
+	        ? 'Setup Required Before Continuing'
+	        : (summary.warningCount > 0 ? 'Setup Warnings Detected' : 'Setup Checks Passed');
+	    }
+	    if (summaryEl) {
+	      summaryEl.textContent = `Context: ${this.setupGateModalReason} | Blocking: ${summary.blockingCount} | Warnings: ${summary.warningCount}`;
+	    }
+	    if (alertEl) {
+	      if (summary.blockingCount > 0) {
+	        alertEl.innerHTML = 'Blocking prerequisites are missing. Workspace/project creation is gated until these are fixed.';
+	      } else if (summary.warningCount > 0) {
+	        alertEl.innerHTML = 'No blocking issues found. You can continue in limited mode while optional integrations are incomplete.';
+	      } else {
+	        alertEl.innerHTML = 'All setup checks passed. Full mode is available.';
+	      }
+	    }
+	    if (checksEl) {
+	      const lines = checks.map((check) => {
+	        const status = String(check?.status || 'unknown').trim().toLowerCase();
+	        const severity = String(check?.severity || 'info').trim().toLowerCase();
+	        const icon = status === 'pass' ? 'ok' : (severity === 'blocking' ? '!!' : 'warn');
+	        const name = String(check?.name || check?.id || 'check').trim();
+	        const message = String(check?.message || '').trim();
+	        return `${icon} [${severity}] ${name}${message ? `: ${message}` : ''}`;
+	      });
+	      checksEl.textContent = lines.join('\n') || 'No setup checks available.';
+	    }
+
+	    if (btnLimited) btnLimited.style.display = (summary.blockingCount === 0 && summary.warningCount > 0) ? '' : 'none';
+	    if (btnFull) btnFull.style.display = (summary.blockingCount === 0 && summary.warningCount === 0) ? '' : 'none';
+	    if (btnRepair) btnRepair.disabled = (blocking.length === 0 && warnings.length === 0);
+	    if (btnRefresh) btnRefresh.disabled = false;
+	    if (btnOpenDiagnostics) btnOpenDiagnostics.disabled = false;
+
+	    modal.classList.remove('hidden');
+	  }
+
+	  async runStartupSetupGate() {
+	    if (this.setupGateState?.completed === true) return;
+	    const diagnostics = await this.fetchFirstRunDiagnostics({ force: true, maxAgeMs: 0 });
+	    const summary = this.getSetupGateSummary(diagnostics);
+	    if (summary.blockingCount > 0 || summary.warningCount > 0) {
+	      this.saveSetupGateState({ completed: false, mode: 'unknown', completedAt: null });
+	      this.renderSetupGateModal({ diagnostics, reason: 'first launch' });
+	      if (summary.blockingCount > 0) {
+	        this.showSetupIssueToast('Blocking setup issues detected. Fix these before creating workspaces or projects.', 'error');
+	      } else {
+	        this.showSetupIssueToast('Setup warnings detected. Continue in limited mode or run fixes.', 'warning');
+	      }
+	      return;
+	    }
+
+	    this.saveSetupGateState({
+	      completed: true,
+	      mode: 'full',
+	      completedAt: new Date().toISOString()
+	    });
+	  }
+
+	  async ensureSetupReadyForAction(actionLabel, { allowLimited = true } = {}) {
+	    const action = String(actionLabel || 'continue').trim();
+	    let diagnostics = null;
+	    try {
+	      diagnostics = await this.fetchFirstRunDiagnostics({ force: true, maxAgeMs: 0 });
+	    } catch (error) {
+	      this.showSetupIssueToast(`Failed to run setup checks for "${action}": ${String(error?.message || error)}`, 'error');
+	      return false;
+	    }
+
+	    const summary = this.getSetupGateSummary(diagnostics);
+	    if (summary.blockingCount > 0) {
+	      this.saveSetupGateState({ completed: false, mode: 'unknown', completedAt: null });
+	      this.renderSetupGateModal({ diagnostics, reason: action });
+	      this.showSetupIssueToast(`Cannot ${action} while blocking setup issues exist.`, 'error');
+	      return false;
+	    }
+
+	    if (summary.warningCount > 0 && allowLimited) {
+	      const mode = String(this.setupGateState?.mode || '').trim().toLowerCase();
+	      if (mode === 'limited') return true;
+	      if (this.setupGateState?.completed !== true) {
+	        this.renderSetupGateModal({ diagnostics, reason: action });
+	        this.showSetupIssueToast(`Setup warnings found for "${action}". Continue in limited mode first.`, 'warning');
+	        return false;
+	      }
+	      return true;
+	    }
+
+	    this.saveSetupGateState({
+	      completed: true,
+	      mode: 'full',
+	      completedAt: new Date().toISOString()
+	    });
+	    return true;
+	  }
+
 	  setupDiagnosticsPanel() {
 	    const btn = document.getElementById('diagnostics-refresh');
 	    const btnFirstRun = document.getElementById('diagnostics-first-run');
@@ -8428,6 +8860,8 @@ class ClaudeOrchestrator {
 	        throw new Error(String(data?.error || `HTTP ${res.status}`));
 	      }
 	      state.firstRun = data;
+	      this.setupGateDiagnostics = data;
+	      this.setupGateFetchedAt = Date.now();
 	      renderRepairActions(data);
 	      return data;
 	    };
@@ -8556,6 +8990,164 @@ class ClaudeOrchestrator {
 	    });
 	  }
 
+	  setupIntegrationHealthPanel() {
+	    const refreshBtn = document.getElementById('integration-health-refresh');
+	    const statusEl = document.getElementById('integration-health-status');
+	    const container = document.getElementById('integration-health-output');
+	    if (!refreshBtn || !container) return;
+
+	    const state = { data: null };
+	    const render = () => {
+	      const data = state.data;
+	      if (!data || typeof data !== 'object') {
+	        container.innerHTML = '<div class="setting-description">No integration health data yet.</div>';
+	        return;
+	      }
+	      const summary = data.summary && typeof data.summary === 'object' ? data.summary : {};
+	      const rows = Array.isArray(data.integrations) ? data.integrations : [];
+	      const top = `
+	        <div class="integration-health-topline">
+	          ok ${Number(summary.okCount || 0)} | warnings ${Number(summary.warningCount || 0)} | errors ${Number(summary.errorCount || 0)}
+	        </div>
+	      `;
+	      const cards = rows.map((row, rowIndex) => {
+	        const status = String(row?.status || 'unknown').trim().toLowerCase();
+	        const statusClass = status === 'ok' ? 'ok' : (status === 'warning' ? 'warning' : 'error');
+	        const summaryText = this.escapeHtml(String(row?.summary || '').trim() || 'No summary');
+	        const detailsText = this.escapeHtml(String(row?.details || '').trim());
+	        const nextSteps = Array.isArray(row?.nextSteps) ? row.nextSteps : [];
+	        const actions = Array.isArray(row?.actions) ? row.actions : [];
+	        const stepsHtml = nextSteps.length
+	          ? `<ul class="integration-health-steps">${nextSteps.map((step) => `<li>${this.escapeHtml(String(step || '').trim())}</li>`).join('')}</ul>`
+	          : '<div class="integration-health-subtle">No next steps.</div>';
+	        const actionsHtml = actions.length
+	          ? `<div class="integration-health-actions">${actions.map((action, actionIndex) => {
+	            const label = this.escapeHtml(String(action?.label || action?.id || 'Fix').trim());
+	            return `<button class="btn-secondary" type="button" data-integration-action="true" data-integration-row="${rowIndex}" data-integration-action-index="${actionIndex}">${label}</button>`;
+	          }).join('')}</div>`
+	          : '<div class="integration-health-subtle">No actions available.</div>';
+	        return `
+	          <div class="integration-health-card integration-health-card-${statusClass}">
+	            <div class="integration-health-head">
+	              <div class="integration-health-name">${this.escapeHtml(String(row?.label || row?.id || 'Integration'))}</div>
+	              <div class="integration-health-badge">${this.escapeHtml(status)}</div>
+	            </div>
+	            <div class="integration-health-summary">${summaryText}</div>
+	            ${detailsText ? `<div class="integration-health-details">${detailsText}</div>` : ''}
+	            ${stepsHtml}
+	            ${actionsHtml}
+	          </div>
+	        `;
+	      }).join('');
+	      container.innerHTML = `${top}<div class="integration-health-grid">${cards}</div>`;
+	    };
+
+	    const refresh = async ({ force = true } = {}) => {
+	      refreshBtn.disabled = true;
+	      if (statusEl) statusEl.textContent = 'Loading...';
+	      try {
+	        const suffix = force ? '?force=true' : '';
+	        const res = await fetch(`/api/diagnostics/integrations${suffix}`);
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok || data?.ok === false) {
+	          throw new Error(String(data?.error || `HTTP ${res.status}`));
+	        }
+	        state.data = data;
+	        this.integrationHealthState = {
+	          data,
+	          fetchedAt: Date.now()
+	        };
+	        render();
+	        if (statusEl) statusEl.textContent = `Updated: ${String(data?.generatedAt || '')}`;
+	      } catch (error) {
+	        container.innerHTML = `<div class="integration-health-error">${this.escapeHtml(String(error?.message || error))}</div>`;
+	        if (statusEl) statusEl.textContent = '';
+	      } finally {
+	        refreshBtn.disabled = false;
+	      }
+	    };
+
+	    const copyText = async (text) => {
+	      const value = String(text || '').trim();
+	      if (!value) return false;
+	      if (navigator?.clipboard?.writeText) {
+	        await navigator.clipboard.writeText(value);
+	        return true;
+	      }
+	      const ta = document.createElement('textarea');
+	      ta.value = value;
+	      ta.style.position = 'fixed';
+	      ta.style.left = '-9999px';
+	      document.body.appendChild(ta);
+	      ta.focus();
+	      ta.select();
+	      const ok = document.execCommand('copy');
+	      ta.remove();
+	      return !!ok;
+	    };
+
+	    const runAction = async ({ rowIndex, actionIndex }) => {
+	      const row = state.data?.integrations?.[rowIndex];
+	      const action = row?.actions?.[actionIndex];
+	      if (!row || !action) return;
+	      const kind = String(action?.kind || '').trim().toLowerCase();
+	      if (kind === 'ui' && String(action?.uiAction || '').trim() === 'open-diagnostics') {
+	        this.openDiagnosticsPanel({ refresh: true, scroll: true });
+	        return;
+	      }
+	      if (kind === 'url') {
+	        const url = String(action?.url || '').trim();
+	        if (!url) return;
+	        window.open(url, '_blank', 'noopener');
+	        return;
+	      }
+	      if (kind === 'command') {
+	        const command = String(action?.command || '').trim();
+	        if (!command) return;
+	        try {
+	          const copied = await copyText(command);
+	          this.showToast(copied ? `Copied command: ${command}` : command, copied ? 'success' : 'info');
+	        } catch (error) {
+	          this.showToast(`Copy failed: ${String(error?.message || error)}`, 'error');
+	        }
+	        return;
+	      }
+	      if (kind === 'api') {
+	        const endpoint = String(action?.endpoint || '').trim();
+	        if (!endpoint) return;
+	        const method = String(action?.method || 'POST').trim().toUpperCase();
+	        try {
+	          const res = await fetch(endpoint, { method });
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok || data?.ok === false) {
+	            throw new Error(String(data?.message || data?.error || `HTTP ${res.status}`));
+	          }
+	          this.showToast(`${String(action?.label || 'Action')} completed`, 'success');
+	          await refresh({ force: true });
+	        } catch (error) {
+	          this.showSetupIssueToast(`${String(action?.label || 'Action')} failed: ${String(error?.message || error)}`, 'error');
+	        }
+	      }
+	    };
+
+	    refreshBtn.addEventListener('click', () => {
+	      refresh({ force: true }).catch(() => {});
+	    });
+
+	    container.addEventListener('click', (event) => {
+	      const btn = event.target.closest('[data-integration-action="true"]');
+	      if (!btn) return;
+	      const rowIndex = Number(btn.getAttribute('data-integration-row'));
+	      const actionIndex = Number(btn.getAttribute('data-integration-action-index'));
+	      if (!Number.isFinite(rowIndex) || !Number.isFinite(actionIndex)) return;
+	      runAction({ rowIndex, actionIndex }).catch((error) => {
+	        this.showSetupIssueToast(String(error?.message || error), 'error');
+	      });
+	    });
+
+	    refresh({ force: false }).catch(() => {});
+	  }
+
 	  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {
 	    const msg = String(message || '').trim();
 	    if (!msg) return;
@@ -8590,13 +9182,24 @@ class ClaudeOrchestrator {
     }
   }
   
-  showToast(message, type = 'info') {
+  showToast(message, type = 'info', options = {}) {
+    const msg = String(message || '').trim();
+    if (!msg) return;
+
+    const actionLabel = String(options?.actionLabel || '').trim();
+    const actionHandler = typeof options?.onAction === 'function' ? options.onAction : null;
+    const durationMsRaw = Number(options?.durationMs);
+    const durationMs = Number.isFinite(durationMsRaw) ? Math.max(2000, Math.min(20_000, Math.round(durationMsRaw))) : 5000;
+    const fadeLeadMs = 300;
+    const fadeStartMs = Math.max(0, durationMs - fadeLeadMs);
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.innerHTML = `
       <div class="toast-content">
         <span class="toast-icon">${type === 'success' ? '✅' : type === 'warning' ? '⚠️' : type === 'error' ? '❌' : 'ℹ️'}</span>
-        <span class="toast-text">${message}</span>
+        <span class="toast-text">${this.escapeHtml(msg)}</span>
+        ${actionLabel ? `<button class="toast-action-btn" type="button" data-toast-action="true">${this.escapeHtml(actionLabel)}</button>` : ''}
       </div>
     `;
     
@@ -8618,17 +9221,40 @@ class ClaudeOrchestrator {
       border-radius: var(--radius-md);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       z-index: 1000;
-      animation: slideInRight 0.3s ease-out, fadeOutRight 0.3s ease-in 4.7s forwards;
+      animation: slideInRight 0.3s ease-out, fadeOutRight 0.3s ease-in ${fadeStartMs}ms forwards;
     `;
     
+    const actionBtn = toast.querySelector('[data-toast-action="true"]');
+    if (actionBtn) {
+      actionBtn.style.cssText = `
+        border: 1px solid rgba(255,255,255,0.65);
+        background: rgba(0,0,0,0.18);
+        color: #fff;
+        border-radius: 6px;
+        padding: 3px 8px;
+        cursor: pointer;
+        font-size: 12px;
+      `;
+      actionBtn.addEventListener('click', () => {
+        if (actionHandler) {
+          try {
+            actionHandler();
+          } catch {
+            // ignore action handler errors
+          }
+        }
+        toast.remove();
+      });
+    }
+
     document.body.appendChild(toast);
     
-    // Remove after 5 seconds
+    // Remove after configured duration
     setTimeout(() => {
       if (toast.parentNode) {
         toast.remove();
       }
-    }, 5000);
+    }, durationMs);
   }
 
   async launchDiffViewer(githubUrl) {
@@ -8713,10 +9339,10 @@ class ClaudeOrchestrator {
           if (status?.running) break;
         }
       }
-    } catch (err) {
-      this.showToast(`Diff viewer failed to start: ${err.message}`, 'error');
-      try {
-        popup.document.title = 'Diff Viewer Error';
+	    } catch (err) {
+	      this.showSetupIssueToast(`Diff viewer failed to start: ${err.message}`, 'error');
+	      try {
+	        popup.document.title = 'Diff Viewer Error';
         popup.document.body.innerHTML = `
           <h2 style="margin:0 0 8px 0;color:#ff6b6b;">Failed to start diff viewer</h2>
           <div style="color:#9a9a9a;margin-bottom:14px;">${err.message}</div>
@@ -8793,7 +9419,7 @@ class ClaudeOrchestrator {
         }
       }
     } catch (err) {
-      this.showToast(`Diff viewer failed to start: ${err.message}`, 'error');
+      this.showSetupIssueToast(`Diff viewer failed to start: ${err.message}`, 'error');
       try {
         popup.document.title = 'Diff Viewer Error';
         popup.document.body.innerHTML = `
@@ -9964,13 +10590,13 @@ class ClaudeOrchestrator {
 		              diffIframeEl.classList.remove('hidden');
 		              diffStatusEl.textContent = `Embedded: ${targetPath || baseUrl}`;
 		              if (showToast) this.showToast('Diff embedded', 'success');
-		            } catch (err) {
-		              diffStatusEl.textContent = `Diff Viewer failed to start: ${String(err?.message || err)}`;
-		              if (showToast) this.showToast(`Diff Viewer failed to start: ${String(err?.message || err)}`, 'error');
-		            } finally {
-		              diffLoadPromise = null;
-		              updateDiffControls();
-		            }
+			            } catch (err) {
+			              diffStatusEl.textContent = `Diff Viewer failed to start: ${String(err?.message || err)}`;
+			              if (showToast) this.showSetupIssueToast(`Diff Viewer failed to start: ${String(err?.message || err)}`, 'error');
+			            } finally {
+			              diffLoadPromise = null;
+			              updateDiffControls();
+			            }
 		          })();
 
 		          return diffLoadPromise;
@@ -11433,7 +12059,7 @@ class ClaudeOrchestrator {
 			        } catch (err) {
 			          const msg = String(err?.message || err);
 			          if (diffStatusEl) diffStatusEl.textContent = `Diff Viewer failed to start: ${msg}`;
-			          if (showToast) this.showToast(`Diff Viewer failed to start: ${msg}`, 'error');
+			          if (showToast) this.showSetupIssueToast(`Diff Viewer failed to start: ${msg}`, 'error');
 			          syncDiffButtons();
 			          throw err;
 			        }
@@ -11978,19 +12604,7 @@ class ClaudeOrchestrator {
 		      });
 		      bodyEl.querySelectorAll?.('[data-open-diagnostics="true"]')?.forEach?.((btn) => {
 		        btn.addEventListener('click', () => {
-		          try {
-		            document.getElementById('settings-panel')?.classList?.remove?.('hidden');
-		            setTimeout(() => {
-		              try {
-		                document.getElementById('diagnostics-output')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-		              } catch {}
-		              try {
-		                document.getElementById('diagnostics-refresh')?.click?.();
-		              } catch {}
-		            }, 50);
-		          } catch {
-		            // ignore
-		          }
+		          this.openDiagnosticsPanel({ refresh: true, scroll: true });
 		        });
 		      });
 		      bodyEl.querySelectorAll('[data-pr-refresh]').forEach((btn0) => {
@@ -17926,13 +18540,14 @@ class ClaudeOrchestrator {
 		        ghRepoPickerEl.disabled = true;
 		        ghRepoPickerEl.innerHTML = `<option value="">${force ? 'Refreshing GitHub repos…' : 'Loading GitHub repos…'}</option>`;
 
-		        let repos = [];
-		        try {
-		          repos = await this.getGitHubRepos({ force, limit: 500 });
-		        } catch (e) {
-		          ghRepoPickerEl.innerHTML = `<option value="">GitHub repos unavailable (gh auth login)</option>`;
-		          return;
-		        }
+			        let repos = [];
+			        try {
+			          repos = await this.getGitHubRepos({ force, limit: 500 });
+			        } catch (e) {
+			          ghRepoPickerEl.innerHTML = `<option value="">GitHub repos unavailable (gh auth login)</option>`;
+			          this.showSetupIssueToast('GitHub repos unavailable. Run gh auth login, then refresh.', 'warning');
+			          return;
+			        }
 
 		        const items = (Array.isArray(repos) ? repos : [])
 		          .map((r) => {

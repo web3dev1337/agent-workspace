@@ -291,24 +291,27 @@ fn append_tauri_bootstrap_log(data_dir: &std::path::Path, message: &str) {
 
 async fn show_bootstrap_error(
     window: tauri::WebviewWindow,
+    code: &str,
     title: &str,
     message: &str,
     details: Option<String>,
     hint_html: Option<String>,
+    retry_url: Option<String>,
+    logs_dir: Option<String>,
 ) {
-    let title_json = serde_json::to_string(title).unwrap_or_else(|_| "\"Failed to start\"".to_string());
-    let message_json = serde_json::to_string(message)
-        .unwrap_or_else(|_| "\"The backend did not start.\"".to_string());
-    let details_json = details
-        .map(|v| serde_json::to_string(&v).unwrap_or_else(|_| "null".to_string()))
-        .unwrap_or_else(|| "null".to_string());
-    let hint_json = hint_html
-        .map(|v| serde_json::to_string(&v).unwrap_or_else(|_| "null".to_string()))
-        .unwrap_or_else(|| "null".to_string());
-
+    let payload = serde_json::json!({
+        "code": code,
+        "title": title,
+        "message": message,
+        "details": details,
+        "hint": hint_html,
+        "retryUrl": retry_url,
+        "logsDir": logs_dir
+    });
+    let payload_json = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
     let js = format!(
-        "window.__orchestrator_bootstrap_error && window.__orchestrator_bootstrap_error({}, {}, {}, {});",
-        title_json, message_json, details_json, hint_json
+        "window.__orchestrator_bootstrap_error && window.__orchestrator_bootstrap_error({});",
+        payload_json
     );
     for _ in 0..60 {
         if window.eval(&js).is_ok() {
@@ -585,13 +588,17 @@ fn main() {
                         append_tauri_bootstrap_log(&data_dir, message);
                         if let Some(window) = window.clone() {
                             let hint = "Rebuild the app so backend resources are bundled. If you’re running a dev build, set <code>TAURI_SPAWN_BACKEND=true</code> and ensure <code>node</code> is on PATH (or set <code>ORCHESTRATOR_NODE_PATH</code>).".to_string();
+                            let logs_dir = data_dir.join("logs").to_string_lossy().to_string();
                             tauri::async_runtime::spawn(async move {
                                 show_bootstrap_error(
                                     window,
+                                    "BOOTSTRAP_BACKEND_MISSING",
                                     "Backend missing",
                                     "The packaged backend could not be found, so the app can’t start.",
                                     Some(message.to_string()),
                                     Some(hint),
+                                    None,
+                                    Some(logs_dir),
                                 )
                                 .await;
                             });
@@ -628,13 +635,17 @@ fn main() {
                                 append_tauri_bootstrap_log(&data_dir, &details);
                                 if let Some(window) = window.clone() {
                                     let hint = "If Node is missing, set <code>ORCHESTRATOR_NODE_PATH</code> (or bundle Node into the app resources). Then restart the app.".to_string();
+                                    let logs_dir = data_dir.join("logs").to_string_lossy().to_string();
                                     tauri::async_runtime::spawn(async move {
                                         show_bootstrap_error(
                                             window,
+                                            "BOOTSTRAP_BACKEND_SPAWN_FAILED",
                                             "Failed to launch backend",
                                             "The local server process could not be started.",
                                             Some(details),
                                             Some(hint),
+                                            None,
+                                            Some(logs_dir),
                                         )
                                         .await;
                                     });
@@ -646,6 +657,8 @@ fn main() {
                                 if let Some(window) = window {
                                     let url = format!("http://127.0.0.1:{}/?token={}", port, token);
                                     let data_dir_for_wait = data_dir.clone();
+                                    let retry_url = url.clone();
+                                    let logs_dir = data_dir_for_wait.join("logs").to_string_lossy().to_string();
                                     tauri::async_runtime::spawn(async move {
                                         if wait_for_port(port, Duration::from_secs(20)).await {
                                             navigate_window(window, url).await;
@@ -661,10 +674,13 @@ fn main() {
                                             append_tauri_bootstrap_log(&data_dir_for_wait, &details);
                                             show_bootstrap_error(
                                                 window,
+                                                "BOOTSTRAP_BACKEND_TIMEOUT",
                                                 "Backend did not become ready",
                                                 "The local server started, but never opened its port.",
                                                 Some(details),
                                                 None,
+                                                Some(retry_url),
+                                                Some(logs_dir),
                                             )
                                             .await;
                                         }
