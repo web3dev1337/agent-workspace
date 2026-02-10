@@ -291,6 +291,20 @@ class SchedulerService {
           safetyMode: 'safe',
           enabled: false
         }
+      },
+      {
+        id: 'pr-review-poll',
+        name: 'PR Review Poll',
+        category: 'review',
+        risk: 'caution',
+        description: 'Scan for new PRs and completed reviews, auto-spawn reviewer agents.',
+        defaults: {
+          intervalMinutes: 1,
+          command: 'pr-review-poll',
+          params: {},
+          safetyMode: 'safe',
+          enabled: false
+        }
       }
     ];
   }

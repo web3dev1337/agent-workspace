@@ -86,6 +86,7 @@ const { BatchLaunchService } = require('./batchLaunchService');
 const { TaskTicketingService } = require('./taskTicketingService');
 const { TaskTicketMoveService } = require('./taskTicketMoveService');
 const { PrMergeAutomationService } = require('./prMergeAutomationService');
+const { PrReviewAutomationService } = require('./prReviewAutomationService');
 const { GitHubRepoService } = require('./githubRepoService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
 const { sanitizeFilename, formatConversationAsMarkdown } = require('./conversationExportService');
@@ -3456,8 +3457,31 @@ const prMergeAutomationService = PrMergeAutomationService.getInstance({
   userSettingsService
 });
 
+const prReviewAutomationService = PrReviewAutomationService.getInstance({
+  taskRecordService,
+  pullRequestService,
+  userSettingsService,
+  sessionManager,
+  workspaceManager,
+  ensureWorkspaceMixedWorktree,
+  io
+});
+
+// Register pr-review-poll command so the scheduler can invoke it
+commandRegistry.register('pr-review-poll', {
+  category: 'process',
+  description: 'Scan for new PRs and completed reviews, auto-spawn reviewer agents',
+  params: [],
+  examples: [],
+  handler: async () => {
+    const result = await prReviewAutomationService.poll();
+    return { message: `PR review poll: ${result.newPrs || 0} new PRs, ${result.reviewsProcessed || 0} reviews, ${result.agentsSpawned || 0} agents spawned` };
+  }
+});
+
 // Start background automations (best-effort; gated by user settings)
 prMergeAutomationService.start();
+prReviewAutomationService.start();
 
 const verifyGitHubWebhookSignature = (req) => {
   const secret = String(process.env.GITHUB_WEBHOOK_SECRET || '').trim();
@@ -3504,22 +3528,59 @@ app.post('/api/webhooks/github', async (req, res) => {
       return res.json({ ok: true, event, verified: sig.verified });
     }
 
+    const action = String(req.body?.action || '').trim().toLowerCase();
+    const repoOwner = req.body?.repository?.owner?.login || req.body?.repository?.owner?.name || '';
+    const repoName = req.body?.repository?.name || '';
+
+    // Handle pull_request_review events (review submitted)
+    if (event === 'pull_request_review') {
+      const review = req.body?.review || null;
+      const pr = req.body?.pull_request || null;
+      if (!review || !pr) return res.status(400).json({ error: 'Missing review or pull_request payload' });
+
+      if (action === 'submitted') {
+        const result = await prReviewAutomationService.onReviewSubmitted({
+          owner: repoOwner,
+          repo: repoName,
+          number: pr.number,
+          reviewState: review.state || '',
+          reviewBody: review.body || '',
+          reviewUser: review.user?.login || '',
+          url: pr.html_url || pr.url || ''
+        });
+        return res.json({ ok: true, event, verified: sig.verified, action, result });
+      }
+      return res.json({ ok: true, event, ignored: true, verified: sig.verified, action });
+    }
+
     if (event !== 'pull_request') {
       return res.json({ ok: true, event, ignored: true, verified: sig.verified });
     }
 
-    const action = String(req.body?.action || '').trim().toLowerCase();
     const pr = req.body?.pull_request || null;
     if (!pr) return res.status(400).json({ error: 'Missing pull_request payload' });
 
+    // Handle PR opened / ready_for_review → auto-review pipeline
+    if (action === 'opened' || action === 'ready_for_review') {
+      const result = await prReviewAutomationService.onPrCreated({
+        owner: repoOwner,
+        repo: repoName,
+        number: pr.number,
+        title: pr.title || '',
+        author: pr.user?.login || '',
+        url: pr.html_url || pr.url || '',
+        action
+      });
+      return res.json({ ok: true, event, verified: sig.verified, action, result });
+    }
+
+    // Handle PR closed + merged → existing merge automation
     const merged = !!pr.merged;
     const mergedAt = pr.merged_at || null;
     if (action !== 'closed' || !merged) {
       return res.json({ ok: true, event, ignored: true, verified: sig.verified, action, merged });
     }
 
-    const repoOwner = req.body?.repository?.owner?.login || req.body?.repository?.owner?.name || '';
-    const repoName = req.body?.repository?.name || '';
     const result = await prMergeAutomationService.processMergedPullRequest({
       owner: repoOwner,
       repo: repoName,
@@ -3540,7 +3601,8 @@ app.get('/api/process/automations', (req, res) => {
   try {
     res.json({
       prMerge: prMergeAutomationService.getConfig(),
-      lastRunAt: prMergeAutomationService.lastRunAt || null
+      lastRunAt: prMergeAutomationService.lastRunAt || null,
+      prReview: prReviewAutomationService.getStatus()
     });
   } catch (error) {
     logger.error('Failed to get automations status', { error: error.message, stack: error.stack });
@@ -3556,6 +3618,39 @@ app.post('/api/process/automations/pr-merge/run', requirePolicyAction('destructi
   } catch (error) {
     logger.error('Failed to run PR merge automations', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to run PR merge automations' });
+  }
+});
+
+// PR review automation endpoints
+app.post('/api/process/automations/pr-review/run', express.json(), async (req, res) => {
+  try {
+    const result = await prReviewAutomationService.runManual();
+    res.json(result);
+  } catch (error) {
+    logger.error('Failed to run PR review automation', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to run PR review automation' });
+  }
+});
+
+app.get('/api/process/automations/pr-review/status', (req, res) => {
+  try {
+    res.json(prReviewAutomationService.getStatus());
+  } catch (error) {
+    logger.error('Failed to get PR review status', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to get PR review status' });
+  }
+});
+
+app.put('/api/process/automations/pr-review/config', express.json(), async (req, res) => {
+  try {
+    const config = prReviewAutomationService.updateConfig(req.body || {});
+    // Restart polling if config changed
+    prReviewAutomationService.stop();
+    prReviewAutomationService.start();
+    res.json({ ok: true, config });
+  } catch (error) {
+    logger.error('Failed to update PR review config', { error: error.message, stack: error.stack });
+    res.status(500).json({ error: error.message || 'Failed to update PR review config' });
   }
 });
 
