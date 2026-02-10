@@ -29078,6 +29078,7 @@ class ClaudeOrchestrator {
 
     const payload = text.endsWith('\n') ? text : `${text}\n`;
     this.socket.emit('terminal-input', { sessionId, data: payload });
+    this.socket.emit('command-executed', { sessionId, command: text });
     pending.sentAt = Date.now();
     this.pendingAutoPrompts.set(sessionId, pending);
 
