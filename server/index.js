@@ -1201,6 +1201,23 @@ app.get('/api/workspaces', (req, res) => {
   }
 });
 
+app.get('/api/workspaces/active', (req, res) => {
+  try {
+    const active = workspaceManager.getActiveWorkspace();
+    if (active) return res.json({ id: active.id, name: active.name });
+    // Fallback: read from persisted config (survives hot-reload)
+    const configActive = workspaceManager.getConfig()?.activeWorkspace;
+    if (configActive) {
+      const ws = workspaceManager.getWorkspace(configActive);
+      if (ws) return res.json({ id: ws.id, name: ws.name });
+    }
+    res.json({ id: null, name: null });
+  } catch (error) {
+    logger.error('Failed to get active workspace', { error: error.message });
+    res.status(500).json({ error: 'Failed to get active workspace' });
+  }
+});
+
 app.post('/api/workspaces/:id/cleanup-terminals', async (req, res) => {
   try {
     const workspaceId = String(req.params?.id || '').trim();
