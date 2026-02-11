@@ -11006,19 +11006,19 @@ class ClaudeOrchestrator {
 
 			      bodyEl.innerHTML = `
 			        <div class="worktree-inspector-header review-console-header">
-		          <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
-	            <div class="worktree-inspector-subtle" style="font-size:0.95rem;">
-	              <strong>PR #${escapeHtml(pr.number || '')}</strong>
-	              ${pr.state ? ` • <span style="opacity:0.85;">${escapeHtml(pr.state)}</span>` : ''}
-	              ${pr.isDraft ? ' • <span style="opacity:0.85;">draft</span>' : ''}
-	              ${pr.headRefName ? ` • <span style="opacity:0.85;">${escapeHtml(pr.headRefName)}</span>` : ''}
-	            </div>
-		            <div class="worktree-inspector-subtle" style="opacity:0.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-		              ${escapeHtml(pr.title || t.title || '')}
+			          <div class="review-console-header-main">
+		            <div class="worktree-inspector-subtle review-console-header-pr-line">
+		              <strong>PR #${escapeHtml(pr.number || '')}</strong>
+		              ${pr.state ? ` • <span class="review-console-header-pr-state">${escapeHtml(pr.state)}</span>` : ''}
+		              ${pr.isDraft ? ' • <span class="review-console-header-pr-state">draft</span>' : ''}
+		              ${pr.headRefName ? ` • <span class="review-console-header-pr-state">${escapeHtml(pr.headRefName)}</span>` : ''}
 		            </div>
-		          </div>
-		          <span style="flex:1"></span>
-			          <div class="review-console-header-actions">
+			            <div class="worktree-inspector-subtle review-console-header-title">
+			              ${escapeHtml(pr.title || t.title || '')}
+			            </div>
+			          </div>
+			          <span class="review-console-header-spacer"></span>
+				          <div class="review-console-header-actions">
 			            ${showNav ? `
 			              <button class="btn-secondary" type="button" data-review-nav="prev" title="Previous PR in review stack">◀</button>
 			              <span class="worktree-inspector-subtle" data-review-nav-status="true" title="Review stack (captured from Queue)">${navIndex + 1}/${navCount}</span>
