@@ -153,6 +153,10 @@ class Dashboard {
                   <div class="dashboard-summary-title">Discord</div>
                   <div id="dashboard-discord-summary" class="dashboard-summary-body">Loading…</div>
                   <div class="dashboard-summary-actions">
+                    <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;" title="Auto-start Discord bot when server starts">
+                      <input type="checkbox" id="dashboard-discord-autostart" style="margin:0;" />
+                      Auto-start
+                    </label>
                     <button class="dashboard-topbar-btn" id="dashboard-discord-ensure" title="Create/ensure Services workspace + terminals">🧰 Ensure</button>
                     <button class="dashboard-topbar-btn" id="dashboard-discord-process" title="Trigger Discord queue processing">📥 Process</button>
                     <button class="dashboard-topbar-btn" id="dashboard-discord-open-services" title="Open Services workspace">↗ Services</button>
@@ -257,6 +261,26 @@ class Dashboard {
           e.preventDefault();
           this.showPolecatOverlay().catch(() => {});
         });
+        // Discord auto-start checkbox
+        const discordAutostartCb = document.getElementById('dashboard-discord-autostart');
+        if (discordAutostartCb) {
+          // Load current setting
+          try {
+            const res = await fetch('/api/user-settings').catch(() => null);
+            const settings = res ? await res.json().catch(() => ({})) : {};
+            discordAutostartCb.checked = settings?.global?.ui?.discord?.autoEnsureServicesAtStartup === true;
+          } catch { /* leave unchecked */ }
+
+          discordAutostartCb.addEventListener('change', async (e) => {
+            const enabled = !!e.target.checked;
+            await this.orchestrator?.updateGlobalUserSetting?.('ui.discord.autoEnsureServicesAtStartup', enabled);
+            if (enabled) {
+              await this.ensureDiscordServices();
+              await this.loadDashboardDiscordSummary(discordEl);
+            }
+          });
+        }
+
         document.getElementById('dashboard-discord-ensure')?.addEventListener('click', async (e) => {
           e.preventDefault();
           await this.ensureDiscordServices();
