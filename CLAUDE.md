@@ -64,6 +64,7 @@ curl -sS "https://api.trello.com/1/cards/CARD_ID/customFieldItems?key=$KEY&token
 - Claude: `claude --dangerously-skip-permissions`
 
 **Launch sequence (MUST follow):**
+0. **CHECK ACTIVE WORKSPACE FIRST**: `GET /api/workspaces/active` — add worktrees to the workspace the user has open, NOT a random one
 1. Remove all worktrees: `POST /api/workspaces/remove-worktree` for each
 2. Re-add worktrees with tier: `POST /api/workspaces/add-mixed-worktree` (include `startTier`)
 3. Start agent: send launch command + `\r`
@@ -166,7 +167,7 @@ curl -sS -X POST "http://localhost:$PORT/api/commander/send-to-session" \
 - Use `gpt-5.3-codex` model with `xhigh` reasoning
 - System instructions go AFTER the card content
 - Two-request pattern: text first, then `\r` separately
-- 15s sleep for Codex init (not 20)
+- 3s sleep for Codex init (it initializes in ~2-3s, not 15)
 - Use `\u0015` (Ctrl+U) before Codex command to clear line
 
 ## Codex CLI Reference
@@ -701,6 +702,7 @@ SERVICES:     Modular service architecture with clear interfaces
 14. **Undefined config spread**: Handle missing gameModes/commonFlags with `{ ...(result[key] || {}), ...override[key] }` pattern
 15. **XTerm rendering race**: Wrap fitTerminal() in requestAnimationFrame() to allow renderer initialization
 16. **Repository name extraction**: For mixed-repo workspaces, use workspace config's terminal.repository.name, not session ID parsing
+17. **ALWAYS check active workspace first**: Before adding worktrees or launching agents, call `GET /api/workspaces/active` to find which workspace the user currently has open. Add worktrees to THAT workspace — never guess or pick a workspace by name
 
 ## Development Setup - Two Isolated Instances
 
