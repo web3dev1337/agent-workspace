@@ -100,8 +100,13 @@ class Dashboard {
   }
 
   generateDashboardHTML() {
-		    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws));
-		    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws));
+		    const sortByLastAccess = (a, b) => {
+		      const aTime = a.lastAccess ? new Date(a.lastAccess).getTime() : 0;
+		      const bTime = b.lastAccess ? new Date(b.lastAccess).getTime() : 0;
+		      return bTime - aTime;
+		    };
+		    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws)).sort(sortByLastAccess);
+		    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws)).sort(sortByLastAccess);
 		    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
 
 			    return `
