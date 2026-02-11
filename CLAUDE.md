@@ -145,7 +145,7 @@ sleep 1
 curl -sS -X POST "http://localhost:$PORT/api/commander/send-to-session" \
   -H "Content-Type: application/json" \
   -d "{\"sessionId\": \"$SESSION_ID\", \"input\": \"\r\"}"
-sleep 15  # wait for Codex init
+sleep 3  # wait for Codex init (only needs 2-3s)
 
 # Send VERBATIM title + desc + system instructions AFTER
 PROMPT="${CARD_TITLE}\n\n${CARD_DESC}\n\n---\nSYSTEM INSTRUCTIONS:\n1. git fetch origin master && git checkout master && git pull\n2. git checkout -b feature/BRANCH_SLUG\n3. Read CLAUDE.md and CODEBASE_DOCUMENTATION.md first\n4. Implement everything above verbatim\n5. Clean surgical code, minimal diff\n6. Automated tests following existing patterns\n7. NEVER squash merge\n8. Commit and push regularly\n9. gh pr create when done, include PR link\n10. Run existing tests"
