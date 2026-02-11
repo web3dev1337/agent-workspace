@@ -813,6 +813,13 @@ class WorkspaceManager {
       });
     }
 
+    // Sort by lastAccess descending (most recently used first).
+    workspaces.sort((a, b) => {
+      const aTime = a.lastAccess ? new Date(a.lastAccess).getTime() : 0;
+      const bTime = b.lastAccess ? new Date(b.lastAccess).getTime() : 0;
+      return bTime - aTime;
+    });
+
     // Attach any recent health/cleanup info (best-effort; not persisted).
     return workspaces.map((ws) => {
       const health = this.workspaceHealth.get(ws.id) || null;
