@@ -273,16 +273,31 @@ Because `main` is usually checked out in the `master/` worktree, **do not try to
 - **WorkspaceManager**: Multi-workspace orchestration (`server/workspaceManager.js`)
 - **WorktreeHelper**: Git worktree operations (`server/worktreeHelper.js`)
 - **NotificationService**: System notifications (`server/notificationService.js`)
-- **CommanderService**: Top-Level AI orchestration terminal (`server/commanderService.js`)
+- **CommanderService**: Top-Level AI orchestration — thin wrapper, delegates to CommanderDaemon in headless mode (`server/commanderService.js`)
+- **CommanderDaemon**: Always-on headless Claude CLI daemon — inbox poll loop, stream-json parser, session continuity via `--resume` (`server/commanderDaemon.js`)
 - **CommandHistoryService**: Terminal autosuggestions via shell history (`server/commandHistoryService.js`)
 - **Tauri App**: Native desktop application (`src-tauri/`)
 - **Diff Viewer**: Advanced code review tool (`diff-viewer/`)
 
 ## Commander Claude (Top-Level AI)
 
-Commander Claude is a special Claude Code instance that runs from the orchestrator `master/` directory with knowledge of the entire system. When you ARE Commander Claude (running in this directory or launched from the Commander panel), you have these capabilities.
+Commander is an always-on headless daemon (OpenClaw-style). It runs `claude --print --output-format stream-json` as a subprocess per inbox batch, streams responses to the UI panel via Socket.IO, and uses `--resume <session_id>` for conversation continuity. Claude Code's built-in auto-compact handles context. No API key management needed.
 
-**IMPORTANT:** When you first start, greet the user with:
+**Mode:** headless CLI by default. Set `COMMANDER_MODE=pty` to fall back to the old visible terminal.
+
+**Key env vars:**
+- `COMMANDER_MODEL` — model to use (default: `claude-opus-4-6`)
+- `COMMANDER_POLL_MS` — inbox poll interval ms (default: `5000`)
+- `COMMANDER_DAEMON` — set `false` to disable auto-start on server boot
+
+**Sending tasks to Commander (from any channel):**
+```bash
+curl -sS -X POST http://localhost:$PORT/api/commander/inbox \
+  -H "Content-Type: application/json" \
+  -d '{"source":"discord","type":"task","payload":"check all sessions and report status"}'
+```
+
+**IMPORTANT:** When you first start (pty mode only), greet the user with:
 > Commander Claude reporting for duty, sir!
 
 **Read the full Commander instructions:**
