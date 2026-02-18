@@ -7152,6 +7152,82 @@ app.post('/api/commander/send-to-session', (req, res) => {
   }
 });
 
+// ============ COMMANDER DAEMON ============
+// OpenClaw-style always-on daemon: watchdog, inbox, multi-channel events
+
+// Get daemon status
+app.get('/api/commander/daemon', (req, res) => {
+  try {
+    res.json(commanderService.getDaemonStatus());
+  } catch (error) {
+    logger.error('Failed to get daemon status', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Start daemon (auto-restart enabled)
+app.post('/api/commander/daemon/start', async (req, res) => {
+  try {
+    await commanderService.startDaemon();
+    res.json({ success: true, daemon: commanderService.getDaemonStatus() });
+  } catch (error) {
+    logger.error('Failed to start daemon', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Stop daemon (disable auto-restart)
+app.post('/api/commander/daemon/stop', (req, res) => {
+  try {
+    commanderService.stopDaemon();
+    res.json({ success: true, daemon: commanderService.getDaemonStatus() });
+  } catch (error) {
+    logger.error('Failed to stop daemon', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ── Inbox ──
+
+// Get inbox events
+app.get('/api/commander/inbox', (req, res) => {
+  try {
+    const { status } = req.query;
+    const events = commanderService.getInbox(status || null);
+    res.json({ events, total: events.length });
+  } catch (error) {
+    logger.error('Failed to get inbox', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Enqueue an event (from any channel: voice, Discord, cron, UI)
+app.post('/api/commander/inbox', (req, res) => {
+  try {
+    const { source, type, payload, meta } = req.body;
+    if (!payload) {
+      return res.status(400).json({ error: 'payload is required' });
+    }
+    const event = commanderService.enqueueEvent({ source, type, payload, meta });
+    res.json({ success: true, event });
+  } catch (error) {
+    logger.error('Failed to enqueue event', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Dismiss / remove an inbox event
+app.delete('/api/commander/inbox/:id', (req, res) => {
+  try {
+    const removed = commanderService.dismissEvent(req.params.id);
+    if (!removed) return res.status(404).json({ error: 'Event not found' });
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to dismiss inbox event', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ COMMANDER COMMAND REGISTRY ============
 // Semantic command system for Commander Claude UI control
 
@@ -7787,10 +7863,20 @@ httpServer.listen(PORT, HOST, () => {
   sessionManager.initializeSessions()
     .then(() => {
       if (!shouldAutoEnsureDiscordServices) return;
-      // Don’t block server startup; just best-effort keep Services running after restarts.
+      // Don't block server startup; just best-effort keep Services running after restarts.
       return discordIntegrationService.ensureDiscordServices({ sessionManager, workspaceManager })
         .then(() => logger.info('Discord services ensured on startup'))
         .catch((error) => logger.warn('Failed to ensure Discord services on startup', { error: error.message }));
+    })
+    .then(() => {
+      // Auto-start Commander daemon (OpenClaw-style always-on AI)
+      const autoStartRaw = String(process.env.COMMANDER_DAEMON ?? 'true').toLowerCase();
+      const shouldStartDaemon = !['0', 'false', 'no'].includes(autoStartRaw);
+      if (shouldStartDaemon) {
+        commanderService.startDaemon().catch((error) => {
+          logger.warn('Commander daemon auto-start failed', { error: error.message });
+        });
+      }
     })
     .catch((error) => {
       logger.error('Failed to initialize sessions', { error: error.message, stack: error.stack });
@@ -7812,7 +7898,10 @@ function shutdown(signal = 'unknown') {
 
   isShuttingDown = true;
   logger.info('Shutting down server...', { signal });
-  
+
+  // Stop Commander daemon watchdog before session cleanup
+  try { commanderService.stopDaemon(); } catch { /* ignore */ }
+
   // Clean up sessions first
   sessionManager.cleanup();
   
