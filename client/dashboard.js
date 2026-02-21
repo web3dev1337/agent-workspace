@@ -247,6 +247,16 @@ class Dashboard {
           </div>
         ` : '';
 
+        const reviewSection = (visibility.reviewSection !== false) ? `
+          <div class="dashboard-section dashboard-review">
+            <h2>Review</h2>
+            <div class="dashboard-create-actions dashboard-review-actions">
+              <button class="btn-primary" id="dashboard-review-inbox">Review Inbox</button>
+              <button class="btn-secondary" id="dashboard-quick-review">Quick Review</button>
+            </div>
+          </div>
+        ` : '';
+
         const quickLinksSection = (visibility.quickLinks !== false) ? `
           <div class="dashboard-section dashboard-half">
             <h2>Quick Links</h2>
@@ -286,6 +296,7 @@ class Dashboard {
             </div>
             <div class="dashboard-col dashboard-col-right">
               ${createSection}
+              ${reviewSection}
               ${quickLinksSection}
               ${runningServicesSection}
             </div>
@@ -3454,6 +3465,20 @@ class Dashboard {
     if (createProjectBtn) {
       createProjectBtn.addEventListener('click', () => {
         this.showCreateProjectWizard();
+      });
+    }
+
+    const reviewInboxBtn = document.getElementById('dashboard-review-inbox');
+    if (reviewInboxBtn) {
+      reviewInboxBtn.addEventListener('click', () => {
+        this.orchestrator.openReviewInbox();
+      });
+    }
+
+    const quickReviewBtn = document.getElementById('dashboard-quick-review');
+    if (quickReviewBtn) {
+      quickReviewBtn.addEventListener('click', () => {
+        this.orchestrator.openReviewInbox({ quick: true });
       });
     }
 
