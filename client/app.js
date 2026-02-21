@@ -418,6 +418,7 @@ class ClaudeOrchestrator {
 
   getSessionIntentHaikuText(sessionId) {
     const sid = String(sessionId || '').trim();
+    if (!this.isIntentHintEnabled()) return '';
     const row = this.intentHaikuBySession.get(sid);
     const summary = String(row?.summary || '').trim();
     return summary || this.getSessionIntentHaikuFallback(sid);
@@ -426,6 +427,7 @@ class ClaudeOrchestrator {
   renderSessionIntentHaiku(sessionId, { pending = false, error = false } = {}) {
     const sid = String(sessionId || '').trim();
     if (!sid) return;
+    if (!this.isIntentHintEnabled()) return;
     const el = document.getElementById(this.getSessionDomId('intent-haiku', sid));
     if (!el) return;
 
@@ -460,6 +462,7 @@ class ClaudeOrchestrator {
 
   maybeSchedulePostPromptIntentRefresh(sessionId) {
     const sid = String(sessionId || '').trim();
+    if (!this.isIntentHintEnabled()) return;
     if (!sid || !this.isAgentSession(sid)) return;
     const policy = this.getIntentHaikuPolicy(sid);
     if (!policy || policy.postPromptScheduled) return;
@@ -470,6 +473,7 @@ class ClaudeOrchestrator {
   maybeSchedulePrIntentRefresh(sessionId, prUrl) {
     const sid = String(sessionId || '').trim();
     const pr = String(prUrl || '').trim();
+    if (!this.isIntentHintEnabled()) return;
     if (!sid || !this.isAgentSession(sid) || !pr) return;
     const policy = this.getIntentHaikuPolicy(sid);
     if (!policy) return;
@@ -480,6 +484,7 @@ class ClaudeOrchestrator {
 
   maybeScheduleLongSessionIntentRefresh(sessionId) {
     const sid = String(sessionId || '').trim();
+    if (!this.isIntentHintEnabled()) return;
     if (!sid || !this.isAgentSession(sid)) return;
     const now = Date.now();
     const lastFetch = Number(this.intentHaikuLastFetchedAt.get(sid) || 0);
@@ -511,6 +516,7 @@ class ClaudeOrchestrator {
 
   scheduleSessionIntentHaikuRefresh(sessionId, { delayMs = 2400, force = false } = {}) {
     const sid = String(sessionId || '').trim();
+    if (!this.isIntentHintEnabled()) return;
     if (!sid || !this.isAgentSession(sid)) return;
 
     const existing = this.intentHaikuTimers.get(sid);
@@ -524,6 +530,7 @@ class ClaudeOrchestrator {
   }
 
   refreshIntentHaikusForAgentSessions({ delayMs = 1400, force = false, onlyMissing = false } = {}) {
+    if (!this.isIntentHintEnabled()) return;
     for (const sessionId of this.sessions.keys()) {
       if (!this.isAgentSession(sessionId)) continue;
       if (onlyMissing && this.intentHaikuBySession.has(sessionId)) {
@@ -536,6 +543,7 @@ class ClaudeOrchestrator {
 
   async fetchSessionIntentHaiku(sessionId, { force = false } = {}) {
     const sid = String(sessionId || '').trim();
+    if (!this.isIntentHintEnabled()) return null;
     if (!sid || !this.isAgentSession(sid)) return null;
 
     if (this.intentHaikuInFlight.has(sid)) return null;
@@ -3566,6 +3574,10 @@ class ClaudeOrchestrator {
     return this.getUiVisibilityConfig().terminal || {};
   }
 
+  isIntentHintEnabled() {
+    return this.getTerminalVisibilityConfig().intentHints !== false;
+  }
+
   shouldRenderTerminalButton(buttonId) {
     const visibility = this.getTerminalVisibilityConfig();
     const map = {
@@ -5167,23 +5179,26 @@ class ClaudeOrchestrator {
 	    const repositoryName = this.extractRepositoryName(sessionId);
 	    const worktreeId = session.worktreeId;
 		    const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
-		    const branchMeta = this.formatBranchLabel(session.branch || '', { context: 'terminal' });
-		    const branchRefreshId = (() => { try { return encodeURIComponent(String(sessionId || '')); } catch { return ''; } })();
+	    const branchMeta = this.formatBranchLabel(session.branch || '', { context: 'terminal' });
+	    const branchRefreshId = (() => { try { return encodeURIComponent(String(sessionId || '')); } catch { return ''; } })();
+      const terminalVisibility = this.getTerminalVisibilityConfig();
+      const showBranchRefresh = terminalVisibility.branchRefresh !== false;
+      const showIntentHints = terminalVisibility.intentHints !== false;
 	    const ticketMeta = this.getTicketMetaForSession(sessionId, session);
 	    const ticketChip = ticketMeta?.label ? (
 	      ticketMeta.url
 	      ? `<a class="terminal-ticket" href="${this.escapeHtml(ticketMeta.url)}" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(ticketMeta.tooltip || ticketMeta.title || ticketMeta.label)}">🧾 ${this.escapeHtml(ticketMeta.label)}</a>`
 	      : `<span class="terminal-ticket" title="${this.escapeHtml(ticketMeta.tooltip || ticketMeta.title || ticketMeta.label)}">🧾 ${this.escapeHtml(ticketMeta.label)}</span>`
 	    ) : '';
-      const intentHaikuId = this.getSessionDomId('intent-haiku', sessionId);
-      const intentHaikuText = this.escapeHtml(this.getSessionIntentHaikuText(sessionId));
+      const intentHaikuId = showIntentHints ? this.getSessionDomId('intent-haiku', sessionId) : '';
+      const intentHaikuText = showIntentHints ? this.escapeHtml(this.getSessionIntentHaikuText(sessionId)) : '';
 			    wrapper.innerHTML = `
 			      <div class="terminal-header">
 			        <div class="terminal-title">
 		          <span class="status-indicator ${session.status}" id="${this.getSessionDomId('status', sessionId)}"></span>
 		          <span>${isAgentSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
 		          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
-		          <button type="button" class="terminal-branch-refresh" data-branch-refresh="${this.escapeHtml(branchRefreshId)}" title="Refresh branch label">↻</button>
+		          ${showBranchRefresh ? `<button type="button" class="terminal-branch-refresh" data-branch-refresh="${this.escapeHtml(branchRefreshId)}" title="Refresh branch label">↻</button>` : ''}
 		          ${ticketChip}
 			        </div>
 		        <div class="terminal-controls">
@@ -5202,7 +5217,7 @@ class ClaudeOrchestrator {
 			          ` : ''}
 		        </div>
 			      </div>
-          ${isAgentSession ? `<div class="terminal-intent-haiku" id="${intentHaikuId}" data-state="loading">${intentHaikuText}</div>` : ''}
+          ${isAgentSession && showIntentHints ? `<div class="terminal-intent-haiku" id="${intentHaikuId}" data-state="loading">${intentHaikuText}</div>` : ''}
 	      <div class="terminal-body">
 	        <div class="terminal" id="${this.getSessionDomId('terminal', sessionId)}"></div>
 	        ${isAgentSession ? `
