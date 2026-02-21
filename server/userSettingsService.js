@@ -166,6 +166,7 @@ class UserSettingsService {
               reviewRoute: false,
               activity: false,
               diff: false,
+              workflowMode: false,
               workflowBackground: false,
               tierFilters: false,
               focusTier2: false,

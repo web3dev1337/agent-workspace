@@ -60,24 +60,24 @@ class CommanderPanel {
         </div>
       </div>
       <div class="commander-toolbar">
-        <button id="commander-start" class="commander-btn" title="Start terminal">▶️ Start</button>
-        <button id="commander-stop" class="commander-btn" title="Stop terminal">⏹️ Stop</button>
-        <div class="commander-toolbar-divider"></div>
-        <button id="commander-cmdmode" class="commander-btn" title="Command mode: type / then a natural-language command to control the UI">
+        <button id="commander-start" class="commander-btn" title="Start terminal" data-ui-visibility="commander.startStop">▶️ Start</button>
+        <button id="commander-stop" class="commander-btn" title="Stop terminal" data-ui-visibility="commander.startStop">⏹️ Stop</button>
+        <div class="commander-toolbar-divider" data-ui-visibility="commander.startStop"></div>
+        <button id="commander-cmdmode" class="commander-btn" title="Command mode: type / then a natural-language command to control the UI" data-ui-visibility="commander.cmdMode">
           ⌨️ Cmd:on
         </button>
-        <button id="commander-start-claude" class="commander-btn" title="Start Claude Code">
+        <button id="commander-start-claude" class="commander-btn" title="Start Claude Code" data-ui-visibility="commander.startClaude">
           Start Claude
         </button>
-        <select id="commander-mode">
+        <select id="commander-mode" data-ui-visibility="commander.modeSelect">
           <option value="fresh">Fresh</option>
           <option value="continue">Continue</option>
           <option value="resume">Resume</option>
         </select>
-        <button id="commander-sessions" class="commander-btn" title="View sessions">
+        <button id="commander-sessions" class="commander-btn" title="View sessions" data-ui-visibility="commander.sessions">
           Sessions
         </button>
-        <button id="commander-advice" class="commander-btn" title="Show workflow advice">
+        <button id="commander-advice" class="commander-btn" title="Show workflow advice" data-ui-visibility="commander.advice">
           Advice
         </button>
       </div>
@@ -105,6 +105,8 @@ class CommanderPanel {
       <div id="commander-advice-body" class="commander-advice-body">Loading…</div>
     `;
     document.body.appendChild(advice);
+
+    this.orchestrator?.applyUiVisibility?.();
   }
 
   /**
