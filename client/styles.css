@@ -342,18 +342,14 @@ body {
 
 .delete-worktree-btn {
   background: transparent;
-  border: none;
-  color: var(--text-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   cursor: pointer;
-  padding: var(--space-xs);
+  padding: 2px 4px;
   border-radius: var(--radius-sm);
   font-size: 0.9rem;
-  opacity: 0;
-  transition: all 0.2s;
-}
-
-.worktree-item:hover .delete-worktree-btn {
   opacity: 1;
+  transition: all 0.2s;
 }
 
 .delete-worktree-btn:hover {
@@ -1243,16 +1239,20 @@ header h1 {
 }
 
 .filter-toggle {
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-sm);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .filter-toggle-row {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
+}
+
+.filter-toggle-row-compact {
+  row-gap: 4px;
 }
 
 .filter-toggle button {
