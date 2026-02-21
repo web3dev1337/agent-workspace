@@ -2936,7 +2936,7 @@ class ClaudeOrchestrator {
       sections: {
         ...existingSections,
         terminals: true,
-        files: true,
+        files: false,
         commits: false,
         diff: true
       },
@@ -4888,9 +4888,10 @@ class ClaudeOrchestrator {
 
       ordered.forEach((sessionId) => {
         const session = this.sessions.get(sessionId);
-        const isVisible = visibleSet.has(sessionId);
         let wrapper = this.getSessionWrapperElement(sessionId);
-        if (wrapper && !grid.contains(wrapper)) wrapper = null;
+        const docked = !!(wrapper && wrapper.classList.contains('review-console-terminal'));
+        const isVisible = visibleSet.has(sessionId) && !docked;
+        if (wrapper && !grid.contains(wrapper) && !docked) wrapper = null;
 
         console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}, exists=${!!wrapper}`);
 
@@ -4928,12 +4929,14 @@ class ClaudeOrchestrator {
             container.appendChild(wrapper);
           }
           visibleCount += 1;
-        } else if (wrapper) {
+        } else if (wrapper && !docked) {
           // Hide wrapper if not visible
           wrapper.style.display = 'none';
           if (wrapper.parentElement !== container) {
             container.appendChild(wrapper);
           }
+        } else if (wrapper && docked && session) {
+          this.updateTerminalTicketLabel(sessionId);
         }
       });
 
@@ -8675,19 +8678,19 @@ class ClaudeOrchestrator {
 		    const allowedPresets = new Set(['default', 'review', 'throughput', 'deep', 'code', 'terminals', 'custom']);
 		    const preset = allowedPresets.has(presetRaw) ? presetRaw : 'throughput';
 
-    const rawSections = (cfg.sections && typeof cfg.sections === 'object') ? cfg.sections : {};
-    const storedSections = {
-      terminals: rawSections.terminals !== false,
-      files: rawSections.files !== false,
-      commits: rawSections.commits !== false,
-      diff: rawSections.diff !== false
-    };
+		    const rawSections = (cfg.sections && typeof cfg.sections === 'object') ? cfg.sections : {};
+		    const storedSections = {
+		      terminals: rawSections.terminals !== false,
+		      files: rawSections.files !== false,
+		      commits: rawSections.commits !== false,
+		      diff: rawSections.diff !== false
+		    };
 
 		    const presets = {
 		      default: { terminals: true, files: true, commits: true, diff: true },
-		      // Review layout preset (diff-dominant). Keep commits off by default for less vertical scrolling.
-		      review: { terminals: true, files: true, commits: false, diff: true },
-		      throughput: { terminals: true, files: true, commits: false, diff: true },
+		      // Review layout preset (diff-dominant). Keep commits/files off by default for less vertical scrolling.
+		      review: { terminals: true, files: false, commits: false, diff: true },
+		      throughput: { terminals: true, files: false, commits: false, diff: true },
 		      deep: { terminals: true, files: true, commits: true, diff: true },
 		      code: { terminals: false, files: true, commits: true, diff: true },
 		      terminals: { terminals: true, files: false, commits: false, diff: false }
@@ -10301,8 +10304,8 @@ class ClaudeOrchestrator {
 
 		        const presets = {
 		          default: { terminals: true, files: true, commits: true, diff: true },
-		          review: { terminals: true, files: true, commits: false, diff: true },
-		          throughput: { terminals: true, files: true, commits: false, diff: true },
+		          review: { terminals: true, files: false, commits: false, diff: true },
+		          throughput: { terminals: true, files: false, commits: false, diff: true },
 		          deep: { terminals: true, files: true, commits: true, diff: true },
 		          terminals: { terminals: true, files: false, commits: false, diff: false },
 		          code: { terminals: false, files: true, commits: true, diff: true }
@@ -11347,8 +11350,8 @@ class ClaudeOrchestrator {
 
 				      const presets = {
 				        default: { terminals: true, files: true, commits: true, diff: true },
-				        review: { terminals: true, files: true, commits: false, diff: true },
-				        throughput: { terminals: true, files: true, commits: false, diff: true },
+				        review: { terminals: true, files: false, commits: false, diff: true },
+				        throughput: { terminals: true, files: false, commits: false, diff: true },
 				        deep: { terminals: true, files: true, commits: true, diff: true },
 				        code: { terminals: false, files: true, commits: true, diff: true },
 				        terminals: { terminals: true, files: false, commits: false, diff: false }
