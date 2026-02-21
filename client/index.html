@@ -382,6 +382,132 @@
             </div>
 
             <div class="setting-section">
+                <h4>Review Inbox</h4>
+                <div class="setting-group">
+                    <label>
+                        Default view:
+                        <select id="review-inbox-mode">
+                            <option value="mine">Mine</option>
+                            <option value="all">All</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Default tiers:
+                        <select id="review-inbox-tiers">
+                            <option value="t3t4">T3 + T4</option>
+                            <option value="t1">T1</option>
+                            <option value="t2">T2</option>
+                            <option value="t3">T3</option>
+                            <option value="t4">T4</option>
+                            <option value="all">All</option>
+                            <option value="none">None</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="review-inbox-pr-only" />
+                        PRs only
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="review-inbox-unreviewed" />
+                        Unreviewed only
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="review-inbox-prioritize-active" />
+                        Prioritize active agents
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="review-inbox-auto-console" />
+                        Auto-open Review Console
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="review-inbox-auto-advance" />
+                        Auto-advance after review
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Default project filter:
+                        <input id="review-inbox-project" type="text" placeholder="owner/repo or project name" />
+                    </label>
+                </div>
+            </div>
+
+            <div class="setting-section">
+                <h4>Quick Review</h4>
+                <div class="setting-group">
+                    <label>
+                        Default view:
+                        <select id="quick-review-mode">
+                            <option value="mine">Mine</option>
+                            <option value="all">All</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Default tiers:
+                        <select id="quick-review-tiers">
+                            <option value="t3t4">T3 + T4</option>
+                            <option value="t1">T1</option>
+                            <option value="t2">T2</option>
+                            <option value="t3">T3</option>
+                            <option value="t4">T4</option>
+                            <option value="all">All</option>
+                            <option value="none">None</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="quick-review-pr-only" />
+                        PRs only
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="quick-review-unreviewed" />
+                        Unreviewed only
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="quick-review-prioritize-active" />
+                        Prioritize active agents
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="quick-review-auto-console" />
+                        Auto-open Review Console
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="quick-review-auto-advance" />
+                        Auto-advance after review
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Default project filter:
+                        <input id="quick-review-project" type="text" placeholder="owner/repo or project name" />
+                    </label>
+                </div>
+            </div>
+
+            <div class="setting-section">
                 <h4>Projects + Chats</h4>
                 <div class="setting-group">
                     <label>

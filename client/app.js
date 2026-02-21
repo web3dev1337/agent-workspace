@@ -1655,6 +1655,22 @@ class ClaudeOrchestrator {
       'tasks-theme-select': null,
       'tasks-launch-global-prefix': null,
       'tasks-launch-include-title': null,
+      'review-inbox-mode': null,
+      'review-inbox-tiers': null,
+      'review-inbox-pr-only': null,
+      'review-inbox-unreviewed': null,
+      'review-inbox-prioritize-active': null,
+      'review-inbox-auto-console': null,
+      'review-inbox-auto-advance': null,
+      'review-inbox-project': null,
+      'quick-review-mode': null,
+      'quick-review-tiers': null,
+      'quick-review-pr-only': null,
+      'quick-review-unreviewed': null,
+      'quick-review-prioritize-active': null,
+      'quick-review-auto-console': null,
+      'quick-review-auto-advance': null,
+      'quick-review-project': null,
       'trello-me-username': null,
       'identity-claim-name': null,
       'identity-save': null,
@@ -2296,6 +2312,110 @@ class ClaudeOrchestrator {
       });
     }
 
+    const reviewInboxMode = document.getElementById('review-inbox-mode');
+    if (reviewInboxMode) {
+      reviewInboxMode.addEventListener('change', async (e) => {
+        const v = String(e.target.value || '').trim().toLowerCase();
+        await this.updateGlobalUserSetting('ui.reviewInbox.mode', v === 'all' ? 'all' : 'mine');
+      });
+    }
+    const reviewInboxTiers = document.getElementById('review-inbox-tiers');
+    if (reviewInboxTiers) {
+      reviewInboxTiers.addEventListener('change', async (e) => {
+        const v = String(e.target.value || '').trim().toLowerCase();
+        const allowed = new Set(['t3t4', 't1', 't2', 't3', 't4', 'all', 'none']);
+        await this.updateGlobalUserSetting('ui.reviewInbox.tiers', allowed.has(v) ? v : 't3t4');
+      });
+    }
+    const reviewInboxPrOnly = document.getElementById('review-inbox-pr-only');
+    if (reviewInboxPrOnly) {
+      reviewInboxPrOnly.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.reviewInbox.kind', e.target.checked ? 'pr' : 'all');
+      });
+    }
+    const reviewInboxUnreviewed = document.getElementById('review-inbox-unreviewed');
+    if (reviewInboxUnreviewed) {
+      reviewInboxUnreviewed.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.reviewInbox.unreviewedOnly', !!e.target.checked);
+      });
+    }
+    const reviewInboxPrioritize = document.getElementById('review-inbox-prioritize-active');
+    if (reviewInboxPrioritize) {
+      reviewInboxPrioritize.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.reviewInbox.prioritizeActive', !!e.target.checked);
+      });
+    }
+    const reviewInboxAutoConsole = document.getElementById('review-inbox-auto-console');
+    if (reviewInboxAutoConsole) {
+      reviewInboxAutoConsole.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.reviewInbox.autoConsole', !!e.target.checked);
+      });
+    }
+    const reviewInboxAutoAdvance = document.getElementById('review-inbox-auto-advance');
+    if (reviewInboxAutoAdvance) {
+      reviewInboxAutoAdvance.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.reviewInbox.autoAdvance', !!e.target.checked);
+      });
+    }
+    const reviewInboxProject = document.getElementById('review-inbox-project');
+    if (reviewInboxProject) {
+      reviewInboxProject.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.reviewInbox.project', String(e.target.value || '').trim());
+      });
+    }
+
+    const quickReviewMode = document.getElementById('quick-review-mode');
+    if (quickReviewMode) {
+      quickReviewMode.addEventListener('change', async (e) => {
+        const v = String(e.target.value || '').trim().toLowerCase();
+        await this.updateGlobalUserSetting('ui.quickReview.mode', v === 'all' ? 'all' : 'mine');
+      });
+    }
+    const quickReviewTiers = document.getElementById('quick-review-tiers');
+    if (quickReviewTiers) {
+      quickReviewTiers.addEventListener('change', async (e) => {
+        const v = String(e.target.value || '').trim().toLowerCase();
+        const allowed = new Set(['t3t4', 't1', 't2', 't3', 't4', 'all', 'none']);
+        await this.updateGlobalUserSetting('ui.quickReview.tiers', allowed.has(v) ? v : 't3t4');
+      });
+    }
+    const quickReviewPrOnly = document.getElementById('quick-review-pr-only');
+    if (quickReviewPrOnly) {
+      quickReviewPrOnly.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.quickReview.kind', e.target.checked ? 'pr' : 'all');
+      });
+    }
+    const quickReviewUnreviewed = document.getElementById('quick-review-unreviewed');
+    if (quickReviewUnreviewed) {
+      quickReviewUnreviewed.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.quickReview.unreviewedOnly', !!e.target.checked);
+      });
+    }
+    const quickReviewPrioritize = document.getElementById('quick-review-prioritize-active');
+    if (quickReviewPrioritize) {
+      quickReviewPrioritize.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.quickReview.prioritizeActive', !!e.target.checked);
+      });
+    }
+    const quickReviewAutoConsole = document.getElementById('quick-review-auto-console');
+    if (quickReviewAutoConsole) {
+      quickReviewAutoConsole.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.quickReview.autoConsole', !!e.target.checked);
+      });
+    }
+    const quickReviewAutoAdvance = document.getElementById('quick-review-auto-advance');
+    if (quickReviewAutoAdvance) {
+      quickReviewAutoAdvance.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.quickReview.autoAdvance', !!e.target.checked);
+      });
+    }
+    const quickReviewProject = document.getElementById('quick-review-project');
+    if (quickReviewProject) {
+      quickReviewProject.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('ui.quickReview.project', String(e.target.value || '').trim());
+      });
+    }
+
     // Simple mode settings (Projects + Chats shell)
     const simpleModeEnabled = document.getElementById('simple-mode-enabled');
     if (simpleModeEnabled) {
@@ -2858,24 +2978,68 @@ class ClaudeOrchestrator {
     return this.showQueuePanel();
   }
 
+  normalizeReviewTierPreset(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw || raw === 'default') return { preset: 't3t4', reviewTier: 'all', tierSet: [3, 4] };
+    if (raw === 'all') return { preset: 'all', reviewTier: 'all', tierSet: null };
+    if (raw === 'none') return { preset: 'none', reviewTier: 'none', tierSet: null };
+    if (raw === 't3t4' || raw === 't3+4' || raw === 't3+t4' || raw === 'bg') {
+      return { preset: 't3t4', reviewTier: 'all', tierSet: [3, 4] };
+    }
+    const m = raw.match(/^t?([1-4])$/);
+    if (m) {
+      const tier = Number.parseInt(m[1], 10);
+      return { preset: `t${tier}`, reviewTier: tier, tierSet: null };
+    }
+    return { preset: 't3t4', reviewTier: 'all', tierSet: [3, 4] };
+  }
+
+  getReviewInboxDefaults(variant = 'reviewInbox') {
+    const base = (this.userSettings?.global?.ui?.reviewInbox && typeof this.userSettings.global.ui.reviewInbox === 'object')
+      ? this.userSettings.global.ui.reviewInbox
+      : {};
+    const quick = (this.userSettings?.global?.ui?.quickReview && typeof this.userSettings.global.ui.quickReview === 'object')
+      ? this.userSettings.global.ui.quickReview
+      : {};
+    const raw = variant === 'quickReview' ? { ...base, ...quick } : { ...base };
+    const tierInfo = this.normalizeReviewTierPreset(raw.tiers);
+    const mode = String(raw.mode || '').trim().toLowerCase() === 'all' ? 'all' : 'mine';
+    const kind = String(raw.kind || '').trim().toLowerCase() === 'all' ? 'all' : 'pr';
+    const project = String(raw.project || '').trim();
+
+    return {
+      mode,
+      kind,
+      project,
+      tiers: tierInfo.preset,
+      reviewTier: tierInfo.reviewTier,
+      tierSet: tierInfo.tierSet,
+      unreviewedOnly: raw.unreviewedOnly !== false,
+      autoConsole: raw.autoConsole === true,
+      autoAdvance: raw.autoAdvance === true,
+      prioritizeActive: raw.prioritizeActive !== false
+    };
+  }
+
   async openReviewInbox({ quick = false, project = '' } = {}) {
     this.setWorkflowMode('review');
-    const projectFilter = String(project || '').trim();
+    const defaults = this.getReviewInboxDefaults(quick ? 'quickReview' : 'reviewInbox');
+    const projectFilter = String(project || defaults.project || '').trim();
     this.queuePanelPreset = {
-      mode: 'mine',
-      reviewTier: 'all',
-      tierSet: [3, 4],
+      mode: defaults.mode,
+      reviewTier: defaults.reviewTier,
+      tierSet: defaults.tierSet,
       triageMode: false,
-      unreviewedOnly: true,
+      unreviewedOnly: defaults.unreviewedOnly,
       blockedOnly: false,
       autoOpenDiff: false,
-      autoConsole: !!quick,
-      autoAdvance: false,
+      autoConsole: defaults.autoConsole,
+      autoAdvance: defaults.autoAdvance,
       reviewActive: true,
       reviewRouteActive: false,
-      kindFilter: 'pr',
+      kindFilter: defaults.kind,
       projectFilter: projectFilter || '',
-      prioritizeActive: true,
+      prioritizeActive: defaults.prioritizeActive,
       quickReview: !!quick
     };
     return this.showQueuePanel();
@@ -14629,6 +14793,78 @@ class ClaudeOrchestrator {
       reviewConsoleShowServer.checked = kinds.server !== false;
     }
 
+    const reviewInboxCfg = (this.userSettings.global?.ui?.reviewInbox && typeof this.userSettings.global.ui.reviewInbox === 'object')
+      ? this.userSettings.global.ui.reviewInbox
+      : {};
+    const reviewInboxMode = document.getElementById('review-inbox-mode');
+    if (reviewInboxMode) {
+      reviewInboxMode.value = String(reviewInboxCfg.mode || 'mine').trim().toLowerCase() === 'all' ? 'all' : 'mine';
+    }
+    const reviewInboxTiers = document.getElementById('review-inbox-tiers');
+    if (reviewInboxTiers) {
+      reviewInboxTiers.value = this.normalizeReviewTierPreset(reviewInboxCfg.tiers).preset;
+    }
+    const reviewInboxPrOnly = document.getElementById('review-inbox-pr-only');
+    if (reviewInboxPrOnly) {
+      reviewInboxPrOnly.checked = String(reviewInboxCfg.kind || 'pr').trim().toLowerCase() !== 'all';
+    }
+    const reviewInboxUnreviewed = document.getElementById('review-inbox-unreviewed');
+    if (reviewInboxUnreviewed) {
+      reviewInboxUnreviewed.checked = reviewInboxCfg.unreviewedOnly !== false;
+    }
+    const reviewInboxPrioritize = document.getElementById('review-inbox-prioritize-active');
+    if (reviewInboxPrioritize) {
+      reviewInboxPrioritize.checked = reviewInboxCfg.prioritizeActive !== false;
+    }
+    const reviewInboxAutoConsole = document.getElementById('review-inbox-auto-console');
+    if (reviewInboxAutoConsole) {
+      reviewInboxAutoConsole.checked = reviewInboxCfg.autoConsole === true;
+    }
+    const reviewInboxAutoAdvance = document.getElementById('review-inbox-auto-advance');
+    if (reviewInboxAutoAdvance) {
+      reviewInboxAutoAdvance.checked = reviewInboxCfg.autoAdvance === true;
+    }
+    const reviewInboxProject = document.getElementById('review-inbox-project');
+    if (reviewInboxProject) {
+      reviewInboxProject.value = String(reviewInboxCfg.project || '');
+    }
+
+    const quickReviewCfg = (this.userSettings.global?.ui?.quickReview && typeof this.userSettings.global.ui.quickReview === 'object')
+      ? this.userSettings.global.ui.quickReview
+      : {};
+    const quickReviewMode = document.getElementById('quick-review-mode');
+    if (quickReviewMode) {
+      quickReviewMode.value = String(quickReviewCfg.mode || 'mine').trim().toLowerCase() === 'all' ? 'all' : 'mine';
+    }
+    const quickReviewTiers = document.getElementById('quick-review-tiers');
+    if (quickReviewTiers) {
+      quickReviewTiers.value = this.normalizeReviewTierPreset(quickReviewCfg.tiers).preset;
+    }
+    const quickReviewPrOnly = document.getElementById('quick-review-pr-only');
+    if (quickReviewPrOnly) {
+      quickReviewPrOnly.checked = String(quickReviewCfg.kind || 'pr').trim().toLowerCase() !== 'all';
+    }
+    const quickReviewUnreviewed = document.getElementById('quick-review-unreviewed');
+    if (quickReviewUnreviewed) {
+      quickReviewUnreviewed.checked = quickReviewCfg.unreviewedOnly !== false;
+    }
+    const quickReviewPrioritize = document.getElementById('quick-review-prioritize-active');
+    if (quickReviewPrioritize) {
+      quickReviewPrioritize.checked = quickReviewCfg.prioritizeActive !== false;
+    }
+    const quickReviewAutoConsole = document.getElementById('quick-review-auto-console');
+    if (quickReviewAutoConsole) {
+      quickReviewAutoConsole.checked = quickReviewCfg.autoConsole === true;
+    }
+    const quickReviewAutoAdvance = document.getElementById('quick-review-auto-advance');
+    if (quickReviewAutoAdvance) {
+      quickReviewAutoAdvance.checked = quickReviewCfg.autoAdvance === true;
+    }
+    const quickReviewProject = document.getElementById('quick-review-project');
+    if (quickReviewProject) {
+      quickReviewProject.value = String(quickReviewCfg.project || '');
+    }
+
     const simpleModeEnabled = document.getElementById('simple-mode-enabled');
     if (simpleModeEnabled) {
       simpleModeEnabled.checked = this.userSettings.global?.ui?.simpleMode?.enabled !== false;
@@ -23079,25 +23315,27 @@ class ClaudeOrchestrator {
         };
 
         const startQuickReview = async () => {
+          const defaults = this.getReviewInboxDefaults('quickReview');
           state.reviewRouteActive = false;
           state.reviewActive = true;
-          state.reviewTier = 'all';
-          state.tierSet = [3, 4];
+          state.reviewTier = defaults.reviewTier;
+          state.tierSet = defaults.tierSet;
           state.triageMode = false;
-          state.unreviewedOnly = true;
+          state.unreviewedOnly = defaults.unreviewedOnly;
           state.blockedOnly = false;
-          state.kindFilter = 'pr';
-          state.prioritizeActive = true;
-          state.autoConsole = true;
+          state.kindFilter = defaults.kind;
+          state.prioritizeActive = defaults.prioritizeActive;
+          state.autoConsole = defaults.autoConsole;
           state.autoOpenDiff = false;
-          state.autoAdvance = false;
-          state.mode = 'mine';
-          try { localStorage.setItem('queue-auto-console', 'true'); } catch {}
-          try { localStorage.setItem('queue-auto-advance', 'false'); } catch {}
+          state.autoAdvance = defaults.autoAdvance;
+          state.mode = defaults.mode;
+          state.projectFilter = defaults.project || '';
+          try { localStorage.setItem('queue-auto-console', defaults.autoConsole ? 'true' : 'false'); } catch {}
+          try { localStorage.setItem('queue-auto-advance', defaults.autoAdvance ? 'true' : 'false'); } catch {}
           try { localStorage.setItem('queue-triage', 'false'); } catch {}
           try { localStorage.setItem('queue-blocked-only', 'false'); } catch {}
-          try { localStorage.setItem('queue-prioritize-active', 'true'); } catch {}
-          setMode('mine');
+          try { localStorage.setItem('queue-prioritize-active', defaults.prioritizeActive ? 'true' : 'false'); } catch {}
+          setMode(defaults.mode);
 
           syncReviewControlsUI();
           renderList();

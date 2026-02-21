@@ -230,6 +230,26 @@ class UserSettingsService {
               runningServices: true,
               createSection: true
             },
+            reviewInbox: {
+              mode: 'mine',
+              tiers: 't3t4',
+              kind: 'pr',
+              unreviewedOnly: true,
+              autoConsole: false,
+              autoAdvance: false,
+              prioritizeActive: true,
+              project: ''
+            },
+            quickReview: {
+              mode: 'mine',
+              tiers: 't3t4',
+              kind: 'pr',
+              unreviewedOnly: true,
+              autoConsole: true,
+              autoAdvance: false,
+              prioritizeActive: true,
+              project: ''
+            },
             commander: {
               cmdMode: false,
               startStop: false,
