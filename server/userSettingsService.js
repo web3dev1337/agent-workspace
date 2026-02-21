@@ -270,14 +270,14 @@ class UserSettingsService {
 	            // Default layout intent: a batch-review surface. Keep it fullscreen and show diff by default.
 	            preset: 'review', // default | review | throughput | deep | code | terminals | custom
 	            fullscreen: true,
-	            diffEmbed: true,
-	            sections: {
-	              terminals: true,
-	              files: false,
-	              commits: false,
-	              diff: true
-	            }
-	          },
+            diffEmbed: true,
+            sections: {
+              terminals: true,
+              files: true,
+              commits: false,
+              diff: true
+            }
+          },
           discord: {
             // If enabled, the server will call POST /api/discord/ensure-services on startup
             // (via internal service call) to keep Claudesworth online after restarts.
