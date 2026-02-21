@@ -759,6 +759,23 @@ header h1 {
   contain: layout;
 }
 
+.terminal-pair {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-height: 0;
+  height: 100%;
+}
+
+.terminal-pair > .terminal-wrapper {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.terminal-pair.terminal-pair-single {
+  gap: 0;
+}
+
 /* Dynamic layouts for different terminal counts - Pair-aware (Claude + Server) */
 
 /* Single terminal (shouldn't happen often) */
