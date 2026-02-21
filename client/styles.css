@@ -2079,14 +2079,11 @@ header h1 {
   grid-template-columns: minmax(360px, 0.35fr) minmax(0, 1fr);
 }
 
-/* Review preset (3-column view): prioritize the diff, keep terminals/meta stacked on the right.
-   This is intended to reduce vertical scrolling and make the embedded diff dominate. */
+/* Review preset (3-column view): keep terminals left, meta center, diff dominant on the right. */
 .review-console-grid[data-review-preset="review"]:not(.one-column):not(.two-column) {
-  grid-template-columns: minmax(0, 2.2fr) minmax(420px, 0.9fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-areas:
-    "diff terminals"
-    "diff meta";
+  grid-template-columns: minmax(440px, 0.85fr) minmax(320px, 0.55fr) minmax(0, 2.4fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "terminals meta diff";
 }
 
 .review-console-grid[data-review-preset="review"]:not(.one-column):not(.two-column) .review-console-col-terminals {
@@ -2103,12 +2100,11 @@ header h1 {
   grid-area: diff;
 }
 
+/* Throughput preset: diff-dominant, terminals left, meta center. */
 .review-console-grid[data-review-preset="throughput"]:not(.one-column):not(.two-column) {
-  grid-template-columns: minmax(0, 2.7fr) minmax(420px, 0.9fr);
-  grid-template-rows: minmax(0, 0.95fr) minmax(0, 1.05fr);
-  grid-template-areas:
-    "diff terminals"
-    "diff meta";
+  grid-template-columns: minmax(420px, 0.8fr) minmax(320px, 0.5fr) minmax(0, 2.8fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "terminals meta diff";
 }
 
 .review-console-grid[data-review-preset="throughput"]:not(.one-column):not(.two-column) .review-console-col-terminals {
@@ -2220,7 +2216,8 @@ header h1 {
 }
 
 .worktree-inspector-terminals.review-console-terminals-grid.paired-layout {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(200px, 1fr);
 }
 
 .worktree-inspector-terminals .terminal-wrapper.review-console-terminal {
