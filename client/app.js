@@ -203,7 +203,7 @@ class ClaudeOrchestrator {
         advancedDiff: false,
         advancedBranchDiff: false,
         startServerDev: false,
-        forceKill: false,
+        forceKill: true,
         launchSettings: false,
         startServer: true
       },
@@ -7199,7 +7199,7 @@ class ClaudeOrchestrator {
       autoScroll: true,
       autoSuggestions: true,
       theme: 'dark',
-      skin: 'default'
+      skin: 'blue'
     };
 
     if (stored) {

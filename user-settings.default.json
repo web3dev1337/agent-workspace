@@ -96,6 +96,8 @@
     },
     "ui": {
       "theme": "dark",
+      "skin": "blue",
+      "skinIntensity": 100,
       "visibility": {
         "processBanner": false,
         "header": {
