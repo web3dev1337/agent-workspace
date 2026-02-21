@@ -17,6 +17,7 @@ FRONTEND:   client/app.js, client/terminal.js        - Web client
 NATIVE:     src-tauri/src/main.rs                    - Native desktop app
 CONFIG:     config.json, package.json                - Configuration files
 DIFF:       diff-viewer/                             - Advanced diff viewer component
+PLANS:      PLANS/                                   - Date-stamped planning + implementation notes
 ```
 
 ## Core Systems (Start Here)
