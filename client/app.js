@@ -3917,6 +3917,7 @@ class ClaudeOrchestrator {
     if (!worktreeList) return;
 
     const previousScrollTop = worktreeList.scrollTop;
+    const sidebarVisibility = this.getUiVisibilityConfig().sidebar || {};
 
     // Always ensure filter toggle exists and is updated FIRST
     this.ensureFilterToggleExists();
@@ -4029,6 +4030,11 @@ class ClaudeOrchestrator {
         ? (serverVisible ? 'Hide server terminal' : 'Show server terminal')
         : 'No server terminal';
 
+        const showRefresh = sidebarVisibility.refreshBranch !== false;
+        const showReadyForReview = sidebarVisibility.readyForReview !== false;
+        const showSessionToggles = sidebarVisibility.sessionVisibilityToggles !== false;
+        const showDelete = sidebarVisibility.deleteWorktree !== false;
+
 	      item.innerHTML = `
 	        <div class="worktree-header">
 	          <div class="worktree-title">
@@ -4042,42 +4048,50 @@ class ClaudeOrchestrator {
 		            </div>
 	          </div>
 	          <div class="worktree-actions">
-	            <button class="refresh-branch-btn"
-	                    data-worktree-id="${this.escapeHtml(worktree.id)}"
-	                    title="Refresh branch label">
-	              ↻
-	            </button>
-            <button class="ready-review-btn ${isReadyForReview ? 'ready' : ''}"
-                    data-worktree-path="${this.escapeHtml(worktreePath || '')}"
-                    aria-pressed="${isReadyForReview ? 'true' : 'false'}"
-                    title="${this.escapeHtml(readyTitle)}"
-                    ${worktreePath ? '' : 'disabled'}>
-              R
-            </button>
-            <button class="worktree-session-visibility-btn ${claudeVisible ? 'active' : ''}"
-                    data-session-visibility-session="${this.escapeHtml(agentSessionEncoded)}"
-                    data-session-visibility-kind="agent"
-                    aria-pressed="${claudeVisible ? 'true' : 'false'}"
-                    title="${this.escapeHtml(agentTitle)}"
-                    ${worktree.claude ? '' : 'disabled'}>
-              🤖
-            </button>
-            <button class="worktree-session-visibility-btn ${serverVisible ? 'active' : ''}"
-                    data-session-visibility-session="${this.escapeHtml(serverSessionEncoded)}"
-                    data-session-visibility-kind="server"
-                    aria-pressed="${serverVisible ? 'true' : 'false'}"
-                    title="${this.escapeHtml(serverTitle)}"
-                    ${worktree.server ? '' : 'disabled'}>
-              💻
-            </button>
-            <button class="delete-worktree-btn"
-                    onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.deleteWorktree(${worktreeIdArg}, ${displayNameArg}, { workspaceId: ${workspaceIdArg} })"
-                    title="Remove worktree from workspace (closes terminal processes, keeps files on disk)">
-              🗑
-            </button>
-          </div>
-        </div>
-      `;
+              ${showRefresh ? `
+	              <button class="refresh-branch-btn"
+	                      data-worktree-id="${this.escapeHtml(worktree.id)}"
+	                      title="Refresh branch label">
+	                ↻
+	              </button>
+              ` : ''}
+              ${showReadyForReview ? `
+              <button class="ready-review-btn ${isReadyForReview ? 'ready' : ''}"
+                      data-worktree-path="${this.escapeHtml(worktreePath || '')}"
+                      aria-pressed="${isReadyForReview ? 'true' : 'false'}"
+                      title="${this.escapeHtml(readyTitle)}"
+                      ${worktreePath ? '' : 'disabled'}>
+                R
+              </button>
+              ` : ''}
+              ${showSessionToggles ? `
+              <button class="worktree-session-visibility-btn ${claudeVisible ? 'active' : ''}"
+                      data-session-visibility-session="${this.escapeHtml(agentSessionEncoded)}"
+                      data-session-visibility-kind="agent"
+                      aria-pressed="${claudeVisible ? 'true' : 'false'}"
+                      title="${this.escapeHtml(agentTitle)}"
+                      ${worktree.claude ? '' : 'disabled'}>
+                🤖
+              </button>
+              <button class="worktree-session-visibility-btn ${serverVisible ? 'active' : ''}"
+                      data-session-visibility-session="${this.escapeHtml(serverSessionEncoded)}"
+                      data-session-visibility-kind="server"
+                      aria-pressed="${serverVisible ? 'true' : 'false'}"
+                      title="${this.escapeHtml(serverTitle)}"
+                      ${worktree.server ? '' : 'disabled'}>
+                💻
+              </button>
+              ` : ''}
+              ${showDelete ? `
+              <button class="delete-worktree-btn"
+                      onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.deleteWorktree(${worktreeIdArg}, ${displayNameArg}, { workspaceId: ${workspaceIdArg} })"
+                      title="Remove worktree from workspace (closes terminal processes, keeps files on disk)">
+                🗑
+              </button>
+              ` : ''}
+	          </div>
+	        </div>
+	      `;
       
       // Click handler is already attached via event delegation in setupEventListeners
       
@@ -4268,8 +4282,8 @@ class ClaudeOrchestrator {
     return this.setWorktreeReadyForReview(worktreePath, !current);
   }
   
-	  ensureFilterToggleExists() {
-	    let filterToggle = document.getElementById('filter-toggle');
+  ensureFilterToggleExists() {
+    let filterToggle = document.getElementById('filter-toggle');
 	    
 	    if (!filterToggle) {
 	      // Create the filter toggle element
@@ -4283,22 +4297,30 @@ class ClaudeOrchestrator {
 	    }
 	    
 	    // Always update the button content
-	    filterToggle.innerHTML = `
-	      <div class="filter-toggle-row">
-	        <button class="${this.showActiveOnly ? 'active' : ''}" onclick="window.orchestrator.toggleActivityFilter()">
-	          ${this.showActiveOnly ? 'Show All' : 'Active Only'}
-	        </button>
-	      </div>
-	      <div class="filter-toggle-row filter-toggle-tier" role="group" aria-label="Tier filter">
-	        <button class="${this.tierFilter === 'all' ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('all')" title="Show all tiers">All</button>
-	        <button class="${this.tierFilter === 1 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('1')" title="Tier 1">T1</button>
-	        <button class="${this.tierFilter === 2 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('2')" title="Tier 2">T2</button>
-	        <button class="${this.tierFilter === 3 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('3')" title="Tier 3">T3</button>
-	        <button class="${this.tierFilter === 4 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('4')" title="Tier 4">T4</button>
-	        <button class="${this.tierFilter === 'none' ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('none')" title="No tier set">None</button>
-	      </div>
-	    `;
-	  }
+    const visibility = this.getUiVisibilityConfig().sidebar || {};
+    const showActiveFilter = visibility.activeFilter !== false;
+    const showTierFilters = visibility.tierFilters !== false;
+    const activeBtn = showActiveFilter ? `
+      <button class="${this.showActiveOnly ? 'active' : ''}" onclick="window.orchestrator.toggleActivityFilter()">
+        ${this.showActiveOnly ? 'Show All' : 'Active Only'}
+      </button>
+    ` : '';
+    const tierButtons = showTierFilters ? `
+      <button class="${this.tierFilter === 'all' ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('all')" title="Show all tiers">All</button>
+      <button class="${this.tierFilter === 1 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('1')" title="Tier 1">T1</button>
+      <button class="${this.tierFilter === 2 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('2')" title="Tier 2">T2</button>
+      <button class="${this.tierFilter === 3 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('3')" title="Tier 3">T3</button>
+      <button class="${this.tierFilter === 4 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('4')" title="Tier 4">T4</button>
+      <button class="${this.tierFilter === 'none' ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('none')" title="No tier set">None</button>
+    ` : '';
+
+    filterToggle.innerHTML = `
+      <div class="filter-toggle-row filter-toggle-row-compact" role="group" aria-label="Worktree filters">
+        ${activeBtn}
+        ${tierButtons}
+      </div>
+    `;
+  }
 
   getServerStatusClass(sessionId) {
     const status = this.serverStatuses.get(sessionId);
