@@ -18,7 +18,7 @@ class WorkspaceWizard {
     if (blank) {
       this.data.isBlank = true;
       this.data.type = 'custom';
-      this.data.suggestedName = this.data.suggestedName || 'New Workspace';
+      this.data.suggestedName = this.data.suggestedName || this.getNextWorkspaceName();
     } else {
       // Scan for projects first
       await this.scanProjects();
@@ -27,6 +27,30 @@ class WorkspaceWizard {
     // Show wizard modal
     this.renderWizard();
     this.showStep(blank ? 2 : 1);
+  }
+
+  getNextWorkspaceName() {
+    const list = Array.isArray(this.orchestrator?.availableWorkspaces)
+      ? this.orchestrator.availableWorkspaces
+      : [];
+    const ids = new Set(list.map(ws => String(ws?.id || '').trim()).filter(Boolean));
+    const numbers = list.map(ws => {
+      const name = String(ws?.name || '').trim();
+      const nameMatch = name.match(/^Workspace\s+(\d+)$/i);
+      if (nameMatch) return Number(nameMatch[1]);
+      const idMatch = String(ws?.id || '').trim().match(/^workspace-(\d+)$/i);
+      if (idMatch) return Number(idMatch[1]);
+      return NaN;
+    }).filter(n => Number.isFinite(n));
+    let next = numbers.length ? Math.max(...numbers) + 1 : 1;
+    let name = `Workspace ${next}`;
+    let id = `workspace-${next}`;
+    while (ids.has(id)) {
+      next += 1;
+      name = `Workspace ${next}`;
+      id = `workspace-${next}`;
+    }
+    return name;
   }
 
   async scanProjects() {
