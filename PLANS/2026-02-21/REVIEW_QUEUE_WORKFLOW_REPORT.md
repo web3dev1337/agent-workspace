@@ -6,6 +6,74 @@ Scope: Full inventory of review-related UI, workflows, panels, APIs, data models
 
 Sources scanned: `client/`, `server/`, `diff-viewer/` (key files listed per section).
 
+## Executive Summary
+
+- The review system is powerful but fragmented across many entry points (header, dashboard, terminal controls, command palette, voice, notifications), which creates duplication and user confusion.
+- The Queue panel is the central review hub, but PRs panel, Review Console, and Advanced Diff Viewer each duplicate parts of the review flow.
+- Naming is the main usability risk: “Queue” vs “Review Route” vs “Review Console” are related but feel unrelated.
+- The workflow mode controls (Focus/Review/Background/All) are conceptually separate from Queue presets, but users encounter them in the same mental workflow.
+- Recommendation: consolidate entry points, simplify naming, and introduce a single “Review Hub” with a guided flow.
+
+## Recommendations (Actionable)
+
+1. Add a single “Review Hub” header entry that opens Queue with a default preset, and route all other entry points to that hub.
+2. Rename or re‑label “Review Route” to “Batch Review (T3+)” and “Review Console” to “Review Workspace” to reduce ambiguity.
+3. Merge PRs panel into Queue as a “PRs” tab so users stop jumping between two separate lists.
+4. Collapse Queue automation toggles into one “Automation” drawer with a single “Enable review automation” master switch.
+5. Replace “Advanced Diff” labels with a single “Diff Viewer” label everywhere, and keep a single diff entry point in the Queue detail view.
+6. Surface “Ready for Review” only inside Queue items (remove sidebar toggle or convert it to “Queue tag” to avoid double‑entry).
+7. Add an onboarding tooltip to explain Focus/Review/Background modes the first time Queue opens.
+8. Add a “Review path” quick preset: “T2 conveyor”, “T3 conveyor”, “Batch review (T3+)”.
+
+## Diagrams
+
+### User Entry Points → Review Surfaces
+
+```mermaid
+flowchart LR
+  Header["Header Buttons"] --> Queue["Queue Panel"]
+  Dashboard["Dashboard Cards"] --> Queue
+  Notifications["Notifications Actions"] --> Queue
+  Commands["Command Palette / Commander"] --> Queue
+  Voice["Voice Commands"] --> Queue
+  Queue --> ReviewConsole["Review Console"]
+  Queue --> PRPanel["PRs Panel"]
+  Queue --> DiffViewer["Advanced Diff Viewer"]
+  ReviewConsole --> DiffViewer
+  PRPanel --> DiffViewer
+```
+
+### Queue Data Sources → API → UI
+
+```mermaid
+flowchart LR
+  PRs["PRs (GitHub via gh)"] --> ProcessTaskService["ProcessTaskService"]
+  WorktreeTags["Worktree Tags (ready_for_review)"] --> ProcessTaskService
+  WaitingSessions["Waiting Sessions"] --> ProcessTaskService
+  ProcessTaskService --> API["GET /api/process/tasks"]
+  API --> Queue["Queue Panel"]
+```
+
+### Workflow Modes + Review Route
+
+```mermaid
+flowchart LR
+  WorkflowModes["Workflow Modes (Focus/Review/Background/All)"] --> Filters["Terminal Visibility + Queue Presets"]
+  ReviewRoute["Review Route (T3+ unreviewed)"] --> Queue["Queue Panel"]
+  Filters --> Queue
+  Queue --> ReviewConsole["Review Console"]
+  ReviewConsole --> DiffViewer["Advanced Diff Viewer"]
+  Queue --> ReviewActions["Review Actions (approve/merge/notes)"]
+```
+
+## Glossary (Quick Definitions)
+
+- Queue: unified review inbox (PRs + ready worktrees + waiting sessions).
+- Review Route: a Queue preset for Tier 3/4 unreviewed batch review.
+- Review Console: review UI (worktree inspector layout + diff embed).
+- Diff Viewer: standalone advanced diff service (can be embedded).
+- Workflow Modes: Focus/Review/Background/All terminal visibility filters.
+
 ## UI Entry Points (All Ways Users Can Open or Trigger Review/Queue/PR/Diff)
 
 Header buttons in `client/index.html` + wired in `client/app.js`:
