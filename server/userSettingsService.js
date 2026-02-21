@@ -207,7 +207,7 @@ class UserSettingsService {
               advancedDiff: false,
               advancedBranchDiff: false,
               startServerDev: false,
-              forceKill: false,
+              forceKill: true,
               launchSettings: false,
               startServer: true
             },
