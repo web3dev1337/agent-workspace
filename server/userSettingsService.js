@@ -160,7 +160,7 @@ class UserSettingsService {
               newProject: false,
               history: false,
               prs: false,
-              queue: false,
+              queue: true,
               chats: false,
               commands: false,
               reviewRoute: false,
@@ -225,6 +225,7 @@ class UserSettingsService {
               suggestions: false,
               workspacesActive: true,
               workspacesAll: true,
+              reviewSection: true,
               quickLinks: true,
               runningServices: true,
               createSection: true

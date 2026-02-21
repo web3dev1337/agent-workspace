@@ -155,7 +155,7 @@ class ClaudeOrchestrator {
         newProject: false,
         history: false,
         prs: false,
-        queue: false,
+        queue: true,
         chats: false,
         commands: false,
         reviewRoute: false,
@@ -220,6 +220,7 @@ class ClaudeOrchestrator {
         suggestions: false,
         workspacesActive: true,
         workspacesAll: true,
+        reviewSection: true,
         quickLinks: true,
         runningServices: true,
         createSection: true
@@ -854,8 +855,12 @@ class ClaudeOrchestrator {
       });
 
       // Queue / Review inbox panel (process tasks)
-      document.getElementById('queue-btn')?.addEventListener('click', () => {
-        this.showQueuePanel();
+      document.getElementById('queue-btn')?.addEventListener('click', (event) => {
+        if (event?.shiftKey) {
+          this.openReviewInbox({ quick: true });
+          return;
+        }
+        this.openReviewInbox();
       });
       document.getElementById('project-chats-btn')?.addEventListener('click', () => {
         this.showProjectChatsShell();
@@ -2851,6 +2856,33 @@ class ClaudeOrchestrator {
       reviewRouteActive: true
     };
     return this.showQueuePanel();
+  }
+
+  async openReviewInbox({ quick = false, project = '' } = {}) {
+    this.setWorkflowMode('review');
+    const projectFilter = String(project || '').trim();
+    this.queuePanelPreset = {
+      mode: 'mine',
+      reviewTier: 'all',
+      tierSet: [3, 4],
+      triageMode: false,
+      unreviewedOnly: true,
+      blockedOnly: false,
+      autoOpenDiff: false,
+      autoConsole: !!quick,
+      autoAdvance: false,
+      reviewActive: true,
+      reviewRouteActive: false,
+      kindFilter: 'pr',
+      projectFilter: projectFilter || '',
+      prioritizeActive: true,
+      quickReview: !!quick
+    };
+    return this.showQueuePanel();
+  }
+
+  async openQuickReview({ project = '' } = {}) {
+    return this.openReviewInbox({ quick: true, project });
   }
 
   syncWorkflowModeFromUserSettings() {
@@ -22484,6 +22516,9 @@ class ClaudeOrchestrator {
 
 				    const state = {
 				      mode: 'mine', // mine | all
+              kindFilter: 'all', // all | pr | worktree | session
+              projectFilter: '',
+              prioritizeActive: localStorage.getItem('queue-prioritize-active') === 'true',
 				      query: '',
 				      tasks: [],
 				      selectedId: initialSelectedId,
@@ -22492,6 +22527,7 @@ class ClaudeOrchestrator {
 				      unreviewedOnly: false,
 	            blockedOnly: localStorage.getItem('queue-blocked-only') === 'true',
               reviewRouteActive: false,
+              quickReview: false,
 				      autoOpenDiff: false,
 	            autoConsole: localStorage.getItem('queue-auto-console') === 'true',
 	            triageMode: localStorage.getItem('queue-triage') === 'true',
@@ -22571,6 +22607,21 @@ class ClaudeOrchestrator {
     if (this.queuePanelPreset && typeof this.queuePanelPreset === 'object') {
       const preset = this.queuePanelPreset;
       this.queuePanelPreset = null;
+      if (preset.mode !== undefined) {
+        state.mode = String(preset.mode || '').trim().toLowerCase() === 'all' ? 'all' : 'mine';
+      }
+      if (preset.kindFilter !== undefined) {
+        const raw = String(preset.kindFilter || '').trim().toLowerCase();
+        state.kindFilter = ['pr', 'worktree', 'session'].includes(raw) ? raw : 'all';
+      }
+      if (preset.projectFilter !== undefined) {
+        state.projectFilter = String(preset.projectFilter || '').trim();
+      }
+      if (preset.prioritizeActive !== undefined) {
+        state.prioritizeActive = !!preset.prioritizeActive;
+        try { localStorage.setItem('queue-prioritize-active', state.prioritizeActive ? 'true' : 'false'); } catch {}
+      }
+      if (preset.quickReview !== undefined) state.quickReview = !!preset.quickReview;
       if (preset.reviewTier !== undefined) {
         state.reviewTier = preset.reviewTier === 'all' || preset.reviewTier === 'none'
           ? preset.reviewTier
@@ -22614,6 +22665,9 @@ class ClaudeOrchestrator {
         </div>
         <div class="tasks-toolbar">
           <input type="text" id="queue-search" class="search-input tasks-search" placeholder="Search PRs/worktrees/sessions…">
+          <select id="queue-project-filter" class="tasks-select tasks-select-inline" title="Project filter" style="width: 180px;">
+            <option value="">All projects</option>
+          </select>
           <div class="tasks-view-toggle" role="group" aria-label="Queue mode">
             <button class="btn-secondary tasks-view-btn" id="queue-mode-mine" data-mode="mine" title="My PRs">Mine</button>
             <button class="btn-secondary tasks-view-btn" id="queue-mode-all" data-mode="all" title="All PRs">All</button>
@@ -22631,6 +22685,8 @@ class ClaudeOrchestrator {
 				            <button class="btn-secondary tasks-view-btn" id="queue-triage" title="Triage ordering + snooze (safe backoff)">Triage</button>
 				            <button class="btn-secondary tasks-view-btn" id="queue-unreviewed" title="Toggle: show unreviewed only">Unreviewed</button>
 				            <button class="btn-secondary tasks-view-btn" id="queue-blocked" title="Toggle: show blocked only (dependency-blocked items)">Blocked</button>
+				            <button class="btn-secondary tasks-view-btn" id="queue-kind-pr" title="Toggle: PRs only">PRs</button>
+				            <button class="btn-secondary tasks-view-btn" id="queue-prioritize-active" title="Prioritize items with active agents in this workspace">Active First</button>
 				          </div>
 				          <details class="tasks-filter tasks-toolbar-menu" id="queue-automation-menu">
 				            <summary class="btn-secondary tasks-view-btn" aria-label="Automation controls">Automation ▾</summary>
@@ -22646,6 +22702,7 @@ class ClaudeOrchestrator {
 				          <details class="tasks-filter tasks-toolbar-menu" id="queue-workflows-menu">
 				            <summary class="btn-secondary tasks-view-btn" aria-label="Workflow controls">Flows ▾</summary>
 				            <div class="tasks-filter-popover tasks-toolbar-popover" data-queue-popover="workflows">
+				              <button class="btn-secondary tasks-view-btn" id="queue-quick-review" title="Quick Review: PRs only, Tier 3/4, active-first">Quick Review</button>
 				              <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t2" title="Conveyor: Tier 2 + unreviewed + auto-next (one-at-a-time)">Conveyor T2</button>
 				              <button class="btn-secondary tasks-view-btn" id="queue-conveyor-t3" title="Conveyor: Tier 3 + unreviewed + auto-console + auto-next (one-at-a-time)">Conveyor T3</button>
 	                      <button class="btn-secondary tasks-view-btn" id="queue-review-route" title="Review Route: Tier 3+ unreviewed batch review in Review Console">Review Route</button>
@@ -22675,6 +22732,7 @@ class ClaudeOrchestrator {
 	    const listEl = modal.querySelector('#queue-list');
 	    const detailEl = modal.querySelector('#queue-detail');
 	    const searchEl = modal.querySelector('#queue-search');
+      const projectFilterEl = modal.querySelector('#queue-project-filter');
 	    const refreshBtn = modal.querySelector('#queue-refresh');
 	    const pairingBtn = modal.querySelector('#queue-pairing');
     const mineBtn = modal.querySelector('#queue-mode-mine');
@@ -22689,6 +22747,8 @@ class ClaudeOrchestrator {
 		    const unreviewedBtn = modal.querySelector('#queue-unreviewed');
         const blockedBtn = modal.querySelector('#queue-blocked');
         const triageBtn = modal.querySelector('#queue-triage');
+        const kindPrBtn = modal.querySelector('#queue-kind-pr');
+        const prioritizeActiveBtn = modal.querySelector('#queue-prioritize-active');
 			    const autoDiffBtn = modal.querySelector('#queue-auto-diff');
 			    const autoConsoleBtn = modal.querySelector('#queue-auto-console');
 			    const autoNextBtn = modal.querySelector('#queue-auto-next');
@@ -22698,6 +22758,7 @@ class ClaudeOrchestrator {
 		    const conveyorT2Btn = modal.querySelector('#queue-conveyor-t2');
 		    const conveyorT3Btn = modal.querySelector('#queue-conveyor-t3');
         const reviewRouteBtn = modal.querySelector('#queue-review-route');
+        const quickReviewBtn = modal.querySelector('#queue-quick-review');
 		    const startReviewBtn = modal.querySelector('#queue-start-review');
 		    const prevBtn = modal.querySelector('#queue-prev');
 		    const nextBtn = modal.querySelector('#queue-next');
@@ -22725,6 +22786,9 @@ class ClaudeOrchestrator {
 
       if (searchEl) {
         searchEl.value = String(state.query || '');
+      }
+      if (projectFilterEl) {
+        projectFilterEl.value = String(state.projectFilter || '');
       }
 
 	    const showPairingModal = async () => {
@@ -22835,7 +22899,7 @@ class ClaudeOrchestrator {
       mineBtn.classList.toggle('active', state.mode === 'mine');
       allBtn.classList.toggle('active', state.mode === 'all');
     };
-    setMode('mine');
+    setMode(state.mode);
 
     const normalizeReviewTier = (tier) => {
       const raw = String(tier ?? '').trim().toLowerCase();
@@ -22860,6 +22924,8 @@ class ClaudeOrchestrator {
           triageBtn?.classList.toggle('active', !!state.triageMode);
 			      unreviewedBtn?.classList.toggle('active', !!state.unreviewedOnly);
 	          blockedBtn?.classList.toggle('active', !!state.blockedOnly);
+            kindPrBtn?.classList.toggle('active', state.kindFilter === 'pr');
+            prioritizeActiveBtn?.classList.toggle('active', !!state.prioritizeActive);
 			      autoDiffBtn?.classList.toggle('active', !!state.autoOpenDiff);
 			      autoConsoleBtn?.classList.toggle('active', !!state.autoConsole);
 			      autoNextBtn?.classList.toggle('active', !!state.autoAdvance);
@@ -22918,6 +22984,17 @@ class ClaudeOrchestrator {
     blockedBtn?.addEventListener('click', () => {
       state.blockedOnly = !state.blockedOnly;
       try { localStorage.setItem('queue-blocked-only', state.blockedOnly ? 'true' : 'false'); } catch {}
+      applyFiltersAndMaybeClampSelection();
+    });
+
+    kindPrBtn?.addEventListener('click', () => {
+      state.kindFilter = state.kindFilter === 'pr' ? 'all' : 'pr';
+      applyFiltersAndMaybeClampSelection();
+    });
+
+    prioritizeActiveBtn?.addEventListener('click', () => {
+      state.prioritizeActive = !state.prioritizeActive;
+      try { localStorage.setItem('queue-prioritize-active', state.prioritizeActive ? 'true' : 'false'); } catch {}
       applyFiltersAndMaybeClampSelection();
     });
 
@@ -23000,6 +23077,45 @@ class ClaudeOrchestrator {
           }
         };
 
+        const startQuickReview = async () => {
+          state.reviewRouteActive = false;
+          state.reviewActive = true;
+          state.reviewTier = 'all';
+          state.tierSet = [3, 4];
+          state.triageMode = false;
+          state.unreviewedOnly = true;
+          state.blockedOnly = false;
+          state.kindFilter = 'pr';
+          state.prioritizeActive = true;
+          state.autoConsole = true;
+          state.autoOpenDiff = false;
+          state.autoAdvance = false;
+          state.mode = 'mine';
+          try { localStorage.setItem('queue-auto-console', 'true'); } catch {}
+          try { localStorage.setItem('queue-auto-advance', 'false'); } catch {}
+          try { localStorage.setItem('queue-triage', 'false'); } catch {}
+          try { localStorage.setItem('queue-blocked-only', 'false'); } catch {}
+          try { localStorage.setItem('queue-prioritize-active', 'true'); } catch {}
+          setMode('mine');
+
+          syncReviewControlsUI();
+          renderList();
+
+          const ordered = getOrderedTasks(getFilteredTasks());
+          if (!ordered.length) {
+            this.showToast('No Tier 3/4 unreviewed PRs in Quick Review', 'info');
+            return;
+          }
+          const first = ordered[0];
+          selectById(first.id, { allowAutoOpenDiff: false });
+          const wantsConsole = !!(first?.sessionId || first?.worktreePath || (first?.kind === 'pr' && String(first?.url || '').trim()));
+          if (state.autoConsole && wantsConsole) {
+            this.openReviewConsoleForTask(first).catch((error) => {
+              console.error('Failed to auto-open review console for quick review:', error);
+            });
+          }
+        };
+
 	    startReviewBtn?.addEventListener('click', async () => {
 	      if (state.reviewActive) {
 	        state.reviewActive = false;
@@ -23060,6 +23176,10 @@ class ClaudeOrchestrator {
           startReviewRoute().catch((e) => this.showToast(String(e?.message || e), 'error'));
         });
 
+        quickReviewBtn?.addEventListener('click', () => {
+          startQuickReview().catch((e) => this.showToast(String(e?.message || e), 'error'));
+        });
+
 	    const maybeAutoAdvanceAfterReview = (currentTaskId) => {
 	      if (!state.reviewActive || !state.autoAdvance) return;
 	      const ordered = getOrderedTasks(getFilteredTasks());
@@ -23075,6 +23195,41 @@ class ClaudeOrchestrator {
 	      selectById(ordered[nextIndex].id, { allowAutoOpenDiff: true });
 	    };
 
+    const normalizeProjectKey = (value) => String(value || '').trim().toLowerCase();
+    const extractRepoName = (value) => {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+      const parts = raw.replace(/\\/g, '/').split('/').filter(Boolean);
+      return parts[parts.length - 1] || raw;
+    };
+
+    const updateProjectFilterOptions = () => {
+      if (!projectFilterEl) return;
+      const options = new Map();
+      for (const t of (Array.isArray(state.tasks) ? state.tasks : [])) {
+        if (t?.kind !== 'pr') continue;
+        const repo = String(t?.repository || '').trim();
+        const project = String(t?.project || '').trim();
+        const label = repo || project;
+        if (!label) continue;
+        options.set(normalizeProjectKey(label), label);
+      }
+      const sorted = Array.from(options.values()).sort((a, b) => String(a).localeCompare(String(b)));
+      const current = normalizeProjectKey(state.projectFilter);
+      projectFilterEl.innerHTML = `<option value="">All projects</option>` + sorted
+        .map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`)
+        .join('');
+      if (current && options.has(current)) {
+        projectFilterEl.value = options.get(current);
+        state.projectFilter = options.get(current);
+      } else if (!state.projectFilter) {
+        projectFilterEl.value = '';
+      } else if (!options.has(current)) {
+        projectFilterEl.value = '';
+        state.projectFilter = '';
+      }
+    };
+
     const calcTierCounts = (tasks) => {
       const counts = { 1: 0, 2: 0, 3: 0, 4: 0, none: 0 };
       for (const t of tasks) {
@@ -23088,6 +23243,20 @@ class ClaudeOrchestrator {
     const getFilteredTasks = () => {
       const q = String(state.query || '').trim().toLowerCase();
       return (Array.isArray(state.tasks) ? state.tasks : []).filter((t) => {
+        if (state.kindFilter !== 'all') {
+          if (String(t?.kind || '').trim() !== state.kindFilter) return false;
+        }
+        const projectFilter = normalizeProjectKey(state.projectFilter);
+        if (projectFilter) {
+          const repo = normalizeProjectKey(t?.repository || '');
+          const project = normalizeProjectKey(t?.project || '');
+          const repoName = normalizeProjectKey(extractRepoName(t?.repository || ''));
+          const matches = repo === projectFilter
+            || project === projectFilter
+            || repoName === projectFilter
+            || (repo && repo.endsWith(`/${projectFilter}`));
+          if (!matches) return false;
+        }
         const tier = Number(t?.record?.tier);
         if (state.tierSet && Array.isArray(state.tierSet) && state.tierSet.length) {
           if (!state.tierSet.includes(tier)) return false;
@@ -23132,7 +23301,78 @@ class ClaudeOrchestrator {
       });
     };
 
+    const buildActiveIndex = () => {
+      const activeSessionIds = new Set();
+      const activeWorktreeIds = new Set();
+      const activeWorktreePaths = new Set();
+      const activeRepoNames = new Set();
+      const activeRepoSlugs = new Set();
+
+      for (const [sid, session] of this.sessions) {
+        if (!this.isAgentSession(sid)) continue;
+        const status = String(session?.status || '').trim().toLowerCase();
+        if (status === 'exited') continue;
+        const hasActivity = this.sessionActivity.get(sid) === 'active' || status === 'busy' || status === 'waiting';
+        if (!hasActivity) continue;
+
+        activeSessionIds.add(String(sid));
+
+        const worktreeId = String(session?.worktreeId || '').trim();
+        if (worktreeId) activeWorktreeIds.add(worktreeId);
+
+        const worktreePath = String(session?.config?.cwd || '').trim();
+        if (worktreePath) activeWorktreePaths.add(worktreePath);
+
+        const repoName = String(session?.repositoryName || '').trim();
+        if (repoName) activeRepoNames.add(normalizeProjectKey(repoName));
+
+        const repoRoot = String(session?.repositoryRoot || '').trim();
+        const repoRootName = extractRepoName(repoRoot);
+        if (repoRootName) activeRepoNames.add(normalizeProjectKey(repoRootName));
+
+        const repoSlug = String(session?.repositorySlug || '').trim();
+        if (repoSlug) activeRepoSlugs.add(normalizeProjectKey(repoSlug));
+      }
+
+      return { activeSessionIds, activeWorktreeIds, activeWorktreePaths, activeRepoNames, activeRepoSlugs };
+    };
+
+    const getActiveScoreForTask = (t, index) => {
+      if (!index) return 0;
+      if (t?.kind === 'session') {
+        const sid = String(t?.sessionId || '').trim();
+        return (sid && index.activeSessionIds.has(sid)) ? 3 : 0;
+      }
+      if (t?.kind === 'worktree') {
+        const path = String(t?.worktreePath || '').trim();
+        if (path && index.activeWorktreePaths.has(path)) return 2;
+        const worktreeId = String(t?.worktreeId || '').trim();
+        if (worktreeId && index.activeWorktreeIds.has(worktreeId)) return 2;
+        return 0;
+      }
+      if (t?.kind === 'pr') {
+        const rec = (t?.record && typeof t.record === 'object') ? t.record : {};
+        const worktreeIds = [
+          rec.reviewerWorktreeId,
+          rec.fixerWorktreeId,
+          rec.recheckWorktreeId,
+          rec.overnightWorktreeId
+        ].map((v) => String(v || '').trim()).filter(Boolean);
+        if (worktreeIds.some((id) => index.activeWorktreeIds.has(id))) return 3;
+
+        const repoSlug = normalizeProjectKey(t?.repository || '');
+        if (repoSlug && index.activeRepoSlugs.has(repoSlug)) return 2;
+
+        const repoName = normalizeProjectKey(extractRepoName(t?.repository || ''));
+        const projectName = normalizeProjectKey(t?.project || '');
+        if ((repoName && index.activeRepoNames.has(repoName)) || (projectName && index.activeRepoNames.has(projectName))) return 2;
+      }
+      return 0;
+    };
+
     const getOrderedTasks = (tasks) => {
+      const activeIndex = state.prioritizeActive ? buildActiveIndex() : null;
+      const activeScore = (t) => getActiveScoreForTask(t, activeIndex);
       const unblocked = [];
       const blocked = [];
       for (const t of (Array.isArray(tasks) ? tasks : [])) {
@@ -23158,6 +23398,9 @@ class ClaudeOrchestrator {
 
       const triageSort = (arr) => {
         return [...arr].sort((a, b) => {
+          const sa = activeScore(a);
+          const sb = activeScore(b);
+          if (sb !== sa) return sb - sa;
           const pa = triagePriority(a);
           const pb = triagePriority(b);
           if (pa !== pb) return pa - pb;
@@ -23170,7 +23413,19 @@ class ClaudeOrchestrator {
 
       if (!state.reviewActive) {
         if (state.triageMode) return triageSort(unblocked).concat(triageSort(blocked));
-        return unblocked.concat(blocked);
+        const sortByActive = (arr) => {
+          if (!state.prioritizeActive) return arr;
+          return [...arr].sort((a, b) => {
+            const sa = activeScore(a);
+            const sb = activeScore(b);
+            if (sb !== sa) return sb - sa;
+            const at = parseUpdatedMs(a);
+            const bt = parseUpdatedMs(b);
+            if (bt !== at) return bt - at;
+            return String(a?.title || a?.id || '').localeCompare(String(b?.title || b?.id || ''));
+          });
+        };
+        return sortByActive(unblocked).concat(sortByActive(blocked));
       }
 
       const riskToScore = (raw) => {
@@ -23198,6 +23453,9 @@ class ClaudeOrchestrator {
 
       const reviewSort = (arr) => {
         return [...arr].sort((a, b) => {
+          const sa = activeScore(a);
+          const sb = activeScore(b);
+          if (sb !== sa) return sb - sa;
           const ra = overallRiskScore(a);
           const rb = overallRiskScore(b);
           if (rb !== ra) return rb - ra;
@@ -23480,6 +23738,7 @@ class ClaudeOrchestrator {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to load queue');
       state.tasks = data.tasks || [];
+      updateProjectFilterOptions();
       const selectedStillExists = !!(state.selectedId && getTaskById(state.selectedId));
       if (!selectedStillExists) {
         const ordered = getOrderedTasks(getFilteredTasks());
@@ -26266,6 +26525,11 @@ class ClaudeOrchestrator {
       if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     });
 
+    projectFilterEl?.addEventListener('change', () => {
+      state.projectFilter = String(projectFilterEl.value || '');
+      applyFiltersAndMaybeClampSelection();
+    });
+
 	    refreshBtn.addEventListener('click', async () => {
 	      refreshBtn.disabled = true;
 	      try {
@@ -27433,7 +27697,10 @@ class ClaudeOrchestrator {
       await fetchTasks();
       // Initial render respects triage mode + tierSet presets.
       applyFiltersAndMaybeClampSelection({ renderSelectedDetail: false });
-      if (state.reviewRouteActive) {
+      if (state.quickReview) {
+        state.quickReview = false;
+        startQuickReview().catch((e) => this.showToast(String(e?.message || e), 'error'));
+      } else if (state.reviewRouteActive) {
         startReviewRoute().catch((e) => this.showToast(String(e?.message || e), 'error'));
       } else if (state.selectedId) {
         selectById(state.selectedId, { allowAutoOpenDiff: state.reviewActive });
