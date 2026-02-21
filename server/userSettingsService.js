@@ -153,6 +153,90 @@ class UserSettingsService {
           skin: 'default',
           // 0..100 (applied as 0..1 multiplier for skin tint in CSS)
           skinIntensity: 100,
+          visibility: {
+            processBanner: false,
+            header: {
+              dashboard: true,
+              newProject: false,
+              history: false,
+              prs: false,
+              queue: false,
+              chats: false,
+              commands: false,
+              reviewRoute: false,
+              activity: false,
+              diff: false,
+              workflowBackground: false,
+              tierFilters: false,
+              focusTier2: false,
+              focusSwap: false,
+              tasks: false,
+              ports: false,
+              commander: true,
+              recommendations: false,
+              notifications: true,
+              settings: true,
+              connectionStatus: true
+            },
+            sidebar: {
+              viewPresets: false,
+              tierFilters: true,
+              activeFilter: true,
+              refreshBranch: false,
+              readyForReview: false,
+              sessionVisibilityToggles: false,
+              deleteWorktree: true
+            },
+            terminal: {
+              intentHints: false,
+              branchRefresh: false,
+              closeProcess: false,
+              removeWorktree: true,
+              reviewConsole: true,
+              showOnlyWorktree: true,
+              startAgentOptions: true,
+              startClaudeWithSettings: false,
+              createNewProject: false,
+              refreshTerminal: false,
+              interrupt: false,
+              assignCodeReview: true,
+              buildProductionZip: false,
+              viewBranchOnGithub: false,
+              viewBranchDiff: true,
+              viewPrOnGithub: true,
+              advancedDiff: false,
+              advancedBranchDiff: false,
+              startServerDev: false,
+              forceKill: false,
+              launchSettings: false,
+              startServer: true
+            },
+            dashboard: {
+              processBanner: false,
+              processSection: false,
+              statusCard: false,
+              telemetryCard: false,
+              polecatsCard: false,
+              discordCard: false,
+              projectsCard: false,
+              adviceCard: false,
+              readinessCard: false,
+              suggestions: false,
+              workspacesActive: true,
+              workspacesAll: true,
+              quickLinks: true,
+              runningServices: true,
+              createSection: true
+            },
+            commander: {
+              cmdMode: false,
+              startStop: false,
+              startClaude: false,
+              advice: false,
+              sessions: true,
+              modeSelect: false
+            }
+          },
           simpleMode: {
             // Codex-style top-level project/chat shell controls.
             enabled: true,
@@ -539,6 +623,35 @@ class UserSettingsService {
           };
         }
 
+        if (ui.visibility && typeof ui.visibility === 'object') {
+          const defaultsVisibility = uiDefaults.visibility || {};
+          const nextVisibility = ui.visibility || {};
+          merged.global.ui.visibility = {
+            ...defaultsVisibility,
+            ...nextVisibility,
+            header: {
+              ...(defaultsVisibility.header || {}),
+              ...(nextVisibility.header || {})
+            },
+            sidebar: {
+              ...(defaultsVisibility.sidebar || {}),
+              ...(nextVisibility.sidebar || {})
+            },
+            terminal: {
+              ...(defaultsVisibility.terminal || {}),
+              ...(nextVisibility.terminal || {})
+            },
+            dashboard: {
+              ...(defaultsVisibility.dashboard || {}),
+              ...(nextVisibility.dashboard || {})
+            },
+            commander: {
+              ...(defaultsVisibility.commander || {}),
+              ...(nextVisibility.commander || {})
+            }
+          };
+        }
+
 	        if (ui.diffViewer) {
 	          merged.global.ui.diffViewer = {
 	            ...(merged.global.ui.diffViewer || {}),
@@ -808,6 +921,34 @@ class UserSettingsService {
           ...this.getDefaultSettings().global.ui,
           ...newGlobal.ui
         };
+        if (newGlobal.ui.visibility) {
+          const defaultsVisibility = this.getDefaultSettings().global.ui.visibility || {};
+          const nextVisibility = newGlobal.ui.visibility || {};
+          this.settings.global.ui.visibility = {
+            ...defaultsVisibility,
+            ...nextVisibility,
+            header: {
+              ...(defaultsVisibility.header || {}),
+              ...(nextVisibility.header || {})
+            },
+            sidebar: {
+              ...(defaultsVisibility.sidebar || {}),
+              ...(nextVisibility.sidebar || {})
+            },
+            terminal: {
+              ...(defaultsVisibility.terminal || {}),
+              ...(nextVisibility.terminal || {})
+            },
+            dashboard: {
+              ...(defaultsVisibility.dashboard || {}),
+              ...(nextVisibility.dashboard || {})
+            },
+            commander: {
+              ...(defaultsVisibility.commander || {}),
+              ...(nextVisibility.commander || {})
+            }
+          };
+        }
         if (newGlobal.ui.diffViewer) {
           this.settings.global.ui.diffViewer = {
             ...this.getDefaultSettings().global.ui.diffViewer,
