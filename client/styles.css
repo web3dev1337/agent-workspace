@@ -2082,6 +2082,7 @@ header h1 {
 .review-console-grid {
   display: grid;
   grid-template-columns: minmax(460px, 0.28fr) minmax(320px, 0.24fr) minmax(0, 1fr);
+  grid-template-areas: "terminals meta diff";
   gap: 6px;
   flex: 1 1 auto;
   min-height: 0;
@@ -2147,6 +2148,18 @@ header h1 {
   overflow: auto;
 }
 
+.review-console-col-terminals {
+  grid-area: terminals;
+}
+
+.review-console-col-meta {
+  grid-area: meta;
+}
+
+.review-console-col-diff {
+  grid-area: diff;
+}
+
 .review-console-col > .worktree-inspector-panel {
   flex: 1 1 auto;
 }
@@ -2190,6 +2203,27 @@ header h1 {
 
 .worktree-inspector-grid.one-column {
   grid-template-columns: 1fr;
+}
+
+@media (max-width: 1500px) {
+  .review-console-grid:not(.one-column):not(.two-column) {
+    grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.6fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "terminals diff"
+      "meta diff";
+  }
+}
+
+@media (max-width: 1100px) {
+  .review-console-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    grid-template-areas:
+      "terminals"
+      "diff"
+      "meta";
+  }
 }
 
 /* Review Console / Inspector responsiveness:
