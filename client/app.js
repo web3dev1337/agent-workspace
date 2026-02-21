@@ -4830,60 +4830,130 @@ class ClaudeOrchestrator {
       return;
     }
 
+    const visibleSet = new Set(this.activeView);
+    const groupMap = new Map();
+
+    sessionIds.forEach((sessionId, index) => {
+      const session = this.sessions.get(sessionId);
+      if (!session) return;
+      const key = this.getSessionWorktreeKey(sessionId, session) || sessionId;
+      let group = groupMap.get(key);
+      if (!group) {
+        group = { key, sessionIds: [], order: index };
+        groupMap.set(key, group);
+      }
+      group.sessionIds.push(sessionId);
+    });
+
+    const groups = Array.from(groupMap.values()).sort((a, b) => a.order - b.order);
+    const rankSession = (sid, session) => {
+      const type = String(session?.type || '').trim().toLowerCase();
+      if (type === 'server' || String(sid || '').endsWith('-server')) return 2;
+      if (type === 'codex' || String(sid || '').endsWith('-codex')) return 1;
+      return 0;
+    };
+    const safePairId = (key) => {
+      if (typeof this.getDomSafeIdPart === 'function') {
+        return `terminal-pair-${this.getDomSafeIdPart(key)}`;
+      }
+      return `terminal-pair-${String(key || '').replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    };
+    const ensurePairContainer = (key) => {
+      const id = safePairId(key);
+      let container = document.getElementById(id);
+      if (!container || !grid.contains(container)) {
+        container = document.createElement('div');
+        container.id = id;
+        container.className = 'terminal-pair';
+        container.dataset.worktreeKey = String(key || '');
+        grid.appendChild(container);
+      } else {
+        grid.appendChild(container);
+      }
+      return container;
+    };
+
+    const activeGroupKeys = new Set();
+
+    groups.forEach((group) => {
+      const container = ensurePairContainer(group.key);
+      const ordered = group.sessionIds.slice().sort((a, b) => {
+        const ra = rankSession(a, this.sessions.get(a));
+        const rb = rankSession(b, this.sessions.get(b));
+        if (ra !== rb) return ra - rb;
+        return String(a).localeCompare(String(b));
+      });
+
+      let visibleCount = 0;
+
+      ordered.forEach((sessionId) => {
+        const session = this.sessions.get(sessionId);
+        const isVisible = visibleSet.has(sessionId);
+        let wrapper = this.getSessionWrapperElement(sessionId);
+        if (wrapper && !grid.contains(wrapper)) wrapper = null;
+
+        console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}, exists=${!!wrapper}`);
+
+        if (session && isVisible) {
+          // Create wrapper if it doesn't exist
+          if (!wrapper) {
+            console.log(`✅ Creating terminal element for: ${sessionId}`);
+            wrapper = this.createTerminalElement(sessionId, session);
+            if (wrapper) {
+              container.appendChild(wrapper);
+              console.log(`✅ Appended terminal to grid: ${sessionId}`);
+
+              // Initialize terminal for newly created element (scope query to wrapper/grid to avoid cross-tab collisions)
+              setTimeout(() => {
+                const terminalId = this.getSessionDomId('terminal', sessionId);
+                const terminalEl = document.getElementById(terminalId);
+                if (terminalEl && wrapper && wrapper.contains(terminalEl) && !this.terminalManager.terminals.has(sessionId)) {
+                  this.terminalManager.createTerminal(sessionId, session);
+                }
+              }, 50);
+            }
+          } else {
+            // Show existing wrapper
+            wrapper.style.display = '';
+            this.updateTerminalTicketLabel(sessionId);
+
+            // Refit terminal if it exists
+            if (this.terminalManager.terminals.has(sessionId)) {
+              requestAnimationFrame(() => {
+                this.terminalManager.fitTerminal(sessionId);
+              });
+            }
+          }
+          if (wrapper && wrapper.parentElement !== container) {
+            container.appendChild(wrapper);
+          }
+          visibleCount += 1;
+        } else if (wrapper) {
+          // Hide wrapper if not visible
+          wrapper.style.display = 'none';
+          if (wrapper.parentElement !== container) {
+            container.appendChild(wrapper);
+          }
+        }
+      });
+
+      container.classList.toggle('terminal-pair-single', visibleCount <= 1);
+      container.style.display = visibleCount ? '' : 'none';
+      if (visibleCount) activeGroupKeys.add(group.key);
+    });
+
+    // Remove stale pair containers (worktrees removed)
+    Array.from(grid.querySelectorAll('.terminal-pair')).forEach((container) => {
+      const key = String(container?.dataset?.worktreeKey || '');
+      if (key && !groupMap.has(key)) container.remove();
+    });
+
     // Set the data attribute for dynamic layout based on visible count
-    const visibleCount = this.activeView.length;
+    const visibleCount = activeGroupKeys.size;
     grid.setAttribute('data-visible-count', visibleCount);
     // If the user has more than 16 visible terminals, fall back to a scrollable grid
     // instead of clipping extra rows (which shows up as tiny “slivers” at the bottom).
     grid.classList.toggle('terminal-grid-scrollable', visibleCount > 16);
-
-    // CRITICAL: Don't destroy terminals with innerHTML = ''
-    // Instead, create missing terminals and hide/show existing ones
-
-    sessionIds.forEach((sessionId) => {
-      const session = this.sessions.get(sessionId);
-      const isVisible = this.isSessionVisibleInCurrentView(sessionId);
-      const wrapperId = this.getSessionDomId('wrapper', sessionId);
-      let wrapper = this.getSessionWrapperElement(sessionId);
-      if (wrapper && !grid.contains(wrapper)) wrapper = null;
-
-      console.log(`📍 ${sessionId}: session=${!!session}, visible=${isVisible}, exists=${!!wrapper}`);
-
-      if (session && isVisible) {
-        // Create wrapper if it doesn't exist
-        if (!wrapper) {
-          console.log(`✅ Creating terminal element for: ${sessionId}`);
-          wrapper = this.createTerminalElement(sessionId, session);
-          if (wrapper) {
-            grid.appendChild(wrapper);
-            console.log(`✅ Appended terminal to grid: ${sessionId}`);
-
-            // Initialize terminal for newly created element (scope query to wrapper/grid to avoid cross-tab collisions)
-            setTimeout(() => {
-              const terminalId = this.getSessionDomId('terminal', sessionId);
-              const terminalEl = document.getElementById(terminalId);
-              if (terminalEl && wrapper && wrapper.contains(terminalEl) && !this.terminalManager.terminals.has(sessionId)) {
-                this.terminalManager.createTerminal(sessionId, session);
-              }
-            }, 50);
-          }
-        } else {
-          // Show existing wrapper
-          wrapper.style.display = '';
-          this.updateTerminalTicketLabel(sessionId);
-
-          // Refit terminal if it exists
-          if (this.terminalManager.terminals.has(sessionId)) {
-            requestAnimationFrame(() => {
-              this.terminalManager.fitTerminal(sessionId);
-            });
-          }
-        }
-      } else if (wrapper) {
-        // Hide wrapper if not visible
-        wrapper.style.display = 'none';
-      }
-    });
 
     // Force a resize after everything is rendered to ensure terminals fit properly
     setTimeout(() => {
