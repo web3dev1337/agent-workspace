@@ -273,7 +273,7 @@ class UserSettingsService {
             diffEmbed: true,
             sections: {
               terminals: true,
-              files: true,
+              files: false,
               commits: false,
               diff: true
             }
