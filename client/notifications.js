@@ -128,7 +128,7 @@ class NotificationManager {
     const { type, message, sessionId, metadata = {} } = data;
     
     // Determine icon and title based on type
-    let title = 'Agent Orchestrator';
+    let title = 'Claude Orchestrator';
     let icon = '🤖';
     let urgency = 'normal';
     
@@ -320,9 +320,9 @@ class NotificationManager {
     
     // Update page title with count
     if (this.unreadCount > 0) {
-      document.title = `(${this.unreadCount}) Agent Orchestrator`;
+      document.title = `(${this.unreadCount}) Claude Orchestrator`;
     } else {
-      document.title = 'Agent Orchestrator';
+      document.title = 'Claude Orchestrator';
     }
   }
   

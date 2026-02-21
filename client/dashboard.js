@@ -19,8 +19,9 @@ class Dashboard {
       window.quickLinks = this.quickLinks; // Make available globally for onclick handlers
     }
 
+    const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
     // Fetch quick links data - re-render when complete
-    if (this.quickLinks) {
+    if (this.quickLinks && visibility.quickLinks !== false) {
       this.quickLinks.fetchData().then(() => {
         // Re-render to show quick links once loaded
         if (this.isVisible) {
@@ -88,15 +89,20 @@ class Dashboard {
     this.setupEventListeners();
 
     // Set up quick links drag and drop
-    if (this.quickLinks) {
+    const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
+    if (this.quickLinks && visibility.quickLinks !== false) {
       this.quickLinks.setupDragAndDrop();
     }
 
     // Load ports for dashboard
-    this.loadDashboardPorts();
+    if (visibility.runningServices !== false) {
+      this.loadDashboardPorts();
+    }
 
     // Load process status/telemetry/advice summaries
-    this.loadDashboardProcessSummary();
+    if (visibility.processSection !== false) {
+      this.loadDashboardProcessSummary();
+    }
   }
 
   generateDashboardHTML() {
@@ -108,128 +114,209 @@ class Dashboard {
 		    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws)).sort(sortByLastAccess);
 		    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws)).sort(sortByLastAccess);
 		    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
+        const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
+        const showProcessBanner = visibility.processBanner !== false;
+        const showProcessSection = visibility.processSection !== false;
+        const showStatusCard = visibility.statusCard !== false;
+        const showTelemetryCard = visibility.telemetryCard !== false;
+        const showPolecatsCard = visibility.polecatsCard !== false;
+        const showDiscordCard = visibility.discordCard !== false;
+        const showProjectsCard = visibility.projectsCard !== false;
+        const showAdviceCard = visibility.adviceCard !== false;
+        const showReadinessCard = visibility.readinessCard !== false;
+
+        const processCards = [
+          showStatusCard ? `
+            <div class="dashboard-summary-card">
+              <div class="dashboard-summary-title">Status</div>
+              <div id="dashboard-status-summary" class="dashboard-summary-body">Loading…</div>
+            </div>
+          ` : '',
+          showTelemetryCard ? `
+            <div class="dashboard-summary-card">
+              <div class="dashboard-summary-title">Telemetry</div>
+              <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
+              <div class="dashboard-summary-actions">
+                <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-performance" title="Per-terminal resource usage">⚙ Perf</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-polecats" title="Manage sessions (restart/kill/logs)">🐾 Polecats</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-hooks" title="Hook browser (automations/webhooks)">🪝 Hooks</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-deacon" title="Deacon monitor (health dashboard)">🛡 Deacon</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-tests" title="Run tests across worktrees">🧪 Tests</button>
+                <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
+                <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
+              </div>
+            </div>
+          ` : '',
+          showPolecatsCard ? `
+            <div class="dashboard-summary-card">
+              <div class="dashboard-summary-title">Polecats</div>
+              <div id="dashboard-polecats-summary" class="dashboard-summary-body">Loading…</div>
+              <div class="dashboard-summary-actions">
+                <button class="dashboard-topbar-btn" id="dashboard-open-polecats-card" title="Open Polecats panel">🐾 Manage</button>
+              </div>
+            </div>
+          ` : '',
+          showDiscordCard ? `
+            <div class="dashboard-summary-card">
+              <div class="dashboard-summary-title">Discord</div>
+              <div id="dashboard-discord-summary" class="dashboard-summary-body">Loading…</div>
+              <div class="dashboard-summary-actions">
+                <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;" title="Auto-start Discord bot when server starts">
+                  <input type="checkbox" id="dashboard-discord-autostart" style="margin:0;" />
+                  Auto-start
+                </label>
+                <button class="dashboard-topbar-btn" id="dashboard-discord-ensure" title="Create/ensure Services workspace + terminals">🧰 Ensure</button>
+                <button class="dashboard-topbar-btn" id="dashboard-discord-process" title="Trigger Discord queue processing">📥 Process</button>
+                <button class="dashboard-topbar-btn" id="dashboard-discord-open-services" title="Open Services workspace">↗ Services</button>
+              </div>
+            </div>
+          ` : '',
+          showProjectsCard ? `
+            <div class="dashboard-summary-card">
+              <div class="dashboard-summary-title">Projects</div>
+              <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
+              <div class="dashboard-summary-actions">
+                <button class="dashboard-topbar-btn" id="dashboard-open-prs" title="Open Pull Requests">🔀 PRs</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-project-health" title="Open per-project health dashboard">🩺 Health</button>
+              </div>
+            </div>
+          ` : '',
+          showAdviceCard ? `
+            <div class="dashboard-summary-card">
+              <div class="dashboard-summary-title">Advice</div>
+              <div id="dashboard-advice-summary" class="dashboard-summary-body">Loading…</div>
+              <div class="dashboard-summary-actions">
+                <button class="dashboard-topbar-btn" id="dashboard-open-queue" title="Open Queue">📥 Queue</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-queue-viz" title="Work queue visualization">🧭 Viz</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-convoys" title="Convoy dashboard (by assignment)">🚚 Convoys</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-advice" title="Open Commander Advice">🧠 Advice</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-suggestions" title="Open workspace suggestions">✨ Suggestions</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-distribution" title="Suggested terminal per PR/task">🎯 Distribution</button>
+              </div>
+            </div>
+          ` : '',
+          showReadinessCard ? `
+            <div class="dashboard-summary-card">
+              <div class="dashboard-summary-title">Readiness</div>
+              <div id="dashboard-readiness-summary" class="dashboard-summary-body">Loading…</div>
+              <div class="dashboard-summary-actions">
+                <button class="dashboard-topbar-btn" id="dashboard-open-readiness" title="Open project readiness checklists">✅ Checklists</button>
+              </div>
+            </div>
+          ` : ''
+        ].filter(Boolean).join('');
+
+        const processSection = (showProcessSection && processCards) ? `
+          <div class="dashboard-section">
+            <h2>Process</h2>
+            <div class="dashboard-summary-grid">
+              ${processCards}
+            </div>
+          </div>
+        ` : '';
+
+        const activeSection = (visibility.workspacesActive !== false && activeWorkspaces.length > 0) ? `
+          <div class="dashboard-section">
+            <h2>Active Workspaces</h2>
+            <div class="workspace-grid">
+              ${activeWorkspaces.map(ws => this.generateWorkspaceCard(ws, true)).join('')}
+            </div>
+          </div>
+        ` : '';
+
+        const allSection = (visibility.workspacesAll !== false) ? `
+          <div class="dashboard-section">
+            <h2>All Workspaces</h2>
+            <div class="workspace-grid">
+              ${inactiveWorkspaces.map(ws => this.generateWorkspaceCard(ws, false)).join('')}
+            </div>
+          </div>
+        ` : '';
+
+        const createSection = (visibility.createSection !== false) ? `
+          <div class="dashboard-section dashboard-create">
+            <h2>Create</h2>
+            <div class="dashboard-create-actions">
+              <button class="btn-primary workspace-create-btn">New Workspace</button>
+              <button class="btn-secondary workspace-create-empty-btn">Empty Workspace</button>
+              <button class="btn-secondary workspace-import-btn" title="Import a workspace config (JSON)">Import Workspace</button>
+              <button class="btn-primary workspace-create-project-btn">New Project</button>
+              <button class="btn-secondary" id="dashboard-commander-toggle">Commander: …</button>
+            </div>
+          </div>
+        ` : '';
+
+        const reviewSection = (visibility.reviewSection !== false) ? `
+          <div class="dashboard-section dashboard-review">
+            <h2>Review</h2>
+            <div class="dashboard-create-actions dashboard-review-actions">
+              <button class="btn-primary" id="dashboard-review-inbox">Review Inbox</button>
+              <button class="btn-secondary" id="dashboard-quick-review">Quick Review</button>
+            </div>
+          </div>
+        ` : '';
+
+        const quickLinksSection = (visibility.quickLinks !== false) ? `
+          <div class="dashboard-section dashboard-half">
+            <h2>Quick Links</h2>
+            <div class="quick-links-grid">
+              ${this.generateQuickLinksHTML()}
+            </div>
+          </div>
+        ` : '';
+
+        const runningServicesSection = (visibility.runningServices !== false) ? `
+          <div class="dashboard-section dashboard-half ports-dashboard-section">
+            <h2>Running Services</h2>
+            <div class="ports-dashboard-grid" id="ports-dashboard-grid">
+              <div class="ports-loading">Loading services...</div>
+            </div>
+          </div>
+        ` : '';
 
 			    return `
 			      <div class="dashboard-topbar">
 		        ${canReturnToWorkspaces ? `
 		          <button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to Workspaces</button>
 		        ` : `<div></div>`}
-            <div id="dashboard-process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div>
+            ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div>` : `<div></div>`}
 		      </div>
 		      <div class="dashboard-header">
-		        <h1>🎯 Agent Orchestrator Dashboard</h1>
+		        <h1>Dashboard</h1>
 		        <p>Select a workspace to begin development</p>
 		      </div>
 
-          <div class="dashboard-section">
-            <h2>📊 Process</h2>
-	            <div class="dashboard-summary-grid">
-	              <div class="dashboard-summary-card">
-	                <div class="dashboard-summary-title">Status</div>
-	                <div id="dashboard-status-summary" class="dashboard-summary-body">Loading…</div>
-	              </div>
-		              <div class="dashboard-summary-card">
-		                <div class="dashboard-summary-title">Telemetry</div>
-		                <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
-		                <div class="dashboard-summary-actions">
-		                  <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
-		                  <button class="dashboard-topbar-btn" id="dashboard-open-performance" title="Per-terminal resource usage">⚙ Perf</button>
-                      <button class="dashboard-topbar-btn" id="dashboard-open-polecats" title="Manage sessions (restart/kill/logs)">🐾 Polecats</button>
-                      <button class="dashboard-topbar-btn" id="dashboard-open-hooks" title="Hook browser (automations/webhooks)">🪝 Hooks</button>
-                      <button class="dashboard-topbar-btn" id="dashboard-open-deacon" title="Deacon monitor (health dashboard)">🛡 Deacon</button>
-		                  <button class="dashboard-topbar-btn" id="dashboard-open-tests" title="Run tests across worktrees">🧪 Tests</button>
-		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
-		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
-		                </div>
-		              </div>
-                <div class="dashboard-summary-card">
-                  <div class="dashboard-summary-title">Polecats</div>
-                  <div id="dashboard-polecats-summary" class="dashboard-summary-body">Loading…</div>
-                  <div class="dashboard-summary-actions">
-                    <button class="dashboard-topbar-btn" id="dashboard-open-polecats-card" title="Open Polecats panel">🐾 Manage</button>
-                  </div>
-                </div>
-                <div class="dashboard-summary-card">
-                  <div class="dashboard-summary-title">Discord</div>
-                  <div id="dashboard-discord-summary" class="dashboard-summary-body">Loading…</div>
-                  <div class="dashboard-summary-actions">
-                    <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;" title="Auto-start Discord bot when server starts">
-                      <input type="checkbox" id="dashboard-discord-autostart" style="margin:0;" />
-                      Auto-start
-                    </label>
-                    <button class="dashboard-topbar-btn" id="dashboard-discord-ensure" title="Create/ensure Services workspace + terminals">🧰 Ensure</button>
-                    <button class="dashboard-topbar-btn" id="dashboard-discord-process" title="Trigger Discord queue processing">📥 Process</button>
-                    <button class="dashboard-topbar-btn" id="dashboard-discord-open-services" title="Open Services workspace">↗ Services</button>
-                  </div>
-                </div>
-	              <div class="dashboard-summary-card">
-	                <div class="dashboard-summary-title">Projects</div>
-	                <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
-	                <div class="dashboard-summary-actions">
-                  <button class="dashboard-topbar-btn" id="dashboard-open-prs" title="Open Pull Requests">🔀 PRs</button>
-                  <button class="dashboard-topbar-btn" id="dashboard-open-project-health" title="Open per-project health dashboard">🩺 Health</button>
-                </div>
-              </div>
-              <div class="dashboard-summary-card">
-                <div class="dashboard-summary-title">Advice</div>
-                <div id="dashboard-advice-summary" class="dashboard-summary-body">Loading…</div>
-                <div class="dashboard-summary-actions">
-                  <button class="dashboard-topbar-btn" id="dashboard-open-queue" title="Open Queue">📥 Queue</button>
-                  <button class="dashboard-topbar-btn" id="dashboard-open-queue-viz" title="Work queue visualization">🧭 Viz</button>
-                  <button class="dashboard-topbar-btn" id="dashboard-open-convoys" title="Convoy dashboard (by assignment)">🚚 Convoys</button>
-                  <button class="dashboard-topbar-btn" id="dashboard-open-advice" title="Open Commander Advice">🧠 Advice</button>
-                  <button class="dashboard-topbar-btn" id="dashboard-open-suggestions" title="Open workspace suggestions">✨ Suggestions</button>
-                  <button class="dashboard-topbar-btn" id="dashboard-open-distribution" title="Suggested terminal per PR/task">🎯 Distribution</button>
-                </div>
-              </div>
-              <div class="dashboard-summary-card">
-                <div class="dashboard-summary-title">Readiness</div>
-                <div id="dashboard-readiness-summary" class="dashboard-summary-body">Loading…</div>
-                <div class="dashboard-summary-actions">
-                  <button class="dashboard-topbar-btn" id="dashboard-open-readiness" title="Open project readiness checklists">✅ Checklists</button>
-                </div>
-              </div>
+          ${processSection}
+
+          <div class="dashboard-columns">
+            <div class="dashboard-col dashboard-col-left">
+              ${activeSection}
+              ${allSection}
+            </div>
+            <div class="dashboard-col dashboard-col-right">
+              ${createSection}
+              ${reviewSection}
+              ${quickLinksSection}
+              ${runningServicesSection}
             </div>
           </div>
-
-	      ${activeWorkspaces.length > 0 ? `
-	        <div class="dashboard-section">
-	          <h2>Active Workspaces</h2>
-	          <div class="workspace-grid">
-	            ${activeWorkspaces.map(ws => this.generateWorkspaceCard(ws, true)).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      <div class="dashboard-section">
-        <h2>All Workspaces</h2>
-        <div class="workspace-grid">
-          ${inactiveWorkspaces.map(ws => this.generateWorkspaceCard(ws, false)).join('')}
-          ${this.generateCreateWorkspaceCard()}
-          ${this.generateCreateProjectCard()}
-        </div>
-      </div>
-
-      <div class="dashboard-split-row">
-        <div class="dashboard-section dashboard-half">
-          <h2>🔗 Quick Links</h2>
-          <div class="quick-links-grid">
-            ${this.generateQuickLinksHTML()}
-          </div>
-        </div>
-
-        <div class="dashboard-section dashboard-half ports-dashboard-section">
-          <h2>🔌 Running Services</h2>
-          <div class="ports-dashboard-grid" id="ports-dashboard-grid">
-            <div class="ports-loading">Loading services...</div>
-          </div>
-        </div>
-      </div>
     `;
 	  }
 
-	  async loadDashboardProcessSummary() {
-	    const statusEl = document.getElementById('dashboard-status-summary');
+  async loadDashboardProcessSummary() {
+    const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
+    const showStatus = visibility.statusCard !== false;
+    const showTelemetry = visibility.telemetryCard !== false;
+    const showPolecats = visibility.polecatsCard !== false;
+    const showDiscord = visibility.discordCard !== false;
+    const showProjects = visibility.projectsCard !== false;
+    const showAdvice = visibility.adviceCard !== false;
+    const showReadiness = visibility.readinessCard !== false;
+    const showAny = showStatus || showTelemetry || showPolecats || showDiscord || showProjects || showAdvice || showReadiness;
+    if (!showAny) return;
+
+    const statusEl = document.getElementById('dashboard-status-summary');
 	    const telemetryEl = document.getElementById('dashboard-telemetry-summary');
       const polecatsEl = document.getElementById('dashboard-polecats-summary');
       const discordEl = document.getElementById('dashboard-discord-summary');
@@ -360,10 +447,12 @@ class Dashboard {
       } catch {}
     });
 
-    try {
-      this.updatePolecatSummary(polecatsEl);
-    } catch {
-      // ignore
+    if (showPolecats) {
+      try {
+        this.updatePolecatSummary(polecatsEl);
+      } catch {
+        // ignore
+      }
     }
 
     const escapeHtml = (value) => String(value ?? '')
@@ -432,13 +521,13 @@ class Dashboard {
 
     try {
       const [statusRes, telemetryRes, projectsRes, readinessRes] = await Promise.all([
-        fetch('/api/process/status?mode=mine').catch(() => null),
-        fetch('/api/process/telemetry').catch(() => null),
-        fetch('/api/process/projects?mode=mine').catch(() => null),
-        fetch('/api/process/readiness/templates').catch(() => null)
+        showStatus ? fetch('/api/process/status?mode=mine').catch(() => null) : Promise.resolve(null),
+        showTelemetry ? fetch('/api/process/telemetry').catch(() => null) : Promise.resolve(null),
+        showProjects ? fetch('/api/process/projects?mode=mine').catch(() => null) : Promise.resolve(null),
+        showReadiness ? fetch('/api/process/readiness/templates').catch(() => null) : Promise.resolve(null)
       ]);
 
-      if (statusEl) {
+      if (showStatus && statusEl) {
         const data = statusRes ? await statusRes.json().catch(() => ({})) : {};
         if (statusRes && statusRes.ok) {
           const q = data?.qByTier || {};
@@ -452,7 +541,7 @@ class Dashboard {
         }
       }
 
-	      if (telemetryEl) {
+	      if (showTelemetry && telemetryEl) {
 	        const data = telemetryRes ? await telemetryRes.json().catch(() => ({})) : {};
 		        if (telemetryRes && telemetryRes.ok) {
 		          this._telemetrySummary = data;
@@ -475,7 +564,7 @@ class Dashboard {
 		        }
 	      }
 
-      if (projectsEl) {
+      if (showProjects && projectsEl) {
         const data = projectsRes ? await projectsRes.json().catch(() => ({})) : {};
         if (projectsRes && projectsRes.ok) {
           const totals = data?.totals || {};
@@ -538,7 +627,7 @@ class Dashboard {
         }
       }
 
-      if (readinessEl) {
+      if (showReadiness && readinessEl) {
         const data = readinessRes ? await readinessRes.json().catch(() => ({})) : {};
         if (readinessRes && readinessRes.ok) {
           const templates = Array.isArray(data?.templates) ? data.templates : [];
@@ -552,15 +641,19 @@ class Dashboard {
         }
       }
 
-      await this.loadDashboardDiscordSummary(discordEl);
-      await renderAdvice({ force: false });
+      if (showDiscord) {
+        await this.loadDashboardDiscordSummary(discordEl);
+      }
+      if (showAdvice) {
+        await renderAdvice({ force: false });
+      }
 		    } catch (error) {
-		      if (statusEl) statusEl.textContent = 'Failed to load.';
-		      if (telemetryEl) telemetryEl.textContent = 'Failed to load.';
-		      if (projectsEl) projectsEl.textContent = 'Failed to load.';
-		      if (readinessEl) readinessEl.textContent = 'Failed to load.';
-          if (discordEl) discordEl.textContent = 'Failed to load.';
-		      await renderAdvice({ force: false });
+		      if (showStatus && statusEl) statusEl.textContent = 'Failed to load.';
+		      if (showTelemetry && telemetryEl) telemetryEl.textContent = 'Failed to load.';
+		      if (showProjects && projectsEl) projectsEl.textContent = 'Failed to load.';
+		      if (showReadiness && readinessEl) readinessEl.textContent = 'Failed to load.';
+          if (showDiscord && discordEl) discordEl.textContent = 'Failed to load.';
+		      if (showAdvice) await renderAdvice({ force: false });
 		    }
 		  }
 
@@ -3375,6 +3468,28 @@ class Dashboard {
       });
     }
 
+    const reviewInboxBtn = document.getElementById('dashboard-review-inbox');
+    if (reviewInboxBtn) {
+      reviewInboxBtn.addEventListener('click', () => {
+        this.orchestrator.openReviewInbox();
+      });
+    }
+
+    const quickReviewBtn = document.getElementById('dashboard-quick-review');
+    if (quickReviewBtn) {
+      quickReviewBtn.addEventListener('click', () => {
+        this.orchestrator.openReviewInbox({ quick: true });
+      });
+    }
+
+    const commanderToggleBtn = document.getElementById('dashboard-commander-toggle');
+    if (commanderToggleBtn) {
+      commanderToggleBtn.addEventListener('click', () => {
+        this.toggleCommanderFromDashboard();
+      });
+      this.updateCommanderToggle();
+    }
+
     // ESC: return to tabbed workspaces if dashboard was opened from there
     if (this._escHandler) {
       document.removeEventListener('keydown', this._escHandler);
@@ -3536,17 +3651,20 @@ class Dashboard {
 
   async createEmptyWorkspaceQuick() {
     try {
-      const timestamp = new Date();
-      const stamp = timestamp.toISOString().replace(/[:T]/g, '-').slice(0, 19);
-      const name = `Empty Workspace ${timestamp.toLocaleString()}`;
-      const baseId = `empty-${stamp}`;
-      const randomSuffix = Math.random().toString(36).slice(2, 6);
-      let workspaceId = `${baseId}-${randomSuffix}`;
-
-      // Ensure ID is unique against current list
       const existingIds = new Set(this.workspaces.map(ws => ws.id));
-      if (existingIds.has(workspaceId)) {
-        workspaceId = `${baseId}-${Math.random().toString(36).slice(2, 8)}`;
+      const existingNumbers = this.workspaces
+        .map(ws => {
+          const match = String(ws?.name || '').match(/^Workspace\s+(\d+)$/i);
+          return match ? Number(match[1]) : NaN;
+        })
+        .filter(n => Number.isFinite(n));
+      let nextNumber = existingNumbers.length ? Math.max(...existingNumbers) + 1 : 1;
+      let name = `Workspace ${nextNumber}`;
+      let workspaceId = `workspace-${nextNumber}`;
+      while (existingIds.has(workspaceId)) {
+        nextNumber += 1;
+        name = `Workspace ${nextNumber}`;
+        workspaceId = `workspace-${nextNumber}`;
       }
 
       const workspaceConfig = {
@@ -3554,7 +3672,7 @@ class Dashboard {
         name,
         type: 'custom',
         icon: '🧱',
-        description: 'Empty workspace (add worktrees later)',
+        description: 'Workspace (add worktrees later)',
         access: 'private',
         empty: true,
         repository: {
@@ -3620,6 +3738,31 @@ class Dashboard {
       console.error('Failed to create empty workspace:', error);
       alert('Failed to create empty workspace: ' + error.message);
     }
+  }
+
+  async updateCommanderToggle() {
+    const btn = document.getElementById('dashboard-commander-toggle');
+    if (!btn) return;
+    try {
+      const res = await fetch('/api/commander/status').catch(() => null);
+      const data = res ? await res.json().catch(() => ({})) : {};
+      const running = !!data?.running;
+      btn.dataset.running = running ? 'true' : 'false';
+      btn.textContent = running ? 'Commander: On' : 'Commander: Off';
+    } catch {
+      btn.dataset.running = 'false';
+      btn.textContent = 'Commander: Off';
+    }
+  }
+
+  async toggleCommanderFromDashboard() {
+    const btn = document.getElementById('dashboard-commander-toggle');
+    const running = btn?.dataset?.running === 'true';
+    const endpoint = running ? '/api/commander/stop' : '/api/commander/start';
+    try {
+      await fetch(endpoint, { method: 'POST' }).catch(() => null);
+    } catch {}
+    await this.updateCommanderToggle();
   }
 
   async downloadWorkspaceExport(workspaceId) {
