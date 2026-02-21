@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent Orchestrator</title>
+    <title>Claude Orchestrator</title>
     
     <!-- Xterm.js for terminal rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
@@ -20,7 +20,7 @@
 	    <aside class="sidebar">
 	        <div class="sidebar-header">
 	            <h2>Worktrees</h2>
-	            <button id="view-presets" class="icon-button" title="View Presets">📋</button>
+	            <button id="view-presets" class="icon-button" title="View Presets" data-ui-visibility="sidebar.viewPresets">📋</button>
 	        </div>
         
         <div class="worktree-list" id="worktree-list">
@@ -42,46 +42,46 @@
 	        <header>
 	            <div class="header-content">
 	                <button id="sidebar-toggle" class="icon-button sidebar-toggle" title="Toggle sidebar">☰</button>
-	                <h1>Agent Orchestrator</h1>
+	                <h1>Claude Orchestrator</h1>
 	            </div>
 	            <div class="header-actions">
-                <button id="dashboard-btn" class="header-btn" title="Dashboard">
+                <button id="dashboard-btn" class="header-btn" title="Dashboard" data-ui-visibility="header.dashboard">
                     🏠 Dashboard
                 </button>
-                <button id="greenfield-btn" class="header-btn" title="Create new project">
+                <button id="greenfield-btn" class="header-btn" title="Create new project" data-ui-visibility="header.newProject">
                     ➕ New Project
                 </button>
-                <button id="conversations-btn" class="header-btn" title="Browse conversations">
+                <button id="conversations-btn" class="header-btn" title="Browse conversations" data-ui-visibility="header.history">
                     💬 History
                 </button>
-                <button id="prs-btn" class="header-btn" title="Browse pull requests">
+                <button id="prs-btn" class="header-btn" title="Browse pull requests" data-ui-visibility="header.prs">
                     🔀 PRs
                 </button>
-                <button id="queue-btn" class="header-btn" title="Review inbox (tiers/queue)">
+                <button id="queue-btn" class="header-btn" title="Review inbox (tiers/queue)" data-ui-visibility="header.queue">
                     📥 Queue
                 </button>
-                <button id="project-chats-btn" class="header-btn" title="Simple projects + chats shell (Alt+P)">
+                <button id="project-chats-btn" class="header-btn" title="Simple projects + chats shell (Alt+P)" data-ui-visibility="header.chats">
                     🧵 Chats
                 </button>
-                <button id="command-palette-btn" class="header-btn" title="Command palette (Ctrl+K / Cmd+K)">
+                <button id="command-palette-btn" class="header-btn" title="Command palette (Ctrl+K / Cmd+K)" data-ui-visibility="header.commands">
                     ⌘ Commands
                 </button>
-                <button id="review-route-btn" class="header-btn" title="Review Route (Tier 3+ unreviewed batch review)">
+                <button id="review-route-btn" class="header-btn" title="Review Route (Tier 3+ unreviewed batch review)" data-ui-visibility="header.reviewRoute">
                     🛣 Review Route
                 </button>
-                <button id="activity-btn" class="header-btn" title="Activity feed (agents, PRs, tests)">
+                <button id="activity-btn" class="header-btn" title="Activity feed (agents, PRs, tests)" data-ui-visibility="header.activity">
                     📰 Activity
                 </button>
-                <button id="diff-viewer-open" class="header-btn" title="Open Advanced Diff Viewer for the active PR/branch (falls back to home)">
+                <button id="diff-viewer-open" class="header-btn" title="Open Advanced Diff Viewer for the active PR/branch (falls back to home)" data-ui-visibility="header.diff">
                     🔍 Diff
                 </button>
                 <div class="workflow-toggle" role="group" aria-label="Workflow mode">
                     <button id="workflow-focus" class="header-btn workflow-btn" title="Focus (Tier 1–2)">🎯 Focus</button>
                     <button id="workflow-all" class="header-btn workflow-btn" title="All tiers (show everything)">🧩 All</button>
                     <button id="workflow-review" class="header-btn workflow-btn" title="Review (Queue)">🧾 Review</button>
-                    <button id="workflow-background" class="header-btn workflow-btn" title="Background (Tier 3–4)">🌙 Background</button>
+                    <button id="workflow-background" class="header-btn workflow-btn" title="Background (Tier 3–4)" data-ui-visibility="header.workflowBackground">🌙 Background</button>
                 </div>
-                <div class="workflow-toggle tier-toggle" role="group" aria-label="Tier filter">
+                <div class="workflow-toggle tier-toggle" role="group" aria-label="Tier filter" data-ui-visibility="header.tierFilters">
                     <button id="tier-filter-all" class="header-btn workflow-btn" title="Show all tiers">All</button>
                     <button id="tier-filter-1" class="header-btn workflow-btn" title="Tier 1 only">T1</button>
                     <button id="tier-filter-2" class="header-btn workflow-btn" title="Tier 2 only">T2</button>
@@ -89,30 +89,30 @@
                     <button id="tier-filter-4" class="header-btn workflow-btn" title="Tier 4 only">T4</button>
                     <button id="tier-filter-none" class="header-btn workflow-btn" title="No tier set">None</button>
                 </div>
-                <button id="workflow-focus-tier2" class="header-btn" title="Focus: hide Tier 2 while Tier 1 is busy">T2 Auto</button>
-                <button id="workflow-focus-autoswap" class="header-btn" title="Focus: auto-swap to Tier 2 while Tier 1 is busy">Swap T2</button>
-                <div id="process-banner-holder"><div id="process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div></div>
-                <button id="tasks-btn" class="header-btn" title="Browse tasks (Trello)">
+                <button id="workflow-focus-tier2" class="header-btn" title="Focus: hide Tier 2 while Tier 1 is busy" data-ui-visibility="header.focusTier2">T2 Auto</button>
+                <button id="workflow-focus-autoswap" class="header-btn" title="Focus: auto-swap to Tier 2 while Tier 1 is busy" data-ui-visibility="header.focusSwap">Swap T2</button>
+                <div id="process-banner-holder" data-ui-visibility="processBanner"><div id="process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div></div>
+                <button id="tasks-btn" class="header-btn" title="Browse tasks (Trello)" data-ui-visibility="header.tasks">
                     ✅ Tasks
                 </button>
-                <button id="ports-btn" class="header-btn" title="View running services">
+                <button id="ports-btn" class="header-btn" title="View running services" data-ui-visibility="header.ports">
                     🔌 Ports
                 </button>
-                <button id="commander-toggle" class="header-btn commander-btn" title="Commander (Top-Level AI)">
+                <button id="commander-toggle" class="header-btn commander-btn" title="Commander (Top-Level AI)" data-ui-visibility="header.commander">
                     🎖️ Commander
                 </button>
-                <button id="recommendations-toggle" class="icon-button" title="System Recommendations" onclick="window.recommendationsUI && window.recommendationsUI.toggle()">
+                <button id="recommendations-toggle" class="icon-button" title="System Recommendations" onclick="window.recommendationsUI && window.recommendationsUI.toggle()" data-ui-visibility="header.recommendations">
                     <span class="notification-badge recommendations-badge" id="recommendations-badge" style="display:none">0</span>
                     🔧
                 </button>
-                <button id="notification-toggle" class="icon-button" title="Notifications">
+                <button id="notification-toggle" class="icon-button" title="Notifications" data-ui-visibility="header.notifications">
                     <span class="notification-badge" id="notification-badge">0</span>
                     🔔
                 </button>
-                <button id="settings-toggle" class="icon-button" title="Settings">
+                <button id="settings-toggle" class="icon-button" title="Settings" data-ui-visibility="header.settings">
                     ⚙️
                 </button>
-                <div class="connection-status" id="connection-status">
+                <div class="connection-status" id="connection-status" data-ui-visibility="header.connectionStatus">
                     <span class="status-dot disconnected"></span>
                     <span>Disconnected</span>
                 </div>

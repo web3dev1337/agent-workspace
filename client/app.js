@@ -102,6 +102,8 @@ class ClaudeOrchestrator {
     // Button registry - all available buttons with their implementations
     this.buttonRegistry = this.initButtonRegistry();
 
+    this.uiVisibility = this.getUiVisibilityConfig();
+
     // Review Console: when terminals are embedded into the console, we temporarily
     // move existing terminal wrappers into the modal and restore them on close.
     this.reviewConsoleDockedTerminals = new Map(); // sessionId -> { wrapper, parent, nextSibling }
@@ -143,6 +145,129 @@ class ClaudeOrchestrator {
       .replace(/^origin\//, '')
       .replace(/^remotes\/origin\//, '');
     return cleaned === 'main' || cleaned === 'master' || cleaned === 'trunk' || cleaned === 'default';
+  }
+
+  getDefaultVisibilityConfig() {
+    return {
+      processBanner: false,
+      header: {
+        dashboard: true,
+        newProject: false,
+        history: false,
+        prs: false,
+        queue: false,
+        chats: false,
+        commands: false,
+        reviewRoute: false,
+        activity: false,
+        diff: false,
+        workflowBackground: false,
+        tierFilters: false,
+        focusTier2: false,
+        focusSwap: false,
+        tasks: false,
+        ports: false,
+        commander: true,
+        recommendations: false,
+        notifications: true,
+        settings: true,
+        connectionStatus: true
+      },
+      sidebar: {
+        viewPresets: false,
+        tierFilters: true,
+        activeFilter: true,
+        refreshBranch: false,
+        readyForReview: false,
+        sessionVisibilityToggles: false,
+        deleteWorktree: true
+      },
+      terminal: {
+        intentHints: false,
+        branchRefresh: false,
+        closeProcess: false,
+        removeWorktree: true,
+        reviewConsole: true,
+        showOnlyWorktree: true,
+        startAgentOptions: true,
+        startClaudeWithSettings: false,
+        createNewProject: false,
+        refreshTerminal: false,
+        interrupt: false,
+        assignCodeReview: true,
+        buildProductionZip: false,
+        viewBranchOnGithub: false,
+        viewBranchDiff: true,
+        viewPrOnGithub: true,
+        advancedDiff: false,
+        advancedBranchDiff: false,
+        startServerDev: false,
+        forceKill: false,
+        launchSettings: false,
+        startServer: true
+      },
+      dashboard: {
+        processBanner: false,
+        processSection: false,
+        statusCard: false,
+        telemetryCard: false,
+        polecatsCard: false,
+        discordCard: false,
+        projectsCard: false,
+        adviceCard: false,
+        readinessCard: false,
+        suggestions: false,
+        workspacesActive: true,
+        workspacesAll: true,
+        quickLinks: true,
+        runningServices: true,
+        createSection: true
+      },
+      commander: {
+        cmdMode: false,
+        startStop: false,
+        startClaude: false,
+        advice: false,
+        sessions: true,
+        modeSelect: false
+      }
+    };
+  }
+
+  getUiVisibilityConfig() {
+    const defaults = this.getDefaultVisibilityConfig();
+    const next = this.userSettings?.global?.ui?.visibility || {};
+    return {
+      ...defaults,
+      ...next,
+      header: { ...defaults.header, ...(next.header || {}) },
+      sidebar: { ...defaults.sidebar, ...(next.sidebar || {}) },
+      terminal: { ...defaults.terminal, ...(next.terminal || {}) },
+      dashboard: { ...defaults.dashboard, ...(next.dashboard || {}) },
+      commander: { ...defaults.commander, ...(next.commander || {}) }
+    };
+  }
+
+  getVisibilityValue(config, key) {
+    if (!key) return true;
+    const parts = String(key || '').split('.').filter(Boolean);
+    let current = config;
+    for (const part of parts) {
+      if (!current || typeof current !== 'object') return undefined;
+      current = current[part];
+    }
+    return current;
+  }
+
+  applyUiVisibility() {
+    this.uiVisibility = this.getUiVisibilityConfig();
+    const nodes = document.querySelectorAll('[data-ui-visibility]');
+    nodes.forEach((node) => {
+      const key = node.dataset.uiVisibility || '';
+      const value = this.getVisibilityValue(this.uiVisibility, key);
+      const shouldShow = value !== false;
+      node.classList.toggle('hidden', !shouldShow);
+    });
   }
 
   getSessionVisibilityStorageKey() {
@@ -2921,6 +3046,12 @@ class ClaudeOrchestrator {
   }
 
   startProcessStatusBanner() {
+    const visibility = this.getUiVisibilityConfig();
+    const showHeader = visibility.processBanner !== false;
+    const showDashboard = visibility.dashboard?.processBanner !== false;
+    if (!showHeader && !showDashboard) {
+      return;
+    }
     const renderInto = (banner, status) => {
       if (!banner) return;
       if (!banner.dataset.bound) {
@@ -14106,6 +14237,7 @@ class ClaudeOrchestrator {
         this.applyThemeFromUserSettings();
         this.applySimpleModeConfig();
         this.maybeAutoOpenSimpleMode();
+        this.applyUiVisibility();
         this.refreshBranchLabels();
         this.updateTierFilterButtons();
       } else {
@@ -14152,6 +14284,7 @@ class ClaudeOrchestrator {
         const updatedSettings = await response.json();
         this.userSettings = updatedSettings;
         console.log('Global setting updated:', path, '=', value);
+        this.applyUiVisibility();
       } else {
         console.error('Failed to update global setting:', response.statusText);
       }
