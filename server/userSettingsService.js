@@ -150,9 +150,115 @@ class UserSettingsService {
         },
         ui: {
           theme: 'dark',
-          skin: 'default',
+          skin: 'blue',
           // 0..100 (applied as 0..1 multiplier for skin tint in CSS)
           skinIntensity: 100,
+          visibility: {
+            processBanner: false,
+            header: {
+              dashboard: true,
+              newProject: false,
+              history: false,
+              prs: false,
+              queue: true,
+              chats: false,
+              commands: false,
+              reviewRoute: false,
+              activity: false,
+              diff: false,
+              workflowMode: false,
+              workflowBackground: false,
+              tierFilters: false,
+              focusTier2: false,
+              focusSwap: false,
+              tasks: false,
+              ports: false,
+              commander: true,
+              recommendations: false,
+              notifications: true,
+              settings: true,
+              connectionStatus: true
+            },
+            sidebar: {
+              viewPresets: false,
+              tierFilters: true,
+              activeFilter: true,
+              refreshBranch: false,
+              readyForReview: false,
+              sessionVisibilityToggles: false,
+              deleteWorktree: true
+            },
+            terminal: {
+              intentHints: false,
+              branchRefresh: false,
+              closeProcess: false,
+              removeWorktree: true,
+              reviewConsole: true,
+              showOnlyWorktree: true,
+              startAgentOptions: true,
+              startClaudeWithSettings: false,
+              createNewProject: false,
+              refreshTerminal: false,
+              interrupt: false,
+              assignCodeReview: true,
+              buildProductionZip: false,
+              viewBranchOnGithub: false,
+              viewBranchDiff: true,
+              viewPrOnGithub: true,
+              advancedDiff: false,
+              advancedBranchDiff: false,
+              startServerDev: false,
+              forceKill: true,
+              launchSettings: false,
+              startServer: true
+            },
+            dashboard: {
+              processBanner: false,
+              processSection: false,
+              statusCard: false,
+              telemetryCard: false,
+              polecatsCard: false,
+              discordCard: false,
+              projectsCard: false,
+              adviceCard: false,
+              readinessCard: false,
+              suggestions: false,
+              workspacesActive: true,
+              workspacesAll: true,
+              reviewSection: true,
+              quickLinks: true,
+              runningServices: true,
+              createSection: true
+            },
+            reviewInbox: {
+              mode: 'mine',
+              tiers: 't3t4',
+              kind: 'pr',
+              unreviewedOnly: true,
+              autoConsole: false,
+              autoAdvance: false,
+              prioritizeActive: true,
+              project: ''
+            },
+            quickReview: {
+              mode: 'mine',
+              tiers: 't3t4',
+              kind: 'pr',
+              unreviewedOnly: true,
+              autoConsole: true,
+              autoAdvance: false,
+              prioritizeActive: true,
+              project: ''
+            },
+            commander: {
+              cmdMode: false,
+              startStop: false,
+              startClaude: false,
+              advice: false,
+              sessions: true,
+              modeSelect: false
+            }
+          },
           simpleMode: {
             // Codex-style top-level project/chat shell controls.
             enabled: true,
@@ -164,14 +270,14 @@ class UserSettingsService {
 	            // Default layout intent: a batch-review surface. Keep it fullscreen and show diff by default.
 	            preset: 'review', // default | review | throughput | deep | code | terminals | custom
 	            fullscreen: true,
-	            diffEmbed: true,
-	            sections: {
-	              terminals: true,
-	              files: false,
-	              commits: false,
-	              diff: true
-	            }
-	          },
+            diffEmbed: true,
+            sections: {
+              terminals: true,
+              files: false,
+              commits: false,
+              diff: true
+            }
+          },
           discord: {
             // If enabled, the server will call POST /api/discord/ensure-services on startup
             // (via internal service call) to keep Claudesworth online after restarts.
@@ -306,9 +412,11 @@ class UserSettingsService {
         // Merge with defaults to ensure all properties exist
         const defaults = this.getDefaultSettings();
         const merged = this.mergeSettings(defaults, settings);
+        const migrated = this.applySettingsMigrations(merged);
+        if (migrated.changed) this.saveSettings(migrated.settings);
         
         logger.info('Loaded user settings', { path: this.settingsPath });
-        return merged;
+        return migrated.settings;
       } else {
         logger.info('No user settings file found, creating from default template', { 
           path: this.settingsPath 
@@ -324,6 +432,34 @@ class UserSettingsService {
       });
       return this.getDefaultSettings();
     }
+  }
+
+  applySettingsMigrations(settings) {
+    const next = settings || {};
+    let changed = false;
+
+    const ui = next?.global?.ui;
+    if (ui) {
+      const rc = (ui.reviewConsole && typeof ui.reviewConsole === 'object') ? { ...ui.reviewConsole } : {};
+      const migrations = (rc.migrations && typeof rc.migrations === 'object') ? { ...rc.migrations } : {};
+      if (!migrations.filesDefaultOff) {
+        const sections = (rc.sections && typeof rc.sections === 'object') ? { ...rc.sections } : {};
+        if (sections.files !== false) {
+          sections.files = false;
+          changed = true;
+        }
+        if (sections.terminals === false) {
+          sections.terminals = true;
+          changed = true;
+        }
+        rc.sections = sections;
+        rc.migrations = { ...migrations, filesDefaultOff: true };
+        ui.reviewConsole = rc;
+        changed = true;
+      }
+    }
+
+    return { settings: next, changed };
   }
 
   loadDefaultTemplate() {
@@ -536,6 +672,35 @@ class UserSettingsService {
           merged.global.ui.simpleMode = {
             ...(uiDefaults.simpleMode || {}),
             ...(ui.simpleMode || {})
+          };
+        }
+
+        if (ui.visibility && typeof ui.visibility === 'object') {
+          const defaultsVisibility = uiDefaults.visibility || {};
+          const nextVisibility = ui.visibility || {};
+          merged.global.ui.visibility = {
+            ...defaultsVisibility,
+            ...nextVisibility,
+            header: {
+              ...(defaultsVisibility.header || {}),
+              ...(nextVisibility.header || {})
+            },
+            sidebar: {
+              ...(defaultsVisibility.sidebar || {}),
+              ...(nextVisibility.sidebar || {})
+            },
+            terminal: {
+              ...(defaultsVisibility.terminal || {}),
+              ...(nextVisibility.terminal || {})
+            },
+            dashboard: {
+              ...(defaultsVisibility.dashboard || {}),
+              ...(nextVisibility.dashboard || {})
+            },
+            commander: {
+              ...(defaultsVisibility.commander || {}),
+              ...(nextVisibility.commander || {})
+            }
           };
         }
 
@@ -808,6 +973,34 @@ class UserSettingsService {
           ...this.getDefaultSettings().global.ui,
           ...newGlobal.ui
         };
+        if (newGlobal.ui.visibility) {
+          const defaultsVisibility = this.getDefaultSettings().global.ui.visibility || {};
+          const nextVisibility = newGlobal.ui.visibility || {};
+          this.settings.global.ui.visibility = {
+            ...defaultsVisibility,
+            ...nextVisibility,
+            header: {
+              ...(defaultsVisibility.header || {}),
+              ...(nextVisibility.header || {})
+            },
+            sidebar: {
+              ...(defaultsVisibility.sidebar || {}),
+              ...(nextVisibility.sidebar || {})
+            },
+            terminal: {
+              ...(defaultsVisibility.terminal || {}),
+              ...(nextVisibility.terminal || {})
+            },
+            dashboard: {
+              ...(defaultsVisibility.dashboard || {}),
+              ...(nextVisibility.dashboard || {})
+            },
+            commander: {
+              ...(defaultsVisibility.commander || {}),
+              ...(nextVisibility.commander || {})
+            }
+          };
+        }
         if (newGlobal.ui.diffViewer) {
           this.settings.global.ui.diffViewer = {
             ...this.getDefaultSettings().global.ui.diffViewer,
