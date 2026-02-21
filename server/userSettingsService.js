@@ -412,9 +412,11 @@ class UserSettingsService {
         // Merge with defaults to ensure all properties exist
         const defaults = this.getDefaultSettings();
         const merged = this.mergeSettings(defaults, settings);
+        const migrated = this.applySettingsMigrations(merged);
+        if (migrated.changed) this.saveSettings(migrated.settings);
         
         logger.info('Loaded user settings', { path: this.settingsPath });
-        return merged;
+        return migrated.settings;
       } else {
         logger.info('No user settings file found, creating from default template', { 
           path: this.settingsPath 
@@ -430,6 +432,34 @@ class UserSettingsService {
       });
       return this.getDefaultSettings();
     }
+  }
+
+  applySettingsMigrations(settings) {
+    const next = settings || {};
+    let changed = false;
+
+    const ui = next?.global?.ui;
+    if (ui) {
+      const rc = (ui.reviewConsole && typeof ui.reviewConsole === 'object') ? { ...ui.reviewConsole } : {};
+      const migrations = (rc.migrations && typeof rc.migrations === 'object') ? { ...rc.migrations } : {};
+      if (!migrations.filesDefaultOff) {
+        const sections = (rc.sections && typeof rc.sections === 'object') ? { ...rc.sections } : {};
+        if (sections.files !== false) {
+          sections.files = false;
+          changed = true;
+        }
+        if (sections.terminals === false) {
+          sections.terminals = true;
+          changed = true;
+        }
+        rc.sections = sections;
+        rc.migrations = { ...migrations, filesDefaultOff: true };
+        ui.reviewConsole = rc;
+        changed = true;
+      }
+    }
+
+    return { settings: next, changed };
   }
 
   loadDefaultTemplate() {
