@@ -82,3 +82,30 @@ Then again I don't know what the difference between PR's Q chats commands review
 
 BRO do ui have a .md plan yet? IF NOT MAKE ONE, dont u dare lose the context of what we want, dump my entire prompt for sure
 ```
+
+## Addendum: Review Inbox + Quick Review (2026-02-21)
+
+### Goal
+Add a dedicated Review Inbox entry point that lists pending PRs, enables a Quick Review flow (PR-only, Tier 3–4 by default), and supports reprompt → next navigation that jumps back to ready reprompted PRs.
+
+### Mini-Step Plan
+1. **Plan + UI entry point**
+   - Add Review Inbox button (dashboard and/or header).
+   - Add queue preset for PR-only view with T3–T4 defaults.
+   - Commit + push.
+2. **Queue filters + ordering**
+   - Add PR-only filter, optional project filter.
+   - Prioritize PRs that have active agents in current workspace.
+   - Commit + push.
+3. **Reprompt + Next behavior**
+   - Add “Reprompt” action to queue detail (spawns fixer + tracks worktree).
+   - Update Next navigation to jump to reprompted-ready items first.
+   - Commit + push.
+4. **Tests + PR**
+   - Run existing automated tests and report failures.
+   - Create PR and provide URL.
+
+### Verbatim Addendum Request (Do Not Lose Context)
+```
+Okay, so let's just say I want a button. I want to be able to click it. It then should show all of my, I guess, pending reviews slash PRs, whatever you want to call them. I should be able to go into each of them one at a time through that menu if wanted. Or I should be able to click a button either from that menu or maybe even another one, like quick review, and it should just instantly open up each of my pull requests that are not merged starting with any active agents that have been working like in my current workspace primarily potentially and then I want to be able to like just look at here's one and then when I'm done either merge it or I go next and then it goes to the next one and it keeps you know I can filter by project if I want. But you know in general, it'll be filtered by tier 3 to 4, tier 3s whatever and then as I go through them, I either merge them or I reprompt. If I reprompt and then I go next, that'll kind of go in the background right? And then I start to review the next one. If and then once I'm done with that and I press next or whatever once I click next right, if that other one that I reprompted is finished, it's finished prompting or whatever, then I want you to go back to that one straight away. Otherwise go to the next one. In other words, the decision every time you click next is there is one you've reprompted ready for re-review or not go to the next one okay?
+```
