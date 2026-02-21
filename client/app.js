@@ -22552,7 +22552,8 @@ class ClaudeOrchestrator {
 			      reviewTimer: { taskId: null, startedAtMs: null },
 			      reviewerSpawning: new Set(),
 			      fixerSpawning: new Set(),
-			      recheckSpawning: new Set()
+			      recheckSpawning: new Set(),
+            reprompted: []
 			    };
 
     const loadSnoozes = () => {
@@ -23230,6 +23231,44 @@ class ClaudeOrchestrator {
       }
     };
 
+    const pruneReprompted = () => {
+      if (!Array.isArray(state.reprompted) || state.reprompted.length === 0) return;
+      const liveIds = new Set((Array.isArray(state.tasks) ? state.tasks : []).map((t) => String(t?.id || '').trim()).filter(Boolean));
+      state.reprompted = state.reprompted.filter((entry) => liveIds.has(String(entry?.taskId || '').trim()));
+    };
+
+    const registerRepromptedTask = ({ taskId, worktreeId } = {}) => {
+      const id = String(taskId || '').trim();
+      if (!id) return;
+      const wt = String(worktreeId || '').trim() || null;
+      const next = (Array.isArray(state.reprompted) ? state.reprompted : []).filter((entry) => String(entry?.taskId || '').trim() !== id);
+      next.unshift({ taskId: id, worktreeId: wt, createdAtMs: Date.now() });
+      state.reprompted = next.slice(0, 50);
+    };
+
+    const isReadyStatus = (status) => {
+      const s = String(status || '').trim().toLowerCase();
+      return s === 'waiting' || s === 'ready' || s === 'ready-new';
+    };
+
+    const findReadyRepromptedTaskId = () => {
+      if (!Array.isArray(state.reprompted) || state.reprompted.length === 0) return '';
+      const readyWorktreeIds = new Set();
+      for (const [sid, session] of this.sessions) {
+        if (!this.isAgentSession(sid)) continue;
+        if (!isReadyStatus(session?.status)) continue;
+        const wt = String(session?.worktreeId || '').trim();
+        if (wt) readyWorktreeIds.add(wt);
+      }
+      for (const entry of state.reprompted) {
+        const id = String(entry?.taskId || '').trim();
+        const wt = String(entry?.worktreeId || '').trim();
+        if (!id || !wt) continue;
+        if (readyWorktreeIds.has(wt)) return id;
+      }
+      return '';
+    };
+
     const calcTierCounts = (tasks) => {
       const counts = { 1: 0, 2: 0, 3: 0, 4: 0, none: 0 };
       for (const t of tasks) {
@@ -23739,6 +23778,7 @@ class ClaudeOrchestrator {
       if (!res.ok) throw new Error(data?.error || 'Failed to load queue');
       state.tasks = data.tasks || [];
       updateProjectFilterOptions();
+      pruneReprompted();
       const selectedStillExists = !!(state.selectedId && getTaskById(state.selectedId));
       if (!selectedStillExists) {
         const ordered = getOrderedTasks(getFilteredTasks());
@@ -24812,6 +24852,7 @@ class ClaudeOrchestrator {
 				            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-overnight" ${canOvernight ? '' : 'disabled'} title="${canOvernight ? 'Spawn Tier 4 overnight runner (runs tests + leaves summary)' : 'Set Tier=4 to enable overnight runner'}">🌙 Overnight</button>` : ''}
 				            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-reviewer" title="Start a reviewer agent in a clean worktree">🧑‍⚖️ Reviewer</button>` : ''}
 				            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-fixer" title="Start a fixer agent for this PR (uses Notes)">🛠 Fixer</button>` : ''}
+				            ${hasPR ? `<button class="btn-secondary" id="queue-reprompt" title="Reprompt fixer and return here when ready">✉ Reprompt</button>` : ''}
 				            ${hasPR ? `<button class="btn-secondary" id="queue-spawn-recheck" title="Spawn a reviewer agent to recheck after fixes">🔁 Recheck</button>` : ''}
 				          </div>
 			        </div>
@@ -25100,6 +25141,7 @@ class ClaudeOrchestrator {
 				      const spawnOvernightBtn = detailEl.querySelector('#queue-spawn-overnight');
 				      const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
 				      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
+				      const repromptBtn = detailEl.querySelector('#queue-reprompt');
 				      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
 		      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
 		      const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
@@ -26242,6 +26284,40 @@ class ClaudeOrchestrator {
         }
       });
 
+      repromptBtn?.addEventListener('click', async () => {
+        try {
+          repromptBtn.disabled = true;
+          const notes = String(notesEl?.value || '').trim();
+          if (!notes && !window.confirm('Reprompt without Notes?')) return;
+          await saveNotes();
+          const existingFixerId = String(t?.record?.fixerWorktreeId || '').trim();
+          const info = await this.spawnFixAgentForPRTask(t, {
+            tier: 2,
+            agentId: 'claude',
+            mode: 'fresh',
+            yolo: true,
+            notes,
+            worktreeId: existingFixerId || null
+          });
+          if (info) {
+            const worktreeId = info.worktreeId || existingFixerId || null;
+            const rec = await upsertRecord(t.id, {
+              fixerSpawnedAt: new Date().toISOString(),
+              fixerWorktreeId: worktreeId
+            });
+            updateTaskRecordInState(t.id, rec);
+            registerRepromptedTask({ taskId: t.id, worktreeId });
+            renderList();
+            renderDetail(getTaskById(t.id));
+            this.showToast('Reprompted fixer started', 'success');
+          }
+        } catch (e) {
+          this.showToast(String(e?.message || e), 'error');
+        } finally {
+          if (repromptBtn) repromptBtn.disabled = false;
+        }
+      });
+
 	      spawnRecheckBtn?.addEventListener('click', async () => {
 	        try {
 	          spawnRecheckBtn.disabled = true;
@@ -26559,6 +26635,17 @@ class ClaudeOrchestrator {
     });
 
 	    const navigate = (dir) => {
+	      if (dir > 0) {
+	        const readyId = findReadyRepromptedTaskId();
+	        if (readyId && readyId !== state.selectedId) {
+	          state.reprompted = state.reprompted.filter((entry) => String(entry?.taskId || '').trim() !== readyId);
+	          selectById(readyId, { allowAutoOpenDiff: true });
+	          return;
+	        }
+	        if (readyId && readyId === state.selectedId) {
+	          state.reprompted = state.reprompted.filter((entry) => String(entry?.taskId || '').trim() !== readyId);
+	        }
+	      }
 	      const ordered = getOrderedTasks(getFilteredTasks());
 	      if (!ordered.length) return;
 	      const currentIndex = state.selectedId ? ordered.findIndex(t => t.id === state.selectedId) : -1;
