@@ -150,7 +150,7 @@ class UserSettingsService {
         },
         ui: {
           theme: 'dark',
-          skin: 'default',
+          skin: 'blue',
           // 0..100 (applied as 0..1 multiplier for skin tint in CSS)
           skinIntensity: 100,
           visibility: {
