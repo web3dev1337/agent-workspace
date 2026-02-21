@@ -2953,7 +2953,7 @@ class ClaudeOrchestrator {
     try { localStorage.setItem('queue-auto-advance', 'true'); } catch {}
     try {
       localStorage.setItem('review-console-collapsed-panels', JSON.stringify({
-        files: true,
+        files: false,
         commits: true,
         conversation: true
       }));
@@ -8617,7 +8617,7 @@ class ClaudeOrchestrator {
 		      default: { terminals: true, files: true, commits: true, diff: true },
 		      // Review layout preset (diff-dominant). Keep commits off by default for less vertical scrolling.
 		      review: { terminals: true, files: true, commits: false, diff: true },
-		      throughput: { terminals: true, files: false, commits: false, diff: true },
+		      throughput: { terminals: true, files: true, commits: false, diff: true },
 		      deep: { terminals: true, files: true, commits: true, diff: true },
 		      code: { terminals: false, files: true, commits: true, diff: true },
 		      terminals: { terminals: true, files: false, commits: false, diff: false }
@@ -10232,7 +10232,7 @@ class ClaudeOrchestrator {
 		        const presets = {
 		          default: { terminals: true, files: true, commits: true, diff: true },
 		          review: { terminals: true, files: true, commits: false, diff: true },
-		          throughput: { terminals: true, files: false, commits: false, diff: true },
+		          throughput: { terminals: true, files: true, commits: false, diff: true },
 		          deep: { terminals: true, files: true, commits: true, diff: true },
 		          terminals: { terminals: true, files: false, commits: false, diff: false },
 		          code: { terminals: false, files: true, commits: true, diff: true }
@@ -11278,7 +11278,7 @@ class ClaudeOrchestrator {
 				      const presets = {
 				        default: { terminals: true, files: true, commits: true, diff: true },
 				        review: { terminals: true, files: true, commits: false, diff: true },
-				        throughput: { terminals: true, files: false, commits: false, diff: true },
+				        throughput: { terminals: true, files: true, commits: false, diff: true },
 				        deep: { terminals: true, files: true, commits: true, diff: true },
 				        code: { terminals: false, files: true, commits: true, diff: true },
 				        terminals: { terminals: true, files: false, commits: false, diff: false }
@@ -11356,15 +11356,16 @@ class ClaudeOrchestrator {
             };
             const routeFilters = readRouteFilters();
             const readCollapsedPanels = () => {
+              const defaults = { files: false, commits: true, conversation: true };
               try {
                 const raw = JSON.parse(localStorage.getItem('review-console-collapsed-panels') || '{}');
                 return {
-                  files: raw?.files !== false,
-                  commits: raw?.commits !== false,
-                  conversation: raw?.conversation !== false
+                  files: (typeof raw?.files === 'boolean') ? raw.files : defaults.files,
+                  commits: (typeof raw?.commits === 'boolean') ? raw.commits : defaults.commits,
+                  conversation: (typeof raw?.conversation === 'boolean') ? raw.conversation : defaults.conversation
                 };
               } catch {
-                return { files: true, commits: true, conversation: true };
+                return { ...defaults };
               }
             };
             const collapsedPanels = readCollapsedPanels();
