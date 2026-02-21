@@ -3562,6 +3562,28 @@ class ClaudeOrchestrator {
     };
   }
 
+  getTerminalVisibilityConfig() {
+    return this.getUiVisibilityConfig().terminal || {};
+  }
+
+  shouldRenderTerminalButton(buttonId) {
+    const visibility = this.getTerminalVisibilityConfig();
+    const map = {
+      focus: 'showOnlyWorktree',
+      newProject: 'createNewProject',
+      interrupt: 'interrupt',
+      claudeStart: 'startClaudeWithSettings',
+      claudeModal: 'startAgentOptions',
+      refresh: 'refreshTerminal',
+      review: 'assignCodeReview',
+      build: 'buildProductionZip',
+      kill: 'forceKill'
+    };
+    const key = map[buttonId];
+    if (!key) return true;
+    return visibility[key] !== false;
+  }
+
   /**
    * Get buttons for a session based on cascaded config
    * @param {string} sessionId
@@ -3611,8 +3633,12 @@ class ClaudeOrchestrator {
     const buttons = [];
 
     // Always add focus + create-project quick action first
-    buttons.push(this.renderButton('focus', this.buttonRegistry.focus, sessionId));
-    buttons.push(this.renderButton('newProject', this.buttonRegistry.newProject, sessionId));
+    if (this.shouldRenderTerminalButton('focus')) {
+      buttons.push(this.renderButton('focus', this.buttonRegistry.focus, sessionId));
+    }
+    if (this.shouldRenderTerminalButton('newProject')) {
+      buttons.push(this.renderButton('newProject', this.buttonRegistry.newProject, sessionId));
+    }
 
     // Render configured buttons
     for (const [buttonId, buttonConfig] of Object.entries(buttonDefs)) {
@@ -3621,6 +3647,7 @@ class ClaudeOrchestrator {
 
       // Merge config with registry
       const mergedButton = { ...registryEntry, ...buttonConfig };
+      if (!this.shouldRenderTerminalButton(buttonId)) continue;
       buttons.push(this.renderButton(buttonId, mergedButton, sessionId));
     }
 
@@ -3662,24 +3689,24 @@ class ClaudeOrchestrator {
    */
   getDefaultButtons(terminalType, sessionId = '') {
     if (terminalType === 'claude') {
-      return [
-        this.renderButton('focus', this.buttonRegistry.focus, sessionId),
-        this.renderButton('newProject', this.buttonRegistry.newProject, sessionId),
-        this.renderButton('claudeStart', this.buttonRegistry.claudeStart, sessionId),
-        this.renderButton('claudeModal', this.buttonRegistry.claudeModal, sessionId),
-        this.renderButton('refresh', this.buttonRegistry.refresh, sessionId),
-        this.renderButton('interrupt', this.buttonRegistry.interrupt, sessionId),
-        this.renderButton('review', this.buttonRegistry.review, sessionId),
-        this.renderButton('build', this.buttonRegistry.build, sessionId)
+      const ids = [
+        'focus',
+        'newProject',
+        'claudeStart',
+        'claudeModal',
+        'refresh',
+        'interrupt',
+        'review',
+        'build'
       ];
+      return ids
+        .filter((id) => this.shouldRenderTerminalButton(id))
+        .map((id) => this.renderButton(id, this.buttonRegistry[id], sessionId));
     } else {
-      return [
-        this.renderButton('focus', this.buttonRegistry.focus, sessionId),
-        this.renderButton('newProject', this.buttonRegistry.newProject, sessionId),
-        this.renderButton('build', this.buttonRegistry.build, sessionId),
-        this.renderButton('interrupt', this.buttonRegistry.interrupt, sessionId),
-        this.renderButton('kill', this.buttonRegistry.kill, sessionId)
-      ];
+      const ids = ['focus', 'newProject', 'build', 'interrupt', 'kill'];
+      return ids
+        .filter((id) => this.shouldRenderTerminalButton(id))
+        .map((id) => this.renderButton(id, this.buttonRegistry[id], sessionId));
     }
   }
 
@@ -3781,6 +3808,8 @@ class ClaudeOrchestrator {
    */
   getServerControlsHTML(sessionId) {
     const isRunning = this.serverStatuses.get(sessionId) === 'running';
+    const visibility = this.getTerminalVisibilityConfig();
+    const showLaunchSettings = visibility.launchSettings !== false;
 
     // Start with server control (start/stop/launch)
     let html = '';
@@ -3795,7 +3824,7 @@ class ClaudeOrchestrator {
           ${this.getDynamicLaunchOptions(sessionId)}
           <option value="custom" selected>Custom...</option>
         </select>
-        <button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>
+        ${showLaunchSettings ? `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>` : ''}
       </div>`;
     }
 
@@ -3840,6 +3869,9 @@ class ClaudeOrchestrator {
   getServerQuickControlsHTMLForClaude(claudeSessionId) {
     const serverSessionId = this.getLinkedServerSessionIdForClaude(claudeSessionId);
     if (!serverSessionId) return '';
+
+    const visibility = this.getTerminalVisibilityConfig();
+    if (visibility.startServerDev === false) return '';
 
     const isRunning = this.serverStatuses.get(serverSessionId) === 'running';
     if (isRunning) {
@@ -5660,6 +5692,7 @@ class ClaudeOrchestrator {
   getGitHubButtons(sessionId) {
     const links = this.githubLinks.get(sessionId) || {};
     let buttons = '';
+    const visibility = this.getTerminalVisibilityConfig();
     
     // Always show branch button (uses current session's git info)
     const session = this.sessions.get(sessionId);
@@ -5675,9 +5708,15 @@ class ClaudeOrchestrator {
         const defaultBranch = session.defaultBranch || 'main';
         const compareUrl = `${session.remoteUrl}/compare/${encodeRef(defaultBranch)}...${branchRef}`;
         
-        buttons += `<button class="control-btn" onclick="window.open('${branchUrl}', '_blank')" title="View Branch on GitHub">🌿</button>`;
-        buttons += `<button class="control-btn" onclick="window.open('${compareUrl}', '_blank')" title="View Branch Diff">📊</button>`;
-        buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${compareUrl}')" title="Advanced Branch Diff">🔍</button>`;
+        if (visibility.viewBranchOnGithub !== false) {
+          buttons += `<button class="control-btn" onclick="window.open('${branchUrl}', '_blank')" title="View Branch on GitHub">🌿</button>`;
+        }
+        if (visibility.viewBranchDiff !== false) {
+          buttons += `<button class="control-btn" onclick="window.open('${compareUrl}', '_blank')" title="View Branch Diff">📊</button>`;
+        }
+        if (visibility.advancedBranchDiff !== false) {
+          buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${compareUrl}')" title="Advanced Branch Diff">🔍</button>`;
+        }
       }
     }
     
@@ -5688,14 +5727,19 @@ class ClaudeOrchestrator {
         console.log('Adding PR button for session:', sessionId, 'URL:', links.pr);
         this.githubLinkLogs.set(sessionId, { pr: links.pr });
       }
-      buttons += `<button class="control-btn" onclick="window.orchestrator.openPRLink('${links.pr}')" title="View PR on GitHub (${links.pr})">📥</button>`;
-      // Add advanced diff viewer button for PRs
-      buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${links.pr}')" title="Advanced Diff View">🔍</button>`;
+      if (visibility.viewPrOnGithub !== false) {
+        buttons += `<button class="control-btn" onclick="window.orchestrator.openPRLink('${links.pr}')" title="View PR on GitHub (${links.pr})">📥</button>`;
+      }
+      if (visibility.advancedDiff !== false) {
+        buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${links.pr}')" title="Advanced Diff View">🔍</button>`;
+      }
     }
     
     // Check for commit URLs
     if (links.commit) {
-      buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${links.commit}')" title="Advanced Diff View">🔍</button>`;
+      if (visibility.advancedDiff !== false) {
+        buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${links.commit}')" title="Advanced Diff View">🔍</button>`;
+      }
     }
     
     return buttons;
@@ -5730,6 +5774,8 @@ class ClaudeOrchestrator {
 			  }
 
 					  getWorktreeInspectorButtonHTML(sessionId) {
+			    const visibility = this.getTerminalVisibilityConfig();
+			    if (visibility.reviewConsole === false) return '';
 			    const session = this.sessions.get(sessionId);
 			    const worktreePath = this.resolveWorktreePathForSession(sessionId, session) || null;
 					    const links = this.githubLinks.get(sessionId) || {};
@@ -5761,15 +5807,22 @@ class ClaudeOrchestrator {
 					    const sid = String(sessionId || '').trim();
 					    if (!sid) return '';
 					    const session = this.sessions.get(sid);
+              const visibility = this.getTerminalVisibilityConfig();
+              const showClose = visibility.closeProcess !== false;
+              const showRemove = visibility.removeWorktree !== false;
               const sidArg = this.escapeOnclickArg(sid);
-					    const stopBtn = `<button class="control-btn terminal-process-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.requestCloseSession(${sidArg})" title="Close terminal process (kills agent/server for this worktree, keeps worktree in workspace)">×</button>`;
+					    const stopBtn = showClose
+                ? `<button class="control-btn terminal-process-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.requestCloseSession(${sidArg})" title="Close terminal process (kills agent/server for this worktree, keeps worktree in workspace)">×</button>`
+                : '';
 
 					    // Reduce UI confusion: show the "remove worktree" button only once per pair (on the Agent tile).
 					    // Server tiles keep their server controls; removal is done from the Agent tile or sidebar.
 					    if (String(session?.type || '').toLowerCase() === 'server') return stopBtn;
 
-					    const removeBtn = `<button class="control-btn danger terminal-session-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.removeWorktreeForSession(${sidArg})" title="Remove worktree from workspace (closes all terminal processes, keeps files on disk)">🗑</button>`;
-					    return `${stopBtn}\n${removeBtn}`;
+					    const removeBtn = showRemove
+                ? `<button class="control-btn danger terminal-session-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.removeWorktreeForSession(${sidArg})" title="Remove worktree from workspace (closes all terminal processes, keeps files on disk)">🗑</button>`
+                : '';
+					    return [stopBtn, removeBtn].filter(Boolean).join('\n');
 					  }
   
   updateServerStatus(sessionId, output) {
