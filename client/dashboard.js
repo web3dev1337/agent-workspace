@@ -8,6 +8,7 @@ class Dashboard {
     this.isVisible = false;
     this.quickLinks = null;
     this._escHandler = null;
+    this.onboardingShown = false;
   }
 
 	  async show() {
@@ -47,10 +48,193 @@ class Dashboard {
 	          this.orchestrator.showToast?.(`Cleaned ${count} stale terminal entries from workspace configs`, 'info');
 	        }
 	      } catch {}
-	      this.render();
-	      this.isVisible = true;
-	    });
+      this.render();
+      this.isVisible = true;
+      this.maybeShowOnboarding();
+    });
 	  }
+
+  getOnboardingState() {
+    return (this.orchestrator.userSettings?.global?.onboarding && typeof this.orchestrator.userSettings.global.onboarding === 'object')
+      ? this.orchestrator.userSettings.global.onboarding
+      : {};
+  }
+
+  async setOnboardingState(patch) {
+    if (!patch || typeof patch !== 'object') return;
+    const current = this.getOnboardingState();
+    const next = { ...current, ...patch };
+    await this.orchestrator.updateGlobalUserSetting('onboarding', next);
+  }
+
+  async fetchOnboardingReport() {
+    try {
+      const res = await fetch('/api/diagnostics/install-wizard');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      this.orchestrator?.showToast?.(`Failed to load onboarding checks: ${String(err?.message || err)}`, 'error');
+      return null;
+    }
+  }
+
+  async maybeShowOnboarding() {
+    if (this.onboardingShown) return;
+    try {
+      if (!this.orchestrator.userSettings) {
+        await this.orchestrator.loadUserSettings();
+      }
+      const state = this.getOnboardingState();
+      if (state.completedAt) return;
+
+      const report = await this.fetchOnboardingReport();
+      if (!report) return;
+
+      const hasBlocking = Number(report?.summary?.blockingCount || 0) > 0;
+      if (state.dismissedAt && !hasBlocking) return;
+
+      this.renderOnboardingModal(report);
+      this.onboardingShown = true;
+    } catch (err) {
+      console.warn('Failed to show onboarding modal:', err);
+    }
+  }
+
+  renderOnboardingModal(report) {
+    const existing = document.getElementById('onboarding-modal');
+    if (existing) existing.remove();
+
+    const steps = Array.isArray(report?.steps) ? report.steps : [];
+    const guidance = Array.isArray(report?.guidance) ? report.guidance : [];
+
+    const claudeStep = steps.find(step => String(step?.id || '') === 'claude-cli');
+    const codexStep = steps.find(step => String(step?.id || '') === 'codex-cli');
+    const agentGuidance = [];
+    if (claudeStep?.status !== 'pass' && codexStep?.status === 'pass') {
+      agentGuidance.push('Claude CLI is missing. Use the ⚡ Codex selector in terminals until Claude is installed.');
+    } else if (claudeStep?.status !== 'pass' && codexStep?.status !== 'pass') {
+      agentGuidance.push('No agent CLI detected. Install Claude or Codex before starting agent sessions.');
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'onboarding-modal';
+    modal.className = 'modal onboarding-modal';
+    modal.innerHTML = `
+      <div class="modal-content onboarding-content">
+        <div class="modal-header">
+          <div>
+            <h2>Welcome to Claude Orchestrator</h2>
+            <div class="onboarding-subtitle">Let’s validate your setup before you start.</div>
+          </div>
+          <button class="close-btn" id="onboarding-close" title="Close">×</button>
+        </div>
+        <div class="onboarding-summary">
+          <span class="onboarding-pill">${Number(report?.summary?.blockingCount || 0)} blocking</span>
+          <span class="onboarding-pill">${Number(report?.summary?.warningCount || 0)} warnings</span>
+          <span class="onboarding-pill">${Number(report?.summary?.totalSteps || 0)} checks</span>
+        </div>
+        <div class="onboarding-steps">
+          ${steps.map((step) => this.renderOnboardingStep(step)).join('')}
+        </div>
+        ${guidance.length || agentGuidance.length ? `
+          <div class="onboarding-guidance">
+            ${(guidance.concat(agentGuidance)).map(item => `<div class="onboarding-guidance-item">${this.orchestrator.escapeHtml(item)}</div>`).join('')}
+          </div>
+        ` : ''}
+        <div class="onboarding-actions">
+          <button class="btn-secondary" id="onboarding-open-diagnostics">Open Diagnostics</button>
+          <button class="btn-secondary" id="onboarding-fix-safe">Auto-fix safe issues</button>
+          <button class="btn-primary" id="onboarding-complete">Mark Complete</button>
+          <button class="btn-secondary" id="onboarding-skip">Skip for now</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelector('#onboarding-close')?.addEventListener('click', () => {
+      this.dismissOnboarding('dismissedAt');
+    });
+    modal.querySelector('#onboarding-skip')?.addEventListener('click', () => {
+      this.dismissOnboarding('dismissedAt');
+    });
+    modal.querySelector('#onboarding-complete')?.addEventListener('click', async () => {
+      await this.dismissOnboarding('completedAt');
+    });
+    modal.querySelector('#onboarding-open-diagnostics')?.addEventListener('click', () => {
+      try {
+        document.getElementById('settings-panel')?.classList?.remove?.('hidden');
+        setTimeout(() => {
+          document.getElementById('diagnostics-output')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+          document.getElementById('diagnostics-refresh')?.click?.();
+        }, 50);
+      } catch {}
+    });
+    modal.querySelector('#onboarding-fix-safe')?.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/diagnostics/first-run/repair-safe', { method: 'POST' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
+        const nextReport = payload?.diagnostics
+          ? { ...report, steps: this.upgradeFirstRunToWizard(payload.diagnostics, report) }
+          : await this.fetchOnboardingReport();
+        if (nextReport) this.refreshOnboardingSteps(nextReport);
+      } catch (err) {
+        this.orchestrator?.showToast?.(`Auto-fix failed: ${String(err?.message || err)}`, 'error');
+      }
+    });
+  }
+
+  renderOnboardingStep(step) {
+    const status = String(step?.status || 'unknown').trim().toLowerCase();
+    const severity = String(step?.severity || '').trim().toLowerCase();
+    const statusClass = status === 'pass' ? 'pass' : (severity === 'blocking' ? 'fail' : 'warn');
+    const message = String(step?.message || '').trim();
+    const help = String(step?.help || '').trim();
+    const command = String(step?.command || '').trim();
+    const title = String(step?.title || step?.name || '').trim();
+
+    return `
+      <div class="onboarding-step ${statusClass}">
+        <div class="onboarding-step-title">${this.orchestrator.escapeHtml(title)}</div>
+        ${message ? `<div class="onboarding-step-message">${this.orchestrator.escapeHtml(message)}</div>` : ''}
+        ${help ? `<div class="onboarding-step-help">${this.orchestrator.escapeHtml(help)}</div>` : ''}
+        ${command ? `<div class="onboarding-step-command"><code>${this.orchestrator.escapeHtml(command)}</code></div>` : ''}
+      </div>
+    `;
+  }
+
+  async dismissOnboarding(stateKey) {
+    await this.setOnboardingState({ [stateKey]: new Date().toISOString() });
+    const modal = document.getElementById('onboarding-modal');
+    if (modal) modal.remove();
+  }
+
+  upgradeFirstRunToWizard(firstRun, report) {
+    const base = report && typeof report === 'object' ? report : {};
+    const steps = Array.isArray(base?.steps) ? base.steps : [];
+    const byId = new Map((firstRun?.checks || []).map((check) => [String(check?.id || '').trim(), check]));
+    return steps.map((step) => {
+      const check = byId.get(String(step?.id || '').trim());
+      if (!check) return step;
+      return {
+        ...step,
+        status: check.status,
+        severity: check.severity,
+        message: check.message,
+        details: check.details
+      };
+    });
+  }
+
+  refreshOnboardingSteps(report) {
+    const modal = document.getElementById('onboarding-modal');
+    if (!modal) return;
+    const stepsContainer = modal.querySelector('.onboarding-steps');
+    if (!stepsContainer) return;
+    const steps = Array.isArray(report?.steps) ? report.steps : [];
+    stepsContainer.innerHTML = steps.map((step) => this.renderOnboardingStep(step)).join('');
+  }
 
   hide() {
     const dashboard = document.getElementById('dashboard-container');

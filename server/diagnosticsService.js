@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const util = require('util');
 const { execFile } = require('child_process');
+const { loadTrelloCredentials } = require('./taskProviders/trelloCredentials');
 
 const execFileAsync = util.promisify(execFile);
 
@@ -310,6 +311,11 @@ function buildInstallWizardReport(firstRunDiagnostics, baseDiagnostics) {
       defaultCommand: 'gh auth login && gh auth status'
     }),
     toInstallWizardStep({
+      check: byId.get('trello-credentials'),
+      title: 'Configure Trello credentials',
+      help: 'Optional: required only for Trello task workflows.'
+    }),
+    toInstallWizardStep({
       check: byId.get('node-pty-loaded'),
       title: 'Repair terminal runtime (node-pty)',
       help: 'If this fails, the terminal grid cannot attach PTYs reliably.'
@@ -381,6 +387,7 @@ async function collectFirstRunDiagnostics(options = {}) {
   const orchestratorDir = path.join(homeDir, '.orchestrator');
   const workspacesDir = path.join(orchestratorDir, 'workspaces');
   const githubRoot = path.join(homeDir, 'GitHub');
+  const trelloCreds = loadTrelloCredentials();
 
   const git = findToolResult(data, 'git');
   const gh = findToolResult(data, 'gh');
@@ -492,6 +499,16 @@ async function collectFirstRunDiagnostics(options = {}) {
         command: 'gh auth login'
       }
     ]
+  }));
+
+  checks.push(createCheck({
+    id: 'trello-credentials',
+    name: 'Trello credentials',
+    pass: !!trelloCreds,
+    severity: 'warning',
+    passMessage: trelloCreds ? `Configured (${trelloCreds.source})` : 'Trello configured',
+    failMessage: 'Trello credentials not found (Trello tasks disabled)',
+    details: trelloCreds ? null : 'Set TRELLO_API_KEY/TRELLO_TOKEN or ~/.trello-credentials'
   }));
 
   checks.push(createCheck({
