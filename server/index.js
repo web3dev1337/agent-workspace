@@ -3249,16 +3249,12 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
 
     // Close associated sessions even when this workspace isn't currently active.
     // This prevents orphan PTYs/recovery entries when users manage worktrees from other tabs/views.
-    const relatedSessionIds = new Set([
-      ...sessionManager.getSessionIdsForWorktree({
+    const relatedSessionIds = new Set(
+      sessionManager.getSessionIdsForWorktree({
         workspaceId,
         worktreeKey: parsedWorktree.key || parsedWorktree.worktreeId
-      }),
-      ...sessionManager.getSessionIdsForWorktree({
-        workspaceId,
-        worktreeKey: parsedWorktree.worktreeId
       })
-    ]);
+    );
     let recoveryMatchedSessionIds = [];
     try {
       await sessionRecoveryService.loadWorkspaceState(workspaceId);
