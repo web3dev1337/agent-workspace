@@ -171,7 +171,7 @@ class UserSettingsService {
               tierFilters: false,
               focusTier2: false,
               focusSwap: false,
-              tasks: false,
+              tasks: true,
               ports: false,
               commander: true,
               recommendations: false,
@@ -455,6 +455,21 @@ class UserSettingsService {
         rc.sections = sections;
         rc.migrations = { ...migrations, filesDefaultOff: true };
         ui.reviewConsole = rc;
+        changed = true;
+      }
+
+      const uiMigrations = (ui.migrations && typeof ui.migrations === 'object') ? { ...ui.migrations } : {};
+      if (!uiMigrations.headerTasksDefaultOn) {
+        const visibility = (ui.visibility && typeof ui.visibility === 'object') ? { ...ui.visibility } : {};
+        const header = (visibility.header && typeof visibility.header === 'object') ? { ...visibility.header } : {};
+        if (header.tasks !== true) {
+          header.tasks = true;
+          visibility.header = header;
+          ui.visibility = visibility;
+          changed = true;
+        }
+        uiMigrations.headerTasksDefaultOn = true;
+        ui.migrations = uiMigrations;
         changed = true;
       }
     }
