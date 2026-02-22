@@ -128,13 +128,18 @@ function terminalMatchesWorktree(terminal, parsedWorktree) {
   if (!targetKey && !targetWorktree) return false;
 
   const identity = parseTerminalIdentity(terminal);
-  if (identity.composedKey && targetKey && identity.composedKey === targetKey) return true;
-  if (targetRepo && targetWorktree) {
+  const repoScoped = !!targetRepo;
+
+  if (targetKey) {
+    if (identity.composedKey && identity.composedKey === targetKey) return true;
+    if (identity.terminalId === targetKey) return true;
+    if (identity.terminalKey === targetKey) return true;
+  }
+
+  if (repoScoped && targetWorktree) {
     return identity.repositoryName === targetRepo && identity.worktreeId === targetWorktree;
   }
-  if (targetWorktree && identity.worktreeId === targetWorktree) return true;
-  if (targetKey && identity.terminalId === targetKey) return true;
-  if (targetKey && identity.terminalKey === targetKey) return true;
+  if (!repoScoped && targetWorktree && identity.worktreeId === targetWorktree) return true;
   return false;
 }
 
@@ -166,18 +171,20 @@ function sessionRecordMatchesWorktree(sessionId, record = {}, parsedWorktree) {
   );
   const composedKey = repositoryName && worktreeId ? `${repositoryName}-${worktreeId}` : '';
 
+  const repoScoped = !!targetRepo;
+
   if (composedKey && targetKey && composedKey === targetKey) return true;
-  if (targetRepo && targetWorktree) {
+  if (targetKey && sidKey === targetKey) return true;
+  if (repoScoped && targetWorktree) {
     return repositoryName === targetRepo && worktreeId === targetWorktree;
   }
-  if (targetWorktree && worktreeId === targetWorktree) return true;
-  if (targetKey && sidKey === targetKey) return true;
+  if (!repoScoped && targetWorktree && worktreeId === targetWorktree) return true;
 
   if (targetKey && sidKey) {
     const keyExpr = new RegExp(`(^|[-_/])${escapeRegex(targetKey)}($|[-_/])`, 'i');
     if (keyExpr.test(sidKey)) return true;
   }
-  if (targetWorktree && sidKey) {
+  if (!repoScoped && targetWorktree && sidKey) {
     const worktreeExpr = new RegExp(`(^|[-_/])${escapeRegex(targetWorktree)}($|[-_/])`, 'i');
     if (worktreeExpr.test(sidKey)) return true;
   }
