@@ -508,6 +508,13 @@ See "Socket.IO Event System" section above for complete event reference.
 - Rate limiting for API endpoints
 - File system access restrictions
 
+### Release Readiness Docs
+- PUBLIC_RELEASE_AUDIT_2026-02-04.md - Original public-release security + privacy audit
+- PUBLIC_RELEASE_AUDIT_2026-02-05.md - Updated audit after hardening
+- PUBLIC_RELEASE_AUDIT_2026-02-06.md - Repeatable audit with commands
+- OPEN_SOURCE_READINESS_REPORT_2026-02-22.md - Consolidated findings + recommendations for open-source release
+- POST_REWRITE_LOCAL_RECOVERY_2026-02-22.md - Local reset and recovery guidance after history rewrite
+
 ## Critical Patterns
 
 ```
