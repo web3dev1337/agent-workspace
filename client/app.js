@@ -13759,15 +13759,24 @@ class ClaudeOrchestrator {
     console.log('Applying session recovery:', recovery);
     const recoverySettings = this.userSettings?.global?.sessionRecovery || {};
     const resumeConversation = recoverySettings.resumeConversation !== false;
+    const resumeCwd = recoverySettings.resumeCwd !== false;
+    const normalizeMode = (mode, fallback) => {
+      const normalized = String(mode || '').trim().toLowerCase();
+      if (normalized === 'fresh' || normalized === 'continue' || normalized === 'resume') {
+        return normalized;
+      }
+      return fallback;
+    };
 
     // Track which sessions we're recovering so auto-start skips them
     this.recoveredSessions = new Set();
 
     for (const session of recovery.sessions) {
-      const { sessionId, lastCwd, lastAgent, lastConversationId } = session;
+      const { sessionId, lastCwd, lastAgent, lastConversationId, lastMode } = session;
 
       // Find the terminal for this session
-      if (!this.sessions.has(sessionId)) {
+      const sessionState = this.sessions.get(sessionId);
+      if (!sessionState) {
         console.log(`Session ${sessionId} not found, skipping recovery`);
         continue;
       }
@@ -13777,24 +13786,53 @@ class ClaudeOrchestrator {
 
       console.log(`Recovering session ${sessionId}:`, { lastCwd, lastAgent, lastConversationId });
 
-      // Start agent with resume if conversation available and it's a claude terminal
-      if (resumeConversation && lastConversationId && lastAgent === 'claude' && sessionId.includes('-claude')) {
-        console.log(`Resuming conversation: ${lastConversationId} in ${lastCwd}`);
+      const sessionType = String(sessionState?.type || '').trim().toLowerCase();
+      const recoveryCwd = resumeCwd ? lastCwd : null;
 
-        // Use recovery-specific skipPermissions setting (defaults to true)
+      if (lastAgent === 'claude' && (sessionType === 'claude' || sessionId.includes('-claude'))) {
         const skipPermissions = recoverySettings.skipPermissions !== false;
+        if (resumeConversation && lastConversationId) {
+          console.log(`Resuming conversation: ${lastConversationId} in ${lastCwd}`);
+          this.socket.emit('start-claude', {
+            sessionId,
+            options: {
+              mode: 'resume',
+              resumeId: lastConversationId,
+              skipPermissions: skipPermissions,
+              cwd: recoveryCwd
+            }
+          });
+        } else {
+          let mode = normalizeMode(lastMode, 'continue');
+          if (mode === 'resume') mode = 'continue';
+          console.log(`Recovering Claude session ${sessionId} with mode: ${mode}`);
+          this.socket.emit('start-claude', {
+            sessionId,
+            options: {
+              mode,
+              skipPermissions: skipPermissions,
+              cwd: recoveryCwd
+            }
+          });
+        }
 
-        this.socket.emit('start-claude', {
-          sessionId,
-          options: {
-            mode: 'resume',
-            resumeId: lastConversationId,
-            skipPermissions: skipPermissions,
-            cwd: lastCwd
-          }
-        });
+        await new Promise(resolve => setTimeout(resolve, 200));
+        continue;
+      }
 
-        // Small delay between sessions
+      if (lastAgent === 'codex') {
+        let mode = normalizeMode(lastMode, 'continue');
+        if (mode === 'resume') mode = 'continue';
+        console.log(`Recovering Codex session ${sessionId} with mode: ${mode}`);
+        const config = {
+          agentId: 'codex',
+          mode,
+          flags: ['yolo']
+        };
+        if (recoveryCwd) {
+          config.cwd = recoveryCwd;
+        }
+        await this.startAgentWithConfig(sessionId, config);
         await new Promise(resolve => setTimeout(resolve, 200));
       }
     }

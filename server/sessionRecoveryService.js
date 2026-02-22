@@ -198,7 +198,8 @@ class SessionRecoveryService {
    */
   updateAgent(workspaceId, sessionId, agent, modeOrMeta) {
     const updates = {
-      lastAgent: agent  // 'claude', 'codex', 'opencode', etc.
+      lastAgent: agent,  // 'claude', 'codex', 'opencode', etc.
+      lastAgentActive: true
     };
 
     if (modeOrMeta && typeof modeOrMeta === 'object') {
@@ -216,12 +217,27 @@ class SessionRecoveryService {
   clearAgent(workspaceId, sessionId) {
     return this.updateSession(workspaceId, sessionId, {
       lastAgent: null,
+      lastAgentActive: false,
       lastMode: null,
       lastAgentCommand: null,
       lastAgentCwd: null,
       lastConversationId: null,
       lastConversationPath: null
     });
+  }
+
+  /**
+   * Mark agent as inactive without losing the last agent metadata.
+   * Keeps recovery info intact while allowing the UI to show "no agent".
+   */
+  markAgentInactive(workspaceId, sessionId, meta = null) {
+    const updates = {
+      lastAgentActive: false
+    };
+    if (meta && typeof meta === 'object') {
+      Object.assign(updates, meta);
+    }
+    return this.updateSession(workspaceId, sessionId, updates);
   }
 
   /**
@@ -333,21 +349,22 @@ class SessionRecoveryService {
         }
       }
 
-      // Only include Claude sessions with valid conversations
-      // Always include server sessions
+      const safeConversationId = (s.lastAgent === 'claude' && conversationValid)
+        ? s.lastConversationId
+        : null;
       if (s.lastAgent === 'claude' && !conversationValid) {
-        logger.debug('Skipping session with invalid/empty conversation', {
+        logger.debug('Recovery session missing valid conversation, falling back to continue', {
           sessionId: s.sessionId,
           conversationId: s.lastConversationId
         });
-        continue;
       }
 
       recoveryData.push({
         sessionId: s.sessionId,
         lastCwd: conversationCwd || s.worktreePath,
         lastAgent: s.lastAgent,
-        lastConversationId: s.lastConversationId,
+        lastMode: s.lastMode,
+        lastConversationId: safeConversationId,
         worktreePath: s.worktreePath,
         lastServerCommand: s.lastServerCommand,
         updatedAt: s.updatedAt
