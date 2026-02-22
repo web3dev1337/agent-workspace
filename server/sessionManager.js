@@ -14,6 +14,7 @@ const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 const { UserSettingsService } = require('./userSettingsService');
 const { WorktreeHelper } = require('./worktreeHelper');
 const sessionRecoveryService = require('./sessionRecoveryService');
+const { parseWorktreeKey } = require('./lifecyclePolicyService');
 const {
   getShellKind,
   quoteForShell,
@@ -2562,8 +2563,15 @@ class SessionManager extends EventEmitter {
       ? new Set(sessionTypes.map((type) => String(type || '').trim().toLowerCase()).filter(Boolean))
       : null;
 
-    const keyTokenMatch = keyRaw.match(/(work\d+|main|master)$/i);
-    const keyToken = String(keyTokenMatch?.[1] || keyRaw).trim().toLowerCase();
+    const parsedKey = parseWorktreeKey(keyRaw);
+    const repoScoped = Boolean(parsedKey?.repositoryName);
+    const keyCandidates = new Set([keyRaw].filter(Boolean));
+    if (parsedKey?.repositoryName && parsedKey?.worktreeId) {
+      keyCandidates.add(`${parsedKey.repositoryName}-${parsedKey.worktreeId}`);
+    }
+    if (!repoScoped && parsedKey?.worktreeId) {
+      keyCandidates.add(String(parsedKey.worktreeId).trim().toLowerCase());
+    }
     const out = [];
 
     for (const [sessionId, session] of this.getAllSessionEntries({ workspaceId })) {
@@ -2581,13 +2589,16 @@ class SessionManager extends EventEmitter {
         ? `${sessionRepoName}-${sessionWorktreeId}`
         : '';
 
-      const matches = (
-        sidLower === keyRaw
-        || sidLower.includes(`${keyRaw}-`)
-        || (sessionWorktreeId && sessionWorktreeId === keyRaw)
-        || (composedKey && composedKey === keyRaw)
-        || (sessionWorktreeId && sessionWorktreeId === keyToken)
-      );
+      let matches = false;
+      for (const candidate of keyCandidates) {
+        if (!candidate) continue;
+        if (sidLower === candidate || sidLower.includes(`${candidate}-`)) {
+          matches = true;
+          break;
+        }
+      }
+      if (!matches && composedKey && keyCandidates.has(composedKey)) matches = true;
+      if (!matches && !repoScoped && sessionWorktreeId && keyCandidates.has(sessionWorktreeId)) matches = true;
 
       if (!matches) continue;
       out.push(sid);
