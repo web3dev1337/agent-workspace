@@ -873,7 +873,7 @@ class SessionManager extends EventEmitter {
           // make the UI think an AI is still attached/running.
           if (workspaceId) {
             try {
-              sessionRecoveryService.clearAgent(workspaceId, sessionId);
+              sessionRecoveryService.markAgentInactive(workspaceId, sessionId);
             } catch {
               // best-effort
             }
@@ -1988,7 +1988,10 @@ class SessionManager extends EventEmitter {
     const recovery = workspaceId
       ? sessionRecoveryService.getSession(workspaceId, sessionId)
       : null;
-    const agent = recovery?.lastAgent || (type === 'codex' ? 'codex' : null);
+    const agentActive = recovery?.lastAgentActive !== false;
+    const agent = agentActive
+      ? (recovery?.lastAgent || (type === 'codex' ? 'codex' : null))
+      : null;
 
     const newStatus = this.statusDetector.detectStatus(sessionId, session.buffer || '', { agent });
     if (newStatus === 'idle' && workspaceId && recovery?.lastAgent) {
@@ -1998,7 +2001,7 @@ class SessionManager extends EventEmitter {
       const recentAll = this.statusDetector.getLastNonEmptyLines(recentLines, 6).join('\n');
       if (this.statusDetector.hasExplicitShellIndicator(recentAll, lastNonEmptyLine)) {
         try {
-          sessionRecoveryService.clearAgent(workspaceId, sessionId);
+          sessionRecoveryService.markAgentInactive(workspaceId, sessionId);
         } catch {
           // best-effort cleanup; status update still proceeds
         }
@@ -2153,7 +2156,7 @@ class SessionManager extends EventEmitter {
         worktreeId: session.worktreeId,
         repositoryName: session.repositoryName,  // For mixed-repo workspaces
         repositoryType: session.repositoryType,  // For dynamic launch options
-        agent: recovery?.lastAgent || null,
+        agent: recovery?.lastAgentActive === false ? null : (recovery?.lastAgent || null),
         agentMode: recovery?.lastMode || null,
         lastActivity: session.lastActivity
       };
@@ -2670,7 +2673,7 @@ class SessionManager extends EventEmitter {
       const workspaceId = session.workspace || null;
       if (workspaceId) {
         try {
-          sessionRecoveryService.clearAgent(workspaceId, sessionId);
+          sessionRecoveryService.markAgentInactive(workspaceId, sessionId);
         } catch {
           // best-effort
         }
