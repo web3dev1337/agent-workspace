@@ -116,7 +116,7 @@
           "tierFilters": false,
           "focusTier2": false,
           "focusSwap": false,
-          "tasks": false,
+          "tasks": true,
           "ports": false,
           "commander": true,
           "recommendations": false,
