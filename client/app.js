@@ -1444,6 +1444,11 @@ class ClaudeOrchestrator {
             // Pre-fetch worktree-specific configs for all terminals
             await this.prefetchWorktreeConfigs(workspace, sessions);
 
+            // CRITICAL: Set lastSessionsWorkspaceId BEFORE handleInitialSessions so that
+            // it treats this as a same-workspace refresh and preserves the worktree
+            // visibility state that was just restored from the tab (fix #786).
+            this.lastSessionsWorkspaceId = workspace.id;
+
             this.handleInitialSessions(sessions);
 
             // Update workspace switcher
