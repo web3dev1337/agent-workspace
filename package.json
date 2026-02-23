@@ -5,7 +5,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "npm run dev",
-    "dev:server": "node scripts/ensure-pty.js && nodemon server/index.js",
+    "dev:server": "node scripts/ensure-pty.js && node scripts/dev-server.js",
     "dev:client": "node client/dev-server.js",
     "dev:diff": "cd diff-viewer && npm run dev",
     "tauri": "tauri",

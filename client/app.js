@@ -2444,6 +2444,14 @@ class ClaudeOrchestrator {
       });
     }
 
+    // Server-only file watching (server-persisted, requires dev:server restart)
+    const serverOnlyFileWatching = document.getElementById('server-only-file-watching');
+    if (serverOnlyFileWatching) {
+      serverOnlyFileWatching.addEventListener('change', async (e) => {
+        await this.updateGlobalUserSetting('serverOnlyFileWatching', !!e.target.checked);
+      });
+    }
+
     // Discord services auto-start (server-persisted)
     const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
 	    if (discordAutoEnsure) {
@@ -14994,6 +15002,11 @@ class ClaudeOrchestrator {
       simpleModeShowHints.checked = this.userSettings.global?.ui?.simpleMode?.showHints !== false;
     }
     this.applySimpleModeConfig();
+
+    const serverOnlyFileWatching = document.getElementById('server-only-file-watching');
+    if (serverOnlyFileWatching) {
+      serverOnlyFileWatching.checked = this.userSettings.global?.serverOnlyFileWatching === true;
+    }
 
     const discordAutoEnsure = document.getElementById('discord-auto-ensure-services');
     if (discordAutoEnsure) {

@@ -11,6 +11,7 @@
       "delay": 500
     },
     "terminal": {},
+    "serverOnlyFileWatching": false,
     "scheduler": {
       "enabled": false,
       "tickSeconds": 30,
