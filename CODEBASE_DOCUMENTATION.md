@@ -67,6 +67,7 @@ server/threadService.js            - Workspace/project thread persistence (`~/.o
 ├─ New chat reuse: thread creation prefers an existing repo worktree without an active thread before allocating a new `workN`
 ├─ Project aggregation: `listProjects()` returns repository-level chat rollups across one/many workspaces
 └─ Lifecycle: create/list/close/archive + session association updates
+server/projectBoardService.js      - Local projects kanban board persistence (`~/.orchestrator/project-board.json`) + APIs (`GET /api/projects/board`, `POST /api/projects/board/move`)
 server/discordIntegrationService.js - Discord queue orchestration bridge (Services workspace ensure/start, signed queue verification, invocation idempotency, JSONL audit log for processing dispatch/replay/fail paths)
 server/intentHaikuService.js       - Session intent summarizer for context-switch hints (optional Anthropic Haiku model, heuristic fallback)
 server/threadWorktreeSelection.js  - Repository/worktree normalization + reuse-first candidate selection for thread creation
@@ -183,6 +184,8 @@ client/greenfield-wizard.js        - New-project wizard (greenfield creation flo
 ├─ Workspace-context suggestion (repo type -> recommended template/framework defaults)
 └─ Full-screen wizard UI for project scaffolding + workspace creation
 
+client/projects-board.js           - Projects kanban board modal (drag/drop projects between Backlog/Active/Ship Next/Done/Archived; persists via `/api/projects/board`)
+
 client/workspace-tab-manager.js    - Multi-workspace tab management (NEW)
 ├─ Features: Browser-like tabs for multiple workspaces
 ├─ Manages: Tab creation, switching, state preservation
@@ -193,6 +196,8 @@ client/workspace-tab-manager.js    - Multi-workspace tab management (NEW)
 client/styles/tabs.css             - Tab bar styling
 ├─ Features: Tab UI, badges, animations
 └─ Responsive: Mobile and desktop layouts
+
+client/styles/projects-board.css   - Projects Board modal styling
 
 client/plugin-host.js              - Client plugin runtime for UI slots/actions
 ├─ Loads: `/api/plugins/client-surface` slot actions with cache/refresh support
