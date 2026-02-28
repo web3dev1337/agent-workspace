@@ -1804,6 +1804,15 @@ class ClaudeOrchestrator {
 	      });
 	    }
 
+	    const projectsBoardBtn = document.getElementById('projects-board-btn');
+	    if (projectsBoardBtn) {
+	      projectsBoardBtn.addEventListener('click', () => {
+	        try {
+	          this.projectsBoardUI?.show?.();
+	        } catch {}
+	      });
+	    }
+
 	    document.getElementById('view-all').addEventListener('click', () => {
 			      this.setViewMode('all');
 			      if (this.isMobileLayout()) this.closeSidebar();
@@ -31062,4 +31071,10 @@ let orchestrator;
 document.addEventListener('DOMContentLoaded', () => {
   orchestrator = new ClaudeOrchestrator();
   window.orchestrator = orchestrator; // Make globally available
+  try {
+    if (window.ProjectsBoardUI && !window.projectsBoardUI) {
+      window.projectsBoardUI = new window.ProjectsBoardUI(orchestrator);
+      orchestrator.projectsBoardUI = window.projectsBoardUI;
+    }
+  } catch {}
 });

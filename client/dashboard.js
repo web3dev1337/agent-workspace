@@ -179,6 +179,7 @@ class Dashboard {
               <div class="dashboard-summary-actions">
                 <button class="dashboard-topbar-btn" id="dashboard-open-prs" title="Open Pull Requests">🔀 PRs</button>
                 <button class="dashboard-topbar-btn" id="dashboard-open-project-health" title="Open per-project health dashboard">🩺 Health</button>
+                <button class="dashboard-topbar-btn" id="dashboard-open-project-board" title="Open projects kanban board">🗂 Board</button>
               </div>
             </div>
           ` : '',
@@ -420,6 +421,12 @@ class Dashboard {
       e.preventDefault();
       try {
         this.showProjectHealthOverlay();
+      } catch {}
+    });
+    document.getElementById('dashboard-open-project-board')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      try {
+        this.orchestrator?.projectsBoardUI?.show?.();
       } catch {}
     });
     document.getElementById('dashboard-open-advice')?.addEventListener('click', (e) => {
