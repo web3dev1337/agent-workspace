@@ -61,12 +61,15 @@
   flex: 1;
   min-height: 0;
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 6px;
 }
 
 .projects-board-column {
   --projects-col-expanded: var(--projects-board-column-width);
   --projects-col-collapsed: 56px;
+  --projects-card-columns: 1;
+  --projects-card-rows: 1;
   width: var(--projects-col-expanded);
   min-width: var(--projects-col-expanded);
   display: flex;
@@ -133,6 +136,20 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.projects-board-columns.projects-board-expand .projects-board-column-body {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(var(--projects-card-rows, 1), min-content);
+  grid-template-columns: repeat(var(--projects-card-columns, 1), minmax(220px, 1fr));
+  align-content: start;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.projects-board-columns.projects-board-grid .projects-board-card {
+  height: fit-content;
 }
 
 .projects-board-column.is-collapsed {

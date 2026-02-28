@@ -19,6 +19,8 @@ class ProjectsBoardUI {
     this.hideForks = false;
     this.githubRepos = [];
     this._escHandler = null;
+    this._wrapExpandResizeHandler = null;
+    this._wrapExpandResizeDebounce = null;
   }
 
   async show() {
@@ -30,6 +32,7 @@ class ProjectsBoardUI {
     modal.classList.remove('hidden');
     this.visible = true;
     await this.refresh({ force: false });
+    this.ensureWrapExpandHandler();
 
     if (!this._escHandler) {
       this._escHandler = (e) => {
@@ -48,6 +51,15 @@ class ProjectsBoardUI {
     if (this._escHandler) {
       document.removeEventListener('keydown', this._escHandler);
       this._escHandler = null;
+    }
+
+    if (this._wrapExpandResizeHandler) {
+      window.removeEventListener('resize', this._wrapExpandResizeHandler);
+      this._wrapExpandResizeHandler = null;
+    }
+    if (this._wrapExpandResizeDebounce) {
+      clearTimeout(this._wrapExpandResizeDebounce);
+      this._wrapExpandResizeDebounce = null;
     }
   }
 
@@ -70,7 +82,7 @@ class ProjectsBoardUI {
           <button type="button" class="button-secondary" id="projects-board-refresh" title="Refresh repos + board">↻ Refresh</button>
         </div>
         <div class="projects-board-meta" id="projects-board-meta"></div>
-        <div class="projects-board-columns" id="projects-board-columns"></div>
+        <div class="projects-board-columns projects-board-expand projects-board-grid" id="projects-board-columns"></div>
       </div>
     `;
 
@@ -345,6 +357,101 @@ class ProjectsBoardUI {
         </section>
       `;
     }).join('');
+
+    this.applyWrapExpandColumns();
+  }
+
+  ensureWrapExpandHandler() {
+    if (this._wrapExpandResizeHandler) return;
+    this._wrapExpandResizeHandler = () => {
+      if (this._wrapExpandResizeDebounce) clearTimeout(this._wrapExpandResizeDebounce);
+      this._wrapExpandResizeDebounce = setTimeout(() => this.applyWrapExpandColumns(), 120);
+    };
+    window.addEventListener('resize', this._wrapExpandResizeHandler);
+  }
+
+  applyWrapExpandColumns() {
+    if (!this.visible) return;
+    const modal = document.getElementById(this.modalId);
+    if (!modal) return;
+    const boardEl = modal.querySelector('#projects-board-columns');
+    if (!boardEl) return;
+
+    const columns = Array.from(boardEl.querySelectorAll('.projects-board-column'));
+
+    const computeForColumn = (col) => {
+      if (!col || col.classList.contains('is-collapsed')) return;
+      const cardsContainer = col.querySelector('.projects-board-column-body');
+      const header = col.querySelector('.projects-board-column-header');
+      if (!cardsContainer || !header) return;
+
+      col.style.width = '';
+      col.style.minWidth = '';
+      const baseWidth = col.getBoundingClientRect().width;
+
+      const cards = Array.from(cardsContainer.querySelectorAll('.projects-board-card'));
+      const cardCount = cards.length;
+      if (cardCount === 0) {
+        col.style.setProperty('--projects-card-columns', '1');
+        col.style.setProperty('--projects-card-rows', '1');
+        return;
+      }
+
+      const containerHeight = cardsContainer.clientHeight;
+      if (!containerHeight || containerHeight < 40) return;
+
+      const styles = window.getComputedStyle(cardsContainer);
+      const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
+      const columnGap = Number.parseFloat(styles.columnGap || styles.gap || '0') || 0;
+      const padLeft = Number.parseFloat(styles.paddingLeft || '0') || 0;
+      const padRight = Number.parseFloat(styles.paddingRight || '0') || 0;
+      const sample = cards.slice(0, Math.min(6, cardCount));
+      const heights = sample.map(el => el.getBoundingClientRect().height).filter(Boolean);
+      const avg = heights.length ? (heights.reduce((a, b) => a + b, 0) / heights.length) : 80;
+      const denom = Math.max(1, avg + rowGap);
+      let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
+      rowsFit = Math.min(rowsFit, cardCount);
+
+      const apply = (rows) => {
+        const r = Math.max(1, Number(rows) || 1);
+        const cols = Math.max(1, Math.ceil(cardCount / r));
+        col.style.setProperty('--projects-card-rows', String(r));
+        col.style.setProperty('--projects-card-columns', String(cols));
+
+        if (cols <= 1) {
+          col.style.width = '';
+          col.style.minWidth = '';
+        } else {
+          const minCardWidth = 220;
+          const cardsWidth = (cols * minCardWidth) + Math.max(0, cols - 1) * columnGap;
+          const target = Math.max(baseWidth, cardsWidth + padLeft + padRight);
+          col.style.width = `${Math.round(target)}px`;
+          col.style.minWidth = `${Math.round(target)}px`;
+        }
+      };
+
+      apply(rowsFit);
+
+      for (let attempt = 0; attempt < 24; attempt++) {
+        void cardsContainer.offsetHeight;
+        if (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1) break;
+        rowsFit = Math.max(1, rowsFit - 1);
+        apply(rowsFit);
+      }
+    };
+
+    for (const col of columns) {
+      if (col.classList.contains('is-collapsed')) {
+        col.style.removeProperty('--projects-card-columns');
+        col.style.removeProperty('--projects-card-rows');
+        col.style.width = '';
+        col.style.minWidth = '';
+      }
+    }
+
+    window.requestAnimationFrame(() => {
+      columns.forEach(computeForColumn);
+    });
   }
 
   async ensureGitHubRepos({ force = false } = {}) {
