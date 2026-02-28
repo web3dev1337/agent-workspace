@@ -1422,14 +1422,37 @@ app.post('/api/projects/board/move', express.json(), async (req, res) => {
   try {
     const projectKey = String(req.body?.projectKey || '').trim();
     const columnId = String(req.body?.columnId || '').trim();
+    const orderByColumn = req.body?.orderByColumn && typeof req.body.orderByColumn === 'object' ? req.body.orderByColumn : null;
     if (!projectKey) return res.status(400).json({ ok: false, error: 'projectKey is required' });
     if (!columnId) return res.status(400).json({ ok: false, error: 'columnId is required' });
 
-    const board = await projectBoardService.moveProject({ projectKey, columnId });
+    const board = await projectBoardService.moveProject({ projectKey, columnId, orderByColumn });
     res.json({ ok: true, projectKey, columnId: String(columnId || '').trim().toLowerCase(), board });
   } catch (error) {
     logger.error('Failed to move project on board', { error: error.message, stack: error.stack });
     res.status(400).json({ ok: false, error: error.message || 'Failed to move project' });
+  }
+});
+
+app.post('/api/projects/board/patch', express.json(), async (req, res) => {
+  try {
+    const collapsedColumnIds = Array.isArray(req.body?.collapsedColumnIds) ? req.body.collapsedColumnIds : undefined;
+    const projectKey = req.body?.projectKey !== undefined ? String(req.body.projectKey || '').trim() : undefined;
+    const live = req.body?.live;
+
+    const hasLiveUpdate = live === true || live === false;
+    if (projectKey !== undefined && !projectKey) return res.status(400).json({ ok: false, error: 'projectKey is required' });
+
+    const board = await projectBoardService.patchBoard({
+      collapsedColumnIds,
+      projectKey: hasLiveUpdate ? projectKey : undefined,
+      live: hasLiveUpdate ? live : undefined
+    });
+
+    res.json({ ok: true, board });
+  } catch (error) {
+    logger.error('Failed to patch project board', { error: error.message, stack: error.stack });
+    res.status(400).json({ ok: false, error: error.message || 'Failed to patch project board' });
   }
 });
 

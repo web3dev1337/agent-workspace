@@ -4,17 +4,20 @@ class ProjectsBoardUI {
     this.modalId = 'projects-board-modal';
     this.visible = false;
     this.columns = [
+      { id: 'archived', label: 'Archive' },
+      { id: 'someday', label: 'Maybe One Day' },
       { id: 'backlog', label: 'Backlog' },
       { id: 'active', label: 'Active' },
       { id: 'next', label: 'Ship Next' },
-      { id: 'done', label: 'Done' },
-      { id: 'archived', label: 'Archived' }
+      { id: 'done', label: 'Done' }
     ];
-    this.board = { projectToColumn: {} };
+    this.board = { projectToColumn: {}, orderByColumn: {}, collapsedColumnIds: [], tagsByProjectKey: {} };
     this.storePath = '';
     this.projects = [];
     this.filter = '';
     this.dragProjectKey = null;
+    this.hideForks = false;
+    this.githubRepos = [];
     this._escHandler = null;
   }
 
@@ -60,6 +63,10 @@ class ProjectsBoardUI {
         </div>
         <div class="projects-board-toolbar">
           <input id="projects-board-filter" class="search-input" type="search" placeholder="Filter projects…" autocomplete="off" />
+          <label class="projects-board-toggle" title="Hide forked repositories (best-effort from GitHub)">
+            <input type="checkbox" id="projects-board-hide-forks" />
+            Hide forks
+          </label>
           <button type="button" class="button-secondary" id="projects-board-refresh" title="Refresh repos + board">↻ Refresh</button>
         </div>
         <div class="projects-board-meta" id="projects-board-meta"></div>
@@ -91,6 +98,26 @@ class ProjectsBoardUI {
       });
     }
 
+    const hideForksEl = modal.querySelector('#projects-board-hide-forks');
+    if (hideForksEl) {
+      try {
+        const raw = localStorage.getItem('projects-board-hide-forks');
+        this.hideForks = raw === 'true';
+        hideForksEl.checked = this.hideForks;
+      } catch {}
+
+      hideForksEl.addEventListener('change', async (e) => {
+        this.hideForks = !!e.target.checked;
+        try {
+          localStorage.setItem('projects-board-hide-forks', this.hideForks ? 'true' : 'false');
+        } catch {}
+        if (this.hideForks) {
+          await this.ensureGitHubRepos({ force: false });
+        }
+        this.render();
+      });
+    }
+
     const columnsEl = modal.querySelector('#projects-board-columns');
     if (columnsEl) {
       columnsEl.addEventListener('dragstart', (e) => this.onDragStart(e));
@@ -98,6 +125,7 @@ class ProjectsBoardUI {
       columnsEl.addEventListener('dragover', (e) => this.onDragOver(e));
       columnsEl.addEventListener('dragleave', (e) => this.onDragLeave(e));
       columnsEl.addEventListener('drop', (e) => this.onDrop(e));
+      columnsEl.addEventListener('click', (e) => this.onClick(e));
     }
   }
 
@@ -115,8 +143,14 @@ class ProjectsBoardUI {
         this.orchestrator?.getScannedRepos?.({ force }) || Promise.resolve([])
       ]);
 
-      const board = boardRes?.board && typeof boardRes.board === 'object' ? boardRes.board : { projectToColumn: {} };
-      this.board = board;
+      const board = boardRes?.board && typeof boardRes.board === 'object' ? boardRes.board : {};
+      this.board = {
+        ...(board || {}),
+        projectToColumn: board?.projectToColumn && typeof board.projectToColumn === 'object' ? board.projectToColumn : {},
+        orderByColumn: board?.orderByColumn && typeof board.orderByColumn === 'object' ? board.orderByColumn : {},
+        collapsedColumnIds: Array.isArray(board?.collapsedColumnIds) ? board.collapsedColumnIds : [],
+        tagsByProjectKey: board?.tagsByProjectKey && typeof board.tagsByProjectKey === 'object' ? board.tagsByProjectKey : {}
+      };
       this.storePath = String(boardRes?.storePath || '').trim();
 
       const fromServer = Array.isArray(boardRes?.columns) ? boardRes.columns : [];
@@ -127,6 +161,16 @@ class ProjectsBoardUI {
       }
 
       this.projects = (Array.isArray(repos) ? repos : []).map((p) => this.normalizeProjectRow(p)).filter(Boolean);
+
+      try {
+        const hideForksEl = modal.querySelector('#projects-board-hide-forks');
+        if (hideForksEl) hideForksEl.checked = !!this.hideForks;
+      } catch {}
+
+      if (this.hideForks) {
+        await this.ensureGitHubRepos({ force });
+      }
+
       this.render();
     } catch (error) {
       if (metaEl) metaEl.textContent = 'Failed to load projects board.';
@@ -165,50 +209,98 @@ class ProjectsBoardUI {
     return String(mapped || 'backlog').trim().toLowerCase() || 'backlog';
   }
 
-  getFilteredProjects() {
-    const term = String(this.filter || '').trim().toLowerCase();
-    const rows = Array.isArray(this.projects) ? this.projects : [];
-    if (!term) return rows;
-    return rows.filter((p) => {
-      const name = String(p?.name || '').toLowerCase();
-      const key = String(p?.key || '').toLowerCase();
-      const cat = String(p?.category || '').toLowerCase();
-      return name.includes(term) || key.includes(term) || cat.includes(term);
-    });
+  getProjectIsLive(projectKey) {
+    const key = String(projectKey || '').trim().replace(/\\/g, '/');
+    const tags = this.board?.tagsByProjectKey && typeof this.board.tagsByProjectKey === 'object' ? this.board.tagsByProjectKey[key] : null;
+    return !!tags?.live;
   }
 
-  buildColumnModel() {
-    const rows = this.getFilteredProjects();
+  getForkMapByName() {
+    const map = new Map();
+    const rows = Array.isArray(this.githubRepos) ? this.githubRepos : [];
+    for (const repo of rows) {
+      const name = String(repo?.name || '').trim().toLowerCase();
+      if (!name) continue;
+      map.set(name, { isFork: !!repo?.isFork });
+    }
+    return map;
+  }
+
+  matchesFilter(project, term) {
+    const t = String(term || '').trim().toLowerCase();
+    if (!t) return true;
+    const name = String(project?.name || '').toLowerCase();
+    const key = String(project?.key || '').toLowerCase();
+    const cat = String(project?.category || '').toLowerCase();
+    return name.includes(t) || key.includes(t) || cat.includes(t);
+  }
+
+  buildFullColumnModel() {
+    const rows = Array.isArray(this.projects) ? this.projects : [];
+    const forkMap = this.hideForks ? this.getForkMapByName() : null;
+    const visible = forkMap
+      ? rows.filter((p) => !forkMap.get(String(p?.name || '').trim().toLowerCase())?.isFork)
+      : rows;
+
     const byColumn = new Map();
     for (const col of this.columns) byColumn.set(col.id, []);
-    for (const project of rows) {
+    for (const project of visible) {
       const colId = this.getProjectColumn(project.key);
       if (!byColumn.has(colId)) byColumn.set(colId, []);
       byColumn.get(colId).push(project);
     }
+
     for (const [colId, list] of byColumn.entries()) {
-      list.sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+      const order = Array.isArray(this.board?.orderByColumn?.[colId]) ? this.board.orderByColumn[colId] : [];
+      const index = new Map();
+      order.forEach((k, i) => {
+        const key = String(k || '').trim().replace(/\\/g, '/');
+        if (key && !index.has(key)) index.set(key, i);
+      });
+
+      list.sort((a, b) => {
+        const aKey = String(a?.key || '').trim().replace(/\\/g, '/');
+        const bKey = String(b?.key || '').trim().replace(/\\/g, '/');
+        const aRank = index.has(aKey) ? index.get(aKey) : Number.POSITIVE_INFINITY;
+        const bRank = index.has(bKey) ? index.get(bKey) : Number.POSITIVE_INFINITY;
+        if (aRank !== bRank) return aRank - bRank;
+        return String(a?.name || '').localeCompare(String(b?.name || ''));
+      });
       byColumn.set(colId, list);
     }
     return byColumn;
+  }
+
+  buildColumnModel(fullModel = null) {
+    const full = fullModel || this.buildFullColumnModel();
+    const term = String(this.filter || '').trim().toLowerCase();
+    if (!term) return full;
+    const filtered = new Map();
+    for (const [colId, list] of full.entries()) {
+      filtered.set(colId, list.filter((p) => this.matchesFilter(p, term)));
+    }
+    return filtered;
   }
 
   render() {
     const modal = document.getElementById(this.modalId);
     if (!modal) return;
 
+    const full = this.buildFullColumnModel();
+    const byColumn = this.buildColumnModel(full);
+
     const metaEl = modal.querySelector('#projects-board-meta');
     if (metaEl) {
-      const total = Array.isArray(this.projects) ? this.projects.length : 0;
-      const visible = this.getFilteredProjects().length;
+      let total = 0;
+      for (const list of full.values()) total += list.length;
+      let visible = 0;
+      for (const list of byColumn.values()) visible += list.length;
       const fileHint = this.storePath ? ` • saved: ${this.storePath}` : '';
       metaEl.textContent = `${visible}/${total} projects${fileHint}`;
     }
 
     const columnsEl = modal.querySelector('#projects-board-columns');
     if (!columnsEl) return;
-
-    const byColumn = this.buildColumnModel();
     const escapeHtml = (value) => this.orchestrator?.escapeHtml?.(value) ?? String(value ?? '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -222,23 +314,31 @@ class ProjectsBoardUI {
       const key = escapeHtml(project.key);
       const path = escapeHtml(project.path || '');
       const category = escapeHtml(project.category || '');
+      const type = escapeHtml(project.type || '');
       const subtitle = category ? `${category} • ${key}` : key;
+      const isLive = this.getProjectIsLive(project.key);
       return `
-        <div class="projects-board-card" draggable="true" data-project-key="${key}" title="${path}">
-          <div class="projects-board-card-title">${icon} ${name}</div>
+        <div class="projects-board-card ${isLive ? 'is-live' : ''}" draggable="true" data-project-key="${key}" data-project-type="${type}" title="${path}">
+          <div class="projects-board-card-top">
+            <div class="projects-board-card-title">${icon} ${name}</div>
+            <button type="button" class="projects-board-card-live ${isLive ? 'is-on' : ''}" data-no-drag="true" data-live-toggle="${key}" aria-label="Toggle live tag" aria-pressed="${isLive ? 'true' : 'false'}">★</button>
+          </div>
           <div class="projects-board-card-subtitle">${escapeHtml(subtitle)}</div>
         </div>
       `;
     };
 
+    const collapsedSet = new Set(Array.isArray(this.board?.collapsedColumnIds) ? this.board.collapsedColumnIds : []);
+
     columnsEl.innerHTML = this.columns.map((col) => {
       const list = byColumn.get(col.id) || [];
+      const isCollapsed = collapsedSet.has(col.id);
       return `
-        <section class="projects-board-column" data-column-id="${escapeHtml(col.id)}">
-          <div class="projects-board-column-header">
+        <section class="projects-board-column ${isCollapsed ? 'is-collapsed' : ''}" data-column-id="${escapeHtml(col.id)}">
+          <button type="button" class="projects-board-column-header" data-col-toggle="${escapeHtml(col.id)}" aria-expanded="${isCollapsed ? 'false' : 'true'}">
             <div class="projects-board-column-title">${escapeHtml(col.label)}</div>
             <div class="projects-board-column-count">${list.length}</div>
-          </div>
+          </button>
           <div class="projects-board-column-body" data-dropzone="true">
             ${list.length ? list.map(renderCard).join('') : '<div class="projects-board-empty">Drop here</div>'}
           </div>
@@ -247,7 +347,17 @@ class ProjectsBoardUI {
     }).join('');
   }
 
+  async ensureGitHubRepos({ force = false } = {}) {
+    try {
+      const repos = await this.orchestrator?.getGitHubRepos?.({ force, limit: 2000 });
+      this.githubRepos = Array.isArray(repos) ? repos : [];
+    } catch {
+      this.githubRepos = [];
+    }
+  }
+
   onDragStart(event) {
+    if (event.target?.closest?.('[data-no-drag="true"]')) return;
     const card = event.target?.closest?.('.projects-board-card');
     if (!card) return;
     const key = String(card.dataset?.projectKey || '').trim();
@@ -297,11 +407,41 @@ class ProjectsBoardUI {
     this.dragProjectKey = null;
     if (!projectKey || !columnId) return;
 
+    const targetCard = event.target?.closest?.('.projects-board-card');
+    const targetKey = targetCard ? String(targetCard.dataset?.projectKey || '').trim() : '';
+    const insertAfter = (() => {
+      if (!targetCard || !targetKey || targetKey === projectKey) return false;
+      try {
+        const rect = targetCard.getBoundingClientRect();
+        return (event.clientY || 0) > rect.top + rect.height / 2;
+      } catch {
+        return false;
+      }
+    })();
+
+    const sourceColumnId = this.getProjectColumn(projectKey);
+    const full = this.buildFullColumnModel();
+    const sourceKeys = (full.get(sourceColumnId) || []).map((p) => p.key).filter((k) => k !== projectKey);
+    const destinationKeysBase = sourceColumnId === columnId
+      ? sourceKeys.slice()
+      : (full.get(columnId) || []).map((p) => p.key).filter((k) => k !== projectKey);
+
+    const destinationKeys = destinationKeysBase.slice();
+    let insertIndex = destinationKeys.length;
+    if (targetKey && targetKey !== projectKey) {
+      const idx = destinationKeys.indexOf(targetKey);
+      if (idx !== -1) insertIndex = insertAfter ? idx + 1 : idx;
+    }
+    destinationKeys.splice(insertIndex, 0, projectKey);
+
+    const orderByColumn = { [columnId]: destinationKeys };
+    if (sourceColumnId !== columnId) orderByColumn[sourceColumnId] = sourceKeys;
+
     try {
       const res = await fetch('/api/projects/board/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectKey, columnId })
+        body: JSON.stringify({ projectKey, columnId, orderByColumn })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.ok) throw new Error(String(data?.error || 'Failed to move project'));
@@ -312,7 +452,59 @@ class ProjectsBoardUI {
       this.orchestrator?.showToast?.(String(error?.message || error), 'error');
     }
   }
+
+  async onClick(event) {
+    const toggle = event.target?.closest?.('[data-col-toggle]');
+    if (toggle) {
+      const columnId = String(toggle.getAttribute('data-col-toggle') || '').trim();
+      if (!columnId) return;
+
+      const current = new Set(Array.isArray(this.board?.collapsedColumnIds) ? this.board.collapsedColumnIds : []);
+      if (current.has(columnId)) current.delete(columnId);
+      else current.add(columnId);
+      const next = Array.from(current);
+
+      this.board = { ...(this.board || {}), collapsedColumnIds: next };
+      this.render();
+
+      try {
+        const res = await fetch('/api/projects/board/patch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ collapsedColumnIds: next })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.ok) throw new Error(String(data?.error || 'Failed to update board'));
+        this.board = data.board || this.board;
+        this.render();
+      } catch (error) {
+        this.orchestrator?.showToast?.(String(error?.message || error), 'error');
+      }
+      return;
+    }
+
+    const liveToggle = event.target?.closest?.('[data-live-toggle]');
+    if (liveToggle) {
+      event.preventDefault();
+      const projectKey = String(liveToggle.getAttribute('data-live-toggle') || '').trim();
+      if (!projectKey) return;
+      const nextLive = !this.getProjectIsLive(projectKey);
+
+      try {
+        const res = await fetch('/api/projects/board/patch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectKey, live: nextLive })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.ok) throw new Error(String(data?.error || 'Failed to update board'));
+        this.board = data.board || this.board;
+        this.render();
+      } catch (error) {
+        this.orchestrator?.showToast?.(String(error?.message || error), 'error');
+      }
+    }
+  }
 }
 
 window.ProjectsBoardUI = ProjectsBoardUI;
-

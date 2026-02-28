@@ -32,6 +32,20 @@
   min-width: 220px;
 }
 
+.projects-board-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.projects-board-toggle input {
+  margin: 0;
+}
+
 .projects-board-meta {
   font-size: 12px;
   color: var(--text-secondary);
@@ -51,14 +65,17 @@
 }
 
 .projects-board-column {
-  width: var(--projects-board-column-width);
-  min-width: var(--projects-board-column-width);
+  --projects-col-expanded: var(--projects-board-column-width);
+  --projects-col-collapsed: 56px;
+  width: var(--projects-col-expanded);
+  min-width: var(--projects-col-expanded);
   display: flex;
   flex-direction: column;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  max-height: 100%;
 }
 
 .projects-board-column.drag-over {
@@ -74,10 +91,29 @@
   padding: 10px 12px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
+  width: 100%;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary);
+}
+
+.projects-board-column-header:hover {
+  background: var(--bg-primary);
+}
+
+.projects-board-column-header:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 .projects-board-column-title {
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .projects-board-column-count {
@@ -99,6 +135,51 @@
   gap: 8px;
 }
 
+.projects-board-column.is-collapsed {
+  width: var(--projects-col-collapsed);
+  min-width: var(--projects-col-collapsed);
+}
+
+.projects-board-column.is-collapsed .projects-board-column-body {
+  display: none;
+}
+
+.projects-board-column.is-collapsed .projects-board-column-title {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: unset;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.projects-board-column.is-collapsed .projects-board-column-header {
+  justify-content: flex-start;
+  align-items: center;
+  flex-direction: column;
+  height: 100%;
+  padding: 10px 8px;
+  gap: 14px;
+}
+
+.projects-board-column.is-collapsed .projects-board-column-count {
+  display: inline-flex;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--text-primary);
+  order: -1;
+}
+
 .projects-board-empty {
   font-size: 12px;
   color: var(--text-tertiary);
@@ -115,6 +196,7 @@
   padding: 10px 10px;
   cursor: grab;
   user-select: none;
+  border-left: 4px solid transparent;
 }
 
 .projects-board-card:active {
@@ -125,10 +207,17 @@
   opacity: 0.65;
 }
 
+.projects-board-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
 .projects-board-card-title {
   font-weight: 600;
   font-size: 13px;
-  margin-bottom: 4px;
 }
 
 .projects-board-card-subtitle {
@@ -139,3 +228,46 @@
   white-space: nowrap;
 }
 
+.projects-board-card-live {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.projects-board-card-live:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.projects-board-card-live:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.projects-board-card-live.is-on {
+  border-color: rgba(250, 204, 21, 0.65);
+  background: rgba(250, 204, 21, 0.12);
+  color: var(--text-primary);
+}
+
+.projects-board-card.is-live {
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.18);
+}
+
+.projects-board-card[data-project-type="hytopia-game"] { border-left-color: #10b981; }
+.projects-board-card[data-project-type="monogame-game"] { border-left-color: #f97316; }
+.projects-board-card[data-project-type="minecraft-mod"] { border-left-color: #22c55e; }
+.projects-board-card[data-project-type="rust-game"] { border-left-color: #f59e0b; }
+.projects-board-card[data-project-type="web-game"] { border-left-color: #38bdf8; }
+.projects-board-card[data-project-type="website"] { border-left-color: #3b82f6; }
+.projects-board-card[data-project-type="writing"] { border-left-color: #a3a3a3; }
+.projects-board-card[data-project-type="tool-project"] { border-left-color: #a855f7; }
