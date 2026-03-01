@@ -19,6 +19,7 @@ class ProjectsBoardUI {
     this.dragSourceColumnId = null;
     this.dragCardEl = null;
     this.dragPlaceholderEl = null;
+    this.dragDropInFlight = false;
     this._dragOverRaf = null;
     this._pendingDragOver = null;
     this.hideForks = false;
@@ -604,17 +605,33 @@ class ProjectsBoardUI {
     this.dragProjectKey = key;
     this.dragSourceColumnId = this.getProjectColumn(key);
     this.dragCardEl = card;
+    this.dragDropInFlight = false;
     card.classList.add('dragging');
-    this.ensureDragPlaceholder(card);
+    const placeholder = this.ensureDragPlaceholder(card);
+    const sourceDropzone = card.closest?.('.projects-board-column-body[data-dropzone="true"]') || null;
+    if (sourceDropzone && placeholder) {
+      try {
+        sourceDropzone.insertBefore(placeholder, card);
+      } catch {}
+    }
     try {
       event.dataTransfer?.setData?.('text/plain', key);
       event.dataTransfer.effectAllowed = 'move';
     } catch {}
+
+    // Hide the dragged card from the grid layout so the placeholder doesn't create an extra
+    // "half column" by adding one more grid item.
+    setTimeout(() => {
+      if (card.classList.contains('dragging')) card.classList.add('drag-hidden');
+    }, 0);
   }
 
   onDragEnd(event) {
     const card = event.target?.closest?.('.projects-board-card');
     if (card) card.classList.remove('dragging');
+    if (card && !this.dragDropInFlight) {
+      card.classList.remove('drag-hidden');
+    }
     document.querySelectorAll('.projects-board-column.drag-over').forEach((el) => el.classList.remove('drag-over'));
     this.dragProjectKey = null;
     this.dragSourceColumnId = null;
@@ -676,6 +693,9 @@ class ProjectsBoardUI {
     this.dragSourceColumnId = null;
     if (!projectKey || !columnId) return;
 
+    const draggedEl = this.dragCardEl;
+    this.dragDropInFlight = true;
+
     let insertIndex = null;
     const dropzone = col.classList.contains('is-collapsed') ? null : this.getColumnDropzone(col);
     if (dropzone) {
@@ -718,7 +738,10 @@ class ProjectsBoardUI {
       } catch {}
       this.render();
     } catch (error) {
+      if (draggedEl) draggedEl.classList.remove('drag-hidden');
       this.orchestrator?.showToast?.(String(error?.message || error), 'error');
+    } finally {
+      this.dragDropInFlight = false;
     }
   }
 

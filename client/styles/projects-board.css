@@ -224,6 +224,10 @@
   opacity: 0.65;
 }
 
+.projects-board-card.drag-hidden {
+  display: none;
+}
+
 .projects-board-drop-placeholder {
   border: 2px dashed rgba(79, 70, 229, 0.55);
   border-radius: var(--radius-sm);
