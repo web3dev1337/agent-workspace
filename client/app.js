@@ -97,7 +97,10 @@ class ClaudeOrchestrator {
     // Worktree launches that should not auto-start or auto-show terminals when sessions arrive.
     this.pendingBackgroundWorktrees = new Set(); // worktreeId
     this.scannedReposCache = { value: null, fetchedAt: 0 };
+    this.projectsBoardCache = { value: null, fetchedAt: 0 };
     this.worktreeModalKeepOpen = this.loadWorktreeModalKeepOpenPreference();
+    this.sidebarProjectShortcutsRenderTimer = null;
+    this.sidebarProjectShortcutsRenderInFlight = false;
 
     // Button registry - all available buttons with their implementations
     this.buttonRegistry = this.initButtonRegistry();
@@ -673,10 +676,49 @@ class ClaudeOrchestrator {
     this.syncSidebarBackdrop();
   }
 
+  getSidebarDesktopCollapsedPref() {
+    const fromServer = this.userSettings?.global?.ui?.sidebar?.desktopCollapsed;
+    if (typeof fromServer === 'boolean') return fromServer;
+    try {
+      return localStorage.getItem('sidebar-desktop-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  setSidebarDesktopCollapsed(collapsed) {
+    const next = !!collapsed;
+    document.body.classList.toggle('sidebar-collapsed', next);
+    try {
+      localStorage.setItem('sidebar-desktop-collapsed', next ? 'true' : 'false');
+    } catch {
+      // ignore
+    }
+    try {
+      this.updateGlobalUserSetting('ui.sidebar.desktopCollapsed', next);
+    } catch {
+      // ignore
+    }
+  }
+
+  applySidebarDesktopCollapsedFromPrefs() {
+    try {
+      document.body.classList.toggle('sidebar-collapsed', !!this.getSidebarDesktopCollapsedPref());
+    } catch {
+      // ignore
+    }
+  }
+
   toggleSidebar() {
-    const isOpen = document.body.classList.contains('sidebar-open');
-    if (isOpen) this.closeSidebar();
-    else this.openSidebar();
+    if (this.isMobileLayout()) {
+      const isOpen = document.body.classList.contains('sidebar-open');
+      if (isOpen) this.closeSidebar();
+      else this.openSidebar();
+      return;
+    }
+
+    const collapsed = document.body.classList.contains('sidebar-collapsed');
+    this.setSidebarDesktopCollapsed(!collapsed);
   }
 
   loadWorktreeModalKeepOpenPreference() {
@@ -959,6 +1001,7 @@ class ClaudeOrchestrator {
       
 	      // Load user settings from server
 	      await this.loadUserSettings();
+        this.applySidebarDesktopCollapsedFromPrefs();
 	      this.refreshLicenseStatus?.().catch(() => {});
 	      this.syncTerminalFiltersFromUserSettings();
 	      this.syncWorkflowModeFromUserSettings();
@@ -1708,6 +1751,24 @@ class ClaudeOrchestrator {
 	    // Sidebar worktree clicks - use toggle instead of show
 	    if (elements['worktree-list']) {
 	      elements['worktree-list'].addEventListener('click', (e) => {
+        const shortcutsToggle = e.target.closest('[data-sidebar-project-shortcuts-toggle]');
+        if (shortcutsToggle) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.setSidebarProjectShortcutsCollapsed(!this.getSidebarProjectShortcutsCollapsed());
+          return;
+        }
+
+        const shortcutBtn = e.target.closest('[data-sidebar-project-shortcut]');
+        if (shortcutBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          const key = String(shortcutBtn.getAttribute('data-sidebar-project-shortcut') || '').trim();
+          if (key) this.startProjectWorktreeFromBoardKey(key);
+          if (this.isMobileLayout()) this.closeSidebar();
+          return;
+        }
+
         // Check if click was on ready-for-review toggle
         const readyBtn = e.target.closest('.ready-review-btn');
         if (readyBtn) {
@@ -1801,6 +1862,15 @@ class ClaudeOrchestrator {
 	    if (dashboardBtn) {
 	      dashboardBtn.addEventListener('click', () => {
 	        this.showDashboard();
+	      });
+	    }
+
+	    const projectsBoardBtn = document.getElementById('projects-board-btn');
+	    if (projectsBoardBtn) {
+	      projectsBoardBtn.addEventListener('click', () => {
+	        try {
+	          this.projectsBoardUI?.show?.();
+	        } catch {}
 	      });
 	    }
 
@@ -4344,7 +4414,201 @@ class ClaudeOrchestrator {
       worktreeList.appendChild(item);
     }
 
+    const shortcuts = document.createElement('div');
+    shortcuts.id = 'sidebar-project-shortcuts';
+    shortcuts.className = 'sidebar-project-shortcuts';
+    shortcuts.innerHTML = `<div class="sidebar-project-shortcuts-loading">Loading projects…</div>`;
+    worktreeList.appendChild(shortcuts);
+    this.scheduleSidebarProjectShortcutsRender();
+
     worktreeList.scrollTop = previousScrollTop;
+  }
+
+  getSidebarProjectShortcutsCollapsed() {
+    const fromServer = this.userSettings?.global?.ui?.sidebar?.projectShortcuts?.collapsed;
+    if (typeof fromServer === 'boolean') return fromServer;
+    try {
+      return localStorage.getItem('sidebar-project-shortcuts-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  setSidebarProjectShortcutsCollapsed(collapsed) {
+    const next = !!collapsed;
+    try {
+      localStorage.setItem('sidebar-project-shortcuts-collapsed', next ? 'true' : 'false');
+    } catch {
+      // ignore
+    }
+    try {
+      this.updateGlobalUserSetting('ui.sidebar.projectShortcuts.collapsed', next);
+    } catch {
+      // ignore
+    }
+    this.scheduleSidebarProjectShortcutsRender();
+  }
+
+  scheduleSidebarProjectShortcutsRender({ force = false } = {}) {
+    if (this.sidebarProjectShortcutsRenderTimer) return;
+    this.sidebarProjectShortcutsRenderTimer = setTimeout(() => {
+      this.sidebarProjectShortcutsRenderTimer = null;
+      this.renderSidebarProjectShortcuts({ force }).catch(() => {});
+    }, 160);
+  }
+
+  async renderSidebarProjectShortcuts({ force = false } = {}) {
+    if (this.sidebarProjectShortcutsRenderInFlight) return;
+    this.sidebarProjectShortcutsRenderInFlight = true;
+
+    try {
+      const container = document.getElementById('sidebar-project-shortcuts');
+      if (!container) return;
+
+      const [boardData, repos] = await Promise.all([
+        this.getProjectsBoard({ force }).catch(() => null),
+        this.getScannedRepos({ force: false }).catch(() => [])
+      ]);
+
+      const board = boardData?.board && typeof boardData.board === 'object' ? boardData.board : null;
+      if (!board || !Array.isArray(repos) || repos.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const repoByKey = new Map();
+      for (const repo of repos) {
+        const key = this.normalizeProjectsBoardProjectKey(repo?.relativePath);
+        if (!key) continue;
+        if (!repoByKey.has(key)) repoByKey.set(key, repo);
+      }
+
+      const getOrderIndex = (columnId) => {
+        const raw = board?.orderByColumn && typeof board.orderByColumn === 'object' ? board.orderByColumn[columnId] : null;
+        const order = Array.isArray(raw) ? raw : [];
+        const index = new Map();
+        order.forEach((k, i) => {
+          const key = this.normalizeProjectsBoardProjectKey(k);
+          if (!key || index.has(key)) return;
+          index.set(key, i);
+        });
+        return index;
+      };
+
+      const collect = (columnId) => {
+        const out = [];
+        for (const [key, repo] of repoByKey.entries()) {
+          const col = this.getProjectsBoardColumnForProjectKey(key, boardData);
+          if (col === columnId) out.push({ key, repo });
+        }
+        const index = getOrderIndex(columnId);
+        out.sort((a, b) => {
+          const aRank = index.has(a.key) ? index.get(a.key) : Number.POSITIVE_INFINITY;
+          const bRank = index.has(b.key) ? index.get(b.key) : Number.POSITIVE_INFINITY;
+          if (aRank !== bRank) return aRank - bRank;
+          return String(a.repo?.name || '').localeCompare(String(b.repo?.name || ''));
+        });
+        return out;
+      };
+
+      const shipNext = collect('next');
+      const active = collect('active');
+      const total = shipNext.length + active.length;
+      if (total === 0) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const collapsed = this.getSidebarProjectShortcutsCollapsed();
+
+      const renderTile = (item) => {
+        const icon = this.getProjectIcon(item?.repo?.type);
+        const name = String(item?.repo?.name || item?.key || '').trim();
+        const title = `${name} • ${item?.key}`;
+        return `
+          <button type="button"
+                  class="sidebar-project-tile"
+                  data-sidebar-project-shortcut="${this.escapeHtml(item.key)}"
+                  title="${this.escapeHtml(title)}">
+            <span class="sidebar-project-tile-icon">${this.escapeHtml(icon)}</span>
+            <span class="sidebar-project-tile-name">${this.escapeHtml(name)}</span>
+          </button>
+        `;
+      };
+
+      const renderGroup = (label, items) => {
+        if (!items.length) return '';
+        return `
+          <div class="sidebar-project-group">
+            <div class="sidebar-project-group-title">${this.escapeHtml(label)}</div>
+            <div class="sidebar-project-grid">
+              ${items.map(renderTile).join('')}
+            </div>
+          </div>
+        `;
+      };
+
+      container.innerHTML = `
+        <div class="sidebar-project-shortcuts-section ${collapsed ? 'is-collapsed' : ''}">
+          <button type="button"
+                  class="sidebar-project-shortcuts-header"
+                  data-sidebar-project-shortcuts-toggle="true"
+                  aria-expanded="${collapsed ? 'false' : 'true'}">
+            <span class="sidebar-project-shortcuts-title">Projects</span>
+            <span class="sidebar-project-shortcuts-count">${total}</span>
+            <span class="sidebar-project-shortcuts-chevron">▾</span>
+          </button>
+          <div class="sidebar-project-shortcuts-body">
+            ${renderGroup('Ship Next', shipNext)}
+            ${renderGroup('Active', active)}
+          </div>
+        </div>
+      `;
+    } finally {
+      this.sidebarProjectShortcutsRenderInFlight = false;
+    }
+  }
+
+  async startProjectWorktreeFromBoardKey(projectKey) {
+    const key = this.normalizeProjectsBoardProjectKey(projectKey);
+    if (!key) return;
+    if (!this.socket) {
+      this.showToast?.('Socket not connected', 'error');
+      return;
+    }
+
+    let repos = [];
+    try {
+      repos = await this.getScannedRepos({ force: false });
+    } catch {
+      repos = [];
+    }
+
+    const repo = Array.isArray(repos)
+      ? repos.find((r) => this.normalizeProjectsBoardProjectKey(r?.relativePath) === key)
+      : null;
+
+    if (!repo?.path) {
+      this.showToast?.(`Repo not found: ${key}`, 'error');
+      return;
+    }
+
+    const recommended = this.getRecommendedWorktree(repo);
+    if (!recommended?.id || !recommended?.path) {
+      this.showToast?.(`No free worktrees: ${repo.name || key}`, 'warning');
+      return;
+    }
+
+    await this.quickStartWorktree({
+      repoPath: repo.path,
+      repoType: repo.type,
+      repoName: repo.name,
+      worktreeId: recommended.id,
+      worktreePath: recommended.path,
+      repositoryRoot: repo.path,
+      keepOpen: true,
+      explicitSelection: true
+    });
   }
 
   getWorktreePathForSidebarEntry(worktree) {
@@ -20182,11 +20446,11 @@ class ClaudeOrchestrator {
 	                              <div class="task-card-meta">${escapeHtml(meta)}</div>
 	                              <div class="task-card-top-right">${quickLaunchHtml}</div>
 	                            </div>
-                            <div class="task-card-title">${title}</div>
-                          </div>
-                        `;
-                      })
-                      .join('')}
+	                            <div class="task-card-title" title="${escapeHtml(String(c?.name || ''))}">${title}</div>
+	                          </div>
+	                        `;
+	                      })
+	                      .join('')}
                   </div>
                 </div>
               `;
@@ -20218,41 +20482,91 @@ class ClaudeOrchestrator {
           return;
         }
 
-        const containerHeight = cardsContainer.clientHeight;
-        if (!containerHeight || containerHeight < 40) return;
+	        const containerHeight = cardsContainer.clientHeight;
+	        if (!containerHeight || containerHeight < 40) {
+	          col.style.setProperty('--tasks-card-columns', '1');
+	          col.style.setProperty('--tasks-card-rows', '1');
+	          col.style.width = '';
+	          col.style.minWidth = '';
 
-        const styles = window.getComputedStyle(cardsContainer);
-        const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
-        const sample = cards.slice(0, Math.min(6, cardCount));
-        const heights = sample.map(el => el.getBoundingClientRect().height).filter(Boolean);
-        const avg = heights.length ? (heights.reduce((a, b) => a + b, 0) / heights.length) : 80;
-        const denom = Math.max(1, avg + rowGap);
-        let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
-        rowsFit = Math.min(rowsFit, 12);
+	          const tries = Number(col.dataset.tasksWrapExpandRetry || '0') || 0;
+	          if (tries < 4) {
+	            col.dataset.tasksWrapExpandRetry = String(tries + 1);
+	            window.requestAnimationFrame(() => computeForColumn(col));
+	          } else {
+	            delete col.dataset.tasksWrapExpandRetry;
+	          }
+	          return;
+	        }
+	        delete col.dataset.tasksWrapExpandRetry;
+
+	        const styles = window.getComputedStyle(cardsContainer);
+	        const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
+	        const columnGap = Number.parseFloat(styles.columnGap || styles.gap || '0') || 0;
+	        const padLeft = Number.parseFloat(styles.paddingLeft || '0') || 0;
+	        const padRight = Number.parseFloat(styles.paddingRight || '0') || 0;
+
+	        const measureSampleHeights = () => {
+	          const maxSamples = Math.min(24, cardCount);
+	          if (maxSamples <= 0) return [];
+	          const step = Math.max(1, Math.floor(cardCount / maxSamples));
+	          const heights = [];
+	          for (let i = 0; i < cardCount && heights.length < maxSamples; i += step) {
+	            const h = cards[i]?.getBoundingClientRect?.().height;
+	            if (h) heights.push(h);
+	          }
+	          return heights;
+	        };
+
+	        const heights = measureSampleHeights().sort((a, b) => a - b);
+	        const median = heights.length ? heights[Math.floor(heights.length / 2)] : 80;
+	        const denom = Math.max(1, median + rowGap);
+	        let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
+	        rowsFit = Math.min(rowsFit, cardCount);
 
         const apply = (rows) => {
           const r = Math.max(1, Number(rows) || 1);
           const cols = Math.max(1, Math.ceil(cardCount / r));
           col.style.setProperty('--tasks-card-rows', String(r));
           col.style.setProperty('--tasks-card-columns', String(cols));
-          if (cols <= 1) {
-            col.style.width = '';
-            col.style.minWidth = '';
-          } else {
-            const target = Math.max(baseWidth, baseWidth * cols);
-            col.style.width = `${Math.round(target)}px`;
-            col.style.minWidth = `${Math.round(target)}px`;
-          }
-        };
+	          if (cols <= 1) {
+	            col.style.width = '';
+	            col.style.minWidth = '';
+	          } else {
+	            // Match CSS `minmax(180px, 1fr)` for card columns; expand only as much as needed.
+	            const minCardWidth = 180;
+	            const cardsWidth = (cols * minCardWidth) + Math.max(0, cols - 1) * columnGap;
+	            const target = Math.max(baseWidth, cardsWidth + padLeft + padRight);
+	            col.style.width = `${Math.round(target)}px`;
+	            col.style.minWidth = `${Math.round(target)}px`;
+	          }
+	        };
 
-        apply(rowsFit);
-        for (let attempt = 0; attempt < 6; attempt++) {
-          void cardsContainer.offsetHeight;
-          if (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1) break;
-          rowsFit = Math.max(1, rowsFit - 1);
-          apply(rowsFit);
-        }
-      };
+	        apply(rowsFit);
+	        const fits = () => (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1);
+
+	        // If we overflow vertically, reduce rows (creating more columns) until we fit.
+	        for (let attempt = 0; attempt < 24; attempt++) {
+	          void cardsContainer.offsetHeight;
+	          if (fits()) break;
+	          rowsFit = Math.max(1, rowsFit - 1);
+	          apply(rowsFit);
+	        }
+
+	        // If we fit, try to maximize rows (minimize columns) by filling vertically first.
+	        for (let attempt = 0; attempt < 24; attempt++) {
+	          if (rowsFit >= cardCount) break;
+	          const next = rowsFit + 1;
+	          apply(next);
+	          void cardsContainer.offsetHeight;
+	          if (fits()) {
+	            rowsFit = next;
+	            continue;
+	          }
+	          apply(rowsFit);
+	          break;
+	        }
+	      };
 
       window.requestAnimationFrame(() => {
         columns.forEach(computeForColumn);
@@ -20665,11 +20979,11 @@ class ClaudeOrchestrator {
 	                            </div>
 	                          </div>
 	                        </div>
-	                        <div class="task-card-title">${title}</div>
-	                        <div class="task-card-meta">${due ? `<span class="task-card-due" title="Due">${escapeHtml(due)}</span> • ` : ''}${last}</div>
-	                      </div>
-	                    `;
-	                  }).join('')}
+		                        <div class="task-card-title" title="${escapeHtml(String(c?.name || ''))}">${title}</div>
+		                        <div class="task-card-meta">${due ? `<span class="task-card-due" title="Due">${escapeHtml(due)}</span> • ` : ''}${last}</div>
+		                      </div>
+		                    `;
+		                  }).join('')}
                 </div>
               </div>
             `;
@@ -20714,24 +21028,51 @@ class ClaudeOrchestrator {
             col.style.setProperty('--tasks-card-columns', '1');
             col.style.setProperty('--tasks-card-rows', '1');
             return;
-          }
+	          }
+	
+	          const containerHeight = cardsContainer.clientHeight;
+	          if (!containerHeight || containerHeight < 40) {
+	            col.style.setProperty('--tasks-card-columns', '1');
+	            col.style.setProperty('--tasks-card-rows', '1');
+	            col.style.width = '';
+	            col.style.minWidth = '';
 
-          const containerHeight = cardsContainer.clientHeight;
-          if (!containerHeight || containerHeight < 40) return;
+	            const tries = Number(col.dataset.tasksWrapExpandRetry || '0') || 0;
+	            if (tries < 4) {
+	              col.dataset.tasksWrapExpandRetry = String(tries + 1);
+	              window.requestAnimationFrame(() => computeForColumn(col));
+	            } else {
+	              delete col.dataset.tasksWrapExpandRetry;
+	            }
+	            return;
+	          }
+	          delete col.dataset.tasksWrapExpandRetry;
+	
+	          const styles = window.getComputedStyle(cardsContainer);
+	          const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
+	          const columnGap = Number.parseFloat(styles.columnGap || styles.gap || '0') || 0;
+	          const padLeft = Number.parseFloat(styles.paddingLeft || '0') || 0;
+	          const padRight = Number.parseFloat(styles.paddingRight || '0') || 0;
 
-          const styles = window.getComputedStyle(cardsContainer);
-          const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
-          const columnGap = Number.parseFloat(styles.columnGap || styles.gap || '0') || 0;
-          const padLeft = Number.parseFloat(styles.paddingLeft || '0') || 0;
-          const padRight = Number.parseFloat(styles.paddingRight || '0') || 0;
-          const sample = cards.slice(0, Math.min(6, cardCount));
-          const heights = sample.map(el => el.getBoundingClientRect().height).filter(Boolean);
-          const avg = heights.length ? (heights.reduce((a, b) => a + b, 0) / heights.length) : 80;
-          const denom = Math.max(1, avg + rowGap);
-          let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
-          // In wrap+expand mode, prefer minimizing the number of columns by filling vertically first
-          // (as long as we still avoid vertical scrolling).
-          rowsFit = Math.min(rowsFit, cardCount);
+	          const measureSampleHeights = () => {
+	            const maxSamples = Math.min(24, cardCount);
+	            if (maxSamples <= 0) return [];
+	            const step = Math.max(1, Math.floor(cardCount / maxSamples));
+	            const heights = [];
+	            for (let i = 0; i < cardCount && heights.length < maxSamples; i += step) {
+	              const h = cards[i]?.getBoundingClientRect?.().height;
+	              if (h) heights.push(h);
+	            }
+	            return heights;
+	          };
+
+	          const heights = measureSampleHeights().sort((a, b) => a - b);
+	          const median = heights.length ? heights[Math.floor(heights.length / 2)] : 80;
+	          const denom = Math.max(1, median + rowGap);
+	          let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
+	          // In wrap+expand mode, prefer minimizing the number of columns by filling vertically first
+	          // (as long as we still avoid vertical scrolling).
+	          rowsFit = Math.min(rowsFit, cardCount);
 
           const apply = (rows) => {
             const r = Math.max(1, Number(rows) || 1);
@@ -20751,18 +21092,33 @@ class ClaudeOrchestrator {
               col.style.minWidth = `${Math.round(target)}px`;
             }
           };
+	
+	          apply(rowsFit);
+	          const fits = () => (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1);
+	
+	          // If we still overflow vertically, reduce rows (creating more columns) until we fit.
+	          for (let attempt = 0; attempt < 24; attempt++) {
+	            // Force reflow and then check overflow.
+	            void cardsContainer.offsetHeight;
+	            if (fits()) break;
+	            rowsFit = Math.max(1, rowsFit - 1);
+	            apply(rowsFit);
+	          }
 
-          apply(rowsFit);
-
-          // If we still overflow vertically, reduce rows (creating more columns) until we fit.
-          for (let attempt = 0; attempt < 24; attempt++) {
-            // Force reflow and then check overflow.
-            void cardsContainer.offsetHeight;
-            if (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1) break;
-            rowsFit = Math.max(1, rowsFit - 1);
-            apply(rowsFit);
-          }
-        };
+	          // If we fit, try to maximize rows (minimize columns) by filling vertically first.
+	          for (let attempt = 0; attempt < 24; attempt++) {
+	            if (rowsFit >= cardCount) break;
+	            const next = rowsFit + 1;
+	            apply(next);
+	            void cardsContainer.offsetHeight;
+	            if (fits()) {
+	              rowsFit = next;
+	              continue;
+	            }
+	            apply(rowsFit);
+	            break;
+	          }
+	        };
 
         // Clear variables for collapsed columns to avoid stale widths.
         for (const col of columns) {
@@ -28363,7 +28719,10 @@ class ClaudeOrchestrator {
     if (existing) existing.remove();
 
     const categories = {};
-    allRepos.forEach(repo => {
+    this.addWorktreeModalReposRaw = Array.isArray(allRepos) ? allRepos : [];
+    const filteredRepos = this.filterReposForWorktreeMenus(this.addWorktreeModalReposRaw);
+
+    filteredRepos.forEach(repo => {
       if (!categories[repo.category]) categories[repo.category] = [];
       categories[repo.category].push(repo);
     });
@@ -28385,6 +28744,14 @@ class ClaudeOrchestrator {
             <button class="filter-btn" data-filter="hytopia">Hytopia Games</button>
             <button class="filter-btn" data-filter="monogame">MonoGame</button>
           </div>
+          <label class="quick-checkbox" title="Show projects in the Archive column">
+            <input type="checkbox" id="worktree-modal-show-archived-projects">
+            Show archive
+          </label>
+          <label class="quick-checkbox" title="Show projects in the Done column">
+            <input type="checkbox" id="worktree-modal-show-done-projects">
+            Show done
+          </label>
           <label class="quick-checkbox" title="Keep this modal open after adding so you can add multiple worktrees">
             <input type="checkbox" id="worktree-modal-keep-open">
             Keep open
@@ -28414,6 +28781,24 @@ class ClaudeOrchestrator {
         this.setWorktreeModalKeepOpenPreference(!!keepOpenEl.checked);
       });
     }
+
+    const menuVisibilityPrefs = this.getProjectsBoardMenuVisibilityPrefs();
+    const showArchivedEl = modal.querySelector('#worktree-modal-show-archived-projects');
+    if (showArchivedEl) showArchivedEl.checked = !!menuVisibilityPrefs.showArchived;
+    const showDoneEl = modal.querySelector('#worktree-modal-show-done-projects');
+    if (showDoneEl) showDoneEl.checked = !!menuVisibilityPrefs.showDone;
+
+    const onVisibilityChange = () => {
+      const next = {
+        showArchived: !!modal.querySelector('#worktree-modal-show-archived-projects')?.checked,
+        showDone: !!modal.querySelector('#worktree-modal-show-done-projects')?.checked
+      };
+      this.setProjectsBoardMenuVisibilityPrefs(next);
+      this.showAdvancedAddWorktreeModal(this.addWorktreeModalReposRaw);
+    };
+    showArchivedEl?.addEventListener('change', onVisibilityChange);
+    showDoneEl?.addEventListener('change', onVisibilityChange);
+
     this.setupWorktreeModalInteractions();
   }
 
@@ -28541,6 +28926,16 @@ class ClaudeOrchestrator {
                 </label>
               </div>
               <div class="quick-control-group">
+                <label class="quick-checkbox" title="Show projects in the Archive column">
+                  <input type="checkbox" id="quick-show-archived-projects">
+                  Show archive
+                </label>
+                <label class="quick-checkbox" title="Show projects in the Done column">
+                  <input type="checkbox" id="quick-show-done-projects">
+                  Show done
+                </label>
+              </div>
+              <div class="quick-control-group">
                 <span class="quick-control-label">Create</span>
                 <input type="number" id="quick-worktree-create-count" class="quick-number-input" min="1" max="8" value="${this.quickWorktreeCreateCount}" title="How many new worktrees to create (work9+)" />
                 <label class="quick-checkbox" title="Create terminals but keep them hidden (skip auto-start)">
@@ -28592,6 +28987,16 @@ class ClaudeOrchestrator {
       favoritesOnlyCheckbox.checked = !!this.quickWorktreeFavoritesOnly;
     }
 
+    const menuVisibilityPrefs = this.getProjectsBoardMenuVisibilityPrefs();
+    const showArchivedEl = modal.querySelector('#quick-show-archived-projects');
+    if (showArchivedEl) {
+      showArchivedEl.checked = !!menuVisibilityPrefs.showArchived;
+    }
+    const showDoneEl = modal.querySelector('#quick-show-done-projects');
+    if (showDoneEl) {
+      showDoneEl.checked = !!menuVisibilityPrefs.showDone;
+    }
+
     const keepOpenCheckbox = modal.querySelector('#worktree-modal-keep-open');
     if (keepOpenCheckbox) {
       keepOpenCheckbox.checked = this.getWorktreeModalKeepOpen();
@@ -28640,6 +29045,16 @@ class ClaudeOrchestrator {
       if (e.target && e.target.id === 'quick-favorites-only') {
         this.quickWorktreeFavoritesOnly = !!e.target.checked;
         localStorage.setItem('quick-worktree-favorites-only', this.quickWorktreeFavoritesOnly ? 'true' : 'false');
+        this.renderQuickWorktreeRepoList();
+        return;
+      }
+
+      if (e.target && (e.target.id === 'quick-show-archived-projects' || e.target.id === 'quick-show-done-projects')) {
+        const next = {
+          showArchived: !!modal.querySelector('#quick-show-archived-projects')?.checked,
+          showDone: !!modal.querySelector('#quick-show-done-projects')?.checked
+        };
+        this.setProjectsBoardMenuVisibilityPrefs(next);
         this.renderQuickWorktreeRepoList();
         return;
       }
@@ -28734,6 +29149,7 @@ class ClaudeOrchestrator {
       const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
       const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
       const allRepos = await response.json();
+      await this.getProjectsBoard({ force: false }).catch(() => {});
       this.showAdvancedAddWorktreeModal(allRepos);
     } catch (error) {
       console.error('Failed to fetch repositories:', error);
@@ -28746,6 +29162,7 @@ class ClaudeOrchestrator {
     if (!listEl) return;
 
     try {
+      await this.getProjectsBoard({ force: false }).catch(() => {});
       const serverUrl = window.location.port === '2080' ? 'http://localhost:3000' : window.location.origin;
       const response = await fetch(`${serverUrl}/api/workspaces/scan-repos`);
       const repos = await response.json();
@@ -28808,7 +29225,9 @@ class ClaudeOrchestrator {
       ? filtered.filter(r => favoritesSet.has(r.path))
       : filtered;
 
-    const sorted = filteredFavorites.sort((a, b) => {
+    const filteredByBoard = this.filterReposForWorktreeMenus(filteredFavorites);
+
+    const sorted = filteredByBoard.sort((a, b) => {
       if (this.quickWorktreeSortMode === 'created') {
         const aCreated = a.createdMs || 0;
         const bCreated = b.createdMs || 0;
@@ -30430,6 +30849,108 @@ class ClaudeOrchestrator {
     return arr;
   }
 
+  invalidateProjectsBoardCache() {
+    this.projectsBoardCache = { value: null, fetchedAt: 0 };
+  }
+
+  getProjectsBoardMenuVisibilityPrefs() {
+    const fromServer = this.userSettings?.global?.ui?.projects?.board?.menus;
+    const serverShowArchived = typeof fromServer?.showArchived === 'boolean' ? fromServer.showArchived : null;
+    const serverShowDone = typeof fromServer?.showDone === 'boolean' ? fromServer.showDone : null;
+
+    const fromLocalStorage = (key) => {
+      try { return localStorage.getItem(key) === 'true'; } catch { return false; }
+    };
+
+    return {
+      showArchived: serverShowArchived === null ? fromLocalStorage('projects-board-menus-show-archived') : serverShowArchived,
+      showDone: serverShowDone === null ? fromLocalStorage('projects-board-menus-show-done') : serverShowDone
+    };
+  }
+
+  async setProjectsBoardMenuVisibilityPrefs(next) {
+    const desired = next && typeof next === 'object' ? next : {};
+    const prefs = {
+      showArchived: !!desired.showArchived,
+      showDone: !!desired.showDone
+    };
+
+    try { localStorage.setItem('projects-board-menus-show-archived', prefs.showArchived ? 'true' : 'false'); } catch {}
+    try { localStorage.setItem('projects-board-menus-show-done', prefs.showDone ? 'true' : 'false'); } catch {}
+
+    try {
+      await this.updateGlobalUserSetting('ui.projects.board.menus', prefs);
+    } catch {
+      // ignore
+    }
+
+    // Re-render any open worktree add modals to reflect updated filtering.
+    try { this.refreshWorktreeAddModals(); } catch {}
+  }
+
+  normalizeProjectsBoardProjectKey(value) {
+    return String(value || '').trim().replace(/\\/g, '/');
+  }
+
+  normalizeProjectsBoardColumnId(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return '';
+    if (raw === 'archive') return 'archived';
+    return raw;
+  }
+
+  async getProjectsBoard({ force = false } = {}) {
+    const now = Date.now();
+    const ttlMs = 15_000;
+    if (!force && this.projectsBoardCache?.value && (now - (this.projectsBoardCache.fetchedAt || 0) < ttlMs)) {
+      return this.projectsBoardCache.value;
+    }
+
+    const url = new URL('/api/projects/board', window.location.origin);
+    if (force) url.searchParams.set('refresh', 'true');
+    const res = await fetch(url.toString());
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) throw new Error(String(data?.error || 'Failed to load projects board'));
+
+    this.projectsBoardCache = { value: data, fetchedAt: now };
+    return data;
+  }
+
+  getProjectsBoardColumnForProjectKey(projectKey, boardData = null) {
+    const key = this.normalizeProjectsBoardProjectKey(projectKey);
+    if (!key) return 'backlog';
+    const board = (boardData?.board && typeof boardData.board === 'object')
+      ? boardData.board
+      : (this.projectsBoardCache?.value?.board && typeof this.projectsBoardCache.value.board === 'object' ? this.projectsBoardCache.value.board : null);
+    const mapping = board?.projectToColumn && typeof board.projectToColumn === 'object' ? board.projectToColumn : {};
+    const mapped = this.normalizeProjectsBoardColumnId(mapping[key]);
+    return mapped || 'backlog';
+  }
+
+  getProjectsBoardColumnForRepo(repo, boardData = null) {
+    const key = this.normalizeProjectsBoardProjectKey(repo?.relativePath || repo?.key);
+    if (!key) return 'backlog';
+    return this.getProjectsBoardColumnForProjectKey(key, boardData);
+  }
+
+  filterReposForWorktreeMenus(repos, boardData = null) {
+    const prefs = this.getProjectsBoardMenuVisibilityPrefs();
+    const rows = Array.isArray(repos) ? repos : [];
+    if (!rows.length) return rows;
+
+    const board = (boardData?.board && typeof boardData.board === 'object')
+      ? boardData
+      : (this.projectsBoardCache?.value?.board ? this.projectsBoardCache.value : null);
+    if (!board?.board) return rows;
+
+    return rows.filter((repo) => {
+      const col = this.getProjectsBoardColumnForRepo(repo, board);
+      if (!prefs.showArchived && col === 'archived') return false;
+      if (!prefs.showDone && col === 'done') return false;
+      return true;
+    });
+  }
+
   async getGitHubRepos({ force = false, limit = 500, owner = null } = {}) {
     const now = Date.now();
     const ttlMs = 60_000;
@@ -31062,4 +31583,10 @@ let orchestrator;
 document.addEventListener('DOMContentLoaded', () => {
   orchestrator = new ClaudeOrchestrator();
   window.orchestrator = orchestrator; // Make globally available
+  try {
+    if (window.ProjectsBoardUI && !window.projectsBoardUI) {
+      window.projectsBoardUI = new window.ProjectsBoardUI(orchestrator);
+      orchestrator.projectsBoardUI = window.projectsBoardUI;
+    }
+  } catch {}
 });
