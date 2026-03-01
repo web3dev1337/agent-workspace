@@ -8,6 +8,7 @@ class Dashboard {
     this.isVisible = false;
     this.quickLinks = null;
     this._escHandler = null;
+    this._projectLaunchInFlight = false;
   }
 
 	  async show() {
@@ -467,7 +468,7 @@ class Dashboard {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
-    const renderAdvice = async ({ force = false } = {}) => {
+		    const renderAdvice = async ({ force = false } = {}) => {
       if (!adviceEl) return;
       adviceEl.textContent = 'Loading…';
 
@@ -526,13 +527,22 @@ class Dashboard {
       });
     };
 
-    try {
-      const [statusRes, telemetryRes, projectsRes, readinessRes] = await Promise.all([
-        showStatus ? fetch('/api/process/status?mode=mine').catch(() => null) : Promise.resolve(null),
-        showTelemetry ? fetch('/api/process/telemetry').catch(() => null) : Promise.resolve(null),
-        showProjects ? fetch('/api/process/projects?mode=mine').catch(() => null) : Promise.resolve(null),
-        showReadiness ? fetch('/api/process/readiness/templates').catch(() => null) : Promise.resolve(null)
-      ]);
+	    try {
+	      const projectsBoardPromise = (showProjects && this.orchestrator?.getProjectsBoard)
+	        ? this.orchestrator.getProjectsBoard({ force: false }).catch(() => null)
+	        : Promise.resolve(null);
+	      const scannedReposPromise = (showProjects && this.orchestrator?.getScannedRepos)
+	        ? this.orchestrator.getScannedRepos({ force: false }).catch(() => [])
+	        : Promise.resolve([]);
+
+	      const [statusRes, telemetryRes, projectsRes, readinessRes, projectsBoardData, scannedRepos] = await Promise.all([
+	        showStatus ? fetch('/api/process/status?mode=mine').catch(() => null) : Promise.resolve(null),
+	        showTelemetry ? fetch('/api/process/telemetry').catch(() => null) : Promise.resolve(null),
+	        showProjects ? fetch('/api/process/projects?mode=mine').catch(() => null) : Promise.resolve(null),
+	        showReadiness ? fetch('/api/process/readiness/templates').catch(() => null) : Promise.resolve(null),
+	        projectsBoardPromise,
+	        scannedReposPromise
+	      ]);
 
       if (showStatus && statusEl) {
         const data = statusRes ? await statusRes.json().catch(() => ({})) : {};
@@ -571,68 +581,211 @@ class Dashboard {
 		        }
 	      }
 
-      if (showProjects && projectsEl) {
-        const data = projectsRes ? await projectsRes.json().catch(() => ({})) : {};
-        if (projectsRes && projectsRes.ok) {
-          const totals = data?.totals || {};
-          const repos = Array.isArray(data?.repos) ? data.repos : [];
-          const top = repos.slice(0, 6);
+	      if (showProjects && projectsEl) {
+	        const data = projectsRes ? await projectsRes.json().catch(() => ({})) : {};
+	        const projectsBoard = projectsBoardData?.board && typeof projectsBoardData.board === 'object' ? projectsBoardData.board : null;
+	        const scanned = Array.isArray(scannedRepos) ? scannedRepos : [];
 
-          const pickWorstRisk = (counts) => {
-            const c = counts && typeof counts === 'object' ? counts : {};
-            if (Number(c.critical || 0) > 0) return 'critical';
-            if (Number(c.high || 0) > 0) return 'high';
-            if (Number(c.medium || 0) > 0) return 'medium';
-            if (Number(c.low || 0) > 0) return 'low';
-            return '';
-          };
+	        const normalizeKey = (value) => (this.orchestrator?.normalizeProjectsBoardProjectKey?.(value) ?? String(value || '').trim().replace(/\\/g, '/'));
 
-          const riskChip = (risk) => {
-            const r = String(risk || '').trim().toLowerCase();
-            if (!r) return '';
-            const cls = (r === 'critical' || r === 'high') ? 'level-warn' : '';
-            return `<span class="process-chip ${cls}">${escapeHtml(r)}</span>`;
-          };
+	        const boardHtml = (() => {
+	          if (!projectsBoard || scanned.length === 0) return '';
 
-          projectsEl.innerHTML = `
-            <div>Repos <strong>${Number(totals?.repos ?? top.length ?? 0)}</strong> • Open PRs <strong>${Number(totals?.prsOpen ?? 0)}</strong></div>
-            <div>Unreviewed <strong>${Number(totals?.prsUnreviewed ?? 0)}</strong> • Needs fix <strong>${Number(totals?.prsNeedsFix ?? 0)}</strong></div>
-            <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
-              ${top.length ? top.map((r) => {
-                const repo = String(r?.repo || '').trim();
-                const open = Number(r?.prsOpen ?? 0);
-                const unrev = Number(r?.prsUnreviewed ?? 0);
-                const avgReview = r?.telemetry?.avgReviewSeconds ? `${Math.round(Number(r.telemetry.avgReviewSeconds))}s` : '—';
-                const worstRisk = pickWorstRisk(r?.riskCounts);
-                return `
-                  <button class="btn-secondary" type="button" data-open-repo="${escapeHtml(repo)}" title="Open PRs filtered to ${escapeHtml(repo)}" style="width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                    <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(repo)} (${open} open, ${unrev} unrev)</span>
-                    <span style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-                      ${worstRisk ? riskChip(worstRisk) : ''}
-                      <span style="opacity:0.8;">${escapeHtml(avgReview)}</span>
-                    </span>
-                  </button>
-                `;
-              }).join('') : `<div style="opacity:0.8;">No PRs found.</div>`}
-            </div>
-          `;
+	          const repoByKey = new Map();
+	          for (const repo of scanned) {
+	            const key = normalizeKey(repo?.relativePath);
+	            if (!key) continue;
+	            if (!repoByKey.has(key)) repoByKey.set(key, repo);
+	          }
+	          if (!repoByKey.size) return '';
 
-          projectsEl.querySelectorAll('[data-open-repo]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-              const repo = btn.getAttribute('data-open-repo') || '';
-              if (!repo) return;
-              try {
-                localStorage.setItem('prs-panel-repo', repo);
-              } catch {}
-              try {
-                this.orchestrator?.showPRsPanel?.();
-              } catch {}
-            });
-          });
-        } else {
-          projectsEl.textContent = 'Failed to load.';
-        }
-      }
+	          const getOrderIndex = (columnId) => {
+	            const raw = projectsBoard?.orderByColumn && typeof projectsBoard.orderByColumn === 'object'
+	              ? projectsBoard.orderByColumn[columnId]
+	              : null;
+	            const order = Array.isArray(raw) ? raw : [];
+	            const index = new Map();
+	            order.forEach((k, i) => {
+	              const key = normalizeKey(k);
+	              if (!key || index.has(key)) return;
+	              index.set(key, i);
+	            });
+	            return index;
+	          };
+
+	          const collect = (columnId) => {
+	            const out = [];
+	            for (const [key, repo] of repoByKey.entries()) {
+	              const col = this.orchestrator?.getProjectsBoardColumnForProjectKey?.(key, projectsBoardData) || 'backlog';
+	              if (col === columnId) out.push({ key, repo });
+	            }
+	            const index = getOrderIndex(columnId);
+	            out.sort((a, b) => {
+	              const aRank = index.has(a.key) ? index.get(a.key) : Number.POSITIVE_INFINITY;
+	              const bRank = index.has(b.key) ? index.get(b.key) : Number.POSITIVE_INFINITY;
+	              if (aRank !== bRank) return aRank - bRank;
+	              return String(a.repo?.name || '').localeCompare(String(b.repo?.name || ''));
+	            });
+	            return out;
+	          };
+
+	          const shipNext = collect('next');
+	          const active = collect('active');
+	          const total = shipNext.length + active.length;
+	          if (total === 0) return '';
+
+	          const tagMap = projectsBoard?.tagsByProjectKey && typeof projectsBoard.tagsByProjectKey === 'object'
+	            ? projectsBoard.tagsByProjectKey
+	            : {};
+
+	          const renderTile = (item) => {
+	            const icon = this.orchestrator?.getProjectIcon?.(item?.repo?.type) || '📁';
+	            const name = String(item?.repo?.name || item?.key || '').trim();
+	            const key = normalizeKey(item?.key);
+	            const category = String(item?.repo?.category || '').trim();
+	            const type = String(item?.repo?.type || '').trim();
+	            const subtitle = category ? `${category} • ${key}` : key;
+	            const isLive = !!tagMap[key]?.live;
+	            return `
+	              <button type="button"
+	                      class="dashboard-project-tile ${isLive ? 'is-live' : ''}"
+	                      data-dashboard-start-project="${escapeHtml(key)}"
+	                      data-project-type="${escapeHtml(type)}"
+	                      title="Start worktree: ${escapeHtml(name)}">
+	                <span class="dashboard-project-tile-icon">${escapeHtml(icon)}</span>
+	                <span class="dashboard-project-tile-text">
+	                  <span class="dashboard-project-tile-name">${escapeHtml(name)}</span>
+	                  <span class="dashboard-project-tile-subtitle">${escapeHtml(subtitle)}</span>
+	                </span>
+	                ${isLive ? `<span class="dashboard-project-tile-live" title="Live">★</span>` : ''}
+	              </button>
+	            `;
+	          };
+
+	          const renderGroup = (label, list) => {
+	            if (!list.length) return '';
+	            return `
+	              <div class="dashboard-project-group">
+	                <div class="dashboard-project-group-title">${escapeHtml(label)} <span class="dashboard-project-group-count">${list.length}</span></div>
+	                <div class="dashboard-project-grid">
+	                  ${list.map(renderTile).join('')}
+	                </div>
+	              </div>
+	            `;
+	          };
+
+	          return `
+	            <div class="dashboard-projects-board">
+	              ${renderGroup('Ship Next', shipNext)}
+	              ${renderGroup('Active', active)}
+	            </div>
+	          `;
+	        })();
+
+	        const prSummaryHtml = (() => {
+	          if (!(projectsRes && projectsRes.ok)) {
+	            return `<div style="opacity:0.85;">Failed to load PR summary.</div>`;
+	          }
+
+	          const totals = data?.totals || {};
+	          const repos = Array.isArray(data?.repos) ? data.repos : [];
+	          const top = repos.slice(0, 6);
+
+	          const pickWorstRisk = (counts) => {
+	            const c = counts && typeof counts === 'object' ? counts : {};
+	            if (Number(c.critical || 0) > 0) return 'critical';
+	            if (Number(c.high || 0) > 0) return 'high';
+	            if (Number(c.medium || 0) > 0) return 'medium';
+	            if (Number(c.low || 0) > 0) return 'low';
+	            return '';
+	          };
+
+	          const riskChip = (risk) => {
+	            const r = String(risk || '').trim().toLowerCase();
+	            if (!r) return '';
+	            const cls = (r === 'critical' || r === 'high') ? 'level-warn' : '';
+	            return `<span class="process-chip ${cls}">${escapeHtml(r)}</span>`;
+	          };
+
+	          return `
+	            <div>Repos <strong>${Number(totals?.repos ?? top.length ?? 0)}</strong> • Open PRs <strong>${Number(totals?.prsOpen ?? 0)}</strong></div>
+	            <div>Unreviewed <strong>${Number(totals?.prsUnreviewed ?? 0)}</strong> • Needs fix <strong>${Number(totals?.prsNeedsFix ?? 0)}</strong></div>
+	            <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+	              ${top.length ? top.map((r) => {
+	                const repo = String(r?.repo || '').trim();
+	                const open = Number(r?.prsOpen ?? 0);
+	                const unrev = Number(r?.prsUnreviewed ?? 0);
+	                const avgReview = r?.telemetry?.avgReviewSeconds ? `${Math.round(Number(r.telemetry.avgReviewSeconds))}s` : '—';
+	                const worstRisk = pickWorstRisk(r?.riskCounts);
+	                return `
+	                  <button class="btn-secondary" type="button" data-open-repo="${escapeHtml(repo)}" title="Open PRs filtered to ${escapeHtml(repo)}" style="width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+	                    <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(repo)} (${open} open, ${unrev} unrev)</span>
+	                    <span style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+	                      ${worstRisk ? riskChip(worstRisk) : ''}
+	                      <span style="opacity:0.8;">${escapeHtml(avgReview)}</span>
+	                    </span>
+	                  </button>
+	                `;
+	              }).join('') : `<div style="opacity:0.8;">No PRs found.</div>`}
+	            </div>
+	          `;
+	        })();
+
+	        projectsEl.innerHTML = `${boardHtml}${prSummaryHtml}`;
+
+	        projectsEl.querySelectorAll('[data-dashboard-start-project]').forEach((btn) => {
+	          btn.addEventListener('click', async () => {
+	            if (this._projectLaunchInFlight) return;
+	            const key = String(btn.getAttribute('data-dashboard-start-project') || '').trim();
+	            if (!key) return;
+	            this._projectLaunchInFlight = true;
+	            btn.disabled = true;
+	            try {
+	              const currentId = String(this.orchestrator?.currentWorkspace?.id || '').trim();
+	              const workspaces = Array.isArray(this.workspaces) ? this.workspaces : [];
+	              const pickRecent = () => {
+	                if (currentId) return currentId;
+	                let best = null;
+	                let bestTime = 0;
+	                for (const ws of workspaces) {
+	                  const t = ws?.lastAccess ? new Date(ws.lastAccess).getTime() : 0;
+	                  if (!best || t > bestTime) {
+	                    best = ws;
+	                    bestTime = t;
+	                  }
+	                }
+	                return String(best?.id || '').trim();
+	              };
+
+	              const targetId = pickRecent();
+	              try { this.orchestrator?.hideDashboard?.(); } catch {}
+	              if (targetId && targetId !== currentId) {
+	                this.orchestrator?.switchToWorkspace?.(targetId);
+	                await this.orchestrator?.waitForWorkspaceActive?.(targetId).catch(() => false);
+	              }
+	              await this.orchestrator?.startProjectWorktreeFromBoardKey?.(key);
+	            } catch {
+	              this.orchestrator?.showToast?.('Failed to start worktree', 'error');
+	            } finally {
+	              btn.disabled = false;
+	              this._projectLaunchInFlight = false;
+	            }
+	          });
+	        });
+
+	        projectsEl.querySelectorAll('[data-open-repo]').forEach((btn) => {
+	          btn.addEventListener('click', () => {
+	            const repo = btn.getAttribute('data-open-repo') || '';
+	            if (!repo) return;
+	            try {
+	              localStorage.setItem('prs-panel-repo', repo);
+	            } catch {}
+	            try {
+	              this.orchestrator?.showPRsPanel?.();
+	            } catch {}
+	          });
+	        });
+	      }
 
       if (showReadiness && readinessEl) {
         const data = readinessRes ? await readinessRes.json().catch(() => ({})) : {};
