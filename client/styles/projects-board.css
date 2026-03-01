@@ -225,7 +225,14 @@
 }
 
 .projects-board-card.drag-hidden {
-  display: none;
+  position: fixed;
+  left: -10000px;
+  top: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .projects-board-drop-placeholder {
