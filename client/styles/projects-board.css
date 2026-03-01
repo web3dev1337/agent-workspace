@@ -224,22 +224,32 @@
   opacity: 0.65;
 }
 
-.projects-board-card.drag-hidden {
-  position: fixed;
-  left: -10000px;
-  top: -10000px;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0;
+.projects-board-card.is-drop-target-before,
+.projects-board-card.is-drop-target-after {
+  position: relative;
+}
+
+.projects-board-card.is-drop-target-before::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.85);
   pointer-events: none;
 }
 
-.projects-board-drop-placeholder {
-  border: 2px dashed rgba(79, 70, 229, 0.55);
-  border-radius: var(--radius-sm);
-  background: rgba(79, 70, 229, 0.08);
-  min-height: 64px;
+.projects-board-card.is-drop-target-after::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.85);
   pointer-events: none;
 }
 
