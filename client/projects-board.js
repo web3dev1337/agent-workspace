@@ -554,6 +554,10 @@ class ProjectsBoardUI {
       if (!res.ok || !data?.ok) throw new Error(String(data?.error || 'Failed to move project'));
       this.board = data.board || this.board;
       this.orchestrator?.showToast?.(`Moved ${projectKey} → ${columnId}`, 'success');
+      try {
+        this.orchestrator?.invalidateProjectsBoardCache?.();
+        this.orchestrator?.renderSidebarProjectShortcuts?.({ force: true });
+      } catch {}
       this.render();
     } catch (error) {
       this.orchestrator?.showToast?.(String(error?.message || error), 'error');
