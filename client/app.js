@@ -20446,11 +20446,11 @@ class ClaudeOrchestrator {
 	                              <div class="task-card-meta">${escapeHtml(meta)}</div>
 	                              <div class="task-card-top-right">${quickLaunchHtml}</div>
 	                            </div>
-                            <div class="task-card-title">${title}</div>
-                          </div>
-                        `;
-                      })
-                      .join('')}
+	                            <div class="task-card-title" title="${escapeHtml(String(c?.name || ''))}">${title}</div>
+	                          </div>
+	                        `;
+	                      })
+	                      .join('')}
                   </div>
                 </div>
               `;
@@ -20482,41 +20482,91 @@ class ClaudeOrchestrator {
           return;
         }
 
-        const containerHeight = cardsContainer.clientHeight;
-        if (!containerHeight || containerHeight < 40) return;
+	        const containerHeight = cardsContainer.clientHeight;
+	        if (!containerHeight || containerHeight < 40) {
+	          col.style.setProperty('--tasks-card-columns', '1');
+	          col.style.setProperty('--tasks-card-rows', '1');
+	          col.style.width = '';
+	          col.style.minWidth = '';
 
-        const styles = window.getComputedStyle(cardsContainer);
-        const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
-        const sample = cards.slice(0, Math.min(6, cardCount));
-        const heights = sample.map(el => el.getBoundingClientRect().height).filter(Boolean);
-        const avg = heights.length ? (heights.reduce((a, b) => a + b, 0) / heights.length) : 80;
-        const denom = Math.max(1, avg + rowGap);
-        let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
-        rowsFit = Math.min(rowsFit, 12);
+	          const tries = Number(col.dataset.tasksWrapExpandRetry || '0') || 0;
+	          if (tries < 4) {
+	            col.dataset.tasksWrapExpandRetry = String(tries + 1);
+	            window.requestAnimationFrame(() => computeForColumn(col));
+	          } else {
+	            delete col.dataset.tasksWrapExpandRetry;
+	          }
+	          return;
+	        }
+	        delete col.dataset.tasksWrapExpandRetry;
+
+	        const styles = window.getComputedStyle(cardsContainer);
+	        const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
+	        const columnGap = Number.parseFloat(styles.columnGap || styles.gap || '0') || 0;
+	        const padLeft = Number.parseFloat(styles.paddingLeft || '0') || 0;
+	        const padRight = Number.parseFloat(styles.paddingRight || '0') || 0;
+
+	        const measureSampleHeights = () => {
+	          const maxSamples = Math.min(24, cardCount);
+	          if (maxSamples <= 0) return [];
+	          const step = Math.max(1, Math.floor(cardCount / maxSamples));
+	          const heights = [];
+	          for (let i = 0; i < cardCount && heights.length < maxSamples; i += step) {
+	            const h = cards[i]?.getBoundingClientRect?.().height;
+	            if (h) heights.push(h);
+	          }
+	          return heights;
+	        };
+
+	        const heights = measureSampleHeights().sort((a, b) => a - b);
+	        const median = heights.length ? heights[Math.floor(heights.length / 2)] : 80;
+	        const denom = Math.max(1, median + rowGap);
+	        let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
+	        rowsFit = Math.min(rowsFit, cardCount);
 
         const apply = (rows) => {
           const r = Math.max(1, Number(rows) || 1);
           const cols = Math.max(1, Math.ceil(cardCount / r));
           col.style.setProperty('--tasks-card-rows', String(r));
           col.style.setProperty('--tasks-card-columns', String(cols));
-          if (cols <= 1) {
-            col.style.width = '';
-            col.style.minWidth = '';
-          } else {
-            const target = Math.max(baseWidth, baseWidth * cols);
-            col.style.width = `${Math.round(target)}px`;
-            col.style.minWidth = `${Math.round(target)}px`;
-          }
-        };
+	          if (cols <= 1) {
+	            col.style.width = '';
+	            col.style.minWidth = '';
+	          } else {
+	            // Match CSS `minmax(180px, 1fr)` for card columns; expand only as much as needed.
+	            const minCardWidth = 180;
+	            const cardsWidth = (cols * minCardWidth) + Math.max(0, cols - 1) * columnGap;
+	            const target = Math.max(baseWidth, cardsWidth + padLeft + padRight);
+	            col.style.width = `${Math.round(target)}px`;
+	            col.style.minWidth = `${Math.round(target)}px`;
+	          }
+	        };
 
-        apply(rowsFit);
-        for (let attempt = 0; attempt < 6; attempt++) {
-          void cardsContainer.offsetHeight;
-          if (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1) break;
-          rowsFit = Math.max(1, rowsFit - 1);
-          apply(rowsFit);
-        }
-      };
+	        apply(rowsFit);
+	        const fits = () => (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1);
+
+	        // If we overflow vertically, reduce rows (creating more columns) until we fit.
+	        for (let attempt = 0; attempt < 24; attempt++) {
+	          void cardsContainer.offsetHeight;
+	          if (fits()) break;
+	          rowsFit = Math.max(1, rowsFit - 1);
+	          apply(rowsFit);
+	        }
+
+	        // If we fit, try to maximize rows (minimize columns) by filling vertically first.
+	        for (let attempt = 0; attempt < 24; attempt++) {
+	          if (rowsFit >= cardCount) break;
+	          const next = rowsFit + 1;
+	          apply(next);
+	          void cardsContainer.offsetHeight;
+	          if (fits()) {
+	            rowsFit = next;
+	            continue;
+	          }
+	          apply(rowsFit);
+	          break;
+	        }
+	      };
 
       window.requestAnimationFrame(() => {
         columns.forEach(computeForColumn);
@@ -20929,11 +20979,11 @@ class ClaudeOrchestrator {
 	                            </div>
 	                          </div>
 	                        </div>
-	                        <div class="task-card-title">${title}</div>
-	                        <div class="task-card-meta">${due ? `<span class="task-card-due" title="Due">${escapeHtml(due)}</span> • ` : ''}${last}</div>
-	                      </div>
-	                    `;
-	                  }).join('')}
+		                        <div class="task-card-title" title="${escapeHtml(String(c?.name || ''))}">${title}</div>
+		                        <div class="task-card-meta">${due ? `<span class="task-card-due" title="Due">${escapeHtml(due)}</span> • ` : ''}${last}</div>
+		                      </div>
+		                    `;
+		                  }).join('')}
                 </div>
               </div>
             `;
@@ -20978,24 +21028,51 @@ class ClaudeOrchestrator {
             col.style.setProperty('--tasks-card-columns', '1');
             col.style.setProperty('--tasks-card-rows', '1');
             return;
-          }
+	          }
+	
+	          const containerHeight = cardsContainer.clientHeight;
+	          if (!containerHeight || containerHeight < 40) {
+	            col.style.setProperty('--tasks-card-columns', '1');
+	            col.style.setProperty('--tasks-card-rows', '1');
+	            col.style.width = '';
+	            col.style.minWidth = '';
 
-          const containerHeight = cardsContainer.clientHeight;
-          if (!containerHeight || containerHeight < 40) return;
+	            const tries = Number(col.dataset.tasksWrapExpandRetry || '0') || 0;
+	            if (tries < 4) {
+	              col.dataset.tasksWrapExpandRetry = String(tries + 1);
+	              window.requestAnimationFrame(() => computeForColumn(col));
+	            } else {
+	              delete col.dataset.tasksWrapExpandRetry;
+	            }
+	            return;
+	          }
+	          delete col.dataset.tasksWrapExpandRetry;
+	
+	          const styles = window.getComputedStyle(cardsContainer);
+	          const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
+	          const columnGap = Number.parseFloat(styles.columnGap || styles.gap || '0') || 0;
+	          const padLeft = Number.parseFloat(styles.paddingLeft || '0') || 0;
+	          const padRight = Number.parseFloat(styles.paddingRight || '0') || 0;
 
-          const styles = window.getComputedStyle(cardsContainer);
-          const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
-          const columnGap = Number.parseFloat(styles.columnGap || styles.gap || '0') || 0;
-          const padLeft = Number.parseFloat(styles.paddingLeft || '0') || 0;
-          const padRight = Number.parseFloat(styles.paddingRight || '0') || 0;
-          const sample = cards.slice(0, Math.min(6, cardCount));
-          const heights = sample.map(el => el.getBoundingClientRect().height).filter(Boolean);
-          const avg = heights.length ? (heights.reduce((a, b) => a + b, 0) / heights.length) : 80;
-          const denom = Math.max(1, avg + rowGap);
-          let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
-          // In wrap+expand mode, prefer minimizing the number of columns by filling vertically first
-          // (as long as we still avoid vertical scrolling).
-          rowsFit = Math.min(rowsFit, cardCount);
+	          const measureSampleHeights = () => {
+	            const maxSamples = Math.min(24, cardCount);
+	            if (maxSamples <= 0) return [];
+	            const step = Math.max(1, Math.floor(cardCount / maxSamples));
+	            const heights = [];
+	            for (let i = 0; i < cardCount && heights.length < maxSamples; i += step) {
+	              const h = cards[i]?.getBoundingClientRect?.().height;
+	              if (h) heights.push(h);
+	            }
+	            return heights;
+	          };
+
+	          const heights = measureSampleHeights().sort((a, b) => a - b);
+	          const median = heights.length ? heights[Math.floor(heights.length / 2)] : 80;
+	          const denom = Math.max(1, median + rowGap);
+	          let rowsFit = Math.max(1, Math.floor((containerHeight + rowGap) / denom));
+	          // In wrap+expand mode, prefer minimizing the number of columns by filling vertically first
+	          // (as long as we still avoid vertical scrolling).
+	          rowsFit = Math.min(rowsFit, cardCount);
 
           const apply = (rows) => {
             const r = Math.max(1, Number(rows) || 1);
@@ -21015,18 +21092,33 @@ class ClaudeOrchestrator {
               col.style.minWidth = `${Math.round(target)}px`;
             }
           };
+	
+	          apply(rowsFit);
+	          const fits = () => (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1);
+	
+	          // If we still overflow vertically, reduce rows (creating more columns) until we fit.
+	          for (let attempt = 0; attempt < 24; attempt++) {
+	            // Force reflow and then check overflow.
+	            void cardsContainer.offsetHeight;
+	            if (fits()) break;
+	            rowsFit = Math.max(1, rowsFit - 1);
+	            apply(rowsFit);
+	          }
 
-          apply(rowsFit);
-
-          // If we still overflow vertically, reduce rows (creating more columns) until we fit.
-          for (let attempt = 0; attempt < 24; attempt++) {
-            // Force reflow and then check overflow.
-            void cardsContainer.offsetHeight;
-            if (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1) break;
-            rowsFit = Math.max(1, rowsFit - 1);
-            apply(rowsFit);
-          }
-        };
+	          // If we fit, try to maximize rows (minimize columns) by filling vertically first.
+	          for (let attempt = 0; attempt < 24; attempt++) {
+	            if (rowsFit >= cardCount) break;
+	            const next = rowsFit + 1;
+	            apply(next);
+	            void cardsContainer.offsetHeight;
+	            if (fits()) {
+	              rowsFit = next;
+	              continue;
+	            }
+	            apply(rowsFit);
+	            break;
+	          }
+	        };
 
         // Clear variables for collapsed columns to avoid stale widths.
         for (const col of columns) {

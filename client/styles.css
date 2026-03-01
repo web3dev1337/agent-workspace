@@ -10509,6 +10509,15 @@ header h1 {
   min-height: 0;
 }
 
+.tasks-board.tasks-board-expand .task-card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .tasks-board.tasks-board-grid .task-card-board {
   height: fit-content;
 }
