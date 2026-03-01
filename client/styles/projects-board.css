@@ -224,6 +224,14 @@
   opacity: 0.65;
 }
 
+.projects-board-drop-placeholder {
+  border: 2px dashed rgba(79, 70, 229, 0.55);
+  border-radius: var(--radius-sm);
+  background: rgba(79, 70, 229, 0.08);
+  min-height: 64px;
+  pointer-events: none;
+}
+
 .projects-board-card-top {
   display: flex;
   align-items: center;

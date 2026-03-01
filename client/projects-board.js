@@ -16,6 +16,11 @@ class ProjectsBoardUI {
     this.projects = [];
     this.filter = '';
     this.dragProjectKey = null;
+    this.dragSourceColumnId = null;
+    this.dragCardEl = null;
+    this.dragPlaceholderEl = null;
+    this._dragOverRaf = null;
+    this._pendingDragOver = null;
     this.hideForks = false;
     this.githubRepos = [];
     this._escHandler = null;
@@ -463,6 +468,133 @@ class ProjectsBoardUI {
     }
   }
 
+  getColumnDropzone(columnEl) {
+    if (!columnEl) return null;
+    return columnEl.querySelector?.('.projects-board-column-body[data-dropzone="true"]') || null;
+  }
+
+  ensureDragPlaceholder(cardEl) {
+    if (!this.dragPlaceholderEl) {
+      const el = document.createElement('div');
+      el.className = 'projects-board-drop-placeholder';
+      el.setAttribute('data-drop-placeholder', 'true');
+      el.setAttribute('aria-hidden', 'true');
+      this.dragPlaceholderEl = el;
+    }
+
+    if (cardEl && this.dragPlaceholderEl) {
+      try {
+        const rect = cardEl.getBoundingClientRect();
+        const h = Number(rect?.height || 0);
+        if (h > 0) {
+          this.dragPlaceholderEl.style.height = `${Math.round(h)}px`;
+          this.dragPlaceholderEl.style.minHeight = `${Math.round(h)}px`;
+        }
+      } catch {}
+    }
+
+    return this.dragPlaceholderEl;
+  }
+
+  clearDragPlaceholder() {
+    if (this.dragPlaceholderEl?.parentElement) {
+      this.dragPlaceholderEl.parentElement.removeChild(this.dragPlaceholderEl);
+    }
+  }
+
+  computeClosestCardForPoint(cards, x, y) {
+    const px = Number.isFinite(Number(x)) ? Number(x) : 0;
+    const py = Number.isFinite(Number(y)) ? Number(y) : 0;
+    let best = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+
+    for (const card of cards) {
+      if (!card || card === this.dragPlaceholderEl) continue;
+      let rect = null;
+      try {
+        rect = card.getBoundingClientRect();
+      } catch {
+        rect = null;
+      }
+      if (!rect) continue;
+
+      const dx = (px < rect.left) ? (rect.left - px) : (px > rect.right ? (px - rect.right) : 0);
+      const dy = (py < rect.top) ? (rect.top - py) : (py > rect.bottom ? (py - rect.bottom) : 0);
+      const dist = (dx * dx) + (dy * dy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = { card, rect };
+      }
+    }
+
+    return best;
+  }
+
+  positionDragPlaceholder(dropzoneEl, { x, y } = {}) {
+    const dropzone = dropzoneEl;
+    if (!dropzone) return null;
+    if (!this.dragProjectKey) return null;
+
+    const placeholder = this.ensureDragPlaceholder(this.dragCardEl);
+    if (!placeholder) return null;
+
+    const empty = dropzone.querySelector?.('.projects-board-empty');
+    const cards = Array.from(dropzone.querySelectorAll('.projects-board-card')).filter((el) => !el.classList.contains('dragging'));
+
+    if (!cards.length) {
+      if (empty) dropzone.insertBefore(placeholder, empty);
+      else dropzone.appendChild(placeholder);
+      return placeholder;
+    }
+
+    const closest = this.computeClosestCardForPoint(cards, x, y);
+    const target = closest?.card || null;
+    const rect = closest?.rect || null;
+    if (!target || !rect) {
+      dropzone.appendChild(placeholder);
+      return placeholder;
+    }
+
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = (Number.isFinite(Number(x)) ? Number(x) : 0) - cx;
+    const dy = (Number.isFinite(Number(y)) ? Number(y) : 0) - cy;
+    const useY = Math.abs(dy) >= Math.abs(dx);
+    const after = useY ? (dy > 0) : (dx > 0);
+    const insertBefore = after ? target.nextElementSibling : target;
+
+    if (insertBefore === placeholder) return placeholder;
+    if (placeholder.parentElement !== dropzone) {
+      dropzone.insertBefore(placeholder, insertBefore);
+      return placeholder;
+    }
+
+    const currentNext = placeholder.nextElementSibling;
+    if (!after && target === currentNext) return placeholder;
+    if (after && target === placeholder.previousElementSibling) return placeholder;
+
+    dropzone.insertBefore(placeholder, insertBefore);
+    return placeholder;
+  }
+
+  computeInsertIndexFromPlaceholder(dropzoneEl, projectKey) {
+    const dropzone = dropzoneEl;
+    const placeholder = dropzone?.querySelector?.('.projects-board-drop-placeholder[data-drop-placeholder="true"]') || null;
+    if (!dropzone || !placeholder) return null;
+    const key = String(projectKey || '').trim().replace(/\\/g, '/');
+
+    let index = 0;
+    const children = Array.from(dropzone.children || []);
+    for (const child of children) {
+      if (child === placeholder) break;
+      if (!child?.classList?.contains?.('projects-board-card')) continue;
+      const childKey = String(child?.dataset?.projectKey || '').trim().replace(/\\/g, '/');
+      if (!childKey || childKey === key) continue;
+      index += 1;
+    }
+    return index;
+  }
+
   onDragStart(event) {
     if (event.target?.closest?.('[data-no-drag="true"]')) return;
     const card = event.target?.closest?.('.projects-board-card');
@@ -470,7 +602,10 @@ class ProjectsBoardUI {
     const key = String(card.dataset?.projectKey || '').trim();
     if (!key) return;
     this.dragProjectKey = key;
+    this.dragSourceColumnId = this.getProjectColumn(key);
+    this.dragCardEl = card;
     card.classList.add('dragging');
+    this.ensureDragPlaceholder(card);
     try {
       event.dataTransfer?.setData?.('text/plain', key);
       event.dataTransfer.effectAllowed = 'move';
@@ -482,6 +617,14 @@ class ProjectsBoardUI {
     if (card) card.classList.remove('dragging');
     document.querySelectorAll('.projects-board-column.drag-over').forEach((el) => el.classList.remove('drag-over'));
     this.dragProjectKey = null;
+    this.dragSourceColumnId = null;
+    this.dragCardEl = null;
+    this.clearDragPlaceholder();
+    if (this._dragOverRaf) {
+      window.cancelAnimationFrame(this._dragOverRaf);
+      this._dragOverRaf = null;
+    }
+    this._pendingDragOver = null;
   }
 
   onDragOver(event) {
@@ -489,10 +632,27 @@ class ProjectsBoardUI {
     if (!col) return;
     if (!this.dragProjectKey) return;
     event.preventDefault();
+    document.querySelectorAll('.projects-board-column.drag-over').forEach((el) => {
+      if (el !== col) el.classList.remove('drag-over');
+    });
     col.classList.add('drag-over');
     try {
       event.dataTransfer.dropEffect = 'move';
     } catch {}
+
+    if (col.classList.contains('is-collapsed')) return;
+    const dropzone = this.getColumnDropzone(col);
+    if (!dropzone) return;
+
+    this._pendingDragOver = { dropzone, x: event.clientX, y: event.clientY };
+    if (this._dragOverRaf) return;
+    this._dragOverRaf = window.requestAnimationFrame(() => {
+      this._dragOverRaf = null;
+      const pending = this._pendingDragOver;
+      this._pendingDragOver = null;
+      if (!pending) return;
+      this.positionDragPlaceholder(pending.dropzone, { x: pending.x, y: pending.y });
+    });
   }
 
   onDragLeave(event) {
@@ -511,22 +671,20 @@ class ProjectsBoardUI {
 
     const columnId = String(col.dataset?.columnId || '').trim();
     const projectKey = String(this.dragProjectKey || '').trim() || String(event.dataTransfer?.getData?.('text/plain') || '').trim();
+    const sourceColumnId = this.dragSourceColumnId || this.getProjectColumn(projectKey);
     this.dragProjectKey = null;
+    this.dragSourceColumnId = null;
     if (!projectKey || !columnId) return;
 
-    const targetCard = event.target?.closest?.('.projects-board-card');
-    const targetKey = targetCard ? String(targetCard.dataset?.projectKey || '').trim() : '';
-    const insertAfter = (() => {
-      if (!targetCard || !targetKey || targetKey === projectKey) return false;
-      try {
-        const rect = targetCard.getBoundingClientRect();
-        return (event.clientY || 0) > rect.top + rect.height / 2;
-      } catch {
-        return false;
-      }
-    })();
+    let insertIndex = null;
+    const dropzone = col.classList.contains('is-collapsed') ? null : this.getColumnDropzone(col);
+    if (dropzone) {
+      this.positionDragPlaceholder(dropzone, { x: event.clientX, y: event.clientY });
+      insertIndex = this.computeInsertIndexFromPlaceholder(dropzone, projectKey);
+    }
+    this.clearDragPlaceholder();
+    this.dragCardEl = null;
 
-    const sourceColumnId = this.getProjectColumn(projectKey);
     const full = this.buildFullColumnModel();
     const sourceKeys = (full.get(sourceColumnId) || []).map((p) => p.key).filter((k) => k !== projectKey);
     const destinationKeysBase = sourceColumnId === columnId
@@ -534,12 +692,12 @@ class ProjectsBoardUI {
       : (full.get(columnId) || []).map((p) => p.key).filter((k) => k !== projectKey);
 
     const destinationKeys = destinationKeysBase.slice();
-    let insertIndex = destinationKeys.length;
-    if (targetKey && targetKey !== projectKey) {
-      const idx = destinationKeys.indexOf(targetKey);
-      if (idx !== -1) insertIndex = insertAfter ? idx + 1 : idx;
-    }
-    destinationKeys.splice(insertIndex, 0, projectKey);
+    const fallbackIndex = destinationKeys.length;
+    const desired = Number(insertIndex);
+    const safeIndex = Number.isFinite(desired)
+      ? Math.min(Math.max(Math.round(desired), 0), destinationKeys.length)
+      : fallbackIndex;
+    destinationKeys.splice(safeIndex, 0, projectKey);
 
     const orderByColumn = { [columnId]: destinationKeys };
     if (sourceColumnId !== columnId) orderByColumn[sourceColumnId] = sourceKeys;
