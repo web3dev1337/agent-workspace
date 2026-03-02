@@ -39,21 +39,20 @@ describe('SessionRecoveryService.clearAgent', () => {
 
     const workspaceId = 'ws';
     const sessionId = 'repo-work1-claude';
-    const sessions = {
-      [sessionId]: {
+    svc.states.set(workspaceId, new Map([
+      [sessionId, {
         sessionId,
         worktreePath: '/tmp/repo/work1',
         lastCwd: '/tmp/repo/work1',
         lastAgent: 'claude',
         lastConversationId: 'abc123',
         updatedAt: '2026-02-09T00:00:00.000Z'
-      }
-    };
-
-    svc.loadWorkspaceState = jest.fn().mockImplementation(async (id) => {
-      svc.states.set(id, new Map(Object.entries(sessions)));
-      return { workspaceId: id, sessions };
-    });
+      }]
+    ]));
+    svc.loadWorkspaceState = jest.fn(async (id) => ({
+      workspaceId: id,
+      sessions: Object.fromEntries(svc.states.get(id) || new Map())
+    }));
 
     svc.clearAgent(workspaceId, sessionId);
 

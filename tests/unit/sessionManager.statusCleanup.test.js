@@ -2,6 +2,7 @@ jest.mock('../../server/sessionRecoveryService', () => ({
   clearSession: jest.fn(),
   updateSession: jest.fn(),
   updateAgent: jest.fn(),
+  markAgentInactive: jest.fn(),
   updateCwd: jest.fn(),
   updateConversation: jest.fn(),
   updateServer: jest.fn(),
@@ -45,6 +46,6 @@ describe('SessionManager refreshSessionStatus stale-agent cleanup', () => {
 
     sm.refreshSessionStatus(sessionId, session);
 
-    expect(sessionRecoveryService.clearAgent).toHaveBeenCalledWith('ws1', sessionId);
+    expect(sessionRecoveryService.markAgentInactive).toHaveBeenCalledWith('ws1', sessionId);
   });
 });
