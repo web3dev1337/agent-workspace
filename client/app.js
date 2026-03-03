@@ -7736,10 +7736,9 @@ class ClaudeOrchestrator {
 	            .slice(-8)
 	        : [];
 	      const runOutputText = this.escapeHtml(runOutput.join('\n'));
-	      const runDisabled = !current?.runSupported || !!current?.done || isRunBusy;
-	      const runLabel = current?.done
-	        ? 'Installed'
-	        : (!current?.runSupported ? 'Manual step' : (isRunBusy ? 'Running...' : 'Run step'));
+	      const showRunButton = current?.runSupported !== false;
+	      const runDisabled = !!current?.done || isRunBusy;
+	      const runLabel = current?.done ? 'Installed' : (isRunBusy ? 'Running...' : 'Run step');
 	      const statusText = current?.done || runStatus === 'verified'
 	        ? 'Installed'
 	        : (isRunning ? 'Installing' : (isVerifying ? 'Verifying' : (runStatus === 'failed' ? 'Failed' : 'Missing')));
@@ -7808,7 +7807,7 @@ class ClaudeOrchestrator {
 	            </div>
 	          ` : ''}
 	          <div class="dependency-setup-item-actions">
-	            <button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>
+	            ${showRunButton ? `<button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>` : ''}
 	            <button class="btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
 	          </div>
 	        </div>
