@@ -7745,6 +7745,21 @@ class ClaudeOrchestrator {
 	            .slice(-8)
 	        : [];
 	      const runOutputText = this.escapeHtml(runOutput.join('\n'));
+	      const shouldShowInstallerOutput = currentId !== 'gh-login' && (
+	        runOutput.length > 0 ||
+	        isRunBusy ||
+	        runStatus === 'failed' ||
+	        runStatus === 'needs-attention'
+	      );
+	      const installerOutputText = runOutput.length
+	        ? runOutputText
+	        : this.escapeHtml(
+	            isRunning
+	              ? 'Installer started. Waiting for output...'
+	              : (isVerifying
+	                  ? 'Installer finished. Verifying dependency...'
+	                  : 'No installer output captured yet.')
+	          );
 	      const githubDeviceUrl = 'https://github.com/login/device';
 	      const ghLoginLink = (() => {
 	        if (currentId !== 'gh-login') return githubDeviceUrl;
@@ -7867,12 +7882,12 @@ class ClaudeOrchestrator {
 				              }
 				            </div>
 				          ` : ''}
-			          ${runOutput.length && !isGhLoginStep ? `
+			          ${shouldShowInstallerOutput ? `
 			            <div class="dependency-onboarding-command-wrap">
 			              <div class="dependency-onboarding-command-label">Installer output</div>
-			              <pre class="mono dependency-setup-item-command dependency-setup-item-output">${runOutputText}</pre>
+			              <pre class="mono dependency-setup-item-command dependency-setup-item-output">${installerOutputText}</pre>
 			            </div>
-		          ` : ''}
+			          ` : ''}
 		          ${command && !isGhLoginStep ? `
 		            <div class="dependency-onboarding-command-wrap">
 		              <div class="dependency-onboarding-command-label">Command</div>
