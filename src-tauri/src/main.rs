@@ -608,6 +608,8 @@ fn main() {
                         cmd.arg(entry);
                         cmd.current_dir(&data_dir);
                         cmd.stdin(Stdio::null());
+                        cmd.stdout(Stdio::null());
+                        cmd.stderr(Stdio::null());
                         cmd.env("ORCHESTRATOR_HOST", "127.0.0.1");
                         cmd.env("ORCHESTRATOR_PORT", port.to_string());
                         cmd.env("AUTH_TOKEN", token.clone());
