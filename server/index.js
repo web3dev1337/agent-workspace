@@ -2754,6 +2754,52 @@ app.get('/api/setup-actions/run-status', (req, res) => {
   }
 });
 
+app.post('/api/setup-actions/open-url', (req, res) => {
+  try {
+    const rawUrl = String(req.body?.url || '').trim();
+    if (!rawUrl) {
+      return res.status(400).json({ ok: false, error: 'url is required' });
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ ok: false, error: 'Invalid URL' });
+    }
+
+    if (!['http:', 'https:'].includes(String(parsed.protocol || '').toLowerCase())) {
+      return res.status(400).json({ ok: false, error: 'Only http/https URLs are supported' });
+    }
+
+    const targetUrl = parsed.toString();
+    const { execFile } = require('child_process');
+
+    const finish = (error) => {
+      if (error) {
+        logger.error('Failed to open setup URL', { url: targetUrl, error: error.message, stack: error.stack });
+        return res.status(500).json({ ok: false, error: 'Failed to open URL' });
+      }
+      res.json({ ok: true, opened: targetUrl });
+    };
+
+    if (process.platform === 'win32') {
+      execFile('explorer.exe', [targetUrl], { windowsHide: true }, finish);
+      return;
+    }
+
+    if (process.platform === 'darwin') {
+      execFile('open', [targetUrl], { windowsHide: true }, finish);
+      return;
+    }
+
+    execFile('xdg-open', [targetUrl], { windowsHide: true }, finish);
+  } catch (error) {
+    logger.error('Failed to open setup URL', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to open URL' });
+  }
+});
+
 // Port registry API endpoints
 app.get('/api/ports', (req, res) => {
   try {
