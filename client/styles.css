@@ -3922,6 +3922,39 @@ body.dependency-onboarding-active #dependency-setup-modal {
   color: var(--accent-primary);
 }
 
+.dependency-gh-login-helper {
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(145deg, rgba(56, 139, 253, 0.1), rgba(56, 139, 253, 0.02)),
+    var(--bg-tertiary);
+}
+
+.dependency-gh-login-helper-text {
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.dependency-gh-login-code-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dependency-gh-login-code {
+  display: inline-block;
+  padding: 7px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
 .dependency-setup-item-output {
   max-height: 150px;
   overflow: auto;

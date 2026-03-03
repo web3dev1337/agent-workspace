@@ -7744,6 +7744,25 @@ class ClaudeOrchestrator {
 	            .slice(-8)
 	        : [];
 	      const runOutputText = this.escapeHtml(runOutput.join('\n'));
+	      const githubDeviceUrl = 'https://github.com/login/device';
+	      const ghLoginLink = (() => {
+	        if (currentId !== 'gh-login') return githubDeviceUrl;
+	        for (let i = runOutput.length - 1; i >= 0; i -= 1) {
+	          const line = String(runOutput[i] || '');
+	          const match = line.match(/https:\/\/github\.com\/login\/device(?:\S*)?/i);
+	          if (match?.[0]) return match[0].trim();
+	        }
+	        return githubDeviceUrl;
+	      })();
+	      const ghLoginCode = (() => {
+	        if (currentId !== 'gh-login') return '';
+	        for (let i = runOutput.length - 1; i >= 0; i -= 1) {
+	          const line = String(runOutput[i] || '');
+	          const match = line.match(/\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/);
+	          if (match?.[1]) return match[1];
+	        }
+	        return '';
+	      })();
 	      const showRunButton = current?.runSupported !== false;
 	      const runDisabled = !!current?.done || isRunBusy;
 	      const runLabel = (() => {
@@ -7753,29 +7772,42 @@ class ClaudeOrchestrator {
 	          return 'Installed';
 	        }
 	        if (isRunBusy) return 'Running...';
-	        if (currentId === 'gh-login') return 'Login';
+	        if (currentId === 'gh-login') return 'Start login';
 	        return 'Run step';
 	      })();
-	      const statusText = current?.done || runStatus === 'verified'
-	        ? 'Installed'
-	        : (isRunning ? 'Installing' : (isVerifying ? 'Verifying' : (runStatus === 'failed' ? 'Failed' : 'Missing')));
+	      const baseStatusText = String(current?.statusText || (current?.done ? 'Installed' : 'Missing'));
+	      const statusText = (() => {
+	        if (runStatus === 'verified') return baseStatusText;
+	        if (isRunning) return currentId === 'gh-login' ? 'Signing in' : 'Installing';
+	        if (isVerifying) return currentId === 'gh-login' ? 'Checking login' : 'Verifying';
+	        if (runStatus === 'failed') return currentId === 'gh-login' ? 'Login failed' : 'Failed';
+	        return baseStatusText;
+	      })();
 	      const statusClass = current?.done || runStatus === 'verified'
 	        ? 'status-ok'
 	        : ((isRunning || isVerifying) ? 'status-pending' : (runStatus === 'failed' ? 'status-missing' : (current?.statusClass || 'status-missing')));
 	      let guidance = 'Run this step. We will detect completion automatically.';
 	      if (current?.done || runStatus === 'verified') {
-	        guidance = 'Already installed on this machine. Continue to the next step.';
+	        guidance = currentId === 'gh-login'
+	          ? 'GitHub CLI is authenticated. Continue to the next step.'
+	          : 'Already installed on this machine. Continue to the next step.';
 	      } else if (isRunning) {
-	        guidance = 'Installing now via PowerShell. Keep this window open and we will recheck automatically.';
+	        guidance = currentId === 'gh-login'
+	          ? 'Starting GitHub login. Complete sign-in in your browser and we will detect it automatically.'
+	          : 'Installing now via PowerShell. Keep this window open and we will recheck automatically.';
 	      } else if (isVerifying) {
-	        guidance = 'Install command finished. Checking your system automatically...';
+	        guidance = currentId === 'gh-login'
+	          ? 'Checking GitHub login status automatically...'
+	          : 'Install command finished. Checking your system automatically...';
 	      } else if (runStatus === 'failed') {
 	        const errorText = String(runInfo?.error || '').trim();
 	        guidance = errorText
-	          ? `Install failed: ${errorText}`
-	          : 'Install failed. Review the output below and run the step again.';
+	          ? `${currentId === 'gh-login' ? 'Login failed' : 'Install failed'}: ${errorText}`
+	          : `${currentId === 'gh-login' ? 'Login failed' : 'Install failed'}. Review the output below and run the step again.`;
 	      } else if (runStatus === 'needs-attention') {
-	        guidance = 'Install command finished, but this dependency is still not detected. Review output below and run again.';
+	        guidance = currentId === 'gh-login'
+	          ? 'GitHub login is not detected yet. Finish sign-in in your browser, then click Start login again.'
+	          : 'Install command finished, but this dependency is still not detected. Review output below and run again.';
 	      } else if (!current?.runSupported && current?.optional) {
 	        guidance = 'Optional but strongly recommended: set Git user.name and user.email so commits and PR authorship are correct.';
 	      } else if (!current?.runSupported) {
@@ -7807,13 +7839,23 @@ class ClaudeOrchestrator {
 	              <span class="dependency-setup-badge ${statusClass}">${statusText}</span>
 	            </div>
 	          </div>
-	          <div class="dependency-setup-item-desc">${currentDesc}</div>
-	          <div class="dependency-onboarding-state ${statusClass}">${this.escapeHtml(guidance)}</div>
-	          ${runOutput.length ? `
-	            <div class="dependency-onboarding-command-wrap">
-	              <div class="dependency-onboarding-command-label">Installer output</div>
-	              <pre class="mono dependency-setup-item-command dependency-setup-item-output">${runOutputText}</pre>
-	            </div>
+		          <div class="dependency-setup-item-desc">${currentDesc}</div>
+		          <div class="dependency-onboarding-state ${statusClass}">${this.escapeHtml(guidance)}</div>
+		          ${currentId === 'gh-login' && !current?.done ? `
+		            <div class="dependency-gh-login-helper">
+		              <div class="dependency-onboarding-command-label">Browser login</div>
+		              <div class="dependency-gh-login-helper-text">Use your browser to complete sign-in. We check this automatically after the command exits.</div>
+		              ${ghLoginCode
+		                ? `<div class="dependency-gh-login-code-wrap"><span class="dependency-gh-login-code mono">${this.escapeHtml(ghLoginCode)}</span><button class="btn-secondary" type="button" data-setup-copy-gh-code="${this.escapeHtml(ghLoginCode)}">Copy code</button></div>`
+		                : '<div class="dependency-gh-login-helper-text">Waiting for one-time code from GitHub CLI output...</div>'
+		              }
+		            </div>
+		          ` : ''}
+		          ${runOutput.length ? `
+		            <div class="dependency-onboarding-command-wrap">
+		              <div class="dependency-onboarding-command-label">${currentId === 'gh-login' ? 'GitHub CLI output' : 'Installer output'}</div>
+		              <pre class="mono dependency-setup-item-command dependency-setup-item-output">${runOutputText}</pre>
+		            </div>
 	          ` : ''}
 	          ${command ? `
 	            <div class="dependency-onboarding-command-wrap">
@@ -7821,13 +7863,15 @@ class ClaudeOrchestrator {
 	              <pre class="mono dependency-setup-item-command">${command}</pre>
 	            </div>
 	          ` : ''}
-	          <div class="dependency-setup-item-actions">
-	            ${showRunButton ? `<button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>` : ''}
-	            <button class="btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
-	          </div>
-	        </div>
-	        <div class="dependency-onboarding-nav">
-	          <button class="btn-secondary" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Back</button>
+		          <div class="dependency-setup-item-actions">
+		            ${showRunButton ? `<button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>` : ''}
+		            <button class="btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
+		            ${currentId === 'gh-login' && !current?.done ? `<a class="btn-secondary" href="${this.escapeHtml(ghLoginLink)}" target="_blank" rel="noopener noreferrer">Open GitHub login</a>` : ''}
+		            ${currentId === 'gh-login' && !current?.done ? `<button class="btn-secondary" type="button" data-setup-copy-gh-link="${this.escapeHtml(ghLoginLink)}">Copy login link</button>` : ''}
+		          </div>
+		        </div>
+		        <div class="dependency-onboarding-nav">
+		          <button class="btn-secondary" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Back</button>
 	          <button class="btn-primary" type="button" data-setup-next="true" ${canAdvance ? '' : 'disabled'}>${nextLabel}</button>
 	        </div>
 	      `;
@@ -7953,6 +7997,9 @@ class ClaudeOrchestrator {
 
 	    const getVerifyPolicyForAction = (actionId) => {
 	      const id = String(actionId || '').trim();
+	      if (id === 'gh-login') {
+	        return { attempts: 20, delayMs: 1000 };
+	      }
 	      if (id === 'install-git' || id === 'install-node' || id === 'install-gh') {
 	        return { attempts: 10, delayMs: 650 };
 	      }
@@ -7999,7 +8046,12 @@ class ClaudeOrchestrator {
 	        status: 'needs-attention',
 	        updatedAt: new Date().toISOString()
 	      });
-	      this.showToast('Install finished but dependency is still missing. Review output and run again if needed.', 'warning');
+	      this.showToast(
+	        id === 'gh-login'
+	          ? 'GitHub login is not detected yet. Complete sign-in in browser and try again.'
+	          : 'Install finished but dependency is still missing. Review output and run again if needed.',
+	        'warning'
+	      );
 	      return false;
 	    };
 
@@ -8098,8 +8150,12 @@ class ClaudeOrchestrator {
 	          await loadAndRender({ open: true, forceAutoShow: true });
 	        }
 	        const defaultMessage = data?.alreadyRunning
-	          ? 'Install is already running. Watching for completion...'
-	          : 'Install started. We will check this step automatically.';
+	          ? (id === 'gh-login'
+	              ? 'GitHub login is already running. Complete it in your browser.'
+	              : 'Install is already running. Watching for completion...')
+	          : (id === 'gh-login'
+	              ? 'GitHub login started. Complete sign-in in your browser.'
+	              : 'Install started. We will check this step automatically.');
 	        this.showToast(String(data?.message || defaultMessage), 'info');
 	      } catch (err) {
 	        updateActionRunState(id, {
@@ -8170,6 +8226,32 @@ class ClaudeOrchestrator {
 	        try {
 	          await navigator.clipboard.writeText(command);
 	          this.showToast('Command copied to clipboard.', 'success');
+	        } catch (err) {
+	          this.showToast(`Copy failed: ${String(err?.message || err)}`, 'error');
+	        }
+	        return;
+	      }
+
+	      const copyGhCodeBtn = event.target.closest('[data-setup-copy-gh-code]');
+	      if (copyGhCodeBtn) {
+	        const code = String(copyGhCodeBtn.getAttribute('data-setup-copy-gh-code') || '').trim();
+	        if (!code) return;
+	        try {
+	          await navigator.clipboard.writeText(code);
+	          this.showToast('GitHub one-time code copied.', 'success');
+	        } catch (err) {
+	          this.showToast(`Copy failed: ${String(err?.message || err)}`, 'error');
+	        }
+	        return;
+	      }
+
+	      const copyGhLinkBtn = event.target.closest('[data-setup-copy-gh-link]');
+	      if (copyGhLinkBtn) {
+	        const link = String(copyGhLinkBtn.getAttribute('data-setup-copy-gh-link') || '').trim();
+	        if (!link) return;
+	        try {
+	          await navigator.clipboard.writeText(link);
+	          this.showToast('GitHub login link copied.', 'success');
 	        } catch (err) {
 	          this.showToast(`Copy failed: ${String(err?.message || err)}`, 'error');
 	        }

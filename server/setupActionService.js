@@ -53,7 +53,7 @@ function getSetupActions(platform = process.platform) {
       id: 'gh-login',
       title: 'Login GitHub CLI',
       description: 'Authenticate GitHub CLI for PR and repo APIs.',
-      command: 'gh auth login --hostname github.com --git-protocol https --web',
+      command: 'gh auth login --hostname github.com --git-protocol https --web --clipboard',
       docsUrl: 'https://cli.github.com/manual/gh_auth_login',
       required: false,
       optional: true,
