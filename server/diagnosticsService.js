@@ -23,8 +23,7 @@ async function checkCommand(command, args, options = {}) {
       const isWindowsScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandStr);
       const shouldRetryWithCmd = isWindowsScript && (error?.code === 'EINVAL' || error?.code === 'ENOENT');
       if (!shouldRetryWithCmd) throw error;
-
-      result = await execFileAsync('cmd.exe', ['/d', '/s', '/c', commandStr, ...argsArr], runOptions);
+      result = await execFileAsync('cmd.exe', ['/d', '/c', commandStr, ...argsArr], runOptions);
     }
 
     const { stdout, stderr } = result || {};
