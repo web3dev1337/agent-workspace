@@ -7637,6 +7637,13 @@ class ClaudeOrchestrator {
 	      return level === 'recommended' ? 'level-recommended' : 'level-required';
 	    };
 
+	    const getActionStatusText = (actionId, done) => {
+	      const id = String(actionId || '').trim();
+	      if (id === 'gh-login') return done ? 'Logged in' : 'Not logged in';
+	      if (id === 'configure-git-identity') return done ? 'Configured' : 'Not configured';
+	      return done ? 'Installed' : 'Missing';
+	    };
+
 	    const getResolvedSteps = () => {
 	      const toolsMap = toToolMap(state.diagnostics);
 	      const actions = Array.isArray(state.actions) ? state.actions : [];
@@ -7652,7 +7659,7 @@ class ClaudeOrchestrator {
 	          done,
 	          levelText: getActionLevelText(level),
 	          levelClass: getActionLevelClass(level),
-	          statusText: done ? 'Installed' : 'Missing',
+	          statusText: getActionStatusText(id, done),
 	          statusClass: done ? 'status-ok' : 'status-missing',
 	          runSupported: action?.runSupported !== false
 	        };
@@ -7739,7 +7746,16 @@ class ClaudeOrchestrator {
 	      const runOutputText = this.escapeHtml(runOutput.join('\n'));
 	      const showRunButton = current?.runSupported !== false;
 	      const runDisabled = !!current?.done || isRunBusy;
-	      const runLabel = current?.done ? 'Installed' : (isRunBusy ? 'Running...' : 'Run step');
+	      const runLabel = (() => {
+	        if (current?.done) {
+	          if (currentId === 'gh-login') return 'Logged in';
+	          if (currentId === 'configure-git-identity') return 'Configured';
+	          return 'Installed';
+	        }
+	        if (isRunBusy) return 'Running...';
+	        if (currentId === 'gh-login') return 'Login';
+	        return 'Run step';
+	      })();
 	      const statusText = current?.done || runStatus === 'verified'
 	        ? 'Installed'
 	        : (isRunning ? 'Installing' : (isVerifying ? 'Verifying' : (runStatus === 'failed' ? 'Failed' : 'Missing')));
@@ -7867,7 +7883,14 @@ class ClaudeOrchestrator {
 	        }
 
 	        state.diagnostics = diagData;
-	        state.actions = Array.isArray(actionsData?.actions) ? actionsData.actions : [];
+	        const allActions = Array.isArray(actionsData?.actions) ? actionsData.actions : [];
+	        const toolsMap = toToolMap(diagData);
+	        state.actions = allActions.filter((action) => {
+	          const id = String(action?.id || '').trim();
+	          // Only offer GitHub login once GitHub CLI is actually installed/detected.
+	          if (id === 'gh-login' && !toolsMap.get('gh')) return false;
+	          return true;
+	        });
 	        if (state.actions.length > 0) {
 	          const savedStep = readSavedStep();
 	          setCurrentStep(savedStep, { persist: false });
