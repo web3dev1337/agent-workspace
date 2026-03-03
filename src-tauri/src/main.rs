@@ -10,6 +10,12 @@ use uuid::Uuid;
 use tauri_plugin_updater::UpdaterExt;
 use url::Url;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 mod terminal;
 mod file_watcher;
 use terminal::{TerminalManager, TerminalOutput};
@@ -610,6 +616,11 @@ fn main() {
                         // If we didn't bundle diff-viewer, disable auto-start so packaged builds don't fail noisily.
                         if !has_diff_viewer_folder(&app_handle) {
                             cmd.env("AUTO_START_DIFF_VIEWER", "false");
+                        }
+
+                        #[cfg(target_os = "windows")]
+                        {
+                            cmd.creation_flags(CREATE_NO_WINDOW);
                         }
 
                         match cmd.spawn() {

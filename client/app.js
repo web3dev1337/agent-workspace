@@ -7490,6 +7490,7 @@ class ClaudeOrchestrator {
 	    const dismissBtn = document.getElementById('dependency-setup-dismiss');
 	    const closeBtn = document.getElementById('dependency-setup-close');
 	    if (!modal || !summaryEl || !listEl) return;
+	    const body = document.body;
 
 	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v2';
 	    const completedKey = 'orchestrator-dependency-onboarding-completed-v1';
@@ -7670,9 +7671,9 @@ class ClaudeOrchestrator {
 	      if (!req.hasAgentCli) missingCore.push('Claude Code or Codex CLI');
 
 	      if (req.coreReady) {
-	        summaryEl.textContent = `Onboarding step ${stepNo} of ${totalSteps}. Core requirements are installed; continue through each step to verify your environment.`;
+	        summaryEl.textContent = `Step ${stepNo} of ${totalSteps}. Core tools are ready. We'll still verify each step and mark installed tools automatically.`;
 	      } else {
-	        summaryEl.textContent = `Onboarding step ${stepNo} of ${totalSteps}. Missing core requirements: ${missingCore.join(' + ')}.`;
+	        summaryEl.textContent = `Step ${stepNo} of ${totalSteps}. Missing core tools: ${missingCore.join(' + ')}.`;
 	      }
 
 	      const currentId = String(current?.id || '').trim();
@@ -7682,22 +7683,11 @@ class ClaudeOrchestrator {
 	      const command = this.escapeHtml(commandRaw);
 	      const docsUrl = this.escapeHtml(String(current?.docsUrl || ''));
 	      const runDisabled = !current?.runSupported || !!current?.done;
-	      const runLabel = current?.done ? 'Already installed' : 'Run in PowerShell';
+	      const runLabel = current?.done ? 'Installed' : 'Run step';
 	      const guidance = current?.done
-	        ? 'Detected on this machine. Continue to the next step.'
-	        : 'Not detected yet. Run the command, then click Recheck.';
+	        ? 'Already installed on this machine. Continue to the next step.'
+	        : 'Run this step, then click Recheck.';
 	      const nextLabel = stepNo >= totalSteps ? 'Finish onboarding' : 'Next step';
-
-	      const chips = steps.map((step, idx) => {
-	        const chipClasses = [
-	          'dependency-onboarding-step-chip',
-	          idx === state.currentStep ? 'is-active' : '',
-	          step.done ? 'is-complete' : ''
-	        ].filter(Boolean).join(' ');
-	        const name = this.escapeHtml(String(step?.title || step?.id || `Step ${idx + 1}`));
-	        const stateText = step.done ? 'Installed' : 'Missing';
-	        return `<button class="${chipClasses}" type="button" data-setup-jump="${idx}">${idx + 1}. ${name} - ${stateText}</button>`;
-	      }).join('');
 
 	      listEl.innerHTML = `
 	        <div class="dependency-onboarding-progress">
@@ -7709,7 +7699,8 @@ class ClaudeOrchestrator {
 	            <div class="dependency-onboarding-progress-bar" style="width:${doneRatio}%;"></div>
 	          </div>
 	        </div>
-	        <div class="dependency-setup-item dependency-onboarding-step" data-setup-item="${this.escapeHtml(currentId)}">
+	        <div class="dependency-setup-item dependency-onboarding-step dependency-onboarding-step-card" data-setup-item="${this.escapeHtml(currentId)}">
+	          <div class="dependency-onboarding-step-kicker">Current step</div>
 	          <div class="dependency-setup-item-header">
 	            <div class="dependency-setup-item-title">${currentTitle}</div>
 	            <div class="dependency-setup-badges">
@@ -7719,7 +7710,12 @@ class ClaudeOrchestrator {
 	          </div>
 	          <div class="dependency-setup-item-desc">${currentDesc}</div>
 	          <div class="dependency-onboarding-state ${current?.statusClass || ''}">${this.escapeHtml(guidance)}</div>
-	          ${command ? `<pre class="mono dependency-setup-item-command">${command}</pre>` : ''}
+	          ${command ? `
+	            <div class="dependency-onboarding-command-wrap">
+	              <div class="dependency-onboarding-command-label">Command</div>
+	              <pre class="mono dependency-setup-item-command">${command}</pre>
+	            </div>
+	          ` : ''}
 	          <div class="dependency-setup-item-actions">
 	            <button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>
 	            <button class="btn-secondary" type="button" data-setup-copy="${this.escapeHtml(commandRaw)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
@@ -7728,17 +7724,22 @@ class ClaudeOrchestrator {
 	          </div>
 	        </div>
 	        <div class="dependency-onboarding-nav">
-	          <button class="btn-secondary" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Previous</button>
-	          <button class="btn-secondary" type="button" data-setup-next="true">${nextLabel}</button>
+	          <button class="btn-secondary" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Back</button>
+	          <button class="btn-primary" type="button" data-setup-next="true">${nextLabel}</button>
 	        </div>
-	        <div class="dependency-onboarding-overview">${chips}</div>
 	      `;
 
 	      return { req, steps, current };
 	    };
 
-	    const closeModal = () => modal.classList.add('hidden');
-	    const openModal = () => modal.classList.remove('hidden');
+	    const closeModal = () => {
+	      modal.classList.add('hidden');
+	      body?.classList?.remove?.('dependency-onboarding-active');
+	    };
+	    const openModal = () => {
+	      modal.classList.remove('hidden');
+	      body?.classList?.add?.('dependency-onboarding-active');
+	    };
 
 	    const setLoading = (loading) => {
 	      state.loading = !!loading;
@@ -7804,8 +7805,8 @@ class ClaudeOrchestrator {
 	        if (!res.ok || data?.ok === false) {
 	          throw new Error(String(data?.error || `HTTP ${res.status}`));
 	        }
-	        this.showToast(String(data?.message || 'Setup command opened in PowerShell.'), 'info');
-	        this.showToast('Complete the command in PowerShell, then click Refresh.', 'info');
+	        this.showToast(String(data?.message || 'Setup command started.'), 'info');
+	        this.showToast('After it finishes, click Recheck.', 'info');
 	      } catch (err) {
 	        this.showToast(`Failed to start action: ${String(err?.message || err)}`, 'error');
 	      } finally {
