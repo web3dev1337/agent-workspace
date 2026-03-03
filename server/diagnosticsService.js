@@ -110,10 +110,20 @@ async function collectDiagnostics() {
     ...npmCheck
   });
 
+  const gitCandidates = uniqueCommandCandidates([
+    { command: 'git', args: ['--version'] },
+    platform === 'win32' ? { command: 'git.exe', args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.ProgramFiles || '', 'Git', 'cmd', 'git.exe'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.ProgramFiles || '', 'Git', 'bin', 'git.exe'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env['ProgramFiles(x86)'] || '', 'Git', 'cmd', 'git.exe'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env['ProgramFiles(x86)'] || '', 'Git', 'bin', 'git.exe'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Git', 'cmd', 'git.exe'), args: ['--version'] } : null
+  ]);
+
   tools.push({
     id: 'git',
     name: 'Git',
-    ...(await checkCommand('git', ['--version']))
+    ...(await checkFirstAvailable(gitCandidates))
   });
 
   tools.push({
