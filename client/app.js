@@ -7491,11 +7491,14 @@ class ClaudeOrchestrator {
 	    const closeBtn = document.getElementById('dependency-setup-close');
 	    if (!modal || !summaryEl || !listEl) return;
 
-	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v1';
+	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v2';
+	    const completedKey = 'orchestrator-dependency-onboarding-completed-v1';
+	    const progressKey = 'orchestrator-dependency-onboarding-progress-v1';
 	    const state = {
 	      loading: false,
 	      diagnostics: null,
-	      actions: []
+	      actions: [],
+	      currentStep: 0
 	    };
 
 	    const readDismissed = () => {
@@ -7510,6 +7513,41 @@ class ClaudeOrchestrator {
 	      try {
 	        if (value) localStorage.setItem(dismissKey, 'true');
 	        else localStorage.removeItem(dismissKey);
+	      } catch {
+	        // ignore
+	      }
+	    };
+
+	    const readCompleted = () => {
+	      try {
+	        return localStorage.getItem(completedKey) === 'true';
+	      } catch {
+	        return false;
+	      }
+	    };
+
+	    const writeCompleted = (value) => {
+	      try {
+	        if (value) localStorage.setItem(completedKey, 'true');
+	        else localStorage.removeItem(completedKey);
+	      } catch {
+	        // ignore
+	      }
+	    };
+
+	    const readSavedStep = () => {
+	      try {
+	        const raw = Number.parseInt(String(localStorage.getItem(progressKey) || ''), 10);
+	        if (Number.isFinite(raw) && raw >= 0) return raw;
+	        return 0;
+	      } catch {
+	        return 0;
+	      }
+	    };
+
+	    const writeSavedStep = (step) => {
+	      try {
+	        localStorage.setItem(progressKey, String(Math.max(0, Number(step) || 0)));
 	      } catch {
 	        // ignore
 	      }
@@ -7564,6 +7602,46 @@ class ClaudeOrchestrator {
 	      }
 	    };
 
+	    const getActionLevelText = (level) => {
+	      if (level === 'required') return 'Required';
+	      if (level === 'core-option') return 'Core option';
+	      return 'Recommended';
+	    };
+
+	    const getActionLevelClass = (level) => {
+	      return level === 'recommended' ? 'level-recommended' : 'level-required';
+	    };
+
+	    const getResolvedSteps = () => {
+	      const toolsMap = toToolMap(state.diagnostics);
+	      const actions = Array.isArray(state.actions) ? state.actions : [];
+	      return actions.map((action) => {
+	        const id = String(action?.id || '').trim();
+	        const level = getActionLevel(id);
+	        const done = isActionComplete(id, toolsMap);
+	        return {
+	          ...action,
+	          id,
+	          level,
+	          done,
+	          levelText: getActionLevelText(level),
+	          levelClass: getActionLevelClass(level),
+	          statusText: done ? 'Installed' : 'Missing',
+	          statusClass: done ? 'status-ok' : 'status-missing',
+	          runSupported: action?.runSupported !== false
+	        };
+	      });
+	    };
+
+	    const setCurrentStep = (nextStep, { persist = true } = {}) => {
+	      const maxStep = Math.max(0, (Array.isArray(state.actions) ? state.actions.length : 0) - 1);
+	      const parsed = Number.parseInt(String(nextStep), 10);
+	      const safe = Number.isFinite(parsed) ? parsed : 0;
+	      state.currentStep = Math.max(0, Math.min(safe, maxStep));
+	      if (persist) writeSavedStep(state.currentStep);
+	      return state.currentStep;
+	    };
+
 	    const getActionLevel = (actionId) => {
 	      const id = String(actionId || '').trim();
 	      if (id === 'install-git') return 'required';
@@ -7574,59 +7652,89 @@ class ClaudeOrchestrator {
 	    const render = () => {
 	      const toolsMap = toToolMap(state.diagnostics);
 	      const req = getRequirementState(toolsMap);
-	      if (req.coreReady) {
-	        summaryEl.textContent = 'Core requirements are installed. Optional tools can still be installed below.';
-	      } else {
-	        const missingParts = [];
-	        if (!req.gitOk) missingParts.push('Git');
-	        if (!req.hasAgentCli) missingParts.push('Claude Code or Codex CLI');
-	        summaryEl.textContent = `Missing core requirements: ${missingParts.join(' + ')}.`;
-	      }
-
-	      const actions = Array.isArray(state.actions) ? state.actions : [];
-	      if (!actions.length) {
+	      const steps = getResolvedSteps();
+	      if (!steps.length) {
+	        summaryEl.textContent = 'No setup actions are available for this platform.';
 	        listEl.innerHTML = '<div class="dependency-setup-empty">No setup actions are available for this platform.</div>';
-	        return req;
+	        return { req, steps, current: null };
 	      }
 
-	      listEl.innerHTML = actions.map((action) => {
-	        const id = String(action?.id || '').trim();
-	        const title = this.escapeHtml(String(action?.title || id || 'Setup action'));
-	        const desc = this.escapeHtml(String(action?.description || ''));
-	        const commandRaw = String(action?.command || '');
-	        const command = this.escapeHtml(commandRaw);
-	        const docsUrl = this.escapeHtml(String(action?.docsUrl || ''));
-	        const done = isActionComplete(id, toolsMap);
-	        const level = getActionLevel(id);
-	        const levelText = level === 'required' ? 'Required' : (level === 'core-option' ? 'Core option' : 'Recommended');
-	        const levelClass = level === 'recommended' ? 'level-recommended' : 'level-required';
-	        const statusText = done ? 'Installed' : 'Missing';
-	        const statusClass = done ? 'status-ok' : 'status-missing';
-	        const runSupported = action?.runSupported !== false;
-	        const runDisabled = !runSupported || done;
-	        const runLabel = done ? 'Installed' : 'Run in PowerShell';
+	      setCurrentStep(state.currentStep, { persist: false });
+	      const current = steps[state.currentStep];
+	      const stepNo = state.currentStep + 1;
+	      const totalSteps = steps.length;
+	      const detectedCount = steps.filter((step) => step.done).length;
+	      const doneRatio = totalSteps > 0 ? Math.round((detectedCount / totalSteps) * 100) : 0;
+	      const missingCore = [];
+	      if (!req.gitOk) missingCore.push('Git');
+	      if (!req.hasAgentCli) missingCore.push('Claude Code or Codex CLI');
 
-	        return `
-	          <div class="dependency-setup-item" data-setup-item="${this.escapeHtml(id)}">
-	            <div class="dependency-setup-item-header">
-	              <div class="dependency-setup-item-title">${title}</div>
-	              <div class="dependency-setup-badges">
-	                <span class="dependency-setup-badge ${levelClass}">${levelText}</span>
-	                <span class="dependency-setup-badge ${statusClass}">${statusText}</span>
-	              </div>
-	            </div>
-	            <div class="dependency-setup-item-desc">${desc}</div>
-	            ${command ? `<pre class="mono dependency-setup-item-command">${command}</pre>` : ''}
-	            <div class="dependency-setup-item-actions">
-	              <button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(id)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>
-	              <button class="btn-secondary" type="button" data-setup-copy="${this.escapeHtml(commandRaw)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
-	              ${docsUrl ? `<a class="btn-secondary" href="${docsUrl}" target="_blank" rel="noopener noreferrer">Docs</a>` : ''}
-	            </div>
-	          </div>
-	        `;
+	      if (req.coreReady) {
+	        summaryEl.textContent = `Onboarding step ${stepNo} of ${totalSteps}. Core requirements are installed; continue through each step to verify your environment.`;
+	      } else {
+	        summaryEl.textContent = `Onboarding step ${stepNo} of ${totalSteps}. Missing core requirements: ${missingCore.join(' + ')}.`;
+	      }
+
+	      const currentId = String(current?.id || '').trim();
+	      const currentTitle = this.escapeHtml(String(current?.title || currentId || 'Setup action'));
+	      const currentDesc = this.escapeHtml(String(current?.description || ''));
+	      const commandRaw = String(current?.command || '');
+	      const command = this.escapeHtml(commandRaw);
+	      const docsUrl = this.escapeHtml(String(current?.docsUrl || ''));
+	      const runDisabled = !current?.runSupported || !!current?.done;
+	      const runLabel = current?.done ? 'Already installed' : 'Run in PowerShell';
+	      const guidance = current?.done
+	        ? 'Detected on this machine. Continue to the next step.'
+	        : 'Not detected yet. Run the command, then click Recheck.';
+	      const nextLabel = stepNo >= totalSteps ? 'Finish onboarding' : 'Next step';
+
+	      const chips = steps.map((step, idx) => {
+	        const chipClasses = [
+	          'dependency-onboarding-step-chip',
+	          idx === state.currentStep ? 'is-active' : '',
+	          step.done ? 'is-complete' : ''
+	        ].filter(Boolean).join(' ');
+	        const name = this.escapeHtml(String(step?.title || step?.id || `Step ${idx + 1}`));
+	        const stateText = step.done ? 'Installed' : 'Missing';
+	        return `<button class="${chipClasses}" type="button" data-setup-jump="${idx}">${idx + 1}. ${name} - ${stateText}</button>`;
 	      }).join('');
 
-	      return req;
+	      listEl.innerHTML = `
+	        <div class="dependency-onboarding-progress">
+	          <div class="dependency-onboarding-progress-meta">
+	            <strong>Step ${stepNo} of ${totalSteps}</strong>
+	            <span>${detectedCount}/${totalSteps} detected</span>
+	          </div>
+	          <div class="dependency-onboarding-progress-track" aria-hidden="true">
+	            <div class="dependency-onboarding-progress-bar" style="width:${doneRatio}%;"></div>
+	          </div>
+	        </div>
+	        <div class="dependency-setup-item dependency-onboarding-step" data-setup-item="${this.escapeHtml(currentId)}">
+	          <div class="dependency-setup-item-header">
+	            <div class="dependency-setup-item-title">${currentTitle}</div>
+	            <div class="dependency-setup-badges">
+	              <span class="dependency-setup-badge ${current?.levelClass || ''}">${current?.levelText || 'Recommended'}</span>
+	              <span class="dependency-setup-badge ${current?.statusClass || ''}">${current?.statusText || 'Missing'}</span>
+	            </div>
+	          </div>
+	          <div class="dependency-setup-item-desc">${currentDesc}</div>
+	          <div class="dependency-onboarding-state ${current?.statusClass || ''}">${this.escapeHtml(guidance)}</div>
+	          ${command ? `<pre class="mono dependency-setup-item-command">${command}</pre>` : ''}
+	          <div class="dependency-setup-item-actions">
+	            <button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>
+	            <button class="btn-secondary" type="button" data-setup-copy="${this.escapeHtml(commandRaw)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
+	            ${docsUrl ? `<a class="btn-secondary" href="${docsUrl}" target="_blank" rel="noopener noreferrer">Docs</a>` : ''}
+	            <button class="btn-secondary" type="button" data-setup-recheck="true">Recheck</button>
+	          </div>
+	        </div>
+	        <div class="dependency-onboarding-nav">
+	          <button class="btn-secondary" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Previous</button>
+	          <button class="btn-secondary" type="button" data-setup-next="true">${nextLabel}</button>
+	        </div>
+	        <div class="dependency-onboarding-overview">${chips}</div>
+	      `;
+
+	      return { req, steps, current };
 	    };
 
 	    const closeModal = () => modal.classList.add('hidden');
@@ -7661,13 +7769,14 @@ class ClaudeOrchestrator {
 
 	        state.diagnostics = diagData;
 	        state.actions = Array.isArray(actionsData?.actions) ? actionsData.actions : [];
-
-	        const req = render();
-	        if (req.coreReady) {
-	          writeDismissed(false);
+	        if (state.actions.length > 0) {
+	          const savedStep = readSavedStep();
+	          setCurrentStep(savedStep, { persist: false });
 	        }
+	        const view = render();
+	        if (view.req?.coreReady) writeDismissed(false);
 
-	        const shouldAutoShow = !req.coreReady && (forceAutoShow || !readDismissed());
+	        const shouldAutoShow = !readDismissed() && (!readCompleted() || !(view.req?.coreReady));
 	        if (open || shouldAutoShow) {
 	          openModal();
 	        }
@@ -7711,6 +7820,44 @@ class ClaudeOrchestrator {
 	        return;
 	      }
 
+	      const recheckBtn = event.target.closest('[data-setup-recheck]');
+	      if (recheckBtn) {
+	        await loadAndRender({ open: true, forceAutoShow: true });
+	        return;
+	      }
+
+	      const prevBtn = event.target.closest('[data-setup-prev]');
+	      if (prevBtn) {
+	        setCurrentStep(state.currentStep - 1);
+	        render();
+	        return;
+	      }
+
+	      const nextBtn = event.target.closest('[data-setup-next]');
+	      if (nextBtn) {
+	        const total = Array.isArray(state.actions) ? state.actions.length : 0;
+	        if (state.currentStep >= (total - 1)) {
+	          writeCompleted(true);
+	          writeDismissed(false);
+	          closeModal();
+	          this.showToast('Dependency onboarding complete.', 'success');
+	          return;
+	        }
+	        setCurrentStep(state.currentStep + 1);
+	        render();
+	        return;
+	      }
+
+	      const jumpBtn = event.target.closest('[data-setup-jump]');
+	      if (jumpBtn) {
+	        const idx = Number.parseInt(String(jumpBtn.getAttribute('data-setup-jump') || ''), 10);
+	        if (Number.isFinite(idx)) {
+	          setCurrentStep(idx);
+	          render();
+	        }
+	        return;
+	      }
+
 	      const copyBtn = event.target.closest('[data-setup-copy]');
 	      if (copyBtn) {
 	        const command = String(copyBtn.getAttribute('data-setup-copy') || '').trim();
@@ -7727,6 +7874,7 @@ class ClaudeOrchestrator {
 	    if (openBtn) {
 	      openBtn.addEventListener('click', () => {
 	        writeDismissed(false);
+	        setCurrentStep(0);
 	        loadAndRender({ open: true, forceAutoShow: true });
 	      });
 	    }
@@ -7747,7 +7895,7 @@ class ClaudeOrchestrator {
 	      dismissBtn.addEventListener('click', () => {
 	        writeDismissed(true);
 	        closeModal();
-	        this.showToast('Dependency setup wizard will stay hidden unless opened manually.', 'info');
+	        this.showToast('Dependency onboarding skipped for now. Reopen it from Diagnostics any time.', 'info');
 	      });
 	    }
 	    if (closeBtn) {

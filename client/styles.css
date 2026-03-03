@@ -3767,9 +3767,102 @@ header h1 {
   color: var(--text-secondary);
 }
 
+.dependency-onboarding-progress {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  padding: 10px;
+}
+
+.dependency-onboarding-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.dependency-onboarding-progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.dependency-onboarding-progress-bar {
+  height: 100%;
+  background: var(--accent-primary);
+  transition: width 180ms ease-in-out;
+}
+
+.dependency-onboarding-step {
+  margin-top: 10px;
+}
+
+.dependency-onboarding-state {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+}
+
+.dependency-onboarding-state.status-ok {
+  color: var(--accent-success);
+}
+
+.dependency-onboarding-state.status-missing {
+  color: var(--accent-warning);
+}
+
+.dependency-onboarding-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.dependency-onboarding-nav .btn-secondary {
+  width: auto;
+  min-height: 32px;
+}
+
+.dependency-onboarding-overview {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dependency-onboarding-step-chip {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: 6px 9px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.dependency-onboarding-step-chip.is-active {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.dependency-onboarding-step-chip.is-complete {
+  border-color: rgba(34, 197, 94, 0.45);
+  color: var(--accent-success);
+}
+
 @media (max-width: 700px) {
   .dependency-setup-actions {
     justify-content: flex-start;
+  }
+
+  .dependency-onboarding-nav {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 
