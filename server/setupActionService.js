@@ -46,6 +46,7 @@ function getSetupActions(platform = process.platform) {
       command: 'winget install --id GitHub.cli --exact --source winget --accept-source-agreements --accept-package-agreements',
       docsUrl: 'https://cli.github.com/',
       required: false,
+      optional: true,
       runSupported: true
     },
     {
@@ -55,6 +56,7 @@ function getSetupActions(platform = process.platform) {
       command: 'gh auth login --hostname github.com --git-protocol https --web',
       docsUrl: 'https://cli.github.com/manual/gh_auth_login',
       required: false,
+      optional: true,
       runSupported: true
     },
     {
