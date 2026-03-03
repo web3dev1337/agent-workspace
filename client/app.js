@@ -7519,8 +7519,7 @@ class ClaudeOrchestrator {
 	      actions: [],
 	      currentStep: 0,
 	      actionRuns: new Map(),
-	      actionRunPollers: new Map(),
-	      lastLockNoticeAt: 0
+	      actionRunPollers: new Map()
 	    };
 
 	    const readDismissed = () => {
@@ -7677,13 +7676,6 @@ class ClaudeOrchestrator {
 	      return locked;
 	    };
 
-	    const showLockNotice = () => {
-	      const now = Date.now();
-	      if ((now - Number(state.lastLockNoticeAt || 0)) < 2200) return;
-	      state.lastLockNoticeAt = now;
-	      this.showToast('Finish onboarding before opening the dashboard.', 'warning');
-	    };
-
 	    const setCurrentStep = (nextStep, { persist = true } = {}) => {
 	      const maxStep = Math.max(0, (Array.isArray(state.actions) ? state.actions.length : 0) - 1);
 	      const parsed = Number.parseInt(String(nextStep), 10);
@@ -7832,7 +7824,6 @@ class ClaudeOrchestrator {
 	    const closeModal = ({ force = false } = {}) => {
 	      const locked = applyOnboardingLockUI();
 	      if (!force && locked) {
-	        showLockNotice();
 	        openModal();
 	        return false;
 	      }
