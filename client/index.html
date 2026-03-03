@@ -402,6 +402,7 @@
                 <h4>Diagnostics</h4>
                 <div class="setting-group">
                     <button id="diagnostics-refresh" class="template-btn secondary">Refresh diagnostics</button>
+                    <button id="dependency-setup-open" class="template-btn secondary" type="button">Open setup wizard</button>
                     <span id="diagnostics-status" style="margin-left:10px; opacity:0.75;"></span>
                 </div>
                 <div class="setting-group">
@@ -699,6 +700,26 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dependency Setup Wizard -->
+    <div id="dependency-setup-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="dependency-setup-title">
+        <div class="modal-content dependency-setup-content">
+            <div class="modal-header">
+                <h3 id="dependency-setup-title">Dependency setup wizard</h3>
+                <button id="dependency-setup-close" class="close-btn" type="button" aria-label="Close dependency setup wizard">X</button>
+            </div>
+            <div class="dependency-setup-body">
+                <p id="dependency-setup-summary" class="setting-description">Checking local tools...</p>
+                <div id="dependency-setup-list" class="dependency-setup-list"></div>
+            </div>
+            <div class="modal-actions dependency-setup-actions">
+                <button id="dependency-setup-refresh" class="btn-secondary" type="button">Refresh</button>
+                <button id="dependency-setup-open-diagnostics" class="btn-secondary" type="button">Open diagnostics</button>
+                <button id="dependency-setup-continue" class="btn-secondary" type="button">Continue</button>
+                <button id="dependency-setup-dismiss" class="btn-secondary" type="button">Don't show again</button>
             </div>
         </div>
     </div>

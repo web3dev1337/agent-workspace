@@ -1419,6 +1419,7 @@ class ClaudeOrchestrator {
 		    // Settings UI helpers: search + section jump so the panel doesn’t feel like an endless scroll.
 		    this.setupSettingsPanelNavigation();
 		    this.setupDiagnosticsPanel();
+		    this.setupDependencySetupWizard();
 
 	    const tasksThemeSelect = document.getElementById('tasks-theme-select');
 	    if (tasksThemeSelect) {
@@ -7438,6 +7439,7 @@ class ClaudeOrchestrator {
 	        if (!res.ok || data?.ok === false) {
 	          throw new Error(String(data?.error || `HTTP ${res.status}`));
 	        }
+	        this.latestDiagnostics = data;
 	        render(data);
 	        if (statusEl) statusEl.textContent = `Updated: ${String(data?.generatedAt || '')}`;
 	      } catch (err) {
@@ -7449,6 +7451,322 @@ class ClaudeOrchestrator {
 	    };
 
 	    btn.addEventListener('click', refresh);
+	    this.refreshDiagnosticsPanel = refresh;
+	  }
+
+	  openDiagnosticsPanel({ refresh = true } = {}) {
+	    try {
+	      document.getElementById('settings-panel')?.classList?.remove?.('hidden');
+	      setTimeout(() => {
+	        try {
+	          document.getElementById('diagnostics-output')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+	        } catch {
+	          // ignore
+	        }
+	        if (!refresh) return;
+	        if (typeof this.refreshDiagnosticsPanel === 'function') {
+	          this.refreshDiagnosticsPanel();
+	          return;
+	        }
+	        try {
+	          document.getElementById('diagnostics-refresh')?.click?.();
+	        } catch {
+	          // ignore
+	        }
+	      }, 50);
+	    } catch {
+	      // ignore
+	    }
+	  }
+
+	  setupDependencySetupWizard() {
+	    const modal = document.getElementById('dependency-setup-modal');
+	    const openBtn = document.getElementById('dependency-setup-open');
+	    const summaryEl = document.getElementById('dependency-setup-summary');
+	    const listEl = document.getElementById('dependency-setup-list');
+	    const refreshBtn = document.getElementById('dependency-setup-refresh');
+	    const openDiagnosticsBtn = document.getElementById('dependency-setup-open-diagnostics');
+	    const continueBtn = document.getElementById('dependency-setup-continue');
+	    const dismissBtn = document.getElementById('dependency-setup-dismiss');
+	    const closeBtn = document.getElementById('dependency-setup-close');
+	    if (!modal || !summaryEl || !listEl) return;
+
+	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v1';
+	    const state = {
+	      loading: false,
+	      diagnostics: null,
+	      actions: []
+	    };
+
+	    const readDismissed = () => {
+	      try {
+	        return localStorage.getItem(dismissKey) === 'true';
+	      } catch {
+	        return false;
+	      }
+	    };
+
+	    const writeDismissed = (value) => {
+	      try {
+	        if (value) localStorage.setItem(dismissKey, 'true');
+	        else localStorage.removeItem(dismissKey);
+	      } catch {
+	        // ignore
+	      }
+	    };
+
+	    const toToolMap = (diagnostics) => {
+	      const map = new Map();
+	      const tools = Array.isArray(diagnostics?.tools) ? diagnostics.tools : [];
+	      tools.forEach((tool) => {
+	        const id = String(tool?.id || '').trim();
+	        if (!id) return;
+	        map.set(id, !!tool?.ok);
+	      });
+	      return map;
+	    };
+
+	    const getRequirementState = (toolsMap) => {
+	      const gitOk = !!toolsMap.get('git');
+	      const claudeOk = !!toolsMap.get('claude');
+	      const codexOk = !!toolsMap.get('codex');
+	      const hasAgentCli = claudeOk || codexOk;
+	      const coreReady = gitOk && hasAgentCli;
+	      const missingCore = [];
+	      if (!gitOk) missingCore.push('git');
+	      if (!hasAgentCli) missingCore.push('agent-cli');
+	      return {
+	        gitOk,
+	        claudeOk,
+	        codexOk,
+	        hasAgentCli,
+	        coreReady,
+	        missingCore
+	      };
+	    };
+
+	    const isActionComplete = (actionId, toolsMap) => {
+	      switch (String(actionId || '').trim()) {
+	        case 'install-git':
+	          return !!toolsMap.get('git');
+	        case 'install-node':
+	          return !!toolsMap.get('node') && !!toolsMap.get('npm');
+	        case 'install-gh':
+	          return !!toolsMap.get('gh');
+	        case 'gh-login':
+	          return !!toolsMap.get('ghAuth');
+	        case 'install-claude':
+	          return !!toolsMap.get('claude');
+	        case 'install-codex':
+	          return !!toolsMap.get('codex');
+	        default:
+	          return false;
+	      }
+	    };
+
+	    const getActionLevel = (actionId) => {
+	      const id = String(actionId || '').trim();
+	      if (id === 'install-git') return 'required';
+	      if (id === 'install-claude' || id === 'install-codex') return 'core-option';
+	      return 'recommended';
+	    };
+
+	    const render = () => {
+	      const toolsMap = toToolMap(state.diagnostics);
+	      const req = getRequirementState(toolsMap);
+	      if (req.coreReady) {
+	        summaryEl.textContent = 'Core requirements are installed. Optional tools can still be installed below.';
+	      } else {
+	        const missingParts = [];
+	        if (!req.gitOk) missingParts.push('Git');
+	        if (!req.hasAgentCli) missingParts.push('Claude Code or Codex CLI');
+	        summaryEl.textContent = `Missing core requirements: ${missingParts.join(' + ')}.`;
+	      }
+
+	      const actions = Array.isArray(state.actions) ? state.actions : [];
+	      if (!actions.length) {
+	        listEl.innerHTML = '<div class="dependency-setup-empty">No setup actions are available for this platform.</div>';
+	        return req;
+	      }
+
+	      listEl.innerHTML = actions.map((action) => {
+	        const id = String(action?.id || '').trim();
+	        const title = this.escapeHtml(String(action?.title || id || 'Setup action'));
+	        const desc = this.escapeHtml(String(action?.description || ''));
+	        const commandRaw = String(action?.command || '');
+	        const command = this.escapeHtml(commandRaw);
+	        const docsUrl = this.escapeHtml(String(action?.docsUrl || ''));
+	        const done = isActionComplete(id, toolsMap);
+	        const level = getActionLevel(id);
+	        const levelText = level === 'required' ? 'Required' : (level === 'core-option' ? 'Core option' : 'Recommended');
+	        const levelClass = level === 'recommended' ? 'level-recommended' : 'level-required';
+	        const statusText = done ? 'Installed' : 'Missing';
+	        const statusClass = done ? 'status-ok' : 'status-missing';
+	        const runSupported = action?.runSupported !== false;
+	        const runDisabled = !runSupported || done;
+	        const runLabel = done ? 'Installed' : 'Run in PowerShell';
+
+	        return `
+	          <div class="dependency-setup-item" data-setup-item="${this.escapeHtml(id)}">
+	            <div class="dependency-setup-item-header">
+	              <div class="dependency-setup-item-title">${title}</div>
+	              <div class="dependency-setup-badges">
+	                <span class="dependency-setup-badge ${levelClass}">${levelText}</span>
+	                <span class="dependency-setup-badge ${statusClass}">${statusText}</span>
+	              </div>
+	            </div>
+	            <div class="dependency-setup-item-desc">${desc}</div>
+	            ${command ? `<pre class="mono dependency-setup-item-command">${command}</pre>` : ''}
+	            <div class="dependency-setup-item-actions">
+	              <button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(id)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>
+	              <button class="btn-secondary" type="button" data-setup-copy="${this.escapeHtml(commandRaw)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
+	              ${docsUrl ? `<a class="btn-secondary" href="${docsUrl}" target="_blank" rel="noopener noreferrer">Docs</a>` : ''}
+	            </div>
+	          </div>
+	        `;
+	      }).join('');
+
+	      return req;
+	    };
+
+	    const closeModal = () => modal.classList.add('hidden');
+	    const openModal = () => modal.classList.remove('hidden');
+
+	    const setLoading = (loading) => {
+	      state.loading = !!loading;
+	      if (refreshBtn) refreshBtn.disabled = state.loading;
+	      if (openBtn) openBtn.disabled = state.loading;
+	      if (state.loading) {
+	        summaryEl.textContent = 'Checking local dependencies...';
+	      }
+	    };
+
+	    const loadAndRender = async ({ open = false, forceAutoShow = false } = {}) => {
+	      if (state.loading) return;
+	      setLoading(true);
+	      try {
+	        const [diagRes, actionsRes] = await Promise.all([
+	          fetch('/api/diagnostics'),
+	          fetch('/api/setup-actions')
+	        ]);
+	        const diagData = await diagRes.json().catch(() => ({}));
+	        const actionsData = await actionsRes.json().catch(() => ({}));
+
+	        if (!diagRes.ok || diagData?.ok === false) {
+	          throw new Error(String(diagData?.error || `Diagnostics HTTP ${diagRes.status}`));
+	        }
+	        if (!actionsRes.ok || actionsData?.ok === false) {
+	          throw new Error(String(actionsData?.error || `Setup actions HTTP ${actionsRes.status}`));
+	        }
+
+	        state.diagnostics = diagData;
+	        state.actions = Array.isArray(actionsData?.actions) ? actionsData.actions : [];
+
+	        const req = render();
+	        if (req.coreReady) {
+	          writeDismissed(false);
+	        }
+
+	        const shouldAutoShow = !req.coreReady && (forceAutoShow || !readDismissed());
+	        if (open || shouldAutoShow) {
+	          openModal();
+	        }
+	      } catch (err) {
+	        summaryEl.textContent = `Dependency check failed: ${String(err?.message || err)}`;
+	        listEl.innerHTML = '<div class="dependency-setup-empty">Unable to load setup actions right now.</div>';
+	        if (open) openModal();
+	      } finally {
+	        setLoading(false);
+	      }
+	    };
+
+	    const runSetupAction = async (actionId, btnEl) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return;
+	      const button = btnEl || null;
+	      if (button) button.disabled = true;
+	      try {
+	        const res = await fetch('/api/setup-actions/run', {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify({ actionId: id })
+	        });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok || data?.ok === false) {
+	          throw new Error(String(data?.error || `HTTP ${res.status}`));
+	        }
+	        this.showToast(String(data?.message || 'Setup command opened in PowerShell.'), 'info');
+	        this.showToast('Complete the command in PowerShell, then click Refresh.', 'info');
+	      } catch (err) {
+	        this.showToast(`Failed to start action: ${String(err?.message || err)}`, 'error');
+	      } finally {
+	        if (button) button.disabled = false;
+	      }
+	    };
+
+	    listEl.addEventListener('click', async (event) => {
+	      const runBtn = event.target.closest('[data-setup-run]');
+	      if (runBtn) {
+	        await runSetupAction(runBtn.getAttribute('data-setup-run'), runBtn);
+	        return;
+	      }
+
+	      const copyBtn = event.target.closest('[data-setup-copy]');
+	      if (copyBtn) {
+	        const command = String(copyBtn.getAttribute('data-setup-copy') || '').trim();
+	        if (!command) return;
+	        try {
+	          await navigator.clipboard.writeText(command);
+	          this.showToast('Command copied to clipboard.', 'success');
+	        } catch (err) {
+	          this.showToast(`Copy failed: ${String(err?.message || err)}`, 'error');
+	        }
+	      }
+	    });
+
+	    if (openBtn) {
+	      openBtn.addEventListener('click', () => {
+	        writeDismissed(false);
+	        loadAndRender({ open: true, forceAutoShow: true });
+	      });
+	    }
+	    if (refreshBtn) {
+	      refreshBtn.addEventListener('click', () => {
+	        loadAndRender({ open: !modal.classList.contains('hidden'), forceAutoShow: true });
+	      });
+	    }
+	    if (openDiagnosticsBtn) {
+	      openDiagnosticsBtn.addEventListener('click', () => {
+	        this.openDiagnosticsPanel({ refresh: true });
+	      });
+	    }
+	    if (continueBtn) {
+	      continueBtn.addEventListener('click', closeModal);
+	    }
+	    if (dismissBtn) {
+	      dismissBtn.addEventListener('click', () => {
+	        writeDismissed(true);
+	        closeModal();
+	        this.showToast('Dependency setup wizard will stay hidden unless opened manually.', 'info');
+	      });
+	    }
+	    if (closeBtn) {
+	      closeBtn.addEventListener('click', closeModal);
+	    }
+
+	    modal.addEventListener('click', (event) => {
+	      if (event.target === modal) closeModal();
+	    });
+
+	    document.addEventListener('keydown', (event) => {
+	      if (event.key !== 'Escape') return;
+	      if (modal.classList.contains('hidden')) return;
+	      closeModal();
+	    });
+
+	    setTimeout(() => {
+	      loadAndRender({ open: false, forceAutoShow: false });
+	    }, 700);
 	  }
 
 	  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {
@@ -10673,19 +10991,7 @@ class ClaudeOrchestrator {
 		      });
 		      bodyEl.querySelectorAll?.('[data-open-diagnostics="true"]')?.forEach?.((btn) => {
 		        btn.addEventListener('click', () => {
-		          try {
-		            document.getElementById('settings-panel')?.classList?.remove?.('hidden');
-		            setTimeout(() => {
-		              try {
-		                document.getElementById('diagnostics-output')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-		              } catch {}
-		              try {
-		                document.getElementById('diagnostics-refresh')?.click?.();
-		              } catch {}
-		            }, 50);
-		          } catch {
-		            // ignore
-		          }
+		          this.openDiagnosticsPanel({ refresh: true });
 		        });
 		      });
 		      bodyEl.querySelectorAll('[data-pr-refresh]').forEach((btn0) => {

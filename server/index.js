@@ -92,6 +92,7 @@ const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
 const sessionRecoveryService = require('./sessionRecoveryService');
 const { collectDiagnostics } = require('./diagnosticsService');
+const { getSetupActions, runSetupAction } = require('./setupActionService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { ThreadService } = require('./threadService');
@@ -2696,6 +2697,35 @@ app.get('/api/diagnostics', async (req, res) => {
   } catch (error) {
     logger.error('Failed to collect diagnostics', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to collect diagnostics' });
+  }
+});
+
+// Setup helper actions for first-run dependency wizard.
+app.get('/api/setup-actions', (req, res) => {
+  try {
+    const platform = process.platform;
+    const actions = getSetupActions(platform);
+    res.json({ ok: true, platform, actions });
+  } catch (error) {
+    logger.error('Failed to get setup actions', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get setup actions' });
+  }
+});
+
+app.post('/api/setup-actions/run', (req, res) => {
+  try {
+    const actionId = String(req.body?.actionId || '').trim();
+    if (!actionId) {
+      return res.status(400).json({ ok: false, error: 'actionId is required' });
+    }
+
+    const result = runSetupAction(actionId, process.platform);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    const code = String(error?.code || '');
+    const status = (code === 'unsupported_platform' || code === 'unknown_action' || code === 'not_runnable') ? 400 : 500;
+    logger.error('Failed to run setup action', { actionId: req.body?.actionId, error: error.message, stack: error.stack });
+    res.status(status).json({ ok: false, error: String(error?.message || 'Failed to run setup action') });
   }
 });
 
