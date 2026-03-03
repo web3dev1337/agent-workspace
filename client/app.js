@@ -7771,7 +7771,7 @@ class ClaudeOrchestrator {
 	        if (!ghLoginCode) return 'wait-code';
 	        return 'code';
 	      })();
-	      const showRunButton = current?.runSupported !== false;
+	      const showRunButton = current?.runSupported !== false && !(isGhLoginStep && current?.done);
 	      const runDisabled = !!current?.done || isRunBusy;
 	      const runLabel = (() => {
 	        if (current?.done) {
