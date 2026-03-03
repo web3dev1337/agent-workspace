@@ -34,6 +34,21 @@ async function checkFirstAvailable(candidates) {
   return await checkCommand(last.command, last.args, last.options);
 }
 
+function uniqueCommandCandidates(candidates = []) {
+  const seen = new Set();
+  const out = [];
+  for (const candidate of candidates) {
+    const command = String(candidate?.command || '').trim();
+    if (!command) continue;
+    const args = Array.isArray(candidate?.args) ? candidate.args : [];
+    const key = `${command}::${JSON.stringify(args)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ command, args, options: candidate?.options });
+  }
+  return out;
+}
+
 async function collectDiagnostics() {
   const platform = process.platform;
   const homeDir = process.env.HOME || os.homedir();
@@ -47,16 +62,38 @@ async function collectDiagnostics() {
 
   const tools = [];
 
+  const nodeCandidates = uniqueCommandCandidates([
+    { command: 'node', args: ['--version'] },
+    { command: platform === 'win32' ? 'node.exe' : 'node', args: ['--version'] },
+    platform === 'win32' ? { command: path.join(process.env.ProgramFiles || '', 'nodejs', 'node.exe'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env['ProgramFiles(x86)'] || '', 'nodejs', 'node.exe'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'node.exe'), args: ['--version'] } : null,
+    { command: process.execPath || 'node', args: ['--version'] }
+  ]);
+  const nodeCheck = await checkFirstAvailable(nodeCandidates);
+  const nodeCommand = String(nodeCheck?.command || '').trim();
+  const nodeDir = nodeCommand ? path.dirname(nodeCommand) : '';
+
+  const npmCandidates = uniqueCommandCandidates([
+    { command: platform === 'win32' ? 'npm.cmd' : 'npm', args: ['--version'] },
+    platform === 'win32' ? { command: 'npm', args: ['--version'] } : null,
+    platform === 'win32' && nodeDir ? { command: path.join(nodeDir, 'npm.cmd'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.ProgramFiles || '', 'nodejs', 'npm.cmd'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env['ProgramFiles(x86)'] || '', 'nodejs', 'npm.cmd'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'npm.cmd'), args: ['--version'] } : null
+  ]);
+  const npmCheck = await checkFirstAvailable(npmCandidates);
+
   tools.push({
     id: 'node',
     name: 'Node.js',
-    ...(await checkCommand(process.execPath || 'node', ['--version']))
+    ...nodeCheck
   });
 
   tools.push({
     id: 'npm',
     name: 'npm',
-    ...(await checkCommand(platform === 'win32' ? 'npm.cmd' : 'npm', ['--version']))
+    ...npmCheck
   });
 
   tools.push({
