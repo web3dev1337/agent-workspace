@@ -7519,7 +7519,8 @@ class ClaudeOrchestrator {
 	      actions: [],
 	      currentStep: 0,
 	      actionRuns: new Map(),
-	      actionRunPollers: new Map()
+	      actionRunPollers: new Map(),
+	      lastLockNoticeAt: 0
 	    };
 
 	    const readDismissed = () => {
@@ -7657,6 +7658,30 @@ class ClaudeOrchestrator {
 	          runSupported: action?.runSupported !== false
 	        };
 	      });
+	    };
+
+	    const isOnboardingLocked = () => {
+	      const toolsMap = toToolMap(state.diagnostics);
+	      const req = getRequirementState(toolsMap);
+	      if (!req?.coreReady) return true;
+	      return !readCompleted();
+	    };
+
+	    const applyOnboardingLockUI = () => {
+	      const locked = isOnboardingLocked();
+	      if (closeBtn) {
+	        closeBtn.disabled = locked;
+	        closeBtn.style.visibility = locked ? 'hidden' : '';
+	      }
+	      modal.setAttribute('data-onboarding-locked', locked ? 'true' : 'false');
+	      return locked;
+	    };
+
+	    const showLockNotice = () => {
+	      const now = Date.now();
+	      if ((now - Number(state.lastLockNoticeAt || 0)) < 2200) return;
+	      state.lastLockNoticeAt = now;
+	      this.showToast('Finish onboarding before opening the dashboard.', 'warning');
 	    };
 
 	    const setCurrentStep = (nextStep, { persist = true } = {}) => {
@@ -7804,15 +7829,23 @@ class ClaudeOrchestrator {
 	      return { req, steps, current };
 	    };
 
-	    const closeModal = () => {
+	    const closeModal = ({ force = false } = {}) => {
+	      const locked = applyOnboardingLockUI();
+	      if (!force && locked) {
+	        showLockNotice();
+	        openModal();
+	        return false;
+	      }
 	      modal.classList.add('hidden');
 	      body?.classList?.remove?.('dependency-onboarding-active');
 	      setBootstrapPending(false);
+	      return true;
 	    };
 	    const openModal = () => {
 	      modal.classList.remove('hidden');
 	      setBootstrapPending(false);
 	      body?.classList?.add?.('dependency-onboarding-active');
+	      applyOnboardingLockUI();
 	    };
 
 	    const setLoading = (loading) => {
@@ -7851,6 +7884,7 @@ class ClaudeOrchestrator {
 	          setCurrentStep(savedStep, { persist: false });
 	        }
 	        const view = render();
+	        applyOnboardingLockUI();
 	        if (view.req?.coreReady) writeDismissed(false);
 
 	        const shouldAutoShow = forceAutoShow || (!readDismissed() && (!readCompleted() || !(view.req?.coreReady)));
@@ -8082,7 +8116,7 @@ class ClaudeOrchestrator {
 	        if (state.currentStep >= (total - 1)) {
 	          writeCompleted(true);
 	          writeDismissed(false);
-	          closeModal();
+	          closeModal({ force: true });
 	          this.showToast('Dependency onboarding complete.', 'success');
 	          return;
 	        }
@@ -8134,7 +8168,7 @@ class ClaudeOrchestrator {
 	      });
 	    }
 	    if (closeBtn) {
-	      closeBtn.addEventListener('click', closeModal);
+	      closeBtn.addEventListener('click', () => closeModal());
 	    }
 
 	    modal.addEventListener('click', (event) => {
