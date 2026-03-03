@@ -63,9 +63,10 @@ function getSetupActions(platform = process.platform) {
       id: 'install-claude',
       title: 'Install Claude Code CLI',
       description: 'Install the Claude command used by agent sessions.',
-      command: 'npm install -g @anthropic-ai/claude-code',
-      docsUrl: 'https://docs.anthropic.com/',
+      command: 'Set-ExecutionPolicy Bypass -Scope Process -Force; irm https://claude.ai/install.ps1 | iex',
+      docsUrl: 'https://docs.claude.com/en/docs/claude-code/setup',
       required: false,
+      optional: true,
       runSupported: true
     },
     {

@@ -198,16 +198,36 @@ async function collectDiagnostics() {
     ...ghAuthCheck
   });
 
+  const claudeCandidates = uniqueCommandCandidates([
+    { command: 'claude', args: ['--version'] },
+    platform === 'win32' ? { command: 'claude.cmd', args: ['--version'] } : null,
+    platform === 'win32' ? { command: 'claude.exe', args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.APPDATA || '', 'npm', 'claude.cmd'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.APPDATA || '', 'npm', 'claude'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.local', 'bin', 'claude.exe'), args: ['--version'] } : null,
+    // Some Windows installs can leave this renamed but still executable by full path.
+    platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.local', 'bin', 'claude.exe.disabled'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.claude', 'local', 'claude.exe'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Claude', 'claude.exe'), args: ['--version'] } : null
+  ]);
   tools.push({
     id: 'claude',
     name: 'Claude Code',
-    ...(await checkCommand('claude', ['--version']))
+    ...(await checkFirstAvailable(claudeCandidates))
   });
 
+  const codexCandidates = uniqueCommandCandidates([
+    { command: 'codex', args: ['--version'] },
+    platform === 'win32' ? { command: 'codex.cmd', args: ['--version'] } : null,
+    platform === 'win32' ? { command: 'codex.exe', args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.APPDATA || '', 'npm', 'codex'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.local', 'bin', 'codex.exe'), args: ['--version'] } : null
+  ]);
   tools.push({
     id: 'codex',
     name: 'Codex CLI',
-    ...(await checkCommand('codex', ['--version']))
+    ...(await checkFirstAvailable(codexCandidates))
   });
 
   tools.push({

@@ -7697,7 +7697,8 @@ class ClaudeOrchestrator {
 	      if (id === 'install-git') return 'required';
 	      if (id === 'configure-git-identity') return 'optional';
 	      if (id === 'install-gh' || id === 'gh-login') return 'optional';
-	      if (id === 'install-claude' || id === 'install-codex') return 'core-option';
+	      if (id === 'install-claude') return 'optional';
+	      if (id === 'install-codex') return 'core-option';
 	      return 'recommended';
 	    };
 
