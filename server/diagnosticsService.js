@@ -63,6 +63,43 @@ function uniqueCommandCandidates(candidates = []) {
   return out;
 }
 
+async function checkGitIdentity(gitCommand, gitInstalled) {
+  const command = String(gitCommand || 'git').trim() || 'git';
+  if (!gitInstalled) {
+    return {
+      ok: false,
+      command,
+      args: ['config', '--global', '--get', 'user.name'],
+      error: 'Git is not installed'
+    };
+  }
+
+  const nameCheck = await checkCommand(command, ['config', '--global', '--get', 'user.name']);
+  const emailCheck = await checkCommand(command, ['config', '--global', '--get', 'user.email']);
+  const name = String(nameCheck?.version || '').trim();
+  const email = String(emailCheck?.version || '').trim();
+
+  if (name && email) {
+    return {
+      ok: true,
+      command,
+      args: ['config', '--global', '--get', 'user.name,user.email'],
+      version: `${name} <${email}>`
+    };
+  }
+
+  const missing = [];
+  if (!name) missing.push('user.name');
+  if (!email) missing.push('user.email');
+
+  return {
+    ok: false,
+    command,
+    args: ['config', '--global', '--get', 'user.name,user.email'],
+    error: `Missing global Git setting(s): ${missing.join(', ')}`
+  };
+}
+
 async function collectDiagnostics() {
   const platform = process.platform;
   const homeDir = process.env.HOME || os.homedir();
@@ -124,6 +161,12 @@ async function collectDiagnostics() {
     id: 'git',
     name: 'Git',
     ...(await checkFirstAvailable(gitCandidates))
+  });
+  const gitTool = tools[tools.length - 1];
+  tools.push({
+    id: 'gitIdentity',
+    name: 'Git identity',
+    ...(await checkGitIdentity(gitTool?.command, !!gitTool?.ok))
   });
 
   tools.push({

@@ -21,6 +21,16 @@ function getSetupActions(platform = process.platform) {
       runSupported: true
     },
     {
+      id: 'configure-git-identity',
+      title: 'Configure Git identity',
+      description: 'Optional but strongly recommended so commits use the correct author name and email.',
+      command: 'git config --global user.name "Your Name"\ngit config --global user.email "you@example.com"',
+      docsUrl: 'https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup',
+      required: false,
+      optional: true,
+      runSupported: false
+    },
+    {
       id: 'install-node',
       title: 'Install Node.js LTS',
       description: 'Needed to install CLI tools like Claude Code and Codex.',

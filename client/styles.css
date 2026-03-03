@@ -3782,6 +3782,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
   border-color: rgba(56, 139, 253, 0.45);
 }
 
+.dependency-setup-badge.level-optional {
+  color: var(--accent-warning);
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
 .dependency-setup-item-desc {
   color: var(--text-secondary);
   margin-bottom: 10px;

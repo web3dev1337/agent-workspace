@@ -7608,6 +7608,8 @@ class ClaudeOrchestrator {
 	      switch (String(actionId || '').trim()) {
 	        case 'install-git':
 	          return !!toolsMap.get('git');
+	        case 'configure-git-identity':
+	          return !!toolsMap.get('gitIdentity');
 	        case 'install-node':
 	          return !!toolsMap.get('node') && !!toolsMap.get('npm');
 	        case 'install-gh':
@@ -7625,11 +7627,13 @@ class ClaudeOrchestrator {
 
 	    const getActionLevelText = (level) => {
 	      if (level === 'required') return 'Required';
+	      if (level === 'optional') return 'Optional';
 	      if (level === 'core-option') return 'Core option';
 	      return 'Recommended';
 	    };
 
 	    const getActionLevelClass = (level) => {
+	      if (level === 'optional') return 'level-optional';
 	      return level === 'recommended' ? 'level-recommended' : 'level-required';
 	    };
 
@@ -7644,6 +7648,7 @@ class ClaudeOrchestrator {
 	          ...action,
 	          id,
 	          level,
+	          optional: action?.optional === true || level === 'optional',
 	          done,
 	          levelText: getActionLevelText(level),
 	          levelClass: getActionLevelClass(level),
@@ -7666,6 +7671,7 @@ class ClaudeOrchestrator {
 	    const getActionLevel = (actionId) => {
 	      const id = String(actionId || '').trim();
 	      if (id === 'install-git') return 'required';
+	      if (id === 'configure-git-identity') return 'optional';
 	      if (id === 'install-claude' || id === 'install-codex') return 'core-option';
 	      return 'recommended';
 	    };
@@ -7714,7 +7720,9 @@ class ClaudeOrchestrator {
 	        : [];
 	      const runOutputText = this.escapeHtml(runOutput.join('\n'));
 	      const runDisabled = !current?.runSupported || !!current?.done || isRunBusy;
-	      const runLabel = current?.done ? 'Installed' : (isRunBusy ? 'Running...' : 'Run step');
+	      const runLabel = current?.done
+	        ? 'Installed'
+	        : (!current?.runSupported ? 'Manual step' : (isRunBusy ? 'Running...' : 'Run step'));
 	      const statusText = current?.done || runStatus === 'verified'
 	        ? 'Installed'
 	        : (isRunning ? 'Installing' : (isVerifying ? 'Verifying' : (runStatus === 'failed' ? 'Failed' : 'Missing')));
@@ -7737,11 +7745,17 @@ class ClaudeOrchestrator {
 	          : 'Install failed. Review the output below and run the step again.';
 	      } else if (runStatus === 'needs-attention') {
 	        guidance = 'Install command finished, but this dependency is still not detected. Review output below and run again.';
+	      } else if (!current?.runSupported && current?.optional) {
+	        guidance = 'Optional but strongly recommended: set Git user.name and user.email so commits and PR authorship are correct.';
+	      } else if (!current?.runSupported) {
+	        guidance = 'Manual step: run the command below in your terminal. We will detect it automatically afterward.';
 	      }
-	      const canAdvance = !!current?.done;
+	      const canAdvance = !!current?.done || !!current?.optional;
 	      const nextLabel = !canAdvance
 	        ? 'Complete this step first'
-	        : (stepNo >= totalSteps ? 'Finish onboarding' : 'Next step');
+	        : (!current?.done && current?.optional
+	            ? 'Skip optional step'
+	            : (stepNo >= totalSteps ? 'Finish onboarding' : 'Next step'));
 
 	      listEl.innerHTML = `
 	        <div class="dependency-onboarding-progress">
@@ -7778,7 +7792,7 @@ class ClaudeOrchestrator {
 	          ` : ''}
 	          <div class="dependency-setup-item-actions">
 	            <button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>
-	            <button class="btn-secondary" type="button" data-setup-copy="${this.escapeHtml(commandRaw)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
+	            <button class="btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
 	          </div>
 	        </div>
 	        <div class="dependency-onboarding-nav">
@@ -8059,8 +8073,11 @@ class ClaudeOrchestrator {
 	        const steps = getResolvedSteps();
 	        const currentStep = steps[state.currentStep];
 	        if (!currentStep?.done) {
-	          this.showToast('Install this dependency before continuing.', 'warning');
-	          return;
+	          if (!currentStep?.optional) {
+	            this.showToast('Install this dependency before continuing.', 'warning');
+	            return;
+	          }
+	          this.showToast('Skipping optional setup for now. You can configure it later.', 'warning');
 	        }
 	        if (state.currentStep >= (total - 1)) {
 	          writeCompleted(true);
@@ -8084,9 +8101,11 @@ class ClaudeOrchestrator {
 	        return;
 	      }
 
-	      const copyBtn = event.target.closest('[data-setup-copy]');
+	      const copyBtn = event.target.closest('[data-setup-copy-id]');
 	      if (copyBtn) {
-	        const command = String(copyBtn.getAttribute('data-setup-copy') || '').trim();
+	        const actionId = String(copyBtn.getAttribute('data-setup-copy-id') || '').trim();
+	        const action = (Array.isArray(state.actions) ? state.actions : []).find((item) => String(item?.id || '').trim() === actionId);
+	        const command = String(action?.command || '').trim();
 	        if (!command) return;
 	        try {
 	          await navigator.clipboard.writeText(command);
