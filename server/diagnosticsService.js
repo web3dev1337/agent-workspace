@@ -169,17 +169,33 @@ async function collectDiagnostics() {
     ...(await checkGitIdentity(gitTool?.command, !!gitTool?.ok))
   });
 
+  const ghCandidates = uniqueCommandCandidates([
+    { command: 'gh', args: ['--version'] },
+    platform === 'win32' ? { command: 'gh.exe', args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.ProgramFiles || '', 'GitHub CLI', 'gh.exe'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env['ProgramFiles(x86)'] || '', 'GitHub CLI', 'gh.exe'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.LOCALAPPDATA || '', 'Programs', 'GitHub CLI', 'gh.exe'), args: ['--version'] } : null
+  ]);
+  const ghCheck = await checkFirstAvailable(ghCandidates);
   tools.push({
     id: 'gh',
     name: 'GitHub CLI',
-    ...(await checkCommand('gh', ['--version']))
+    ...ghCheck
   });
   // Auth status is the most common root cause of "0 files/commits" in PR tooling on Windows.
   // We keep it lightweight: first line of `gh auth status` is enough to spot "not logged in".
+  const ghAuthCheck = ghCheck?.ok
+    ? await checkCommand(String(ghCheck.command || 'gh'), ['auth', 'status'])
+    : {
+        ok: false,
+        command: String(ghCheck?.command || 'gh'),
+        args: ['auth', 'status'],
+        error: 'GitHub CLI is not installed'
+      };
   tools.push({
     id: 'ghAuth',
     name: 'GitHub CLI auth',
-    ...(await checkCommand('gh', ['auth', 'status']))
+    ...ghAuthCheck
   });
 
   tools.push({

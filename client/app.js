@@ -7752,9 +7752,7 @@ class ClaudeOrchestrator {
 	      } else if (isRunning) {
 	        guidance = 'Installing now via PowerShell. Keep this window open and we will recheck automatically.';
 	      } else if (isVerifying) {
-	        const attempt = Number(runInfo?.verifyAttempt) || 1;
-	        const total = Number(runInfo?.verifyMax) || 1;
-	        guidance = `Install command finished. Checking your system automatically (${attempt}/${total})...`;
+	        guidance = 'Install command finished. Checking your system automatically...';
 	      } else if (runStatus === 'failed') {
 	        const errorText = String(runInfo?.error || '').trim();
 	        guidance = errorText
@@ -7930,9 +7928,23 @@ class ClaudeOrchestrator {
 	      return data.run;
 	    };
 
-	    const verifyActionInstalled = async (actionId, runId, { attempts = 24, delayMs = 1700 } = {}) => {
+	    const getVerifyPolicyForAction = (actionId) => {
+	      const id = String(actionId || '').trim();
+	      if (id === 'install-git' || id === 'install-node' || id === 'install-gh') {
+	        return { attempts: 10, delayMs: 650 };
+	      }
+	      return { attempts: 8, delayMs: 650 };
+	    };
+
+	    const verifyActionInstalled = async (actionId, runId, options = {}) => {
 	      const id = String(actionId || '').trim();
 	      if (!id) return false;
+	      const policy = {
+	        ...getVerifyPolicyForAction(id),
+	        ...(options && typeof options === 'object' ? options : {})
+	      };
+	      const attempts = Math.max(1, Number(policy.attempts) || 1);
+	      const delayMs = Math.max(250, Number(policy.delayMs) || 650);
 
 	      for (let attempt = 1; attempt <= attempts; attempt += 1) {
 	        const runState = state.actionRuns.get(id);
@@ -7980,7 +7992,7 @@ class ClaudeOrchestrator {
 	          updateActionRunState(id, run);
 
 	          if (String(run?.status || '').toLowerCase() === 'running') {
-	            const timer = setTimeout(pollLoop, 1300);
+	            const timer = setTimeout(pollLoop, 850);
 	            state.actionRunPollers.set(id, { runId: rid, timer });
 	            return;
 	          }
