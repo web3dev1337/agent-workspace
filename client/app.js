@@ -7765,6 +7765,12 @@ class ClaudeOrchestrator {
 	      })();
 	      const isGhLoginStep = currentId === 'gh-login';
 	      const hasGhLoginRun = isGhLoginStep && !!runInfo;
+	      const ghLoginUiPhase = (() => {
+	        if (!isGhLoginStep || current?.done) return 'none';
+	        if (!hasGhLoginRun) return 'start';
+	        if (!ghLoginCode) return 'open';
+	        return 'code';
+	      })();
 	      const showRunButton = current?.runSupported !== false;
 	      const runDisabled = !!current?.done || isRunBusy;
 	      const runLabel = (() => {
@@ -7846,14 +7852,17 @@ class ClaudeOrchestrator {
 			          ${isGhLoginStep && !current?.done ? `
 			            <div class="dependency-gh-login-helper">
 			              <div class="dependency-onboarding-command-label">Browser login</div>
-			              <div class="dependency-gh-login-helper-text">1. Click <strong>Start login</strong>.</div>
-			              ${hasGhLoginRun ? '<div class="dependency-gh-login-helper-text">2. Click <strong>Open GitHub login</strong>.</div>' : ''}
-			              ${hasGhLoginRun ? '<div class="dependency-gh-login-helper-text">3. Paste the one-time code shown here:</div>' : ''}
-			              ${hasGhLoginRun
-			                ? (ghLoginCode
-			                    ? `<div class="dependency-gh-login-code-wrap"><span class="dependency-gh-login-code mono">${this.escapeHtml(ghLoginCode)}</span><button class="btn-secondary" type="button" data-setup-copy-gh-code="${this.escapeHtml(ghLoginCode)}">Copy code</button></div>`
-			                    : '<div class="dependency-gh-login-helper-text">Waiting for one-time code from GitHub CLI output...</div>')
-			                : '<div class="dependency-gh-login-helper-text">After Start login begins, the browser action and one-time code will appear here.</div>'
+			              ${ghLoginUiPhase === 'start'
+			                ? '<div class="dependency-gh-login-helper-text">Step 1: Click <strong>Start login</strong>.</div>'
+			                : ''
+			              }
+			              ${ghLoginUiPhase === 'open'
+			                ? '<div class="dependency-gh-login-helper-text">Step 2: Click <strong>Open GitHub login</strong>. Waiting for one-time code...</div>'
+			                : ''
+			              }
+			              ${ghLoginUiPhase === 'code'
+			                ? `<div class="dependency-gh-login-helper-text">Step 3: Paste this code on GitHub login.</div><div class="dependency-gh-login-code-wrap"><span class="dependency-gh-login-code mono">${this.escapeHtml(ghLoginCode)}</span><button class="btn-secondary" type="button" data-setup-copy-gh-code="${this.escapeHtml(ghLoginCode)}">Copy code</button></div>`
+			                : ''
 			              }
 			            </div>
 			          ` : ''}
