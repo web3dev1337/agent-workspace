@@ -7764,6 +7764,7 @@ class ClaudeOrchestrator {
 	        return '';
 	      })();
 	      const isGhLoginStep = currentId === 'gh-login';
+	      const hasGhLoginRun = isGhLoginStep && !!runInfo;
 	      const showRunButton = current?.runSupported !== false;
 	      const runDisabled = !!current?.done || isRunBusy;
 	      const runLabel = (() => {
@@ -7846,11 +7847,13 @@ class ClaudeOrchestrator {
 			            <div class="dependency-gh-login-helper">
 			              <div class="dependency-onboarding-command-label">Browser login</div>
 			              <div class="dependency-gh-login-helper-text">1. Click <strong>Start login</strong>.</div>
-			              <div class="dependency-gh-login-helper-text">2. Click <strong>Open GitHub login</strong>.</div>
-			              <div class="dependency-gh-login-helper-text">3. Paste the one-time code shown here:</div>
-			              ${ghLoginCode
-			                ? `<div class="dependency-gh-login-code-wrap"><span class="dependency-gh-login-code mono">${this.escapeHtml(ghLoginCode)}</span><button class="btn-secondary" type="button" data-setup-copy-gh-code="${this.escapeHtml(ghLoginCode)}">Copy code</button></div>`
-			                : '<div class="dependency-gh-login-helper-text">Waiting for one-time code from GitHub CLI output...</div>'
+			              ${hasGhLoginRun ? '<div class="dependency-gh-login-helper-text">2. Click <strong>Open GitHub login</strong>.</div>' : ''}
+			              ${hasGhLoginRun ? '<div class="dependency-gh-login-helper-text">3. Paste the one-time code shown here:</div>' : ''}
+			              ${hasGhLoginRun
+			                ? (ghLoginCode
+			                    ? `<div class="dependency-gh-login-code-wrap"><span class="dependency-gh-login-code mono">${this.escapeHtml(ghLoginCode)}</span><button class="btn-secondary" type="button" data-setup-copy-gh-code="${this.escapeHtml(ghLoginCode)}">Copy code</button></div>`
+			                    : '<div class="dependency-gh-login-helper-text">Waiting for one-time code from GitHub CLI output...</div>')
+			                : '<div class="dependency-gh-login-helper-text">After Start login begins, the browser action and one-time code will appear here.</div>'
 			              }
 			            </div>
 			          ` : ''}
@@ -7869,9 +7872,9 @@ class ClaudeOrchestrator {
 			          <div class="dependency-setup-item-actions">
 			            ${showRunButton ? `<button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>` : ''}
 			            ${!isGhLoginStep ? `<button class="btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>` : ''}
-			            ${isGhLoginStep && !current?.done ? `<button class="btn-secondary" type="button" data-setup-open-gh-login="${this.escapeHtml(ghLoginLink)}">Open GitHub login</button>` : ''}
-			          </div>
-			        </div>
+				            ${isGhLoginStep && !current?.done && hasGhLoginRun ? `<button class="btn-secondary" type="button" data-setup-open-gh-login="${this.escapeHtml(ghLoginLink)}">Open GitHub login</button>` : ''}
+				          </div>
+				        </div>
 		        <div class="dependency-onboarding-nav">
 		          <button class="btn-secondary" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Back</button>
 	          <button class="btn-primary" type="button" data-setup-next="true" ${canAdvance ? '' : 'disabled'}>${nextLabel}</button>
