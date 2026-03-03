@@ -5,14 +5,35 @@ const { execFile } = require('child_process');
 
 const execFileAsync = util.promisify(execFile);
 
+function quoteCmdArg(value) {
+  const v = String(value ?? '');
+  return `"${v.replace(/"/g, '""')}"`;
+}
+
 async function checkCommand(command, args, options = {}) {
   const timeout = Number(options.timeoutMs) || 2500;
   try {
-    const { stdout, stderr } = await execFileAsync(command, args, {
+    const runOptions = {
       timeout,
       windowsHide: true,
       maxBuffer: 1024 * 1024
-    });
+    };
+
+    const commandStr = String(command || '').trim();
+    const argsArr = Array.isArray(args) ? args : [];
+    let result;
+    try {
+      result = await execFileAsync(commandStr, argsArr, runOptions);
+    } catch (error) {
+      const isWindowsScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandStr);
+      const shouldRetryWithCmd = isWindowsScript && (error?.code === 'EINVAL' || error?.code === 'ENOENT');
+      if (!shouldRetryWithCmd) throw error;
+
+      const cmdLine = [commandStr, ...argsArr].map((part) => quoteCmdArg(part)).join(' ');
+      result = await execFileAsync('cmd.exe', ['/d', '/s', '/c', cmdLine], runOptions);
+    }
+
+    const { stdout, stderr } = result || {};
     const output = String(stdout || stderr || '').trim();
     const firstLine = output.split(/\r?\n/).find(Boolean) || '';
     return { ok: true, command, args, version: firstLine || null };
