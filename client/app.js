@@ -7491,6 +7491,26 @@ class ClaudeOrchestrator {
 	    const closeBtn = document.getElementById('dependency-setup-close');
 	    if (!modal || !summaryEl || !listEl) return;
 	    const body = document.body;
+	    const isWindowsHost = (() => {
+	      try {
+	        const platform = String(navigator?.platform || '').toLowerCase();
+	        const userAgent = String(navigator?.userAgent || '').toLowerCase();
+	        return platform.includes('win') || userAgent.includes('windows');
+	      } catch {
+	        return false;
+	      }
+	    })();
+
+	    const setBootstrapPending = (pending) => {
+	      if (!isWindowsHost) return;
+	      if (pending) {
+	        body?.classList?.add?.('dependency-onboarding-booting');
+	        body?.classList?.remove?.('dependency-onboarding-active');
+	        return;
+	      }
+	      body?.classList?.remove?.('dependency-onboarding-booting');
+	    };
+	    setBootstrapPending(true);
 
 	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v2';
 	    const completedKey = 'orchestrator-dependency-onboarding-completed-v1';
@@ -7735,9 +7755,11 @@ class ClaudeOrchestrator {
 	    const closeModal = () => {
 	      modal.classList.add('hidden');
 	      body?.classList?.remove?.('dependency-onboarding-active');
+	      setBootstrapPending(false);
 	    };
 	    const openModal = () => {
 	      modal.classList.remove('hidden');
+	      setBootstrapPending(false);
 	      body?.classList?.add?.('dependency-onboarding-active');
 	    };
 
@@ -7777,18 +7799,21 @@ class ClaudeOrchestrator {
 	        const view = render();
 	        if (view.req?.coreReady) writeDismissed(false);
 
-	        const shouldAutoShow = !readDismissed() && (!readCompleted() || !(view.req?.coreReady));
-	        if (open || shouldAutoShow) {
-	          openModal();
-	        }
-	      } catch (err) {
-	        summaryEl.textContent = `Dependency check failed: ${String(err?.message || err)}`;
-	        listEl.innerHTML = '<div class="dependency-setup-empty">Unable to load setup actions right now.</div>';
-	        if (open) openModal();
-	      } finally {
-	        setLoading(false);
-	      }
-	    };
+		        const shouldAutoShow = !readDismissed() && (!readCompleted() || !(view.req?.coreReady));
+		        if (open || shouldAutoShow) {
+		          openModal();
+		        } else {
+		          setBootstrapPending(false);
+		        }
+		      } catch (err) {
+		        summaryEl.textContent = `Dependency check failed: ${String(err?.message || err)}`;
+		        listEl.innerHTML = '<div class="dependency-setup-empty">Unable to load setup actions right now.</div>';
+		        if (open) openModal();
+		        else setBootstrapPending(false);
+		      } finally {
+		        setLoading(false);
+		      }
+		    };
 
 	    const runSetupAction = async (actionId, btnEl) => {
 	      const id = String(actionId || '').trim();
@@ -7913,10 +7938,8 @@ class ClaudeOrchestrator {
 	      closeModal();
 	    });
 
-	    setTimeout(() => {
-	      loadAndRender({ open: false, forceAutoShow: false });
-	    }, 700);
-	  }
+		    loadAndRender({ open: false, forceAutoShow: false });
+		  }
 
 	  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {
 	    const msg = String(message || '').trim();
