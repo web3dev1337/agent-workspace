@@ -7486,7 +7486,6 @@ class ClaudeOrchestrator {
 	    const listEl = document.getElementById('dependency-setup-list');
 	    const refreshBtn = document.getElementById('dependency-setup-refresh');
 	    const openDiagnosticsBtn = document.getElementById('dependency-setup-open-diagnostics');
-	    const continueBtn = document.getElementById('dependency-setup-continue');
 	    const dismissBtn = document.getElementById('dependency-setup-dismiss');
 	    const closeBtn = document.getElementById('dependency-setup-close');
 	    if (!modal || !summaryEl || !listEl) return;
@@ -7772,8 +7771,10 @@ class ClaudeOrchestrator {
 	      }
 	    };
 
-	    const loadAndRender = async ({ open = false, forceAutoShow = false } = {}) => {
-	      if (state.loading) return;
+	    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+
+	    const loadAndRender = async ({ open = false, forceAutoShow = false, bootstrap = false } = {}) => {
+	      if (state.loading) return false;
 	      setLoading(true);
 	      try {
 	        const [diagRes, actionsRes] = await Promise.all([
@@ -7799,21 +7800,35 @@ class ClaudeOrchestrator {
 	        const view = render();
 	        if (view.req?.coreReady) writeDismissed(false);
 
-		        const shouldAutoShow = !readDismissed() && (!readCompleted() || !(view.req?.coreReady));
-		        if (open || shouldAutoShow) {
-		          openModal();
-		        } else {
-		          setBootstrapPending(false);
-		        }
-		      } catch (err) {
-		        summaryEl.textContent = `Dependency check failed: ${String(err?.message || err)}`;
-		        listEl.innerHTML = '<div class="dependency-setup-empty">Unable to load setup actions right now.</div>';
-		        if (open) openModal();
-		        else setBootstrapPending(false);
-		      } finally {
-		        setLoading(false);
-		      }
-		    };
+	        const shouldAutoShow = forceAutoShow || (!readDismissed() && (!readCompleted() || !(view.req?.coreReady)));
+	        if (open || shouldAutoShow) {
+	          openModal();
+	        } else {
+	          setBootstrapPending(false);
+	        }
+	        return true;
+	      } catch (err) {
+	        summaryEl.textContent = `Dependency check failed: ${String(err?.message || err)}`;
+	        listEl.innerHTML = '<div class="dependency-setup-empty">Unable to load setup actions right now.</div>';
+	        if (open) openModal();
+	        else if (!bootstrap) setBootstrapPending(false);
+	        return false;
+	      } finally {
+	        setLoading(false);
+	      }
+	    };
+
+	    const runBootstrapLoad = async () => {
+	      const delaysMs = [0, 240, 420, 700, 1050, 1450, 1900];
+	      for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
+	        if (attempt > 0) {
+	          await sleep(delaysMs[attempt]);
+	        }
+	        const ok = await loadAndRender({ open: false, forceAutoShow: false, bootstrap: true });
+	        if (ok) return;
+	      }
+	      setBootstrapPending(false);
+	    };
 
 	    const runSetupAction = async (actionId, btnEl) => {
 	      const id = String(actionId || '').trim();
@@ -7914,9 +7929,6 @@ class ClaudeOrchestrator {
 	        this.openDiagnosticsPanel({ refresh: true });
 	      });
 	    }
-	    if (continueBtn) {
-	      continueBtn.addEventListener('click', closeModal);
-	    }
 	    if (dismissBtn) {
 	      dismissBtn.addEventListener('click', () => {
 	        writeDismissed(true);
@@ -7938,7 +7950,7 @@ class ClaudeOrchestrator {
 	      closeModal();
 	    });
 
-		    loadAndRender({ open: false, forceAutoShow: false });
+		    runBootstrapLoad();
 		  }
 
 	  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {
