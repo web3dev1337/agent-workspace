@@ -5,11 +5,6 @@ const { execFile } = require('child_process');
 
 const execFileAsync = util.promisify(execFile);
 
-function quoteCmdArg(value) {
-  const v = String(value ?? '');
-  return `"${v.replace(/"/g, '""')}"`;
-}
-
 async function checkCommand(command, args, options = {}) {
   const timeout = Number(options.timeoutMs) || 2500;
   try {
@@ -29,8 +24,7 @@ async function checkCommand(command, args, options = {}) {
       const shouldRetryWithCmd = isWindowsScript && (error?.code === 'EINVAL' || error?.code === 'ENOENT');
       if (!shouldRetryWithCmd) throw error;
 
-      const cmdLine = [commandStr, ...argsArr].map((part) => quoteCmdArg(part)).join(' ');
-      result = await execFileAsync('cmd.exe', ['/d', '/s', '/c', cmdLine], runOptions);
+      result = await execFileAsync('cmd.exe', ['/d', '/s', '/c', commandStr, ...argsArr], runOptions);
     }
 
     const { stdout, stderr } = result || {};
