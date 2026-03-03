@@ -3767,6 +3767,11 @@ body.dependency-onboarding-active #dependency-setup-modal {
   border-color: rgba(245, 158, 11, 0.45);
 }
 
+.dependency-setup-badge.status-pending {
+  color: var(--accent-primary);
+  border-color: rgba(56, 139, 253, 0.45);
+}
+
 .dependency-setup-badge.level-required {
   color: var(--accent-danger);
   border-color: rgba(239, 68, 68, 0.45);
@@ -3906,6 +3911,15 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 .dependency-onboarding-state.status-missing {
   color: var(--accent-warning);
+}
+
+.dependency-onboarding-state.status-pending {
+  color: var(--accent-primary);
+}
+
+.dependency-setup-item-output {
+  max-height: 150px;
+  overflow: auto;
 }
 
 .dependency-onboarding-nav {

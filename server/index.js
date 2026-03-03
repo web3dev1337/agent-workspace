@@ -92,7 +92,12 @@ const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
 const sessionRecoveryService = require('./sessionRecoveryService');
 const { collectDiagnostics } = require('./diagnosticsService');
-const { getSetupActions, runSetupAction } = require('./setupActionService');
+const {
+  getSetupActions,
+  runSetupAction,
+  getSetupActionRun,
+  getLatestSetupActionRun
+} = require('./setupActionService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { ThreadService } = require('./threadService');
@@ -2726,6 +2731,26 @@ app.post('/api/setup-actions/run', (req, res) => {
     const status = (code === 'unsupported_platform' || code === 'unknown_action' || code === 'not_runnable') ? 400 : 500;
     logger.error('Failed to run setup action', { actionId: req.body?.actionId, error: error.message, stack: error.stack });
     res.status(status).json({ ok: false, error: String(error?.message || 'Failed to run setup action') });
+  }
+});
+
+app.get('/api/setup-actions/run-status', (req, res) => {
+  try {
+    const runId = String(req.query?.runId || '').trim();
+    const actionId = String(req.query?.actionId || '').trim();
+    const run = runId ? getSetupActionRun(runId) : getLatestSetupActionRun(actionId);
+    if (!run) {
+      return res.status(404).json({ ok: false, error: 'Setup action run not found' });
+    }
+    res.json({ ok: true, run });
+  } catch (error) {
+    logger.error('Failed to get setup action run status', {
+      runId: req.query?.runId,
+      actionId: req.query?.actionId,
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ ok: false, error: 'Failed to get setup action run status' });
   }
 });
 

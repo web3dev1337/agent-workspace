@@ -7517,7 +7517,9 @@ class ClaudeOrchestrator {
 	      loading: false,
 	      diagnostics: null,
 	      actions: [],
-	      currentStep: 0
+	      currentStep: 0,
+	      actionRuns: new Map(),
+	      actionRunPollers: new Map()
 	    };
 
 	    const readDismissed = () => {
@@ -7699,11 +7701,43 @@ class ClaudeOrchestrator {
 	      const currentDesc = this.escapeHtml(String(current?.description || ''));
 	      const commandRaw = String(current?.command || '');
 	      const command = this.escapeHtml(commandRaw);
-	      const runDisabled = !current?.runSupported || !!current?.done;
-	      const runLabel = current?.done ? 'Installed' : 'Run step';
-	      const guidance = current?.done
-	        ? 'Already installed on this machine. Continue to the next step.'
-	        : 'Run this step, then click Recheck.';
+	      const runInfo = state.actionRuns.get(currentId) || null;
+	      const runStatus = String(runInfo?.status || '').trim().toLowerCase();
+	      const isRunning = runStatus === 'running';
+	      const isVerifying = runStatus === 'verifying';
+	      const isRunBusy = isRunning || isVerifying;
+	      const runOutput = Array.isArray(runInfo?.output)
+	        ? runInfo.output
+	            .map((entry) => String(entry?.line || '').trim())
+	            .filter(Boolean)
+	            .slice(-8)
+	        : [];
+	      const runOutputText = this.escapeHtml(runOutput.join('\n'));
+	      const runDisabled = !current?.runSupported || !!current?.done || isRunBusy;
+	      const runLabel = current?.done ? 'Installed' : (isRunBusy ? 'Running...' : 'Run step');
+	      const statusText = current?.done || runStatus === 'verified'
+	        ? 'Installed'
+	        : (isRunning ? 'Installing' : (isVerifying ? 'Verifying' : (runStatus === 'failed' ? 'Failed' : 'Missing')));
+	      const statusClass = current?.done || runStatus === 'verified'
+	        ? 'status-ok'
+	        : ((isRunning || isVerifying) ? 'status-pending' : (runStatus === 'failed' ? 'status-missing' : (current?.statusClass || 'status-missing')));
+	      let guidance = 'Run this step. We will detect completion automatically.';
+	      if (current?.done || runStatus === 'verified') {
+	        guidance = 'Already installed on this machine. Continue to the next step.';
+	      } else if (isRunning) {
+	        guidance = 'Installing now via PowerShell. Keep this window open and we will recheck automatically.';
+	      } else if (isVerifying) {
+	        const attempt = Number(runInfo?.verifyAttempt) || 1;
+	        const total = Number(runInfo?.verifyMax) || 1;
+	        guidance = `Install command finished. Checking your system automatically (${attempt}/${total})...`;
+	      } else if (runStatus === 'failed') {
+	        const errorText = String(runInfo?.error || '').trim();
+	        guidance = errorText
+	          ? `Install failed: ${errorText}`
+	          : 'Install failed. Review the output below and run the step again.';
+	      } else if (runStatus === 'needs-attention') {
+	        guidance = 'Install command finished, but this dependency is still not detected. Review output below and run again.';
+	      }
 	      const canAdvance = !!current?.done;
 	      const nextLabel = !canAdvance
 	        ? 'Complete this step first'
@@ -7725,11 +7759,17 @@ class ClaudeOrchestrator {
 	            <div class="dependency-setup-item-title">${currentTitle}</div>
 	            <div class="dependency-setup-badges">
 	              <span class="dependency-setup-badge ${current?.levelClass || ''}">${current?.levelText || 'Recommended'}</span>
-	              <span class="dependency-setup-badge ${current?.statusClass || ''}">${current?.statusText || 'Missing'}</span>
+	              <span class="dependency-setup-badge ${statusClass}">${statusText}</span>
 	            </div>
 	          </div>
 	          <div class="dependency-setup-item-desc">${currentDesc}</div>
-	          <div class="dependency-onboarding-state ${current?.statusClass || ''}">${this.escapeHtml(guidance)}</div>
+	          <div class="dependency-onboarding-state ${statusClass}">${this.escapeHtml(guidance)}</div>
+	          ${runOutput.length ? `
+	            <div class="dependency-onboarding-command-wrap">
+	              <div class="dependency-onboarding-command-label">Installer output</div>
+	              <pre class="mono dependency-setup-item-command dependency-setup-item-output">${runOutputText}</pre>
+	            </div>
+	          ` : ''}
 	          ${command ? `
 	            <div class="dependency-onboarding-command-wrap">
 	              <div class="dependency-onboarding-command-label">Command</div>
@@ -7739,7 +7779,6 @@ class ClaudeOrchestrator {
 	          <div class="dependency-setup-item-actions">
 	            <button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>
 	            <button class="btn-secondary" type="button" data-setup-copy="${this.escapeHtml(commandRaw)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
-	            <button class="btn-secondary" type="button" data-setup-recheck="true">Recheck</button>
 	          </div>
 	        </div>
 	        <div class="dependency-onboarding-nav">
@@ -7818,6 +7857,121 @@ class ClaudeOrchestrator {
 	      }
 	    };
 
+	    const stopRunPolling = (actionId) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return;
+	      const poller = state.actionRunPollers.get(id);
+	      if (poller?.timer) clearTimeout(poller.timer);
+	      state.actionRunPollers.delete(id);
+	    };
+
+	    const updateActionRunState = (actionId, patch = {}, { rerender = true } = {}) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return null;
+	      const prev = state.actionRuns.get(id) || { actionId: id };
+	      const next = {
+	        ...prev,
+	        ...patch,
+	        actionId: id
+	      };
+	      state.actionRuns.set(id, next);
+	      if (rerender) render();
+	      return next;
+	    };
+
+	    const fetchSetupActionRunStatus = async ({ runId = '', actionId = '' } = {}) => {
+	      const params = new URLSearchParams();
+	      if (runId) params.set('runId', String(runId));
+	      if (actionId) params.set('actionId', String(actionId));
+	      const res = await fetch(`/api/setup-actions/run-status?${params.toString()}`);
+	      const data = await res.json().catch(() => ({}));
+	      if (!res.ok || data?.ok === false || !data?.run) {
+	        throw new Error(String(data?.error || `HTTP ${res.status}`));
+	      }
+	      return data.run;
+	    };
+
+	    const verifyActionInstalled = async (actionId, runId, { attempts = 24, delayMs = 1700 } = {}) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return false;
+
+	      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+	        const runState = state.actionRuns.get(id);
+	        if (!runState || String(runState?.runId || '') !== String(runId || '')) return false;
+
+	        updateActionRunState(id, {
+	          status: 'verifying',
+	          verifyAttempt: attempt,
+	          verifyMax: attempts,
+	          updatedAt: new Date().toISOString()
+	        });
+
+	        await loadAndRender({ open: true, forceAutoShow: true });
+	        const toolsMap = toToolMap(state.diagnostics);
+	        if (isActionComplete(id, toolsMap)) {
+	          updateActionRunState(id, {
+	            status: 'verified',
+	            verifyAttempt: attempts,
+	            verifyMax: attempts,
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Dependency detected automatically.', 'success');
+	          return true;
+	        }
+	        await sleep(delayMs);
+	      }
+
+	      updateActionRunState(id, {
+	        status: 'needs-attention',
+	        updatedAt: new Date().toISOString()
+	      });
+	      this.showToast('Install finished but dependency is still missing. Review output and run again if needed.', 'warning');
+	      return false;
+	    };
+
+	    const pollRunUntilDone = async (actionId, runId) => {
+	      const id = String(actionId || '').trim();
+	      const rid = String(runId || '').trim();
+	      if (!id || !rid) return;
+
+	      stopRunPolling(id);
+	      const pollLoop = async () => {
+	        try {
+	          const run = await fetchSetupActionRunStatus({ runId: rid, actionId: id });
+	          updateActionRunState(id, run);
+
+	          if (String(run?.status || '').toLowerCase() === 'running') {
+	            const timer = setTimeout(pollLoop, 1300);
+	            state.actionRunPollers.set(id, { runId: rid, timer });
+	            return;
+	          }
+
+	          stopRunPolling(id);
+	          await loadAndRender({ open: true, forceAutoShow: true });
+
+	          if (String(run?.status || '').toLowerCase() === 'success') {
+	            await verifyActionInstalled(id, rid);
+	            return;
+	          }
+
+	          if (String(run?.status || '').toLowerCase() === 'failed') {
+	            this.showToast(`Install failed: ${String(run?.error || 'Unknown error')}`, 'error');
+	          }
+	        } catch (err) {
+	          stopRunPolling(id);
+	          updateActionRunState(id, {
+	            status: 'failed',
+	            error: String(err?.message || err || 'Failed to fetch setup status'),
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast(`Install monitoring failed: ${String(err?.message || err)}`, 'error');
+	        }
+	      };
+
+	      const timer = setTimeout(pollLoop, 250);
+	      state.actionRunPollers.set(id, { runId: rid, timer });
+	    };
+
 	    const runBootstrapLoad = async () => {
 	      const delaysMs = [0, 240, 420, 700, 1050, 1450, 1900];
 	      for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
@@ -7836,6 +7990,15 @@ class ClaudeOrchestrator {
 	      const button = btnEl || null;
 	      if (button) button.disabled = true;
 	      try {
+	        updateActionRunState(id, {
+	          runId: null,
+	          status: 'running',
+	          error: null,
+	          output: [],
+	          verifyAttempt: 0,
+	          verifyMax: 0,
+	          updatedAt: new Date().toISOString()
+	        });
 	        const res = await fetch('/api/setup-actions/run', {
 	          method: 'POST',
 	          headers: { 'Content-Type': 'application/json' },
@@ -7845,9 +8008,31 @@ class ClaudeOrchestrator {
 	        if (!res.ok || data?.ok === false) {
 	          throw new Error(String(data?.error || `HTTP ${res.status}`));
 	        }
-	        this.showToast(String(data?.message || 'Setup command started.'), 'info');
-	        this.showToast('After it finishes, click Recheck.', 'info');
+	        const run = (data?.run && typeof data.run === 'object') ? data.run : null;
+	        if (run) {
+	          updateActionRunState(id, {
+	            ...run,
+	            verifyAttempt: 0,
+	            verifyMax: 0
+	          });
+	          if (run?.runId) {
+	            await pollRunUntilDone(id, run.runId);
+	          } else {
+	            await loadAndRender({ open: true, forceAutoShow: true });
+	          }
+	        } else {
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	        }
+	        const defaultMessage = data?.alreadyRunning
+	          ? 'Install is already running. Watching for completion...'
+	          : 'Install started. We will check this step automatically.';
+	        this.showToast(String(data?.message || defaultMessage), 'info');
 	      } catch (err) {
+	        updateActionRunState(id, {
+	          status: 'failed',
+	          error: String(err?.message || err),
+	          updatedAt: new Date().toISOString()
+	        });
 	        this.showToast(`Failed to start action: ${String(err?.message || err)}`, 'error');
 	      } finally {
 	        if (button) button.disabled = false;
@@ -7858,12 +8043,6 @@ class ClaudeOrchestrator {
 	      const runBtn = event.target.closest('[data-setup-run]');
 	      if (runBtn) {
 	        await runSetupAction(runBtn.getAttribute('data-setup-run'), runBtn);
-	        return;
-	      }
-
-	      const recheckBtn = event.target.closest('[data-setup-recheck]');
-	      if (recheckBtn) {
-	        await loadAndRender({ open: true, forceAutoShow: true });
 	        return;
 	      }
 

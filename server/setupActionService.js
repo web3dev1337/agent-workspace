@@ -1,4 +1,9 @@
+const crypto = require('crypto');
 const { spawn } = require('child_process');
+
+const setupActionRuns = new Map();
+const latestRunByActionId = new Map();
+const MAX_OUTPUT_LINES = 180;
 
 function getSetupActions(platform = process.platform) {
   if (platform !== 'win32') {
@@ -69,17 +74,123 @@ function getSetupActionById(actionId, platform = process.platform) {
   return getSetupActions(platform).find((action) => action.id === id) || null;
 }
 
-function openPowerShellWithCommand(command) {
-  const child = spawn(
-    'powershell.exe',
-    ['-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', String(command || '')],
-    {
-      detached: true,
-      windowsHide: false,
-      stdio: 'ignore'
-    }
-  );
-  child.unref();
+function createRunId(actionId) {
+  return `setup-${String(actionId || 'action')}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+}
+
+function getRunSummary(run) {
+  if (!run) return null;
+  return {
+    runId: run.runId,
+    actionId: run.actionId,
+    title: run.title,
+    command: run.command,
+    status: run.status,
+    startedAt: run.startedAt,
+    endedAt: run.endedAt || null,
+    pid: Number.isFinite(run.pid) ? run.pid : null,
+    exitCode: Number.isInteger(run.exitCode) ? run.exitCode : null,
+    error: run.error || null,
+    output: Array.isArray(run.output) ? run.output.slice(-25) : [],
+    updatedAt: run.updatedAt || run.startedAt
+  };
+}
+
+function appendRunOutput(run, chunk, stream = 'stdout') {
+  if (!run) return;
+  const text = String(chunk || '');
+  if (!text) return;
+  const lines = text
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
+  if (!lines.length) return;
+  const at = new Date().toISOString();
+  lines.forEach((line) => {
+    run.output.push({ at, stream, line: String(line).slice(0, 1600) });
+  });
+  if (run.output.length > MAX_OUTPUT_LINES) {
+    run.output.splice(0, run.output.length - MAX_OUTPUT_LINES);
+  }
+  run.updatedAt = at;
+}
+
+function launchPowerShellCommand(action) {
+  const runId = createRunId(action.id);
+  const run = {
+    runId,
+    actionId: action.id,
+    title: action.title,
+    command: action.command,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    pid: null,
+    exitCode: null,
+    error: null,
+    output: [],
+    updatedAt: null
+  };
+  run.updatedAt = run.startedAt;
+
+  setupActionRuns.set(runId, run);
+  latestRunByActionId.set(action.id, runId);
+
+  try {
+    const child = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', String(action.command || '')],
+      {
+        detached: false,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
+    );
+    run.pid = Number.isFinite(child?.pid) ? child.pid : null;
+    run.updatedAt = new Date().toISOString();
+
+    child.stdout.on('data', (chunk) => appendRunOutput(run, chunk, 'stdout'));
+    child.stderr.on('data', (chunk) => appendRunOutput(run, chunk, 'stderr'));
+
+    child.on('error', (error) => {
+      run.status = 'failed';
+      run.error = String(error?.message || error || 'Failed to launch setup action');
+      run.endedAt = new Date().toISOString();
+      run.updatedAt = run.endedAt;
+    });
+
+    child.on('close', (code) => {
+      run.exitCode = Number.isInteger(code) ? code : null;
+      run.status = code === 0 ? 'success' : 'failed';
+      if (code !== 0 && !run.error) {
+        run.error = `Setup action exited with code ${String(code)}`;
+      }
+      run.endedAt = new Date().toISOString();
+      run.updatedAt = run.endedAt;
+    });
+  } catch (error) {
+    run.status = 'failed';
+    run.error = String(error?.message || error || 'Failed to launch setup action');
+    run.endedAt = new Date().toISOString();
+    run.updatedAt = run.endedAt;
+  }
+
+  return run;
+}
+
+function getSetupActionRun(runId) {
+  const key = String(runId || '').trim();
+  if (!key) return null;
+  return getRunSummary(setupActionRuns.get(key));
+}
+
+function getLatestSetupActionRun(actionId) {
+  const id = String(actionId || '').trim();
+  if (!id) return null;
+  const runId = latestRunByActionId.get(id);
+  if (!runId) return null;
+  return getRunSummary(setupActionRuns.get(runId));
 }
 
 function runSetupAction(actionId, platform = process.platform) {
@@ -102,19 +213,35 @@ function runSetupAction(actionId, platform = process.platform) {
     throw err;
   }
 
-  openPowerShellWithCommand(action.command);
+  const latestRun = getLatestSetupActionRun(action.id);
+  if (latestRun && latestRun.status === 'running') {
+    return {
+      id: action.id,
+      title: action.title,
+      started: true,
+      alreadyRunning: true,
+      run: latestRun,
+      message: `${action.title} is already running.`
+    };
+  }
+
+  const run = launchPowerShellCommand(action);
+  const runSummary = getRunSummary(run);
 
   return {
     id: action.id,
     title: action.title,
     started: true,
-    message: `Opened PowerShell to run: ${action.command}`
+    alreadyRunning: false,
+    run: runSummary,
+    message: `Started ${action.title}. Progress updates are now tracked in onboarding.`
   };
 }
 
 module.exports = {
   getSetupActions,
   getSetupActionById,
-  runSetupAction
+  runSetupAction,
+  getSetupActionRun,
+  getLatestSetupActionRun
 };
-
