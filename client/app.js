@@ -7512,9 +7512,9 @@ class ClaudeOrchestrator {
 	    };
 	    setBootstrapPending(true);
 
-	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v2';
-	    const completedKey = 'orchestrator-dependency-onboarding-completed-v1';
-	    const progressKey = 'orchestrator-dependency-onboarding-progress-v1';
+	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v3';
+	    const completedKey = 'orchestrator-dependency-onboarding-completed-v2';
+	    const progressKey = 'orchestrator-dependency-onboarding-progress-v2';
 	    const state = {
 	      loading: false,
 	      diagnostics: null,
