@@ -7486,7 +7486,6 @@ class ClaudeOrchestrator {
 	    const listEl = document.getElementById('dependency-setup-list');
 	    const refreshBtn = document.getElementById('dependency-setup-refresh');
 	    const openDiagnosticsBtn = document.getElementById('dependency-setup-open-diagnostics');
-	    const dismissBtn = document.getElementById('dependency-setup-dismiss');
 	    const closeBtn = document.getElementById('dependency-setup-close');
 	    if (!modal || !summaryEl || !listEl) return;
 	    const body = document.body;
@@ -7700,13 +7699,15 @@ class ClaudeOrchestrator {
 	      const currentDesc = this.escapeHtml(String(current?.description || ''));
 	      const commandRaw = String(current?.command || '');
 	      const command = this.escapeHtml(commandRaw);
-	      const docsUrl = this.escapeHtml(String(current?.docsUrl || ''));
 	      const runDisabled = !current?.runSupported || !!current?.done;
 	      const runLabel = current?.done ? 'Installed' : 'Run step';
 	      const guidance = current?.done
 	        ? 'Already installed on this machine. Continue to the next step.'
 	        : 'Run this step, then click Recheck.';
-	      const nextLabel = stepNo >= totalSteps ? 'Finish onboarding' : 'Next step';
+	      const canAdvance = !!current?.done;
+	      const nextLabel = !canAdvance
+	        ? 'Complete this step first'
+	        : (stepNo >= totalSteps ? 'Finish onboarding' : 'Next step');
 
 	      listEl.innerHTML = `
 	        <div class="dependency-onboarding-progress">
@@ -7738,13 +7739,12 @@ class ClaudeOrchestrator {
 	          <div class="dependency-setup-item-actions">
 	            <button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>
 	            <button class="btn-secondary" type="button" data-setup-copy="${this.escapeHtml(commandRaw)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
-	            ${docsUrl ? `<a class="btn-secondary" href="${docsUrl}" target="_blank" rel="noopener noreferrer">Docs</a>` : ''}
 	            <button class="btn-secondary" type="button" data-setup-recheck="true">Recheck</button>
 	          </div>
 	        </div>
 	        <div class="dependency-onboarding-nav">
 	          <button class="btn-secondary" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Back</button>
-	          <button class="btn-primary" type="button" data-setup-next="true">${nextLabel}</button>
+	          <button class="btn-primary" type="button" data-setup-next="true" ${canAdvance ? '' : 'disabled'}>${nextLabel}</button>
 	        </div>
 	      `;
 
@@ -7877,6 +7877,12 @@ class ClaudeOrchestrator {
 	      const nextBtn = event.target.closest('[data-setup-next]');
 	      if (nextBtn) {
 	        const total = Array.isArray(state.actions) ? state.actions.length : 0;
+	        const steps = getResolvedSteps();
+	        const currentStep = steps[state.currentStep];
+	        if (!currentStep?.done) {
+	          this.showToast('Install this dependency before continuing.', 'warning');
+	          return;
+	        }
 	        if (state.currentStep >= (total - 1)) {
 	          writeCompleted(true);
 	          writeDismissed(false);
@@ -7927,13 +7933,6 @@ class ClaudeOrchestrator {
 	    if (openDiagnosticsBtn) {
 	      openDiagnosticsBtn.addEventListener('click', () => {
 	        this.openDiagnosticsPanel({ refresh: true });
-	      });
-	    }
-	    if (dismissBtn) {
-	      dismissBtn.addEventListener('click', () => {
-	        writeDismissed(true);
-	        closeModal();
-	        this.showToast('Dependency onboarding skipped for now. Reopen it from Diagnostics any time.', 'info');
 	      });
 	    }
 	    if (closeBtn) {
