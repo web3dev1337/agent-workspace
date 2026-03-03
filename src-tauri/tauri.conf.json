@@ -42,5 +42,10 @@
       "resources/backend/client/*",
       "resources/backend/node_modules"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": ""
+    }
   }
 }
