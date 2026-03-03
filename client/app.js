@@ -8248,6 +8248,8 @@ class ClaudeOrchestrator {
 
 	      const copyGhCodeBtn = event.target.closest('[data-setup-copy-gh-code]');
 	      if (copyGhCodeBtn) {
+	        event.preventDefault();
+	        event.stopPropagation();
 	        const code = String(copyGhCodeBtn.getAttribute('data-setup-copy-gh-code') || '').trim();
 	        if (!code) return;
 	        try {
@@ -8261,6 +8263,8 @@ class ClaudeOrchestrator {
 
 	      const openGhLoginBtn = event.target.closest('[data-setup-open-gh-login]');
 	      if (openGhLoginBtn) {
+	        event.preventDefault();
+	        event.stopPropagation();
 	        const link = String(openGhLoginBtn.getAttribute('data-setup-open-gh-login') || '').trim();
 	        if (!link) return;
 	        try {
@@ -8275,12 +8279,7 @@ class ClaudeOrchestrator {
 	          }
 	          this.showToast('Opened GitHub login in your browser.', 'info');
 	        } catch (err) {
-	          try {
-	            await navigator.clipboard.writeText(link);
-	            this.showToast('Could not open browser automatically. Login link copied to clipboard.', 'warning');
-	          } catch (copyErr) {
-	            this.showToast(`Could not open login link: ${String(err?.message || err)} | ${String(copyErr?.message || copyErr)}`, 'error');
-	          }
+	          this.showToast(`Could not open login link: ${String(err?.message || err)}`, 'error');
 	        }
 	        return;
 	      }
