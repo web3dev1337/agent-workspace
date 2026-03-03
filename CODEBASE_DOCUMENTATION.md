@@ -437,5 +437,16 @@ LOGGING:      Winston-based structured logging with rotation
 9. **Mixed-repo workspaces**: Terminal naming must avoid conflicts between repos
 10. **Template validation**: Always validate workspace templates against schemas
 
+
+## First-Run Setup Actions (Windows)
+
+```
+server/setupActionService.js     - Defines setup actions and launches PowerShell installers
+server/index.js                  - Routes: GET /api/setup-actions, POST /api/setup-actions/run
+client/app.js                    - Dependency setup wizard logic + diagnostics panel integration
+client/index.html                - Setup wizard modal markup + open button
+client/styles.css                - Setup wizard styling
+```
+
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
