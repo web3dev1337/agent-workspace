@@ -1,9 +1,109 @@
 const crypto = require('crypto');
-const { spawn } = require('child_process');
+const util = require('util');
+const path = require('path');
+const { spawn, execFile } = require('child_process');
+
+const execFileAsync = util.promisify(execFile);
 
 const setupActionRuns = new Map();
 const latestRunByActionId = new Map();
 const MAX_OUTPUT_LINES = 180;
+
+function uniqueStrings(values = []) {
+  const seen = new Set();
+  const out = [];
+  values.forEach((value) => {
+    const item = String(value || '').trim();
+    if (!item || seen.has(item)) return;
+    seen.add(item);
+    out.push(item);
+  });
+  return out;
+}
+
+async function checkExecutable(command, args = ['--version']) {
+  const commandStr = String(command || '').trim();
+  if (!commandStr) return { ok: false, error: 'Missing command' };
+
+  const runOptions = {
+    windowsHide: true,
+    timeout: 3000,
+    maxBuffer: 1024 * 1024
+  };
+
+  try {
+    await execFileAsync(commandStr, Array.isArray(args) ? args : [], runOptions);
+    return { ok: true };
+  } catch (error) {
+    const isWindowsScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandStr);
+    if (isWindowsScript && (error?.code === 'EINVAL' || error?.code === 'ENOENT')) {
+      try {
+        await execFileAsync('cmd.exe', ['/d', '/c', commandStr, ...(Array.isArray(args) ? args : [])], runOptions);
+        return { ok: true };
+      } catch (fallbackError) {
+        return {
+          ok: false,
+          error: String(fallbackError?.message || fallbackError || 'Command check failed')
+        };
+      }
+    }
+    return {
+      ok: false,
+      error: String(error?.message || error || 'Command check failed')
+    };
+  }
+}
+
+function getGitCommandCandidates(platform = process.platform) {
+  if (platform !== 'win32') {
+    return ['git'];
+  }
+
+  return uniqueStrings([
+    'git',
+    'git.exe',
+    path.join(process.env.ProgramFiles || '', 'Git', 'cmd', 'git.exe'),
+    path.join(process.env.ProgramFiles || '', 'Git', 'bin', 'git.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || '', 'Git', 'cmd', 'git.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || '', 'Git', 'bin', 'git.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Git', 'cmd', 'git.exe')
+  ]);
+}
+
+async function resolveGitCommand(platform = process.platform) {
+  const candidates = getGitCommandCandidates(platform);
+  for (const command of candidates) {
+    const check = await checkExecutable(command, ['--version']);
+    if (check.ok) return command;
+  }
+  return '';
+}
+
+async function runGitCommand(command, args = []) {
+  try {
+    const result = await execFileAsync(command, Array.isArray(args) ? args : [], {
+      windowsHide: true,
+      timeout: 9000,
+      maxBuffer: 1024 * 1024
+    });
+    return String(result?.stdout || result?.stderr || '');
+  } catch (error) {
+    const stderr = String(error?.stderr || '').trim();
+    const stdout = String(error?.stdout || '').trim();
+    const message = stderr || stdout || String(error?.message || error || 'Git command failed');
+    const err = new Error(message);
+    err.code = String(error?.code || 'git_command_failed');
+    throw err;
+  }
+}
+
+function firstNonEmptyLine(text) {
+  return String(text || '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .find(Boolean) || '';
+}
 
 function getSetupActions(platform = process.platform) {
   if (platform !== 'win32') {
@@ -251,10 +351,63 @@ function runSetupAction(actionId, platform = process.platform) {
   };
 }
 
+async function configureGitIdentity({ name, email } = {}, platform = process.platform) {
+  if (platform !== 'win32') {
+    const err = new Error('Git identity setup is currently implemented for Windows only.');
+    err.code = 'unsupported_platform';
+    throw err;
+  }
+
+  const normalizedName = String(name || '').trim();
+  const normalizedEmail = String(email || '').trim();
+  if (!normalizedName || !normalizedEmail) {
+    const err = new Error('Both name and email are required.');
+    err.code = 'invalid_input';
+    throw err;
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    const err = new Error('Enter a valid email address.');
+    err.code = 'invalid_input';
+    throw err;
+  }
+
+  const gitCommand = await resolveGitCommand(platform);
+  if (!gitCommand) {
+    const err = new Error('Git is not installed or not available on PATH.');
+    err.code = 'missing_git';
+    throw err;
+  }
+
+  await runGitCommand(gitCommand, ['config', '--global', 'user.name', normalizedName]);
+  await runGitCommand(gitCommand, ['config', '--global', 'user.email', normalizedEmail]);
+
+  const savedName = firstNonEmptyLine(await runGitCommand(gitCommand, ['config', '--global', '--get', 'user.name']));
+  const savedEmail = firstNonEmptyLine(await runGitCommand(gitCommand, ['config', '--global', '--get', 'user.email']));
+
+  if (!savedName || !savedEmail) {
+    const err = new Error('Git identity was saved, but verification failed.');
+    err.code = 'verify_failed';
+    throw err;
+  }
+
+  return {
+    id: 'configure-git-identity',
+    title: 'Configure Git identity',
+    ok: true,
+    gitCommand,
+    name: savedName,
+    email: savedEmail,
+    summary: `${savedName} <${savedEmail}>`,
+    message: 'Git identity saved successfully.'
+  };
+}
+
 module.exports = {
   getSetupActions,
   getSetupActionById,
   runSetupAction,
   getSetupActionRun,
-  getLatestSetupActionRun
+  getLatestSetupActionRun,
+  configureGitIdentity
 };

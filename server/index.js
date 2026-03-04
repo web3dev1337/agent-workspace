@@ -96,7 +96,8 @@ const {
   getSetupActions,
   runSetupAction,
   getSetupActionRun,
-  getLatestSetupActionRun
+  getLatestSetupActionRun,
+  configureGitIdentity
 } = require('./setupActionService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
@@ -2731,6 +2732,28 @@ app.post('/api/setup-actions/run', (req, res) => {
     const status = (code === 'unsupported_platform' || code === 'unknown_action' || code === 'not_runnable') ? 400 : 500;
     logger.error('Failed to run setup action', { actionId: req.body?.actionId, error: error.message, stack: error.stack });
     res.status(status).json({ ok: false, error: String(error?.message || 'Failed to run setup action') });
+  }
+});
+
+app.post('/api/setup-actions/configure-git-identity', async (req, res) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim();
+    const result = await configureGitIdentity({ name, email }, process.platform);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    const code = String(error?.code || '');
+    const status = (
+      code === 'unsupported_platform'
+      || code === 'invalid_input'
+      || code === 'missing_git'
+      || code === 'verify_failed'
+    ) ? 400 : 500;
+    logger.error('Failed to configure git identity', {
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(status).json({ ok: false, error: String(error?.message || 'Failed to configure git identity') });
   }
 });
 

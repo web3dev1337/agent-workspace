@@ -7517,7 +7517,11 @@ class ClaudeOrchestrator {
 	      actions: [],
 	      currentStep: 0,
 	      actionRuns: new Map(),
-	      actionRunPollers: new Map()
+	      actionRunPollers: new Map(),
+	      gitIdentity: {
+	        name: '',
+	        email: ''
+	      }
 	    };
 
 	    const readDismissed = () => {
@@ -7581,6 +7585,40 @@ class ClaudeOrchestrator {
 	        map.set(id, !!tool?.ok);
 	      });
 	      return map;
+	    };
+
+	    const getToolResult = (diagnostics, toolId) => {
+	      const id = String(toolId || '').trim();
+	      if (!id) return null;
+	      const tools = Array.isArray(diagnostics?.tools) ? diagnostics.tools : [];
+	      return tools.find((tool) => String(tool?.id || '').trim() === id) || null;
+	    };
+
+	    const parseGitIdentityVersion = (value) => {
+	      const raw = String(value || '').trim();
+	      if (!raw) return { name: '', email: '' };
+	      const pair = raw.match(/^(.*)\s<([^<>]+)>$/);
+	      if (pair?.[1] && pair?.[2]) {
+	        return {
+	          name: String(pair[1] || '').trim(),
+	          email: String(pair[2] || '').trim()
+	        };
+	      }
+	      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
+	        return { name: '', email: raw };
+	      }
+	      return { name: raw, email: '' };
+	    };
+
+	    const hydrateGitIdentityDraft = (diagnostics) => {
+	      const gitIdentityTool = getToolResult(diagnostics, 'gitIdentity');
+	      const parsed = parseGitIdentityVersion(String(gitIdentityTool?.version || ''));
+	      if (!state.gitIdentity.name && parsed.name) {
+	        state.gitIdentity.name = parsed.name;
+	      }
+	      if (!state.gitIdentity.email && parsed.email) {
+	        state.gitIdentity.email = parsed.email;
+	      }
 	    };
 
 	    const getRequirementState = (toolsMap) => {
@@ -7736,6 +7774,7 @@ class ClaudeOrchestrator {
 	      const isRunning = runStatus === 'running';
 	      const isVerifying = runStatus === 'verifying';
 	      const isRunBusy = isRunning || isVerifying;
+	      const isGitIdentityStep = currentId === 'configure-git-identity';
 	      const runOutput = Array.isArray(runInfo?.output)
 	        ? runInfo.output
 	            .map((entry) => String(entry?.line || '').trim())
@@ -7743,7 +7782,7 @@ class ClaudeOrchestrator {
 	            .slice(-8)
 	        : [];
 	      const runOutputText = this.escapeHtml(runOutput.join('\n'));
-	      const shouldShowInstallerOutput = currentId !== 'gh-login' && (
+	      const shouldShowInstallerOutput = currentId !== 'gh-login' && !isGitIdentityStep && (
 	        runOutput.length > 0 ||
 	        isRunBusy ||
 	        runStatus === 'failed' ||
@@ -7779,13 +7818,16 @@ class ClaudeOrchestrator {
 	      })();
 	      const isGhLoginStep = currentId === 'gh-login';
 	      const hasGhLoginRun = isGhLoginStep && !!runInfo;
+	      const gitIdentityName = this.escapeHtml(String(state.gitIdentity?.name || ''));
+	      const gitIdentityEmail = this.escapeHtml(String(state.gitIdentity?.email || ''));
+	      const gitIdentityHelpUrl = this.escapeHtml(String(current?.docsUrl || 'https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup'));
 	      const ghLoginUiPhase = (() => {
 	        if (!isGhLoginStep || current?.done) return 'none';
 	        if (!hasGhLoginRun) return 'start';
 	        if (!ghLoginCode) return 'wait-code';
 	        return 'code';
 	      })();
-	      const showRunButton = current?.runSupported !== false && !(isGhLoginStep && current?.done);
+	      const showRunButton = current?.runSupported !== false && !isGitIdentityStep && !(isGhLoginStep && current?.done);
 	      const runDisabled = !!current?.done || isRunBusy;
 	      const runLabel = (() => {
 	        if (current?.done) {
@@ -7800,9 +7842,9 @@ class ClaudeOrchestrator {
 	      const baseStatusText = String(current?.statusText || (current?.done ? 'Installed' : 'Missing'));
 	      const statusText = (() => {
 	        if (runStatus === 'verified') return baseStatusText;
-	        if (isRunning) return currentId === 'gh-login' ? 'Signing in' : 'Installing';
-	        if (isVerifying) return currentId === 'gh-login' ? 'Checking login' : 'Verifying';
-	        if (runStatus === 'failed') return currentId === 'gh-login' ? 'Login failed' : 'Failed';
+	        if (isRunning) return isGhLoginStep ? 'Signing in' : (isGitIdentityStep ? 'Saving' : 'Installing');
+	        if (isVerifying) return isGhLoginStep ? 'Checking login' : (isGitIdentityStep ? 'Checking' : 'Verifying');
+	        if (runStatus === 'failed') return isGhLoginStep ? 'Login failed' : (isGitIdentityStep ? 'Save failed' : 'Failed');
 	        return baseStatusText;
 	      })();
 	      const statusClass = current?.done || runStatus === 'verified'
@@ -7812,24 +7854,34 @@ class ClaudeOrchestrator {
 	      if (current?.done || runStatus === 'verified') {
 	        guidance = isGhLoginStep
 	          ? 'GitHub CLI is authenticated. Continue to the next step.'
-	          : 'Already installed on this machine. Continue to the next step.';
+	          : (isGitIdentityStep
+	              ? 'Git identity is configured. Continue to the next step.'
+	              : 'Already installed on this machine. Continue to the next step.');
 	      } else if (isRunning) {
 	        guidance = isGhLoginStep
 	          ? 'Starting GitHub login. Follow the steps below and we will detect completion automatically.'
-	          : 'Installing now via PowerShell. Keep this window open and we will recheck automatically.';
+	          : (isGitIdentityStep
+	              ? 'Saving Git identity now. Keep this window open and we will recheck automatically.'
+	              : 'Installing now via PowerShell. Keep this window open and we will recheck automatically.');
 	      } else if (isVerifying) {
 	        guidance = isGhLoginStep
 	          ? 'Checking GitHub login status automatically...'
-	          : 'Install command finished. Checking your system automatically...';
+	          : (isGitIdentityStep
+	              ? 'Git identity saved. Checking your system automatically...'
+	              : 'Install command finished. Checking your system automatically...');
 	      } else if (runStatus === 'failed') {
 	        const errorText = String(runInfo?.error || '').trim();
 	        guidance = errorText
-	          ? `${isGhLoginStep ? 'Login failed' : 'Install failed'}: ${errorText}`
-	          : `${isGhLoginStep ? 'Login failed' : 'Install failed'}. Review the output below and run the step again.`;
+	          ? `${isGhLoginStep ? 'Login failed' : (isGitIdentityStep ? 'Save failed' : 'Install failed')}: ${errorText}`
+	          : `${isGhLoginStep ? 'Login failed' : (isGitIdentityStep ? 'Save failed' : 'Install failed')}. Review and run the step again.`;
 	      } else if (runStatus === 'needs-attention') {
 	        guidance = isGhLoginStep
 	          ? 'GitHub login is not detected yet. Finish sign-in in your browser, then click Start login again.'
-	          : 'Install command finished, but this dependency is still not detected. Review output below and run again.';
+	          : (isGitIdentityStep
+	              ? 'Git identity was saved, but it is still not detected. Check your values and save again.'
+	              : 'Install command finished, but this dependency is still not detected. Review output below and run again.');
+	      } else if (isGitIdentityStep) {
+	        guidance = 'Enter your Git name and email, then click Save identity. We will detect it automatically.';
 	      } else if (!current?.runSupported && current?.optional) {
 	        guidance = 'Optional but strongly recommended: set Git user.name and user.email so commits and PR authorship are correct.';
 	      } else if (!current?.runSupported) {
@@ -7863,6 +7915,25 @@ class ClaudeOrchestrator {
 	          </div>
 			          <div class="dependency-setup-item-desc">${currentDesc}</div>
 			          <div class="dependency-onboarding-state ${statusClass}">${this.escapeHtml(guidance)}</div>
+			          ${isGitIdentityStep ? `
+			            <div class="dependency-git-identity-helper">
+			              <div class="dependency-onboarding-command-label">Git author details</div>
+			              <div class="dependency-git-identity-fields">
+			                <label class="dependency-git-identity-field">
+			                  <span>Name</span>
+			                  <input type="text" data-setup-git-name placeholder="Jane Developer" autocomplete="name" value="${gitIdentityName}" ${isRunBusy ? 'disabled' : ''}>
+			                </label>
+			                <label class="dependency-git-identity-field">
+			                  <span>Email</span>
+			                  <input type="email" data-setup-git-email placeholder="you@example.com" autocomplete="email" value="${gitIdentityEmail}" ${isRunBusy ? 'disabled' : ''}>
+			                </label>
+			              </div>
+			              <div class="dependency-git-identity-actions">
+			                <button class="btn-secondary" type="button" data-setup-git-save="true" ${isRunBusy ? 'disabled' : ''}>${isRunBusy ? 'Saving...' : (current?.done ? 'Update identity' : 'Save identity')}</button>
+			                <a class="btn-secondary dependency-git-help-btn" href="${gitIdentityHelpUrl}" target="_blank" rel="noopener noreferrer" title="How to choose name and email">?</a>
+			              </div>
+			            </div>
+			          ` : ''}
 			          ${isGhLoginStep && !current?.done ? `
 				            <div class="dependency-gh-login-helper">
 				              <div class="dependency-onboarding-command-label">Browser login</div>
@@ -7886,7 +7957,7 @@ class ClaudeOrchestrator {
 			              <pre class="mono dependency-setup-item-command dependency-setup-item-output">${installerOutputText}</pre>
 			            </div>
 			          ` : ''}
-		          ${command && !isGhLoginStep ? `
+		          ${command && !isGhLoginStep && !isGitIdentityStep ? `
 		            <div class="dependency-onboarding-command-wrap">
 		              <div class="dependency-onboarding-command-label">Command</div>
 		              <pre class="mono dependency-setup-item-command">${command}</pre>
@@ -7894,7 +7965,7 @@ class ClaudeOrchestrator {
 		          ` : ''}
 				          <div class="dependency-setup-item-actions">
 				            ${showRunButton ? `<button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>` : ''}
-				            ${!isGhLoginStep ? `<button class="btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>` : ''}
+				            ${!isGhLoginStep && !isGitIdentityStep ? `<button class="btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>` : ''}
 					            ${isGhLoginStep && !current?.done && ghLoginUiPhase === 'code' ? `<button class="btn-secondary" type="button" data-setup-open-gh-login="${this.escapeHtml(ghLoginLink)}">Open GitHub login</button>` : ''}
 					          </div>
 				        </div>
@@ -7954,6 +8025,7 @@ class ClaudeOrchestrator {
 	        }
 
 	        state.diagnostics = diagData;
+	        hydrateGitIdentityDraft(diagData);
 	        const allActions = Array.isArray(actionsData?.actions) ? actionsData.actions : [];
 	        const toolsMap = toToolMap(diagData);
 	        state.actions = allActions.filter((action) => {
@@ -8082,6 +8154,47 @@ class ClaudeOrchestrator {
 	      return false;
 	    };
 
+	    const verifyActionWithoutRun = async (actionId, options = {}) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return false;
+	      const policy = {
+	        ...getVerifyPolicyForAction(id),
+	        ...(options && typeof options === 'object' ? options : {})
+	      };
+	      const attempts = Math.max(1, Number(policy.attempts) || 1);
+	      const delayMs = Math.max(250, Number(policy.delayMs) || 650);
+
+	      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+	        updateActionRunState(id, {
+	          status: 'verifying',
+	          verifyAttempt: attempt,
+	          verifyMax: attempts,
+	          updatedAt: new Date().toISOString()
+	        });
+
+	        await loadAndRender({ open: true, forceAutoShow: true });
+	        const toolsMap = toToolMap(state.diagnostics);
+	        if (isActionComplete(id, toolsMap)) {
+	          updateActionRunState(id, {
+	            status: 'verified',
+	            verifyAttempt: attempts,
+	            verifyMax: attempts,
+	            updatedAt: new Date().toISOString()
+	          });
+	          return true;
+	        }
+	        if (attempt < attempts) {
+	          await sleep(delayMs);
+	        }
+	      }
+
+	      updateActionRunState(id, {
+	        status: 'needs-attention',
+	        updatedAt: new Date().toISOString()
+	      });
+	      return false;
+	    };
+
 	    const pollRunUntilDone = async (actionId, runId) => {
 	      const id = String(actionId || '').trim();
 	      const rid = String(runId || '').trim();
@@ -8196,10 +8309,76 @@ class ClaudeOrchestrator {
 	      }
 	    };
 
+	    const saveGitIdentity = async (btnEl) => {
+	      const button = btnEl || null;
+	      const id = 'configure-git-identity';
+	      const nameInput = listEl.querySelector('[data-setup-git-name]');
+	      const emailInput = listEl.querySelector('[data-setup-git-email]');
+	      const name = String(nameInput?.value || state.gitIdentity?.name || '').trim();
+	      const email = String(emailInput?.value || state.gitIdentity?.email || '').trim();
+
+	      state.gitIdentity.name = name;
+	      state.gitIdentity.email = email;
+
+	      if (!name || !email) {
+	        this.showToast('Enter both Git name and email.', 'warning');
+	        return;
+	      }
+
+	      if (button) button.disabled = true;
+	      try {
+	        updateActionRunState(id, {
+	          runId: 'manual-git-identity',
+	          status: 'running',
+	          error: null,
+	          output: [],
+	          verifyAttempt: 0,
+	          verifyMax: 0,
+	          updatedAt: new Date().toISOString()
+	        });
+
+	        const res = await fetch('/api/setup-actions/configure-git-identity', {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify({ name, email })
+	        });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok || data?.ok === false) {
+	          throw new Error(String(data?.error || `HTTP ${res.status}`));
+	        }
+
+	        state.gitIdentity.name = String(data?.name || name).trim();
+	        state.gitIdentity.email = String(data?.email || email).trim();
+
+	        const detected = await verifyActionWithoutRun(id, { attempts: 6, delayMs: 350 });
+	        if (detected) {
+	          this.showToast('Git identity saved and detected automatically.', 'success');
+	        } else {
+	          this.showToast('Git identity saved, but detection is delayed. Try saving again in a few seconds.', 'warning');
+	        }
+	      } catch (err) {
+	        updateActionRunState(id, {
+	          status: 'failed',
+	          error: String(err?.message || err),
+	          updatedAt: new Date().toISOString()
+	        });
+	        this.showToast(`Failed to save Git identity: ${String(err?.message || err)}`, 'error');
+	      } finally {
+	        if (button) button.disabled = false;
+	        await loadAndRender({ open: true, forceAutoShow: true });
+	      }
+	    };
+
 	    listEl.addEventListener('click', async (event) => {
 	      const runBtn = event.target.closest('[data-setup-run]');
 	      if (runBtn) {
 	        await runSetupAction(runBtn.getAttribute('data-setup-run'), runBtn);
+	        return;
+	      }
+
+	      const saveGitBtn = event.target.closest('[data-setup-git-save]');
+	      if (saveGitBtn) {
+	        await saveGitIdentity(saveGitBtn);
 	        return;
 	      }
 
