@@ -7485,7 +7485,6 @@ class ClaudeOrchestrator {
 	    const summaryEl = document.getElementById('dependency-setup-summary');
 	    const listEl = document.getElementById('dependency-setup-list');
 	    const refreshBtn = document.getElementById('dependency-setup-refresh');
-	    const openDiagnosticsBtn = document.getElementById('dependency-setup-open-diagnostics');
 	    const closeBtn = document.getElementById('dependency-setup-close');
 	    if (!modal || !summaryEl || !listEl) return;
 	    const body = document.body;
@@ -8311,11 +8310,6 @@ class ClaudeOrchestrator {
 	    if (refreshBtn) {
 	      refreshBtn.addEventListener('click', () => {
 	        loadAndRender({ open: !modal.classList.contains('hidden'), forceAutoShow: true });
-	      });
-	    }
-	    if (openDiagnosticsBtn) {
-	      openDiagnosticsBtn.addEventListener('click', () => {
-	        this.openDiagnosticsPanel({ refresh: true });
 	      });
 	    }
 	    if (closeBtn) {
