@@ -7721,11 +7721,14 @@ class ClaudeOrchestrator {
 	    };
 
 	    const setCurrentStep = (nextStep, { persist = true } = {}) => {
+	      const previousStep = state.currentStep;
 	      const maxStep = Math.max(0, (Array.isArray(state.actions) ? state.actions.length : 0) - 1);
 	      const parsed = Number.parseInt(String(nextStep), 10);
 	      const safe = Number.isFinite(parsed) ? parsed : 0;
 	      state.currentStep = Math.max(0, Math.min(safe, maxStep));
-	      state.gitIdentityHelpVisible = false;
+	      if (state.currentStep !== previousStep) {
+	        state.gitIdentityHelpVisible = false;
+	      }
 	      if (persist) writeSavedStep(state.currentStep);
 	      return state.currentStep;
 	    };
