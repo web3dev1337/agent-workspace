@@ -36,15 +36,7 @@ Tier tagging persistence:
 
 ## Launching Agents from Trello
 
-### Board-to-Repo Mapping
-**CRITICAL:** Always check `~/.claude/TRELLO_BOARDS.md` for the full board/list/repo mapping. Do NOT assume a board maps to a specific repo - look it up!
-
-| Board | Board ID | Repo Path | Repo Type |
-|-------|----------|-----------|-----------|
-| Zoo Hytopia | `691e5516c77f3e9c9fd89f61` | `~/GitHub/games/hytopia/zoo-game/` | `hytopia-game` |
-| Arcade World | `694a07bae349c125d4568094` | `~/GitHub/games/hytopia/games/hytopia-2d-game-test/` | `hytopia-game` |
-
-Each board has its own **AB T3 Que**, **Doing**, and **Test** lists - IDs differ per board. Always look up the correct list ID from `TRELLO_BOARDS.md`.
+**Zoo Hytopia board:** `<TRELLO_BOARD_ID>` | **Tier-3 queue list:** `<TRELLO_LIST_ID>`
 
 **Get card with agent field:**
 ```bash
@@ -64,7 +56,6 @@ curl -sS "https://api.trello.com/1/cards/CARD_ID/customFieldItems?key=$KEY&token
 - Claude: `claude --dangerously-skip-permissions`
 
 **Launch sequence (MUST follow):**
-0. **CHECK ACTIVE WORKSPACE FIRST**: `GET /api/workspaces/active` — add worktrees to the workspace the user has open, NOT a random one
 1. Remove all worktrees: `POST /api/workspaces/remove-worktree` for each
 2. Re-add worktrees with tier: `POST /api/workspaces/add-mixed-worktree` (include `startTier`)
 3. Start agent: send launch command + `\r`
@@ -75,7 +66,7 @@ curl -sS "https://api.trello.com/1/cards/CARD_ID/customFieldItems?key=$KEY&token
 
 **Add worktree with tier:**
 ```bash
-curl -sS -X POST http://localhost:$PORT/api/workspaces/add-mixed-worktree \
+curl -sS -X POST http://localhost:3000/api/workspaces/add-mixed-worktree \
   -H "Content-Type: application/json" \
   -d '{
     "workspaceId": "zoo-shrimp-game",
@@ -90,7 +81,7 @@ curl -sS -X POST http://localhost:$PORT/api/workspaces/add-mixed-worktree \
 
 **Link Trello card to session (task record):**
 ```bash
-curl -sS -X PUT "http://localhost:$PORT/api/process/task-records/session:zoo-game-work1-claude" \
+curl -sS -X PUT "http://localhost:3000/api/process/task-records/session:zoo-game-work1-claude" \
   -H "Content-Type: application/json" \
   -d '{
     "tier": 3,
@@ -108,92 +99,6 @@ curl -sS -X PUT "http://localhost:$PORT/api/process/task-records/session:zoo-gam
 - Stop-session doesn't fully clear - use remove-worktree + re-add
 - Sessions are paired (claude+server) - remove both via worktree
 
-### Trello → Codex Batch Launch Process
-
-When user says "launch all cards from [list] as Codexes":
-
-**1. Get the correct list ID:**
-```bash
-KEY=$(awk -F= '/^TRELLO_API_KEY=/{print $2}' ~/.trello-credentials | tr -d '\r\n[:space:]')
-TOKEN=$(awk -F= '/^TRELLO_TOKEN=/{print $2}' ~/.trello-credentials | tr -d '\r\n[:space:]')
-curl -fsS "https://api.trello.com/1/boards/BOARD_ID/lists?key=${KEY}&token=${TOKEN}" | jq -r '.[] | "\(.id) | \(.name)"'
-```
-
-**2. Get ALL cards with FULL descriptions:**
-```bash
-curl -fsS "https://api.trello.com/1/lists/LIST_ID/cards?key=${KEY}&token=${TOKEN}&fields=id,name,desc" > /tmp/trello-cards.json
-# Verify desc lengths (list endpoint may truncate):
-jq -r '.[] | {name: .name[0:60], desc_len: (.desc | length)}' /tmp/trello-cards.json
-```
-
-**3. Add worktrees to current workspace:**
-```bash
-for i in $(seq 1 N); do
-  curl -sS -X POST "http://localhost:$PORT/api/workspaces/add-mixed-worktree" \
-    -H "Content-Type: application/json" \
-    -d '{"workspaceId": "WORKSPACE", "repositoryPath": "REPO_PATH", "repositoryType": "hytopia-game", "repositoryName": "REPO_NAME", "worktreeId": "work'$i'", "startTier": 3}'
-done
-```
-
-**4. For each card, launch Codex then send prompt:**
-```bash
-SESSION_ID="REPONAME-workN-claude"
-# Launch Codex
-curl -sS -X POST "http://localhost:$PORT/api/commander/send-to-session" \
-  -H "Content-Type: application/json" \
-  -d "{\"sessionId\": \"$SESSION_ID\", \"input\": \"\u0015codex -m gpt-5.3-codex -c model_reasoning_effort=xhigh --dangerously-bypass-approvals-and-sandbox\"}"
-sleep 1
-curl -sS -X POST "http://localhost:$PORT/api/commander/send-to-session" \
-  -H "Content-Type: application/json" \
-  -d "{\"sessionId\": \"$SESSION_ID\", \"input\": \"\r\"}"
-sleep 3  # wait for Codex init (only needs 2-3s)
-
-# Send VERBATIM title + desc + system instructions AFTER
-PROMPT="${CARD_TITLE}\n\n${CARD_DESC}\n\n---\nSYSTEM INSTRUCTIONS:\n1. git fetch origin master && git checkout master && git pull\n2. git checkout -b feature/BRANCH_SLUG\n3. Read CLAUDE.md and CODEBASE_DOCUMENTATION.md first\n4. Implement everything above verbatim\n5. Clean surgical code, minimal diff\n6. Automated tests following existing patterns\n7. NEVER squash merge\n8. Commit and push regularly\n9. gh pr create when done, include PR link\n10. Run existing tests"
-
-curl -sS -X POST "http://localhost:$PORT/api/commander/send-to-session" \
-  -H "Content-Type: application/json" \
-  --data-binary @- << EOF
-{"sessionId": "$SESSION_ID", "input": $(echo "$PROMPT" | jq -Rs .)}
-EOF
-sleep 1
-curl -sS -X POST "http://localhost:$PORT/api/commander/send-to-session" \
-  -H "Content-Type: application/json" \
-  -d "{\"sessionId\": \"$SESSION_ID\", \"input\": \"\r\"}"
-```
-
-**Batch launch key rules:**
-- NEVER summarize card title or description - paste VERBATIM
-- Use `gpt-5.3-codex` model with `xhigh` reasoning
-- System instructions go AFTER the card content
-- Two-request pattern: text first, then `\r` separately
-- 3s sleep for Codex init (it initializes in ~2-3s, not 15)
-- Use `\u0015` (Ctrl+U) before Codex command to clear line
-
-## Codex CLI Reference
-
-### Launch commands
-- Claude: `claude --dangerously-skip-permissions`
-- Codex: `codex --dangerously-bypass-approvals-and-sandbox`
-- Codex with explicit model: `codex -m gpt-5.3-codex -c model_reasoning_effort=xhigh --dangerously-bypass-approvals-and-sandbox`
-
-### Codex Upgrade Issues
-
-**ENOTEMPTY error on npm upgrade:**
-```bash
-rm -rf ~/.nvm/versions/node/v24.9.0/lib/node_modules/@openai/codex && npm i -g @openai/codex@latest
-```
-
-**"Model does not exist" errors** — Codex needs upgrading:
-```bash
-npm i -g @openai/codex@latest
-```
-
-### Codex config location
-- Config: `~/.codex/config.toml`
-- Global instructions: `~/.codex/AGENTS.md`
-- Fallback filenames (set in config): reads `CLAUDE.md` if no `AGENTS.md`
-
 ## 🚨 STOP! DO THIS FIRST BEFORE ANYTHING ELSE! 🚨
 
 ### THE VERY FIRST THING YOU MUST DO (NO EXCEPTIONS):
@@ -209,8 +114,6 @@ git checkout -b fix/your-feature-name origin/main
 Because `main` is usually checked out in the `master/` worktree, **do not try to check out `main` inside `claude-orchestrator-dev/`** (Git will error: “branch 'main' is already used by worktree…”). Always branch from `origin/main` in dev.
 
 **CRITICAL SAFETY:** If you are working in `claude-orchestrator-dev/`, **do not edit, pull, or run commands in the `master/` folder** unless explicitly requested — that instance may be running on port **3000**.
-
-**ALSO CRITICAL:** If Commander Claude is running FROM `master/`, **NEVER edit files in `master/`**. Even if you revert changes, nodemon will detect the file change and restart the production server, which crashes all active sessions. ALL code changes go in `claude-orchestrator-dev/` on a feature branch, then PR into main. The ONLY exception is if the user explicitly asks you to edit production.
 
 **TEST SAFETY (ports):**
 - Never use port `3000` for dev/test runs.
@@ -235,7 +138,6 @@ Because `main` is usually checked out in the `master/` worktree, **do not try to
 ## Git Workflow Notes
 - Always work on fresh branches from updated main
 - If `git fetch origin main:main` fails, use `git fetch origin main && git checkout -b feature/name origin/main`
-- Never provide delivery estimates in weeks; provide dependency-ordered execution slices instead.
 
 ## Code Style Guidelines
 
@@ -274,32 +176,12 @@ Because `main` is usually checked out in the `master/` worktree, **do not try to
 - **WorktreeHelper**: Git worktree operations (`server/worktreeHelper.js`)
 - **NotificationService**: System notifications (`server/notificationService.js`)
 - **CommanderService**: Top-Level AI orchestration terminal (`server/commanderService.js`)
-- **CommandHistoryService**: Terminal autosuggestions via shell history (`server/commandHistoryService.js`)
 - **Tauri App**: Native desktop application (`src-tauri/`)
 - **Diff Viewer**: Advanced code review tool (`diff-viewer/`)
 
 ## Commander Claude (Top-Level AI)
 
-Commander Claude is a special Claude Code instance that runs from the orchestrator `master/` directory with knowledge of the entire system. When you ARE Commander Claude (running in this directory or launched from the Commander panel), you have these capabilities.
-
-**IMPORTANT:** When you first start, greet the user with:
-> Commander Claude reporting for duty, sir!
-
-**Read the full Commander instructions:**
-```bash
-cat ~/GitHub/tools/automation/claude-orchestrator/master/COMMANDER_CLAUDE.md
-```
-
-### Port Detection (MANDATORY — do this first)
-
-The orchestrator port is NOT hardcoded. It comes from `.env` in your working directory:
-```bash
-PORT=$(grep ORCHESTRATOR_PORT .env | cut -d= -f2)
-# Production (master/) = typically 3000, Dev = typically 4000
-# All API examples below use $PORT — resolve it before running commands
-```
-
-**All `curl` examples in this file use `$PORT`.** Never assume 3000 or 4000.
+Commander Claude is a special Claude Code instance that runs from the orchestrator directory with knowledge of the entire system. When you ARE Commander Claude (running in this directory), you have these capabilities:
 
 ### What Commander Can Do
 1. **View All Sessions**: See all active Claude sessions across all workspaces
@@ -325,81 +207,12 @@ POST /api/commander/start-claude  { mode: 'fresh'|'continue'|'resume', yolo: tru
 # Send input to Commander terminal
 POST /api/commander/input  { input: "text to send" }
 
-# Get active workspace (which workspace the UI is showing)
-GET /api/workspaces/active
-# Returns: { id: "workspace-id", name: "Workspace Name" }
-# Falls back to persisted config if in-memory state is null
-
-# View all sessions — returns {"sessions":[...]} NOT bare array!
+# View all sessions
 GET /api/commander/sessions
-# jq: use '.sessions[]' not '.[]'
 
 # Send to another session
 POST /api/commander/send-to-session  { sessionId: "...", input: "..." }
-
-# System Recommendations (missing tools, suggested installs)
-GET  /api/recommendations              # returns {"items":[...]}
-POST /api/recommendations              # {"package","reason","installCmd","category"}
-PATCH /api/recommendations/:id         # {"status":"installed"|"dismissed"}
-DELETE /api/recommendations/:id        # remove entirely
 ```
-
-### Logging Missing Tools
-When a command fails with "not found", POST a recommendation so the user sees it in the UI 🔧 badge:
-```bash
-curl -sS -X POST http://localhost:$PORT/api/recommendations \
-  -H "Content-Type: application/json" \
-  -d '{"package":"dos2unix","reason":"CRLF fix for WSL scripts","installCmd":"sudo apt-get install -y dos2unix","category":"apt"}'
-```
-
-### Quick Orchestrator Commands
-
-**Focus a Worktree** (show only one worktree's terminals):
-```bash
-curl -sS -X POST http://localhost:$PORT/api/commander/execute \
-  -H "Content-Type: application/json" \
-  -d '{"command": "focus-worktree", "params": {"worktreeId": "work1"}}'
-```
-
-**Show All Worktrees** (unfocus/reset view):
-**NOTE:** The `show-all-worktrees` API command is BROKEN (calls non-existent method).
-Use the "View All" button in the UI (bottom-left under worktrees list) instead.
-
-**Highlight a Worktree** (visual highlight without hiding others):
-```bash
-curl -sS -X POST http://localhost:$PORT/api/commander/execute \
-  -H "Content-Type: application/json" \
-  -d '{"command": "highlight-worktree", "params": {"worktreeId": "work1"}}'
-```
-
-**List All Workspaces:**
-```bash
-curl -sS http://localhost:$PORT/api/workspaces | jq '.[].name'
-```
-
-**Get Workspace Details** (including worktrees):
-```bash
-curl -sS http://localhost:$PORT/api/workspaces | jq '.[] | select(.name == "Zoo Game")'
-```
-
-**Switch to Different Workspace:**
-Use Socket.IO event `switch-workspace` with `workspaceId` - handled via the UI primarily.
-
-**Add Worktree to Workspace** (CORRECT API FORMAT):
-**DO NOT use `path` or `worktreePath`** - the API expects these specific parameters:
-```bash
-curl -sS -X POST http://localhost:$PORT/api/workspaces/add-mixed-worktree \
-  -H "Content-Type: application/json" \
-  -d '{
-    "workspaceId": "workspace-id",
-    "repositoryPath": "/home/<user>/GitHub/games/hytopia/zoo-game",
-    "repositoryType": "hytopia-game",
-    "repositoryName": "zoo-game",
-    "worktreeId": "work1",
-    "startTier": 3
-  }'
-```
-The worktreePath is computed internally as `repositoryPath + worktreeId`.
 
 ### Project Workspaces Location
 Workspaces are stored in `~/.orchestrator/workspaces/`. Each workspace has:
@@ -702,7 +515,6 @@ SERVICES:     Modular service architecture with clear interfaces
 14. **Undefined config spread**: Handle missing gameModes/commonFlags with `{ ...(result[key] || {}), ...override[key] }` pattern
 15. **XTerm rendering race**: Wrap fitTerminal() in requestAnimationFrame() to allow renderer initialization
 16. **Repository name extraction**: For mixed-repo workspaces, use workspace config's terminal.repository.name, not session ID parsing
-17. **ALWAYS check active workspace first**: Before adding worktrees or launching agents, call `GET /api/workspaces/active` to find which workspace the user currently has open. Add worktrees to THAT workspace — never guess or pick a workspace by name
 
 ## Development Setup - Two Isolated Instances
 

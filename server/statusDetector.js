@@ -13,12 +13,11 @@ const logger = winston.createLogger({
 });
 
 // Configuration constants
-// Keep "busy" briefly after output to avoid status flicker.
-// SessionManager now re-evaluates status on an interval, so these windows
-// can stay short enough to avoid "busy forever" false positives.
-const ASSUME_BUSY_SINCE_OUTPUT_MS = 8000; // 8s
-const ASSUME_BUSY_SINCE_OUTPUT_AGENT_MS = 15000; // 15s
-const ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS = 30000; // 30s
+// Keep "busy" for longer silence windows (Claude can think silently for minutes).
+// This primarily reduces green/orange/grey flicker during long tool runs.
+const ASSUME_BUSY_SINCE_OUTPUT_MS = 180000; // 3 minutes
+// When we have strong evidence a Claude session is active, use a longer quiet window.
+const ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS = 600000; // 10 minutes
 
 class StatusDetector {
   constructor() {
@@ -48,18 +47,11 @@ class StatusDetector {
     // Patterns that suggest Claude is typing (busy) - more conservative
     this.typingPatterns = [
       /∴ Thinking…/,                   // Thinking indicator
+      /\.\.\.$/m,                      // Ends with ellipsis (still going)
     ];
 
     // Per-session state (StatusDetector is shared across sessions).
     this.sessionState = new Map(); // sessionId -> { lastBufferLength, lastOutputTime, claudeLikely, agent }
-  }
-
-  stripControlSequences(text) {
-    const input = String(text || '');
-    return input
-      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
-      .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')
-      .replace(/\x1b[()][A-Za-z0-9]/g, '');
   }
   
   getState(sessionId) {
@@ -108,14 +100,9 @@ class StatusDetector {
       state.lastBufferLength = buffer.length;
     }
     const timeSinceOutput = now - state.lastOutputTime;
-    const isAgentTerminal = /-(claude|codex)$/.test(String(sessionId || ''));
-    const assumeBusyWindowMs = (state.claudeLikely || isAgentTerminal)
-      ? (state.claudeLikely ? ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS : ASSUME_BUSY_SINCE_OUTPUT_AGENT_MS)
-      : ASSUME_BUSY_SINCE_OUTPUT_MS;
-    const hasRecentOutput = timeSinceOutput < assumeBusyWindowMs;
 
     // Get recent output for analysis
-    const recentOutput = this.stripControlSequences(buffer.slice(-2000));
+    const recentOutput = buffer.slice(-2000);
     const lines = recentOutput.split('\n');
     const lastFewLines = lines.slice(-10).join('\n');
     const lastNonEmptyLine = this.getLastNonEmptyLine(lines);
@@ -184,9 +171,8 @@ class StatusDetector {
     }
 
     // 4. Active tool usage (definitely busy)
-    if (hasRecentOutput) {
-      for (const pattern of this.toolPatterns) {
-        if (!pattern.test(lastFewLines)) continue;
+    for (const pattern of this.toolPatterns) {
+      if (pattern.test(lastFewLines)) {
         state.claudeLikely = true;
         // Completion is only considered reliable when it is the last non-empty line (handled above).
         // Do not suppress tool activity because an older "Cost:" line is still visible in scrollback.
@@ -196,49 +182,30 @@ class StatusDetector {
     }
 
     // 5. Check typing/thinking patterns
-    if (hasRecentOutput) {
-      for (const pattern of this.typingPatterns) {
-        if (!pattern.test(lastFewLines)) continue;
+    for (const pattern of this.typingPatterns) {
+      if (pattern.test(lastFewLines)) {
         state.claudeLikely = true;
         logger.debug('Typing pattern detected - busy');
         return 'busy';
       }
     }
-    if (hasRecentOutput && /(\.\.\.|…)$/.test(trimmedLastNonEmptyLine)) {
-      state.claudeLikely = true;
-      logger.debug('Trailing ellipsis detected - busy');
-      return 'busy';
-    }
 
-    // 6. Shell prompt means no active AI is currently running in this terminal.
-    // If we observe an explicit shell prompt, clear claudeLikely so stale
-    // Claude activity doesn't keep the session marked busy.
-    if (this.hasExplicitShellIndicator(recentAll, trimmedLastNonEmptyLine)) {
-      state.claudeLikely = false;
-      return 'idle';
-    }
-
-    // 7. Generic prompt fallback (only when Claude is not likely active).
+    // 6. Check if last line looks like a shell/input prompt (not Claude waiting prompt)
+    // Only classify as idle when Claude is NOT likely active.
     if (!state.claudeLikely && this.looksLikePrompt(trimmedLastNonEmptyLine)) {
       return 'idle';
     }
 
-    // 8. Default: assume busy for a short quiet window after output.
+    // 7. Default: assume busy for a while after the last output (Claude can think silently)
+    const isAgentTerminal = String(sessionId || '').includes('-claude');
+    const assumeBusyWindowMs = (state.claudeLikely || isAgentTerminal)
+      ? ASSUME_BUSY_SINCE_OUTPUT_CLAUDE_MS
+      : ASSUME_BUSY_SINCE_OUTPUT_MS;
     if (timeSinceOutput < assumeBusyWindowMs && buffer.length > 100) {
       return 'busy';
     }
 
     return 'idle';
-  }
-
-  hasExplicitShellIndicator(recentAll, trimmedLastNonEmptyLine = '') {
-    const normalizedRecent = this.stripControlSequences(recentAll || '');
-    const normalizedLine = this.stripControlSequences(trimmedLastNonEmptyLine || '').trim();
-    return (
-      /Type 'claude' to start a new Claude session\./i.test(normalizedRecent)
-      || /Claude session ended\./i.test(normalizedRecent)
-      || this.looksLikeShellPrompt(normalizedLine)
-    );
   }
   
   looksLikePrompt(line) {
@@ -246,37 +213,14 @@ class StatusDetector {
     const promptPatterns = [
       /^>$/,
       /^\$$/,
-      /^%$/,
       /^>>>$/,
       /^claude>$/i,
       /^assistant>$/i,
-      /^codex>$/i,
-      /^❯$/,
       /^\w+[@:~].*[\$#>]$/,  // user@host:~$ or similar
       /^\(.*\)\s*\$$/,        // (venv) $ style prompts
-      /^.+\s[❯»›]$/,
     ];
 
     return promptPatterns.some(pattern => pattern.test(line));
-  }
-
-  looksLikeShellPrompt(line) {
-    const shellPromptPatterns = [
-      /^\$$/,
-      /^#$/,
-      /^%$/,
-      /^PS .*>$/i,            // PowerShell prompt
-      /^\w+@[\w.-]+:.*[\$#%]$/, // user@host:path$
-      /^\(.*\)\s*[\$#%]$/,     // (venv) $
-      /^.*[\/~].*[\$#%]$/,     // path-based prompts ending in $/#/%
-      /^bash-[\d.]+\$$/i,
-      /^zsh-[\d.]+%$/i,
-      /^.+\s[❯»›]$/,
-      /^.+[\/~].*[❯»›]$/,
-      /^❯$/
-    ];
-
-    return shellPromptPatterns.some(pattern => pattern.test(line));
   }
 
   // Reset state (useful when session changes)

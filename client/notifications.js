@@ -128,7 +128,7 @@ class NotificationManager {
     const { type, message, sessionId, metadata = {} } = data;
     
     // Determine icon and title based on type
-    let title = 'Claude Orchestrator';
+    let title = 'Agent Orchestrator';
     let icon = '🤖';
     let urgency = 'normal';
     
@@ -320,9 +320,9 @@ class NotificationManager {
     
     // Update page title with count
     if (this.unreadCount > 0) {
-      document.title = `(${this.unreadCount}) Claude Orchestrator`;
+      document.title = `(${this.unreadCount}) Agent Orchestrator`;
     } else {
-      document.title = 'Claude Orchestrator';
+      document.title = 'Agent Orchestrator';
     }
   }
   
@@ -389,21 +389,21 @@ class NotificationManager {
 // Add notification styles
 const notificationStyles = document.createElement('style');
 notificationStyles.textContent = `
-  .empty-message {
+  .notifications-panel .empty-message {
     padding: var(--space-xl);
     text-align: center;
     color: var(--text-secondary);
     font-size: 0.875rem;
   }
   
-  .notification-header {
+  .notifications-panel .notification-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: var(--space-xs);
   }
   
-  .notification-meta {
+  .notifications-panel .notification-meta {
     font-size: 0.75rem;
     color: var(--text-secondary);
     margin-top: var(--space-xs);

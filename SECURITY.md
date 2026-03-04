@@ -32,11 +32,3 @@ If you deploy this tool in a shared environment, treat it like local admin tooli
 - run on trusted machines only
 - keep `AUTH_TOKEN` enabled for any non-loopback binding
 
-## Public Release Audit Commands
-
-Before publishing a release branch publicly:
-
-- `npm run audit:public-release`
-- `npm run audit:public-release:history`
-
-These checks verify tracked-artifact hygiene, docs path hygiene, bind-host/auth defaults, and history secret scanning.

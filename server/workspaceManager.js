@@ -6,7 +6,6 @@ const winston = require('winston');
 const { validateWorkspace, getWorkspaceTypeInfo, getDefaultWorkspaceConfig } = require('./workspaceTypes');
 const { ConfigDiscoveryService } = require('./configDiscoveryService');
 const { GitHubRepoService } = require('./githubRepoService');
-const { createProject } = require('../scripts/create-project');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -813,13 +812,6 @@ class WorkspaceManager {
       });
     }
 
-    // Sort by lastAccess descending (most recently used first).
-    workspaces.sort((a, b) => {
-      const aTime = a.lastAccess ? new Date(a.lastAccess).getTime() : 0;
-      const bTime = b.lastAccess ? new Date(b.lastAccess).getTime() : 0;
-      return bTime - aTime;
-    });
-
     // Attach any recent health/cleanup info (best-effort; not persisted).
     return workspaces.map((ws) => {
       const health = this.workspaceHealth.get(ws.id) || null;
@@ -909,138 +901,6 @@ class WorkspaceManager {
     logger.info(`Created workspace: ${workspaceData.name} (${workspaceData.id})`);
 
     return workspaceData;
-  }
-
-  normalizeWorkspaceId(value) {
-    return String(value || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  }
-
-  resolveWorkspaceTypeForProject(repositoryType) {
-    const normalized = String(repositoryType || '').trim().toLowerCase();
-    const map = {
-      'hytopia-game': 'hytopia-game',
-      'monogame-game': 'monogame-game',
-      website: 'website',
-      writing: 'writing',
-      'tool-project': 'tool-project',
-      generic: 'tool-project'
-    };
-    const candidate = map[normalized] || 'tool-project';
-    const all = this.getAllWorkspaceTypes();
-    if (all[candidate]) return candidate;
-    return 'tool-project';
-  }
-
-  async createProjectWorkspace(options = {}) {
-    const rawName = String(options.name || options.projectName || '').trim();
-    if (!rawName) {
-      throw new Error('name is required');
-    }
-
-    const requestedWorktreeCount = Number(options.worktreeCount || options.worktrees || 0);
-    const safeWorktreeCount = Number.isFinite(requestedWorktreeCount) && requestedWorktreeCount > 0
-      ? Math.min(16, Math.max(1, Math.round(requestedWorktreeCount)))
-      : 1;
-
-    const requestedCategory = String(options.category || options.categoryId || '').trim() || null;
-    const requestedFramework = String(options.framework || options.frameworkId || '').trim() || null;
-    const requestedTemplate = String(options.template || options.templateId || '').trim() || null;
-
-    logger.info('Creating project workspace', {
-      name: rawName,
-      category: requestedCategory,
-      framework: requestedFramework,
-      template: requestedTemplate,
-      worktreeCount: safeWorktreeCount,
-      createGithub: options.createGithub !== undefined ? options.createGithub : true,
-      spawnClaude: options.spawnClaude === true
-    });
-
-    try {
-      const project = await createProject({
-        name: rawName,
-        description: String(options.description || '').trim(),
-        category: options.category || options.categoryId,
-        framework: options.framework || options.frameworkId,
-        template: options.template || options.templateId,
-        basePath: options.basePath,
-        repo: options.repo,
-        githubOrg: options.githubOrg || options.github_org,
-        createGithub: options.createGithub !== undefined ? options.createGithub : true,
-        private: options.isPrivate !== undefined ? options.isPrivate : options.private,
-        push: options.push !== undefined ? options.push : true,
-        initGit: options.initGit !== undefined ? options.initGit : true,
-        worktreeCount: safeWorktreeCount,
-        allowGitHubFailure: options.allowGitHubFailure !== false,
-        logger
-      });
-
-      const workspaceId = this.normalizeWorkspaceId(options.workspaceId || project.name);
-      if (!workspaceId) {
-        throw new Error('Failed to derive workspace id');
-      }
-      if (this.workspaces.has(workspaceId)) {
-        throw new Error(`Workspace ID already exists: ${workspaceId}`);
-      }
-
-      const workspaceType = this.resolveWorkspaceTypeForProject(project.repositoryType);
-      const workspaceName = String(options.workspaceName || rawName).trim() || rawName;
-      const pairs = Math.max(1, Math.min(16, safeWorktreeCount));
-
-      const workspace = {
-        id: workspaceId,
-        name: workspaceName,
-        type: workspaceType,
-        repository: {
-          path: project.projectPath,
-          masterBranch: 'master',
-          remote: project.remoteUrl || undefined
-        },
-        worktrees: {
-          enabled: true,
-          count: pairs,
-          namingPattern: 'work{n}',
-          autoCreate: false
-        },
-        terminals: {
-          pairs
-        }
-      };
-
-      await this.createWorkspace(workspace);
-      const createdWorkspace = this.getWorkspace(workspaceId);
-      logger.info('Project workspace created', {
-        name: rawName,
-        workspaceId,
-        workspaceType,
-        projectPath: project.projectPath,
-        templateId: project.templateId || requestedTemplate,
-        frameworkId: project.frameworkId || requestedFramework,
-        categoryId: project.categoryId || requestedCategory,
-        remoteUrl: project.remoteUrl || null,
-        warnings: Array.isArray(project.warnings) ? project.warnings.length : 0
-      });
-
-      return {
-        success: true,
-        project,
-        workspace: createdWorkspace
-      };
-    } catch (error) {
-      logger.error('Failed to create project workspace', {
-        name: rawName,
-        category: requestedCategory,
-        framework: requestedFramework,
-        template: requestedTemplate,
-        worktreeCount: safeWorktreeCount,
-        error: error.message
-      });
-      throw error;
-    }
   }
 
   async updateWorkspace(workspaceId, updates) {

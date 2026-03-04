@@ -25,9 +25,9 @@ const logger = winston.createLogger({
   ]
 });
 
-// Commander runs from the orchestrator's own directory so it picks up CLAUDE.md
-// Override with COMMANDER_CWD env var if needed
-const COMMANDER_CWD = process.env.COMMANDER_CWD || path.resolve(__dirname, '..');
+// Commander runs from the home directory by default
+// This gives it a neutral starting point from which to orchestrate all projects
+const COMMANDER_CWD = process.env.COMMANDER_CWD || os.homedir();
 
 class CommanderService {
   constructor(options = {}) {
@@ -194,6 +194,13 @@ class CommanderService {
         // ignore
       }
     }, 1200);
+
+    // For fresh starts, send greeting after Claude initializes
+    if (mode === 'fresh') {
+      setTimeout(() => {
+        this.sendInput('Say: Commander Claude reporting for duty, sir!\n');
+      }, 3000);
+    }
 
     return { success: true, message: `Starting Claude (${mode})` };
   }

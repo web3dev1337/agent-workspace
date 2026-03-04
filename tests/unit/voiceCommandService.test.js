@@ -69,33 +69,8 @@ describe('VoiceCommandService (rule parsing)', () => {
     const dash = voiceCommandService.parseWithRules('open dashboard');
     expect(dash.command).toBe('open-dashboard');
 
-    const newProject = voiceCommandService.parseWithRules('open new project');
-    expect(newProject.command).toBe('open-new-project');
-
     const prs = voiceCommandService.parseWithRules('open prs');
     expect(prs.command).toBe('open-prs');
-
-    const projectChats = voiceCommandService.parseWithRules('open projects and chats');
-    expect(projectChats.command).toBe('open-project-chats');
-
-    const newChat = voiceCommandService.parseWithRules('new chat');
-    expect(newChat.command).toBe('project-chats-new');
-
-    const newChatInWorkspace = voiceCommandService.parseWithRules('new chat in Zoo Game');
-    expect(newChatInWorkspace.command).toBe('project-chats-new');
-    expect(newChatInWorkspace.params).toEqual({ workspace: 'Zoo Game' });
-
-    const newChatForRepo = voiceCommandService.parseWithRules('new chat for incremental-game');
-    expect(newChatForRepo.command).toBe('project-chats-new');
-    expect(newChatForRepo.params).toEqual({ repository: 'incremental-game' });
-
-    const newChatWorkspaceRepo = voiceCommandService.parseWithRules('new chat in Zoo Game for incremental-game');
-    expect(newChatWorkspaceRepo.command).toBe('project-chats-new');
-    expect(newChatWorkspaceRepo.params).toEqual({ workspace: 'Zoo Game', repository: 'incremental-game' });
-
-    const newChatRepoWorkspace = voiceCommandService.parseWithRules('new chat for incremental-game in Zoo Game');
-    expect(newChatRepoWorkspace.command).toBe('project-chats-new');
-    expect(newChatRepoWorkspace.params).toEqual({ repository: 'incremental-game', workspace: 'Zoo Game' });
 
     const telemetry = voiceCommandService.parseWithRules('open telemetry');
     expect(telemetry.command).toBe('open-telemetry');
@@ -108,19 +83,6 @@ describe('VoiceCommandService (rule parsing)', () => {
 
     const adviceNext = voiceCommandService.parseWithRules('what should i do next');
     expect(adviceNext.command).toBe('open-advice');
-  });
-
-  test('parses pager/pollcat controls', () => {
-    const status = voiceCommandService.parseWithRules('pager status');
-    expect(status.command).toBe('pager-status');
-
-    const start = voiceCommandService.parseWithRules('start pollcat for work1-claude');
-    expect(start.command).toBe('pager-start');
-    expect(start.params).toEqual({ sessionId: 'work1-claude' });
-
-    const stop = voiceCommandService.parseWithRules('stop pager pager-work1');
-    expect(stop.command).toBe('pager-stop');
-    expect(stop.params).toEqual({ id: 'pager-work1' });
   });
 
   test('parses queue review surface helpers', () => {
@@ -220,14 +182,6 @@ describe('VoiceCommandService (rule parsing)', () => {
   test('parses queue deps/select actions', () => {
     const refresh = voiceCommandService.parseWithRules('refresh queue');
     expect(refresh.command).toBe('queue-refresh');
-
-    const selPrRef = voiceCommandService.parseWithRules('select pr 492 in zoo-game');
-    expect(selPrRef.command).toBe('queue-select-by-pr-ref');
-    expect(selPrRef.params).toEqual({ number: '492', repo: 'zoo-game' });
-
-    const selPrRefNoRepo = voiceCommandService.parseWithRules('select pull request 492');
-    expect(selPrRefNoRepo.command).toBe('queue-select-by-pr-ref');
-    expect(selPrRefNoRepo.params).toEqual({ number: '492' });
 
     const selTicket = voiceCommandService.parseWithRules('select ticket trello:abc123');
     expect(selTicket.command).toBe('queue-select-by-ticket');

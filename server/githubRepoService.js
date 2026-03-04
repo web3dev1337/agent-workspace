@@ -122,7 +122,7 @@ class GitHubRepoService {
       '--limit',
       String(safeLimit),
       '--json',
-      'nameWithOwner,name,owner,isPrivate,visibility,isFork'
+      'nameWithOwner,name,owner,isPrivate,visibility'
     );
 
     try {
@@ -139,7 +139,6 @@ class GitHubRepoService {
           name,
           owner: ownerLogin,
           isPrivate: !!r?.isPrivate,
-          isFork: !!r?.isFork,
           visibility: visibility || null
         };
       }).filter((r) => !!r.nameWithOwner);

@@ -1,91 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude Orchestrator</title>
-    
+    <title>Agent Orchestrator</title>
+
     <!-- Xterm.js for terminal rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
-    
+
     <!-- Our styles -->
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="styles/tabs.css">
-    <link rel="stylesheet" href="styles/projects-board.css">
-    
+
     <!-- Favicon -->
-    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==">
+    <link rel="icon" type="image/png"
+        href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==">
 </head>
+
 <body>
-	    <!-- Sidebar -->
-	    <aside class="sidebar">
-	        <div class="sidebar-header">
-	            <h2>Worktrees</h2>
-	            <button id="view-presets" class="icon-button" title="View Presets" data-ui-visibility="sidebar.viewPresets">📋</button>
-	        </div>
-        
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2>Worktrees</h2>
+            <button id="view-presets" class="icon-button" title="View Presets">📋</button>
+        </div>
+
         <div class="worktree-list" id="worktree-list">
             <!-- Worktree items will be dynamically generated -->
         </div>
-        
-	        <div class="sidebar-footer">
-	            <button id="view-all" class="button-secondary">View All</button>
-	            <button id="view-claude-only" class="button-secondary">Agent Only</button>
-	            <button id="view-servers-only" class="button-secondary">Servers Only</button>
-	            <button id="add-worktree" class="button-primary" onclick="window.orchestrator.showAddWorktreeModal()" title="Add New Worktree">+ Add Worktree</button>
-	        </div>
-	    </aside>
-	    <div id="sidebar-backdrop" class="sidebar-backdrop hidden" aria-hidden="true"></div>
-	    
-	    <!-- Main Content -->
-	    <div class="main-container">
-	        <!-- Header -->
-	        <header>
-	            <div class="header-content">
-	                <button id="sidebar-toggle" class="icon-button sidebar-toggle" title="Toggle sidebar">☰</button>
-	                <h1>Claude Orchestrator</h1>
-	            </div>
-	            <div class="header-actions">
-                <button id="dashboard-btn" class="header-btn" title="Dashboard" data-ui-visibility="header.dashboard">
+
+        <div class="sidebar-footer">
+            <button id="view-all" class="button-secondary">View All</button>
+            <button id="view-claude-only" class="button-secondary">Agent Only</button>
+            <button id="view-servers-only" class="button-secondary">Servers Only</button>
+            <button id="add-worktree" class="button-primary" onclick="window.orchestrator.showAddWorktreeModal()"
+                title="Add New Worktree">+ Add Worktree</button>
+        </div>
+    </aside>
+    <div id="sidebar-backdrop" class="sidebar-backdrop hidden" aria-hidden="true"></div>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <button id="sidebar-toggle" class="icon-button sidebar-toggle" title="Toggle sidebar">☰</button>
+                <h1>Agent Orchestrator</h1>
+            </div>
+            <div class="header-actions">
+                <button id="dashboard-btn" class="header-btn" title="Dashboard">
                     🏠 Dashboard
                 </button>
-                <button id="projects-board-btn" class="header-btn" title="Projects kanban board" data-ui-visibility="header.projectsBoard">
-                    🗂 Projects
-                </button>
-                <button id="greenfield-btn" class="header-btn" title="Create new project" data-ui-visibility="header.newProject">
+                <button id="greenfield-btn" class="header-btn" title="Create new project">
                     ➕ New Project
                 </button>
-                <button id="conversations-btn" class="header-btn" title="Browse conversations" data-ui-visibility="header.history">
+                <button id="conversations-btn" class="header-btn" title="Browse conversations">
                     💬 History
                 </button>
-                <button id="prs-btn" class="header-btn" title="Browse pull requests" data-ui-visibility="header.prs">
+                <button id="prs-btn" class="header-btn" title="Browse pull requests">
                     🔀 PRs
                 </button>
-                <button id="queue-btn" class="header-btn" title="Review inbox (PRs + queue)" data-ui-visibility="header.queue">
-                    📥 Review Inbox
+                <button id="queue-btn" class="header-btn" title="Review inbox (tiers/queue)">
+                    📥 Queue
                 </button>
-                <button id="project-chats-btn" class="header-btn" title="Simple projects + chats shell (Alt+P)" data-ui-visibility="header.chats">
+                <button id="project-chats-btn" class="header-btn" title="Simple projects + chats shell (Alt+P)">
                     🧵 Chats
                 </button>
-                <button id="command-palette-btn" class="header-btn" title="Command palette (Ctrl+K / Cmd+K)" data-ui-visibility="header.commands">
-                    ⌘ Commands
-                </button>
-                <button id="review-route-btn" class="header-btn" title="Review Route (Tier 3+ unreviewed batch review)" data-ui-visibility="header.reviewRoute">
+                <button id="review-route-btn" class="header-btn" title="Review Route (Tier 3+ unreviewed batch review)">
                     🛣 Review Route
                 </button>
-                <button id="activity-btn" class="header-btn" title="Activity feed (agents, PRs, tests)" data-ui-visibility="header.activity">
+                <button id="activity-btn" class="header-btn" title="Activity feed (agents, PRs, tests)">
                     📰 Activity
                 </button>
-                <button id="diff-viewer-open" class="header-btn" title="Open Advanced Diff Viewer for the active PR/branch (falls back to home)" data-ui-visibility="header.diff">
+                <button id="diff-viewer-open" class="header-btn"
+                    title="Open Advanced Diff Viewer for the active PR/branch (falls back to home)">
                     🔍 Diff
                 </button>
-                <div class="workflow-toggle" role="group" aria-label="Workflow mode" data-ui-visibility="header.workflowMode">
-                    <button id="workflow-focus" class="header-btn workflow-btn" title="Focus (Tier 1–2)">🎯 Focus</button>
-                    <button id="workflow-all" class="header-btn workflow-btn" title="All tiers (show everything)">🧩 All</button>
-                    <button id="workflow-review" class="header-btn workflow-btn" title="Review (Queue)">🧾 Review</button>
-                    <button id="workflow-background" class="header-btn workflow-btn" title="Background (Tier 3–4)" data-ui-visibility="header.workflowBackground">🌙 Background</button>
+                <div class="workflow-toggle" role="group" aria-label="Workflow mode">
+                    <button id="workflow-focus" class="header-btn workflow-btn" title="Focus (Tier 1–2)">🎯
+                        Focus</button>
+                    <button id="workflow-all" class="header-btn workflow-btn" title="All tiers (show everything)">🧩
+                        All</button>
+                    <button id="workflow-review" class="header-btn workflow-btn" title="Review (Queue)">🧾
+                        Review</button>
+                    <button id="workflow-background" class="header-btn workflow-btn" title="Background (Tier 3–4)">🌙
+                        Background</button>
                 </div>
-                <div class="workflow-toggle tier-toggle" role="group" aria-label="Tier filter" data-ui-visibility="header.tierFilters">
+                <div class="workflow-toggle tier-toggle" role="group" aria-label="Tier filter">
                     <button id="tier-filter-all" class="header-btn workflow-btn" title="Show all tiers">All</button>
                     <button id="tier-filter-1" class="header-btn workflow-btn" title="Tier 1 only">T1</button>
                     <button id="tier-filter-2" class="header-btn workflow-btn" title="Tier 2 only">T2</button>
@@ -93,36 +95,37 @@
                     <button id="tier-filter-4" class="header-btn workflow-btn" title="Tier 4 only">T4</button>
                     <button id="tier-filter-none" class="header-btn workflow-btn" title="No tier set">None</button>
                 </div>
-                <button id="workflow-focus-tier2" class="header-btn" title="Focus: hide Tier 2 while Tier 1 is busy" data-ui-visibility="header.focusTier2">T2 Auto</button>
-                <button id="workflow-focus-autoswap" class="header-btn" title="Focus: auto-swap to Tier 2 while Tier 1 is busy" data-ui-visibility="header.focusSwap">Swap T2</button>
-                <div id="process-banner-holder" data-ui-visibility="processBanner"><div id="process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div></div>
-                <button id="tasks-btn" class="header-btn" title="Browse tasks (Trello)" data-ui-visibility="header.tasks">
+                <button id="workflow-focus-tier2" class="header-btn" title="Focus: hide Tier 2 while Tier 1 is busy">T2
+                    Auto</button>
+                <button id="workflow-focus-autoswap" class="header-btn"
+                    title="Focus: auto-swap to Tier 2 while Tier 1 is busy">Swap T2</button>
+                <div id="process-banner-holder">
+                    <div id="process-banner" class="process-banner" title="WIP and queue status (click to open Queue)">
+                    </div>
+                </div>
+                <button id="tasks-btn" class="header-btn" title="Browse tasks (Trello)">
                     ✅ Tasks
                 </button>
-                <button id="ports-btn" class="header-btn" title="View running services" data-ui-visibility="header.ports">
+                <button id="ports-btn" class="header-btn" title="View running services">
                     🔌 Ports
                 </button>
-                <button id="commander-toggle" class="header-btn commander-btn" title="Commander (Top-Level AI)" data-ui-visibility="header.commander">
+                <button id="commander-toggle" class="header-btn commander-btn" title="Commander (Top-Level AI)">
                     🎖️ Commander
                 </button>
-                <button id="recommendations-toggle" class="icon-button" title="System Recommendations" onclick="window.recommendationsUI && window.recommendationsUI.toggle()" data-ui-visibility="header.recommendations">
-                    <span class="notification-badge recommendations-badge" id="recommendations-badge" style="display:none">0</span>
-                    🔧
-                </button>
-                <button id="notification-toggle" class="icon-button" title="Notifications" data-ui-visibility="header.notifications">
+                <button id="notification-toggle" class="icon-button" title="Notifications">
                     <span class="notification-badge" id="notification-badge">0</span>
                     🔔
                 </button>
-                <button id="settings-toggle" class="icon-button" title="Settings" data-ui-visibility="header.settings">
+                <button id="settings-toggle" class="icon-button" title="Settings">
                     ⚙️
                 </button>
-                <div class="connection-status" id="connection-status" data-ui-visibility="header.connectionStatus">
+                <div class="connection-status" id="connection-status">
                     <span class="status-dot disconnected"></span>
                     <span>Disconnected</span>
                 </div>
             </div>
         </header>
-        
+
         <!-- Terminal Grid -->
         <main id="terminal-grid" class="terminal-grid">
             <div class="loading-message" id="loading-message">
@@ -131,7 +134,7 @@
             </div>
         </main>
     </div>
-    
+
     <!-- View Presets Modal -->
     <div id="presets-modal" class="modal hidden">
         <div class="modal-content">
@@ -148,7 +151,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Agent Startup Options Modal (Dynamic) -->
     <div id="agent-startup-modal" class="modal hidden">
         <div class="modal-content agent-startup-dynamic">
@@ -191,7 +194,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Settings Panel -->
     <div id="settings-panel" class="settings-panel hidden">
         <div class="panel-header">
@@ -225,13 +228,6 @@
             </div>
             <div class="setting-group">
                 <label>
-                    <input type="checkbox" id="auto-suggestions" checked />
-                    Terminal Autosuggestions
-                </label>
-                <p class="setting-description">Fish/zsh-style command suggestions from shell history. Press → to accept.</p>
-            </div>
-            <div class="setting-group">
-                <label>
                     Theme:
                     <select id="theme-select">
                         <option value="dark">Dark</option>
@@ -248,7 +244,6 @@
                         <option value="purple">Purple</option>
                         <option value="emerald">Emerald</option>
                         <option value="amber">Amber</option>
-                        <option value="high-contrast">High Contrast</option>
                     </select>
                 </label>
                 <p class="setting-description">Controls accent styling; works with Light/Dark.</p>
@@ -259,36 +254,8 @@
                     <input id="skin-intensity-range" type="range" min="0" max="100" step="5" value="100" />
                     <span id="skin-intensity-value" class="mono" style="margin-left:8px; opacity:0.85;">100%</span>
                 </label>
-                <p class="setting-description">How strongly the selected skin tints neutral UI surfaces (0% = neutral, 100% = full skin).</p>
-            </div>
-            <div class="setting-group">
-                <div class="skin-gallery" id="skin-gallery">
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="default" title="Default skin">
-                        <span class="skin-swatch-paint skin-default"></span>
-                        <span>Default</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="blue" title="Blue skin">
-                        <span class="skin-swatch-paint skin-blue"></span>
-                        <span>Blue</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="purple" title="Purple skin">
-                        <span class="skin-swatch-paint skin-purple"></span>
-                        <span>Purple</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="emerald" title="Emerald skin">
-                        <span class="skin-swatch-paint skin-emerald"></span>
-                        <span>Emerald</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="amber" title="Amber skin">
-                        <span class="skin-swatch-paint skin-amber"></span>
-                        <span>Amber</span>
-                    </button>
-                    <button type="button" class="skin-swatch-btn" data-skin-swatch="high-contrast" title="High contrast skin">
-                        <span class="skin-swatch-paint skin-high-contrast"></span>
-                        <span>High Contrast</span>
-                    </button>
-                </div>
-                <p class="setting-description">Theme gallery: click a swatch to switch skins instantly.</p>
+                <p class="setting-description">How strongly the selected skin tints neutral UI surfaces (0% = neutral,
+                    100% = full skin).</p>
             </div>
 
             <div class="setting-section">
@@ -302,7 +269,8 @@
                             <option value="aggressive">Aggressive</option>
                         </select>
                     </label>
-                    <p class="setting-description">Quiet: log only. Normal: toast for key events. Aggressive: toasts + optional browser/sound alerts.</p>
+                    <p class="setting-description">Quiet: log only. Normal: toast for key events. Aggressive: toasts +
+                        optional browser/sound alerts.</p>
                 </div>
                 <div class="setting-group">
                     <label>
@@ -347,14 +315,14 @@
                         Default preset:
                         <select id="review-console-preset">
                             <option value="review">Review (diff-dominant)</option>
-                            <option value="throughput">Throughput (batch review)</option>
                             <option value="default">Default</option>
                             <option value="deep">Deep</option>
                             <option value="terminals">Terminals</option>
                             <option value="code">Code</option>
                         </select>
                     </label>
-                    <p class="setting-description">Controls the initial layout preset when opening the Review Console.</p>
+                    <p class="setting-description">Controls the initial layout preset when opening the Review Console.
+                    </p>
                 </div>
                 <div class="setting-group">
                     <label>
@@ -381,133 +349,8 @@
                         <input type="checkbox" id="review-console-show-server" />
                         Show server terminals
                     </label>
-                    <p class="setting-description">When enabled, Review Console includes the paired server tile next to the agent tile (when available).</p>
-                </div>
-            </div>
-
-            <div class="setting-section">
-                <h4>Review Inbox</h4>
-                <div class="setting-group">
-                    <label>
-                        Default view:
-                        <select id="review-inbox-mode">
-                            <option value="mine">Mine</option>
-                            <option value="all">All</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        Default tiers:
-                        <select id="review-inbox-tiers">
-                            <option value="t3t4">T3 + T4</option>
-                            <option value="t1">T1</option>
-                            <option value="t2">T2</option>
-                            <option value="t3">T3</option>
-                            <option value="t4">T4</option>
-                            <option value="all">All</option>
-                            <option value="none">None</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="review-inbox-pr-only" />
-                        PRs only
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="review-inbox-unreviewed" />
-                        Unreviewed only
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="review-inbox-prioritize-active" />
-                        Prioritize active agents
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="review-inbox-auto-console" />
-                        Auto-open Review Console
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="review-inbox-auto-advance" />
-                        Auto-advance after review
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        Default project filter:
-                        <input id="review-inbox-project" type="text" placeholder="owner/repo or project name" />
-                    </label>
-                </div>
-            </div>
-
-            <div class="setting-section">
-                <h4>Quick Review</h4>
-                <div class="setting-group">
-                    <label>
-                        Default view:
-                        <select id="quick-review-mode">
-                            <option value="mine">Mine</option>
-                            <option value="all">All</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        Default tiers:
-                        <select id="quick-review-tiers">
-                            <option value="t3t4">T3 + T4</option>
-                            <option value="t1">T1</option>
-                            <option value="t2">T2</option>
-                            <option value="t3">T3</option>
-                            <option value="t4">T4</option>
-                            <option value="all">All</option>
-                            <option value="none">None</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="quick-review-pr-only" />
-                        PRs only
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="quick-review-unreviewed" />
-                        Unreviewed only
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="quick-review-prioritize-active" />
-                        Prioritize active agents
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="quick-review-auto-console" />
-                        Auto-open Review Console
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="quick-review-auto-advance" />
-                        Auto-advance after review
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        Default project filter:
-                        <input id="quick-review-project" type="text" placeholder="owner/repo or project name" />
-                    </label>
+                    <p class="setting-description">When enabled, Review Console includes the paired server tile next to
+                        the agent tile (when available).</p>
                 </div>
             </div>
 
@@ -546,46 +389,49 @@
 
                 <details>
                     <summary><strong>Workspace</strong></summary>
-                    <div class="setting-description">A saved configuration that groups worktrees/terminals for a project (or many repos in a mixed workspace). Opening a workspace starts its sessions.</div>
+                    <div class="setting-description">A saved configuration that groups worktrees/terminals for a project
+                        (or many repos in a mixed workspace). Opening a workspace starts its sessions.</div>
                 </details>
 
                 <details>
                     <summary><strong>Worktree</strong></summary>
-                    <div class="setting-description">A git worktree folder (e.g. <code>work6</code>) on disk. One worktree usually has an <em>Agent</em> terminal and (optionally) a paired <em>Server</em> terminal.</div>
+                    <div class="setting-description">A git worktree folder (e.g. <code>work6</code>) on disk. One
+                        worktree usually has an <em>Agent</em> terminal and (optionally) a paired <em>Server</em>
+                        terminal.</div>
                 </details>
 
                 <details>
                     <summary><strong>Terminal / Session</strong></summary>
-                    <div class="setting-description">A running process (PTY) owned by the Orchestrator. It can be recovered after restart unless you explicitly close it.</div>
+                    <div class="setting-description">A running process (PTY) owned by the Orchestrator. It can be
+                        recovered after restart unless you explicitly close it.</div>
                 </details>
 
                 <details>
                     <summary><strong>Agent vs Server</strong></summary>
-                    <div class="setting-description"><strong>Agent</strong> runs Claude/Codex work. <strong>Server</strong> runs your dev server (game/app). They’re paired per worktree and should generally live/die together.</div>
+                    <div class="setting-description"><strong>Agent</strong> runs Claude/Codex work.
+                        <strong>Server</strong> runs your dev server (game/app). They’re paired per worktree and should
+                        generally live/die together.</div>
                 </details>
 
                 <details>
                     <summary><strong>Close vs Remove</strong></summary>
                     <div class="setting-description">
-                        <div><strong>Close terminal (×)</strong>: stops the running processes for that worktree (agent + server). The worktree stays in the workspace and can be re-opened.</div>
-                        <div style="margin-top:6px;"><strong>Remove worktree (🗑)</strong>: removes the worktree from the workspace config, closes its terminals, and clears recoverables. Files on disk are kept.</div>
-                        <div style="margin-top:6px;"><strong>Close chat</strong>: marks thread status as closed (and can optionally close linked sessions via API flag).</div>
-                        <div style="margin-top:6px;"><strong>Archive chat</strong>: marks thread status as archived (and can optionally close linked sessions via API flag).</div>
+                        <div><strong>Close terminal (×)</strong>: stops the running processes for that worktree (agent +
+                            server). The worktree stays in the workspace and can be re-opened.</div>
+                        <div style="margin-top:6px;"><strong>Remove worktree (🗑)</strong>: removes the worktree from
+                            the workspace config, closes its terminals, and clears recoverables. Files on disk are kept.
+                        </div>
                     </div>
                 </details>
             </div>
 
-                <div class="setting-section">
+            <div class="setting-section">
                 <h4>Diagnostics</h4>
                 <div class="setting-group">
                     <button id="diagnostics-refresh" class="template-btn secondary">Refresh diagnostics</button>
-                    <button id="diagnostics-first-run" class="template-btn secondary">Post-install check</button>
-                    <button id="diagnostics-install-wizard" class="template-btn secondary">Fix environment wizard</button>
-                    <button id="diagnostics-repair-safe" class="template-btn secondary">Auto-fix safe issues</button>
+                    <button id="dependency-setup-open" class="template-btn secondary" type="button">Start dependency
+                        onboarding</button>
                     <span id="diagnostics-status" style="margin-left:10px; opacity:0.75;"></span>
-                </div>
-                <div class="setting-group">
-                    <div id="diagnostics-repair-actions" class="mono" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
                 </div>
                 <div class="setting-group">
                     <pre id="diagnostics-output" class="mono diagnostics-output">Click “Refresh diagnostics”.</pre>
@@ -593,175 +439,89 @@
             </div>
 
             <div class="setting-section">
-                <h4>Command Catalog</h4>
-                <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items: flex-end;">
+                <h4>Discord</h4>
+                <div class="setting-group">
                     <label>
-                        Filter:
-                        <input id="command-catalog-filter" type="text" placeholder="search command, category, alias..." style="min-width: 260px;" />
+                        <input type="checkbox" id="discord-auto-ensure-services" />
+                        Auto-start Services workspace on server startup
                     </label>
-                    <button id="command-catalog-refresh" class="btn-secondary" type="button">Refresh commands</button>
-                    <button id="command-catalog-open-new-project" class="btn-secondary" type="button">New Project Wizard</button>
-                    <span id="command-catalog-status" style="opacity:0.75;"></span>
-                </div>
-                <div class="setting-group">
-                    <p id="command-catalog-summary" class="setting-description">Click “Refresh commands”.</p>
-                </div>
-                <div class="setting-group">
-                    <pre id="command-catalog-output" class="mono diagnostics-output">Loading is manual by default.</pre>
+                    <p class="setting-description">Keeps Claudesworth (bot + queue processor) running after orchestrator
+                        restarts.</p>
                 </div>
             </div>
 
-	            <div class="setting-section">
-	                <h4>Discord</h4>
-	                <div class="setting-group">
-	                    <label>
-	                        <input type="checkbox" id="discord-auto-ensure-services" />
-	                        Auto-start Services workspace on server startup
-	                    </label>
-	                    <p class="setting-description">Keeps Claudesworth (bot + queue processor) running after orchestrator restarts.</p>
-	                </div>
-	            </div>
+            <div class="setting-section">
+                <h4>Scheduler</h4>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="scheduler-enabled" />
+                        Enable scheduler
+                    </label>
+                    <p class="setting-description">Runs configured semantic commands on an interval. Safety mode blocks
+                        destructive commands unless explicitly allowed per schedule.</p>
+                </div>
+                <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
+                    <button class="btn-secondary" type="button" id="scheduler-refresh">Refresh scheduler</button>
+                    <button class="btn-secondary" type="button" id="scheduler-save">Save scheduler config</button>
+                    <button class="btn-secondary" type="button" id="scheduler-run-now">Run selected now</button>
+                </div>
+                <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items:flex-end;">
+                    <label>
+                        Template:
+                        <select id="scheduler-template-select" style="min-width: 260px;">
+                            <option value="">Select template…</option>
+                        </select>
+                    </label>
+                    <label>
+                        Interval (min):
+                        <input id="scheduler-template-interval" type="number" min="5" step="5" value="30"
+                            style="width: 110px;" />
+                    </label>
+                    <button class="btn-secondary" type="button" id="scheduler-template-add">Add template job</button>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Selected schedule id:
+                        <input id="scheduler-run-id" type="text" placeholder="schedule-id" style="width: 220px;" />
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Schedules JSON:
+                        <textarea id="scheduler-json" class="tasks-textarea" rows="8"
+                            placeholder='[{"id":"review-route","enabled":true,"intervalMinutes":60,"command":"open-review-route","params":{}}]'></textarea>
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <pre id="scheduler-status-output" class="mono diagnostics-output">Click “Refresh scheduler”.</pre>
+                </div>
+            </div>
 
-                <div class="setting-section">
-                    <h4>Scheduler</h4>
-                    <div class="setting-group">
-                        <label>
-                            <input type="checkbox" id="scheduler-enabled" />
-                            Enable scheduler
-                        </label>
-                        <p class="setting-description">Runs configured semantic commands on an interval. Safety mode blocks destructive commands unless explicitly allowed per schedule.</p>
-                    </div>
-                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
-                        <button class="btn-secondary" type="button" id="scheduler-refresh">Refresh scheduler</button>
-                        <button class="btn-secondary" type="button" id="scheduler-save">Save scheduler config</button>
-                        <button class="btn-secondary" type="button" id="scheduler-run-now">Run selected now</button>
-                    </div>
-                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items:flex-end;">
-                        <label>
-                            Template:
-                            <select id="scheduler-template-select" style="min-width: 260px;">
-                                <option value="">Select template…</option>
-                            </select>
-                        </label>
-                        <label>
-                            Interval (min):
-                            <input id="scheduler-template-interval" type="number" min="5" step="5" value="30" style="width: 110px;" />
-                        </label>
-                        <button class="btn-secondary" type="button" id="scheduler-template-preview">Preview template job</button>
-                        <button class="btn-secondary" type="button" id="scheduler-template-add">Add template job</button>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            Selected schedule id:
-                            <input id="scheduler-run-id" type="text" placeholder="schedule-id" style="width: 220px;" />
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            Schedules JSON:
-                            <textarea id="scheduler-json" class="tasks-textarea" rows="8" placeholder='[{"id":"review-route","enabled":true,"intervalMinutes":60,"command":"open-review-route","params":{}}]'></textarea>
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <pre id="scheduler-status-output" class="mono diagnostics-output">Click “Refresh scheduler”.</pre>
+            <div class="setting-section">
+                <h4>License</h4>
+                <div class="setting-group">
+                    <div id="license-status" class="mono" style="opacity:0.85;">Loading…</div>
+                    <p class="setting-description">Local/offline license verification (no project data is sent
+                        anywhere).</p>
+                </div>
+                <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
+                    <button class="btn-secondary" type="button" id="license-reload">Reload</button>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Paste <code>license.json</code>:
+                        <textarea id="license-json" class="tasks-textarea" rows="5"
+                            placeholder='{"license":{...},"signature":"..."}'></textarea>
+                    </label>
+                    <div style="display:flex; gap:8px; margin-top:8px; flex-wrap: wrap;">
+                        <button class="btn-secondary" type="button" id="license-save">Save</button>
                     </div>
                 </div>
+            </div>
 
-                <div class="setting-section">
-                    <h4>Pager / Pollcat</h4>
-                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items:flex-end;">
-                        <label>
-                            Session id:
-                            <input id="pager-session-id" type="text" placeholder="work1-claude" style="width: 220px;" />
-                        </label>
-                        <label>
-                            Workspace id:
-                            <input id="pager-workspace-id" type="text" placeholder="zoo-hytopia" style="width: 220px;" />
-                        </label>
-                        <label>
-                            Tier filter:
-                            <input id="pager-tier-set" type="text" placeholder="3,4" style="width: 120px;" />
-                        </label>
-                        <label>
-                            Interval (sec):
-                            <input id="pager-interval-seconds" type="number" min="5" step="5" value="300" style="width: 110px;" />
-                        </label>
-                        <label>
-                            Max pings:
-                            <input id="pager-max-pings" type="number" min="1" step="1" value="24" style="width: 110px;" />
-                        </label>
-                        <label>
-                            Max runtime (min):
-                            <input id="pager-max-runtime-minutes" type="number" min="1" step="1" value="120" style="width: 130px;" />
-                        </label>
-                    </div>
-                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap; align-items:flex-end;">
-                        <label>
-                            Nudge text:
-                            <input id="pager-nudge-text" type="text" value="next" style="width: 220px;" />
-                        </label>
-                        <label>
-                            Custom mode:
-                            <select id="pager-custom-instruction-mode" style="width: 120px;">
-                                <option value="append">append</option>
-                                <option value="replace">replace</option>
-                            </select>
-                        </label>
-                        <label>
-                            <input type="checkbox" id="pager-done-check-enabled" />
-                            Done-check enabled
-                        </label>
-                        <label>
-                            Done token:
-                            <input id="pager-done-token" type="text" value="PAGER_DONE" style="width: 160px;" />
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            Custom instruction (optional):
-                            <textarea id="pager-custom-instruction" class="tasks-textarea" rows="3" placeholder="continue and finish all remaining implementation tasks"></textarea>
-                        </label>
-                    </div>
-                    <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
-                        <button class="btn-secondary" type="button" id="pager-refresh">Refresh pager</button>
-                        <button class="btn-secondary" type="button" id="pager-save-defaults">Save pager defaults</button>
-                        <button class="btn-secondary" type="button" id="pager-start">Start pager</button>
-                        <button class="btn-secondary" type="button" id="pager-stop">Stop pager</button>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            Stop job id:
-                            <input id="pager-stop-id" type="text" placeholder="pager-..." style="width: 220px;" />
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <pre id="pager-status-output" class="mono diagnostics-output">Click “Refresh pager”.</pre>
-                    </div>
-                </div>
-
-	            <div class="setting-section">
-	                <h4>License</h4>
-	                <div class="setting-group">
-	                    <div id="license-status" class="mono" style="opacity:0.85;">Loading…</div>
-	                    <p class="setting-description">Local/offline license verification (no project data is sent anywhere).</p>
-	                </div>
-	                <div class="setting-group" style="display:flex; gap:8px; flex-wrap: wrap;">
-	                    <button class="btn-secondary" type="button" id="license-reload">Reload</button>
-	                </div>
-	                <div class="setting-group">
-	                    <label>
-	                        Paste <code>license.json</code>:
-	                        <textarea id="license-json" class="tasks-textarea" rows="5" placeholder='{"license":{...},"signature":"..."}'></textarea>
-	                    </label>
-	                    <div style="display:flex; gap:8px; margin-top:8px; flex-wrap: wrap;">
-	                        <button class="btn-secondary" type="button" id="license-save">Save</button>
-	                    </div>
-	                </div>
-	            </div>
-
-	            <div class="setting-group">
-	                <label>
-	                    Tasks Theme:
+            <div class="setting-group">
+                <label>
+                    Tasks Theme:
                     <select id="tasks-theme-select">
                         <option value="inherit">Follow App</option>
                         <option value="light">Light</option>
@@ -785,7 +545,8 @@
                         <input type="checkbox" id="pr-merge-auto-enabled" />
                         Enable PR-merge automation (Trello)
                     </label>
-                    <p class="setting-description">When a PR merges, auto-move/comment on the linked Trello card (when a Trello card is linked to the PR task).</p>
+                    <p class="setting-description">When a PR merges, auto-move/comment on the linked Trello card (when a
+                        Trello card is linked to the PR task).</p>
                 </div>
                 <div class="setting-group">
                     <label>
@@ -796,7 +557,8 @@
                             <option value="none">Don’t move</option>
                         </select>
                     </label>
-                    <p class="setting-description">Configure board-specific Done/For Test lists in Tasks → Board Settings → Conventions.</p>
+                    <p class="setting-description">Configure board-specific Done/For Test lists in Tasks → Board
+                        Settings → Conventions.</p>
                 </div>
                 <div class="setting-group">
                     <label>
@@ -811,9 +573,11 @@
                 <div class="setting-group">
                     <label>
                         Global prompt prefix:
-                        <textarea id="tasks-launch-global-prefix" class="tasks-textarea" rows="4" placeholder="(optional) Prepended before ticket preface + card description..."></textarea>
+                        <textarea id="tasks-launch-global-prefix" class="tasks-textarea" rows="4"
+                            placeholder="(optional) Prepended before ticket preface + card description..."></textarea>
                     </label>
-                    <p class="setting-description">Prepended before the ticket preface + card description when auto-sending prompts from Tasks.</p>
+                    <p class="setting-description">Prepended before the ticket preface + card description when
+                        auto-sending prompts from Tasks.</p>
                 </div>
                 <div class="setting-group">
                     <label>
@@ -830,7 +594,8 @@
                         Claim / reviewer name:
                         <input id="identity-claim-name" type="text" placeholder="me" style="width: 180px;" />
                     </label>
-                    <p class="setting-description">Used for Queue “Claim” and assignment labels. If empty, falls back to Trello Username (Me), then <code>me</code>.</p>
+                    <p class="setting-description">Used for Queue “Claim” and assignment labels. If empty, falls back to
+                        Trello Username (Me), then <code>me</code>.</p>
                 </div>
                 <div class="setting-group">
                     <button class="btn-secondary" type="button" id="identity-save">Save current</button>
@@ -854,11 +619,11 @@
                 </div>
                 <p class="setting-description">Controls the theme for the Advanced Diff Viewer (port 7655).</p>
             </div>
-            
+
             <!-- Terminal Settings -->
             <div class="setting-section">
                 <h4>Terminal Settings</h4>
-                
+
                 <div class="setting-group">
                     <label>
                         <input type="checkbox" id="global-skip-permissions" />
@@ -866,7 +631,7 @@
                         <small>Apply --dangerously-skip-permissions to all new Claude sessions</small>
                     </label>
                 </div>
-                
+
                 <div class="setting-group">
                     <label>
                         <input type="checkbox" id="global-zai-provider" />
@@ -894,7 +659,8 @@
                     </label>
                     <label style="margin-top: 10px;">
                         <strong>Start Delay (ms):</strong>
-                        <input type="number" id="global-auto-start-delay" value="500" min="0" max="5000" style="width: 100px;" />
+                        <input type="number" id="global-auto-start-delay" value="500" min="0" max="5000"
+                            style="width: 100px;" />
                     </label>
                 </div>
 
@@ -927,22 +693,15 @@
                         <input type="checkbox" id="recovery-skip-permissions" checked />
                         <span>Use YOLO mode (--dangerously-skip-permissions)</span>
                     </label>
-                    <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap: wrap; margin-top: 10px;">
-                        <label>
-                            <strong>Prune recoverables older than (days):</strong>
-                            <input type="number" id="recovery-prune-days" value="7" min="1" max="365" style="width: 100px;" />
-                        </label>
-                        <button class="btn-secondary" type="button" id="recovery-prune-old">Prune old recoverables</button>
-                    </div>
-                    <p id="recovery-prune-status" class="setting-description" style="margin-top:8px;">Current workspace: (none)</p>
                 </div>
 
                 <div class="setting-group per-terminal-settings" id="per-terminal-settings">
                     <h5>Per-Terminal Overrides</h5>
-                    <p class="setting-description">Override global settings for specific terminals (requires terminal restart)</p>
+                    <p class="setting-description">Override global settings for specific terminals (requires terminal
+                        restart)</p>
                     <!-- Per-terminal settings will be populated by JavaScript -->
                 </div>
-                
+
                 <div class="setting-group">
                     <h5>Default Template Management</h5>
                     <p class="setting-description">Manage the default settings template committed to the repository</p>
@@ -962,10 +721,11 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="setting-group">
                     <h5>Repository Updates</h5>
-                    <p class="setting-description">Web/dev mode: Git pull updates. Tauri desktop mode: app updater check/install.</p>
+                    <p class="setting-description">Web/dev mode: Git pull updates. Tauri desktop mode: app updater
+                        check/install.</p>
                     <div class="template-actions">
                         <button id="check-updates" class="template-btn secondary">
                             Check for Updates
@@ -986,19 +746,26 @@
         </div>
     </div>
 
-    <!-- Notifications Panel -->
-    <div id="recommendations-panel" class="notifications-panel hidden" style="right: 140px;">
-        <div class="panel-header">
-            <h3>🔧 Recommendations</h3>
-            <div class="panel-actions">
-                <button onclick="window.recommendationsUI && window.recommendationsUI.dismissAll()" class="icon-button" title="Dismiss all">✕</button>
+    <!-- Dependency Setup Wizard (Onboarding) -->
+    <div id="dependency-setup-modal" class="onboarding-overlay hidden" role="dialog" aria-modal="true"
+        aria-labelledby="dependency-setup-title">
+        <div class="onboarding-bg-glow"></div>
+        <div class="onboarding-bg-glow onboarding-bg-glow-2"></div>
+        <div class="onboarding-container">
+            <div class="onboarding-header">
+                <h2 id="dependency-setup-title" class="onboarding-title">Orchestrator Setup</h2>
+                <p id="dependency-setup-summary" class="onboarding-summary-text"></p>
             </div>
-        </div>
-        <div id="recommendations-list" class="notifications-list">
-            <div class="notification-empty">No recommendations</div>
+
+            <div id="dependency-setup-list" class="onboarding-content-area"></div>
+
+            <!-- Close button for when it's allowed to close -->
+            <button id="dependency-setup-close" class="onboarding-close-btn hidden" type="button"
+                aria-label="Close setup">✕</button>
         </div>
     </div>
 
+    <!-- Notifications Panel -->
     <div id="notifications-panel" class="notifications-panel hidden">
         <div class="panel-header">
             <h3>Notifications</h3>
@@ -1012,22 +779,19 @@
             <div id="notification-list" class="notification-list"></div>
         </div>
     </div>
-    
+
     <!-- Scripts -->
     <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-search@0.13.0/lib/xterm-addon-search.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
-    
+
     <!-- Our scripts -->
     <script src="logger.js"></script>
-    <script src="plugin-host.js"></script>
     <script src="quick-links.js"></script>
     <script src="commander-panel.js"></script>
-    <script src="recommendations.js"></script>
     <script src="dashboard.js"></script>
-    <script src="projects-board.js"></script>
     <script src="workspace-switcher.js"></script>
     <script src="workspace-wizard.js"></script>
     <script src="greenfield-wizard.js"></script>
@@ -1044,10 +808,12 @@
                 <div class="focused-terminal-title">
                     <span class="status-indicator" id="focused-status"></span>
                     <span id="focused-title"></span>
-                    <span id="focused-branch" style="color: var(--accent-primary); font-family: var(--font-mono);"></span>
+                    <span id="focused-branch"
+                        style="color: var(--accent-primary); font-family: var(--font-mono);"></span>
                 </div>
                 <div class="focus-controls">
-                    <button class="focus-close-btn" onclick="window.orchestrator.unfocusTerminal()" title="Close (ESC)">✕</button>
+                    <button class="focus-close-btn" onclick="window.orchestrator.unfocusTerminal()"
+                        title="Close (ESC)">✕</button>
                 </div>
             </div>
             <div class="focused-terminal-body" id="focused-terminal-body">
@@ -1062,4 +828,5 @@
     <script src="notifications.js"></script>
     <script src="agent-modal.js"></script>
 </body>
+
 </html>

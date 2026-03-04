@@ -24,8 +24,6 @@ describe('CommandRegistry catalog metadata', () => {
     expect(listSessions).toBeTruthy();
     expect(listSessions.category).toBe('sessions');
     expect(listSessions.safetyLevel).toBe('safe');
-    expect(typeof listSessions.safetyNotes).toBe('string');
-    expect(listSessions.safetyNotes.length).toBeGreaterThan(0);
     expect(Array.isArray(listSessions.surfaces)).toBe(true);
     expect(listSessions.surfaces).toContain('voice');
     expect(listSessions.surfaces).toContain('commander');
@@ -41,7 +39,7 @@ describe('CommandRegistry catalog metadata', () => {
     expect(first).toHaveProperty('name');
     expect(first).toHaveProperty('description');
     expect(first).toHaveProperty('safetyLevel');
-    expect(first).toHaveProperty('safetyNotes');
     expect(first).toHaveProperty('surfaces');
   });
 });
+

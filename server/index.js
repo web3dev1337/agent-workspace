@@ -56,18 +56,14 @@ const { WorktreeHelper } = require('./worktreeHelper');
 const AgentManager = require('./agentManager');
 const { PortRegistry } = require('./portRegistry');
 const { GreenfieldService } = require('./greenfieldService');
-const { ProjectTypeService } = require('./projectTypeService');
 const { ContinuityService } = require('./continuityService');
 const { QuickLinksService } = require('./quickLinksService');
-const { RecommendationsService } = require('./recommendationsService');
 const { ProductLauncherService } = require('./productLauncherService');
 const { CommanderService } = require('./commanderService');
 const { ConversationService } = require('./conversationService');
-const { AgentProviderService } = require('./agentProviderService');
 const { WorktreeMetadataService } = require('./worktreeMetadataService');
 const { WorktreeGitService } = require('./worktreeGitService');
 const { ProjectMetadataService } = require('./projectMetadataService');
-const { ProjectBoardService } = require('./projectBoardService');
 const { WorktreeConflictService } = require('./worktreeConflictService');
 const { WorktreeTagService } = require('./worktreeTagService');
 const { DiffViewerService } = require('./diffViewerService');
@@ -75,7 +71,6 @@ const { PullRequestService } = require('./pullRequestService');
 const { ProcessTaskService } = require('./processTaskService');
 const { ProcessStatusService } = require('./processStatusService');
 const { ProcessTelemetryService } = require('./processTelemetryService');
-const { ProcessTelemetryBenchmarkService } = require('./processTelemetryBenchmarkService');
 const { ProcessProjectDashboardService } = require('./processProjectDashboardService');
 const { ProcessProjectHealthService } = require('./processProjectHealthService');
 const { ProcessAdvisorService } = require('./processAdvisorService');
@@ -84,11 +79,9 @@ const { TelemetrySnapshotService } = require('./telemetrySnapshotService');
 const { TaskRecordService } = require('./taskRecordService');
 const { PromptArtifactService, safeId, sha256, formatPointerComment } = require('./promptArtifactService');
 const { TaskDependencyService } = require('./taskDependencyService');
-const { BatchLaunchService } = require('./batchLaunchService');
 const { TaskTicketingService } = require('./taskTicketingService');
 const { TaskTicketMoveService } = require('./taskTicketMoveService');
 const { PrMergeAutomationService } = require('./prMergeAutomationService');
-const { PrReviewAutomationService } = require('./prReviewAutomationService');
 const { GitHubRepoService } = require('./githubRepoService');
 const { TestOrchestrationService } = require('./testOrchestrationService');
 const { sanitizeFilename, formatConversationAsMarkdown } = require('./conversationExportService');
@@ -98,33 +91,17 @@ const commandRegistry = require('./commandRegistry');
 const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
 const sessionRecoveryService = require('./sessionRecoveryService');
-const { collectDiagnostics, collectFirstRunDiagnostics, collectInstallWizard, runFirstRunRepair, runFirstRunSafeRepairs } = require('./diagnosticsService');
+const { collectDiagnostics } = require('./diagnosticsService');
+const {
+  getSetupActions,
+  runSetupAction,
+  getSetupActionRun,
+  getLatestSetupActionRun,
+  configureGitIdentity
+} = require('./setupActionService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
-const { PagerService } = require('./pagerService');
 const { ThreadService } = require('./threadService');
-const { PolicyBundleService } = require('./policyBundleService');
-const { ConfigPromoterService } = require('./configPromoterService');
-const { normalizeServiceManifest, getWorkspaceServiceManifest } = require('./workspaceServiceStackService');
-const { ServiceStackRuntimeService } = require('./serviceStackRuntimeService');
-const { IntentHaikuService } = require('./intentHaikuService');
-const {
-  getLifecyclePolicy,
-  parseWorktreeKey,
-  terminalMatchesWorktree,
-  sessionRecordMatchesWorktree,
-  shouldCloseSessionsForThreadAction
-} = require('./lifecyclePolicyService');
-const { PolicyService } = require('./policyService');
-const { AuditExportService } = require('./auditExportService');
-const { getInstance: getCommandHistoryService } = require('./commandHistoryService');
-const { evaluateBindSecurity, isLoopbackHost } = require('./networkSecurityPolicy');
-const {
-  normalizeRepositoryPath,
-  normalizeRepositoryRootForWorktrees,
-  normalizeThreadWorktreeId,
-  pickReusableWorktreeId
-} = require('./threadWorktreeSelection');
 const multer = require('multer');
 
 // Configure multer for audio file uploads
@@ -178,8 +155,7 @@ const io = new Server(httpServer, {
         origin === 'tauri://localhost' ||
         origin.startsWith('http://localhost:') ||
         origin.startsWith('http://127.0.0.1:') ||
-        origin.startsWith('http://[::1]:') ||
-        origin.startsWith('http://100.');
+        origin.startsWith('http://[::1]:');
 
       if (allowed) {
         callback(null, true);
@@ -268,23 +244,18 @@ const notificationService = new NotificationService(io);
 const worktreeHelper = new WorktreeHelper();
 const portRegistry = PortRegistry.getInstance();
 const greenfieldService = GreenfieldService.getInstance();
-const projectTypeService = ProjectTypeService.getInstance({ logger });
 greenfieldService.setSessionManager(sessionManager);
 greenfieldService.setIO(io);
-greenfieldService.setProjectTypeService(projectTypeService);
 const continuityService = ContinuityService.getInstance();
 const quickLinksService = QuickLinksService.getInstance();
-const recommendationsService = RecommendationsService.getInstance();
 const activityFeed = ActivityFeedService.getInstance();
 activityFeed.setIO(io);
 activityFeed.track('server.started', { port: Number(process.env.ORCHESTRATOR_PORT || 3000) });
 const productLauncherService = ProductLauncherService.getInstance();
 const conversationService = ConversationService.getInstance();
-const agentProviderService = AgentProviderService.getInstance({ agentManager, logger });
 const worktreeMetadataService = WorktreeMetadataService.getInstance();
 const worktreeGitService = WorktreeGitService.getInstance();
 const projectMetadataService = ProjectMetadataService.getInstance();
-const projectBoardService = ProjectBoardService.getInstance({ logger });
 const worktreeConflictService = new WorktreeConflictService({ projectMetadataService, worktreeMetadataService });
 const { CommanderContextService } = require('./commanderContextService');
 const commanderContextService = CommanderContextService.getInstance();
@@ -299,11 +270,6 @@ const proOnly = requirePro(licenseService);
 const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager, userSettingsService });
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
 const telemetrySnapshotService = TelemetrySnapshotService.getInstance();
-const processTelemetryBenchmarkService = ProcessTelemetryBenchmarkService.getInstance({
-  processTelemetryService,
-  processStatusService,
-  telemetrySnapshotService
-});
 const processProjectDashboardService = ProcessProjectDashboardService.getInstance({ pullRequestService, taskRecordService });
 const processProjectHealthService = ProcessProjectHealthService.getInstance({ taskRecordService });
 const promptArtifactService = PromptArtifactService.getInstance();
@@ -317,14 +283,7 @@ const processPairingService = ProcessPairingService.getInstance({ processTaskSer
 const testOrchestrationService = TestOrchestrationService.getInstance({ sessionManager, workspaceManager });
 const pluginLoaderService = PluginLoaderService.getInstance({ logger });
 const schedulerService = SchedulerService.getInstance({ logger });
-const pagerService = PagerService.getInstance({ logger });
 const threadService = ThreadService.getInstance({ logger });
-const intentHaikuService = IntentHaikuService.getInstance({ logger });
-const serviceStackRuntimeService = ServiceStackRuntimeService.getInstance({ logger });
-const policyService = PolicyService.getInstance({ logger });
-const auditExportService = AuditExportService.getInstance({ logger });
-const policyBundleService = PolicyBundleService.getInstance({ policyService, userSettingsService });
-const configPromoterService = ConfigPromoterService.getInstance({ logger });
 
 // Initialize Commander service (Top-Level AI as Claude Code terminal)
 const commanderService = CommanderService.getInstance({
@@ -336,16 +295,10 @@ const commanderService = CommanderService.getInstance({
 commandRegistry.init({
   io,
   sessionManager,
-  workspaceManager,
-  pagerService
+  workspaceManager
 });
-policyService.init({ userSettingsService, commandRegistry });
 schedulerService.init({ userSettingsService, commandRegistry });
-pagerService.init({ sessionManager, userSettingsService, taskRecordService });
 threadService.init({ workspaceManager, sessionManager });
-intentHaikuService.setSessionManager(sessionManager);
-serviceStackRuntimeService.init({ workspaceManager, sessionManager, configPromoterService, io });
-auditExportService.init({ activityFeed, schedulerService, userSettingsService });
 
 const loadPlugins = async () => {
   const status = await pluginLoaderService.loadAll({
@@ -356,43 +309,11 @@ const loadPlugins = async () => {
       logger,
       workspaceManager,
       sessionManager,
-      userSettingsService,
-      conversationService,
-      agentProviderService,
-      agentManager
+      userSettingsService
     }
   });
   return status;
 };
-
-function buildPolicyDeniedPayload(decision, fallbackError = 'Forbidden by policy') {
-  return {
-    ok: false,
-    error: fallbackError,
-    reason: decision?.reason || fallbackError,
-    requiredRole: decision?.requiredRole || null,
-    role: decision?.role || null,
-    action: decision?.action || null,
-    policyEnabled: decision?.policyEnabled === true
-  };
-}
-
-function requirePolicyAction(action) {
-  return (req, res, next) => {
-    try {
-      const decision = policyService.canAccessAction({ req, action });
-      if (!decision.ok) {
-        return res.status(403).json(buildPolicyDeniedPayload(decision));
-      }
-      req.policyRole = decision.role;
-      req.policyAction = decision.action;
-      return next();
-    } catch (error) {
-      logger.error('Policy action check failed', { action, error: error.message, stack: error.stack });
-      return res.status(500).json({ ok: false, error: 'Failed to evaluate policy action' });
-    }
-  };
-}
 
 // Connect services
 sessionManager.setStatusDetector(statusDetector);
@@ -480,22 +401,6 @@ io.on('connection', (socket) => {
     }
     logger.debug('Terminal input received', { sessionId, dataLength: inputData.length });
     sessionManager.writeToSession(sessionId, inputData);
-  });
-
-  // Autosuggestion: client requests a suggestion for the current input prefix
-  socket.on('autosuggest-request', ({ sessionId, prefix }) => {
-    const commandHistory = getCommandHistoryService();
-    const match = commandHistory.findMatch(sessionId, prefix);
-    socket.emit('autosuggest-response', { sessionId, suggestion: match, prefix });
-  });
-
-  // Autosuggestion: client reports a command was executed (Enter pressed)
-  socket.on('command-executed', ({ sessionId, command }) => {
-    if (command && command.trim()) {
-      const commandHistory = getCommandHistoryService();
-      commandHistory.addCommand(sessionId, command);
-      intentHaikuService.noteCommand(sessionId, command);
-    }
   });
 
   // Client hint: terminal output suggests the branch changed (e.g. "Switched to branch ...").
@@ -782,33 +687,11 @@ io.on('connection', (socket) => {
     logger.info('Reveal in explorer requested', { filePath });
     
     const { execFile } = require('child_process');
-    const fs = require('fs');
 
     const raw = String(filePath || '').trim();
     if (!raw) return;
 
-    const resolvedPath = path.resolve(raw);
-    if (!fs.existsSync(resolvedPath)) {
-      logger.warn('Reveal path does not exist', { filePath, resolvedPath });
-      return;
-    }
-
-    let dirPath = resolvedPath;
-    try {
-      const stat = fs.statSync(resolvedPath);
-      if (!stat.isDirectory()) {
-        dirPath = path.dirname(resolvedPath);
-      }
-    } catch (error) {
-      logger.warn('Failed to stat reveal path', { filePath, resolvedPath, error: error.message });
-      return;
-    }
-
-    if (!fs.existsSync(dirPath)) {
-      logger.warn('Reveal directory does not exist', { filePath, resolvedPath, dirPath });
-      return;
-    }
-
+    const dirPath = path.dirname(raw);
     const isWSL = process.platform === 'linux' && (process.env.WSL_DISTRO_NAME || process.env.WSLENV);
 
     // Windows native: explorer.exe can open the folder directly.
@@ -926,60 +809,6 @@ io.on('connection', (socket) => {
     } catch (error) {
       logger.warn('Failed to list workspaces (enriched)', { error: error.message });
       socket.emit('workspaces-list', workspaceManager.listWorkspaces());
-    }
-  });
-
-  socket.on('create-new-project', async (payload = {}, callback) => {
-    const requestMeta = {
-      name: String(payload?.name || payload?.projectName || '').trim() || null,
-      category: String(payload?.category || payload?.categoryId || '').trim() || null,
-      framework: String(payload?.framework || payload?.frameworkId || '').trim() || null,
-      template: String(payload?.template || payload?.templateId || '').trim() || null,
-      worktreeCount: Number(payload?.worktreeCount || payload?.worktrees || 0) || null,
-      spawnClaude: payload?.spawnClaude === true,
-      socketId: socket.id
-    };
-    try {
-      logger.info('Socket project creation requested', requestMeta);
-      const result = await workspaceManager.createProjectWorkspace(payload || {});
-      let claudeSession = null;
-      if (payload?.spawnClaude) {
-        const work1Path = path.join(result?.project?.projectPath || '', 'work1');
-        claudeSession = await greenfieldService.spawnClaudeInProject(
-          work1Path,
-          result?.project?.name,
-          String(payload?.description || ''),
-          payload?.yolo !== false
-        );
-      }
-
-      const workspaces = await workspaceManager.listWorkspacesEnriched();
-
-      io.emit('workspaces-list', workspaces);
-      socket.emit('project-created', {
-        project: { ...(result.project || {}), claudeSession },
-        workspace: result.workspace
-      });
-
-      if (typeof callback === 'function') {
-        callback({
-          ok: true,
-          project: { ...(result.project || {}), claudeSession },
-          workspace: result.workspace
-        });
-      }
-      logger.info('Socket project creation succeeded', {
-        ...requestMeta,
-        workspaceId: result?.workspace?.id || null,
-        projectPath: result?.project?.projectPath || null,
-        claudeSessionId: claudeSession?.sessionId || null
-      });
-    } catch (error) {
-      logger.error('Failed to create new project via socket', { ...requestMeta, error: error.message, stack: error.stack });
-      if (typeof callback === 'function') {
-        callback({ ok: false, error: error.message });
-      }
-      socket.emit('error', { message: 'Failed to create new project', error: error.message });
     }
   });
 
@@ -1102,18 +931,8 @@ io.on('connection', (socket) => {
       // We don't track tabId on the backend; the client passes the sessions for that tab.
       const ids = Array.isArray(sessionIds) ? sessionIds.map(String).filter(Boolean) : [];
       let closed = 0;
-      const toClose = new Set();
-      for (const sessionId of ids) {
-        const groupIds = sessionManager.getSessionGroupIds(sessionId, {
-          sessionTypes: ['claude', 'codex', 'server']
-        });
-        groupIds.forEach((id) => {
-          const sid = String(id || '').trim();
-          if (sid) toClose.add(sid);
-        });
-      }
 
-      for (const sessionId of toClose) {
+      for (const sessionId of ids) {
         const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
         if (!ok) continue;
         closed += 1;
@@ -1151,13 +970,27 @@ io.on('connection', (socket) => {
       // If the user closes either the agent or server terminal, close the whole worktree group.
       // This avoids "server orphaned" / "agent orphaned" drift and matches the UI expectation
       // that agent+server live/die together.
-      const closeIds = new Set(
-        sessionManager.getSessionGroupIds(id, {
-          workspaceId: String(target.workspace || '').trim() || null,
-          sessionTypes: ['claude', 'codex', 'server']
-        })
-      );
-      if (!closeIds.size) closeIds.add(id);
+      const workspaceId = String(target.workspace || '').trim();
+      const worktreeId = String(target.worktreeId || '').trim();
+      const repoName = String(target.repositoryName || '').trim();
+      const closeIds = new Set([id]);
+
+      if (workspaceId && worktreeId) {
+        const map = sessionManager.workspaceSessionMaps?.get?.(workspaceId) || null;
+        const iterable = map && typeof map.entries === 'function'
+          ? map.entries()
+          : sessionManager.sessions.entries();
+
+        for (const [sid, sess] of iterable) {
+          if (!sid || !sess) continue;
+          if (workspaceId && String(sess.workspace || '').trim() !== workspaceId) continue;
+          if (String(sess.worktreeId || '').trim() !== worktreeId) continue;
+          if (repoName && String(sess.repositoryName || '').trim() !== repoName) continue;
+          const t = String(sess.type || '').trim().toLowerCase();
+          if (t !== 'claude' && t !== 'codex' && t !== 'server') continue;
+          closeIds.add(String(sid));
+        }
+      }
 
       let closed = 0;
       closeIds.forEach((sid) => {
@@ -1204,23 +1037,6 @@ app.get('/api/workspaces', (req, res) => {
   } catch (error) {
     logger.error('Failed to list workspaces', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to list workspaces' });
-  }
-});
-
-app.get('/api/workspaces/active', (req, res) => {
-  try {
-    const active = workspaceManager.getActiveWorkspace();
-    if (active) return res.json({ id: active.id, name: active.name });
-    // Fallback: read from persisted config (survives hot-reload)
-    const configActive = workspaceManager.getConfig()?.activeWorkspace;
-    if (configActive) {
-      const ws = workspaceManager.getWorkspace(configActive);
-      if (ws) return res.json({ id: ws.id, name: ws.name });
-    }
-    res.json({ id: null, name: null });
-  } catch (error) {
-    logger.error('Failed to get active workspace', { error: error.message });
-    res.status(500).json({ error: 'Failed to get active workspace' });
   }
 });
 
@@ -1284,45 +1100,6 @@ app.get('/api/workspace-types', (req, res) => {
   }
 });
 
-app.get('/api/project-types', (req, res) => {
-  try {
-    res.json(projectTypeService.getTaxonomy());
-  } catch (error) {
-    logger.error('Failed to get project-types taxonomy', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: 'Failed to get project-types taxonomy' });
-  }
-});
-
-app.get('/api/project-types/categories', (req, res) => {
-  try {
-    res.json(projectTypeService.getCategories());
-  } catch (error) {
-    logger.error('Failed to get project-type categories', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: 'Failed to get project-type categories' });
-  }
-});
-
-app.get('/api/project-types/frameworks', (req, res) => {
-  try {
-    const categoryId = String(req.query.categoryId || '').trim();
-    res.json(projectTypeService.getFrameworks({ categoryId }));
-  } catch (error) {
-    logger.error('Failed to get project-type frameworks', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: 'Failed to get project-type frameworks' });
-  }
-});
-
-app.get('/api/project-types/templates', (req, res) => {
-  try {
-    const categoryId = String(req.query.categoryId || '').trim();
-    const frameworkId = String(req.query.frameworkId || '').trim();
-    res.json(projectTypeService.getTemplates({ categoryId, frameworkId }));
-  } catch (error) {
-    logger.error('Failed to get project-type templates', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: 'Failed to get project-type templates' });
-  }
-});
-
 // Get cascaded config for a specific worktree
 app.get('/api/cascaded-config/:repositoryType', async (req, res) => {
   try {
@@ -1354,105 +1131,6 @@ app.post('/api/workspaces', async (req, res) => {
   } catch (error) {
     logger.error('Failed to create workspace', { error: error.message, stack: error.stack });
     res.status(400).json({ error: error.message, stack: error.stack });
-  }
-});
-
-app.post('/api/projects/create-workspace', express.json(), async (req, res) => {
-  const requestMeta = {
-    name: String(req.body?.name || req.body?.projectName || '').trim() || null,
-    category: String(req.body?.category || req.body?.categoryId || '').trim() || null,
-    framework: String(req.body?.framework || req.body?.frameworkId || '').trim() || null,
-    template: String(req.body?.template || req.body?.templateId || '').trim() || null,
-    worktreeCount: Number(req.body?.worktreeCount || req.body?.worktrees || 0) || null,
-    spawnClaude: req.body?.spawnClaude === true
-  };
-  try {
-    logger.info('API project creation requested', requestMeta);
-    const result = await workspaceManager.createProjectWorkspace(req.body || {});
-    let claudeSession = null;
-    if (req.body?.spawnClaude) {
-      const work1Path = path.join(result?.project?.projectPath || '', 'work1');
-      claudeSession = await greenfieldService.spawnClaudeInProject(
-        work1Path,
-        result?.project?.name,
-        String(req.body?.description || ''),
-        req.body?.yolo !== false
-      );
-    }
-    const project = {
-      ...(result.project || {}),
-      claudeSession,
-      repoUrl: result?.project?.remoteUrl || null
-    };
-    res.json({
-      ok: true,
-      ...project,
-      project,
-      workspace: result.workspace
-    });
-    logger.info('API project creation succeeded', {
-      ...requestMeta,
-      workspaceId: result?.workspace?.id || null,
-      projectPath: result?.project?.projectPath || null,
-      claudeSessionId: claudeSession?.sessionId || null
-    });
-  } catch (error) {
-    logger.error('Failed to create project workspace', { ...requestMeta, error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: error.message });
-  }
-});
-
-app.get('/api/projects/board', async (req, res) => {
-  try {
-    const refresh = String(req.query?.refresh || '').toLowerCase() === 'true';
-    const board = await projectBoardService.load({ refresh });
-    res.json({
-      ok: true,
-      storePath: projectBoardService.storePath,
-      columns: projectBoardService.getColumns(),
-      board
-    });
-  } catch (error) {
-    logger.error('Failed to load project board', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to load project board' });
-  }
-});
-
-app.post('/api/projects/board/move', express.json(), async (req, res) => {
-  try {
-    const projectKey = String(req.body?.projectKey || '').trim();
-    const columnId = String(req.body?.columnId || '').trim();
-    const orderByColumn = req.body?.orderByColumn && typeof req.body.orderByColumn === 'object' ? req.body.orderByColumn : null;
-    if (!projectKey) return res.status(400).json({ ok: false, error: 'projectKey is required' });
-    if (!columnId) return res.status(400).json({ ok: false, error: 'columnId is required' });
-
-    const board = await projectBoardService.moveProject({ projectKey, columnId, orderByColumn });
-    res.json({ ok: true, projectKey, columnId: String(columnId || '').trim().toLowerCase(), board });
-  } catch (error) {
-    logger.error('Failed to move project on board', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: error.message || 'Failed to move project' });
-  }
-});
-
-app.post('/api/projects/board/patch', express.json(), async (req, res) => {
-  try {
-    const collapsedColumnIds = Array.isArray(req.body?.collapsedColumnIds) ? req.body.collapsedColumnIds : undefined;
-    const projectKey = req.body?.projectKey !== undefined ? String(req.body.projectKey || '').trim() : undefined;
-    const live = req.body?.live;
-
-    const hasLiveUpdate = live === true || live === false;
-    if (projectKey !== undefined && !projectKey) return res.status(400).json({ ok: false, error: 'projectKey is required' });
-
-    const board = await projectBoardService.patchBoard({
-      collapsedColumnIds,
-      projectKey: hasLiveUpdate ? projectKey : undefined,
-      live: hasLiveUpdate ? live : undefined
-    });
-
-    res.json({ ok: true, board });
-  } catch (error) {
-    logger.error('Failed to patch project board', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: error.message || 'Failed to patch project board' });
   }
 });
 
@@ -1504,381 +1182,6 @@ app.post('/api/workspaces/import', async (req, res) => {
   } catch (error) {
     logger.error('Failed to import workspace', { error: error.message, stack: error.stack });
     res.status(400).json({ ok: false, error: error.message });
-  }
-});
-
-const resolveWorkspaceServiceStackManifest = (workspace, options = {}) => {
-  if (configPromoterService && typeof configPromoterService.resolveWorkspaceManifest === 'function') {
-    return configPromoterService.resolveWorkspaceManifest(workspace, options);
-  }
-  return getWorkspaceServiceManifest(workspace);
-};
-
-const getLocalServiceStackField = (workspace) => {
-  const hasShared = !!(workspace && workspace.serviceStackShared && typeof workspace.serviceStackShared === 'object');
-  return hasShared ? 'serviceStackLocal' : 'serviceStack';
-};
-
-app.get('/api/workspaces/:id/service-stack', (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const workspace = workspaceManager.getWorkspace(workspaceId);
-    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
-    const manifest = resolveWorkspaceServiceStackManifest(workspace, {
-      passphrase: req.query?.passphrase,
-      signingSecret: req.query?.signingSecret
-    });
-    res.json({ ok: true, workspaceId, manifest });
-  } catch (error) {
-    logger.error('Failed to get workspace service stack', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to get workspace service stack', message: error.message });
-  }
-});
-
-app.get('/api/workspaces/:id/service-stack/export', (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const workspace = workspaceManager.getWorkspace(workspaceId);
-    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
-
-    const manifest = resolveWorkspaceServiceStackManifest(workspace, {
-      passphrase: req.query?.passphrase,
-      signingSecret: req.query?.signingSecret
-    });
-    const payload = {
-      workspaceId,
-      workspaceName: String(workspace.name || workspaceId),
-      exportedAt: new Date().toISOString(),
-      ...manifest
-    };
-
-    const filename = `${workspaceId}.service-stack.json`;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(JSON.stringify(payload, null, 2));
-  } catch (error) {
-    logger.error('Failed to export workspace service stack', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to export workspace service stack', message: error.message });
-  }
-});
-
-app.put('/api/workspaces/:id/service-stack', express.json(), async (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const workspace = workspaceManager.getWorkspace(workspaceId);
-    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
-
-    const incoming = req.body?.manifest ?? req.body ?? {};
-    const manifest = normalizeServiceManifest(incoming, { strict: true });
-
-    const localField = getLocalServiceStackField(workspace);
-    const updated = await workspaceManager.updateWorkspace(workspaceId, {
-      [localField]: {
-        ...manifest,
-        updatedAt: new Date().toISOString()
-      }
-    });
-
-    res.json({
-      ok: true,
-      workspaceId,
-      localField,
-      count: Array.isArray(updated?.[localField]?.services) ? updated[localField].services.length : 0,
-      manifest: resolveWorkspaceServiceStackManifest(updated)
-    });
-  } catch (error) {
-    logger.error('Failed to update workspace service stack', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: 'Failed to update workspace service stack', message: error.message });
-  }
-});
-
-app.post('/api/workspaces/:id/service-stack/import', express.json(), async (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const workspace = workspaceManager.getWorkspace(workspaceId);
-    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
-
-    const incoming = req.body?.manifest ?? req.body ?? {};
-    const manifest = normalizeServiceManifest(incoming, { strict: true });
-    const localField = getLocalServiceStackField(workspace);
-    const updated = await workspaceManager.updateWorkspace(workspaceId, {
-      [localField]: {
-        ...manifest,
-        updatedAt: new Date().toISOString()
-      }
-    });
-
-    res.json({
-      ok: true,
-      workspaceId,
-      localField,
-      imported: Array.isArray(manifest.services) ? manifest.services.length : 0,
-      manifest: resolveWorkspaceServiceStackManifest(updated)
-    });
-  } catch (error) {
-    logger.error('Failed to import workspace service stack', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: 'Failed to import workspace service stack', message: error.message });
-  }
-});
-
-app.get('/api/workspaces/:id/service-stack/team', async (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const workspace = workspaceManager.getWorkspace(workspaceId);
-    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
-
-    const pointer = workspace?.serviceStackShared && typeof workspace.serviceStackShared === 'object'
-      ? workspace.serviceStackShared
-      : null;
-
-    let baseline = null;
-    let signatureVerified = null;
-    if (pointer) {
-      try {
-        const readResult = await configPromoterService.readTeamManifest({
-          workspace,
-          pointer,
-          passphrase: req.query?.passphrase,
-          signingSecret: req.query?.signingSecret
-        });
-        baseline = readResult.manifest;
-        signatureVerified = readResult.signatureVerified;
-      } catch (error) {
-        return res.status(400).json({ ok: false, error: 'Failed to read team baseline', message: error.message });
-      }
-    }
-
-    const localManifest = getWorkspaceServiceManifest({ serviceStack: workspace?.serviceStackLocal || workspace?.serviceStack || { services: [] } });
-    const resolved = resolveWorkspaceServiceStackManifest(workspace, {
-      passphrase: req.query?.passphrase,
-      signingSecret: req.query?.signingSecret
-    });
-
-    res.json({
-      ok: true,
-      workspaceId,
-      pointer,
-      baseline,
-      localManifest,
-      resolvedManifest: resolved,
-      signatureVerified
-    });
-  } catch (error) {
-    logger.error('Failed to get workspace team service stack baseline', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to get workspace team service stack baseline', message: error.message });
-  }
-});
-
-app.post('/api/workspaces/:id/service-stack/team/promote', express.json(), async (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const workspace = workspaceManager.getWorkspace(workspaceId);
-    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
-
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const visibility = String(body.visibility || 'shared').trim().toLowerCase();
-    const promote = await configPromoterService.writeTeamManifest({
-      workspace,
-      manifest: resolveWorkspaceServiceStackManifest(workspace, {
-        passphrase: body.passphrase,
-        signingSecret: body.signingSecret
-      }),
-      visibility,
-      repoRoot: body.repoRoot,
-      relPath: body.relPath,
-      passphrase: body.passphrase,
-      signed: body.signed === true,
-      signingSecret: body.signingSecret
-    });
-
-    const updates = {
-      serviceStackShared: {
-        ...promote.pointer,
-        requireSignature: body.requireSignature === true
-      }
-    };
-    if (!workspace.serviceStackLocal && workspace.serviceStack) {
-      updates.serviceStackLocal = workspace.serviceStack;
-    }
-
-    const updated = await workspaceManager.updateWorkspace(workspaceId, updates);
-    res.json({
-      ok: true,
-      workspaceId,
-      pointer: updated.serviceStackShared,
-      resolvedManifest: resolveWorkspaceServiceStackManifest(updated, {
-        passphrase: body.passphrase,
-        signingSecret: body.signingSecret
-      })
-    });
-  } catch (error) {
-    logger.error('Failed to promote workspace team service stack baseline', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: 'Failed to promote workspace team service stack baseline', message: error.message });
-  }
-});
-
-app.post('/api/workspaces/:id/service-stack/team/attach', express.json(), async (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const workspace = workspaceManager.getWorkspace(workspaceId);
-    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
-
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const readResult = await configPromoterService.readTeamManifest({
-      workspace,
-      pointer: {
-        repoRoot: body.repoRoot,
-        relPath: body.relPath,
-        visibility: body.visibility,
-        signed: body.signed === true,
-        requireSignature: body.requireSignature === true
-      },
-      repoRoot: body.repoRoot,
-      relPath: body.relPath,
-      visibility: body.visibility,
-      passphrase: body.passphrase,
-      signingSecret: body.signingSecret
-    });
-
-    const updates = {
-      serviceStackShared: {
-        ...readResult.pointer,
-        requireSignature: body.requireSignature === true
-      }
-    };
-    if (!workspace.serviceStackLocal && workspace.serviceStack) {
-      updates.serviceStackLocal = workspace.serviceStack;
-    }
-    const updated = await workspaceManager.updateWorkspace(workspaceId, updates);
-
-    res.json({
-      ok: true,
-      workspaceId,
-      pointer: updated.serviceStackShared,
-      baseline: readResult.manifest,
-      signatureVerified: readResult.signatureVerified,
-      resolvedManifest: resolveWorkspaceServiceStackManifest(updated, {
-        passphrase: body.passphrase,
-        signingSecret: body.signingSecret
-      })
-    });
-  } catch (error) {
-    logger.error('Failed to attach workspace team service stack baseline', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: 'Failed to attach workspace team service stack baseline', message: error.message });
-  }
-});
-
-app.put('/api/workspaces/:id/service-stack/local-override', express.json(), async (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const workspace = workspaceManager.getWorkspace(workspaceId);
-    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
-
-    const incoming = req.body?.manifest ?? req.body ?? {};
-    const manifest = normalizeServiceManifest(incoming, { strict: true });
-    const updated = await workspaceManager.updateWorkspace(workspaceId, {
-      serviceStackLocal: {
-        ...manifest,
-        updatedAt: new Date().toISOString()
-      }
-    });
-
-    res.json({
-      ok: true,
-      workspaceId,
-      localCount: Array.isArray(updated?.serviceStackLocal?.services) ? updated.serviceStackLocal.services.length : 0,
-      resolvedManifest: resolveWorkspaceServiceStackManifest(updated, {
-        passphrase: req.body?.passphrase,
-        signingSecret: req.body?.signingSecret
-      })
-    });
-  } catch (error) {
-    logger.error('Failed to update local service stack override', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: 'Failed to update local service stack override', message: error.message });
-  }
-});
-
-app.delete('/api/workspaces/:id/service-stack/team', express.json(), async (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const workspace = workspaceManager.getWorkspace(workspaceId);
-    if (!workspace) return res.status(404).json({ ok: false, error: 'Workspace not found' });
-
-    const updated = await workspaceManager.updateWorkspace(workspaceId, {
-      serviceStackShared: null
-    });
-
-    res.json({
-      ok: true,
-      workspaceId,
-      manifest: resolveWorkspaceServiceStackManifest(updated)
-    });
-  } catch (error) {
-    logger.error('Failed to detach workspace team service stack baseline', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: 'Failed to detach workspace team service stack baseline', message: error.message });
-  }
-});
-
-app.get('/api/workspaces/:id/service-stack/runtime', async (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const runtime = await serviceStackRuntimeService.getRuntimeStatus(workspaceId);
-    res.json({ ok: true, ...runtime });
-  } catch (error) {
-    logger.error('Failed to get workspace service stack runtime', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to get workspace service stack runtime', message: error.message });
-  }
-});
-
-app.post('/api/workspaces/:id/service-stack/start', express.json(), async (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const serviceIds = Array.isArray(req.body?.serviceIds) ? req.body.serviceIds : [];
-    const result = await serviceStackRuntimeService.start(workspaceId, { serviceIds });
-    const runtime = await serviceStackRuntimeService.getRuntimeStatus(workspaceId);
-    res.json({ ok: true, ...result, runtime });
-  } catch (error) {
-    logger.error('Failed to start workspace service stack', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: 'Failed to start workspace service stack', message: error.message });
-  }
-});
-
-app.post('/api/workspaces/:id/service-stack/stop', express.json(), async (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const serviceIds = Array.isArray(req.body?.serviceIds) ? req.body.serviceIds : [];
-    const result = await serviceStackRuntimeService.stop(workspaceId, { serviceIds });
-    const runtime = await serviceStackRuntimeService.getRuntimeStatus(workspaceId);
-    res.json({ ok: true, ...result, runtime });
-  } catch (error) {
-    logger.error('Failed to stop workspace service stack', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: 'Failed to stop workspace service stack', message: error.message });
-  }
-});
-
-app.post('/api/workspaces/:id/service-stack/restart', express.json(), async (req, res) => {
-  try {
-    const workspaceId = String(req.params?.id || '').trim();
-    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId is required' });
-    const serviceIds = Array.isArray(req.body?.serviceIds) ? req.body.serviceIds : [];
-    const result = await serviceStackRuntimeService.restart(workspaceId, { serviceIds });
-    const runtime = await serviceStackRuntimeService.getRuntimeStatus(workspaceId);
-    res.json({ ok: true, ...result, runtime });
-  } catch (error) {
-    logger.error('Failed to restart workspace service stack', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: 'Failed to restart workspace service stack', message: error.message });
   }
 });
 
@@ -2303,8 +1606,9 @@ app.post('/api/files/sync', async (req, res) => {
 });
 
 app.get('/api/process/performance', async (req, res) => {
-  const { execFile } = require('child_process');
+  const { exec, execFile } = require('child_process');
   const util = require('util');
+  const execAsync = util.promisify(exec);
   const execFileAsync = util.promisify(execFile);
   const isWin = process.platform === 'win32';
 
@@ -2321,7 +1625,7 @@ app.get('/api/process/performance', async (req, res) => {
         const { stdout } = await execFileAsync(
           'powershell.exe',
           ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${p}").ProcessId`],
-          { timeout: 1500, windowsHide: true }
+          { timeout: 1500 }
         );
         return String(stdout || '')
           .split(/\s+/)
@@ -2329,7 +1633,7 @@ app.get('/api/process/performance', async (req, res) => {
           .filter(n => Number.isFinite(n) && n > 0);
       }
 
-      const { stdout } = await execFileAsync('pgrep', ['-P', String(p)], { timeout: 1500, windowsHide: true });
+      const { stdout } = await execAsync(`pgrep -P ${p}`, { timeout: 1500 });
       return String(stdout || '')
         .split('\n')
         .map(l => parseIntSafe(l))
@@ -2347,14 +1651,14 @@ app.get('/api/process/performance', async (req, res) => {
         const { stdout } = await execFileAsync(
           'powershell.exe',
           ['-NoProfile', '-Command', `(Get-Process -Id ${p} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty WorkingSet64)`],
-          { timeout: 1500, windowsHide: true }
+          { timeout: 1500 }
         );
         const bytes = Number(String(stdout || '').trim());
         if (!Number.isFinite(bytes) || bytes <= 0) return null;
         return Math.round(bytes / 1024);
       }
 
-      const { stdout } = await execFileAsync('ps', ['-o', 'rss=', '-p', String(p)], { timeout: 1500, windowsHide: true });
+      const { stdout } = await execAsync(`ps -o rss= -p ${p}`, { timeout: 1500 });
       return parseIntSafe(stdout);
     } catch {
       return null;
@@ -2415,141 +1719,6 @@ app.get('/api/activity', (req, res) => {
   }
 });
 
-app.get('/api/policy/status', (req, res) => {
-  try {
-    const status = policyService.getStatus({ req });
-    res.json(status);
-  } catch (error) {
-    logger.error('Failed to get policy status', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to get policy status' });
-  }
-});
-
-app.get('/api/policy/templates', requirePolicyAction('read'), (req, res) => {
-  try {
-    const templates = policyBundleService.listTemplates();
-    res.json({
-      ok: true,
-      count: templates.length,
-      templates,
-      policyRole: req.policyRole || policyService.resolveRole(req).role
-    });
-  } catch (error) {
-    logger.error('Failed to list policy templates', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to list policy templates' });
-  }
-});
-
-app.post('/api/policy/bundles/export', requirePolicyAction('read'), express.json({ limit: '2mb' }), (req, res) => {
-  try {
-    const bundle = policyBundleService.exportBundle({
-      templateId: req.body?.templateId,
-      policy: req.body?.policy,
-      orgName: req.body?.orgName,
-      notes: req.body?.notes,
-      createdBy: req.body?.createdBy || req.policyRole || null
-    });
-    res.json({
-      ok: true,
-      bundle
-    });
-  } catch (error) {
-    logger.error('Failed to export policy bundle', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: error.message || 'Failed to export policy bundle' });
-  }
-});
-
-app.post('/api/policy/bundles/import', requirePolicyAction('write'), express.json({ limit: '2mb' }), (req, res) => {
-  try {
-    const bundle = req.body?.bundle || req.body;
-    const mode = req.body?.mode || 'replace';
-    const result = policyBundleService.importBundle(bundle, { mode });
-    io.emit('user-settings-updated', userSettingsService.getAllSettings());
-    res.json({
-      ok: true,
-      ...result
-    });
-  } catch (error) {
-    logger.error('Failed to import policy bundle', { error: error.message, stack: error.stack });
-    res.status(400).json({ ok: false, error: error.message || 'Failed to import policy bundle' });
-  }
-});
-
-app.get('/api/audit/status', requirePolicyAction('read'), async (req, res) => {
-  try {
-    const status = await auditExportService.getStatus();
-    res.json({
-      ...status,
-      policyRole: req.policyRole || policyService.resolveRole(req).role
-    });
-  } catch (error) {
-    logger.error('Failed to get audit status', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to get audit status' });
-  }
-});
-
-app.get('/api/audit/export', requirePolicyAction('audit_export'), proOnly, async (req, res) => {
-  try {
-    const format = String(req.query?.format || 'json').trim().toLowerCase();
-    if (format !== 'json' && format !== 'csv') {
-      return res.status(400).json({ ok: false, error: 'Unsupported export format (json|csv)' });
-    }
-
-    const limit = req.query?.limit ? Number(req.query.limit) : undefined;
-    const sinceHours = req.query?.sinceHours ? Number(req.query.sinceHours) : 24 * 7;
-    const sinceMs = Number.isFinite(sinceHours) ? Date.now() - (Math.max(1, sinceHours) * 60 * 60 * 1000) : 0;
-    const sources = typeof req.query?.sources === 'string' ? req.query.sources : '';
-    const redactRaw = String(req.query?.redact ?? '').trim().toLowerCase();
-    const redact = redactRaw ? !['0', 'false', 'no', 'off'].includes(redactRaw) : undefined;
-    const signedRaw = String(req.query?.signed ?? '').trim().toLowerCase();
-    const signed = ['1', 'true', 'yes', 'on'].includes(signedRaw);
-    if (signed) {
-      const signing = auditExportService.getSigningConfig();
-      if (!signing.enabled) {
-        return res.status(400).json({ ok: false, error: 'Audit signing is disabled (global.audit.signing.enabled=false)' });
-      }
-      if (!signing.hasSecret) {
-        return res.status(400).json({ ok: false, error: 'Missing ORCHESTRATOR_AUDIT_SIGNING_SECRET for signed export' });
-      }
-    }
-
-    if (format === 'csv') {
-      const payload = await auditExportService.exportCsv({ sources, sinceMs, limit, redact });
-      if (signed) {
-        const signature = auditExportService.signPayload({
-          generatedAt: payload.generatedAt,
-          count: payload.count,
-          sources: payload.sources,
-          redacted: payload.redacted,
-          csv: payload.csv
-        });
-        res.setHeader('X-Audit-Signature', signature.value);
-        res.setHeader('X-Audit-Signature-Alg', signature.algorithm);
-        res.setHeader('X-Audit-Signature-KeyId', signature.keyId);
-      }
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="audit-export-${Date.now()}.csv"`);
-      return res.send(payload.csv);
-    }
-
-    const payload = await auditExportService.exportJson({ sources, sinceMs, limit, redact });
-    const jsonBody = signed
-      ? {
-        ok: true,
-        signed: true,
-        signature: auditExportService.signPayload(payload),
-        payload
-      }
-      : payload;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="audit-export-${Date.now()}.json"`);
-    return res.send(`${JSON.stringify(jsonBody, null, 2)}\n`);
-  } catch (error) {
-    logger.error('Failed to export audit logs', { error: error.message, stack: error.stack });
-    return res.status(500).json({ ok: false, error: 'Failed to export audit logs' });
-  }
-});
-
 app.get('/api/sessions/:sessionId/log', (req, res) => {
   try {
     const sessionId = String(req.params.sessionId || '').trim();
@@ -2581,34 +1750,19 @@ app.get('/api/sessions/:sessionId/log', (req, res) => {
   }
 });
 
-app.post('/api/sessions/intent-haiku', async (req, res) => {
-  try {
-    const sessionId = String(req.body?.sessionId || '').trim();
-    if (!sessionId) {
-      return res.status(400).json({ ok: false, error: 'sessionId is required' });
-    }
+function normalizeRepositoryPath(value) {
+  return String(value || '').trim().replace(/[\\/]+$/, '');
+}
 
-    const force = req.body?.force === true;
-    const payload = await intentHaikuService.summarizeSession(sessionId, { force });
-    return res.json({
-      ok: true,
-      sessionId,
-      summary: payload.summary,
-      source: payload.source,
-      generatedAt: payload.generatedAt
-    });
-  } catch (error) {
-    const code = String(error?.code || '').trim();
-    if (code === 'SESSION_NOT_FOUND') {
-      return res.status(404).json({ ok: false, error: error.message });
-    }
-    if (code === 'UNSUPPORTED_SESSION_TYPE') {
-      return res.status(400).json({ ok: false, error: error.message });
-    }
-    logger.error('Failed to generate intent haiku', { error: error.message, stack: error.stack });
-    return res.status(500).json({ ok: false, error: 'Failed to generate intent haiku' });
-  }
-});
+function normalizeThreadWorktreeId(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+  const direct = raw.match(/^work(\d+)$/);
+  if (direct) return `work${Number(direct[1])}`;
+  const digits = raw.match(/(\d+)/);
+  if (digits) return `work${Number(digits[1])}`;
+  return '';
+}
 
 function pickNextWorktreeIdForWorkspace(workspace, { repositoryPath } = {}) {
   const repoPathNorm = normalizeRepositoryPath(repositoryPath);
@@ -2633,20 +1787,16 @@ function pickNextWorktreeIdForWorkspace(workspace, { repositoryPath } = {}) {
 }
 
 function resolveThreadRepositoryContext(workspace, { repositoryPath, repositoryName, repositoryType } = {}) {
-  const repoPathExplicit = normalizeRepositoryRootForWorktrees(repositoryPath);
-  const repoNameExplicit = String(repositoryName || '').trim().toLowerCase();
+  const repoPathExplicit = normalizeRepositoryPath(repositoryPath);
   const mixedTerminals = Array.isArray(workspace?.terminals) ? workspace.terminals : [];
   const repoFromMixed = mixedTerminals.find((terminal) => {
-    const p = normalizeRepositoryRootForWorktrees(terminal?.repository?.path);
+    const p = normalizeRepositoryPath(terminal?.repository?.path);
     return !!repoPathExplicit && !!p && p === repoPathExplicit;
-  }) || mixedTerminals.find((terminal) => {
-    const n = String(terminal?.repository?.name || '').trim().toLowerCase();
-    return !!repoNameExplicit && !!n && n === repoNameExplicit;
   }) || mixedTerminals[0];
 
   const resolvedPath = repoPathExplicit
-    || normalizeRepositoryRootForWorktrees(repoFromMixed?.repository?.path)
-    || normalizeRepositoryRootForWorktrees(workspace?.repository?.path);
+    || normalizeRepositoryPath(repoFromMixed?.repository?.path)
+    || normalizeRepositoryPath(workspace?.repository?.path);
 
   const fallbackRepoName = (() => {
     if (!resolvedPath) return '';
@@ -2668,26 +1818,6 @@ function inferThreadSessionIds({ repositoryName, worktreeId } = {}) {
   return [`${worktree}-claude`, `${worktree}-server`];
 }
 
-function pickExistingThreadWorktreeForRepository({ workspace, workspaceId, repositoryPath, repositoryName } = {}) {
-  const resolvedWorkspaceId = String(workspaceId || workspace?.id || '').trim();
-  if (!resolvedWorkspaceId || !workspace) return '';
-
-  const activeThreads = threadService.list({
-    workspaceId: resolvedWorkspaceId,
-    status: 'active',
-    includeArchived: true
-  });
-  const sessionEntries = sessionManager.getAllSessionEntries({ workspaceId: resolvedWorkspaceId });
-
-  return pickReusableWorktreeId({
-    workspace,
-    repositoryPath,
-    repositoryName,
-    threadRows: activeThreads,
-    sessionRows: sessionEntries
-  });
-}
-
 async function ensureWorkspaceMixedWorktree({
   workspaceId,
   repositoryPath,
@@ -2704,36 +1834,14 @@ async function ensureWorkspaceMixedWorktree({
     throw error;
   }
 
-  const repoPath = normalizeRepositoryRootForWorktrees(repositoryPath);
+  const repoPath = normalizeRepositoryPath(repositoryPath);
   if (!repoPath) {
     const error = new Error('repositoryPath is required');
     error.statusCode = 400;
     throw error;
   }
-  if (!fs.existsSync(repoPath)) {
-    const error = new Error(`Repository path not found: ${repoPath}`);
-    error.statusCode = 400;
-    throw error;
-  }
-  const masterPath = path.join(repoPath, 'master');
-  if (!fs.existsSync(masterPath)) {
-    const error = new Error(`Repository root is missing master directory: ${masterPath}`);
-    error.statusCode = 400;
-    throw error;
-  }
 
-  const requestedWorktree = normalizeThreadWorktreeId(worktreeId);
-  const reusableWorktree = requestedWorktree
-    ? ''
-    : pickExistingThreadWorktreeForRepository({
-      workspace,
-      workspaceId,
-      repositoryPath: repoPath,
-      repositoryName
-    });
-  const worktree = requestedWorktree
-    || reusableWorktree
-    || pickNextWorktreeIdForWorkspace(workspace, { repositoryPath: repoPath });
+  const worktree = normalizeThreadWorktreeId(worktreeId) || pickNextWorktreeIdForWorkspace(workspace, { repositoryPath: repoPath });
   const repoName = String(repositoryName || path.basename(repoPath)).trim();
   const repoType = String(repositoryType || workspace?.repository?.type || workspace?.type || 'generic').trim();
   const worktreePath = path.join(repoPath, worktree);
@@ -2777,11 +1885,10 @@ async function ensureWorkspaceMixedWorktree({
   let alreadyExists = false;
   const terminalList = Array.isArray(updatedWorkspace.terminals) ? updatedWorkspace.terminals : [];
   const existingIds = new Set(terminalList.map((terminal) => terminal?.id));
-  const missingTerminals = newTerminals.filter((terminal) => !existingIds.has(terminal.id));
-  if (missingTerminals.length === 0) {
+  if (existingIds.has(newTerminals[0].id) || existingIds.has(newTerminals[1].id)) {
     alreadyExists = true;
   } else {
-    updatedWorkspace.terminals = terminalList.concat(missingTerminals);
+    updatedWorkspace.terminals = terminalList.concat(newTerminals);
   }
 
   const tempWorkspace = {
@@ -2789,46 +1896,10 @@ async function ensureWorkspaceMixedWorktree({
     repository: { path: repoPath, masterBranch: 'master' },
     worktrees: { enabled: true, namingPattern: 'work{n}', autoCreate: true }
   };
-  try {
-    await worktreeHelper.createWorktree(tempWorkspace, worktree);
-  } catch (error) {
-    const message = String(error?.message || '').trim();
-    const normalized = message.toLowerCase();
-    const wrapped = new Error(message || 'Failed to prepare worktree');
-    wrapped.statusCode = Number(error?.statusCode)
-      || (
-        normalized.includes('repository path')
-        || normalized.includes('master directory not found')
-        || normalized.includes('neither master nor main branch found')
-        || normalized.includes('repository root is missing master directory')
-        || normalized.includes('already exists')
-        || normalized.includes('already checked out')
-        || normalized.includes('invalid workspace config')
-        || normalized.includes('workspace not found')
-        || normalized.includes('failed to execute git command')
-        || normalized.includes('git command failed')
-        ? 400
-        : 500
-      );
-    throw wrapped;
-  }
+  await worktreeHelper.createWorktree(tempWorkspace, worktree);
 
   if (updatedWorkspace !== workspace || !alreadyExists) {
-    try {
-      await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
-    } catch (error) {
-      const message = String(error?.message || '').trim();
-      const normalized = message.toLowerCase();
-      const wrapped = new Error(message || 'Failed to update workspace');
-      wrapped.statusCode = Number(error?.statusCode)
-        || (
-          normalized.includes('invalid workspace config')
-          || normalized.includes('workspace not found')
-          ? 400
-          : 500
-        );
-      throw wrapped;
-    }
+    await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
   }
 
   const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
@@ -2841,8 +1912,7 @@ async function ensureWorkspaceMixedWorktree({
       worktreeId: worktree,
       worktreePath,
       repositoryName: repoName,
-      repositoryType: repoType,
-      includeExistingSessions: true
+      repositoryType: repoType
     });
   }
 
@@ -2860,7 +1930,7 @@ async function ensureWorkspaceMixedWorktree({
   return {
     workspace: refreshedWorkspace,
     alreadyExists,
-    terminalIds: alreadyExists ? [] : missingTerminals.map((terminal) => terminal.id),
+    terminalIds: alreadyExists ? [] : newTerminals.map((terminal) => terminal.id),
     sessions,
     worktreeId: worktree,
     worktreePath,
@@ -2868,16 +1938,6 @@ async function ensureWorkspaceMixedWorktree({
     repositoryType: repoType
   };
 }
-
-const batchLaunchService = BatchLaunchService.getInstance({
-  taskTicketingService,
-  workspaceManager,
-  sessionManager,
-  taskRecordService,
-  userSettingsService,
-  ensureWorkspaceMixedWorktree,
-  io
-});
 
 app.post('/api/workspaces/create-worktree', async (req, res) => {
   try {
@@ -2960,41 +2020,20 @@ app.post('/api/workspaces/add-mixed-worktree', async (req, res) => {
   }
 });
 
-function parseClearSessionsInput(req) {
-  const requested = req.body?.clearSessions;
-  if (requested !== undefined) return requested;
-  const fromQuery = req.query?.clearSessions;
-  if (fromQuery === undefined || fromQuery === null) return undefined;
-  const normalized = String(fromQuery).trim().toLowerCase();
-  if (!normalized) return undefined;
-  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true;
-  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false;
-  return undefined;
-}
-
-function escapeRegex(value) {
-  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function closeThreadSessions(sessionIds = []) {
-  const ids = Array.isArray(sessionIds) ? sessionIds : [];
-  const toClose = new Set();
-  for (const sessionId of ids) {
-    const groupIds = sessionManager.getSessionGroupIds(sessionId, {
-      sessionTypes: ['claude', 'codex', 'server']
-    });
-    groupIds.forEach((id) => {
-      const sid = String(id || '').trim();
-      if (sid) toClose.add(sid);
-    });
+app.get('/api/threads', (req, res) => {
+  try {
+    const workspaceId = String(req.query.workspaceId || '').trim();
+    const status = String(req.query.status || '').trim().toLowerCase();
+    const includeArchived = String(req.query.includeArchived || '').trim().toLowerCase() === 'true';
+    const threads = threadService.list({ workspaceId, status, includeArchived });
+    res.json({ ok: true, count: threads.length, threads });
+  } catch (error) {
+    logger.error('Failed to list threads', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to list threads', message: error.message });
   }
-  for (const sessionId of toClose) {
-    const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
-    if (ok) io.emit('session-closed', { sessionId });
-  }
-}
+});
 
-async function handleCreateThread(req, res) {
+app.post('/api/threads/create', express.json(), async (req, res) => {
   try {
     const {
       workspaceId,
@@ -3043,6 +2082,7 @@ async function handleCreateThread(req, res) {
 
     const created = threadService.createThread({
       workspaceId: workspaceIdValue,
+      projectId: workspaceIdValue,
       title: String(title || `${result.repositoryName}/${result.worktreeId}`).trim(),
       worktreeId: result.worktreeId,
       worktreePath: result.worktreePath,
@@ -3070,93 +2110,6 @@ async function handleCreateThread(req, res) {
     logger.error('Failed to create thread', { error: error.message, stack: error.stack, status });
     res.status(status).json({ ok: false, error: 'Failed to create thread', message: error.message });
   }
-}
-
-app.get('/api/threads', (req, res) => {
-  try {
-    const workspaceId = String(req.query.workspaceId || '').trim();
-    const status = String(req.query.status || '').trim().toLowerCase();
-    const includeArchived = String(req.query.includeArchived || '').trim().toLowerCase() === 'true';
-    const threads = threadService.list({ workspaceId, status, includeArchived });
-    res.json({ ok: true, count: threads.length, threads });
-  } catch (error) {
-    logger.error('Failed to list threads', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to list threads', message: error.message });
-  }
-});
-
-app.get('/api/thread-projects', (req, res) => {
-  try {
-    const workspaceId = String(req.query.workspaceId || '').trim();
-    const includeArchived = String(req.query.includeArchived || '').trim().toLowerCase() === 'true';
-    const projects = threadService.listProjects({ workspaceId, includeArchived });
-    res.json({ ok: true, count: projects.length, projects });
-  } catch (error) {
-    logger.error('Failed to list thread projects', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to list thread projects', message: error.message });
-  }
-});
-
-app.post('/api/threads', express.json(), handleCreateThread);
-app.post('/api/threads/create', express.json(), handleCreateThread);
-
-app.patch('/api/threads/:id', express.json(), (req, res) => {
-  try {
-    const threadId = String(req.params.id || '').trim();
-    if (!threadId) {
-      return res.status(400).json({ ok: false, error: 'thread id is required' });
-    }
-    const before = threadService.getById(threadId);
-    if (!before) {
-      return res.status(404).json({ ok: false, error: 'Failed to update thread', message: `Thread not found: ${threadId}` });
-    }
-
-    const patch = {};
-    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'title')) {
-      patch.title = String(req.body?.title || '').trim();
-    }
-    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'sessionIds')) {
-      patch.sessionIds = Array.isArray(req.body?.sessionIds) ? req.body.sessionIds : [];
-    }
-    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'metadata') && req.body?.metadata && typeof req.body.metadata === 'object') {
-      patch.metadata = req.body.metadata;
-    }
-    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'provider')) {
-      patch.provider = String(req.body?.provider || '').trim().toLowerCase() || before.provider || 'claude';
-    }
-    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'status')) {
-      const nextStatus = String(req.body?.status || '').trim().toLowerCase();
-      if (!['active', 'closed', 'archived'].includes(nextStatus)) {
-        return res.status(400).json({ ok: false, error: 'Invalid status. Use active|closed|archived' });
-      }
-      patch.status = nextStatus;
-    }
-
-    let thread = threadService.updateThread(threadId, patch);
-    const requested = parseClearSessionsInput(req);
-    const transition = String(patch.status || '').trim().toLowerCase();
-    const shouldClose = requested === true
-      || (transition === 'closed' && shouldCloseSessionsForThreadAction('close', requested))
-      || (transition === 'archived' && shouldCloseSessionsForThreadAction('archive', requested));
-    if (shouldClose) {
-      closeThreadSessions(before.sessionIds);
-      thread = threadService.setSessionIds(threadId, []);
-    }
-
-    res.json({
-      ok: true,
-      thread,
-      lifecycle: {
-        action: 'update-thread',
-        closedSessions: !!shouldClose
-      }
-    });
-  } catch (error) {
-    const message = String(error?.message || error);
-    const status = message.toLowerCase().includes('not found') ? 404 : 500;
-    logger.error('Failed to update thread', { error: message, stack: error.stack, status });
-    res.status(status).json({ ok: false, error: 'Failed to update thread', message });
-  }
 });
 
 app.post('/api/threads/:id/close', express.json(), (req, res) => {
@@ -3165,20 +2118,14 @@ app.post('/api/threads/:id/close', express.json(), (req, res) => {
     if (!threadId) {
       return res.status(400).json({ ok: false, error: 'thread id is required' });
     }
-    const closeSessions = shouldCloseSessionsForThreadAction('close', parseClearSessionsInput(req));
-    let thread = threadService.closeThread(threadId);
-    if (closeSessions) {
-      closeThreadSessions(thread.sessionIds);
-      thread = threadService.setSessionIds(threadId, []);
-    }
-    res.json({
-      ok: true,
-      thread,
-      lifecycle: {
-        action: 'close-thread',
-        closedSessions: !!closeSessions
+    const clearSessions = req.body?.clearSessions === true;
+    const thread = threadService.closeThread(threadId);
+    if (clearSessions) {
+      for (const sessionId of Array.isArray(thread.sessionIds) ? thread.sessionIds : []) {
+        sessionManager.closeSession(sessionId, { clearRecovery: false });
       }
-    });
+    }
+    res.json({ ok: true, thread });
   } catch (error) {
     const message = String(error?.message || error);
     const status = message.toLowerCase().includes('not found') ? 404 : 500;
@@ -3187,44 +2134,24 @@ app.post('/api/threads/:id/close', express.json(), (req, res) => {
   }
 });
 
-function handleArchiveThread(req, res, { sourceAction = 'archive-thread' } = {}) {
+app.post('/api/threads/:id/archive', express.json(), (req, res) => {
   try {
     const threadId = String(req.params.id || '').trim();
     if (!threadId) {
       return res.status(400).json({ ok: false, error: 'thread id is required' });
     }
-    const closeSessions = shouldCloseSessionsForThreadAction('archive', parseClearSessionsInput(req));
-    const before = threadService.getById(threadId);
-    if (!before) {
-      return res.status(404).json({ ok: false, error: 'Failed to archive thread', message: `Thread not found: ${threadId}` });
-    }
-
-    let thread = threadService.archiveThread(threadId);
-    if (closeSessions) {
-      closeThreadSessions(before.sessionIds);
-      thread = threadService.setSessionIds(threadId, []);
-    }
-    res.json({
-      ok: true,
-      thread,
-      lifecycle: {
-        action: sourceAction,
-        closedSessions: !!closeSessions
-      }
-    });
+    const thread = threadService.archiveThread(threadId);
+    res.json({ ok: true, thread });
   } catch (error) {
     const message = String(error?.message || error);
     const status = message.toLowerCase().includes('not found') ? 404 : 500;
     logger.error('Failed to archive thread', { error: message, stack: error.stack, status });
     res.status(status).json({ ok: false, error: 'Failed to archive thread', message });
   }
-}
-
-app.post('/api/threads/:id/archive', express.json(), (req, res) => handleArchiveThread(req, res, { sourceAction: 'archive-thread' }));
-app.delete('/api/threads/:id', express.json(), (req, res) => handleArchiveThread(req, res, { sourceAction: 'delete-thread' }));
+});
 
 // Remove worktree from workspace (config only - does NOT delete git worktree folder)
-app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), async (req, res) => {
+app.post('/api/workspaces/remove-worktree', async (req, res) => {
   try {
     const { workspaceId, worktreeId } = req.body;
     logger.info('Removing worktree from workspace configuration (keeping folder intact)', { workspaceId, worktreeId });
@@ -3238,164 +2165,69 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
     // The actual git worktree folder and all its files remain untouched on disk.
     // This allows users to safely remove a worktree from the UI without losing work.
 
-    const parsedWorktree = parseWorktreeKey(worktreeId);
-
     // Remove terminals associated with this worktree from configuration
     const updatedWorkspace = { ...workspace };
-    const terminalsListMode = Array.isArray(updatedWorkspace.terminals);
-    const terminalsPairsArrayMode = Array.isArray(updatedWorkspace?.terminals?.pairs);
-    const originalTerminals = terminalsListMode
-      ? updatedWorkspace.terminals
-      : (terminalsPairsArrayMode ? updatedWorkspace.terminals.pairs : []);
+    const originalTerminals = Array.isArray(updatedWorkspace.terminals) ? updatedWorkspace.terminals : [];
     const originalTerminalCount = originalTerminals.length;
     const removedTerminalIds = [];
 
-    let nextTerminals = originalTerminals.filter((terminal) => {
-      const matched = terminalMatchesWorktree(terminal, parsedWorktree);
-      if (matched && terminal?.id) removedTerminalIds.push(String(terminal.id));
-      return !matched;
+    updatedWorkspace.terminals = originalTerminals.filter(terminal => {
+      // Remove terminals that match this worktree ID (case-insensitive comparison)
+      const keep = !String(terminal?.id || '').toLowerCase().includes(String(worktreeId || '').toLowerCase());
+      if (!keep && terminal?.id) removedTerminalIds.push(String(terminal.id));
+      return keep;
     });
 
-    // Defensive fallback for older terminal configs where id/worktree metadata is inconsistent.
-    if (nextTerminals.length === originalTerminalCount) {
-      const keyExpr = parsedWorktree.key ? new RegExp(`(^|[-_/])${escapeRegex(parsedWorktree.key)}($|[-_/])`, 'i') : null;
-      const worktreeExpr = parsedWorktree.worktreeId ? new RegExp(`(^|[-_/])${escapeRegex(parsedWorktree.worktreeId)}($|[-_/])`, 'i') : null;
-      nextTerminals = originalTerminals.filter((terminal) => {
-        const sid = String(terminal?.id || '').trim().toLowerCase();
-        const fallbackMatch = (
-          sid === parsedWorktree.key
-          || (parsedWorktree.key && sid.includes(`${parsedWorktree.key}-`))
-          || (parsedWorktree.worktreeId && sid.includes(`-${parsedWorktree.worktreeId}-`))
-          || (!!keyExpr && keyExpr.test(sid))
-          || (!!worktreeExpr && worktreeExpr.test(sid))
-        );
-        if (fallbackMatch && terminal?.id) removedTerminalIds.push(String(terminal.id));
-        return !fallbackMatch;
-      });
-    }
+    const removedCount = originalTerminalCount - updatedWorkspace.terminals.length;
 
-    if (terminalsListMode) {
-      updatedWorkspace.terminals = nextTerminals;
-    } else if (terminalsPairsArrayMode) {
-      updatedWorkspace.terminals = {
-        ...updatedWorkspace.terminals,
-        pairs: nextTerminals
-      };
-    }
-
-    const dedupedRemovedTerminalIds = Array.from(new Set(removedTerminalIds));
-
-    let removedCount = originalTerminalCount - nextTerminals.length;
-
-    // Single-repo workspaces typically store a numeric terminals.pairs count instead of terminal entries.
-    // Support removing by worktree number in that mode.
-    const numericPairs = Number(updatedWorkspace?.terminals?.pairs);
-    if (removedCount === 0 && !terminalsListMode && !terminalsPairsArrayMode && Number.isFinite(numericPairs) && numericPairs > 0) {
-      const worktreeToken = String(parsedWorktree.worktreeId || parsedWorktree.key || '').trim();
-      const match = worktreeToken.match(/work(\d+)/i);
-      const worktreeNum = match ? Number(match[1]) : NaN;
-      if (Number.isFinite(worktreeNum) && worktreeNum >= 1 && worktreeNum <= numericPairs) {
-        updatedWorkspace.terminals = {
-          ...(updatedWorkspace.terminals || {}),
-          pairs: Math.max(0, numericPairs - 1)
-        };
-        removedCount = 1;
-      }
-    }
-
-    // Close associated sessions even when this workspace isn't currently active.
-    // This prevents orphan PTYs/recovery entries when users manage worktrees from other tabs/views.
-    const relatedSessionIds = new Set(
-      sessionManager.getSessionIdsForWorktree({
-        workspaceId,
-        worktreeKey: parsedWorktree.key || parsedWorktree.worktreeId
-      })
-    );
-    let recoveryMatchedSessionIds = [];
-    try {
-      await sessionRecoveryService.loadWorkspaceState(workspaceId);
-      const recoverySessions = sessionRecoveryService.getAllSessions(workspaceId);
-      recoveryMatchedSessionIds = Object.entries(recoverySessions || {})
-        .filter(([sid, record]) => sessionRecordMatchesWorktree(sid, record, parsedWorktree))
-        .map(([sid]) => String(sid || '').trim())
-        .filter(Boolean);
-    } catch {
-      recoveryMatchedSessionIds = [];
-    }
-
-    const shouldCleanupOrphans = relatedSessionIds.size > 0 || recoveryMatchedSessionIds.length > 0;
-    if (removedCount === 0 && !shouldCleanupOrphans) {
+    if (removedCount === 0) {
       return res.status(404).json({ error: 'Worktree not found in workspace' });
     }
 
-    // Save updated workspace configuration only when terminals were removed from config.
-    if (removedCount > 0) {
-      await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
-    }
-
-    const uniqueSessionIds = Array.from(new Set([
-      ...(dedupedRemovedTerminalIds || []),
-      ...Array.from(relatedSessionIds),
-      ...(recoveryMatchedSessionIds || [])
-    ]));
-
-    // Always clear recovery entries for all matched sessions (even if the workspace isn't active).
-    for (const sid of uniqueSessionIds) {
-      if (!sid) continue;
-      try {
-        sessionRecoveryService.clearSession(workspaceId, sid);
-      } catch {
-        // best-effort
+    // For single-repo workspaces, also update the pairs count
+    if (workspace.workspaceType !== 'mixed-repo' && workspace.terminals?.pairs) {
+      const worktreeNum = parseInt(worktreeId.replace(/.*work/, ''));
+      if (workspace.terminals.pairs >= worktreeNum) {
+        updatedWorkspace.terminals.pairs = workspace.terminals.pairs - 1;
       }
     }
 
-    uniqueSessionIds.forEach((sessionId) => {
-      const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
-      if (ok) io.emit('session-closed', { sessionId });
-    });
+    // Save updated workspace configuration
+    await workspaceManager.updateWorkspace(workspaceId, updatedWorkspace);
 
-    const removedSessionIdSet = new Set(
-      uniqueSessionIds
-        .map((id) => String(id || '').trim())
-        .filter(Boolean)
-    );
-
-    // Sync thread records tied to this worktree so they don't keep stale session references.
-    let updatedThreadCount = 0;
+    // Always clear recovery entries for removed terminals (even if the workspace isn't active).
     try {
-      const candidateThreads = threadService.list({ workspaceId, includeArchived: true });
-      for (const thread of candidateThreads) {
-        const threadSessionIds = Array.isArray(thread?.sessionIds)
-          ? thread.sessionIds.map((sid) => String(sid || '').trim()).filter(Boolean)
-          : [];
-        const sessionMatched = threadSessionIds.some((sid) => removedSessionIdSet.has(sid));
-
-        const threadWorktree = String(thread?.worktreeId || '').trim().toLowerCase();
-        const threadRepo = String(thread?.repositoryName || '').trim().toLowerCase();
-        const worktreeMatched = !!threadWorktree && (
-          threadWorktree === parsedWorktree.worktreeId
-          || threadWorktree === parsedWorktree.key
-        );
-        const repoMatched = !parsedWorktree.repositoryName || !threadRepo || threadRepo === parsedWorktree.repositoryName;
-        if (!sessionMatched && (!worktreeMatched || !repoMatched)) continue;
-        const nextPatch = (String(thread?.status || '').trim().toLowerCase() === 'archived')
-          ? { sessionIds: [] }
-          : { status: 'closed', sessionIds: [] };
-        threadService.updateThread(thread.id, nextPatch);
-        updatedThreadCount += 1;
+      await sessionRecoveryService.loadWorkspaceState(workspaceId);
+      for (const sid of removedTerminalIds) {
+        if (!sid) continue;
+        sessionRecoveryService.clearSession(workspaceId, sid);
       }
     } catch {
       // best-effort
     }
 
-    // If this is the active workspace, refresh SessionManager's workspace reference.
+    // If this is the active workspace, close sessions but DON'T reinitialize all
     if (workspaceManager.getActiveWorkspace()?.id === workspaceId) {
+      // Set flag to prevent auto-restart of Claude sessions during deletion
       const previousFlag = sessionManager.isWorkspaceSwitching;
       sessionManager.isWorkspaceSwitching = true;
+
       try {
+        // Close sessions for removed terminals by ID.
+        // Mixed-repo worktrees often use a key like `${repoName}-${worktreeId}` for config removal,
+        // while the session's internal `worktreeId` is just `workN`. Closing by removed terminal IDs
+        // prevents "agent closed but server orphaned" drift.
+        const uniqueSessionIds = Array.from(new Set(removedTerminalIds));
+        uniqueSessionIds.forEach((sessionId) => {
+          const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
+          if (ok) io.emit('session-closed', { sessionId });
+        });
+
+        // Update the SessionManager workspace reference without reinitializing all sessions
         const refreshedWorkspace = workspaceManager.getWorkspace(workspaceId);
         sessionManager.setWorkspace(refreshedWorkspace);
       } finally {
+        // Restore the previous flag state after deletion completes
         sessionManager.isWorkspaceSwitching = previousFlag;
       }
     }
@@ -3403,22 +2235,12 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
     logger.info('Worktree removed from workspace configuration (folder preserved)', {
       workspaceId,
       worktreeId,
-      removedTerminals: removedCount,
-      orphanCleanupOnly: removedCount === 0,
-      closedSessions: uniqueSessionIds.length,
-      updatedThreads: updatedThreadCount
+      removedTerminals: removedCount
     });
 
     res.json({
       success: true,
       removedTerminals: removedCount,
-      closedSessions: uniqueSessionIds.length,
-      removedSessionIds: uniqueSessionIds,
-      updatedThreads: updatedThreadCount,
-      lifecycle: {
-        action: 'remove-worktree',
-        policy: getLifecyclePolicy().actions.removeWorktreeFromWorkspace
-      },
       updatedWorkspace: updatedWorkspace
     });
 
@@ -3511,31 +2333,8 @@ const prMergeAutomationService = PrMergeAutomationService.getInstance({
   userSettingsService
 });
 
-const prReviewAutomationService = PrReviewAutomationService.getInstance({
-  taskRecordService,
-  pullRequestService,
-  userSettingsService,
-  sessionManager,
-  workspaceManager,
-  ensureWorkspaceMixedWorktree,
-  io
-});
-
-// Register pr-review-poll command so the scheduler can invoke it
-commandRegistry.register('pr-review-poll', {
-  category: 'process',
-  description: 'Scan for new PRs and completed reviews, auto-spawn reviewer agents',
-  params: [],
-  examples: [],
-  handler: async () => {
-    const result = await prReviewAutomationService.poll();
-    return { message: `PR review poll: ${result.newPrs || 0} new PRs, ${result.reviewsProcessed || 0} reviews, ${result.agentsSpawned || 0} agents spawned` };
-  }
-});
-
 // Start background automations (best-effort; gated by user settings)
 prMergeAutomationService.start();
-prReviewAutomationService.start();
 
 const verifyGitHubWebhookSignature = (req) => {
   const secret = String(process.env.GITHUB_WEBHOOK_SECRET || '').trim();
@@ -3582,59 +2381,22 @@ app.post('/api/webhooks/github', async (req, res) => {
       return res.json({ ok: true, event, verified: sig.verified });
     }
 
-    const action = String(req.body?.action || '').trim().toLowerCase();
-    const repoOwner = req.body?.repository?.owner?.login || req.body?.repository?.owner?.name || '';
-    const repoName = req.body?.repository?.name || '';
-
-    // Handle pull_request_review events (review submitted)
-    if (event === 'pull_request_review') {
-      const review = req.body?.review || null;
-      const pr = req.body?.pull_request || null;
-      if (!review || !pr) return res.status(400).json({ error: 'Missing review or pull_request payload' });
-
-      if (action === 'submitted') {
-        const result = await prReviewAutomationService.onReviewSubmitted({
-          owner: repoOwner,
-          repo: repoName,
-          number: pr.number,
-          reviewState: review.state || '',
-          reviewBody: review.body || '',
-          reviewUser: review.user?.login || '',
-          url: pr.html_url || pr.url || ''
-        });
-        return res.json({ ok: true, event, verified: sig.verified, action, result });
-      }
-      return res.json({ ok: true, event, ignored: true, verified: sig.verified, action });
-    }
-
     if (event !== 'pull_request') {
       return res.json({ ok: true, event, ignored: true, verified: sig.verified });
     }
 
+    const action = String(req.body?.action || '').trim().toLowerCase();
     const pr = req.body?.pull_request || null;
     if (!pr) return res.status(400).json({ error: 'Missing pull_request payload' });
 
-    // Handle PR opened / ready_for_review → auto-review pipeline
-    if (action === 'opened' || action === 'ready_for_review') {
-      const result = await prReviewAutomationService.onPrCreated({
-        owner: repoOwner,
-        repo: repoName,
-        number: pr.number,
-        title: pr.title || '',
-        author: pr.user?.login || '',
-        url: pr.html_url || pr.url || '',
-        action
-      });
-      return res.json({ ok: true, event, verified: sig.verified, action, result });
-    }
-
-    // Handle PR closed + merged → existing merge automation
     const merged = !!pr.merged;
     const mergedAt = pr.merged_at || null;
     if (action !== 'closed' || !merged) {
       return res.json({ ok: true, event, ignored: true, verified: sig.verified, action, merged });
     }
 
+    const repoOwner = req.body?.repository?.owner?.login || req.body?.repository?.owner?.name || '';
+    const repoName = req.body?.repository?.name || '';
     const result = await prMergeAutomationService.processMergedPullRequest({
       owner: repoOwner,
       repo: repoName,
@@ -3655,8 +2417,7 @@ app.get('/api/process/automations', (req, res) => {
   try {
     res.json({
       prMerge: prMergeAutomationService.getConfig(),
-      lastRunAt: prMergeAutomationService.lastRunAt || null,
-      prReview: prReviewAutomationService.getStatus()
+      lastRunAt: prMergeAutomationService.lastRunAt || null
     });
   } catch (error) {
     logger.error('Failed to get automations status', { error: error.message, stack: error.stack });
@@ -3664,7 +2425,7 @@ app.get('/api/process/automations', (req, res) => {
   }
 });
 
-app.post('/api/process/automations/pr-merge/run', requirePolicyAction('destructive'), proOnly, express.json(), async (req, res) => {
+app.post('/api/process/automations/pr-merge/run', proOnly, express.json(), async (req, res) => {
   try {
     const limit = Number(req.body?.limit || 60);
     const result = await prMergeAutomationService.runOnce({ limit });
@@ -3672,39 +2433,6 @@ app.post('/api/process/automations/pr-merge/run', requirePolicyAction('destructi
   } catch (error) {
     logger.error('Failed to run PR merge automations', { error: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to run PR merge automations' });
-  }
-});
-
-// PR review automation endpoints
-app.post('/api/process/automations/pr-review/run', express.json(), async (req, res) => {
-  try {
-    const result = await prReviewAutomationService.runManual();
-    res.json(result);
-  } catch (error) {
-    logger.error('Failed to run PR review automation', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: error.message || 'Failed to run PR review automation' });
-  }
-});
-
-app.get('/api/process/automations/pr-review/status', (req, res) => {
-  try {
-    res.json(prReviewAutomationService.getStatus());
-  } catch (error) {
-    logger.error('Failed to get PR review status', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: error.message || 'Failed to get PR review status' });
-  }
-});
-
-app.put('/api/process/automations/pr-review/config', express.json(), async (req, res) => {
-  try {
-    const config = prReviewAutomationService.updateConfig(req.body || {});
-    // Restart polling if config changed
-    prReviewAutomationService.stop();
-    prReviewAutomationService.start();
-    res.json({ ok: true, config });
-  } catch (error) {
-    logger.error('Failed to update PR review config', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: error.message || 'Failed to update PR review config' });
   }
 });
 
@@ -3894,7 +2622,7 @@ app.post('/api/license/reload', (req, res) => {
 });
 
 // Save license.json (paste into UI); stored in ORCHESTRATOR_DATA_DIR by default.
-app.post('/api/license/set', requirePolicyAction('billing'), express.json({ limit: '2mb' }), (req, res) => {
+app.post('/api/license/set', express.json({ limit: '2mb' }), (req, res) => {
   try {
     let payload = req.body;
     if (payload && typeof payload.text === 'string') {
@@ -3940,7 +2668,7 @@ app.get('/api/git/check-updates', (req, res) => {
     });
 });
 
-app.post('/api/git/pull', requirePolicyAction('destructive'), (req, res) => {
+app.post('/api/git/pull', (req, res) => {
   activityFeed.track('git.pull', { source: 'api' });
   gitUpdateService.pullLatest()
     .then(result => {
@@ -3978,75 +2706,120 @@ app.get('/api/diagnostics', async (req, res) => {
   }
 });
 
-app.get('/api/diagnostics/first-run', async (req, res) => {
+// Setup helper actions for first-run dependency wizard.
+app.get('/api/setup-actions', (req, res) => {
   try {
-    const data = await collectFirstRunDiagnostics();
-    res.json({ ok: true, ...data });
+    const platform = process.platform;
+    const actions = getSetupActions(platform);
+    res.json({ ok: true, platform, actions });
   } catch (error) {
-    logger.error('Failed to collect first-run diagnostics', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to collect first-run diagnostics' });
+    logger.error('Failed to get setup actions', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get setup actions' });
   }
 });
 
-app.get('/api/diagnostics/install-wizard', async (req, res) => {
+app.post('/api/setup-actions/run', (req, res) => {
   try {
-    const data = await collectInstallWizard();
-    res.json({ ok: true, ...data });
-  } catch (error) {
-    logger.error('Failed to collect install wizard diagnostics', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to collect install wizard diagnostics' });
-  }
-});
-
-app.get('/api/diagnostics/post-install', async (req, res) => {
-  try {
-    const data = await collectInstallWizard();
-    res.json({ ok: true, ...data });
-  } catch (error) {
-    logger.error('Failed to collect post-install diagnostics', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to collect post-install diagnostics' });
-  }
-});
-
-app.post('/api/diagnostics/first-run/repair', requirePolicyAction('write'), express.json(), async (req, res) => {
-  try {
-    const action = String(req.body?.action || '').trim();
-    if (!action) {
-      return res.status(400).json({ ok: false, error: 'action is required' });
+    const actionId = String(req.body?.actionId || '').trim();
+    if (!actionId) {
+      return res.status(400).json({ ok: false, error: 'actionId is required' });
     }
 
-    const repair = await runFirstRunRepair({ action });
-    const diagnostics = await collectFirstRunDiagnostics();
-    res.json({ ok: true, repair, diagnostics });
+    const result = runSetupAction(actionId, process.platform);
+    res.json({ ok: true, ...result });
   } catch (error) {
-    logger.error('Failed to run first-run repair', {
-      error: error.message,
-      stack: error.stack,
-      action: String(req.body?.action || '').trim() || null
-    });
-    res.status(400).json({ ok: false, error: String(error?.message || 'Failed to run repair') });
+    const code = String(error?.code || '');
+    const status = (code === 'unsupported_platform' || code === 'unknown_action' || code === 'not_runnable') ? 400 : 500;
+    logger.error('Failed to run setup action', { actionId: req.body?.actionId, error: error.message, stack: error.stack });
+    res.status(status).json({ ok: false, error: String(error?.message || 'Failed to run setup action') });
   }
 });
 
-app.post('/api/diagnostics/first-run/repair-safe', requirePolicyAction('write'), async (req, res) => {
+app.post('/api/setup-actions/configure-git-identity', async (req, res) => {
   try {
-    const result = await runFirstRunSafeRepairs();
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim();
+    const result = await configureGitIdentity({ name, email }, process.platform);
     res.json({ ok: true, ...result });
   } catch (error) {
-    logger.error('Failed to run first-run safe repairs', {
+    const code = String(error?.code || '');
+    const status = (
+      code === 'unsupported_platform'
+      || code === 'invalid_input'
+      || code === 'missing_git'
+      || code === 'verify_failed'
+    ) ? 400 : 500;
+    logger.error('Failed to configure git identity', {
       error: error.message,
       stack: error.stack
     });
-    res.status(500).json({ ok: false, error: String(error?.message || 'Failed to run safe repairs') });
+    res.status(status).json({ ok: false, error: String(error?.message || 'Failed to configure git identity') });
   }
 });
 
-app.get('/api/lifecycle/policy', (req, res) => {
+app.get('/api/setup-actions/run-status', (req, res) => {
   try {
-    res.json({ ok: true, policy: getLifecyclePolicy() });
+    const runId = String(req.query?.runId || '').trim();
+    const actionId = String(req.query?.actionId || '').trim();
+    const run = runId ? getSetupActionRun(runId) : getLatestSetupActionRun(actionId);
+    if (!run) {
+      return res.status(404).json({ ok: false, error: 'Setup action run not found' });
+    }
+    res.json({ ok: true, run });
   } catch (error) {
-    logger.error('Failed to load lifecycle policy', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to load lifecycle policy' });
+    logger.error('Failed to get setup action run status', {
+      runId: req.query?.runId,
+      actionId: req.query?.actionId,
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ ok: false, error: 'Failed to get setup action run status' });
+  }
+});
+
+app.post('/api/setup-actions/open-url', (req, res) => {
+  try {
+    const rawUrl = String(req.body?.url || '').trim();
+    if (!rawUrl) {
+      return res.status(400).json({ ok: false, error: 'url is required' });
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ ok: false, error: 'Invalid URL' });
+    }
+
+    if (!['http:', 'https:'].includes(String(parsed.protocol || '').toLowerCase())) {
+      return res.status(400).json({ ok: false, error: 'Only http/https URLs are supported' });
+    }
+
+    const targetUrl = parsed.toString();
+    const { execFile } = require('child_process');
+
+    const finish = (error) => {
+      if (error) {
+        logger.error('Failed to open setup URL', { url: targetUrl, error: error.message, stack: error.stack });
+        return res.status(500).json({ ok: false, error: 'Failed to open URL' });
+      }
+      res.json({ ok: true, opened: targetUrl });
+    };
+
+    if (process.platform === 'win32') {
+      execFile('explorer.exe', [targetUrl], { windowsHide: true }, finish);
+      return;
+    }
+
+    if (process.platform === 'darwin') {
+      execFile('open', [targetUrl], { windowsHide: true }, finish);
+      return;
+    }
+
+    execFile('xdg-open', [targetUrl], { windowsHide: true }, finish);
+  } catch (error) {
+    logger.error('Failed to open setup URL', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to open URL' });
   }
 });
 
@@ -4196,31 +2969,7 @@ app.get('/api/recovery/:workspaceId', async (req, res) => {
       allowSessionIds: allowSessionIds.length ? allowSessionIds : null,
       pruneMissing: true
     });
-
-    let configuredWorktreeCount = 0;
-    if (workspace) {
-      if (Array.isArray(workspace.terminals)) {
-        const keys = new Set();
-        workspace.terminals
-          .filter((t) => t && typeof t === 'object' && t.visible !== false)
-          .forEach((t) => {
-            const repo = String(t?.repository?.name || '').trim().toLowerCase();
-            const wt = String(t?.worktree || '').trim().toLowerCase();
-            const key = repo && wt ? `${repo}-${wt}` : wt || String(t?.id || '').trim().toLowerCase();
-            if (key) keys.add(key);
-          });
-        configuredWorktreeCount = keys.size;
-      } else {
-        const pairs = Number(workspace?.terminals?.pairs || 0);
-        if (Number.isFinite(pairs) && pairs > 0) configuredWorktreeCount = pairs;
-      }
-    }
-
-    res.json({
-      ...recoveryInfo,
-      configuredTerminalCount: allowSessionIds.length,
-      configuredWorktreeCount
-    });
+    res.json(recoveryInfo);
   } catch (error) {
     logger.error('Failed to get recovery info', { error: error.message });
     res.status(500).json({ error: error.message });
@@ -4476,11 +3225,7 @@ app.post('/api/greenfield/create-full', async (req, res) => {
 
 // Get greenfield categories
 app.get('/api/greenfield/categories', (req, res) => {
-  const categories = projectTypeService.getCategories().map((cat) => ({
-    id: cat.id,
-    path: cat.basePathResolved || cat.basePath || '',
-    keywords: Array.isArray(cat.keywords) ? cat.keywords : []
-  }));
+  const categories = greenfieldService.getCategories();
   res.json(categories);
 });
 
@@ -4490,113 +3235,12 @@ app.post('/api/greenfield/detect-category', (req, res) => {
   if (!description) {
     return res.status(400).json({ error: 'description is required' });
   }
-  const category = projectTypeService.detectCategory(description);
-  const categoryConfig = projectTypeService.getCategoryById(category);
+  const category = greenfieldService.detectCategory(description);
+  const categoryConfig = greenfieldService.categories[category];
   res.json({
     category,
-    path: categoryConfig?.basePathResolved || categoryConfig?.basePath || ''
+    path: categoryConfig.path
   });
-});
-
-// ============================================
-// Agent Provider API
-// ============================================
-
-function mapAgentProviderError(error, fallbackStatus = 500) {
-  const code = String(error?.code || '').trim().toUpperCase();
-  if (code === 'UNKNOWN_PROVIDER') return 404;
-  if (code === 'INVALID_INPUT') return 400;
-  if (code === 'UNSUPPORTED_OPERATION') return 422;
-  return fallbackStatus;
-}
-
-app.get('/api/agent-providers', (req, res) => {
-  try {
-    const providers = agentProviderService.listProviders();
-    res.json({ ok: true, count: providers.length, providers });
-  } catch (error) {
-    logger.error('Failed to list agent providers', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to list agent providers' });
-  }
-});
-
-app.get('/api/agent-providers/:providerId/sessions', (req, res) => {
-  try {
-    const sessions = agentProviderService.listSessions(req.params.providerId, { sessionManager });
-    res.json({ ok: true, provider: String(req.params.providerId || '').trim().toLowerCase(), count: sessions.length, sessions });
-  } catch (error) {
-    const status = mapAgentProviderError(error, 500);
-    logger.error('Failed to list provider sessions', { provider: req.params.providerId, error: error.message, stack: error.stack, status });
-    res.status(status).json({ ok: false, error: error.message || 'Failed to list provider sessions' });
-  }
-});
-
-app.post('/api/agent-providers/:providerId/resume-plan', express.json(), (req, res) => {
-  try {
-    const plan = agentProviderService.buildResumePlan(req.params.providerId, req.body || {}, {
-      agentManager
-    });
-    res.json({ ok: true, provider: String(req.params.providerId || '').trim().toLowerCase(), plan });
-  } catch (error) {
-    const status = mapAgentProviderError(error, 500);
-    logger.error('Failed to build provider resume plan', { provider: req.params.providerId, error: error.message, stack: error.stack, status });
-    res.status(status).json({ ok: false, error: error.message || 'Failed to build provider resume plan' });
-  }
-});
-
-app.post('/api/agent-providers/:providerId/resume', express.json(), (req, res) => {
-  try {
-    const plan = agentProviderService.buildResumePlan(req.params.providerId, req.body || {}, {
-      agentManager
-    });
-    res.json({ ok: true, provider: String(req.params.providerId || '').trim().toLowerCase(), plan });
-  } catch (error) {
-    const status = mapAgentProviderError(error, 500);
-    logger.error('Failed to build provider resume payload', { provider: req.params.providerId, error: error.message, stack: error.stack, status });
-    res.status(status).json({ ok: false, error: error.message || 'Failed to build provider resume payload' });
-  }
-});
-
-app.get('/api/agent-providers/:providerId/history/search', async (req, res) => {
-  try {
-    const results = await agentProviderService.searchHistory(req.params.providerId, req.query || {}, {
-      conversationService
-    });
-    res.json({ ok: true, provider: String(req.params.providerId || '').trim().toLowerCase(), ...results });
-  } catch (error) {
-    const status = mapAgentProviderError(error, 500);
-    logger.error('Failed to search provider history', {
-      provider: req.params.providerId,
-      query: req.query?.q || req.query?.query || '',
-      error: error.message,
-      stack: error.stack,
-      status
-    });
-    res.status(status).json({ ok: false, error: error.message || 'Failed to search provider history' });
-  }
-});
-
-app.get('/api/agent-providers/:providerId/history/:id', async (req, res) => {
-  try {
-    const params = { ...(req.query || {}), id: req.params.id };
-    const conversation = await agentProviderService.getTranscript(req.params.providerId, params, {
-      conversationService
-    });
-    if (!conversation) {
-      return res.status(404).json({ ok: false, error: 'Conversation not found' });
-    }
-    res.json({ ok: true, provider: String(req.params.providerId || '').trim().toLowerCase(), conversation });
-  } catch (error) {
-    const status = mapAgentProviderError(error, 500);
-    logger.error('Failed to get provider transcript', {
-      provider: req.params.providerId,
-      id: req.params.id,
-      error: error.message,
-      stack: error.stack,
-      status
-    });
-    res.status(status).json({ ok: false, error: error.message || 'Failed to get provider transcript' });
-  }
 });
 
 // ============================================
@@ -4957,7 +3601,7 @@ app.get('/api/prs', async (req, res) => {
   }
 });
 
-app.post('/api/prs/merge', requirePolicyAction('destructive'), express.json(), async (req, res) => {
+app.post('/api/prs/merge', express.json(), async (req, res) => {
   try {
     const url = String(req.body?.url || '').trim();
     const method = String(req.body?.method || 'merge').trim().toLowerCase();
@@ -4978,7 +3622,7 @@ app.post('/api/prs/merge', requirePolicyAction('destructive'), express.json(), a
   }
 });
 
-app.post('/api/prs/review', requirePolicyAction('write'), express.json(), async (req, res) => {
+app.post('/api/prs/review', express.json(), async (req, res) => {
   try {
     const url = String(req.body?.url || '').trim();
     const action = String(req.body?.action || 'comment').trim().toLowerCase();
@@ -5422,77 +4066,6 @@ app.get('/api/process/telemetry/details', async (req, res) => {
   } catch (error) {
     logger.error('Failed to fetch process telemetry details', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch process telemetry details' });
-  }
-});
-
-app.get('/api/process/telemetry/benchmarks', async (req, res) => {
-  try {
-    const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
-    const bucketMinutes = req.query.bucketMinutes ? Number(req.query.bucketMinutes) : undefined;
-    const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    const force = String(req.query.force || '').toLowerCase() === 'true';
-    const data = await processTelemetryBenchmarkService.getBenchmarkDashboard({
-      lookbackHours,
-      bucketMinutes,
-      limit,
-      force
-    });
-    res.json(data);
-  } catch (error) {
-    logger.error('Failed to fetch telemetry benchmark dashboard', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: 'Failed to fetch telemetry benchmark dashboard' });
-  }
-});
-
-app.post('/api/process/telemetry/benchmarks/snapshots', express.json({ limit: '2mb' }), async (req, res) => {
-  try {
-    const lookbackHours = req.body?.lookbackHours ? Number(req.body.lookbackHours) : undefined;
-    const bucketMinutes = req.body?.bucketMinutes ? Number(req.body.bucketMinutes) : undefined;
-    const label = typeof req.body?.label === 'string' ? req.body.label : '';
-    const notes = typeof req.body?.notes === 'string' ? req.body.notes : '';
-
-    const created = await processTelemetryBenchmarkService.captureSnapshot({
-      lookbackHours,
-      bucketMinutes,
-      label,
-      notes
-    });
-    res.json({
-      ...created,
-      url: `/api/process/telemetry/snapshots/${created.id}`
-    });
-  } catch (error) {
-    logger.error('Failed to create telemetry benchmark snapshot', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: 'Failed to create telemetry benchmark snapshot' });
-  }
-});
-
-app.get('/api/process/telemetry/benchmarks/release-notes', async (req, res) => {
-  try {
-    const currentId = req.query.currentId ? String(req.query.currentId) : 'live';
-    const baselineId = req.query.baselineId ? String(req.query.baselineId) : '';
-    const lookbackHours = req.query.lookbackHours ? Number(req.query.lookbackHours) : undefined;
-    const bucketMinutes = req.query.bucketMinutes ? Number(req.query.bucketMinutes) : undefined;
-    const download = String(req.query.download || '').toLowerCase() === 'true';
-
-    const payload = await processTelemetryBenchmarkService.buildReleaseNotes({
-      currentId,
-      baselineId,
-      lookbackHours,
-      bucketMinutes
-    });
-
-    if (download) {
-      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="telemetry-release-notes-${Date.now()}.md"`);
-      res.send(payload.markdown + '\n');
-      return;
-    }
-
-    res.json(payload);
-  } catch (error) {
-    logger.error('Failed to build telemetry release notes', { error: error.message, stack: error.stack });
-    res.status(500).json({ error: error.message || 'Failed to build telemetry release notes' });
   }
 });
 
@@ -6606,20 +5179,6 @@ app.put('/api/tasks/cards/:cardId/custom-fields/:customFieldId', express.json(),
 });
 
 // ============================================
-// Batch Launch API
-// ============================================
-
-app.post('/api/tasks/batch-launch', express.json(), async (req, res) => {
-  try {
-    const result = await batchLaunchService.batchLaunch(req.body || {});
-    res.json(result);
-  } catch (error) {
-    logger.error('Batch launch failed', { error: error.message, stack: error.stack });
-    res.status(error.message.includes('required') ? 400 : 500).json({ error: error.message });
-  }
-});
-
-// ============================================
 // Worktree Tags API
 // ============================================
 
@@ -6834,54 +5393,6 @@ app.delete('/api/quick-links/recent-sessions', async (req, res) => {
 });
 
 // =====================================
-// System Recommendations API
-// =====================================
-
-app.get('/api/recommendations', (req, res) => {
-  try {
-    const { status } = req.query;
-    const items = status === 'pending'
-      ? recommendationsService.getPending()
-      : recommendationsService.getAll();
-    res.json({ items });
-  } catch (error) {
-    logger.error('Failed to get recommendations', { error: error.message });
-    res.status(500).json({ error: 'Failed to get recommendations' });
-  }
-});
-
-app.post('/api/recommendations', async (req, res) => {
-  try {
-    const item = await recommendationsService.add(req.body);
-    res.json({ item });
-  } catch (error) {
-    logger.error('Failed to add recommendation', { error: error.message });
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.patch('/api/recommendations/:id', async (req, res) => {
-  try {
-    const { status } = req.body;
-    const item = await recommendationsService.updateStatus(req.params.id, status);
-    res.json({ item });
-  } catch (error) {
-    logger.error('Failed to update recommendation', { error: error.message });
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/recommendations/:id', async (req, res) => {
-  try {
-    await recommendationsService.remove(req.params.id);
-    res.json({ success: true });
-  } catch (error) {
-    logger.error('Failed to delete recommendation', { error: error.message });
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// =====================================
 // Plugin loader API
 // =====================================
 
@@ -6891,48 +5402,6 @@ app.get('/api/plugins', (req, res) => {
   } catch (error) {
     logger.error('Failed to get plugin status', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to get plugin status' });
-  }
-});
-
-app.get('/api/plugins/client-surface', (req, res) => {
-  try {
-    const slotFilter = String(req.query?.slot || '').trim().toLowerCase();
-    const status = pluginLoaderService.getStatus();
-    const loaded = Array.isArray(status?.loaded) ? status.loaded : [];
-
-    const slots = [];
-    for (const plugin of loaded) {
-      const pluginId = String(plugin?.id || '').trim();
-      const pluginName = String(plugin?.name || pluginId).trim();
-      const list = Array.isArray(plugin?.client?.slots) ? plugin.client.slots : [];
-      for (const slot of list) {
-        const slotName = String(slot?.slot || '').trim().toLowerCase();
-        if (!slotName) continue;
-        if (slotFilter && slotName !== slotFilter) continue;
-        slots.push({
-          pluginId,
-          pluginName,
-          id: slot.id,
-          slot: slotName,
-          label: slot.label,
-          description: slot.description || '',
-          order: Number.isFinite(Number(slot.order)) ? Number(slot.order) : 0,
-          action: slot.action || null
-        });
-      }
-    }
-
-    slots.sort((a, b) => {
-      if (a.slot !== b.slot) return a.slot.localeCompare(b.slot);
-      if (a.order !== b.order) return a.order - b.order;
-      if (a.pluginId !== b.pluginId) return a.pluginId.localeCompare(b.pluginId);
-      return String(a.id || '').localeCompare(String(b.id || ''));
-    });
-
-    res.json({ ok: true, count: slots.length, slots });
-  } catch (error) {
-    logger.error('Failed to get plugin client surface', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to get plugin client surface' });
   }
 });
 
@@ -7013,67 +5482,6 @@ app.post('/api/scheduler/jobs/from-template', express.json(), async (req, res) =
     const status = message.toLowerCase().includes('unknown scheduler template') ? 404 : 500;
     logger.error('Failed to create scheduler job from template', { error: message, stack: error.stack, status });
     res.status(status).json({ ok: false, error: 'Failed to create scheduler job from template', message });
-  }
-});
-
-app.post('/api/scheduler/jobs/from-template/preview', express.json(), async (req, res) => {
-  try {
-    const templateId = String(req.body?.templateId || '').trim();
-    if (!templateId) {
-      return res.status(400).json({ ok: false, error: 'templateId is required' });
-    }
-    const options = (req.body?.options && typeof req.body.options === 'object') ? req.body.options : {};
-    const result = await schedulerService.previewScheduleFromTemplate(templateId, options);
-    res.json({ ok: true, ...result });
-  } catch (error) {
-    const message = String(error?.message || error);
-    const status = message.toLowerCase().includes('unknown scheduler template') ? 404 : 500;
-    logger.error('Failed to preview scheduler template job', { error: message, stack: error.stack, status });
-    res.status(status).json({ ok: false, error: 'Failed to preview scheduler template job', message });
-  }
-});
-
-app.get('/api/pager/jobs', (req, res) => {
-  try {
-    const id = String(req.query.id || '').trim();
-    const status = pagerService.getStatus({ id: id || undefined });
-    res.json(status);
-  } catch (error) {
-    logger.error('Failed to get pager jobs', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to get pager jobs', message: error.message });
-  }
-});
-
-app.post('/api/pager/jobs', express.json(), async (req, res) => {
-  try {
-    const options = (req.body && typeof req.body === 'object') ? req.body : {};
-    const job = await pagerService.startJob(options);
-    res.status(201).json({ ok: true, job });
-  } catch (error) {
-    const message = String(error?.message || error);
-    const status = message.toLowerCase().includes('no target sessions') || message.toLowerCase().includes('no live sessions')
-      ? 400
-      : 500;
-    logger.error('Failed to start pager job', { error: message, stack: error.stack, status });
-    res.status(status).json({ ok: false, error: 'Failed to start pager job', message });
-  }
-});
-
-app.post('/api/pager/jobs/:id/stop', express.json(), (req, res) => {
-  try {
-    const id = String(req.params.id || '').trim();
-    if (!id) {
-      return res.status(400).json({ ok: false, error: 'id is required' });
-    }
-    const reason = String(req.body?.reason || 'manual').trim() || 'manual';
-    const result = pagerService.stopJob(id, { reason });
-    if (!result?.ok) {
-      return res.status(404).json({ ok: false, error: result?.error || `Job not found: ${id}` });
-    }
-    res.json({ ok: true, ...result });
-  } catch (error) {
-    logger.error('Failed to stop pager job', { error: error.message, stack: error.stack });
-    res.status(500).json({ ok: false, error: 'Failed to stop pager job', message: error.message });
   }
 });
 
@@ -7211,12 +5619,7 @@ app.post('/api/commander/send-to-session', (req, res) => {
 app.get('/api/commands/catalog', (req, res) => {
   try {
     const includeHidden = String(req.query.includeHidden || '').toLowerCase() === 'true';
-    const commands = commandRegistry
-      .getCatalog({ includeHidden })
-      .map((cmd) => ({
-        ...cmd,
-        requiredRole: policyService.inferRequiredRoleForCommand(cmd.name, cmd)
-      }));
+    const commands = commandRegistry.getCatalog({ includeHidden });
     res.json({
       ok: true,
       count: commands.length,
@@ -7245,10 +5648,6 @@ app.post('/api/commander/execute', async (req, res) => {
     const { command, params } = req.body;
     if (!command) {
       return res.status(400).json({ error: 'command is required' });
-    }
-    const policyDecision = policyService.authorizeCommand({ req, commandName: command });
-    if (!policyDecision.ok) {
-      return res.status(403).json(buildPolicyDeniedPayload(policyDecision, 'Forbidden command by policy'));
     }
     const result = await commandRegistry.execute(command, params || {});
     res.json(result);
@@ -7285,11 +5684,6 @@ app.post('/api/commander/execute-text', async (req, res) => {
 
     if (dryRun === true || String(dryRun).toLowerCase() === 'true') {
       return res.status(200).json({ ok: true, parsed, result: null, dryRun: true });
-    }
-
-    const policyDecision = policyService.authorizeCommand({ req, commandName: parsed.command });
-    if (!policyDecision.ok) {
-      return res.status(403).json(buildPolicyDeniedPayload(policyDecision, 'Forbidden command by policy'));
     }
 
     const result = await commandRegistry.execute(parsed.command, parsed.params || {});
@@ -7378,104 +5772,6 @@ app.get('/api/commander/prompt', (req, res) => {
 // Discord Bot (Claudesworth) Integration
 // =====================================
 
-const DISCORD_API_TOKEN = String(process.env.DISCORD_API_TOKEN || '').trim();
-const discordQueueRateLimitWindowMs = (() => {
-  const parsed = Number(process.env.DISCORD_PROCESS_QUEUE_RATE_LIMIT_WINDOW_MS);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 60_000;
-  return Math.round(parsed);
-})();
-const discordQueueRateLimitMax = (() => {
-  const parsed = Number(process.env.DISCORD_PROCESS_QUEUE_RATE_LIMIT_MAX);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 8;
-  return Math.max(1, Math.round(parsed));
-})();
-const discordQueueRateLimitStore = new Map();
-
-function normalizeIpAddress(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  if (raw.startsWith('::ffff:')) return raw.slice(7);
-  return raw;
-}
-
-function isLoopbackRequest(req) {
-  const remoteAddress = normalizeIpAddress(req?.socket?.remoteAddress || req?.connection?.remoteAddress || '');
-  const requestIp = normalizeIpAddress(req?.ip || '');
-  const forwarded = String(req?.headers?.['x-forwarded-for'] || '')
-    .split(',')[0]
-    .trim();
-  const forwardedIp = normalizeIpAddress(forwarded);
-
-  const candidates = [remoteAddress, requestIp, forwardedIp].filter(Boolean);
-  if (!candidates.length) return false;
-  return candidates.every((candidate) => isLoopbackHost(candidate) || candidate === '::1');
-}
-
-function timingSafeTokenMatch(left, right) {
-  const leftBuffer = Buffer.from(String(left || ''), 'utf8');
-  const rightBuffer = Buffer.from(String(right || ''), 'utf8');
-  if (leftBuffer.length !== rightBuffer.length) return false;
-  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-function extractDiscordRequestToken(req) {
-  const explicit = String(req?.headers?.['x-discord-token'] || '').trim();
-  if (explicit) return explicit;
-  const authHeader = String(req?.headers?.authorization || '').trim();
-  if (/^bearer\s+/i.test(authHeader)) {
-    return authHeader.replace(/^bearer\s+/i, '').trim();
-  }
-  return '';
-}
-
-function requireDiscordAccess(req, res, next) {
-  if (AUTH_TOKEN) return next();
-
-  if (DISCORD_API_TOKEN) {
-    const provided = extractDiscordRequestToken(req);
-    if (!provided || !timingSafeTokenMatch(provided, DISCORD_API_TOKEN)) {
-      return res.status(401).json({ ok: false, error: 'Unauthorized Discord request' });
-    }
-    return next();
-  }
-
-  if (!isLoopbackRequest(req)) {
-    return res.status(403).json({
-      ok: false,
-      error: 'Discord endpoints require loopback access or DISCORD_API_TOKEN'
-    });
-  }
-  return next();
-}
-
-function checkDiscordProcessQueueRateLimit(req) {
-  const actorHint = String(req?.headers?.['x-user-id'] || '').trim();
-  const keyBase = actorHint || normalizeIpAddress(req?.ip || req?.socket?.remoteAddress || '') || 'unknown';
-  const key = `discord-process:${keyBase}`;
-  const nowMs = Date.now();
-
-  const current = discordQueueRateLimitStore.get(key) || { startedAtMs: nowMs, count: 0 };
-  if ((nowMs - current.startedAtMs) >= discordQueueRateLimitWindowMs) {
-    current.startedAtMs = nowMs;
-    current.count = 0;
-  }
-  current.count += 1;
-  discordQueueRateLimitStore.set(key, current);
-
-  if (current.count > discordQueueRateLimitMax) {
-    const retryAfterMs = Math.max(0, discordQueueRateLimitWindowMs - (nowMs - current.startedAtMs));
-    return {
-      allowed: false,
-      retryAfterSeconds: Math.ceil(retryAfterMs / 1000),
-      limit: discordQueueRateLimitMax,
-      windowMs: discordQueueRateLimitWindowMs
-    };
-  }
-  return { allowed: true };
-}
-
-app.use('/api/discord', requireDiscordAccess);
-
 app.get('/api/discord/status', async (req, res) => {
   try {
     const status = await discordIntegrationService.getDiscordStatus({ sessionManager, workspaceManager });
@@ -7486,67 +5782,23 @@ app.get('/api/discord/status', async (req, res) => {
   }
 });
 
-function parseDiscordBoolean(value) {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') return value !== 0;
-  const text = String(value || '').trim().toLowerCase();
-  if (!text) return null;
-  if (['1', 'true', 'yes', 'on'].includes(text)) return true;
-  if (['0', 'false', 'no', 'off'].includes(text)) return false;
-  return null;
-}
-
 app.post('/api/discord/ensure-services', async (req, res) => {
   try {
-    const dangerousModeOverride = parseDiscordBoolean(req.body?.dangerousModeOverride);
-    const status = await discordIntegrationService.ensureDiscordServices({
-      sessionManager,
-      workspaceManager,
-      dangerousModeOverride
-    });
+    const status = await discordIntegrationService.ensureDiscordServices({ sessionManager, workspaceManager });
     res.json(status);
   } catch (error) {
     logger.error('Failed to ensure Discord services', { error: error.message, stack: error.stack });
-    const statusCode = Number(error?.statusCode || 0) || 500;
-    res.status(statusCode).json({ ok: false, error: 'Failed to ensure Discord services', message: error.message, details: error?.details || undefined });
+    res.status(500).json({ ok: false, error: 'Failed to ensure Discord services', message: error.message });
   }
 });
 
 app.post('/api/discord/process-queue', async (req, res) => {
   try {
-    const rateLimit = checkDiscordProcessQueueRateLimit(req);
-    if (!rateLimit.allowed) {
-      res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
-      return res.status(429).json({
-        ok: false,
-        error: 'Rate limit exceeded for discord queue processing',
-        retryAfterSeconds: rateLimit.retryAfterSeconds,
-        limit: rateLimit.limit,
-        windowMs: rateLimit.windowMs
-      });
-    }
-
-    const bodyIdempotencyKey = String(req.body?.idempotencyKey || '').trim();
-    const headerIdempotencyKey = String(req.headers['idempotency-key'] || '').trim();
-    const idempotencyKey = bodyIdempotencyKey || headerIdempotencyKey || null;
-    const dangerousModeOverride = parseDiscordBoolean(req.body?.dangerousModeOverride);
-    const requestId = String(req.body?.requestId || req.headers['x-request-id'] || '').trim() || null;
-    const actor = String(req.body?.actor || req.headers['x-user-id'] || req.ip || '').trim() || null;
-
-    const result = await discordIntegrationService.processDiscordQueue({
-      sessionManager,
-      workspaceManager,
-      logger,
-      idempotencyKey,
-      requestId,
-      actor,
-      dangerousModeOverride
-    });
+    const result = await discordIntegrationService.processDiscordQueue({ sessionManager, workspaceManager });
     res.json(result);
   } catch (error) {
     logger.error('Failed to process Discord queue', { error: error.message, stack: error.stack });
-    const statusCode = Number(error?.statusCode || 0) || 500;
-    res.status(statusCode).json({ ok: false, error: 'Failed to process Discord queue', message: error.message, details: error?.details || undefined });
+    res.status(500).json({ ok: false, error: 'Failed to process Discord queue', message: error.message });
   }
 });
 
@@ -7788,28 +6040,38 @@ app.get('/replay-viewer/:worktreeId/*?', (req, res) => {
 
 // Start server
 const PORT = Number(process.env.ORCHESTRATOR_PORT || 3000);
-const hostPolicy = evaluateBindSecurity({
-  host: process.env.ORCHESTRATOR_HOST || process.env.HOST,
-  authToken: AUTH_TOKEN,
-  allowInsecureLanNoAuth: process.env.ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH
-});
-const HOST = hostPolicy.host;
+const HOST = String(process.env.ORCHESTRATOR_HOST || process.env.HOST || '127.0.0.1');
 
-if (!hostPolicy.allowStart) {
+function isLoopbackHost(host) {
+  const h = String(host || '').trim().toLowerCase();
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1';
+}
+
+function isBindAllHost(host) {
+  const h = String(host || '').trim().toLowerCase();
+  return h === '0.0.0.0' || h === '::';
+}
+
+const allowInsecureLanNoAuth = (() => {
+  const raw = String(process.env.ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH || '').trim().toLowerCase();
+  return ['1', 'true', 'yes'].includes(raw);
+})();
+
+if (!isLoopbackHost(HOST) && !AUTH_TOKEN && !allowInsecureLanNoAuth) {
   logger.error('Refusing to bind to a non-loopback host without AUTH_TOKEN. Set AUTH_TOKEN or set ORCHESTRATOR_ALLOW_INSECURE_LAN_NO_AUTH=1 to override.', { host: HOST, port: PORT });
   process.exit(1);
 }
 
 httpServer.listen(PORT, HOST, () => {
   logger.info(`Server running on http://${HOST}:${PORT}`);
-  if (!hostPolicy.isLoopback) {
-    const bindType = hostPolicy.isBindAll ? 'bind-all' : 'explicit-host';
+  if (!isLoopbackHost(HOST)) {
+    const bindType = isBindAllHost(HOST) ? 'bind-all' : 'explicit-host';
     logger.info(`LAN access enabled (${bindType}) on port ${PORT}`);
-    if (!hostPolicy.hasAuthToken) {
+    if (!AUTH_TOKEN) {
       logger.warn('LAN access is enabled without AUTH_TOKEN. This is insecure; anyone on the network can control this orchestrator.', { host: HOST, port: PORT });
     }
   }
-  if (hostPolicy.hasAuthToken) {
+  if (AUTH_TOKEN) {
     logger.info('Authentication enabled');
   }
 

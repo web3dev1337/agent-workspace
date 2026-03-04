@@ -83,41 +83,6 @@ describe('SchedulerService', () => {
     }
   });
 
-  test('previews a schedule from template without persisting it', async () => {
-    const { service } = buildService({ command: 'open-queue' });
-    try {
-      const before = service.getStatus();
-      const beforeIds = (before.config?.schedules || []).map((row) => row.id);
-
-      const preview = await service.previewScheduleFromTemplate('health-snapshot', { intervalMinutes: 25 });
-      expect(preview.template.id).toBe('health-snapshot');
-      expect(preview.schedule.command).toBe('open-advice');
-      expect(preview.schedule.intervalMinutes).toBe(25);
-      expect(preview.safety.ok).toBe(true);
-
-      const after = service.getStatus();
-      const afterIds = (after.config?.schedules || []).map((row) => row.id);
-      expect(afterIds).toEqual(beforeIds);
-    } finally {
-      service.stop();
-    }
-  });
-
-  test('exposes expanded scheduler templates', async () => {
-    const { service } = buildService({ command: 'open-queue' });
-    try {
-      const templates = service.getTemplates();
-      const ids = templates.map((row) => row.id);
-      expect(ids).toContain('discord-queue-cadence');
-      expect(ids).toContain('workspace-refresh-snapshot');
-      expect(ids).toContain('queue-conveyor-t3');
-      expect(ids).toContain('stuck-session-nudge');
-      expect(ids).toContain('daily-health-digest');
-    } finally {
-      service.stop();
-    }
-  });
-
   test('rejects unknown template id', async () => {
     const { service } = buildService({ command: 'open-queue' });
     try {

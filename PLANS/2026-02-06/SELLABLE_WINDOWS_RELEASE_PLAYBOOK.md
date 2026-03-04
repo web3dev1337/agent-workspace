@@ -121,9 +121,6 @@ Expected:
 ### Privacy
 - Do not bundle user data into installers
 - Ensure `.env`, `user-settings.json`, `sessions/`, `diff-viewer/cache/`, `test-results/` are ignored and not shipped
-- Run:
-  - `npm run audit:public-release`
-  - `npm run audit:public-release:history`
 
 ### Security hygiene
 - Avoid shell interpolation where possible (prefer `execFile/spawn` with args)
@@ -152,3 +149,4 @@ Good “Pro” candidates:
 References:
 - `PLANS/2026-02-05/PUBLISHING_AND_MONETIZATION_OPTIONS.md`
 - `PLANS/2026-02-05/PLUGIN_ARCHITECTURE_AND_PRO_GATING.md`
+

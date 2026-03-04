@@ -9,10 +9,7 @@ function parseArgs(argv) {
   const args = {
     scope: 'all', // all | recent | added
     sinceDays: 7,
-    out: null,
-    format: null, // markdown | json
-    actionableOnly: false,
-    backlogOnly: false
+    out: null
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -49,26 +46,6 @@ function parseArgs(argv) {
       args.out = a.split('=').slice(1).join('=').trim() || null;
       continue;
     }
-    if (a === '--format') {
-      args.format = String(argv[++i] || '').trim().toLowerCase() || null;
-      continue;
-    }
-    if (a.startsWith('--format=')) {
-      args.format = a.split('=').slice(1).join('=').trim().toLowerCase() || null;
-      continue;
-    }
-    if (a === '--json') {
-      args.format = 'json';
-      continue;
-    }
-    if (a === '--actionable-only') {
-      args.actionableOnly = true;
-      continue;
-    }
-    if (a === '--backlog-only') {
-      args.backlogOnly = true;
-      continue;
-    }
   }
 
   if (!['all', 'recent', 'added'].includes(args.scope)) {
@@ -76,9 +53,6 @@ function parseArgs(argv) {
   }
   if (!Number.isFinite(args.sinceDays) || args.sinceDays <= 0) {
     throw new Error(`Invalid --since-days: ${args.sinceDays}`);
-  }
-  if (args.format && !['markdown', 'md', 'json'].includes(args.format)) {
-    throw new Error(`Invalid --format: ${args.format} (expected markdown|json)`);
   }
 
   return args;
@@ -178,20 +152,8 @@ function scanMarkdown(filePath, content) {
     /\/CHECKLIST\.md$/i.test(filePath) ||
     /\/CHECKLISTS?\//i.test(filePath) ||
     /\/OPTIMAL_ORCHESTRATOR_PROCESS\.md$/i.test(filePath);
-  const isNonBacklogDoc =
-    /^ai-memory\//i.test(filePath) ||
-    /^scripts\/README\.md$/i.test(filePath) ||
-    /^WINDOWS_.*GUIDE\.md$/i.test(filePath) ||
-    /^PUBLIC_RELEASE_AUDIT_.*\.md$/i.test(filePath);
-  const isGeneratedScan =
-    /\/REMAINING_WORK_.*(SCAN|FULL)\.md$/i.test(filePath) ||
-    /\/REMAINING_MARKDOWNS_.*SCAN\.md$/i.test(filePath) ||
-    /\/REMAINING_WORK_FROM_.*\.md$/i.test(filePath);
   const isPlanish = /^PLANS\//.test(filePath);
-  const isLikelyTemplate = isTemplate || isNonBacklogDoc || (/COWORKER_SETUP_GUIDE\.md$/i.test(filePath) && isPlanish);
-  let classification = 'doc/backlog';
-  if (isLikelyTemplate) classification = 'template/guide';
-  if (isGeneratedScan) classification = 'generated-scan';
+  const isLikelyTemplate = isTemplate || (/COWORKER_SETUP_GUIDE\.md$/i.test(filePath) && isPlanish);
 
   return {
     filePath,
@@ -199,7 +161,7 @@ function scanMarkdown(filePath, content) {
     todoFixme,
     remainingSections,
     remainingCount: unchecked.length + todoFixme.length + remainingSections.reduce((acc, s) => acc + (s?.items?.length || 0), 0),
-    classification
+    classification: isLikelyTemplate ? 'template/guide' : 'doc/backlog'
   };
 }
 
@@ -207,66 +169,12 @@ function mdEscape(s) {
   return String(s || '').replace(/`/g, '\\`');
 }
 
-function resolveOutputFormat(args, outPath) {
-  const requested = String(args?.format || '').trim().toLowerCase();
-  if (requested === 'json') return 'json';
-  if (requested === 'markdown' || requested === 'md') return 'markdown';
-  if (outPath && /\.json$/i.test(String(outPath))) return 'json';
-  return 'markdown';
-}
+function renderReport({ scope, sinceDays, files }) {
+  const stamp = new Date().toISOString().slice(0, 10);
 
-function buildSummary(files) {
   const scanned = files.length;
   const withRemaining = files.filter(f => f.remainingCount > 0);
   const withoutRemaining = files.filter(f => f.remainingCount === 0);
-  return {
-    scanned,
-    withRemaining: withRemaining.length,
-    withoutRemaining: withoutRemaining.length
-  };
-}
-
-function filterScansForActionable(files) {
-  return (Array.isArray(files) ? files : []).filter((scan) => {
-    if (!scan || scan.classification !== 'doc/backlog') return false;
-    const explicitCount = Number(scan?.unchecked?.length || 0) + Number(scan?.todoFixme?.length || 0);
-    return explicitCount > 0;
-  });
-}
-
-function filterScansForBacklog(files) {
-  return (Array.isArray(files) ? files : []).filter((scan) =>
-    scan &&
-    scan.classification === 'doc/backlog' &&
-    Number(scan.remainingCount || 0) > 0
-  );
-}
-
-function renderJsonReport({ scope, sinceDays, files, actionableOnly = false, backlogOnly = false }) {
-  const summary = buildSummary(files);
-  return JSON.stringify({
-    generatedAt: new Date().toISOString(),
-    scope,
-    sinceDays: Number(sinceDays),
-    backlogOnly: backlogOnly === true || actionableOnly === true,
-    actionableOnly: actionableOnly === true,
-    summary,
-    filesWithRemaining: files
-      .filter(f => f.remainingCount > 0)
-      .sort((a, b) => b.remainingCount - a.remainingCount || a.filePath.localeCompare(b.filePath)),
-    filesWithoutRemaining: files
-      .filter(f => f.remainingCount === 0)
-      .map(f => f.filePath)
-      .sort((a, b) => a.localeCompare(b))
-  }, null, 2);
-}
-
-function renderReport({ scope, sinceDays, files, actionableOnly = false, backlogOnly = false }) {
-  const stamp = new Date().toISOString().slice(0, 10);
-
-  const withRemaining = files.filter(f => f.remainingCount > 0);
-  const withoutRemaining = files.filter(f => f.remainingCount === 0);
-  const summary = buildSummary(files);
 
   const lines = [];
   lines.push(`# Remaining work from markdowns (${scope})`);
@@ -287,18 +195,11 @@ function renderReport({ scope, sinceDays, files, actionableOnly = false, backlog
     lines.push('Scope: all tracked markdown files (`git ls-files \"*.md\"`).');
     lines.push('');
   }
-  if (actionableOnly === true) {
-    lines.push('Actionable filter: enabled (`doc/backlog` files with explicit markers only: unchecked and/or TODO/FIXME).');
-    lines.push('');
-  } else if (backlogOnly === true) {
-    lines.push('Backlog filter: enabled (`doc/backlog` files with remaining markers only).');
-    lines.push('');
-  }
 
   lines.push('## Summary');
-  lines.push(`- Scanned: ${summary.scanned}`);
-  lines.push(`- With remaining markers: ${summary.withRemaining}`);
-  lines.push(`- With no remaining markers: ${summary.withoutRemaining}`);
+  lines.push(`- Scanned: ${scanned}`);
+  lines.push(`- With remaining markers: ${withRemaining.length}`);
+  lines.push(`- With no remaining markers: ${withoutRemaining.length}`);
   lines.push('');
 
   lines.push('## Files with remaining items');
@@ -386,18 +287,8 @@ function main() {
       const content = fs.readFileSync(abs, 'utf8');
       return scanMarkdown(filePath, content);
     });
-  let filesForReport = scans;
-  if (args.backlogOnly || args.actionableOnly) {
-    filesForReport = filterScansForBacklog(filesForReport);
-  }
-  if (args.actionableOnly) {
-    filesForReport = filterScansForActionable(filesForReport);
-  }
 
-  const format = resolveOutputFormat(args, outPath);
-  const report = format === 'json'
-    ? renderJsonReport({ scope: args.scope, sinceDays: args.sinceDays, files: filesForReport, actionableOnly: args.actionableOnly, backlogOnly: args.backlogOnly })
-    : renderReport({ scope: args.scope, sinceDays: args.sinceDays, files: filesForReport, actionableOnly: args.actionableOnly, backlogOnly: args.backlogOnly });
+  const report = renderReport({ scope: args.scope, sinceDays: args.sinceDays, files: scans });
 
   if (outPath) {
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
@@ -409,16 +300,4 @@ function main() {
   process.stdout.write(report);
 }
 
-if (require.main === module) {
-  main();
-}
-
-module.exports = {
-  parseArgs,
-  scanMarkdown,
-  renderReport,
-  renderJsonReport,
-  resolveOutputFormat,
-  filterScansForActionable,
-  filterScansForBacklog
-};
+main();

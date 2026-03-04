@@ -94,13 +94,14 @@ describe('StatusDetector', () => {
       expect(status).toBe('busy');
     });
 
-    it('should classify explicit shell prompts as idle even if Claude was previously active', () => {
+    it('should not classify shell prompts as idle when Claude is likely active', () => {
+      // "$" can appear in code blocks/snippets while Claude is working; do not flip to idle.
       const state = detector.getState(sessionId);
       state.lastOutputTime = Date.now();
       state.lastBufferLength = 0;
       const buffer = `Welcome to Claude Code!\n${'Example output '.repeat(20)}\n$`;
       const status = detector.detectStatus(sessionId, buffer);
-      expect(status).toBe('idle');
+      expect(status).toBe('busy');
     });
 
     it('should detect idle status after quiet period', () => {
@@ -113,33 +114,22 @@ describe('StatusDetector', () => {
       expect(status).toBe('idle');
     });
 
-    it('should return idle after long quiet windows for Claude sessions', () => {
+    it('should keep Claude sessions busy for longer quiet windows', () => {
       const buffer = `Welcome to Claude Code!\n${'Working '.repeat(30)}\nstill working`;
       const state = detector.getState(sessionId);
       state.lastBufferLength = buffer.length;
       state.lastOutputTime = Date.now() - 240000; // 4 minutes of silence
       state.claudeLikely = true;
       const status = detector.detectStatus(sessionId, buffer);
-      expect(status).toBe('idle');
+      expect(status).toBe('busy');
     });
 
-    it('should not keep agent terminals busy after long quiet windows', () => {
+    it('should keep agent terminals busy for longer quiet windows', () => {
       const agentSessionId = 'work1-claude';
       const buffer = `Starting work...\n${'Working '.repeat(30)}\nstill working`;
       const state = detector.getState(agentSessionId);
       state.lastBufferLength = buffer.length;
       state.lastOutputTime = Date.now() - 240000; // 4 minutes of silence
-      state.claudeLikely = false;
-      const status = detector.detectStatus(agentSessionId, buffer);
-      expect(status).toBe('idle');
-    });
-
-    it('should treat trailing ellipsis as busy only when output is recent', () => {
-      const agentSessionId = 'work2-claude';
-      const buffer = `Working through tasks...\nChecking files...\nStill running...`;
-      const state = detector.getState(agentSessionId);
-      state.lastBufferLength = buffer.length;
-      state.lastOutputTime = Date.now();
       state.claudeLikely = false;
       const status = detector.detectStatus(agentSessionId, buffer);
       expect(status).toBe('busy');
@@ -157,30 +147,6 @@ describe('StatusDetector', () => {
       const status = detector.detectStatus(sessionId, buffer, { agent: 'codex' });
       expect(status).toBe('waiting');
       expect(detector.getState(sessionId).claudeLikely).toBe(false);
-    });
-
-    it('should detect idle status from zsh-style prompt', () => {
-      const buffer = '/home/<user>/GitHub/project %';
-      const status = detector.detectStatus(sessionId, buffer);
-      expect(status).toBe('idle');
-    });
-
-    it('should detect idle status from starship-style prompt glyph', () => {
-      const buffer = '~/GitHub/project ❯';
-      const status = detector.detectStatus(sessionId, buffer);
-      expect(status).toBe('idle');
-    });
-
-    it('should detect idle status from no-agent banner', () => {
-      const buffer = "Claude session ended.\nType 'claude' to start a new Claude session.";
-      const status = detector.detectStatus(sessionId, buffer);
-      expect(status).toBe('idle');
-    });
-
-    it('should detect idle status from ANSI-colored shell prompts', () => {
-      const buffer = '\u001b[32mab@host\u001b[0m:\u001b[34m~/repo\u001b[0m$ ';
-      const status = detector.detectStatus(sessionId, buffer);
-      expect(status).toBe('idle');
     });
   });
 
@@ -214,18 +180,6 @@ describe('StatusDetector', () => {
       detector.reset();
 
       expect(detector.sessionState.size).toBe(0);
-    });
-  });
-
-  describe('hasExplicitShellIndicator', () => {
-    it('should detect shell indicator from no-agent banner', () => {
-      const recentAll = "Claude session ended.\nType 'claude' to start a new Claude session.";
-      expect(detector.hasExplicitShellIndicator(recentAll, '')).toBe(true);
-    });
-
-    it('should detect shell indicator from ANSI prompt line', () => {
-      const recentAll = '\u001b[32mab@host\u001b[0m:\u001b[34m~/repo\u001b[0m$';
-      expect(detector.hasExplicitShellIndicator(recentAll, '\u001b[32mab@host\u001b[0m:\u001b[34m~/repo\u001b[0m$')).toBe(true);
     });
   });
 

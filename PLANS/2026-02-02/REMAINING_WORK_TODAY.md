@@ -13,8 +13,6 @@ Status:
 - ✅ Skin selector exists (Settings → Skin).
 - ✅ Blue skin uses requested primary `#0f67fd` and works in light + dark.
 - ✅ Skin intensity shipped (Settings → Skin intensity; persisted via `ui.skinIntensity`).
-- ✅ Additional skins shipped (Purple/Emerald/Amber + High Contrast).
-- ✅ Theme gallery shipped (clickable swatches in Settings).
 - ✅ Color audit exists (`PLANS/2026-01-31/UI_COLOR_AUDIT.md`).
 - ✅ Started tokenizing a few hard-coded accents (YOLO highlight + warning accents) to respect skins.
 
@@ -23,6 +21,7 @@ Remaining work:
 - Decide + document which UI surfaces are “accent tinted” vs neutral across skins:
   - selected rows/tiles, active tabs, focused buttons, modals/overlays
   - Queue/Tasks/Review Console overlays
+- Add 1–2 additional skins as validation of the architecture (e.g. Purple/Emerald) and QA light+dark readability.
 
 Primary sources:
 - `PLANS/2026-01-31/THEMING_SKINS_BLUE_MODE_PLAN.md`
@@ -38,14 +37,12 @@ Status:
 - ✅ Commander execute + capabilities shipped.
 - ✅ Queue + Review Console core control surface shipped.
 - ✅ Voice exact-match aliases are auto-generated from command metadata (prevents drift).
-- ✅ Selection helper supports repo-aware PR number targeting (`select pr 492 in zoo-game`) via shared command surface.
-- ✅ Commander typed freeform parsing is available via `POST /api/commander/execute-text` (rules first, LLM fallback via the same voice pipeline).
 
 Remaining work:
-- ✅ Provider plugin interface (Claude/Codex/future) shipped via `server/agentProviderService.js`:
-  - `listSessions`, `resume` plan generation, `searchHistory`, `getTranscript`
-  - REST surface: `/api/agent-providers/*`
-  - Plugin wiring: provider service is now available in plugin loader service context
+- Provider plugin interface (Claude/Codex/future) to keep the architecture clean:
+  - `listSessions`, `resume`, `searchHistory`, `getTranscript`, etc.
+- Commander “typed freeform → LLM parse → {command, params}” flow (same prompt logic as voice, but typed).
+- Expand selection helpers so voice can do “select PR 492 in zoo-game” (repo alias + PR number) without requiring full URL.
 
 Primary source:
 - `PLANS/2026-01-31/FULL_UI_CONTROL_VIA_COMMANDS_GAP_ANALYSIS.md`

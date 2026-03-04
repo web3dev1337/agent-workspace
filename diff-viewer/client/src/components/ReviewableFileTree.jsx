@@ -257,7 +257,7 @@ const renderTree = (tree, selectedFile, onFileSelect, reviewState, toggleFileRev
           key={node.path}
           className={`file-item ${changeClass} ${isSelected ? 'selected' : ''} ${node.reviewed ? 'reviewed' : ''}`}
           onClick={() => onFileSelect(node)}
-          style={{ paddingLeft: `${level * 12 + 6}px` }}
+          style={{ paddingLeft: `${level * 20 + 10}px` }}
         >
           <input
             type="checkbox"
@@ -269,7 +269,7 @@ const renderTree = (tree, selectedFile, onFileSelect, reviewState, toggleFileRev
           <span className="file-icon">{getFileIcon(name)}</span>
           <span className="file-name">{name}</span>
           <span className="file-stats">
-            {(node.additions || 0) > 0 && <span className="additions">+{node.additions}</span>}
+            <span className="additions">+{node.additions || 0}</span>
             {(node.deletions || 0) > 0 && <span className="deletions">-{node.deletions}</span>}
           </span>
         </div>
@@ -283,7 +283,7 @@ const renderTree = (tree, selectedFile, onFileSelect, reviewState, toggleFileRev
         <div key={name} className="directory-item">
           <div
             className={`directory-header ${hasReviewedChildren ? 'has-reviewed' : ''}`}
-            style={{ paddingLeft: `${level * 12 + 6}px` }}
+            style={{ paddingLeft: `${level * 20 + 10}px` }}
           >
             <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
             <span className="directory-icon">📁</span>

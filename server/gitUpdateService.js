@@ -23,19 +23,6 @@ class GitUpdateService {
     this.projectRoot = path.join(__dirname, '..');
   }
 
-  static isPullableBranchName(branchName) {
-    const name = String(branchName || '').trim();
-    if (!name) return false;
-    const lower = name.toLowerCase();
-    const blocked = new Set(['head', 'unknown', 'no-git', 'missing', 'invalid-path']);
-    if (blocked.has(lower)) return false;
-    if (name.includes('..') || name.includes('@{') || name.endsWith('.') || name.endsWith('/') || name.startsWith('-')) {
-      return false;
-    }
-    if (/[\s\\~^:?*\[\]\x00-\x1f]/.test(name)) return false;
-    return true;
-  }
-
   async execGit(args, { timeoutMs = 20000 } = {}) {
     const argv = Array.isArray(args) ? args.map(String) : [];
     if (!argv.length) throw new Error('execGit: args required');
@@ -93,15 +80,7 @@ class GitUpdateService {
   async pullLatest() {
     try {
       // Check current branch
-      const currentBranch = String(await this.getCurrentBranch() || '').trim();
-      if (!GitUpdateService.isPullableBranchName(currentBranch)) {
-        logger.warn('Cannot pull - invalid or detached branch', { currentBranch });
-        return {
-          success: false,
-          error: `Cannot pull from current branch '${currentBranch || '(empty)'}'. Switch to a named branch first.`,
-          currentBranch
-        };
-      }
+      const currentBranch = await this.getCurrentBranch();
       
       // Check for uncommitted changes
       const status = await this.getStatus();
@@ -197,14 +176,7 @@ class GitUpdateService {
 
   async checkForUpdates() {
     try {
-      const currentBranch = String(await this.getCurrentBranch() || '').trim();
-      if (!GitUpdateService.isPullableBranchName(currentBranch)) {
-        return {
-          hasUpdates: null,
-          currentBranch,
-          error: `Cannot check updates for branch '${currentBranch || '(empty)'}'`
-        };
-      }
+      const currentBranch = await this.getCurrentBranch();
       
       // Fetch latest
       await this.fetchLatest();

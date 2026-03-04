@@ -46,7 +46,7 @@ Target behavior:
   - be available to Commander typed execution.
 
 Work needed:
-- Build an exported “command manifest” from `server/commandRegistry.js` (name, params schema, examples, safety notes). (DONE: explicit `safetyNotes` now included in catalog/capabilities and Settings has a live Command Catalog help view)
+- Build an exported “command manifest” from `server/commandRegistry.js` (name, params schema, examples, safety notes). (PARTIAL: `GET /api/commander/capabilities` exists; remaining: add explicit safety notes + UI help view)
 - Update voice LLM fallback prompt to include the manifest (or a scoped subset + retrieval). (DONE)
 - Add `POST /api/commander/execute-text`: (DONE: PR #574)
   - input: free text
@@ -64,9 +64,8 @@ Current state is usable, but not “one-screen batch reviewing”.
 
 Work needed:
 - Make **Diff embed always on by default**, and treat “Open in new tab” as secondary. (DONE: PR #587)
-- Add **filter/sort controls inside Review Console** (not just Queue). (DONE: this branch)
-  - filters: tier/risk/unreviewed/blocked/claim
-  - sort modes: queue order, risk+verify, verify desc, updated desc
+- Add **filter/sort controls inside Review Console** (not just Queue):
+  - by tier/risk/verifyMinutes/blocked/unreviewed
   - quick “next unreviewed tier 3” navigation.
 - Reduce vertical waste:
   - compact headers, tighten paddings, avoid tall meta blocks.
@@ -95,7 +94,7 @@ Work needed:
 - Add a recovery policy:
   - default: only show sessions not explicitly closed
   - optionally show “closed (archived)” in a collapsible section.
-- DONE: Settings now includes per-workspace “Prune old recoverables” (older-than-days) wired to recovery prune API.
+- Add UI affordance: “Clear all recoverable sessions (older than N days)” with confirmation.
 
 ---
 
@@ -137,9 +136,9 @@ Work needed:
   - enumerate all hard-coded colors and convert to CSS variables
   - document which variables a skin is allowed to override (`--skin-*` targets).
 - Add more skins with tuned neutral surface targets:
-  - blue (done), plus emerald/purple/amber (done) and a high-contrast option. (DONE: this branch)
+  - blue (done), plus at least 2 more “beautiful” schemes (e.g. emerald + violet) and a high-contrast option.
 - Add a “theme gallery” in Settings:
-  - preview swatches, quick toggle, and a short explanation of intensity. (DONE: this branch)
+  - preview swatches, quick toggle, and a short explanation of intensity.
 
 ---
 
@@ -161,5 +160,5 @@ Work needed:
 ## 8) Known UX papercuts (small but important)
 
 - Reduce or eliminate multiple “✕” close buttons that do different things without clarity.
-- DONE: Queue action bar now wraps by group and keeps controls in-frame on narrower/shorter viewports (no hidden off-screen buttons).
-- DONE: Settings panel now uses dynamic viewport height + mobile full-width fallback, keeping the full panel scrollable/usable on short viewports.
+- Ensure Queue action bar never hides buttons off-screen (wrap/overflow).
+- Ensure settings panel always stays usable on short viewports.

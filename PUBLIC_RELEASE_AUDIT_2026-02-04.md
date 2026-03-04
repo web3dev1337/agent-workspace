@@ -75,7 +75,7 @@ Normal PR fix:
 ### Medium (privacy / public-facing cleanliness)
 
 4) **Absolute user paths and usernames in docs**
-- Many tracked docs include `/home/<user>/...`, `/home/<user>/...`, and at least one Windows path `C:\\Users\\<user>\\...`.
+- Many tracked docs include `/home/ab/...`, `/home/anrokx/...`, and at least one Windows path `C:\\Users\\AB\\...`.
 - These are not “secrets”, but they are **personal identifiers** and confusing for new users.
 
 Normal PR fix:

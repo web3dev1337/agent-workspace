@@ -14,17 +14,15 @@ class CommandRegistry {
     this.io = null;
     this.sessionManager = null;
     this.workspaceManager = null;
-    this.pagerService = null;
   }
 
   /**
    * Initialize with dependencies
    */
-  init({ io, sessionManager, workspaceManager, pagerService }) {
+  init({ io, sessionManager, workspaceManager }) {
     this.io = io;
     this.sessionManager = sessionManager;
     this.workspaceManager = workspaceManager;
-    this.pagerService = pagerService || this.pagerService;
     this.registerBuiltinCommands();
   }
 
@@ -60,8 +58,6 @@ class CommandRegistry {
       params: config.params || [],
       examples: config.examples || [],
       safetyLevel: normalizeSafetyLevel(config.safetyLevel),
-      safetyNotes: String(config.safetyNotes || '').trim() || null,
-      requiredRole: String(config.requiredRole || '').trim().toLowerCase() || null,
       surfaces: surfaces.length ? surfaces : ['commander', 'voice', 'ui'],
       aliases,
       hidden: config.hidden === true,
@@ -85,8 +81,6 @@ class CommandRegistry {
         params: cmd.params,
         examples: cmd.examples,
         safetyLevel: cmd.safetyLevel,
-        safetyNotes: this.buildSafetyNotes(cmd),
-        requiredRole: cmd.requiredRole,
         surfaces: cmd.surfaces,
         aliases: cmd.aliases
       });
@@ -111,8 +105,6 @@ class CommandRegistry {
         params: cmd.params,
         examples: cmd.examples,
         safetyLevel: cmd.safetyLevel,
-        safetyNotes: this.buildSafetyNotes(cmd),
-        requiredRole: cmd.requiredRole,
         surfaces: cmd.surfaces,
         aliases: cmd.aliases
       }))
@@ -121,45 +113,6 @@ class CommandRegistry {
         if (categoryCmp !== 0) return categoryCmp;
         return String(a.name).localeCompare(String(b.name));
       });
-  }
-
-  /**
-   * Get command metadata by name.
-   * @param {string} name
-   * @returns {object|null}
-   */
-  getCommand(name) {
-    const cmd = this.commands.get(name);
-    if (!cmd) return null;
-    return {
-      name: cmd.name,
-      category: cmd.category,
-      description: cmd.description,
-      params: cmd.params,
-      examples: cmd.examples,
-      safetyLevel: cmd.safetyLevel,
-      safetyNotes: this.buildSafetyNotes(cmd),
-      requiredRole: cmd.requiredRole,
-      surfaces: cmd.surfaces,
-      aliases: cmd.aliases,
-      hidden: cmd.hidden === true
-    };
-  }
-
-  buildSafetyNotes(command) {
-    if (!command || typeof command !== 'object') return '';
-    const explicit = String(command.safetyNotes || '').trim();
-    if (explicit) return explicit;
-    const level = String(command.safetyLevel || 'safe').trim().toLowerCase();
-    const baseByLevel = {
-      safe: 'Read-only or low-impact action.',
-      caution: 'Can change UI or session state; verify the target before running.',
-      dangerous: 'Can modify repositories, workspaces, or process lifecycle; confirm intent first.'
-    };
-    const base = baseByLevel[level] || baseByLevel.safe;
-    const requiredRole = String(command.requiredRole || '').trim().toLowerCase();
-    if (!requiredRole) return base;
-    return `${base} Requires role: ${requiredRole}.`;
   }
 
   /**
@@ -192,8 +145,7 @@ class CommandRegistry {
       const result = await cmd.handler(params, {
         io: this.io,
         sessionManager: this.sessionManager,
-        workspaceManager: this.workspaceManager,
-        pagerService: this.pagerService
+        workspaceManager: this.workspaceManager
       });
       return { success: true, ...result };
     } catch (err) {
@@ -426,12 +378,12 @@ class CommandRegistry {
 
     this.register('review-console-set-preset', {
       category: 'review-console',
-      description: 'Set Review Console preset layout (Default/Review/Throughput/Deep/Terminals/Code)',
+      description: 'Set Review Console preset layout (Default/Review/Deep/Terminals/Code)',
       params: [
-        { name: 'preset', required: true, description: 'Preset: default|review|throughput|deep|terminals|code' }
+        { name: 'preset', required: true, description: 'Preset: default|review|deep|terminals|code' }
       ],
       examples: [
-        { params: { preset: 'throughput' }, description: 'Diff-first compact review flow' }
+        { params: { preset: 'review' }, description: 'Terminals + Files + Diff' }
       ],
       handler: (params, { io }) => {
         io.emit('commander-action', { action: 'review-console-set-preset', ...params });
@@ -514,7 +466,6 @@ class CommandRegistry {
     this.register('open-new-project', {
       category: 'ui',
       description: 'Open the New Project / Greenfield wizard',
-      aliases: ['new-project', 'create-project', 'open-greenfield'],
       params: [],
       examples: [],
       handler: (params, { io }) => {
@@ -565,25 +516,6 @@ class CommandRegistry {
       handler: (params, { io }) => {
         io.emit('commander-action', { action: 'open-project-chats' });
         return { message: 'Opening Projects + Chats' };
-      }
-    });
-
-    this.register('project-chats-new', {
-      category: 'ui',
-      description: 'Create a new chat in the Projects + Chats shell',
-      params: [
-        { name: 'workspace', required: false, description: 'Optional workspace id or name for where to create the chat' },
-        { name: 'repository', required: false, description: 'Optional repository name/path hint to target a specific project within the workspace' }
-      ],
-      examples: [
-        { params: {}, description: 'Create a chat in the currently selected workspace' },
-        { params: { workspace: 'zoo-game' }, description: 'Create a chat in the zoo-game workspace' },
-        { params: { workspace: 'zoo-gamabc', repository: 'incremental-game' }, description: 'Create a chat in a specific repository inside a mixed workspace' }
-      ],
-      aliases: ['new-chat', 'create-chat', 'new-thread'],
-      handler: (params, { io }) => {
-        io.emit('commander-action', { action: 'project-chats-new', ...params });
-        return { message: 'Creating new chat' };
       }
     });
 
@@ -1029,23 +961,6 @@ class CommandRegistry {
       }
     });
 
-    this.register('queue-select-by-pr-ref', {
-      category: 'process',
-      description: 'Select a Queue item by PR number with optional repo hint',
-      params: [
-        { name: 'number', required: true, description: 'Pull request number (e.g. 492)' },
-        { name: 'repo', required: false, description: 'Optional repo hint (e.g. zoo-game or owner/repo)' }
-      ],
-      examples: [
-        { params: { number: '492', repo: 'zoo-game' }, description: 'Select PR #492 in queue for zoo-game' },
-        { params: { number: '492' }, description: 'Select PR #492 across queue items' }
-      ],
-      handler: (params, { io }) => {
-        io.emit('commander-action', { action: 'queue-select-by-pr-ref', ...params });
-        return { message: 'Queue: select by PR number' };
-      }
-    });
-
     this.register('queue-select-by-ticket', {
       category: 'process',
       description: 'Select a Queue item by ticket reference (trello URL / trello:<shortLink> / <shortLink>)',
@@ -1206,80 +1121,6 @@ class CommandRegistry {
       handler: (params, { io }) => {
         io.emit('commander-action', { action: 'open-advice' });
         return { message: 'Opening Advisor' };
-      }
-    });
-
-    this.register('pager-start', {
-      category: 'automation',
-      description: 'Start pager/pollcat nudges for one or more sessions',
-      params: [
-        { name: 'sessionId', required: false, description: 'Single session id (e.g., work1-claude)' },
-        { name: 'sessionIds', required: false, description: 'Array of session ids' },
-        { name: 'workspaceId', required: false, description: 'Target all sessions in a workspace' },
-        { name: 'tiers', required: false, description: 'Optional tier filter (array or comma list, e.g., [3,4])' },
-        { name: 'intervalSeconds', required: false, description: 'Nudge interval in seconds (min 5)' },
-        { name: 'maxPings', required: false, description: 'Maximum nudge cycles before auto-stop' },
-        { name: 'maxRuntimeMinutes', required: false, description: 'Maximum runtime before auto-stop' },
-        { name: 'nudgeText', required: false, description: 'Default nudge text (default: next)' },
-        { name: 'customInstruction', required: false, description: 'Optional custom instruction added to the nudge profile' },
-        { name: 'customInstructionMode', required: false, description: 'append (default) or replace global custom instruction' },
-        { name: 'doneCheckEnabled', required: false, description: 'Enable done-token stop check' },
-        { name: 'doneToken', required: false, description: 'Token to detect completion (default: PAGER_DONE)' }
-      ],
-      examples: [
-        { params: { sessionId: 'work1-claude' }, description: 'Start pager for one session with defaults' },
-        { params: { sessionId: 'work2-claude', customInstruction: 'continue with remaining tasks' }, description: 'Start pager with custom instructions' }
-      ],
-      aliases: ['pollcat-start', 'start-pager', 'start-pollcat'],
-      handler: async (params, { pagerService }) => {
-        if (!pagerService || typeof pagerService.startJob !== 'function') {
-          throw new Error('Pager service unavailable');
-        }
-        const job = await pagerService.startJob(params || {});
-        return { message: `Pager started: ${job.id}`, job };
-      }
-    });
-
-    this.register('pager-stop', {
-      category: 'automation',
-      description: 'Stop a running pager/pollcat job',
-      params: [
-        { name: 'id', required: true, description: 'Pager job id' },
-        { name: 'reason', required: false, description: 'Optional stop reason' }
-      ],
-      examples: [
-        { params: { id: 'pager-work1' }, description: 'Stop pager job by id' }
-      ],
-      aliases: ['pollcat-stop', 'stop-pager', 'stop-pollcat'],
-      handler: async (params, { pagerService }) => {
-        if (!pagerService || typeof pagerService.stopJob !== 'function') {
-          throw new Error('Pager service unavailable');
-        }
-        const id = String(params?.id || '').trim();
-        if (!id) throw new Error('id is required');
-        const result = pagerService.stopJob(id, { reason: params?.reason || 'manual' });
-        if (!result?.ok) throw new Error(result?.error || `Job not found: ${id}`);
-        return { message: `Pager stopped: ${id}`, job: result.job };
-      }
-    });
-
-    this.register('pager-status', {
-      category: 'automation',
-      description: 'Get pager/pollcat status',
-      params: [
-        { name: 'id', required: false, description: 'Pager job id (optional)' }
-      ],
-      examples: [
-        { params: {}, description: 'List all pager jobs' },
-        { params: { id: 'pager-work1' }, description: 'Get one pager job status' }
-      ],
-      aliases: ['pollcat-status', 'pager-jobs', 'pollcat-jobs'],
-      handler: async (params, { pagerService }) => {
-        if (!pagerService || typeof pagerService.getStatus !== 'function') {
-          throw new Error('Pager service unavailable');
-        }
-        const id = String(params?.id || '').trim();
-        return pagerService.getStatus({ id: id || undefined });
       }
     });
 

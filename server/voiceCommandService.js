@@ -83,32 +83,6 @@ class VoiceCommandService {
         command: 'queue-next',
         extractParams: () => ({})
       },
-      // Pager / Pollcat controls
-      {
-        patterns: [
-          /(?:pager|pollcat)\s+status/i,
-          /status\s+(?:pager|pollcat)/i,
-          /list\s+(?:pager|pollcat)\s+jobs/i,
-        ],
-        command: 'pager-status',
-        extractParams: () => ({})
-      },
-      {
-        patterns: [
-          /(?:stop|cancel|disable)\s+(?:pager|pollcat)\s+([a-z0-9._:-]+)/i,
-          /(?:stop|cancel|disable)\s+(?:pager|pollcat)\s+job\s+([a-z0-9._:-]+)/i,
-        ],
-        command: 'pager-stop',
-        extractParams: (match) => ({ id: String(match?.[1] || '').trim() })
-      },
-      {
-        patterns: [
-          /(?:start|run|enable)\s+(?:pager|pollcat)\s+(?:for\s+)?([a-z0-9._:-]+)/i,
-          /(?:pager|pollcat)\s+(?:for\s+)?([a-z0-9._:-]+)\s+(?:start|on)/i,
-        ],
-        command: 'pager-start',
-        extractParams: (match) => ({ sessionId: String(match?.[1] || '').trim() })
-      },
       // Open Queue (blockers)
       {
         patterns: [
@@ -178,8 +152,8 @@ class VoiceCommandService {
       // Review Console: layout/window controls (assumes console is open)
       {
         patterns: [
-          /^(?:preset|layout)\s+(default|review|throughput|deep|terminals|code)$/i,
-          /^(?:set\s+)?review\s+console\s+preset\s+(default|review|throughput|deep|terminals|code)$/i,
+          /^(?:preset|layout)\s+(default|review|deep|terminals|code)$/i,
+          /^(?:set\s+)?review\s+console\s+preset\s+(default|review|deep|terminals|code)$/i,
         ],
         command: 'review-console-set-preset',
         extractParams: (match) => ({ preset: String(match?.[1] || '').trim().toLowerCase() })
@@ -444,21 +418,6 @@ class VoiceCommandService {
         command: 'queue-select-by-pr-url',
         extractParams: (match) => ({ url: String(match?.[1] || '').trim() })
       },
-      // Queue: select by PR number + optional repo hint
-      {
-        patterns: [
-          /^select\s+(?:pr|pull\s+request)\s+#?([0-9]+)(?:\s+in\s+([a-zA-Z0-9._/-]+))?$/i,
-        ],
-        command: 'queue-select-by-pr-ref',
-        extractParams: (match) => {
-          const number = String(match?.[1] || '').trim();
-          const repo = String(match?.[2] || '').trim();
-          return {
-            number,
-            ...(repo ? { repo } : {})
-          };
-        }
-      },
       // Queue: select by ticket (trello)
       {
         patterns: [
@@ -690,56 +649,6 @@ class VoiceCommandService {
         ],
         command: 'open-commander',
         extractParams: () => ({})
-      },
-      // Open New Project wizard
-      {
-        patterns: [
-          /^(?:open|show)\s+(?:the\s+)?(?:new\s+)?project(?:\s+wizard)?$/i,
-          /^(?:create|start)\s+(?:a\s+)?new\s+project$/i,
-          /^(?:open|show)\s+new\s+project\s+wizard$/i,
-        ],
-        command: 'open-new-project',
-        extractParams: () => ({})
-      },
-      // Open projects + chats shell (simple mode)
-      {
-        patterns: [
-          /open\s+projects?\s*(?:and|\+)?\s*chats?/i,
-          /show\s+projects?\s*(?:and|\+)?\s*chats?/i,
-          /open\s+chats?\s+shell/i,
-          /open\s+simple\s+mode/i,
-        ],
-        command: 'open-project-chats',
-        extractParams: () => ({})
-      },
-      // Create a new chat from projects + chats
-      {
-        patterns: [
-          /^(?:new|create|start)\s+(?:chat|thread)$/i,
-          /^(?:new|create|start)\s+(?:chat|thread)\s+in\s+(.+?)\s+(?:for|repo|repository)\s+(.+)$/i,
-          /^(?:new|create|start)\s+(?:chat|thread)\s+(?:for|repo|repository)\s+(.+?)\s+in\s+(.+)$/i,
-          /^(?:new|create|start)\s+(?:chat|thread)\s+(?:for|repo|repository)\s+(.+)$/i,
-          /^(?:new|create|start)\s+(?:chat|thread)\s+in\s+(.+)$/i,
-        ],
-        command: 'project-chats-new',
-        extractParams: (match) => {
-          const raw = String(match?.[0] || '').toLowerCase();
-          const first = String(match?.[1] || '').trim();
-          const second = String(match?.[2] || '').trim();
-          if (first && second) {
-            if (/\sin\s+.+\s+(?:for|repo|repository)\s+/.test(raw)) {
-              return { workspace: first, repository: second };
-            }
-            return { repository: first, workspace: second };
-          }
-          if (first) {
-            if (/(?:for|repo|repository)\s+/.test(raw) && !/\sin\s+/.test(raw)) {
-              return { repository: first };
-            }
-            return { workspace: first };
-          }
-          return {};
-        }
       },
       // Open settings
       {
@@ -1410,15 +1319,8 @@ Command patterns:
 - "open queue" → open-queue
 - "open tasks" → open-tasks
 - "open advice" → open-advice
-- "open projects and chats" → open-project-chats
-- "new chat" → project-chats-new
-- "new chat in zoo game for incremental-game" → project-chats-new { workspace, repository }
 - "open commander" → open-commander
-- "open new project" → open-new-project
 - "open settings" → open-settings
-- "pager status" → pager-status
-- "start pager for work1-claude" → pager-start { sessionId }
-- "stop pager pager-work1" → pager-stop { id }
 
 Worktree matching:
 - "zoo game work 1" → worktreeId: "zoo-game-work1"

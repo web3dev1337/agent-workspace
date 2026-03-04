@@ -133,7 +133,6 @@ class GreenfieldService {
     this.categories = PROJECT_CATEGORIES;
     this.sessionManager = null; // Set via setSessionManager()
     this.io = null; // Set via setIO()
-    this.projectTypeService = null;
   }
 
   static getInstance() {
@@ -177,10 +176,6 @@ class GreenfieldService {
     this.io = io;
   }
 
-  setProjectTypeService(projectTypeService) {
-    this.projectTypeService = projectTypeService || null;
-  }
-
   /**
    * Get all available project templates
    */
@@ -197,13 +192,6 @@ class GreenfieldService {
    * Get all project categories
    */
   getCategories() {
-    if (this.projectTypeService && typeof this.projectTypeService.getCategories === 'function') {
-      return this.projectTypeService.getCategories().map((cat) => ({
-        id: cat.id,
-        path: cat.basePathResolved || cat.basePath || '',
-        keywords: Array.isArray(cat.keywords) ? cat.keywords : []
-      }));
-    }
     return Object.entries(this.categories).map(([id, cat]) => ({
       id,
       path: cat.path,
@@ -215,10 +203,7 @@ class GreenfieldService {
    * Detect project category from description
    */
   detectCategory(description) {
-    if (this.projectTypeService && typeof this.projectTypeService.detectCategory === 'function') {
-      return this.projectTypeService.detectCategory(description);
-    }
-    const lowerDesc = String(description || '').toLowerCase();
+    const lowerDesc = description.toLowerCase();
 
     for (const [categoryId, category] of Object.entries(this.categories)) {
       for (const keyword of category.keywords) {
@@ -286,10 +271,8 @@ class GreenfieldService {
 
     // Detect or use provided category
     const category = providedCategory || this.detectCategory(description);
-    const categoryConfig = this.projectTypeService?.getCategoryById?.(category)
-      || this.categories[category]
-      || this.categories.other;
-    const basePath = expandUserPath(categoryConfig.basePathResolved || categoryConfig.path);
+    const categoryConfig = this.categories[category];
+    const basePath = expandUserPath(categoryConfig.path);
 
     logger.info('Detected category', { category, basePath });
 

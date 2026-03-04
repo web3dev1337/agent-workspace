@@ -727,15 +727,6 @@ class WorkspaceTabManager {
     }
   }
 
-  shouldIgnoreShortcutEvent(e) {
-    if (!e || e.defaultPrevented) return true;
-    const target = e.target;
-    const tag = String(target?.tagName || '').toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-    if (target?.isContentEditable) return true;
-    return false;
-  }
-
   /**
    * Get active tab
    */
@@ -834,8 +825,6 @@ class WorkspaceTabManager {
    */
   setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
-      if (this.shouldIgnoreShortcutEvent(e)) return;
-
       // Alt + Arrow Left - Previous tab
       if (e.altKey && e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         e.preventDefault();
@@ -854,12 +843,6 @@ class WorkspaceTabManager {
           e.preventDefault();
           this.closeTab(this.activeTabId);
         }
-      }
-
-      // Alt + Shift + N - New project wizard
-      if (e.altKey && e.shiftKey && String(e.key || '').toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        this.orchestrator?.openGreenfieldWizard?.().catch?.(() => {});
       }
 
       // Alt + N - New tab

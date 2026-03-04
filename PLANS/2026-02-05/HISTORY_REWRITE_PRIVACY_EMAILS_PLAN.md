@@ -48,13 +48,6 @@ If you don’t need to keep history:
 Pros: simplest, avoids history leaks entirely.
 Cons: loses blame/history/PR linkage.
 
-Automated helper for this path:
-- `npm run prep:public-snapshot-repo`
-- Optional output directory:
-  - `npm run prep:public-snapshot-repo -- --out-dir /tmp/claude-orchestrator-public`
-- Output is a new local git repo with tracked files copied and a single initial commit.
-- This does not touch the current repo history.
-
 ---
 
 ## Operational plan (history rewrite)
@@ -79,69 +72,6 @@ Example:
 Use one of:
 - `git filter-repo` (recommended)
 - BFG Repo-Cleaner (less flexible)
-
-Non-destructive prep helper now available:
-- `npm run audit:history-authors`
-- Optional outputs:
-  - `node scripts/audit-history-authors.js --json /tmp/history-authors.json --md /tmp/history-authors.md --mailmap /tmp/history-authors.mailmap`
-- This does not rewrite history; it only audits author/committer email usage and generates a private mailmap starter file.
-- Tool bootstrap helper:
-  - `npm run setup:history-rewrite-tools`
-  - Optional auto-install attempt:
-    - `npm run setup:history-rewrite-tools -- --apply`
-  - Supports `--only git-filter-repo` / `--only gitleaks` when you need one specific dependency.
-- One-command prep pipeline:
-  - `npm run prep:history-rewrite:pipeline`
-  - Optional strict maintenance-window gate in one run:
-    - `npm run prep:history-rewrite:pipeline -- --strict`
-  - Optional auto-tool bootstrap attempt:
-    - `npm run prep:history-rewrite:pipeline -- --apply-tools`
-  - Optional persisted report artifacts:
-    - `npm run prep:history-rewrite:pipeline -- --report-dir /tmp/history-rewrite-reports`
-    - writes:
-      - `prep-report.json`
-      - `prep-report.md`
-      - per-step JSON files (`setup-tools.json`, `prepare-workkit.json`, `readiness-check.json`)
-  - Pipeline runs:
-    - dependency bootstrap check
-    - workkit generation
-    - readiness preflight check
-- Post-rewrite verification helper:
-  - Strict: `npm run check:history-rewrite-result`
-  - Advisory: `npm run check:history-rewrite-result:advisory`
-  - Checks:
-    - custom author/committer emails are removed (or explicitly allowed)
-    - blocked history paths are absent across `git log --all --name-only`
-- Mailmap finalizer helper:
-  - `npm run prep:history-rewrite:mailmap-finalize -- --workkit-dir /tmp/history-rewrite-workkit`
-  - Optional explicit target:
-    - `npm run prep:history-rewrite:mailmap-finalize -- --workkit-dir /tmp/history-rewrite-workkit --target-email <id+user@users.noreply.github.com>`
-  - Replaces `REPLACE_WITH_NOREPLY_EMAIL` placeholders in `mailmap.private.txt` with a real noreply email (default from global git config).
-- Guarded execution helper (maintenance window):
-  - Plan only (safe/default):
-    - `npm run history-rewrite:execute:plan -- --workkit-dir /tmp/history-rewrite-workkit --clone-dir /path/to/fresh-rewrite-clone`
-  - Execute rewrite in clone (still no push unless requested):
-    - `npm run history-rewrite:execute:plan -- --workkit-dir /tmp/history-rewrite-workkit --clone-dir /path/to/fresh-rewrite-clone --execute --confirm I_UNDERSTAND_HISTORY_REWRITE`
-  - Optional force-push (double-confirmed):
-    - add `--push --confirm-push PUSH_REWRITTEN_HISTORY`
-  - Safety gates:
-    - refuses execution if mailmap has placeholders
-    - refuses execution if clone is dirty
-    - runs strict post-rewrite verification before any push (unless explicitly skipped)
-- Full private execution prep workkit:
-  - `npm run prep:history-rewrite`
-  - Optional custom output directory:
-    - `node scripts/generate-history-rewrite-workkit.js --out-dir /tmp/history-rewrite-workkit`
-  - Generated artifacts include:
-    - `history-authors.json` / `history-authors.md` (audit evidence)
-    - `mailmap.private.txt` (fill in noreply targets)
-    - `paths-to-remove.txt` (history removal path list)
-    - `run-filter-repo.sh` + `history-rewrite-runbook.md` (execution helpers)
-  - This is still non-destructive; no rewrite commands are executed automatically.
-- Rewrite readiness gate:
-  - Advisory mode: `npm run check:history-rewrite-readiness -- --workkit-dir /tmp/history-rewrite-workkit`
-  - Strict gate mode: `npm run check:history-rewrite-readiness:strict -- --workkit-dir /tmp/history-rewrite-workkit`
-  - Strict mode fails fast when required prerequisites are missing (repo identity, clean worktree, filter-repo, gitleaks, workkit files).
 
 ### 3) Rewrite: remove files/directories from all history
 
@@ -211,28 +141,9 @@ Also update:
 
 ## Checklist for “OK to go public”
 
-- [x] History rewritten OR new squashed public repo created
-- [x] Secrets scan passes (history)
-- [x] No tracked caches/DBs
-- [x] Default bind host is loopback; LAN requires auth token
-- [x] Docs don’t contain personal paths/usernames
+- [ ] History rewritten OR new squashed public repo created
+- [ ] Secrets scan passes (history)
+- [ ] No tracked caches/DBs
+- [ ] Default bind host is loopback; LAN requires auth token
+- [ ] Docs don’t contain personal paths/usernames
 
-Status notes (2026-02-06):
-- History scan now passes via `npm run audit:public-release:history` (uses `.gitleaksignore` for two known fixture fingerprints from historical test data).
-- Public docs path hygiene + tracked-artifact checks are automated by `scripts/public-release-audit.js`.
-- Remaining destructive item is intentional: rewrite history (or publish a new squashed repo) to remove historical metadata/artifacts.
-
-Status notes (2026-02-08):
-- Added `scripts/audit-history-authors.js` and `npm run audit:history-authors` so rewrite inputs can be prepared safely before any destructive history operation.
-- Added `scripts/generate-history-rewrite-workkit.js` and `npm run prep:history-rewrite` to produce a private rewrite runbook + command kit for a controlled maintenance-window execution.
-- Added `scripts/check-history-rewrite-readiness.js` and `npm run check:history-rewrite-readiness` to enforce a non-destructive preflight gate before any rewrite maintenance window.
-- Added `scripts/setup-history-rewrite-tools.js` and `npm run setup:history-rewrite-tools` for cross-platform dependency bootstrap guidance (`git-filter-repo`, `gitleaks`).
-- Added `scripts/run-history-rewrite-prep.js` and `npm run prep:history-rewrite:pipeline` for one-command non-destructive prep orchestration.
-- Added `scripts/verify-history-rewrite-result.js` and `npm run check:history-rewrite-result` for post-rewrite pass/fail verification.
-- Added `scripts/finalize-history-rewrite-mailmap.js` and `npm run prep:history-rewrite:mailmap-finalize` to convert placeholder mailmap entries to a concrete noreply mapping.
-- Added `scripts/execute-history-rewrite.js` and `npm run history-rewrite:execute:plan` as a guarded maintenance-window rewrite executor (plan by default; explicit confirm required for execution/push).
-- Added `scripts/create-public-snapshot-repo.js` and `npm run prep:public-snapshot-repo` to generate the alternative single-commit public snapshot repo path.
-- Executed `npm run prep:public-snapshot-repo` to create a local single-commit public snapshot repository (non-destructive path complete).
-- Added `scripts/generate-release-readiness-report.js` and `npm run report:release-readiness` to produce an objective readiness summary (public-release audits + remaining-work state + snapshot existence), with optional strict history scan via `--include-history`.
-- Added `scripts/verify-public-snapshot-repo.js` and `npm run check:public-snapshot-repo` to validate snapshot integrity (exists, git repo, single commit, package.json, in-snapshot audit pass).
-- Hardened `npm run report:release-readiness` with git identity guardrails (effective/global noreply checks) and scoped canonical-history custom-email warnings to strict `--include-history` mode.

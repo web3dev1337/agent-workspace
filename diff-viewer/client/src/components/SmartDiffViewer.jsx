@@ -321,9 +321,7 @@ const SmartDiffViewer = ({ data, initialFilePath = '' }) => {
                   {selectedFile.path}
                 </div>
                 <div className="file-header-meta">
-                  {(selectedFile.additions || 0) > 0 && (
-                    <span className="file-header-badge additions">+{selectedFile.additions}</span>
-                  )}
+                  <span className="file-header-badge additions">+{selectedFile.additions || 0}</span>
                   {(selectedFile.deletions || 0) > 0 && (
                     <span className="file-header-badge deletions">-{selectedFile.deletions}</span>
                   )}

@@ -38,9 +38,7 @@ const CollapsibleHeader = ({ metadata, diff, onToggleView, showSemanticView }) =
           </h2>
           {stats && (
             <div className="quick-stats">
-              {Number(stats.additions || 0) > 0 && (
-                <span className="stat-badge additions">+{stats.additions}</span>
-              )}
+              <span className="stat-badge additions">+{stats.additions}</span>
               {stats.deletions > 0 && <span className="stat-badge deletions">-{stats.deletions}</span>}
               <span className="stat-badge files">{stats.files} files</span>
             </div>

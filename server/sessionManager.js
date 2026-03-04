@@ -14,7 +14,6 @@ const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 const { UserSettingsService } = require('./userSettingsService');
 const { WorktreeHelper } = require('./worktreeHelper');
 const sessionRecoveryService = require('./sessionRecoveryService');
-const { parseWorktreeKey } = require('./lifecyclePolicyService');
 const {
   getShellKind,
   quoteForShell,
@@ -94,7 +93,6 @@ class SessionManager extends EventEmitter {
     this.statusIdleHoldMs = parseInt(process.env.STATUS_IDLE_HOLD_MS || '6000');
     // Default to 30s to keep branch labels reasonably fresh without relying on user git commands.
     this.branchRefreshMs = parseInt(process.env.BRANCH_REFRESH_MS || '30000');
-    this.processTreeKillGraceMs = parseInt(process.env.PROCESS_TREE_KILL_GRACE_MS || '1200');
     this.conversationSnapshotTtlMs = parseInt(process.env.CONVERSATION_SNAPSHOT_TTL_MS || '5000');
     this.conversationSnapshotCache = { timestamp: 0, files: null };
 
@@ -825,8 +823,23 @@ class SessionManager extends EventEmitter {
           session.deliveredBufferLength = session.buffer.length;
         }
 
-        // Update status based on output.
-        this.refreshSessionStatus(sessionId, session);
+        // Update status based on output (for Claude sessions)
+        if (config.type === 'claude' && this.statusDetector) {
+          const recovery = session.workspace ? sessionRecoveryService.getSession(session.workspace, sessionId) : null;
+          const agent = recovery?.lastAgent || null;
+          const newStatus = this.statusDetector.detectStatus(sessionId, session.buffer, { agent });
+          if (newStatus !== session.status) {
+            this.maybeApplyStatusUpdate(sessionId, session, newStatus);
+          } else if (session.pendingStatus && session.pendingStatus !== newStatus) {
+            // Detector re-affirmed the current status; cancel any stale pending transition.
+            if (session.pendingStatusTimer) {
+              clearTimeout(session.pendingStatusTimer);
+              session.pendingStatusTimer = null;
+            }
+            session.pendingStatus = null;
+            session.pendingStatusDueAt = null;
+          }
+        }
         
         // Keep buffer size manageable
         if (session.buffer.length > this.maxBufferSize) {
@@ -868,16 +881,6 @@ class SessionManager extends EventEmitter {
             signal,
             exitCode
           });
-
-          // This terminal is now plain shell; stale recovery agent markers
-          // make the UI think an AI is still attached/running.
-          if (workspaceId) {
-            try {
-              sessionRecoveryService.markAgentInactive(workspaceId, sessionId);
-            } catch {
-              // best-effort
-            }
-          }
           
           // Remove the old session
           this.sessions.delete(sessionId);
@@ -939,9 +942,6 @@ class SessionManager extends EventEmitter {
       // Monitor for fork bombs (every 5 seconds)
       session.processMonitor = setInterval(() => {
         this.checkProcessLimit(session);
-        // Re-evaluate status even when there is no new output, so sessions can
-        // transition out of "busy" after quiet periods.
-        this.refreshSessionStatus(session.id, session);
       }, 5000);
       
     } catch (error) {
@@ -1977,49 +1977,6 @@ class SessionManager extends EventEmitter {
       });
     }
   }
-
-  refreshSessionStatus(sessionId, session) {
-    if (!this.statusDetector || !session) return;
-
-    const type = String(session.type || '').trim().toLowerCase();
-    if (type !== 'claude' && type !== 'codex') return;
-
-    const workspaceId = String(session.workspace || '').trim();
-    const recovery = workspaceId
-      ? sessionRecoveryService.getSession(workspaceId, sessionId)
-      : null;
-    const agentActive = recovery?.lastAgentActive !== false;
-    const agent = agentActive
-      ? (recovery?.lastAgent || (type === 'codex' ? 'codex' : null))
-      : null;
-
-    const newStatus = this.statusDetector.detectStatus(sessionId, session.buffer || '', { agent });
-    if (newStatus === 'idle' && workspaceId && recovery?.lastAgent) {
-      const recentOutput = this.statusDetector.stripControlSequences((session.buffer || '').slice(-2000));
-      const recentLines = recentOutput.split('\n');
-      const lastNonEmptyLine = this.statusDetector.getLastNonEmptyLine(recentLines).trim();
-      const recentAll = this.statusDetector.getLastNonEmptyLines(recentLines, 6).join('\n');
-      if (this.statusDetector.hasExplicitShellIndicator(recentAll, lastNonEmptyLine)) {
-        try {
-          sessionRecoveryService.markAgentInactive(workspaceId, sessionId);
-        } catch {
-          // best-effort cleanup; status update still proceeds
-        }
-      }
-    }
-
-    if (newStatus !== session.status) {
-      this.maybeApplyStatusUpdate(sessionId, session, newStatus);
-    } else if (session.pendingStatus && session.pendingStatus !== newStatus) {
-      // Detector re-affirmed the current status; cancel any stale pending transition.
-      if (session.pendingStatusTimer) {
-        clearTimeout(session.pendingStatusTimer);
-        session.pendingStatusTimer = null;
-      }
-      session.pendingStatus = null;
-      session.pendingStatusDueAt = null;
-    }
-  }
   
   maybeApplyStatusUpdate(sessionId, session, newStatus) {
     const now = Date.now();
@@ -2156,7 +2113,7 @@ class SessionManager extends EventEmitter {
         worktreeId: session.worktreeId,
         repositoryName: session.repositoryName,  // For mixed-repo workspaces
         repositoryType: session.repositoryType,  // For dynamic launch options
-        agent: recovery?.lastAgentActive === false ? null : (recovery?.lastAgent || null),
+        agent: recovery?.lastAgent || null,
         agentMode: recovery?.lastMode || null,
         lastActivity: session.lastActivity
       };
@@ -2172,31 +2129,11 @@ class SessionManager extends EventEmitter {
    * @param {string} worktreeInfo.worktreePath - Full path to worktree
    * @param {string} [worktreeInfo.repositoryName] - For mixed-repo workspaces
    * @param {string} [worktreeInfo.repositoryType] - For dynamic launch options
-   * @param {boolean} [worktreeInfo.includeExistingSessions] - Include existing session states in response
-   * @returns {Object} Map of sessionId -> sessionState for created (and optionally existing) sessions
+   * @returns {Object} Map of sessionId -> sessionState for the new sessions
    */
 	  async createSessionsForWorktree(worktreeInfo) {
-	    const {
-	      worktreeId,
-	      worktreePath,
-	      repositoryName,
-	      repositoryType,
-	      includeExistingSessions = false
-	    } = worktreeInfo;
+	    const { worktreeId, worktreePath, repositoryName, repositoryType } = worktreeInfo;
 	    const newSessions = {};
-
-	    const includeSessionState = (sessionId) => {
-	      const currentSession = this.sessions.get(sessionId);
-	      if (!currentSession) return;
-	      newSessions[sessionId] = {
-	        status: currentSession.status,
-	        branch: currentSession.branch,
-	        type: currentSession.type,
-	        worktreeId: currentSession.worktreeId,
-	        repositoryName: currentSession.repositoryName,
-	        repositoryType: currentSession.repositoryType
-	      };
-	    };
 
 	    logger.info('Creating sessions for new worktree', { worktreeId, worktreePath, repositoryName });
 
@@ -2233,25 +2170,32 @@ class SessionManager extends EventEmitter {
       serverSessionId = `${worktreeId}-server`;
     }
 
-	    // Create Claude session
-	    try {
-	      if (this.sessions.has(claudeSessionId)) {
-	        if (includeExistingSessions) includeSessionState(claudeSessionId);
-	      } else {
-	        this.createSession(claudeSessionId, {
-	          command: getDefaultShell(),
-	          args: buildShellArgs(`cd "${worktreePath}"`),
-	          cwd: worktreePath,
-	          type: 'claude',
-	          worktreeId: worktreeId,
-	          repositoryName: repositoryName,
-	          repositoryType: repositoryType
-	        });
-	        includeSessionState(claudeSessionId);
-	      }
-	    } catch (error) {
-	      logger.error('Failed to create Claude session for worktree', { worktreeId, error: error.message });
-	    }
+    // Create Claude session
+    try {
+      this.createSession(claudeSessionId, {
+        command: getDefaultShell(),
+        args: buildShellArgs(`cd "${worktreePath}"`),
+        cwd: worktreePath,
+        type: 'claude',
+        worktreeId: worktreeId,
+        repositoryName: repositoryName,
+        repositoryType: repositoryType
+      });
+
+      const claudeSession = this.sessions.get(claudeSessionId);
+      if (claudeSession) {
+        newSessions[claudeSessionId] = {
+          status: claudeSession.status,
+          branch: claudeSession.branch,
+          type: claudeSession.type,
+          worktreeId: claudeSession.worktreeId,
+          repositoryName: claudeSession.repositoryName,
+          repositoryType: claudeSession.repositoryType
+        };
+      }
+    } catch (error) {
+      logger.error('Failed to create Claude session for worktree', { worktreeId, error: error.message });
+    }
 
     // Create Server session
     try {
@@ -2259,31 +2203,38 @@ class SessionManager extends EventEmitter {
         ? `=== Server Terminal for ${repositoryName}/${worktreeId} ===`
         : `=== Server Terminal for ${worktreeId} ===`;
 
-	      if (this.sessions.has(serverSessionId)) {
-	        if (includeExistingSessions) includeSessionState(serverSessionId);
-	      } else {
-	        this.createSession(serverSessionId, {
-	          command: getDefaultShell(),
-	          args: buildShellArgs([
-	            `cd "${worktreePath}"`,
-	            `echo "${serverWelcome}"`,
-	            `echo "Directory: ${worktreePath}"`,
-	            process.platform === 'win32'
-	              ? `Write-Host "Branch: $(git branch --show-current 2>$null; if(-not $?) { Write-Output 'unknown' })"`
-	              : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
-	            `echo ""`
-	          ]),
-	          cwd: worktreePath,
-	          type: 'server',
-	          worktreeId: worktreeId,
-	          repositoryName: repositoryName,
-	          repositoryType: repositoryType
-	        });
-	        includeSessionState(serverSessionId);
-	      }
-	    } catch (error) {
-	      logger.error('Failed to create server session for worktree', { worktreeId, error: error.message });
-	    }
+      this.createSession(serverSessionId, {
+        command: getDefaultShell(),
+        args: buildShellArgs([
+          `cd "${worktreePath}"`,
+          `echo "${serverWelcome}"`,
+          `echo "Directory: ${worktreePath}"`,
+          process.platform === 'win32'
+            ? `Write-Host "Branch: $(git branch --show-current 2>$null; if(-not $?) { Write-Output 'unknown' })"`
+            : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
+          `echo ""`
+        ]),
+        cwd: worktreePath,
+        type: 'server',
+        worktreeId: worktreeId,
+        repositoryName: repositoryName,
+        repositoryType: repositoryType
+      });
+
+      const serverSession = this.sessions.get(serverSessionId);
+      if (serverSession) {
+        newSessions[serverSessionId] = {
+          status: serverSession.status,
+          branch: serverSession.branch,
+          type: serverSession.type,
+          worktreeId: serverSession.worktreeId,
+          repositoryName: serverSession.repositoryName,
+          repositoryType: serverSession.repositoryType
+        };
+      }
+    } catch (error) {
+      logger.error('Failed to create server session for worktree', { worktreeId, error: error.message });
+    }
 
 	    // Update git branch info for the new sessions
 	    if (this.gitHelper) {
@@ -2380,16 +2331,11 @@ class SessionManager extends EventEmitter {
       return;
     }
 
-    // POSIX: use pgrep to count child processes without shell interpolation.
-    const { execFile } = require('child_process');
-    execFile('pgrep', ['-P', String(pid)], { timeout: 2000, windowsHide: true }, (err, stdout) => {
-      // pgrep exits with code 1 when no child process matches; treat as zero children.
-      if (err && Number(err?.code) !== 1) return;
-      const lines = String(stdout || '')
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-      const processCount = lines.length;
+    // POSIX: use pgrep to count child processes
+    const { exec } = require('child_process');
+    exec(`pgrep -P ${pid} | wc -l`, (err, stdout) => {
+      if (err) return;
+      const processCount = parseInt(String(stdout || '').trim(), 10);
       if (!Number.isFinite(processCount)) return;
       if (processCount > this.maxProcessesPerSession) {
         logger.error('Process limit exceeded', { 
@@ -2441,8 +2387,6 @@ class SessionManager extends EventEmitter {
       session.pendingStatusTimer = null;
     }
 
-    const ptyPid = Number(session?.pty?.pid);
-
     // Kill the PTY process if it exists
     if (session.pty) {
       try {
@@ -2455,69 +2399,8 @@ class SessionManager extends EventEmitter {
       }
     }
 
-    // Best-effort process tree cleanup to avoid orphaned agent subprocesses
-    // after terminals are closed/removed.
-    this.bestEffortKillProcessTree(ptyPid, { sessionId });
-
     // Remove from sessions map
     sessionMap.delete(sessionId);
-  }
-
-  bestEffortKillProcessTree(pid, { sessionId = null } = {}) {
-    const numericPid = Number(pid);
-    if (!Number.isFinite(numericPid) || numericPid <= 0) return;
-
-    if (process.platform === 'win32') {
-      const { execFile } = require('child_process');
-      execFile(
-        'taskkill',
-        ['/PID', String(numericPid), '/T', '/F'],
-        { windowsHide: true, timeout: 2500 },
-        () => {}
-      );
-      return;
-    }
-
-    let killTarget = null;
-    try {
-      process.kill(-numericPid, 'SIGTERM');
-      killTarget = -numericPid;
-    } catch (groupError) {
-      try {
-        process.kill(numericPid, 'SIGTERM');
-        killTarget = numericPid;
-      } catch (singleError) {
-        logger.debug('Failed to send SIGTERM during process tree cleanup', {
-          sessionId,
-          pid: numericPid,
-          groupError: groupError.message,
-          singleError: singleError.message
-        });
-      }
-    }
-    if (!killTarget || this.processTreeKillGraceMs <= 0) return;
-
-    const escalationTimer = setTimeout(() => {
-      if (!this.isProcessTargetAlive(killTarget)) return;
-      try {
-        process.kill(killTarget, 'SIGKILL');
-      } catch {
-        // best-effort
-      }
-    }, this.processTreeKillGraceMs);
-    if (typeof escalationTimer.unref === 'function') escalationTimer.unref();
-  }
-
-  isProcessTargetAlive(targetPid) {
-    const target = Number(targetPid);
-    if (!Number.isFinite(target) || target === 0) return false;
-    try {
-      process.kill(target, 0);
-      return true;
-    } catch (error) {
-      if (error?.code === 'EPERM') return true;
-      return false;
-    }
   }
 
   getSessionById(sessionId) {
@@ -2529,112 +2412,6 @@ class SessionManager extends EventEmitter {
       if (s) return s;
     }
     return null;
-  }
-
-  getAllSessionEntries({ workspaceId = null } = {}) {
-    const wsFilter = String(workspaceId || '').trim();
-    const entries = [];
-    const seen = new Set();
-
-    const pushEntry = (sessionId, session, fallbackWorkspaceId = null) => {
-      const sid = String(sessionId || '').trim();
-      if (!sid || seen.has(sid) || !session) return;
-      const sessionWorkspaceId = String(session.workspace || fallbackWorkspaceId || '').trim() || null;
-      if (wsFilter && sessionWorkspaceId !== wsFilter) return;
-      seen.add(sid);
-      entries.push([sid, session, sessionWorkspaceId]);
-    };
-
-    for (const [sessionId, session] of this.sessions.entries()) {
-      pushEntry(sessionId, session, this.workspace?.id || null);
-    }
-
-    for (const [workspaceIdKey, map] of this.workspaceSessionMaps.entries()) {
-      if (!map || typeof map.entries !== 'function') continue;
-      for (const [sessionId, session] of map.entries()) {
-        pushEntry(sessionId, session, workspaceIdKey);
-      }
-    }
-
-    return entries;
-  }
-
-  getSessionIdsForWorktree({ workspaceId = null, worktreeKey = null, sessionTypes = null } = {}) {
-    const keyRaw = String(worktreeKey || '').trim().toLowerCase();
-    if (!keyRaw) return [];
-    const typeSet = Array.isArray(sessionTypes)
-      ? new Set(sessionTypes.map((type) => String(type || '').trim().toLowerCase()).filter(Boolean))
-      : null;
-
-    const parsedKey = parseWorktreeKey(keyRaw);
-    const repoScoped = Boolean(parsedKey?.repositoryName);
-    const keyCandidates = new Set([keyRaw].filter(Boolean));
-    if (parsedKey?.repositoryName && parsedKey?.worktreeId) {
-      keyCandidates.add(`${parsedKey.repositoryName}-${parsedKey.worktreeId}`);
-    }
-    if (!repoScoped && parsedKey?.worktreeId) {
-      keyCandidates.add(String(parsedKey.worktreeId).trim().toLowerCase());
-    }
-    const out = [];
-
-    for (const [sessionId, session] of this.getAllSessionEntries({ workspaceId })) {
-      const sid = String(sessionId || '').trim();
-      if (!sid || !session) continue;
-      if (typeSet) {
-        const type = String(session.type || '').trim().toLowerCase();
-        if (!typeSet.has(type)) continue;
-      }
-
-      const sidLower = sid.toLowerCase();
-      const sessionWorktreeId = String(session.worktreeId || '').trim().toLowerCase();
-      const sessionRepoName = String(session.repositoryName || '').trim().toLowerCase();
-      const composedKey = sessionRepoName && sessionWorktreeId
-        ? `${sessionRepoName}-${sessionWorktreeId}`
-        : '';
-
-      let matches = false;
-      for (const candidate of keyCandidates) {
-        if (!candidate) continue;
-        if (sidLower === candidate || sidLower.includes(`${candidate}-`)) {
-          matches = true;
-          break;
-        }
-      }
-      if (!matches && composedKey && keyCandidates.has(composedKey)) matches = true;
-      if (!matches && !repoScoped && sessionWorktreeId && keyCandidates.has(sessionWorktreeId)) matches = true;
-
-      if (!matches) continue;
-      out.push(sid);
-    }
-
-    return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b));
-  }
-
-  getSessionGroupIds(sessionId, { workspaceId = null, sessionTypes = ['claude', 'codex', 'server'] } = {}) {
-    const sid = String(sessionId || '').trim();
-    if (!sid) return [];
-
-    const session = this.getSessionById(sid);
-    if (!session) return [sid];
-
-    const ws = String(workspaceId || session?.workspace || '').trim() || null;
-    const worktreeId = String(session?.worktreeId || '').trim().toLowerCase();
-    const repositoryName = String(session?.repositoryName || '').trim().toLowerCase();
-    const parsedWorktreeId = worktreeId || String(sid).replace(/-(claude|codex|server)$/i, '').split('-').pop()?.toLowerCase() || '';
-    const composedKey = repositoryName && parsedWorktreeId ? `${repositoryName}-${parsedWorktreeId}` : '';
-
-    const group = new Set([sid]);
-    const keys = [composedKey, parsedWorktreeId].filter(Boolean);
-    for (const key of keys) {
-      const ids = this.getSessionIdsForWorktree({
-        workspaceId: ws,
-        worktreeKey: key,
-        sessionTypes
-      });
-      ids.forEach((id) => group.add(id));
-    }
-
-    return Array.from(group).sort((a, b) => a.localeCompare(b));
   }
 
   closeSession(sessionId, { clearRecovery = false } = {}) {
@@ -2670,14 +2447,6 @@ class SessionManager extends EventEmitter {
     // For Claude sessions, restart as a clean shell
     // This allows user to use the agent selection UI to choose how to start
     if (config.type === 'claude') {
-      const workspaceId = session.workspace || null;
-      if (workspaceId) {
-        try {
-          sessionRecoveryService.markAgentInactive(workspaceId, sessionId);
-        } catch {
-          // best-effort
-        }
-      }
       config.command = getDefaultShell();
       config.args = buildShellArgs(`cd "${config.cwd}"`);
     }
@@ -2848,11 +2617,6 @@ class SessionManager extends EventEmitter {
     });
     logger.info('Executing Claude command', { sessionId, command: resolvedCommand.command, provider: resolvedCommand.provider });
     
-    // Mark terminal busy immediately when launching an agent command.
-    if (session.status !== 'busy') {
-      this.applyStatusUpdate(sessionId, session, 'busy');
-    }
-
     // Send the command to the terminal
     this.writeToSession(sessionId, `${commandToRun}\n`);
     
@@ -2922,11 +2686,6 @@ class SessionManager extends EventEmitter {
       } else {
         command = this.agentManager.buildCommand(finalConfig.agentId, finalConfig.mode, finalConfig);
         logger.info('Executing agent command', { sessionId, command });
-      }
-
-      // Mark terminal busy immediately when launching an agent command.
-      if (session.status !== 'busy') {
-        this.applyStatusUpdate(sessionId, session, 'busy');
       }
 
       // Send the command to the terminal

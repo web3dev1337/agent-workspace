@@ -14,8 +14,8 @@ describe('GitHubRepoService listRepos', () => {
   it('lists repos via gh and normalizes output', async () => {
     execFile.mockImplementation((cmd, args, opts, cb) => {
       cb(null, JSON.stringify([
-        { nameWithOwner: 'foo/bar', name: 'bar', owner: { login: 'foo' }, isPrivate: false, isFork: true, visibility: 'PUBLIC' },
-        { nameWithOwner: 'acme/secret', name: 'secret', owner: { login: 'acme' }, isPrivate: true, isFork: false, visibility: 'PRIVATE' }
+        { nameWithOwner: 'foo/bar', name: 'bar', owner: { login: 'foo' }, isPrivate: false, visibility: 'PUBLIC' },
+        { nameWithOwner: 'acme/secret', name: 'secret', owner: { login: 'acme' }, isPrivate: true, visibility: 'PRIVATE' }
       ]), '');
     });
 
@@ -23,14 +23,14 @@ describe('GitHubRepoService listRepos', () => {
     const repos = await svc.listRepos({ limit: 50, force: true });
 
     expect(repos).toEqual([
-      { nameWithOwner: 'foo/bar', name: 'bar', owner: 'foo', isPrivate: false, isFork: true, visibility: 'public' },
-      { nameWithOwner: 'acme/secret', name: 'secret', owner: 'acme', isPrivate: true, isFork: false, visibility: 'private' }
+      { nameWithOwner: 'foo/bar', name: 'bar', owner: 'foo', isPrivate: false, visibility: 'public' },
+      { nameWithOwner: 'acme/secret', name: 'secret', owner: 'acme', isPrivate: true, visibility: 'private' }
     ]);
   });
 
   it('caches list results (no force)', async () => {
     execFile.mockImplementation((cmd, args, opts, cb) => {
-      cb(null, JSON.stringify([{ nameWithOwner: 'foo/bar', name: 'bar', owner: { login: 'foo' }, isPrivate: false, isFork: false, visibility: 'PUBLIC' }]), '');
+      cb(null, JSON.stringify([{ nameWithOwner: 'foo/bar', name: 'bar', owner: { login: 'foo' }, isPrivate: false, visibility: 'PUBLIC' }]), '');
     });
 
     const svc = GitHubRepoService.getInstance();

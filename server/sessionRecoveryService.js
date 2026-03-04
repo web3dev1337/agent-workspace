@@ -198,8 +198,7 @@ class SessionRecoveryService {
    */
   updateAgent(workspaceId, sessionId, agent, modeOrMeta) {
     const updates = {
-      lastAgent: agent,  // 'claude', 'codex', 'opencode', etc.
-      lastAgentActive: true
+      lastAgent: agent  // 'claude', 'codex', 'opencode', etc.
     };
 
     if (modeOrMeta && typeof modeOrMeta === 'object') {
@@ -208,35 +207,6 @@ class SessionRecoveryService {
       updates.lastMode = modeOrMeta; // 'fresh', 'continue', 'resume'
     }
 
-    return this.updateSession(workspaceId, sessionId, updates);
-  }
-
-  /**
-   * Clear agent-specific recovery markers when a terminal returns to plain shell.
-   */
-  clearAgent(workspaceId, sessionId) {
-    return this.updateSession(workspaceId, sessionId, {
-      lastAgent: null,
-      lastAgentActive: false,
-      lastMode: null,
-      lastAgentCommand: null,
-      lastAgentCwd: null,
-      lastConversationId: null,
-      lastConversationPath: null
-    });
-  }
-
-  /**
-   * Mark agent as inactive without losing the last agent metadata.
-   * Keeps recovery info intact while allowing the UI to show "no agent".
-   */
-  markAgentInactive(workspaceId, sessionId, meta = null) {
-    const updates = {
-      lastAgentActive: false
-    };
-    if (meta && typeof meta === 'object') {
-      Object.assign(updates, meta);
-    }
     return this.updateSession(workspaceId, sessionId, updates);
   }
 
@@ -349,22 +319,21 @@ class SessionRecoveryService {
         }
       }
 
-      const safeConversationId = (s.lastAgent === 'claude' && conversationValid)
-        ? s.lastConversationId
-        : null;
+      // Only include Claude sessions with valid conversations
+      // Always include server sessions
       if (s.lastAgent === 'claude' && !conversationValid) {
-        logger.debug('Recovery session missing valid conversation, falling back to continue', {
+        logger.debug('Skipping session with invalid/empty conversation', {
           sessionId: s.sessionId,
           conversationId: s.lastConversationId
         });
+        continue;
       }
 
       recoveryData.push({
         sessionId: s.sessionId,
         lastCwd: conversationCwd || s.worktreePath,
         lastAgent: s.lastAgent,
-        lastMode: s.lastMode,
-        lastConversationId: safeConversationId,
+        lastConversationId: s.lastConversationId,
         worktreePath: s.worktreePath,
         lastServerCommand: s.lastServerCommand,
         updatedAt: s.updatedAt

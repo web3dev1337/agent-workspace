@@ -244,14 +244,15 @@ class TestOrchestrationService {
         return;
       }
 
-      const cwdExists = await isExistingDir(result.worktreePath);
-      if (!cwdExists) {
-        result.status = existingOnly ? 'unsupported' : 'failed';
-        result.exitCode = null;
-        result.durationMs = Date.now() - started;
-        result.finishedAt = new Date().toISOString();
-        appendOutput(result, `\nWorktree path does not exist: ${String(result.worktreePath || '')}\n`);
-        return;
+      if (existingOnly) {
+        const ok = await isExistingDir(result.worktreePath);
+        if (!ok) {
+          result.status = 'unsupported';
+          result.exitCode = null;
+          result.durationMs = Date.now() - started;
+          result.finishedAt = new Date().toISOString();
+          return;
+        }
       }
 
       const cmd = await detectTestCommandForWorktree(result.worktreePath, { script: desiredScript });
@@ -271,8 +272,7 @@ class TestOrchestrationService {
           child = this.spawnImpl(cmd.command, Array.isArray(cmd.args) ? cmd.args : [], {
             cwd: result.worktreePath,
             env: { ...process.env },
-            stdio: ['ignore', 'pipe', 'pipe'],
-            windowsHide: true
+            stdio: ['ignore', 'pipe', 'pipe']
           });
         } catch (error) {
           appendOutput(result, `\nSpawn failed: ${error.message}\n`);

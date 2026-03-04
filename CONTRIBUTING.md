@@ -5,16 +5,12 @@
 1. Create a branch from `origin/main`.
 2. Make focused changes (small PRs preferred).
 3. Run tests for touched areas (at minimum `npm run test:unit`).
-4. Run public-release safety checks:
-   - `npm run audit:public-release`
-   - `npm run audit:public-release:history` (requires `gitleaks`)
-5. Push branch and open a PR.
+4. Push branch and open a PR.
 
 ```bash
 git fetch origin
 git checkout -b feat/my-change origin/main
 npm run test:unit
-npm run audit:public-release
 git add -A
 git commit -m "feat: short summary"
 git push -u origin feat/my-change

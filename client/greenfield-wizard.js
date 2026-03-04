@@ -8,11 +8,6 @@ class GreenfieldWizard {
       name: '',
       description: '',
       category: '',
-      framework: '',
-      template: '',
-      repo: '',
-      githubOrg: '',
-      createGithub: true,
       detectedCategory: '',
       isPrivate: true,
       worktreeCount: 8,
@@ -20,293 +15,53 @@ class GreenfieldWizard {
       yolo: true
     };
     this.categories = [];
-    this.frameworks = [];
-    this.templates = [];
-    this.contextSuggestion = null;
     // Always use same-origin API requests; the dev server proxies `/api` to the backend.
     this.serverUrl = window.location.origin;
-    this._onEscape = null;
   }
 
   async show() {
     console.log('Opening greenfield project wizard...');
 
-    // Fetch taxonomy and derive defaults before rendering.
-    this.contextSuggestion = null;
-    await this.loadTaxonomy();
-    this.applyContextSuggestion();
-    this.ensureValidSelection();
+    // Fetch available categories
+    await this.loadCategories();
 
     // Show wizard modal
     this.renderWizard();
     this.showStep(1);
   }
 
-  async loadTaxonomy() {
+  async loadCategories() {
     try {
-      const taxonomy = await this.orchestrator?.ensureProjectTypeTaxonomy?.();
-      if (taxonomy && Array.isArray(taxonomy.categories) && taxonomy.categories.length && Array.isArray(taxonomy.templates)) {
-        this.categories = taxonomy.categories.map((category) => ({
-          id: String(category?.id || '').trim(),
-          name: String(category?.name || category?.id || '').trim(),
-          description: String(category?.description || '').trim(),
-          path: String(category?.basePathResolved || category?.path || category?.basePath || '').trim(),
-          keywords: Array.isArray(category?.keywords) ? category.keywords : [],
-          defaultTemplateId: String(category?.defaultTemplateId || '').trim(),
-          frameworkIds: Array.isArray(category?.frameworkIds) ? category.frameworkIds.map((id) => String(id || '').trim()).filter(Boolean) : []
-        })).filter((item) => item.id);
-        this.frameworks = Array.isArray(taxonomy.frameworks) ? taxonomy.frameworks.map((framework) => ({
-          id: String(framework?.id || '').trim(),
-          name: String(framework?.name || framework?.id || '').trim(),
-          description: String(framework?.description || '').trim(),
-          categoryId: String(framework?.categoryId || '').trim(),
-          defaultTemplateId: String(framework?.defaultTemplateId || '').trim(),
-          templateIds: Array.isArray(framework?.templateIds) ? framework.templateIds.map((id) => String(id || '').trim()).filter(Boolean) : []
-        })).filter((item) => item.id) : [];
-        this.templates = taxonomy.templates.map((template) => ({
-          id: String(template?.id || '').trim(),
-          name: String(template?.name || template?.id || '').trim(),
-          description: String(template?.description || '').trim(),
-          categoryId: String(template?.categoryId || '').trim(),
-          frameworkId: String(template?.frameworkId || '').trim(),
-          defaultRepositoryType: String(template?.defaultRepositoryType || '').trim()
-        })).filter((item) => item.id);
-        console.log('Loaded project taxonomy:', {
-          categories: this.categories.length,
-          frameworks: this.frameworks.length,
-          templates: this.templates.length
-        });
-        return;
-      }
-
-      const response = await fetch(`${this.serverUrl}/api/project-types`);
+      const response = await fetch(`${this.serverUrl}/api/greenfield/categories`);
       if (response.ok) {
-        const payload = await response.json();
-        this.categories = Array.isArray(payload?.categories) ? payload.categories.map((category) => ({
-          id: String(category?.id || '').trim(),
-          name: String(category?.name || category?.id || '').trim(),
-          description: String(category?.description || '').trim(),
-          path: String(category?.basePathResolved || category?.path || category?.basePath || '').trim(),
-          keywords: Array.isArray(category?.keywords) ? category.keywords : [],
-          defaultTemplateId: String(category?.defaultTemplateId || '').trim(),
-          frameworkIds: Array.isArray(category?.frameworkIds) ? category.frameworkIds.map((id) => String(id || '').trim()).filter(Boolean) : []
-        })).filter((item) => item.id) : [];
-        this.frameworks = Array.isArray(payload?.frameworks) ? payload.frameworks.map((framework) => ({
-          id: String(framework?.id || '').trim(),
-          name: String(framework?.name || framework?.id || '').trim(),
-          description: String(framework?.description || '').trim(),
-          categoryId: String(framework?.categoryId || '').trim(),
-          defaultTemplateId: String(framework?.defaultTemplateId || '').trim(),
-          templateIds: Array.isArray(framework?.templateIds) ? framework.templateIds.map((id) => String(id || '').trim()).filter(Boolean) : []
-        })).filter((item) => item.id) : [];
-        this.templates = Array.isArray(payload?.templates) ? payload.templates.map((template) => ({
-          id: String(template?.id || '').trim(),
-          name: String(template?.name || template?.id || '').trim(),
-          description: String(template?.description || '').trim(),
-          categoryId: String(template?.categoryId || '').trim(),
-          frameworkId: String(template?.frameworkId || '').trim(),
-          defaultRepositoryType: String(template?.defaultRepositoryType || '').trim()
-        })).filter((item) => item.id) : [];
-        return;
+        this.categories = await response.json();
+        console.log('Loaded categories:', this.categories);
       }
     } catch (error) {
-      console.error('Failed to load project taxonomy:', error);
+      console.error('Failed to load categories:', error);
+      this.categories = [
+        { id: 'website', path: '~/GitHub/websites', keywords: ['website'] },
+        { id: 'game', path: '~/GitHub/games', keywords: ['game'] },
+        { id: 'tool', path: '~/GitHub/tools', keywords: ['tool'] },
+        { id: 'other', path: '~/GitHub/projects', keywords: [] }
+      ];
     }
-
-    this.categories = [
-      { id: 'website', name: 'Website', path: '~/GitHub/websites', keywords: ['website'], defaultTemplateId: 'website-starter', frameworkIds: ['web-generic'] },
-      { id: 'game', name: 'Game', path: '~/GitHub/games', keywords: ['game'], defaultTemplateId: 'hytopia-game-starter', frameworkIds: ['hytopia', 'monogame'] },
-      { id: 'tool', name: 'Tool', path: '~/GitHub/tools', keywords: ['tool'], defaultTemplateId: 'node-typescript-tool', frameworkIds: ['nodejs'] },
-      { id: 'other', name: 'Other', path: '~/GitHub/projects', keywords: [], defaultTemplateId: 'generic-empty', frameworkIds: ['generic'] }
-    ];
-    this.frameworks = [
-      { id: 'web-generic', name: 'Web', categoryId: 'website', defaultTemplateId: 'website-starter', templateIds: ['website-starter'] },
-      { id: 'hytopia', name: 'Hytopia', categoryId: 'game', defaultTemplateId: 'hytopia-game-starter', templateIds: ['hytopia-game-starter'] },
-      { id: 'monogame', name: 'MonoGame', categoryId: 'game', defaultTemplateId: 'generic-empty', templateIds: ['generic-empty'] },
-      { id: 'nodejs', name: 'Node.js', categoryId: 'tool', defaultTemplateId: 'node-typescript-tool', templateIds: ['node-typescript-tool', 'generic-empty'] },
-      { id: 'generic', name: 'Generic', categoryId: 'other', defaultTemplateId: 'generic-empty', templateIds: ['generic-empty'] }
-    ];
-    this.templates = [
-      { id: 'website-starter', name: 'Website Starter', description: 'Simple website scaffold', categoryId: 'website', frameworkId: 'web-generic', defaultRepositoryType: 'website' },
-      { id: 'hytopia-game-starter', name: 'Hytopia Starter', description: 'Hytopia game scaffold', categoryId: 'game', frameworkId: 'hytopia', defaultRepositoryType: 'hytopia-game' },
-      { id: 'node-typescript-tool', name: 'Node TypeScript', description: 'Node.js + TypeScript starter', categoryId: 'tool', frameworkId: 'nodejs', defaultRepositoryType: 'tool-project' },
-      { id: 'generic-empty', name: 'Empty Project', description: 'Minimal scaffold', categoryId: 'other', frameworkId: 'generic', defaultRepositoryType: 'generic' }
-    ];
-  }
-
-  getCategoryById(categoryId) {
-    const id = String(categoryId || '').trim();
-    return this.categories.find((category) => category.id === id) || null;
-  }
-
-  getFrameworkById(frameworkId) {
-    const id = String(frameworkId || '').trim();
-    return this.frameworks.find((framework) => framework.id === id) || null;
-  }
-
-  getTemplateById(templateId) {
-    const id = String(templateId || '').trim();
-    return this.templates.find((template) => template.id === id) || null;
-  }
-
-  getFrameworksForCategory(categoryId) {
-    const id = String(categoryId || '').trim();
-    if (!id) return [];
-    const byCategory = this.frameworks.filter((framework) => framework.categoryId === id);
-    if (byCategory.length) return byCategory;
-    const category = this.getCategoryById(id);
-    if (!category) return [];
-    return this.frameworks.filter((framework) => (category.frameworkIds || []).includes(framework.id));
-  }
-
-  getTemplatesForFramework(frameworkId) {
-    const id = String(frameworkId || '').trim();
-    if (!id) return [];
-    const framework = this.getFrameworkById(id);
-    if (!framework) return [];
-    const ids = Array.isArray(framework.templateIds) ? framework.templateIds : [];
-    const byFrameworkId = this.templates.filter((template) => template.frameworkId === id);
-    if (ids.length) {
-      const idSet = new Set(ids);
-      const ordered = [];
-      for (const templateId of ids) {
-        const row = this.getTemplateById(templateId);
-        if (row) ordered.push(row);
-      }
-      for (const row of byFrameworkId) {
-        if (!idSet.has(row.id)) ordered.push(row);
-      }
-      return ordered;
-    }
-    return byFrameworkId;
-  }
-
-  getTemplatesForCategory(categoryId) {
-    const id = String(categoryId || '').trim();
-    if (!id) return [];
-    return this.templates.filter((template) => template.categoryId === id);
-  }
-
-  getSelectedCategory() {
-    return this.getCategoryById(this.data.category);
-  }
-
-  getSelectedFramework() {
-    return this.getFrameworkById(this.data.framework);
-  }
-
-  getSelectedTemplate() {
-    return this.getTemplateById(this.data.template);
-  }
-
-  getCurrentRepositoryTypeHint() {
-    const sessionId = this.orchestrator?.focusedTerminalInfo?.sessionId || this.orchestrator?.lastInteractedSessionId || '';
-    const session = sessionId && this.orchestrator?.sessions?.get ? this.orchestrator.sessions.get(sessionId) : null;
-    if (session?.repositoryType) return String(session.repositoryType).trim();
-
-    const workspace = this.orchestrator?.currentWorkspace || null;
-    if (!workspace) return '';
-
-    if (workspace.workspaceType === 'mixed-repo') {
-      const terminals = Array.isArray(workspace.terminals) ? workspace.terminals : workspace.terminals?.pairs;
-      const first = Array.isArray(terminals) && terminals.length ? terminals[0] : null;
-      return String(first?.repository?.type || '').trim();
-    }
-
-    return String(workspace.type || '').trim();
-  }
-
-  applyContextSuggestion() {
-    const repoType = this.getCurrentRepositoryTypeHint();
-    if (!repoType) return;
-
-    const template = this.templates.find((row) => String(row?.defaultRepositoryType || '').trim().toLowerCase() === repoType.toLowerCase());
-    if (!template) return;
-
-    const framework = this.getFrameworkById(template.frameworkId);
-    const categoryId = template.categoryId || framework?.categoryId || '';
-    if (!categoryId) return;
-
-    this.contextSuggestion = {
-      repositoryType: repoType,
-      categoryId,
-      frameworkId: framework?.id || '',
-      templateId: template.id
-    };
-
-    if (!this.data.category) this.data.category = categoryId;
-    if (!this.data.framework && framework?.id) this.data.framework = framework.id;
-    if (!this.data.template) this.data.template = template.id;
-  }
-
-  ensureValidSelection() {
-    if (!this.data.category && this.categories.length) {
-      this.data.category = this.categories[0].id;
-    }
-
-    const category = this.getSelectedCategory();
-    if (!category) return;
-
-    const frameworks = this.getFrameworksForCategory(category.id);
-    if (!frameworks.length) {
-      this.data.framework = '';
-      this.data.template = '';
-      return;
-    }
-
-    const selectedFramework = frameworks.find((framework) => framework.id === this.data.framework);
-    const framework = selectedFramework || frameworks[0];
-    this.data.framework = framework.id;
-
-    const templates = this.getTemplatesForFramework(framework.id);
-    if (!templates.length) {
-      this.data.template = '';
-      return;
-    }
-
-    const preferredTemplateId = this.data.template
-      || framework.defaultTemplateId
-      || category.defaultTemplateId
-      || templates[0].id;
-    const selectedTemplate = templates.find((template) => template.id === preferredTemplateId) || templates[0];
-    this.data.template = selectedTemplate.id;
-  }
-
-  setCategory(categoryId) {
-    const next = String(categoryId || '').trim();
-    if (!next) return;
-    this.data.category = next;
-    this.ensureValidSelection();
-  }
-
-  setFramework(frameworkId) {
-    const next = String(frameworkId || '').trim();
-    if (!next) return;
-    this.data.framework = next;
-    this.ensureValidSelection();
-  }
-
-  setTemplate(templateId) {
-    const next = String(templateId || '').trim();
-    if (!next) return;
-    this.data.template = next;
-    this.ensureValidSelection();
   }
 
   renderWizard() {
     // Remove existing wizard
     const existing = document.getElementById('greenfield-wizard');
-    if (existing) this.closeWizard();
+    if (existing) existing.remove();
 
     // Create wizard modal
     const wizard = document.createElement('div');
     wizard.id = 'greenfield-wizard';
     wizard.className = 'modal greenfield-wizard-modal';
     wizard.innerHTML = `
-      <div class="modal-content wizard-content greenfield-fullscreen-content">
+      <div class="modal-content wizard-content">
         <div class="wizard-header">
           <h2>New Project</h2>
-          <button class="close-btn" onclick="window.greenfieldWizard.closeWizard()">×</button>
+          <button class="close-btn" onclick="this.closest('.modal').remove()">X</button>
         </div>
 
         <div class="wizard-progress">
@@ -328,24 +83,11 @@ class GreenfieldWizard {
     `;
 
     document.body.appendChild(wizard);
-    wizard.addEventListener('click', (event) => {
-      if (event.target === wizard) {
-        this.closeWizard();
-      }
-    });
-    this._onEscape = (event) => {
-      if (event.key !== 'Escape') return;
-      this.closeWizard();
-    };
-    document.addEventListener('keydown', this._onEscape);
     window.greenfieldWizard = this;
   }
 
   showStep(step) {
     this.currentStep = step;
-    if (step === 2 || step === 3) {
-      this.ensureValidSelection();
-    }
 
     // Update progress indicators
     document.querySelectorAll('#greenfield-wizard .step-indicator').forEach((el, index) => {
@@ -372,9 +114,6 @@ class GreenfieldWizard {
   }
 
   renderDescriptionStep() {
-    const detectedCategory = this.getCategoryById(this.data.detectedCategory);
-    const suggestedTemplate = this.getTemplateById(this.contextSuggestion?.templateId || '');
-    const suggestedFramework = this.getFrameworkById(this.contextSuggestion?.frameworkId || '');
     return `
       <div class="wizard-step">
         <h3>What do you want to build?</h3>
@@ -397,19 +136,10 @@ class GreenfieldWizard {
           <p class="field-help">Describe what you want to build. Claude will use this to understand the project.</p>
         </div>
 
-        ${this.contextSuggestion ? `
-        <div class="detected-category">
-          <span class="category-label">Workspace suggestion:</span>
-          <span class="category-value">${suggestedTemplate?.name || this.contextSuggestion.templateId}</span>
-          <span class="category-path">based on current repo type ${this.contextSuggestion.repositoryType}</span>
-          ${suggestedFramework ? `<span class="category-path">framework: ${suggestedFramework.name}</span>` : ''}
-        </div>
-        ` : ''}
-
         ${this.data.detectedCategory ? `
         <div class="detected-category">
           <span class="category-label">Detected category:</span>
-          <span class="category-value">${detectedCategory?.name || this.data.detectedCategory}</span>
+          <span class="category-value">${this.data.detectedCategory}</span>
           <span class="category-path">${this.getCategoryPath(this.data.detectedCategory)}</span>
         </div>
         ` : ''}
@@ -418,87 +148,25 @@ class GreenfieldWizard {
   }
 
   renderConfigureStep() {
-    this.ensureValidSelection();
-    const category = this.getSelectedCategory();
-    const frameworks = this.getFrameworksForCategory(category?.id);
-    const templates = this.getTemplatesForFramework(this.data.framework);
-    const repoPreview = this.getRepositoryTargetPreview();
-
-    const categoryOptions = this.categories.map((c) => `
+    const categoryOptions = this.categories.map(c => `
       <option value="${c.id}" ${this.data.category === c.id ? 'selected' : ''}>
-        ${(c.name || c.id)} (${c.path})
+        ${c.id} (${c.path})
       </option>
     `).join('');
-    const frameworkOptions = frameworks.map((framework) => `
-      <option value="${framework.id}" ${this.data.framework === framework.id ? 'selected' : ''}>
-        ${framework.name || framework.id}
-      </option>
-    `).join('');
-    const templateOptions = templates.map((template) => `
-      <option value="${template.id}" ${this.data.template === template.id ? 'selected' : ''}>
-        ${template.name || template.id}
-      </option>
-    `).join('');
-    const selectedTemplate = this.getSelectedTemplate();
 
     return `
       <div class="wizard-step">
         <h3>Configure Project</h3>
-        <p class="step-description">Pick category, framework, and template before we scaffold your project.</p>
+        <p class="step-description">Fine-tune how your project will be set up.</p>
 
         <div class="form-group">
           <label for="gf-category">Category</label>
-          <select id="gf-category" onchange="window.greenfieldWizard.setCategory(this.value); window.greenfieldWizard.showStep(2);">
+          <select id="gf-category" onchange="window.greenfieldWizard.updateData('category', this.value)">
             ${categoryOptions}
           </select>
-          <p class="field-help">Determines the base folder: ${category?.path || '~/GitHub/projects'}</p>
+          <p class="field-help">Determines the folder location</p>
         </div>
 
-        <div class="form-group">
-          <label for="gf-framework">Framework</label>
-          <select id="gf-framework" onchange="window.greenfieldWizard.setFramework(this.value); window.greenfieldWizard.showStep(2);">
-            ${frameworkOptions || '<option value="">(none)</option>'}
-          </select>
-          <p class="field-help">${this.getSelectedFramework()?.description || 'Framework-specific defaults and template options'}</p>
-        </div>
-
-        <div class="form-group">
-          <label for="gf-template">Template</label>
-          <select id="gf-template" onchange="window.greenfieldWizard.setTemplate(this.value); window.greenfieldWizard.showStep(2);">
-            ${templateOptions || '<option value="">(none)</option>'}
-          </select>
-          <p class="field-help">${selectedTemplate?.description || 'Scaffold starter kit'}</p>
-        </div>
-
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="gf-create-github" ${this.data.createGithub ? 'checked' : ''}
-                   onchange="window.greenfieldWizard.updateData('createGithub', this.checked)">
-            Create GitHub Repository
-          </label>
-          <p class="field-help">Disable for local-first projects that are not ready for GitHub yet</p>
-        </div>
-
-        <div class="form-group">
-          <label for="gf-repo-target">Repository Target (optional)</label>
-          <input type="text" id="gf-repo-target" value="${this.data.repo || ''}"
-                 placeholder="owner/repo, repo-name, or full git URL"
-                 oninput="window.greenfieldWizard.updateData('repo', this.value)">
-          <p class="field-help">${this.data.createGithub ? 'GitHub slug/URL to create or attach' : 'Optional existing remote URL/slug to attach'}</p>
-          ${repoPreview ? `<p class="field-help">Resolved target: <code>${repoPreview}</code></p>` : ''}
-        </div>
-
-        ${this.data.createGithub ? `
-        <div class="form-group">
-          <label for="gf-github-org">GitHub Org/User (optional)</label>
-          <input type="text" id="gf-github-org" value="${this.data.githubOrg || ''}"
-                 placeholder="web3dev1337"
-                 oninput="window.greenfieldWizard.updateData('githubOrg', this.value)">
-          <p class="field-help">Used when repository target is just a repo name</p>
-        </div>
-        ` : ''}
-
-        ${this.data.createGithub ? `
         <div class="form-group">
           <label class="checkbox-label">
             <input type="checkbox" id="gf-private" ${this.data.isPrivate ? 'checked' : ''}
@@ -507,7 +175,6 @@ class GreenfieldWizard {
           </label>
           <p class="field-help">Create a private GitHub repository (recommended)</p>
         </div>
-        ` : ''}
 
         <div class="form-group">
           <label for="gf-worktree-count">Number of Worktrees</label>
@@ -543,10 +210,6 @@ class GreenfieldWizard {
   renderReviewStep() {
     const categoryPath = this.getCategoryPath(this.data.category);
     const fullPath = `${categoryPath}/${this.data.name}`;
-    const selectedCategory = this.getSelectedCategory();
-    const selectedFramework = this.getSelectedFramework();
-    const selectedTemplate = this.getSelectedTemplate();
-    const repoPreview = this.getRepositoryTargetPreview();
 
     return `
       <div class="wizard-step">
@@ -565,22 +228,8 @@ class GreenfieldWizard {
             <strong>Location:</strong> ${fullPath}
           </div>
           <div class="review-item">
-            <strong>Category:</strong> ${selectedCategory?.name || this.data.category || '(not set)'}
+            <strong>GitHub:</strong> ${this.data.isPrivate ? 'Private' : 'Public'} repository
           </div>
-          <div class="review-item">
-            <strong>Framework:</strong> ${selectedFramework?.name || this.data.framework || '(not set)'}
-          </div>
-          <div class="review-item">
-            <strong>Template:</strong> ${selectedTemplate?.name || this.data.template || '(not set)'}
-          </div>
-          <div class="review-item">
-            <strong>GitHub:</strong> ${this.data.createGithub ? `${this.data.isPrivate ? 'Private' : 'Public'} repository` : 'Skip GitHub creation'}
-          </div>
-          ${repoPreview ? `
-          <div class="review-item">
-            <strong>Repository Target:</strong> ${repoPreview}
-          </div>
-          ` : ''}
           <div class="review-item">
             <strong>Worktrees:</strong> master + work1-work${this.data.worktreeCount}
           </div>
@@ -594,10 +243,8 @@ class GreenfieldWizard {
           <ol>
             <li>Create folder: <code>${fullPath}/master</code></li>
             <li>Initialize git repository</li>
-            ${this.data.createGithub
-              ? `<li>Create GitHub repo (${this.data.isPrivate ? 'private' : 'public'})${repoPreview ? ` as <code>${repoPreview}</code>` : ''}</li>`
-              : '<li>Skip GitHub repo creation (local-only for now)</li>'}
-            ${this.data.createGithub || repoPreview ? '<li>Push initial commit</li>' : ''}
+            <li>Create GitHub repo (${this.data.isPrivate ? 'private' : 'public'})</li>
+            <li>Push initial commit</li>
             <li>Create ${this.data.worktreeCount} worktrees</li>
             <li>Save PROJECT_BRIEF.md with your description</li>
             ${this.data.spawnClaude ? '<li>Start Claude Code in work1 with context</li>' : ''}
@@ -611,26 +258,8 @@ class GreenfieldWizard {
   }
 
   getCategoryPath(categoryId) {
-    const cat = this.getCategoryById(categoryId);
+    const cat = this.categories.find(c => c.id === categoryId);
     return cat?.path || '~/GitHub/projects';
-  }
-
-  getRepositoryTargetPreview() {
-    const repo = String(this.data.repo || '').trim();
-    const githubOrg = String(this.data.githubOrg || '').trim().replace(/^@+/, '').replace(/\/+$/, '');
-    const fallback = String(this.data.name || '').trim();
-    const candidate = repo || (this.data.createGithub ? fallback : '');
-    if (!candidate) return '';
-
-    if (/^(https?:\/\/|git@)/i.test(candidate)) {
-      return candidate;
-    }
-
-    if (candidate.includes('/')) {
-      return candidate;
-    }
-
-    return githubOrg ? `${githubOrg}/${candidate}` : candidate;
   }
 
   async updateDescription(value) {
@@ -648,11 +277,17 @@ class GreenfieldWizard {
         if (response.ok) {
           const result = await response.json();
           this.data.detectedCategory = result.category;
-          if (!this.data.category && result.category) {
-            this.setCategory(result.category);
+          if (!this.data.category) {
+            this.data.category = result.category;
           }
 
-          if (this.currentStep === 1) {
+          // Update UI
+          const detected = document.querySelector('.detected-category');
+          if (detected) {
+            detected.querySelector('.category-value').textContent = result.category;
+            detected.querySelector('.category-path').textContent = result.path;
+          } else {
+            // Re-render to show detected category
             this.showStep(1);
           }
         }
@@ -663,25 +298,11 @@ class GreenfieldWizard {
   }
 
   updateData(key, value) {
-    if (key === 'repo') {
-      this.data.repo = String(value || '').trim();
-    } else if (key === 'githubOrg') {
-      this.data.githubOrg = String(value || '')
-        .trim()
-        .replace(/^@+/, '')
-        .replace(/^https?:\/\/github\.com\//i, '')
-        .replace(/\/+$/, '');
-    } else {
-      this.data[key] = value;
-    }
-    if (key === 'worktreeCount') {
-      const n = Number(value);
-      this.data.worktreeCount = Number.isFinite(n) ? Math.min(8, Math.max(1, Math.round(n))) : 1;
-    }
+    this.data[key] = value;
 
-    // Re-render active step for dynamic controls and summaries.
-    if (this.currentStep === 2 || this.currentStep === 3) {
-      this.showStep(this.currentStep);
+    // Re-render if on review step
+    if (this.currentStep === 3) {
+      this.showStep(3);
     }
   }
 
@@ -717,22 +338,6 @@ class GreenfieldWizard {
         if (!this.data.category) {
           this.data.category = this.data.detectedCategory || 'other';
         }
-        this.ensureValidSelection();
-        return true;
-      case 2:
-        this.ensureValidSelection();
-        if (!this.data.category) {
-          alert('Please select a category');
-          return false;
-        }
-        if (!this.data.framework) {
-          alert('Please select a framework');
-          return false;
-        }
-        if (!this.data.template) {
-          alert('Please select a template');
-          return false;
-        }
         return true;
       default:
         return true;
@@ -755,35 +360,30 @@ class GreenfieldWizard {
     this.showProgress();
 
     try {
-      const repoInput = String(this.data.repo || '').trim();
-      const repoTarget = repoInput || (this.data.createGithub ? this.data.name : '');
-      const githubOrg = String(this.data.githubOrg || '').trim();
-      const payload = {
-        name: this.data.name,
-        description: this.data.description,
-        category: this.data.category,
-        framework: this.data.framework,
-        template: this.data.template,
-        repo: repoTarget || undefined,
-        githubOrg: githubOrg || undefined,
-        private: this.data.isPrivate,
-        createGithub: this.data.createGithub,
-        allowGitHubFailure: true,
-        push: true,
-        initGit: true,
-        worktreeCount: this.data.worktreeCount,
-        spawnClaude: this.data.spawnClaude,
-        yolo: this.data.yolo
-      };
+      const response = await fetch(`${this.serverUrl}/api/greenfield/create-full`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: this.data.name,
+          description: this.data.description,
+          category: this.data.category,
+          isPrivate: this.data.isPrivate,
+          worktreeCount: this.data.worktreeCount,
+          spawnClaude: this.data.spawnClaude,
+          yolo: this.data.yolo
+        })
+      });
 
-      const normalizedResult = this.orchestrator?.createProjectWorkspace
-        ? await this.orchestrator.createProjectWorkspace(payload)
-        : await this.createProjectWorkspaceFallback(payload);
+      const result = await response.json();
 
-      console.log('Project created:', normalizedResult);
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create project');
+      }
+
+      console.log('Project created:', result);
 
       // Show success message
-      this.showSuccess(normalizedResult);
+      this.showSuccess(result);
 
     } catch (error) {
       console.error('Failed to create project:', error);
@@ -794,27 +394,6 @@ class GreenfieldWizard {
         createBtn.textContent = 'Create Project';
       }
     }
-  }
-
-  async createProjectWorkspaceFallback(payload) {
-    const response = await fetch(`${this.serverUrl}/api/projects/create-workspace`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || result?.ok === false) {
-      throw new Error(String(result?.error || `Failed to create project (${response.status})`));
-    }
-
-    const normalized = {
-      ...(result?.project || result || {}),
-      workspace: result?.workspace || null
-    };
-    if (!normalized.repoUrl && normalized.remoteUrl) {
-      normalized.repoUrl = normalized.remoteUrl;
-    }
-    return normalized;
   }
 
   showProgress() {
@@ -841,8 +420,6 @@ class GreenfieldWizard {
         <div class="success-details">
           <p><strong>Project:</strong> ${this.data.name}</p>
           <p><strong>Location:</strong> ${result.projectPath}</p>
-          <p><strong>Framework:</strong> ${this.getSelectedFramework()?.name || this.data.framework || '—'}</p>
-          <p><strong>Template:</strong> ${this.getSelectedTemplate()?.name || this.data.template || '—'}</p>
           ${result.repoUrl ? `<p><strong>GitHub:</strong> <a href="${result.repoUrl}" target="_blank">${result.repoUrl}</a></p>` : ''}
           <p><strong>Worktrees:</strong> ${result.worktrees?.map(w => w.id).join(', ')}</p>
           ${result.claudeSession ? `<p><strong>Claude:</strong> Started in work1</p>` : ''}
@@ -854,7 +431,7 @@ class GreenfieldWizard {
             Open Workspace
           </button>
           ` : ''}
-          <button class="btn-secondary" onclick="window.greenfieldWizard.closeWizard()">
+          <button class="btn-secondary" onclick="document.getElementById('greenfield-wizard').remove()">
             Close
           </button>
         </div>
@@ -874,7 +451,7 @@ class GreenfieldWizard {
           <button class="btn-secondary" onclick="window.greenfieldWizard.showStep(3)">
             Try Again
           </button>
-          <button class="btn-secondary" onclick="window.greenfieldWizard.closeWizard()">
+          <button class="btn-secondary" onclick="document.getElementById('greenfield-wizard').remove()">
             Close
           </button>
         </div>
@@ -883,17 +460,8 @@ class GreenfieldWizard {
     document.querySelector('#greenfield-wizard .wizard-footer').style.display = 'flex';
   }
 
-  closeWizard() {
-    const wizard = document.getElementById('greenfield-wizard');
-    if (wizard) wizard.remove();
-    if (this._onEscape) {
-      document.removeEventListener('keydown', this._onEscape);
-      this._onEscape = null;
-    }
-  }
-
   async openWorkspace(workspaceId) {
-    this.closeWizard();
+    document.getElementById('greenfield-wizard').remove();
 
     // Switch to the new workspace
     if (this.orchestrator && this.orchestrator.socket) {

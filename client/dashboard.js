@@ -8,7 +8,6 @@ class Dashboard {
     this.isVisible = false;
     this.quickLinks = null;
     this._escHandler = null;
-    this._projectLaunchInFlight = false;
   }
 
 	  async show() {
@@ -20,9 +19,8 @@ class Dashboard {
       window.quickLinks = this.quickLinks; // Make available globally for onclick handlers
     }
 
-    const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
     // Fetch quick links data - re-render when complete
-    if (this.quickLinks && visibility.quickLinks !== false) {
+    if (this.quickLinks) {
       this.quickLinks.fetchData().then(() => {
         // Re-render to show quick links once loaded
         if (this.isVisible) {
@@ -90,235 +88,138 @@ class Dashboard {
     this.setupEventListeners();
 
     // Set up quick links drag and drop
-    const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
-    if (this.quickLinks && visibility.quickLinks !== false) {
+    if (this.quickLinks) {
       this.quickLinks.setupDragAndDrop();
     }
 
     // Load ports for dashboard
-    if (visibility.runningServices !== false) {
-      this.loadDashboardPorts();
-    }
+    this.loadDashboardPorts();
 
     // Load process status/telemetry/advice summaries
-    if (visibility.processSection !== false) {
-      this.loadDashboardProcessSummary();
-    }
+    this.loadDashboardProcessSummary();
   }
 
   generateDashboardHTML() {
-		    const sortByLastAccess = (a, b) => {
-		      const aTime = a.lastAccess ? new Date(a.lastAccess).getTime() : 0;
-		      const bTime = b.lastAccess ? new Date(b.lastAccess).getTime() : 0;
-		      return bTime - aTime;
-		    };
-		    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws)).sort(sortByLastAccess);
-		    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws)).sort(sortByLastAccess);
+		    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws));
+		    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws));
 		    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
-        const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
-        const showProcessBanner = visibility.processBanner !== false;
-        const showProcessSection = visibility.processSection !== false;
-        const showStatusCard = visibility.statusCard !== false;
-        const showTelemetryCard = visibility.telemetryCard !== false;
-        const showPolecatsCard = visibility.polecatsCard !== false;
-        const showDiscordCard = visibility.discordCard !== false;
-        const showProjectsCard = visibility.projectsCard !== false;
-        const showAdviceCard = visibility.adviceCard !== false;
-        const showReadinessCard = visibility.readinessCard !== false;
-
-        const processCards = [
-          showStatusCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Status</div>
-              <div id="dashboard-status-summary" class="dashboard-summary-body">Loading…</div>
-            </div>
-          ` : '',
-          showTelemetryCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Telemetry</div>
-              <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-performance" title="Per-terminal resource usage">⚙ Perf</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-polecats" title="Manage sessions (restart/kill/logs)">🐾 Polecats</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-hooks" title="Hook browser (automations/webhooks)">🪝 Hooks</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-deacon" title="Deacon monitor (health dashboard)">🛡 Deacon</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-tests" title="Run tests across worktrees">🧪 Tests</button>
-                <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
-                <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
-              </div>
-            </div>
-          ` : '',
-          showPolecatsCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Polecats</div>
-              <div id="dashboard-polecats-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <button class="dashboard-topbar-btn" id="dashboard-open-polecats-card" title="Open Polecats panel">🐾 Manage</button>
-              </div>
-            </div>
-          ` : '',
-          showDiscordCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Discord</div>
-              <div id="dashboard-discord-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;" title="Auto-start Discord bot when server starts">
-                  <input type="checkbox" id="dashboard-discord-autostart" style="margin:0;" />
-                  Auto-start
-                </label>
-                <button class="dashboard-topbar-btn" id="dashboard-discord-ensure" title="Create/ensure Services workspace + terminals">🧰 Ensure</button>
-                <button class="dashboard-topbar-btn" id="dashboard-discord-process" title="Trigger Discord queue processing">📥 Process</button>
-                <button class="dashboard-topbar-btn" id="dashboard-discord-open-services" title="Open Services workspace">↗ Services</button>
-              </div>
-            </div>
-          ` : '',
-          showProjectsCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Projects</div>
-              <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <button class="dashboard-topbar-btn" id="dashboard-open-prs" title="Open Pull Requests">🔀 PRs</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-project-health" title="Open per-project health dashboard">🩺 Health</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-project-board" title="Open projects kanban board">🗂 Board</button>
-              </div>
-            </div>
-          ` : '',
-          showAdviceCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Advice</div>
-              <div id="dashboard-advice-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <button class="dashboard-topbar-btn" id="dashboard-open-queue" title="Open Queue">📥 Queue</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-queue-viz" title="Work queue visualization">🧭 Viz</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-convoys" title="Convoy dashboard (by assignment)">🚚 Convoys</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-advice" title="Open Commander Advice">🧠 Advice</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-suggestions" title="Open workspace suggestions">✨ Suggestions</button>
-                <button class="dashboard-topbar-btn" id="dashboard-open-distribution" title="Suggested terminal per PR/task">🎯 Distribution</button>
-              </div>
-            </div>
-          ` : '',
-          showReadinessCard ? `
-            <div class="dashboard-summary-card">
-              <div class="dashboard-summary-title">Readiness</div>
-              <div id="dashboard-readiness-summary" class="dashboard-summary-body">Loading…</div>
-              <div class="dashboard-summary-actions">
-                <button class="dashboard-topbar-btn" id="dashboard-open-readiness" title="Open project readiness checklists">✅ Checklists</button>
-              </div>
-            </div>
-          ` : ''
-        ].filter(Boolean).join('');
-
-        const processSection = (showProcessSection && processCards) ? `
-          <div class="dashboard-section">
-            <h2>Process</h2>
-            <div class="dashboard-summary-grid">
-              ${processCards}
-            </div>
-          </div>
-        ` : '';
-
-        const activeSection = (visibility.workspacesActive !== false && activeWorkspaces.length > 0) ? `
-          <div class="dashboard-section">
-            <h2>Active Workspaces</h2>
-            <div class="workspace-grid">
-              ${activeWorkspaces.map(ws => this.generateWorkspaceCard(ws, true)).join('')}
-            </div>
-          </div>
-        ` : '';
-
-        const allSection = (visibility.workspacesAll !== false) ? `
-          <div class="dashboard-section">
-            <h2>All Workspaces</h2>
-            <div class="workspace-grid">
-              ${inactiveWorkspaces.map(ws => this.generateWorkspaceCard(ws, false)).join('')}
-            </div>
-          </div>
-        ` : '';
-
-        const createSection = (visibility.createSection !== false) ? `
-          <div class="dashboard-section dashboard-create">
-            <h2>Create</h2>
-            <div class="dashboard-create-actions">
-              <button class="btn-primary workspace-create-btn">New Workspace</button>
-              <button class="btn-secondary workspace-create-empty-btn">Empty Workspace</button>
-              <button class="btn-secondary workspace-import-btn" title="Import a workspace config (JSON)">Import Workspace</button>
-              <button class="btn-primary workspace-create-project-btn">New Project</button>
-              <button class="btn-secondary" id="dashboard-commander-toggle">Commander: …</button>
-            </div>
-          </div>
-        ` : '';
-
-        const reviewSection = (visibility.reviewSection !== false) ? `
-          <div class="dashboard-section dashboard-review">
-            <h2>Review</h2>
-            <div class="dashboard-create-actions dashboard-review-actions">
-              <button class="btn-primary" id="dashboard-review-inbox">Review Inbox</button>
-              <button class="btn-secondary" id="dashboard-quick-review">Quick Review</button>
-            </div>
-          </div>
-        ` : '';
-
-        const quickLinksSection = (visibility.quickLinks !== false) ? `
-          <div class="dashboard-section dashboard-half">
-            <h2>Quick Links</h2>
-            <div class="quick-links-grid">
-              ${this.generateQuickLinksHTML()}
-            </div>
-          </div>
-        ` : '';
-
-        const runningServicesSection = (visibility.runningServices !== false) ? `
-          <div class="dashboard-section dashboard-half ports-dashboard-section">
-            <h2>Running Services</h2>
-            <div class="ports-dashboard-grid" id="ports-dashboard-grid">
-              <div class="ports-loading">Loading services...</div>
-            </div>
-          </div>
-        ` : '';
 
 			    return `
 			      <div class="dashboard-topbar">
 		        ${canReturnToWorkspaces ? `
 		          <button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to Workspaces</button>
 		        ` : `<div></div>`}
-            ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div>` : `<div></div>`}
+            <div id="dashboard-process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div>
 		      </div>
 		      <div class="dashboard-header">
-		        <h1>Dashboard</h1>
+		        <h1>🎯 Agent Orchestrator Dashboard</h1>
 		        <p>Select a workspace to begin development</p>
 		      </div>
 
-          ${processSection}
-
-          <div class="dashboard-columns">
-            <div class="dashboard-col dashboard-col-left">
-              ${activeSection}
-              ${allSection}
-            </div>
-            <div class="dashboard-col dashboard-col-right">
-              ${createSection}
-              ${reviewSection}
-              ${quickLinksSection}
-              ${runningServicesSection}
+          <div class="dashboard-section">
+            <h2>📊 Process</h2>
+	            <div class="dashboard-summary-grid">
+	              <div class="dashboard-summary-card">
+	                <div class="dashboard-summary-title">Status</div>
+	                <div id="dashboard-status-summary" class="dashboard-summary-body">Loading…</div>
+	              </div>
+		              <div class="dashboard-summary-card">
+		                <div class="dashboard-summary-title">Telemetry</div>
+		                <div id="dashboard-telemetry-summary" class="dashboard-summary-body">Loading…</div>
+		                <div class="dashboard-summary-actions">
+		                  <button class="dashboard-topbar-btn" id="dashboard-open-telemetry-details" title="View trends and histograms">📈 Details</button>
+		                  <button class="dashboard-topbar-btn" id="dashboard-open-performance" title="Per-terminal resource usage">⚙ Perf</button>
+                      <button class="dashboard-topbar-btn" id="dashboard-open-polecats" title="Manage sessions (restart/kill/logs)">🐾 Polecats</button>
+                      <button class="dashboard-topbar-btn" id="dashboard-open-hooks" title="Hook browser (automations/webhooks)">🪝 Hooks</button>
+                      <button class="dashboard-topbar-btn" id="dashboard-open-deacon" title="Deacon monitor (health dashboard)">🛡 Deacon</button>
+		                  <button class="dashboard-topbar-btn" id="dashboard-open-tests" title="Run tests across worktrees">🧪 Tests</button>
+		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry" title="Download telemetry CSV export">⬇ Export</button>
+		                  <button class="dashboard-topbar-btn" id="dashboard-export-telemetry-json" title="Download telemetry JSON export">⬇ JSON</button>
+		                </div>
+		              </div>
+                <div class="dashboard-summary-card">
+                  <div class="dashboard-summary-title">Polecats</div>
+                  <div id="dashboard-polecats-summary" class="dashboard-summary-body">Loading…</div>
+                  <div class="dashboard-summary-actions">
+                    <button class="dashboard-topbar-btn" id="dashboard-open-polecats-card" title="Open Polecats panel">🐾 Manage</button>
+                  </div>
+                </div>
+                <div class="dashboard-summary-card">
+                  <div class="dashboard-summary-title">Discord</div>
+                  <div id="dashboard-discord-summary" class="dashboard-summary-body">Loading…</div>
+                  <div class="dashboard-summary-actions">
+                    <button class="dashboard-topbar-btn" id="dashboard-discord-ensure" title="Create/ensure Services workspace + terminals">🧰 Ensure</button>
+                    <button class="dashboard-topbar-btn" id="dashboard-discord-process" title="Trigger Discord queue processing">📥 Process</button>
+                    <button class="dashboard-topbar-btn" id="dashboard-discord-open-services" title="Open Services workspace">↗ Services</button>
+                  </div>
+                </div>
+	              <div class="dashboard-summary-card">
+	                <div class="dashboard-summary-title">Projects</div>
+	                <div id="dashboard-projects-summary" class="dashboard-summary-body">Loading…</div>
+	                <div class="dashboard-summary-actions">
+                  <button class="dashboard-topbar-btn" id="dashboard-open-prs" title="Open Pull Requests">🔀 PRs</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-project-health" title="Open per-project health dashboard">🩺 Health</button>
+                </div>
+              </div>
+              <div class="dashboard-summary-card">
+                <div class="dashboard-summary-title">Advice</div>
+                <div id="dashboard-advice-summary" class="dashboard-summary-body">Loading…</div>
+                <div class="dashboard-summary-actions">
+                  <button class="dashboard-topbar-btn" id="dashboard-open-queue" title="Open Queue">📥 Queue</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-queue-viz" title="Work queue visualization">🧭 Viz</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-convoys" title="Convoy dashboard (by assignment)">🚚 Convoys</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-advice" title="Open Commander Advice">🧠 Advice</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-suggestions" title="Open workspace suggestions">✨ Suggestions</button>
+                  <button class="dashboard-topbar-btn" id="dashboard-open-distribution" title="Suggested terminal per PR/task">🎯 Distribution</button>
+                </div>
+              </div>
+              <div class="dashboard-summary-card">
+                <div class="dashboard-summary-title">Readiness</div>
+                <div id="dashboard-readiness-summary" class="dashboard-summary-body">Loading…</div>
+                <div class="dashboard-summary-actions">
+                  <button class="dashboard-topbar-btn" id="dashboard-open-readiness" title="Open project readiness checklists">✅ Checklists</button>
+                </div>
+              </div>
             </div>
           </div>
+
+	      ${activeWorkspaces.length > 0 ? `
+	        <div class="dashboard-section">
+	          <h2>Active Workspaces</h2>
+	          <div class="workspace-grid">
+	            ${activeWorkspaces.map(ws => this.generateWorkspaceCard(ws, true)).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <div class="dashboard-section">
+        <h2>All Workspaces</h2>
+        <div class="workspace-grid">
+          ${inactiveWorkspaces.map(ws => this.generateWorkspaceCard(ws, false)).join('')}
+          ${this.generateCreateWorkspaceCard()}
+        </div>
+      </div>
+
+      <div class="dashboard-split-row">
+        <div class="dashboard-section dashboard-half">
+          <h2>🔗 Quick Links</h2>
+          <div class="quick-links-grid">
+            ${this.generateQuickLinksHTML()}
+          </div>
+        </div>
+
+        <div class="dashboard-section dashboard-half ports-dashboard-section">
+          <h2>🔌 Running Services</h2>
+          <div class="ports-dashboard-grid" id="ports-dashboard-grid">
+            <div class="ports-loading">Loading services...</div>
+          </div>
+        </div>
+      </div>
     `;
 	  }
 
-  async loadDashboardProcessSummary() {
-    const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
-    const showStatus = visibility.statusCard !== false;
-    const showTelemetry = visibility.telemetryCard !== false;
-    const showPolecats = visibility.polecatsCard !== false;
-    const showDiscord = visibility.discordCard !== false;
-    const showProjects = visibility.projectsCard !== false;
-    const showAdvice = visibility.adviceCard !== false;
-    const showReadiness = visibility.readinessCard !== false;
-    const showAny = showStatus || showTelemetry || showPolecats || showDiscord || showProjects || showAdvice || showReadiness;
-    if (!showAny) return;
-
-    const statusEl = document.getElementById('dashboard-status-summary');
+	  async loadDashboardProcessSummary() {
+	    const statusEl = document.getElementById('dashboard-status-summary');
 	    const telemetryEl = document.getElementById('dashboard-telemetry-summary');
       const polecatsEl = document.getElementById('dashboard-polecats-summary');
       const discordEl = document.getElementById('dashboard-discord-summary');
@@ -350,26 +251,6 @@ class Dashboard {
           e.preventDefault();
           this.showPolecatOverlay().catch(() => {});
         });
-        // Discord auto-start checkbox
-        const discordAutostartCb = document.getElementById('dashboard-discord-autostart');
-        if (discordAutostartCb) {
-          // Load current setting
-          try {
-            const res = await fetch('/api/user-settings').catch(() => null);
-            const settings = res ? await res.json().catch(() => ({})) : {};
-            discordAutostartCb.checked = settings?.global?.ui?.discord?.autoEnsureServicesAtStartup === true;
-          } catch { /* leave unchecked */ }
-
-          discordAutostartCb.addEventListener('change', async (e) => {
-            const enabled = !!e.target.checked;
-            await this.orchestrator?.updateGlobalUserSetting?.('ui.discord.autoEnsureServicesAtStartup', enabled);
-            if (enabled) {
-              await this.ensureDiscordServices();
-              await this.loadDashboardDiscordSummary(discordEl);
-            }
-          });
-        }
-
         document.getElementById('dashboard-discord-ensure')?.addEventListener('click', async (e) => {
           e.preventDefault();
           await this.ensureDiscordServices();
@@ -424,12 +305,6 @@ class Dashboard {
         this.showProjectHealthOverlay();
       } catch {}
     });
-    document.getElementById('dashboard-open-project-board')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      try {
-        this.orchestrator?.projectsBoardUI?.show?.();
-      } catch {}
-    });
     document.getElementById('dashboard-open-advice')?.addEventListener('click', (e) => {
       e.preventDefault();
       try {
@@ -455,12 +330,10 @@ class Dashboard {
       } catch {}
     });
 
-    if (showPolecats) {
-      try {
-        this.updatePolecatSummary(polecatsEl);
-      } catch {
-        // ignore
-      }
+    try {
+      this.updatePolecatSummary(polecatsEl);
+    } catch {
+      // ignore
     }
 
     const escapeHtml = (value) => String(value ?? '')
@@ -468,7 +341,7 @@ class Dashboard {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
-		    const renderAdvice = async ({ force = false } = {}) => {
+    const renderAdvice = async ({ force = false } = {}) => {
       if (!adviceEl) return;
       adviceEl.textContent = 'Loading…';
 
@@ -527,24 +400,15 @@ class Dashboard {
       });
     };
 
-	    try {
-	      const projectsBoardPromise = (showProjects && this.orchestrator?.getProjectsBoard)
-	        ? this.orchestrator.getProjectsBoard({ force: false }).catch(() => null)
-	        : Promise.resolve(null);
-	      const scannedReposPromise = (showProjects && this.orchestrator?.getScannedRepos)
-	        ? this.orchestrator.getScannedRepos({ force: false }).catch(() => [])
-	        : Promise.resolve([]);
+    try {
+      const [statusRes, telemetryRes, projectsRes, readinessRes] = await Promise.all([
+        fetch('/api/process/status?mode=mine').catch(() => null),
+        fetch('/api/process/telemetry').catch(() => null),
+        fetch('/api/process/projects?mode=mine').catch(() => null),
+        fetch('/api/process/readiness/templates').catch(() => null)
+      ]);
 
-	      const [statusRes, telemetryRes, projectsRes, readinessRes, projectsBoardData, scannedRepos] = await Promise.all([
-	        showStatus ? fetch('/api/process/status?mode=mine').catch(() => null) : Promise.resolve(null),
-	        showTelemetry ? fetch('/api/process/telemetry').catch(() => null) : Promise.resolve(null),
-	        showProjects ? fetch('/api/process/projects?mode=mine').catch(() => null) : Promise.resolve(null),
-	        showReadiness ? fetch('/api/process/readiness/templates').catch(() => null) : Promise.resolve(null),
-	        projectsBoardPromise,
-	        scannedReposPromise
-	      ]);
-
-      if (showStatus && statusEl) {
+      if (statusEl) {
         const data = statusRes ? await statusRes.json().catch(() => ({})) : {};
         if (statusRes && statusRes.ok) {
           const q = data?.qByTier || {};
@@ -558,7 +422,7 @@ class Dashboard {
         }
       }
 
-	      if (showTelemetry && telemetryEl) {
+	      if (telemetryEl) {
 	        const data = telemetryRes ? await telemetryRes.json().catch(() => ({})) : {};
 		        if (telemetryRes && telemetryRes.ok) {
 		          this._telemetrySummary = data;
@@ -581,213 +445,70 @@ class Dashboard {
 		        }
 	      }
 
-	      if (showProjects && projectsEl) {
-	        const data = projectsRes ? await projectsRes.json().catch(() => ({})) : {};
-	        const projectsBoard = projectsBoardData?.board && typeof projectsBoardData.board === 'object' ? projectsBoardData.board : null;
-	        const scanned = Array.isArray(scannedRepos) ? scannedRepos : [];
+      if (projectsEl) {
+        const data = projectsRes ? await projectsRes.json().catch(() => ({})) : {};
+        if (projectsRes && projectsRes.ok) {
+          const totals = data?.totals || {};
+          const repos = Array.isArray(data?.repos) ? data.repos : [];
+          const top = repos.slice(0, 6);
 
-	        const normalizeKey = (value) => (this.orchestrator?.normalizeProjectsBoardProjectKey?.(value) ?? String(value || '').trim().replace(/\\/g, '/'));
+          const pickWorstRisk = (counts) => {
+            const c = counts && typeof counts === 'object' ? counts : {};
+            if (Number(c.critical || 0) > 0) return 'critical';
+            if (Number(c.high || 0) > 0) return 'high';
+            if (Number(c.medium || 0) > 0) return 'medium';
+            if (Number(c.low || 0) > 0) return 'low';
+            return '';
+          };
 
-	        const boardHtml = (() => {
-	          if (!projectsBoard || scanned.length === 0) return '';
+          const riskChip = (risk) => {
+            const r = String(risk || '').trim().toLowerCase();
+            if (!r) return '';
+            const cls = (r === 'critical' || r === 'high') ? 'level-warn' : '';
+            return `<span class="process-chip ${cls}">${escapeHtml(r)}</span>`;
+          };
 
-	          const repoByKey = new Map();
-	          for (const repo of scanned) {
-	            const key = normalizeKey(repo?.relativePath);
-	            if (!key) continue;
-	            if (!repoByKey.has(key)) repoByKey.set(key, repo);
-	          }
-	          if (!repoByKey.size) return '';
+          projectsEl.innerHTML = `
+            <div>Repos <strong>${Number(totals?.repos ?? top.length ?? 0)}</strong> • Open PRs <strong>${Number(totals?.prsOpen ?? 0)}</strong></div>
+            <div>Unreviewed <strong>${Number(totals?.prsUnreviewed ?? 0)}</strong> • Needs fix <strong>${Number(totals?.prsNeedsFix ?? 0)}</strong></div>
+            <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+              ${top.length ? top.map((r) => {
+                const repo = String(r?.repo || '').trim();
+                const open = Number(r?.prsOpen ?? 0);
+                const unrev = Number(r?.prsUnreviewed ?? 0);
+                const avgReview = r?.telemetry?.avgReviewSeconds ? `${Math.round(Number(r.telemetry.avgReviewSeconds))}s` : '—';
+                const worstRisk = pickWorstRisk(r?.riskCounts);
+                return `
+                  <button class="btn-secondary" type="button" data-open-repo="${escapeHtml(repo)}" title="Open PRs filtered to ${escapeHtml(repo)}" style="width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                    <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(repo)} (${open} open, ${unrev} unrev)</span>
+                    <span style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                      ${worstRisk ? riskChip(worstRisk) : ''}
+                      <span style="opacity:0.8;">${escapeHtml(avgReview)}</span>
+                    </span>
+                  </button>
+                `;
+              }).join('') : `<div style="opacity:0.8;">No PRs found.</div>`}
+            </div>
+          `;
 
-	          const getOrderIndex = (columnId) => {
-	            const raw = projectsBoard?.orderByColumn && typeof projectsBoard.orderByColumn === 'object'
-	              ? projectsBoard.orderByColumn[columnId]
-	              : null;
-	            const order = Array.isArray(raw) ? raw : [];
-	            const index = new Map();
-	            order.forEach((k, i) => {
-	              const key = normalizeKey(k);
-	              if (!key || index.has(key)) return;
-	              index.set(key, i);
-	            });
-	            return index;
-	          };
+          projectsEl.querySelectorAll('[data-open-repo]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const repo = btn.getAttribute('data-open-repo') || '';
+              if (!repo) return;
+              try {
+                localStorage.setItem('prs-panel-repo', repo);
+              } catch {}
+              try {
+                this.orchestrator?.showPRsPanel?.();
+              } catch {}
+            });
+          });
+        } else {
+          projectsEl.textContent = 'Failed to load.';
+        }
+      }
 
-	          const collect = (columnId) => {
-	            const out = [];
-	            for (const [key, repo] of repoByKey.entries()) {
-	              const col = this.orchestrator?.getProjectsBoardColumnForProjectKey?.(key, projectsBoardData) || 'backlog';
-	              if (col === columnId) out.push({ key, repo });
-	            }
-	            const index = getOrderIndex(columnId);
-	            out.sort((a, b) => {
-	              const aRank = index.has(a.key) ? index.get(a.key) : Number.POSITIVE_INFINITY;
-	              const bRank = index.has(b.key) ? index.get(b.key) : Number.POSITIVE_INFINITY;
-	              if (aRank !== bRank) return aRank - bRank;
-	              return String(a.repo?.name || '').localeCompare(String(b.repo?.name || ''));
-	            });
-	            return out;
-	          };
-
-	          const shipNext = collect('next');
-	          const active = collect('active');
-	          const total = shipNext.length + active.length;
-	          if (total === 0) return '';
-
-	          const tagMap = projectsBoard?.tagsByProjectKey && typeof projectsBoard.tagsByProjectKey === 'object'
-	            ? projectsBoard.tagsByProjectKey
-	            : {};
-
-	          const renderTile = (item) => {
-	            const icon = this.orchestrator?.getProjectIcon?.(item?.repo?.type) || '📁';
-	            const name = String(item?.repo?.name || item?.key || '').trim();
-	            const key = normalizeKey(item?.key);
-	            const category = String(item?.repo?.category || '').trim();
-	            const type = String(item?.repo?.type || '').trim();
-	            const subtitle = category ? `${category} • ${key}` : key;
-	            const isLive = !!tagMap[key]?.live;
-	            return `
-	              <button type="button"
-	                      class="dashboard-project-tile ${isLive ? 'is-live' : ''}"
-	                      data-dashboard-start-project="${escapeHtml(key)}"
-	                      data-project-type="${escapeHtml(type)}"
-	                      title="Start worktree: ${escapeHtml(name)}">
-	                <span class="dashboard-project-tile-icon">${escapeHtml(icon)}</span>
-	                <span class="dashboard-project-tile-text">
-	                  <span class="dashboard-project-tile-name">${escapeHtml(name)}</span>
-	                  <span class="dashboard-project-tile-subtitle">${escapeHtml(subtitle)}</span>
-	                </span>
-	                ${isLive ? `<span class="dashboard-project-tile-live" title="Live">★</span>` : ''}
-	              </button>
-	            `;
-	          };
-
-	          const renderGroup = (label, list) => {
-	            if (!list.length) return '';
-	            return `
-	              <div class="dashboard-project-group">
-	                <div class="dashboard-project-group-title">${escapeHtml(label)} <span class="dashboard-project-group-count">${list.length}</span></div>
-	                <div class="dashboard-project-grid">
-	                  ${list.map(renderTile).join('')}
-	                </div>
-	              </div>
-	            `;
-	          };
-
-	          return `
-	            <div class="dashboard-projects-board">
-	              ${renderGroup('Ship Next', shipNext)}
-	              ${renderGroup('Active', active)}
-	            </div>
-	          `;
-	        })();
-
-	        const prSummaryHtml = (() => {
-	          if (!(projectsRes && projectsRes.ok)) {
-	            return `<div style="opacity:0.85;">Failed to load PR summary.</div>`;
-	          }
-
-	          const totals = data?.totals || {};
-	          const repos = Array.isArray(data?.repos) ? data.repos : [];
-	          const top = repos.slice(0, 6);
-
-	          const pickWorstRisk = (counts) => {
-	            const c = counts && typeof counts === 'object' ? counts : {};
-	            if (Number(c.critical || 0) > 0) return 'critical';
-	            if (Number(c.high || 0) > 0) return 'high';
-	            if (Number(c.medium || 0) > 0) return 'medium';
-	            if (Number(c.low || 0) > 0) return 'low';
-	            return '';
-	          };
-
-	          const riskChip = (risk) => {
-	            const r = String(risk || '').trim().toLowerCase();
-	            if (!r) return '';
-	            const cls = (r === 'critical' || r === 'high') ? 'level-warn' : '';
-	            return `<span class="process-chip ${cls}">${escapeHtml(r)}</span>`;
-	          };
-
-	          return `
-	            <div>Repos <strong>${Number(totals?.repos ?? top.length ?? 0)}</strong> • Open PRs <strong>${Number(totals?.prsOpen ?? 0)}</strong></div>
-	            <div>Unreviewed <strong>${Number(totals?.prsUnreviewed ?? 0)}</strong> • Needs fix <strong>${Number(totals?.prsNeedsFix ?? 0)}</strong></div>
-	            <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
-	              ${top.length ? top.map((r) => {
-	                const repo = String(r?.repo || '').trim();
-	                const open = Number(r?.prsOpen ?? 0);
-	                const unrev = Number(r?.prsUnreviewed ?? 0);
-	                const avgReview = r?.telemetry?.avgReviewSeconds ? `${Math.round(Number(r.telemetry.avgReviewSeconds))}s` : '—';
-	                const worstRisk = pickWorstRisk(r?.riskCounts);
-	                return `
-	                  <button class="btn-secondary" type="button" data-open-repo="${escapeHtml(repo)}" title="Open PRs filtered to ${escapeHtml(repo)}" style="width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px;">
-	                    <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(repo)} (${open} open, ${unrev} unrev)</span>
-	                    <span style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-	                      ${worstRisk ? riskChip(worstRisk) : ''}
-	                      <span style="opacity:0.8;">${escapeHtml(avgReview)}</span>
-	                    </span>
-	                  </button>
-	                `;
-	              }).join('') : `<div style="opacity:0.8;">No PRs found.</div>`}
-	            </div>
-	          `;
-	        })();
-
-	        projectsEl.innerHTML = `${boardHtml}${prSummaryHtml}`;
-
-	        projectsEl.querySelectorAll('[data-dashboard-start-project]').forEach((btn) => {
-	          btn.addEventListener('click', async () => {
-	            if (this._projectLaunchInFlight) return;
-	            const key = String(btn.getAttribute('data-dashboard-start-project') || '').trim();
-	            if (!key) return;
-	            this._projectLaunchInFlight = true;
-	            btn.disabled = true;
-	            try {
-	              const currentId = String(this.orchestrator?.currentWorkspace?.id || '').trim();
-	              const workspaces = Array.isArray(this.workspaces) ? this.workspaces : [];
-	              const pickRecent = () => {
-	                if (currentId) return currentId;
-	                let best = null;
-	                let bestTime = 0;
-	                for (const ws of workspaces) {
-	                  const t = ws?.lastAccess ? new Date(ws.lastAccess).getTime() : 0;
-	                  if (!best || t > bestTime) {
-	                    best = ws;
-	                    bestTime = t;
-	                  }
-	                }
-	                return String(best?.id || '').trim();
-	              };
-
-	              const targetId = pickRecent();
-	              try { this.orchestrator?.hideDashboard?.(); } catch {}
-	              if (targetId && targetId !== currentId) {
-	                this.orchestrator?.switchToWorkspace?.(targetId);
-	                await this.orchestrator?.waitForWorkspaceActive?.(targetId).catch(() => false);
-	              }
-	              await this.orchestrator?.startProjectWorktreeFromBoardKey?.(key);
-	            } catch {
-	              this.orchestrator?.showToast?.('Failed to start worktree', 'error');
-	            } finally {
-	              btn.disabled = false;
-	              this._projectLaunchInFlight = false;
-	            }
-	          });
-	        });
-
-	        projectsEl.querySelectorAll('[data-open-repo]').forEach((btn) => {
-	          btn.addEventListener('click', () => {
-	            const repo = btn.getAttribute('data-open-repo') || '';
-	            if (!repo) return;
-	            try {
-	              localStorage.setItem('prs-panel-repo', repo);
-	            } catch {}
-	            try {
-	              this.orchestrator?.showPRsPanel?.();
-	            } catch {}
-	          });
-	        });
-	      }
-
-      if (showReadiness && readinessEl) {
+      if (readinessEl) {
         const data = readinessRes ? await readinessRes.json().catch(() => ({})) : {};
         if (readinessRes && readinessRes.ok) {
           const templates = Array.isArray(data?.templates) ? data.templates : [];
@@ -801,19 +522,15 @@ class Dashboard {
         }
       }
 
-      if (showDiscord) {
-        await this.loadDashboardDiscordSummary(discordEl);
-      }
-      if (showAdvice) {
-        await renderAdvice({ force: false });
-      }
+      await this.loadDashboardDiscordSummary(discordEl);
+      await renderAdvice({ force: false });
 		    } catch (error) {
-		      if (showStatus && statusEl) statusEl.textContent = 'Failed to load.';
-		      if (showTelemetry && telemetryEl) telemetryEl.textContent = 'Failed to load.';
-		      if (showProjects && projectsEl) projectsEl.textContent = 'Failed to load.';
-		      if (showReadiness && readinessEl) readinessEl.textContent = 'Failed to load.';
-          if (showDiscord && discordEl) discordEl.textContent = 'Failed to load.';
-		      if (showAdvice) await renderAdvice({ force: false });
+		      if (statusEl) statusEl.textContent = 'Failed to load.';
+		      if (telemetryEl) telemetryEl.textContent = 'Failed to load.';
+		      if (projectsEl) projectsEl.textContent = 'Failed to load.';
+		      if (readinessEl) readinessEl.textContent = 'Failed to load.';
+          if (discordEl) discordEl.textContent = 'Failed to load.';
+		      await renderAdvice({ force: false });
 		    }
 		  }
 
@@ -1033,10 +750,7 @@ class Dashboard {
 		            <button class="btn-secondary" type="button" id="dashboard-telemetry-download">Download CSV</button>
 		            <button class="btn-secondary" type="button" id="dashboard-telemetry-download-json">Download JSON</button>
 		            <button class="btn-secondary" type="button" id="dashboard-telemetry-snapshot" title="Create a snapshot link for this telemetry view">Copy snapshot link</button>
-		            <button class="btn-secondary" type="button" id="dashboard-telemetry-benchmark" title="Capture benchmark snapshot for release tracking">Capture benchmark</button>
-		            <button class="btn-secondary" type="button" id="dashboard-telemetry-release-notes" title="Copy benchmark release-notes summary">Copy release notes</button>
 		          </div>
-		          <div class="dashboard-telemetry-actions" id="dashboard-telemetry-plugin-actions"></div>
 		        </div>
 		        <div id="dashboard-telemetry-body" class="dashboard-telemetry-body">Loading…</div>
 		      </div>
@@ -1069,20 +783,9 @@ class Dashboard {
 		      const bucket = Number(bucketEl?.value ?? 60);
 		      await this.createTelemetrySnapshotLink({ lookbackHours: hours, bucketMinutes: bucket });
 		    });
-		    overlay.querySelector('#dashboard-telemetry-benchmark')?.addEventListener('click', async () => {
-		      const hours = Number(lookbackEl?.value ?? 24);
-		      const bucket = Number(bucketEl?.value ?? 60);
-		      await this.createTelemetryBenchmarkSnapshot({ lookbackHours: hours, bucketMinutes: bucket });
-		    });
-		    overlay.querySelector('#dashboard-telemetry-release-notes')?.addEventListener('click', async () => {
-		      const hours = Number(lookbackEl?.value ?? 24);
-		      const bucket = Number(bucketEl?.value ?? 60);
-		      await this.copyTelemetryReleaseNotes({ lookbackHours: hours, bucketMinutes: bucket });
-		    });
 		    overlay.querySelector('#dashboard-telemetry-refresh')?.addEventListener('click', () => {
 		      this.loadTelemetryDetails({ lookbackHours: Number(lookbackEl?.value ?? 24), bucketMinutes: Number(bucketEl?.value ?? 60) });
 		    });
-		    this.loadTelemetryPluginActions(overlay).catch(() => {});
 
 	    const onKey = (e) => {
 	      if (e.key !== 'Escape') return;
@@ -3068,24 +2771,16 @@ class Dashboard {
 	    const bucket = Number(bucketMinutes);
 	    const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 24;
 	    const safeBucket = Number.isFinite(bucket) && bucket > 0 ? bucket : 60;
-	    const detailsUrl = `/api/process/telemetry/details?lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}`;
-	    const benchmarkUrl = `/api/process/telemetry/benchmarks?lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}&limit=8`;
+	    const url = `/api/process/telemetry/details?lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}`;
 
 	    try {
-	      const [detailsRes, benchmarkRes] = await Promise.all([
-	        fetch(detailsUrl).catch(() => null),
-	        fetch(benchmarkUrl).catch(() => null)
-	      ]);
-
-	      const data = detailsRes ? await detailsRes.json().catch(() => ({})) : {};
-	      if (!detailsRes || !detailsRes.ok) {
+	      const res = await fetch(url).catch(() => null);
+	      const data = res ? await res.json().catch(() => ({})) : {};
+	      if (!res || !res.ok) {
 	        body.textContent = 'Failed to load.';
 	        return;
 	      }
-	      const benchmark = benchmarkRes && benchmarkRes.ok
-	        ? await benchmarkRes.json().catch(() => null)
-	        : null;
-	      body.innerHTML = this.renderTelemetryDetails(data, benchmark);
+	      body.innerHTML = this.renderTelemetryDetails(data);
 	    } catch {
 	      body.textContent = 'Failed to load.';
 	    }
@@ -3115,53 +2810,6 @@ class Dashboard {
 	    }
 	  }
 
-	  async createTelemetryBenchmarkSnapshot({ lookbackHours = 24, bucketMinutes = 60 } = {}) {
-	    const hours = Number(lookbackHours);
-	    const bucket = Number(bucketMinutes);
-	    const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 24;
-	    const safeBucket = Number.isFinite(bucket) && bucket > 0 ? bucket : 60;
-	    const defaultLabel = `release ${new Date().toISOString().slice(0, 10)}`;
-	    const label = window.prompt('Benchmark label (release/tag)', defaultLabel);
-	    if (label === null) return;
-
-	    try {
-	      const res = await fetch('/api/process/telemetry/benchmarks/snapshots', {
-	        method: 'POST',
-	        headers: { 'Content-Type': 'application/json' },
-	        body: JSON.stringify({
-	          label,
-	          lookbackHours: safeHours,
-	          bucketMinutes: safeBucket
-	        })
-	      }).catch(() => null);
-	      const data = res ? await res.json().catch(() => ({})) : {};
-	      if (!res || !res.ok) throw new Error(data?.error || 'Failed to create benchmark snapshot');
-	      try { this.orchestrator?.showToast?.(`Benchmark saved: ${String(data?.label || 'snapshot')}`, 'success'); } catch {}
-	      this.loadTelemetryDetails({ lookbackHours: safeHours, bucketMinutes: safeBucket });
-	    } catch (e) {
-	      try { this.orchestrator?.showToast?.(String(e?.message || e), 'error'); } catch {}
-	    }
-	  }
-
-	  async copyTelemetryReleaseNotes({ lookbackHours = 24, bucketMinutes = 60 } = {}) {
-	    const hours = Number(lookbackHours);
-	    const bucket = Number(bucketMinutes);
-	    const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 24;
-	    const safeBucket = Number.isFinite(bucket) && bucket > 0 ? bucket : 60;
-	    const url = `/api/process/telemetry/benchmarks/release-notes?currentId=live&lookbackHours=${encodeURIComponent(String(safeHours))}&bucketMinutes=${encodeURIComponent(String(safeBucket))}`;
-	    try {
-	      const res = await fetch(url).catch(() => null);
-	      const data = res ? await res.json().catch(() => ({})) : {};
-	      if (!res || !res.ok) throw new Error(data?.error || 'Failed to build release notes');
-	      const markdown = String(data?.markdown || '').trim();
-	      if (!markdown) throw new Error('Release notes were empty');
-	      await this.copyToClipboard(markdown);
-	      try { this.orchestrator?.showToast?.('Release notes copied', 'success'); } catch {}
-	    } catch (e) {
-	      try { this.orchestrator?.showToast?.(String(e?.message || e), 'error'); } catch {}
-	    }
-	  }
-
 	  async copyToClipboard(text) {
 	    const t = String(text || '');
 	    if (!t) return;
@@ -3180,40 +2828,7 @@ class Dashboard {
 	    }
 	  }
 
-	  async loadTelemetryPluginActions(overlay) {
-	    const holder = overlay?.querySelector?.('#dashboard-telemetry-plugin-actions');
-	    if (!holder) return;
-	    holder.innerHTML = '';
-	    const host = window.orchestratorPluginHost;
-	    if (!host || typeof host.refresh !== 'function') return;
-	    try {
-	      await host.refresh({ slot: 'dashboard.telemetry.actions', force: true });
-	      const items = host.getSlotItems('dashboard.telemetry.actions');
-	      if (!items.length) return;
-	      for (const item of items) {
-	        const btn = document.createElement('button');
-	        btn.type = 'button';
-	        btn.className = 'btn-secondary';
-	        btn.textContent = String(item?.label || item?.id || 'Plugin');
-	        const desc = String(item?.description || '').trim();
-	        if (desc) btn.title = desc;
-	        btn.addEventListener('click', async () => {
-	          try {
-	            const result = await host.runAction(item, { orchestrator: this.orchestrator });
-	            if (result?.ok) return;
-	            this.orchestrator?.showToast?.(String(result?.error || 'Plugin action failed'), 'error');
-	          } catch (error) {
-	            this.orchestrator?.showToast?.(String(error?.message || error), 'error');
-	          }
-	        });
-	        holder.appendChild(btn);
-	      }
-	    } catch {
-	      // ignore plugin slot errors in dashboard
-	    }
-	  }
-
-	  renderTelemetryDetails(data, benchmarkData = null) {
+	  renderTelemetryDetails(data) {
 	    const escapeHtml = (value) => String(value ?? '')
 	      .replace(/&/g, '&amp;')
 	      .replace(/</g, '&lt;')
@@ -3287,7 +2902,6 @@ class Dashboard {
 
 	    const reviewHist = data?.histograms?.reviewSeconds;
 	    const promptHist = data?.histograms?.promptChars;
-	    const benchmarkSection = this.renderTelemetryBenchmark(benchmarkData);
 
 	    return `
 	      <div class="dashboard-telemetry-meta">
@@ -3320,70 +2934,6 @@ class Dashboard {
 	          <div class="telemetry-chart-title">Prompt size distribution</div>
 	          ${histogram(promptHist, { formatLabel: (v) => `${Math.round(Number(v) || 0)}` })}
 	        </div>
-	      </div>
-	      ${benchmarkSection}
-	    `;
-	  }
-
-	  renderTelemetryBenchmark(data) {
-	    const escapeHtml = (value) => String(value ?? '')
-	      .replace(/&/g, '&amp;')
-	      .replace(/</g, '&lt;')
-	      .replace(/>/g, '&gt;');
-	    const rows = Array.isArray(data?.rows) ? data.rows : [];
-	    if (!rows.length) {
-	      return `
-	        <div class="telemetry-chart-card">
-	          <div class="telemetry-chart-title">Release benchmark</div>
-	          <div class="telemetry-empty">No benchmark snapshots captured yet.</div>
-	        </div>
-	      `;
-	    }
-
-	    const formatSeconds = (value) => {
-	      const n = Number(value);
-	      if (!Number.isFinite(n) || n <= 0) return '—';
-	      if (n < 60) return `${Math.round(n)}s`;
-	      if (n < 3600) return `${Math.round(n / 60)}m`;
-	      return `${(n / 3600).toFixed(1)}h`;
-	    };
-	    const sign = (value) => {
-	      const n = Number(value);
-	      if (!Number.isFinite(n)) return '—';
-	      return n > 0 ? `+${Math.round(n)}` : `${Math.round(n)}`;
-	    };
-
-	    const listHtml = rows.slice(0, 6).map((row) => {
-	      const metrics = row?.metrics || {};
-	      const onboarding = Number(metrics?.onboarding?.score ?? 0);
-	      const runtime = Number(metrics?.runtime?.score ?? 0);
-	      const review = Number(metrics?.review?.score ?? 0);
-	      const cycle = metrics?.review?.avgReviewSeconds;
-	      const done = Number(metrics?.review?.doneCount ?? 0);
-	      const merged = Number(metrics?.review?.prMergedCount ?? 0);
-	      const delta = row?.deltaFromPrevious || null;
-	      const deltaText = delta
-	        ? `Δ onboarding ${sign(delta.onboardingScore)} • runtime ${sign(delta.runtimeScore)} • review ${sign(delta.reviewScore)}`
-	        : 'Δ baseline n/a';
-	      return `
-	        <div class="dashboard-telemetry-meta" style="display:flex; justify-content:space-between; gap:10px; border-top:1px solid var(--border-color); padding-top:8px;">
-	          <div style="min-width:0;">
-	            <div><strong>${escapeHtml(String(row?.label || row?.id || 'snapshot'))}</strong> <span style="opacity:0.7;">(${escapeHtml(String(row?.createdAt || ''))})</span></div>
-	            <div style="opacity:0.85;">${escapeHtml(deltaText)}</div>
-	          </div>
-	          <div style="text-align:right; white-space:nowrap;">
-	            <div>onboarding <strong>${onboarding}</strong> • runtime <strong>${runtime}</strong> • review <strong>${review}</strong></div>
-	            <div style="opacity:0.85;">cycle <strong>${escapeHtml(formatSeconds(cycle))}</strong> • done <strong>${done}</strong> • merged <strong>${merged}</strong></div>
-	          </div>
-	        </div>
-	      `;
-	    }).join('');
-
-	    return `
-	      <div class="telemetry-chart-card">
-	        <div class="telemetry-chart-title">Release benchmark snapshots</div>
-	        <div style="opacity:0.85; margin-bottom:6px;">Track onboarding, runtime and review metrics across releases.</div>
-	        ${listHtml}
 	      </div>
 	    `;
 	  }
@@ -3486,28 +3036,6 @@ class Dashboard {
           <button class="btn-primary workspace-create-btn">Create Workspace</button>
           <button class="btn-cta-empty workspace-create-empty-btn">One‑Click Empty</button>
           <button class="btn-secondary workspace-import-btn" title="Import a workspace config (JSON)">⬆ Import</button>
-        </div>
-      </div>
-    `;
-  }
-
-  generateCreateProjectCard() {
-    return `
-      <div class="workspace-card create-card create-project-card">
-        <div class="workspace-card-header">
-          <span class="workspace-icon">✨</span>
-          <div class="workspace-info">
-            <h3>New Project</h3>
-            <p class="workspace-type">Greenfield Flow</p>
-          </div>
-        </div>
-
-        <div class="workspace-card-body">
-          <p>Create a brand-new project, scaffold it, and open a workspace in one flow</p>
-        </div>
-
-        <div class="workspace-card-footer">
-          <button class="btn-primary workspace-create-project-btn">Create Project</button>
         </div>
       </div>
     `;
@@ -3621,35 +3149,6 @@ class Dashboard {
       });
     }
 
-    const createProjectBtn = document.querySelector('.workspace-create-project-btn');
-    if (createProjectBtn) {
-      createProjectBtn.addEventListener('click', () => {
-        this.showCreateProjectWizard();
-      });
-    }
-
-    const reviewInboxBtn = document.getElementById('dashboard-review-inbox');
-    if (reviewInboxBtn) {
-      reviewInboxBtn.addEventListener('click', () => {
-        this.orchestrator.openReviewInbox();
-      });
-    }
-
-    const quickReviewBtn = document.getElementById('dashboard-quick-review');
-    if (quickReviewBtn) {
-      quickReviewBtn.addEventListener('click', () => {
-        this.orchestrator.openReviewInbox({ quick: true });
-      });
-    }
-
-    const commanderToggleBtn = document.getElementById('dashboard-commander-toggle');
-    if (commanderToggleBtn) {
-      commanderToggleBtn.addEventListener('click', () => {
-        this.toggleCommanderFromDashboard();
-      });
-      this.updateCommanderToggle();
-    }
-
     // ESC: return to tabbed workspaces if dashboard was opened from there
     if (this._escHandler) {
       document.removeEventListener('keydown', this._escHandler);
@@ -3694,16 +3193,6 @@ class Dashboard {
     } catch (err) {
       this.orchestrator?.showToast?.(`Cleanup failed: ${String(err?.message || err)}`, 'error');
     }
-  }
-
-  showCreateProjectWizard() {
-    if (typeof this.orchestrator?.openGreenfieldWizard === 'function') {
-      this.orchestrator.openGreenfieldWizard().catch((error) => {
-        this.orchestrator?.showToast?.(`Failed to open New Project wizard: ${String(error?.message || error)}`, 'error');
-      });
-      return;
-    }
-    this.orchestrator?.showToast?.('New Project wizard is unavailable in this build', 'warning');
   }
 
   async openWorkspace(workspaceId) {
@@ -3811,20 +3300,17 @@ class Dashboard {
 
   async createEmptyWorkspaceQuick() {
     try {
+      const timestamp = new Date();
+      const stamp = timestamp.toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const name = `Empty Workspace ${timestamp.toLocaleString()}`;
+      const baseId = `empty-${stamp}`;
+      const randomSuffix = Math.random().toString(36).slice(2, 6);
+      let workspaceId = `${baseId}-${randomSuffix}`;
+
+      // Ensure ID is unique against current list
       const existingIds = new Set(this.workspaces.map(ws => ws.id));
-      const existingNumbers = this.workspaces
-        .map(ws => {
-          const match = String(ws?.name || '').match(/^Workspace\s+(\d+)$/i);
-          return match ? Number(match[1]) : NaN;
-        })
-        .filter(n => Number.isFinite(n));
-      let nextNumber = existingNumbers.length ? Math.max(...existingNumbers) + 1 : 1;
-      let name = `Workspace ${nextNumber}`;
-      let workspaceId = `workspace-${nextNumber}`;
-      while (existingIds.has(workspaceId)) {
-        nextNumber += 1;
-        name = `Workspace ${nextNumber}`;
-        workspaceId = `workspace-${nextNumber}`;
+      if (existingIds.has(workspaceId)) {
+        workspaceId = `${baseId}-${Math.random().toString(36).slice(2, 8)}`;
       }
 
       const workspaceConfig = {
@@ -3832,7 +3318,7 @@ class Dashboard {
         name,
         type: 'custom',
         icon: '🧱',
-        description: 'Workspace (add worktrees later)',
+        description: 'Empty workspace (add worktrees later)',
         access: 'private',
         empty: true,
         repository: {
@@ -3898,31 +3384,6 @@ class Dashboard {
       console.error('Failed to create empty workspace:', error);
       alert('Failed to create empty workspace: ' + error.message);
     }
-  }
-
-  async updateCommanderToggle() {
-    const btn = document.getElementById('dashboard-commander-toggle');
-    if (!btn) return;
-    try {
-      const res = await fetch('/api/commander/status').catch(() => null);
-      const data = res ? await res.json().catch(() => ({})) : {};
-      const running = !!data?.running;
-      btn.dataset.running = running ? 'true' : 'false';
-      btn.textContent = running ? 'Commander: On' : 'Commander: Off';
-    } catch {
-      btn.dataset.running = 'false';
-      btn.textContent = 'Commander: Off';
-    }
-  }
-
-  async toggleCommanderFromDashboard() {
-    const btn = document.getElementById('dashboard-commander-toggle');
-    const running = btn?.dataset?.running === 'true';
-    const endpoint = running ? '/api/commander/stop' : '/api/commander/start';
-    try {
-      await fetch(endpoint, { method: 'POST' }).catch(() => null);
-    } catch {}
-    await this.updateCommanderToggle();
   }
 
   async downloadWorkspaceExport(workspaceId) {
@@ -4215,24 +3676,6 @@ class Dashboard {
       let sessions = recoveryInfo.sessions || [];
       let savedAt = recoveryInfo.savedAt ? new Date(recoveryInfo.savedAt).toLocaleString() : 'Unknown';
       let savedAtRaw = String(recoveryInfo.savedAt || '').trim();
-      let configuredTerminalCount = Number(recoveryInfo?.configuredTerminalCount || 0);
-      let configuredWorktreeCount = Number(recoveryInfo?.configuredWorktreeCount || 0);
-
-      const renderRecoverySummaryHtml = () => {
-        const recoverableLabel = `${sessions.length} recoverable`;
-        const worktreeLabel = `${configuredWorktreeCount || 0} configured worktree${configuredWorktreeCount === 1 ? '' : 's'}`;
-        const terminalLabel = `${configuredTerminalCount || 0} configured terminal${configuredTerminalCount === 1 ? '' : 's'}`;
-        return `
-          <div class="recovery-metrics">
-            <span class="recovery-metric-pill recovery-metric-primary">${recoverableLabel}</span>
-            <span class="recovery-metric-pill">${worktreeLabel}</span>
-            <span class="recovery-metric-pill">${terminalLabel}</span>
-          </div>
-          <div class="recovery-summary-text">
-            Last recovery snapshot: ${savedAt}
-          </div>
-        `;
-      };
 
       const modal = document.createElement('div');
       modal.id = 'recovery-dialog';
@@ -4244,10 +3687,7 @@ class Dashboard {
             <button class="close-btn" onclick="this.closest('.modal').remove()">×</button>
           </div>
           <div class="recovery-info">
-            ${renderRecoverySummaryHtml()}
-          </div>
-          <div class="recovery-note">
-            Recoverable sessions are only terminals with resumable agent/shell state. Opening the workspace still loads all configured worktrees/terminals.
+            Found ${sessions.length} recoverable session${sessions.length !== 1 ? 's' : ''} from ${savedAt}
           </div>
           <div class="recovery-sessions">
             ${sessions.length === 0 ? '<div class="no-recovery">No sessions to recover</div>' :
@@ -4387,11 +3827,9 @@ class Dashboard {
           sessions = next?.sessions || [];
           savedAt = next?.savedAt ? new Date(next.savedAt).toLocaleString() : savedAt;
           savedAtRaw = String(next?.savedAt || savedAtRaw || '').trim();
-          configuredTerminalCount = Number(next?.configuredTerminalCount ?? configuredTerminalCount);
-          configuredWorktreeCount = Number(next?.configuredWorktreeCount ?? configuredWorktreeCount);
 
           if (infoEl) {
-            infoEl.innerHTML = renderRecoverySummaryHtml();
+            infoEl.textContent = `Found ${sessions.length} recoverable session${sessions.length !== 1 ? 's' : ''} from ${savedAt}`;
           }
           renderSessions();
         } catch (error) {

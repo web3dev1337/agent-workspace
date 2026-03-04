@@ -26,25 +26,3 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
-      - name: Command surface drift check
-        run: npm run check:command-surface
-
-  public_release_audit:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [unit]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install
-        run: npm ci
-
-      - name: Public release audit (non-destructive)
-        run: npm run audit:public-release

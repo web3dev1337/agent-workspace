@@ -176,16 +176,11 @@ class DiffViewerService {
 
   runCommandToLog(command, args, { cwd, logPath }) {
     return new Promise((resolve, reject) => {
-      if (!cwd || !fs.existsSync(cwd)) {
-        reject(new Error(`Command cwd does not exist: ${cwd || '(empty)'}`));
-        return;
-      }
       const fd = fs.openSync(logPath, 'a');
       const child = spawn(command, args, {
         cwd,
         env: process.env,
-        stdio: ['ignore', fd, fd],
-        windowsHide: true
+        stdio: ['ignore', fd, fd]
       });
 
       child.on('error', (error) => {
@@ -263,8 +258,7 @@ class DiffViewerService {
         cwd: this.diffViewerRoot,
         env,
         detached: true,
-        stdio: ['ignore', fd, fd],
-        windowsHide: true
+        stdio: ['ignore', fd, fd]
       });
     } else {
       const entry = path.join(this.diffViewerRoot, 'server', 'index.js');
@@ -273,8 +267,7 @@ class DiffViewerService {
         cwd: this.diffViewerRoot,
         env,
         detached: true,
-        stdio: ['ignore', fd, fd],
-        windowsHide: true
+        stdio: ['ignore', fd, fd]
       });
     }
 

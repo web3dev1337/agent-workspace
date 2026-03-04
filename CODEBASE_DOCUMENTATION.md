@@ -17,7 +17,6 @@ FRONTEND:   client/app.js, client/terminal.js        - Web client
 NATIVE:     src-tauri/src/main.rs                    - Native desktop app
 CONFIG:     config.json, package.json                - Configuration files
 DIFF:       diff-viewer/                             - Advanced diff viewer component
-PLANS:      PLANS/                                   - Date-stamped planning + implementation notes
 ```
 
 ## Core Systems (Start Here)
@@ -33,14 +32,10 @@ server/index.js                    - Express server with Socket.IO
 server/sessionManager.js           - Terminal session lifecycle management
 ├─ Manages: PTY processes, session tracking, cleanup
 ├─ Key methods: createSession(), destroySession(), getActiveSessions()
-├─ Cleanup hardening: closing sessions sends process-tree SIGTERM and a grace-timed SIGKILL fallback by PTY pid to reduce orphaned agent processes
-├─ Stale-agent cleanup: when status detection sees an explicit shell/no-agent prompt, recovery `lastAgent` markers are cleared to keep sidebar status accurate (`no-agent` vs `busy/waiting`)
-├─ Status model: periodic status re-evaluation prevents stale "busy" lights after output quiets down
 └─ Uses: node-pty for terminal emulation
 
 server/statusDetector.js           - Claude Code session monitoring
 ├─ Detects: Claude sessions, branch changes, status updates
-├─ Busy/idle heuristics: tool/typing signals are recency-gated to avoid stale "busy forever" states
 ├─ Events: session-detected, branch-changed, status-updated
 └─ Polling: Configurable intervals for status checks
 
@@ -57,32 +52,6 @@ server/claudeVersionChecker.js     - Claude Code version detection
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
-├─ Recovery filtering: stale/non-configured session entries are pruned when requested by workspace-scoped APIs
-├─ Agent clearing: `clearAgent()` resets stale `lastAgent` markers when a Claude/Codex terminal falls back to plain shell
-└─ Recovery metadata: recovery payload includes configured terminal/worktree counts for UI context
-server/threadService.js            - Workspace/project thread persistence (`~/.orchestrator/threads.json`)
-├─ Thread identity: active-thread de-dup scopes by workspace + worktree + repository context
-├─ Project identity: `projectId` is repository-scoped (`repo-path:*` / `repo-name:*`) instead of workspace-scoped when repository context is available
-├─ Repository normalization: thread/worktree creation normalizes `.../master` and `.../workN` paths to repository root
-├─ New chat reuse: thread creation prefers an existing repo worktree without an active thread before allocating a new `workN`
-├─ Project aggregation: `listProjects()` returns repository-level chat rollups across one/many workspaces
-└─ Lifecycle: create/list/close/archive + session association updates
-server/projectBoardService.js      - Local projects kanban board persistence (`~/.orchestrator/project-board.json`) + APIs (`GET /api/projects/board`, `POST /api/projects/board/move`, `POST /api/projects/board/patch`)
-server/discordIntegrationService.js - Discord queue orchestration bridge (Services workspace ensure/start, signed queue verification, invocation idempotency, JSONL audit log for processing dispatch/replay/fail paths)
-server/intentHaikuService.js       - Session intent summarizer for context-switch hints (optional Anthropic Haiku model, heuristic fallback)
-server/threadWorktreeSelection.js  - Repository/worktree normalization + reuse-first candidate selection for thread creation
-server/policyService.js            - Role/action policy checks (viewer/operator/admin) for sensitive APIs + command execution
-server/policyBundleService.js      - Policy template catalog + bundle export/import for team governance profiles
-server/pluginLoaderService.js      - Plugin manifest validation/compatibility, command registration safety, and client slot metadata
-server/agentProviderService.js     - Provider abstraction layer for Claude/Codex/future agents (sessions, resume plans, history search, transcript fetch)
-server/workspaceServiceStackService.js - Workspace service-stack manifest normalization/validation (services, env, restart policy, healthchecks)
-server/configPromoterService.js    - Team/shared service-stack baseline promotion + attach/resolve with optional signature verification
-server/encryptedStore.js           - Reusable AES-256-GCM encrypted JSON store helper for shared config artifacts
-server/serviceStackRuntimeService.js - Workspace service-stack runtime supervisor (start/stop/restart, desired state, auto-restart, health checks)
-server/auditExportService.js       - Redacted audit export across activity + scheduler logs (JSON/CSV)
-server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
-server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
-server/projectTypeService.js       - Project taxonomy loader/validator for category→framework→template metadata (`config/project-types.json`)
 ```
 
 ### Multi-Workspace System (Core Feature)
@@ -102,7 +71,6 @@ server/workspaceTypes.js            - Workspace type definitions
 
 server/worktreeHelper.js            - Git worktree operations wrapper
 ├─ Operations: Create, delete, manage git worktrees
-├─ Bootstrap helper: `createProjectWorktrees({ projectPath, count, baseBranch })` for initial `workN` creation
 ├─ Integration: Seamless workspace-worktree coordination
 └─ Safety: Path validation and cleanup handling
 ```
@@ -142,7 +110,7 @@ Config Structure:
 }
 
 client/app.js                       - Config pre-fetching & caching
-├─ Methods: prefetchWorktreeConfigs(), fetchCascadedConfig(), ensureProjectTypeTaxonomy()
+├─ Methods: prefetchWorktreeConfigs(), fetchCascadedConfig()
 ├─ Cache: Map<sessionId, config> for worktree-specific configs
 └─ Extract: extractRepositoryName() from workspace config
 ```
@@ -154,12 +122,6 @@ client/app.js                       - Config pre-fetching & caching
 client/app.js                      - Main client application
 ├─ Manages: UI state, socket connections, terminal grid
 ├─ Features: 16-terminal layout, real-time updates, session switching
-├─ Command Palette: header `⌘ Commands` button + `Ctrl/Cmd+K` searchable command launcher for command-catalog actions
-├─ Intent hints: compact "intent haiku" strip above each agent terminal, refreshed from `POST /api/sessions/intent-haiku`
-├─ Projects + Chats automation: `project-chats-new` Commander/voice action supports explicit workspace + repository targeting
-├─ Projects + Chats list: repository-first aggregation (project-centric view) while preserving workspace context for mixed workspaces
-├─ Projects + Chats data source: prefers server-aggregated repository projects from `GET /api/thread-projects` with client fallback aggregation
-├─ Status UI: visual state mapping for `busy`, `waiting`, `ready-new`, and `no-agent`
 └─ Dependencies: Socket.IO client, terminal emulation
 
 client/terminal.js                 - Terminal component implementation
@@ -176,33 +138,16 @@ client/workspace-wizard.js         - Workspace creation wizard
 ├─ Types: Single-repo, mixed-repo, and custom configurations
 └─ Integration: Worktree creation and template application
 
-client/greenfield-wizard.js        - New-project wizard (greenfield creation flow)
-├─ Uses project taxonomy categories before rendering
-├─ Calls `orchestrator.createProjectWorkspace(options)` to centralize socket + REST fallback (`POST /api/projects/create-workspace`)
-├─ Category → framework → template drilldown based on taxonomy relationships
-├─ GitHub controls: supports optional local-only creation (`createGithub=false`), explicit repo target (`owner/repo` or URL), and optional GitHub org/user prefix
-├─ Workspace-context suggestion (repo type -> recommended template/framework defaults)
-└─ Full-screen wizard UI for project scaffolding + workspace creation
-
-client/projects-board.js           - Projects kanban board modal (Archive/Maybe One Day/Backlog/Active/Ship Next/Done; drag/drop + re-order; collapsible columns; live tag; hide forks; persists via `/api/projects/board`)
-
 client/workspace-tab-manager.js    - Multi-workspace tab management (NEW)
 ├─ Features: Browser-like tabs for multiple workspaces
 ├─ Manages: Tab creation, switching, state preservation
 ├─ XTerm lifecycle: Proper hide/show with fit() handling
 ├─ Notifications: Badge counts for inactive tabs
-└─ Keyboard shortcuts: Alt+←/→, Alt+W, Alt+N, Alt+Shift+N, Alt+1-9
+└─ Keyboard shortcuts: Ctrl+Tab, Ctrl+W, Ctrl+T, Ctrl+1-9
 
 client/styles/tabs.css             - Tab bar styling
 ├─ Features: Tab UI, badges, animations
 └─ Responsive: Mobile and desktop layouts
-
-client/styles/projects-board.css   - Projects Board modal styling
-
-client/plugin-host.js              - Client plugin runtime for UI slots/actions
-├─ Loads: `/api/plugins/client-surface` slot actions with cache/refresh support
-├─ Exposes: `window.orchestratorPluginHost`
-└─ Supports actions: open_url, open_route, copy_text, commander_action
 ```
 
 ### Tabbed Workspace System (NEW)
@@ -249,18 +194,10 @@ TabState Structure:
 - Click "+" button to open new workspace
 - Click tab to switch
 - Click "×" to close tab (confirms if terminals active)
-- `Ctrl/Cmd+K` opens the command palette for quick command execution
 - Alt+← / Alt+→ to cycle tabs (previous/next)
 - Alt+1-9 to jump to specific tab
 - Alt+N for new workspace
-- Alt+Shift+N for full-screen New Project wizard
 - Alt+W to close current tab
-
-Dashboard notes:
-- "Create Workspace" card remains for workspace-only setup
-- "New Project" card opens the greenfield wizard directly
-- Terminal headers include a `✨` quick action to open the New Project wizard from any session
-- Recovery prompt explicitly separates "recoverable sessions" from total configured worktree/terminal counts
 
 ```
 
@@ -297,12 +234,6 @@ templates/launch-settings/         - Workspace configuration templates
 scripts/migrate-to-workspaces.js   - Migration script for legacy workspaces
 ├─ Converts: Old workspace format to new multi-workspace format
 └─ Safety: Backup and rollback capabilities
-
-scripts/public-release-audit.js    - Public-release safety audit automation
-├─ Checks: tracked cache/DB artifacts, public-doc path hygiene, loopback/auth defaults
-└─ Optional: full-history gitleaks scan (`--history-secrets`)
-
-scripts/create-project.js          - Taxonomy-driven project scaffold generator (template/project-kit source resolution, optional post-create hooks, git init, optional GitHub remote, worktree bootstrap via WorktreeHelper)
 ```
 
 ## Advanced Diff Viewer Component
@@ -356,7 +287,6 @@ git-command: {command, args}                   - Execute git command
 switch-workspace: {workspaceId}                - Switch to different workspace
 create-workspace: {config}                     - Create new workspace
 get-workspaces: {}                             - Request workspace list
-create-new-project: {name, category, template, ...} - Create project scaffold + workspace in one socket action
 close-tab: {tabId}                             - Close workspace tab and cleanup sessions (NEW)
 ```
 
@@ -447,39 +377,8 @@ POST /api/workspaces              - Create new workspace
 PUT /api/workspaces/:id           - Update workspace configuration
 DELETE /api/workspaces/:id        - Delete workspace
 POST /api/workspaces/:id/switch   - Switch to workspace
-POST /api/workspaces/remove-worktree - Remove worktree from workspace config (mixed terminal arrays and numeric `terminals.pairs` modes), close linked sessions, prune matching recovery orphans even when config entry is already missing, keep files on disk
-GET /api/threads                  - List project/workspace chats (`workspaceId` required)
-GET /api/thread-projects          - List repository-level chat projects aggregated from threads (optionally `workspaceId` scoped)
-POST /api/threads                 - Create thread + ensure mixed worktree/session context
-POST /api/threads/create          - Alias for thread creation API used by Projects + Chats shell (idempotent for existing worktrees/sessions)
-POST /api/threads/:id/close       - Mark thread closed and close linked sessions
-POST /api/threads/:id/archive     - Archive thread (hidden unless includeArchived=true)
-GET /api/project-types            - Full project taxonomy (categories/frameworks/templates + metadata)
-GET /api/project-types/categories - Project categories with resolved base paths
-GET /api/project-types/frameworks?categoryId=... - Framework catalog (optionally scoped by category)
-GET /api/project-types/templates?frameworkId=...&categoryId=... - Template catalog (optionally scoped)
-POST /api/projects/create-workspace - Create project scaffold + matching workspace in one request
-GET /api/discord/status            - Discord queue + services health/status (counts + signature status); endpoint can be gated by `DISCORD_API_TOKEN`
-POST /api/discord/ensure-services  - Ensure Services workspace/session bootstrap; accepts optional `dangerousModeOverride` (gated by `DISCORD_ALLOW_DANGEROUS_OVERRIDE`)
-POST /api/discord/process-queue    - Dispatch queue processing prompt with optional `Idempotency-Key`/`idempotencyKey`, queue signature verification, idempotent replay, audit logging, and per-endpoint rate limiting
-POST /api/sessions/intent-haiku   - Generate <=200 char intent summary for an active Claude/Codex session
-GET /api/greenfield/categories    - Greenfield category list (taxonomy-backed)
-POST /api/greenfield/detect-category - Infer category from description (taxonomy keyword matching)
 GET /api/user-settings            - Get user preferences
 PUT /api/user-settings            - Update user preferences
-
-GET /api/process/telemetry/benchmarks                         - Live + snapshot benchmark rows for onboarding/runtime/review comparisons
-POST /api/process/telemetry/benchmarks/snapshots              - Capture a named benchmark snapshot for release tracking
-GET /api/process/telemetry/benchmarks/release-notes           - Build markdown release notes comparing current vs baseline benchmark
-GET /api/policy/templates                                    - Built-in team governance policy templates
-POST /api/policy/bundles/export                              - Export policy bundle (template/current/custom) for sharing
-POST /api/policy/bundles/import                              - Apply policy bundle (replace/merge) into global settings
-GET /api/audit/export?signed=1                               - Signed audit export (HMAC-SHA256; requires signing enabled + secret)
-GET /api/agent-providers                                      - List registered agent providers and capabilities
-GET /api/agent-providers/:providerId/sessions                 - List provider sessions from SessionManager
-POST /api/agent-providers/:providerId/resume-plan             - Build provider-specific resume command/config plan
-GET /api/agent-providers/:providerId/history/search           - Provider-scoped history search (conversation index source-aware)
-GET /api/agent-providers/:providerId/history/:id              - Provider-scoped transcript retrieval
 ```
 
 ### WebSocket Events
@@ -537,6 +436,17 @@ LOGGING:      Winston-based structured logging with rotation
 8. **Worktree creation**: Validate paths and handle existing worktree conflicts
 9. **Mixed-repo workspaces**: Terminal naming must avoid conflicts between repos
 10. **Template validation**: Always validate workspace templates against schemas
+
+
+## First-Run Dependency Onboarding (Windows)
+
+```
+server/setupActionService.js     - Defines setup actions and launches PowerShell installers
+server/index.js                  - Routes: GET /api/setup-actions, POST /api/setup-actions/run
+client/app.js                    - Guided dependency onboarding steps + diagnostics integration
+client/index.html                - Dependency onboarding modal markup + launch button
+client/styles.css                - Dependency onboarding progress/step styling
+```
 
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
