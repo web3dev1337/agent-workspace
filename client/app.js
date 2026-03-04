@@ -6088,25 +6088,7 @@ class ClaudeOrchestrator {
     const session = this.sessions.get(sessionId);
     const branch = session ? session.branch : '';
     
-    // Create small toast notification
-    const toast = document.createElement('div');
-    toast.className = 'ready-toast';
-    toast.innerHTML = `
-      <div class="toast-content">
-        <span class="toast-icon">✅</span>
-        <span class="toast-text">Claude ${worktreeId} ready ${branch ? `(${branch})` : ''}</span>
-      </div>
-    `;
-    
-    // Add to page
-    document.body.appendChild(toast);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-      if (toast.parentNode) {
-        toast.remove();
-      }
-    }, 3000);
+    this.showToast(`Claude ${worktreeId} ready ${branch ? `(${branch})` : ''}`, 'success', { durationMs: 3000 });
     
     // Play notification sound if enabled
     if (this.settings.sounds) {
@@ -7484,21 +7466,48 @@ class ClaudeOrchestrator {
 	    const openBtn = document.getElementById('dependency-setup-open');
 	    const summaryEl = document.getElementById('dependency-setup-summary');
 	    const listEl = document.getElementById('dependency-setup-list');
-	    const refreshBtn = document.getElementById('dependency-setup-refresh');
-	    const openDiagnosticsBtn = document.getElementById('dependency-setup-open-diagnostics');
-	    const continueBtn = document.getElementById('dependency-setup-continue');
-	    const dismissBtn = document.getElementById('dependency-setup-dismiss');
 	    const closeBtn = document.getElementById('dependency-setup-close');
 	    if (!modal || !summaryEl || !listEl) return;
+	    const body = document.body;
+	    const isWindowsHost = (() => {
+	      try {
+	        const platform = String(navigator?.platform || '').toLowerCase();
+	        const userAgent = String(navigator?.userAgent || '').toLowerCase();
+	        return platform.includes('win') || userAgent.includes('windows');
+	      } catch {
+	        return false;
+	      }
+	    })();
 
-	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v2';
-	    const completedKey = 'orchestrator-dependency-onboarding-completed-v1';
-	    const progressKey = 'orchestrator-dependency-onboarding-progress-v1';
+	    const setBootstrapPending = (pending) => {
+	      if (!isWindowsHost) return;
+	      if (pending) {
+	        body?.classList?.add?.('dependency-onboarding-booting');
+	        body?.classList?.remove?.('dependency-onboarding-active');
+	        return;
+	      }
+	      body?.classList?.remove?.('dependency-onboarding-booting');
+	    };
+	    setBootstrapPending(true);
+
+	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v3';
+	    const completedKey = 'orchestrator-dependency-onboarding-completed-v2';
+	    const progressKey = 'orchestrator-dependency-onboarding-progress-v2';
+	    const skippedStepsKey = 'orchestrator-dependency-onboarding-skipped-v1';
 	    const state = {
 	      loading: false,
 	      diagnostics: null,
 	      actions: [],
-	      currentStep: 0
+	      currentStep: 0,
+	      showWelcome: true,
+	      skippedActionIds: new Set(),
+	      actionRuns: new Map(),
+	      actionRunPollers: new Map(),
+	      gitIdentity: {
+	        name: '',
+	        email: ''
+	      },
+	      gitIdentityHelpVisible: false
 	    };
 
 	    const readDismissed = () => {
@@ -7553,6 +7562,41 @@ class ClaudeOrchestrator {
 	      }
 	    };
 
+	    const readSkippedStepIds = () => {
+	      try {
+	        const raw = localStorage.getItem(skippedStepsKey);
+	        if (!raw) return new Set();
+	        const parsed = JSON.parse(raw);
+	        if (!Array.isArray(parsed)) return new Set();
+	        const ids = parsed
+	          .map((value) => String(value || '').trim())
+	          .filter(Boolean);
+	        return new Set(ids);
+	      } catch {
+	        return new Set();
+	      }
+	    };
+
+	    const writeSkippedStepIds = () => {
+	      try {
+	        if (!(state.skippedActionIds instanceof Set) || state.skippedActionIds.size === 0) {
+	          localStorage.removeItem(skippedStepsKey);
+	          return;
+	        }
+	        localStorage.setItem(skippedStepsKey, JSON.stringify(Array.from(state.skippedActionIds)));
+	      } catch {
+	        // ignore
+	      }
+	    };
+
+	    const setStepSkipped = (actionId, skipped) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return;
+	      if (skipped) state.skippedActionIds.add(id);
+	      else state.skippedActionIds.delete(id);
+	      writeSkippedStepIds();
+	    };
+
 	    const toToolMap = (diagnostics) => {
 	      const map = new Map();
 	      const tools = Array.isArray(diagnostics?.tools) ? diagnostics.tools : [];
@@ -7562,6 +7606,80 @@ class ClaudeOrchestrator {
 	        map.set(id, !!tool?.ok);
 	      });
 	      return map;
+	    };
+
+	    const getToolResult = (diagnostics, toolId) => {
+	      const id = String(toolId || '').trim();
+	      if (!id) return null;
+	      const tools = Array.isArray(diagnostics?.tools) ? diagnostics.tools : [];
+	      return tools.find((tool) => String(tool?.id || '').trim() === id) || null;
+	    };
+
+	    const parseGitIdentityVersion = (value) => {
+	      const raw = String(value || '').trim();
+	      if (!raw) return { name: '', email: '' };
+	      const pair = raw.match(/^(.*)\s<([^<>]+)>$/);
+	      if (pair?.[1] && pair?.[2]) {
+	        return {
+	          name: String(pair[1] || '').trim(),
+	          email: String(pair[2] || '').trim()
+	        };
+	      }
+	      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
+	        return { name: '', email: raw };
+	      }
+	      return { name: raw, email: '' };
+	    };
+
+	    const stripAnsiText = (value) => String(value || '').replace(/\u001b\[[0-9;]*m/g, '');
+
+	    const collectRunOutputLines = (runInfo, { limit = 25 } = {}) => {
+	      const lines = Array.isArray(runInfo?.output)
+	        ? runInfo.output
+	            .map((entry) => stripAnsiText(String(entry?.line || '')).trim())
+	            .filter(Boolean)
+	        : [];
+	      if (!Number.isFinite(limit) || limit <= 0) return lines;
+	      return lines.slice(-Math.max(1, Number(limit) || 1));
+	    };
+
+	    const extractGithubLoginInfo = (lines = []) => {
+	      const fallbackUrl = 'https://github.com/login/device';
+	      let link = fallbackUrl;
+	      let code = '';
+	      let sawDeviceHint = false;
+
+	      (Array.isArray(lines) ? lines : []).forEach((lineRaw) => {
+	        const line = String(lineRaw || '').trim();
+	        if (!line) return;
+
+	        if (/one[-\s]?time code|login\/device|authenticate in your web browser|copied to your clipboard|open this url/i.test(line)) {
+	          sawDeviceHint = true;
+	        }
+
+	        const linkMatch = line.match(/https:\/\/github\.com\/login\/device(?:\S*)?/i);
+	        if (linkMatch?.[0]) link = linkMatch[0].trim();
+
+	        const codeMatch = line.match(/\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/i);
+	        if (codeMatch?.[1]) code = String(codeMatch[1]).toUpperCase();
+	      });
+
+	      return {
+	        link,
+	        code,
+	        sawDeviceHint
+	      };
+	    };
+
+	    const hydrateGitIdentityDraft = (diagnostics) => {
+	      const gitIdentityTool = getToolResult(diagnostics, 'gitIdentity');
+	      const parsed = parseGitIdentityVersion(String(gitIdentityTool?.version || ''));
+	      if (!state.gitIdentity.name && parsed.name) {
+	        state.gitIdentity.name = parsed.name;
+	      }
+	      if (!state.gitIdentity.email && parsed.email) {
+	        state.gitIdentity.email = parsed.email;
+	      }
 	    };
 
 	    const getRequirementState = (toolsMap) => {
@@ -7587,6 +7705,8 @@ class ClaudeOrchestrator {
 	      switch (String(actionId || '').trim()) {
 	        case 'install-git':
 	          return !!toolsMap.get('git');
+	        case 'configure-git-identity':
+	          return !!toolsMap.get('gitIdentity');
 	        case 'install-node':
 	          return !!toolsMap.get('node') && !!toolsMap.get('npm');
 	        case 'install-gh':
@@ -7604,12 +7724,21 @@ class ClaudeOrchestrator {
 
 	    const getActionLevelText = (level) => {
 	      if (level === 'required') return 'Required';
+	      if (level === 'optional') return 'Optional';
 	      if (level === 'core-option') return 'Core option';
 	      return 'Recommended';
 	    };
 
 	    const getActionLevelClass = (level) => {
+	      if (level === 'optional') return 'level-optional';
 	      return level === 'recommended' ? 'level-recommended' : 'level-required';
+	    };
+
+	    const getActionStatusText = (actionId, done) => {
+	      const id = String(actionId || '').trim();
+	      if (id === 'gh-login') return done ? 'Logged in' : 'Not logged in';
+	      if (id === 'configure-git-identity') return done ? 'Configured' : 'Not configured';
+	      return done ? 'Installed' : 'Missing';
 	    };
 
 	    const getResolvedSteps = () => {
@@ -7623,21 +7752,65 @@ class ClaudeOrchestrator {
 	          ...action,
 	          id,
 	          level,
+	          optional: action?.optional === true || level === 'optional',
 	          done,
 	          levelText: getActionLevelText(level),
 	          levelClass: getActionLevelClass(level),
-	          statusText: done ? 'Installed' : 'Missing',
+	          statusText: getActionStatusText(id, done),
 	          statusClass: done ? 'status-ok' : 'status-missing',
 	          runSupported: action?.runSupported !== false
 	        };
 	      });
 	    };
 
+	    const syncSkippedSteps = (steps) => {
+	      if (!(state.skippedActionIds instanceof Set)) {
+	        state.skippedActionIds = new Set();
+	      }
+	      const validSkippedIds = new Set(
+	        (Array.isArray(steps) ? steps : [])
+	          .filter((step) => {
+	            const id = String(step?.id || '').trim();
+	            return !!id && step?.optional && !step?.done;
+	          })
+	          .map((step) => String(step?.id || '').trim())
+	      );
+	      let changed = false;
+	      for (const id of Array.from(state.skippedActionIds)) {
+	        if (!validSkippedIds.has(id)) {
+	          state.skippedActionIds.delete(id);
+	          changed = true;
+	        }
+	      }
+	      if (changed) writeSkippedStepIds();
+	    };
+
+	    const isOnboardingLocked = () => {
+	      const toolsMap = toToolMap(state.diagnostics);
+	      const req = getRequirementState(toolsMap);
+	      if (!req?.coreReady) return true;
+	      return !readCompleted();
+	    };
+
+	    const applyOnboardingLockUI = () => {
+	      const locked = isOnboardingLocked();
+	      if (closeBtn) {
+	        closeBtn.disabled = locked;
+	        closeBtn.style.visibility = locked ? 'hidden' : '';
+	      }
+	      modal.setAttribute('data-onboarding-locked', locked ? 'true' : 'false');
+	      return locked;
+	    };
+
 	    const setCurrentStep = (nextStep, { persist = true } = {}) => {
+	      const previousStep = state.currentStep;
 	      const maxStep = Math.max(0, (Array.isArray(state.actions) ? state.actions.length : 0) - 1);
 	      const parsed = Number.parseInt(String(nextStep), 10);
 	      const safe = Number.isFinite(parsed) ? parsed : 0;
 	      state.currentStep = Math.max(0, Math.min(safe, maxStep));
+	      if (state.currentStep !== previousStep) {
+	        state.gitIdentityHelpVisible = false;
+	      }
 	      if (persist) writeSavedStep(state.currentStep);
 	      return state.currentStep;
 	    };
@@ -7645,14 +7818,38 @@ class ClaudeOrchestrator {
 	    const getActionLevel = (actionId) => {
 	      const id = String(actionId || '').trim();
 	      if (id === 'install-git') return 'required';
-	      if (id === 'install-claude' || id === 'install-codex') return 'core-option';
+	      if (id === 'configure-git-identity') return 'optional';
+	      if (id === 'install-gh' || id === 'gh-login') return 'optional';
+	      if (id === 'install-claude') return 'optional';
+	      if (id === 'install-codex') return 'optional';
 	      return 'recommended';
+	    };
+
+	    const buildStepIconSvg = (iconMarkup) => (
+	      `<svg class="onboarding-step-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${iconMarkup}</svg>`
+	    );
+
+	    const stepIconSvgByActionId = Object.freeze({
+	      'install-git': buildStepIconSvg('<circle cx="6" cy="6" r="2"></circle><circle cx="18" cy="6" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M8 6h8"></path><path d="M18 8v8"></path><path d="M8 6v8a4 4 0 0 0 4 4h4"></path>'),
+	      'configure-git-identity': buildStepIconSvg('<circle cx="12" cy="8" r="3.5"></circle><path d="M5 19a7 7 0 0 1 14 0"></path>'),
+	      'install-node': buildStepIconSvg('<path d="m12 3 7 4v10l-7 4-7-4V7l7-4Z"></path><path d="M12 7v10"></path><path d="m5 7 7 4 7-4"></path>'),
+	      'install-gh': buildStepIconSvg('<rect x="3.5" y="5" width="17" height="14" rx="2.5"></rect><path d="m8 10 3 2-3 2"></path><path d="M13.5 16h3.5"></path>'),
+	      'gh-login': buildStepIconSvg('<path d="M14 7V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5a2 2 0 0 0 2-2v-2"></path><path d="M10 12h10"></path><path d="m17 8 3.5 4-3.5 4"></path>'),
+	      'install-claude': buildStepIconSvg('<path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3Z"></path><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z"></path>'),
+	      'install-codex': buildStepIconSvg('<path d="m8 8-4 4 4 4"></path><path d="m16 8 4 4-4 4"></path><path d="m13 6-2 12"></path>')
+	    });
+
+	    const getStepIconSvg = (actionId) => {
+	      const id = String(actionId || '').trim();
+	      return stepIconSvgByActionId[id]
+	        || buildStepIconSvg('<path d="M12 3v18"></path><path d="M3 12h18"></path>');
 	    };
 
 	    const render = () => {
 	      const toolsMap = toToolMap(state.diagnostics);
 	      const req = getRequirementState(toolsMap);
 	      const steps = getResolvedSteps();
+	      syncSkippedSteps(steps);
 	      if (!steps.length) {
 	        summaryEl.textContent = 'No setup actions are available for this platform.';
 	        listEl.innerHTML = '<div class="dependency-setup-empty">No setup actions are available for this platform.</div>';
@@ -7669,88 +7866,332 @@ class ClaudeOrchestrator {
 	      if (!req.gitOk) missingCore.push('Git');
 	      if (!req.hasAgentCli) missingCore.push('Claude Code or Codex CLI');
 
-	      if (req.coreReady) {
-	        summaryEl.textContent = `Onboarding step ${stepNo} of ${totalSteps}. Core requirements are installed; continue through each step to verify your environment.`;
-	      } else {
-	        summaryEl.textContent = `Onboarding step ${stepNo} of ${totalSteps}. Missing core requirements: ${missingCore.join(' + ')}.`;
+	      if (state.showWelcome) {
+	        summaryEl.textContent = '';
+	        listEl.innerHTML = `
+	          <div class="onboarding-welcome-card">
+	            <h3 class="onboarding-welcome-title">Let’s get you ready in a minute.</h3>
+	            <p class="onboarding-welcome-copy">
+	              We’ll check your system and install what’s needed.
+	              Optional tools can be skipped.
+	            </p>
+	            <div class="onboarding-nav-row onboarding-welcome-actions">
+	              <button class="onboarding-btn-primary" type="button" data-setup-begin="true">Start setup</button>
+	            </div>
+	          </div>`;
+	        return { req, steps, current };
 	      }
 
+	      summaryEl.textContent = '';
+
 	      const currentId = String(current?.id || '').trim();
+	      const currentStepIconSvg = getStepIconSvg(currentId);
 	      const currentTitle = this.escapeHtml(String(current?.title || currentId || 'Setup action'));
 	      const currentDesc = this.escapeHtml(String(current?.description || ''));
 	      const commandRaw = String(current?.command || '');
-	      const command = this.escapeHtml(commandRaw);
-	      const docsUrl = this.escapeHtml(String(current?.docsUrl || ''));
-	      const runDisabled = !current?.runSupported || !!current?.done;
-	      const runLabel = current?.done ? 'Already installed' : 'Run in PowerShell';
-	      const guidance = current?.done
-	        ? 'Detected on this machine. Continue to the next step.'
-	        : 'Not detected yet. Run the command, then click Recheck.';
-	      const nextLabel = stepNo >= totalSteps ? 'Finish onboarding' : 'Next step';
-
-	      const chips = steps.map((step, idx) => {
-	        const chipClasses = [
-	          'dependency-onboarding-step-chip',
-	          idx === state.currentStep ? 'is-active' : '',
-	          step.done ? 'is-complete' : ''
-	        ].filter(Boolean).join(' ');
-	        const name = this.escapeHtml(String(step?.title || step?.id || `Step ${idx + 1}`));
-	        const stateText = step.done ? 'Installed' : 'Missing';
-	        return `<button class="${chipClasses}" type="button" data-setup-jump="${idx}">${idx + 1}. ${name} - ${stateText}</button>`;
-	      }).join('');
+	      const runInfo = state.actionRuns.get(currentId) || null;
+	      const runStatus = String(runInfo?.status || '').trim().toLowerCase();
+	      const isRunning = runStatus === 'running';
+	      const isVerifying = runStatus === 'verifying';
+	      const isFinalizing = runStatus === 'success' || runStatus === 'completed';
+	      const isRunBusy = isRunning || isVerifying || isFinalizing;
+	      const isGitIdentityStep = currentId === 'configure-git-identity';
+	      const runOutputAll = collectRunOutputLines(runInfo, { limit: 160 });
+	      const runOutput = runOutputAll.slice(-8);
+	      const runOutputText = this.escapeHtml(runOutput.join('\n'));
+	      const shouldShowInstallerOutput = currentId !== 'gh-login' && !isGitIdentityStep && (
+	        runOutput.length > 0 ||
+	        isRunBusy ||
+	        runStatus === 'failed' ||
+	        runStatus === 'needs-attention'
+	      );
+	      const installerOutputText = runOutput.length
+	        ? runOutputText
+	        : this.escapeHtml(
+	            isRunning
+	              ? 'Installer started. Waiting for output...'
+	              : (isVerifying
+	                  ? 'Installer finished. Verifying dependency...'
+	                  : 'No installer output captured yet.')
+	          );
+	      const githubDeviceUrl = 'https://github.com/login/device';
+	      const ghInstalled = !!toolsMap.get('gh');
+	      const ghLoggedIn = !!toolsMap.get('ghAuth');
+	      const ghLoginRunInfo = state.actionRuns.get('gh-login') || null;
+	      const ghLoginRunStatus = String(ghLoginRunInfo?.status || '').trim().toLowerCase();
+	      const ghLoginIsRunning = ghLoginRunStatus === 'running';
+	      const ghLoginIsVerifying = ghLoginRunStatus === 'verifying';
+	      const ghLoginIsFinalizing = ghLoginRunStatus === 'success' || ghLoginRunStatus === 'completed';
+	      const ghLoginIsBusy = ghLoginIsRunning || ghLoginIsVerifying || ghLoginIsFinalizing;
+	      const ghLoginOutputAll = collectRunOutputLines(ghLoginRunInfo, { limit: 160 });
+	      const ghLoginInfo = extractGithubLoginInfo(ghLoginOutputAll);
+	      const ghLoginLink = String(ghLoginRunInfo?.ghDeviceUrl || ghLoginInfo.link || githubDeviceUrl).trim() || githubDeviceUrl;
+	      const ghLoginCode = String(ghLoginRunInfo?.ghDeviceCode || ghLoginInfo.code || '').trim().toUpperCase();
+	      const ghLoginHasSignal = !!(
+	        ghLoginRunInfo?.ghHasDeviceHint
+	        || ghLoginInfo.sawDeviceHint
+	        || ghLoginCode
+	        || ghLoginLink !== githubDeviceUrl
+	      );
+	      const ghLoginUiPhase = (() => {
+	        if (!ghInstalled || ghLoggedIn) return 'none';
+	        if (!ghLoginRunInfo) return 'start';
+	        if (ghLoginCode) return 'code';
+	        if (ghLoginIsBusy) return 'wait-code';
+	        return 'retry';
+	      })();
+	      const ghLoginInlineStatusText = (() => {
+	        if (!ghInstalled) return 'Install GitHub CLI first';
+	        if (ghLoggedIn) return 'Logged in';
+	        if (ghLoginIsFinalizing) return 'Finalizing login';
+	        if (ghLoginIsRunning) return 'Signing in';
+	        if (ghLoginIsVerifying) return 'Checking login';
+	        return 'Not logged in';
+	      })();
+	      const ghLoginInlineStatusClass = ghLoggedIn
+	        ? 'status-ok'
+	        : ((ghLoginIsBusy || ghLoginRunStatus === 'needs-attention') ? 'status-pending' : 'status-missing');
+	      const ghLoginInlineRunLabel = (() => {
+	        if (ghLoggedIn) return 'Logged in';
+	        if (ghLoginIsFinalizing) return 'Finalizing...';
+	        if (ghLoginIsBusy) return 'Waiting...';
+	        return 'Start login';
+	      })();
+	      const ghLoginInlineRunDisabled = !ghInstalled || ghLoggedIn || ghLoginIsBusy;
+	      const showInlineGhLogin = currentId === 'install-gh' && ghInstalled;
+	      const isGhLoginStep = currentId === 'gh-login';
+	      const codexNeedsNode = currentId === 'install-codex' && !(toolsMap.get('node') && toolsMap.get('npm'));
+	      const gitIdentityName = this.escapeHtml(String(state.gitIdentity?.name || ''));
+	      const gitIdentityEmail = this.escapeHtml(String(state.gitIdentity?.email || ''));
+	      const showRunButton = current?.runSupported !== false && !isGitIdentityStep && !(isGhLoginStep && current?.done);
+	      const runDisabled = !!current?.done || runStatus === 'verified' || isRunBusy || codexNeedsNode;
+	      const runLabel = (() => {
+	        if (current?.done || runStatus === 'verified') {
+	          if (currentId === 'gh-login') return 'Logged in';
+	          if (currentId === 'configure-git-identity') return 'Configured';
+	          return 'Installed';
+	        }
+	        if (isFinalizing) return 'Finalizing...';
+	        if (isRunBusy) return isGhLoginStep ? 'Waiting...' : 'Running...';
+	        if (currentId === 'gh-login') return 'Start login';
+	        return 'Run step';
+	      })();
+	      const baseStatusText = String(current?.statusText || (current?.done ? 'Installed' : 'Missing'));
+	      const statusText = (() => {
+	        if (runStatus === 'verified') return baseStatusText;
+	        if (isFinalizing) return isGhLoginStep ? 'Finalizing login' : 'Finalizing';
+	        if (isRunning) return isGhLoginStep ? 'Signing in' : (isGitIdentityStep ? 'Saving' : 'Installing');
+	        if (isVerifying) return isGhLoginStep ? 'Checking login' : (isGitIdentityStep ? 'Checking' : 'Verifying');
+	        if (runStatus === 'failed') return isGhLoginStep ? 'Login failed' : (isGitIdentityStep ? 'Save failed' : 'Failed');
+	        return baseStatusText;
+	      })();
+	      const statusClass = current?.done || runStatus === 'verified'
+	        ? 'status-ok'
+	        : ((isRunning || isVerifying || isFinalizing) ? 'status-pending' : (runStatus === 'failed' ? 'status-missing' : (current?.statusClass || 'status-missing')));
+	      let guidance = 'Run this step. We will detect completion automatically.';
+	      if (current?.done || runStatus === 'verified') {
+	        guidance = isGhLoginStep
+	          ? 'GitHub CLI is authenticated. Continue to the next step.'
+	          : (currentId === 'install-gh'
+	              ? 'GitHub CLI is installed. Optional next step: sign in with GitHub to enable PR and repo actions.'
+	              : (isGitIdentityStep
+	                  ? 'Git identity is configured. Continue to the next step.'
+	                  : 'Already installed on this machine. Continue to the next step.'));
+	      } else if (isRunning) {
+	        guidance = isGhLoginStep
+	          ? 'GitHub login started. Use the browser flow below and keep this window open; we recheck automatically.'
+	          : (isGitIdentityStep
+	              ? 'Saving Git identity now. Keep this window open and we will recheck automatically.'
+	              : 'Installing now via PowerShell. Keep this window open and we will recheck automatically.');
+	      } else if (isVerifying) {
+	        guidance = isGhLoginStep
+	          ? 'Checking GitHub login automatically...'
+	          : (isGitIdentityStep
+	              ? 'Git identity saved. Checking your system automatically...'
+	              : 'Install command finished. Checking your system automatically...');
+	      } else if (isFinalizing) {
+	        guidance = isGhLoginStep
+	          ? 'Login command finished. Finalizing and checking status automatically...'
+	          : 'Install command finished. Finalizing and checking your system automatically...';
+	      } else if (runStatus === 'failed') {
+	        const errorText = String(runInfo?.error || '').trim();
+	        guidance = errorText
+	          ? `${isGhLoginStep ? 'Login failed' : (isGitIdentityStep ? 'Save failed' : 'Install failed')}: ${errorText}`
+	          : `${isGhLoginStep ? 'Login failed' : (isGitIdentityStep ? 'Save failed' : 'Install failed')}. Review and run the step again.`;
+	      } else if (runStatus === 'needs-attention') {
+	        guidance = isGhLoginStep
+	          ? (ghLoginHasSignal
+	              ? 'GitHub login is not detected yet. If browser sign-in is complete, click Start login again to request a new code.'
+	              : 'GitHub CLI did not return a one-time code. Click Start login again; if needed, reinstall GitHub CLI first.')
+	          : (isGitIdentityStep
+	              ? 'Git identity was saved, but it is still not detected. Check your values and save again.'
+	              : 'Install command finished, but this dependency is still not detected. Review output below and run again.');
+	      } else if (isGitIdentityStep) {
+	        guidance = 'Enter your Git name and email, then click Save identity. We will detect it automatically.';
+	      } else if (isGhLoginStep) {
+	        guidance = 'Optional after GitHub CLI install. Start login when you are ready.';
+	      } else if (codexNeedsNode) {
+	        guidance = 'Install Node.js LTS first. Codex uses npm and cannot be installed until Node is detected.';
+	      } else if (!current?.runSupported && current?.optional) {
+	        guidance = 'Optional but strongly recommended: set Git user.name and user.email so commits and PR authorship are correct.';
+	      } else if (!current?.runSupported) {
+	        guidance = 'Manual step: run the command below in your terminal. We will detect it automatically afterward.';
+	      }
+	      if (currentId === 'install-gh' && (current?.done || runStatus === 'verified')) {
+	        if (ghLoggedIn) {
+	          guidance = 'GitHub CLI is installed and authenticated. You can continue.';
+	        } else if (ghLoginIsRunning) {
+	          guidance = 'GitHub login started. Use the browser flow in this step and keep this window open.';
+	        } else if (ghLoginIsVerifying) {
+	          guidance = 'Checking GitHub login automatically...';
+	        } else if (ghLoginIsFinalizing) {
+	          guidance = 'Login command finished. Finalizing and checking status automatically...';
+	        } else if (ghLoginRunStatus === 'needs-attention') {
+	          guidance = ghLoginHasSignal
+	            ? 'GitHub login is not detected yet. If browser sign-in is complete, click Start login again to request a new code.'
+	            : 'GitHub CLI did not return a one-time code. Click Start login again.';
+	        }
+	      }
+	      const canAdvance = !!current?.done || !!current?.optional;
+	      const nextLabel = !canAdvance
+	        ? 'Complete this step first'
+	        : (!current?.done && current?.optional
+	            ? 'Skip'
+	            : (stepNo >= totalSteps ? 'Finish onboarding' : 'Next step'));
 
 	      listEl.innerHTML = `
-	        <div class="dependency-onboarding-progress">
-	          <div class="dependency-onboarding-progress-meta">
-	            <strong>Step ${stepNo} of ${totalSteps}</strong>
-	            <span>${detectedCount}/${totalSteps} detected</span>
-	          </div>
-	          <div class="dependency-onboarding-progress-track" aria-hidden="true">
-	            <div class="dependency-onboarding-progress-bar" style="width:${doneRatio}%;"></div>
-	          </div>
+	        <div class="onboarding-stepper-row">
+	          ${steps.map((step, idx) => {
+	            const isActive = idx === state.currentStep;
+	            const actionId = String(step?.id || '').trim();
+	            const isSkipped = state.skippedActionIds.has(actionId);
+	            const isDone = step.done || isSkipped;
+	            const isPast = idx < state.currentStep;
+	            const isFuture = idx > state.currentStep;
+	            let statusClass = 'stepper-upcoming';
+	            if (isActive) {
+	              statusClass = 'stepper-active';
+	            } else if (isPast && isDone) {
+	              statusClass = 'stepper-done';
+	            } else {
+	              statusClass = 'stepper-upcoming';
+	            }
+	            const stepStateLabel = isActive
+	              ? 'Current step'
+	              : (isPast && isDone ? 'Completed' : (isFuture ? 'Upcoming' : 'Pending'));
+	            return `
+	              <div class="onboarding-stepper-item ${statusClass}" title="${this.escapeHtml(`${step.title} (${stepStateLabel})`)}">
+	                <div class="stepper-icon-box">
+	                  ${isActive ? `<span class="stepper-active-label">Step ${stepNo}</span>` : ''}
+	                  <div class="stepper-diamond"></div>
+	                </div>
+	              </div>
+	            `;
+	          }).join('')}
 	        </div>
-	        <div class="dependency-setup-item dependency-onboarding-step" data-setup-item="${this.escapeHtml(currentId)}">
-	          <div class="dependency-setup-item-header">
-	            <div class="dependency-setup-item-title">${currentTitle}</div>
-	            <div class="dependency-setup-badges">
-	              <span class="dependency-setup-badge ${current?.levelClass || ''}">${current?.levelText || 'Recommended'}</span>
-	              <span class="dependency-setup-badge ${current?.statusClass || ''}">${current?.statusText || 'Missing'}</span>
+	        
+	        <div class="onboarding-step-card ${current?.done ? 'card-done' : ''}" data-setup-item="${this.escapeHtml(currentId)}">
+	          <div class="onboarding-step-icon">
+	            ${currentStepIconSvg}
+	          </div>
+	          <div class="onboarding-step-content">
+	            <h3 class="onboarding-step-title">${currentTitle}</h3>
+	            
+	            <div class="onboarding-step-status-row">
+	              ${current?.done ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="onboarding-check"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+	              <p class="onboarding-step-desc">${currentDesc} ${statusText ? `<span class="onboarding-inline-status ${statusClass}">(${statusText})</span>` : ''}</p>
 	            </div>
-	          </div>
-	          <div class="dependency-setup-item-desc">${currentDesc}</div>
-	          <div class="dependency-onboarding-state ${current?.statusClass || ''}">${this.escapeHtml(guidance)}</div>
-	          ${command ? `<pre class="mono dependency-setup-item-command">${command}</pre>` : ''}
-	          <div class="dependency-setup-item-actions">
-	            <button class="btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>
-	            <button class="btn-secondary" type="button" data-setup-copy="${this.escapeHtml(commandRaw)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>
-	            ${docsUrl ? `<a class="btn-secondary" href="${docsUrl}" target="_blank" rel="noopener noreferrer">Docs</a>` : ''}
-	            <button class="btn-secondary" type="button" data-setup-recheck="true">Recheck</button>
-	          </div>
-	        </div>
-	        <div class="dependency-onboarding-nav">
-	          <button class="btn-secondary" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Previous</button>
-	          <button class="btn-secondary" type="button" data-setup-next="true">${nextLabel}</button>
-	        </div>
-	        <div class="dependency-onboarding-overview">${chips}</div>
-	      `;
+	            
+	            ${isGitIdentityStep ? `
+	              <div class="dependency-git-identity-helper">
+	                <div class="dependency-git-identity-fields">
+	                  <label class="dependency-git-identity-field">
+	                    <span>Name</span>
+	                    <input type="text" data-setup-git-name placeholder="Jane Developer" autocomplete="name" value="${gitIdentityName}" ${isRunBusy ? 'disabled' : ''}>
+	                  </label>
+	                  <label class="dependency-git-identity-field">
+	                    <span>Email</span>
+	                    <input type="email" data-setup-git-email placeholder="you@example.com" autocomplete="email" value="${gitIdentityEmail}" ${isRunBusy ? 'disabled' : ''}>
+	                  </label>
+	                  <button class="onboarding-btn-secondary" type="button" data-setup-git-save="true" ${isRunBusy ? 'disabled' : ''}>${isRunBusy ? 'Saving...' : (current?.done ? 'Update identity' : 'Save identity')}</button>
+	                </div>
+	              </div>
+	            ` : ''}
+	            
+		            ${showInlineGhLogin ? `
+		              <div class="dependency-gh-login-helper">
+		                <div class="dependency-gh-login-helper-text">GitHub authentication (optional) <span class="onboarding-inline-status ${ghLoginInlineStatusClass}">(${this.escapeHtml(ghLoginInlineStatusText)})</span></div>
+		                ${ghLoginUiPhase === 'start' ? '<div class="dependency-gh-login-helper-text">Click <strong>Start login</strong> to begin browser sign-in.</div>' : ''}
+		                ${ghLoginUiPhase === 'wait-code' ? '<div class="dependency-gh-login-helper-text">Waiting for GitHub CLI login details. If code is not shown here, it is copied to your clipboard automatically.</div>' : ''}
+		                ${ghLoginUiPhase === 'retry' ? '<div class="dependency-gh-login-helper-text">Login is not complete yet. Start login again to request a new one-time code.</div>' : ''}
+		                ${ghLoginUiPhase === 'code' ? `<div class="dependency-gh-login-helper-text">Open GitHub login and paste this one-time code.</div><div class="dependency-gh-login-code-wrap"><span class="dependency-gh-login-code mono">${this.escapeHtml(ghLoginCode)}</span><button class="onboarding-btn-secondary" type="button" data-setup-copy-gh-code="${this.escapeHtml(ghLoginCode)}">Copy code</button></div>` : ''}
+		                <div class="dependency-gh-login-helper-actions">
+		                  <button class="onboarding-btn-secondary" type="button" data-setup-run="gh-login" ${ghLoginInlineRunDisabled ? 'disabled' : ''}>${this.escapeHtml(ghLoginInlineRunLabel)}</button>
+		                  ${ghLoginRunInfo ? `<button class="onboarding-btn-secondary" type="button" data-setup-open-gh-login="${this.escapeHtml(ghLoginLink)}">Open GitHub login</button>` : ''}
+		                </div>
+		              </div>
+		            ` : ''}
+	            
+	            ${shouldShowInstallerOutput ? `
+	              <div class="dependency-onboarding-command-wrap">
+	                <pre class="mono dependency-setup-item-output">${installerOutputText}</pre>
+	              </div>
+	            ` : ''}
+	            
+	                <div class="onboarding-step-actions">
+	                  ${showRunButton ? `<button class="onboarding-btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>` : ''}
+	                  ${!isGhLoginStep && !isGitIdentityStep ? `<button class="onboarding-btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>` : ''}
+	                </div>
+		          </div>
+		        </div>
+	        
+	        <div class="onboarding-nav-row">
+	          <button class="onboarding-btn-back" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Back</button>
+	          <button class="onboarding-btn-primary" type="button" data-setup-next="true" ${canAdvance ? '' : 'disabled'}>${nextLabel}</button>
+	        </div>`;
 
 	      return { req, steps, current };
 	    };
 
-	    const closeModal = () => modal.classList.add('hidden');
-	    const openModal = () => modal.classList.remove('hidden');
+	    const closeModal = ({ force = false } = {}) => {
+	      const locked = applyOnboardingLockUI();
+	      if (!force && locked) {
+	        openModal();
+	        return false;
+	      }
+	      modal.classList.add('hidden');
+	      body?.classList?.remove?.('dependency-onboarding-active');
+	      setBootstrapPending(false);
+	      return true;
+	    };
+	    const openModal = ({ showWelcome = null } = {}) => {
+	      const wasHidden = modal.classList.contains('hidden');
+	      modal.classList.remove('hidden');
+	      setBootstrapPending(false);
+	      body?.classList?.add?.('dependency-onboarding-active');
+	      if (typeof showWelcome === 'boolean') {
+	        state.showWelcome = showWelcome;
+	      } else if (wasHidden) {
+	        state.showWelcome = true;
+	      }
+	      if (state.diagnostics && Array.isArray(state.actions) && state.actions.length > 0) {
+	        render();
+	      }
+	      applyOnboardingLockUI();
+	    };
 
 	    const setLoading = (loading) => {
 	      state.loading = !!loading;
-	      if (refreshBtn) refreshBtn.disabled = state.loading;
 	      if (openBtn) openBtn.disabled = state.loading;
 	      if (state.loading) {
-	        summaryEl.textContent = 'Checking local dependencies...';
+	        summaryEl.textContent = '';
 	      }
 	    };
 
-	    const loadAndRender = async ({ open = false, forceAutoShow = false } = {}) => {
-	      if (state.loading) return;
+	    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+
+	    const loadAndRender = async ({ open = false, forceAutoShow = false, bootstrap = false } = {}) => {
+	      if (state.loading) return false;
 	      setLoading(true);
 	      try {
 	        const [diagRes, actionsRes] = await Promise.all([
@@ -7768,25 +8209,269 @@ class ClaudeOrchestrator {
 	        }
 
 	        state.diagnostics = diagData;
-	        state.actions = Array.isArray(actionsData?.actions) ? actionsData.actions : [];
+	        hydrateGitIdentityDraft(diagData);
+	        const allActions = Array.isArray(actionsData?.actions) ? actionsData.actions : [];
+	        const toolsMap = toToolMap(diagData);
+	        state.actions = allActions.filter((action) => String(action?.id || '').trim() !== 'gh-login');
+	        const allowedActionIds = new Set(
+	          state.actions
+	            .map((action) => String(action?.id || '').trim())
+	            .filter(Boolean)
+	        );
+	        const persistedSkippedIds = readSkippedStepIds();
+	        state.skippedActionIds = new Set(
+	          Array.from(persistedSkippedIds).filter((id) => allowedActionIds.has(id))
+	        );
 	        if (state.actions.length > 0) {
 	          const savedStep = readSavedStep();
 	          setCurrentStep(savedStep, { persist: false });
 	        }
 	        const view = render();
+	        applyOnboardingLockUI();
 	        if (view.req?.coreReady) writeDismissed(false);
 
-	        const shouldAutoShow = !readDismissed() && (!readCompleted() || !(view.req?.coreReady));
+	        const shouldAutoShow = forceAutoShow || (!readDismissed() && (!readCompleted() || !(view.req?.coreReady)));
 	        if (open || shouldAutoShow) {
 	          openModal();
+	        } else {
+	          setBootstrapPending(false);
 	        }
+	        return true;
 	      } catch (err) {
 	        summaryEl.textContent = `Dependency check failed: ${String(err?.message || err)}`;
 	        listEl.innerHTML = '<div class="dependency-setup-empty">Unable to load setup actions right now.</div>';
 	        if (open) openModal();
+	        else if (!bootstrap) setBootstrapPending(false);
+	        return false;
 	      } finally {
 	        setLoading(false);
 	      }
+	    };
+
+	    const stopRunPolling = (actionId) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return;
+	      const poller = state.actionRunPollers.get(id);
+	      if (poller?.timer) clearTimeout(poller.timer);
+	      state.actionRunPollers.delete(id);
+	    };
+
+	    const updateActionRunState = (actionId, patch = {}, { rerender = true } = {}) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return null;
+	      const prev = state.actionRuns.get(id) || { actionId: id };
+	      const next = {
+	        ...prev,
+	        ...patch,
+	        actionId: id
+	      };
+	      state.actionRuns.set(id, next);
+	      if (rerender) render();
+	      return next;
+	    };
+
+	    const fetchSetupActionRunStatus = async ({ runId = '', actionId = '' } = {}) => {
+	      const params = new URLSearchParams();
+	      if (runId) params.set('runId', String(runId));
+	      if (actionId) params.set('actionId', String(actionId));
+	      const res = await fetch(`/api/setup-actions/run-status?${params.toString()}`);
+	      const data = await res.json().catch(() => ({}));
+	      if (!res.ok || data?.ok === false || !data?.run) {
+	        throw new Error(String(data?.error || `HTTP ${res.status}`));
+	      }
+	      return data.run;
+	    };
+
+	    const getVerifyPolicyForAction = (actionId) => {
+	      const id = String(actionId || '').trim();
+	      if (id === 'gh-login') {
+	        return { attempts: 14, delayMs: 900 };
+	      }
+	      if (id === 'install-git' || id === 'install-node' || id === 'install-gh') {
+	        return { attempts: 10, delayMs: 650 };
+	      }
+	      return { attempts: 8, delayMs: 650 };
+	    };
+
+	    const verifyActionInstalled = async (actionId, runId, options = {}) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return false;
+	      const policy = {
+	        ...getVerifyPolicyForAction(id),
+	        ...(options && typeof options === 'object' ? options : {})
+	      };
+	      const attempts = Math.max(1, Number(policy.attempts) || 1);
+	      const delayMs = Math.max(250, Number(policy.delayMs) || 650);
+
+	      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+	        const runState = state.actionRuns.get(id);
+	        if (!runState || String(runState?.runId || '') !== String(runId || '')) return false;
+
+	        updateActionRunState(id, {
+	          status: 'verifying',
+	          verifyAttempt: attempt,
+	          verifyMax: attempts,
+	          updatedAt: new Date().toISOString()
+	        });
+
+	        await loadAndRender({ open: true, forceAutoShow: true });
+	        const toolsMap = toToolMap(state.diagnostics);
+	        if (isActionComplete(id, toolsMap)) {
+	          updateActionRunState(id, {
+	            status: 'verified',
+	            verifyAttempt: attempts,
+	            verifyMax: attempts,
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Dependency detected automatically.', 'success');
+	          return true;
+	        }
+	        await sleep(delayMs);
+	      }
+
+	      updateActionRunState(id, {
+	        status: 'needs-attention',
+	        updatedAt: new Date().toISOString()
+	      });
+	      this.showToast(
+	        id === 'gh-login'
+	          ? 'GitHub login is not detected yet. Complete sign-in in browser and try again.'
+	          : 'Install finished but dependency is still missing. Review output and run again if needed.',
+	        'warning'
+	      );
+	      return false;
+	    };
+
+	    const verifyActionWithoutRun = async (actionId, options = {}) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return false;
+	      const policy = {
+	        ...getVerifyPolicyForAction(id),
+	        ...(options && typeof options === 'object' ? options : {})
+	      };
+	      const attempts = Math.max(1, Number(policy.attempts) || 1);
+	      const delayMs = Math.max(250, Number(policy.delayMs) || 650);
+
+	      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+	        updateActionRunState(id, {
+	          status: 'verifying',
+	          verifyAttempt: attempt,
+	          verifyMax: attempts,
+	          updatedAt: new Date().toISOString()
+	        });
+
+	        await loadAndRender({ open: true, forceAutoShow: true });
+	        const toolsMap = toToolMap(state.diagnostics);
+	        if (isActionComplete(id, toolsMap)) {
+	          updateActionRunState(id, {
+	            status: 'verified',
+	            verifyAttempt: attempts,
+	            verifyMax: attempts,
+	            updatedAt: new Date().toISOString()
+	          });
+	          return true;
+	        }
+	        if (attempt < attempts) {
+	          await sleep(delayMs);
+	        }
+	      }
+
+	      updateActionRunState(id, {
+	        status: 'needs-attention',
+	        updatedAt: new Date().toISOString()
+	      });
+	      return false;
+	    };
+
+	    const pollRunUntilDone = async (actionId, runId) => {
+	      const id = String(actionId || '').trim();
+	      const rid = String(runId || '').trim();
+	      if (!id || !rid) return;
+
+	      stopRunPolling(id);
+	      const pollLoop = async () => {
+	        try {
+	          const run = await fetchSetupActionRunStatus({ runId: rid, actionId: id });
+	          updateActionRunState(id, run);
+
+	          if (String(run?.status || '').toLowerCase() === 'running') {
+	            const timer = setTimeout(pollLoop, 850);
+	            state.actionRunPollers.set(id, { runId: rid, timer });
+	            return;
+	          }
+
+	          stopRunPolling(id);
+	          await loadAndRender({ open: true, forceAutoShow: true });
+
+	          if (String(run?.status || '').toLowerCase() === 'success') {
+	            await verifyActionInstalled(id, rid);
+	            return;
+	          }
+
+	      if (String(run?.status || '').toLowerCase() === 'failed') {
+	        if (id === 'gh-login') {
+	          const ghRunLines = collectRunOutputLines(run, { limit: 160 });
+	          const ghRunInfo = extractGithubLoginInfo(ghRunLines);
+	          const hasDeviceSignal = ghRunInfo.sawDeviceHint || !!ghRunInfo.code || /login\/device/i.test(ghRunLines.join('\n'));
+	          const verifyOptions = hasDeviceSignal
+	            ? { attempts: 14, delayMs: 900 }
+	            : { attempts: 5, delayMs: 700 };
+	          const detected = await verifyActionWithoutRun(id, verifyOptions);
+	          if (detected) {
+	            this.showToast('GitHub login detected automatically.', 'success');
+	            return;
+	          }
+
+	          const runError = String(run?.error || '').trim();
+	          const exitCode = Number(run?.exitCode);
+	          const interrupted = exitCode === 1 || /code\s*1/i.test(runError) || /cancel|not completed/i.test(runError);
+	          const missingDeviceCode = !hasDeviceSignal;
+	          updateActionRunState(id, {
+	            status: 'needs-attention',
+	            error: interrupted
+	              ? 'Login was not completed in browser.'
+	              : (missingDeviceCode
+	                  ? 'GitHub CLI did not return a one-time code.'
+	                  : (runError || 'Login was not completed.')),
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast(
+	            missingDeviceCode
+	              ? 'GitHub CLI did not return a one-time code. Click Start login again.'
+	              : (interrupted
+	                  ? 'GitHub login is still not detected. If browser sign-in just finished, click Start login again.'
+	                  : `GitHub login failed: ${runError || 'Unknown error'}`),
+	            (interrupted || missingDeviceCode) ? 'warning' : 'error'
+	          );
+	          return;
+	        }
+	            this.showToast(`Install failed: ${String(run?.error || 'Unknown error')}`, 'error');
+	          }
+	        } catch (err) {
+	          stopRunPolling(id);
+	          updateActionRunState(id, {
+	            status: 'failed',
+	            error: String(err?.message || err || 'Failed to fetch setup status'),
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast(`Install monitoring failed: ${String(err?.message || err)}`, 'error');
+	        }
+	      };
+
+	      const timer = setTimeout(pollLoop, 250);
+	      state.actionRunPollers.set(id, { runId: rid, timer });
+	    };
+
+	    const runBootstrapLoad = async () => {
+	      const delaysMs = [0, 240, 420, 700, 1050, 1450, 1900];
+	      for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
+	        if (attempt > 0) {
+	          await sleep(delaysMs[attempt]);
+	        }
+	        const ok = await loadAndRender({ open: false, forceAutoShow: false, bootstrap: true });
+	        if (ok) return;
+	      }
+	      setBootstrapPending(false);
 	    };
 
 	    const runSetupAction = async (actionId, btnEl) => {
@@ -7795,6 +8480,58 @@ class ClaudeOrchestrator {
 	      const button = btnEl || null;
 	      if (button) button.disabled = true;
 	      try {
+	        const existingRunStatus = String(state.actionRuns.get(id)?.status || '').trim().toLowerCase();
+	        if (existingRunStatus === 'running' || existingRunStatus === 'verifying' || existingRunStatus === 'success' || existingRunStatus === 'completed') {
+	          this.showToast(
+	            id === 'gh-login'
+	              ? 'Login is still in progress. Please wait while we finish checking.'
+	              : 'Install is still in progress. Please wait while we finish checking.',
+	            'info'
+	          );
+	          return;
+	        }
+
+	        const existingStep = getResolvedSteps().find((step) => String(step?.id || '').trim() === id);
+	        const toolsMap = toToolMap(state.diagnostics);
+	        if (id === 'gh-login' && !toToolMap(state.diagnostics).get('gh')) {
+	          updateActionRunState(id, {
+	            status: 'needs-attention',
+	            error: 'Install GitHub CLI before starting login.',
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Install GitHub CLI first. Login is optional and only available after installation.', 'warning');
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	          return;
+	        }
+	        if (id === 'install-codex' && !(toolsMap.get('node') && toolsMap.get('npm'))) {
+	          updateActionRunState(id, {
+	            status: 'needs-attention',
+	            error: 'Install Node.js LTS first. Codex requires npm.',
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Install Node.js LTS first. Codex depends on npm.', 'warning');
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	          return;
+	        }
+	        if (existingStep?.done) {
+	          updateActionRunState(id, {
+	            status: 'verified',
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Dependency already detected.', 'success');
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	          return;
+	        }
+
+	        updateActionRunState(id, {
+	          runId: null,
+	          status: 'running',
+	          error: null,
+	          output: [],
+	          verifyAttempt: 0,
+	          verifyMax: 0,
+	          updatedAt: new Date().toISOString()
+	        });
 	        const res = await fetch('/api/setup-actions/run', {
 	          method: 'POST',
 	          headers: { 'Content-Type': 'application/json' },
@@ -7804,12 +8541,98 @@ class ClaudeOrchestrator {
 	        if (!res.ok || data?.ok === false) {
 	          throw new Error(String(data?.error || `HTTP ${res.status}`));
 	        }
-	        this.showToast(String(data?.message || 'Setup command opened in PowerShell.'), 'info');
-	        this.showToast('Complete the command in PowerShell, then click Refresh.', 'info');
+	        const run = (data?.run && typeof data.run === 'object') ? data.run : null;
+	        if (run) {
+	          updateActionRunState(id, {
+	            ...run,
+	            verifyAttempt: 0,
+	            verifyMax: 0
+	          });
+	          if (run?.runId) {
+	            await pollRunUntilDone(id, run.runId);
+	          } else {
+	            await loadAndRender({ open: true, forceAutoShow: true });
+	          }
+	        } else {
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	        }
+	        const defaultMessage = data?.alreadyRunning
+	          ? (id === 'gh-login'
+	              ? 'GitHub login is already running. Complete it in your browser.'
+	              : 'Install is already running. Watching for completion...')
+	          : (id === 'gh-login'
+	              ? 'GitHub login started. Complete sign-in in your browser.'
+	              : 'Install started. We will check this step automatically.');
+	        this.showToast(String(data?.message || defaultMessage), 'info');
 	      } catch (err) {
+	        updateActionRunState(id, {
+	          status: 'failed',
+	          error: String(err?.message || err),
+	          updatedAt: new Date().toISOString()
+	        });
 	        this.showToast(`Failed to start action: ${String(err?.message || err)}`, 'error');
 	      } finally {
 	        if (button) button.disabled = false;
+	      }
+	    };
+
+	    const saveGitIdentity = async (btnEl) => {
+	      const button = btnEl || null;
+	      const id = 'configure-git-identity';
+	      const nameInput = listEl.querySelector('[data-setup-git-name]');
+	      const emailInput = listEl.querySelector('[data-setup-git-email]');
+	      const name = String(nameInput?.value || state.gitIdentity?.name || '').trim();
+	      const email = String(emailInput?.value || state.gitIdentity?.email || '').trim();
+
+	      state.gitIdentity.name = name;
+	      state.gitIdentity.email = email;
+
+	      if (!name || !email) {
+	        this.showToast('Enter both Git name and email.', 'warning');
+	        return;
+	      }
+
+	      if (button) button.disabled = true;
+	      try {
+	        updateActionRunState(id, {
+	          runId: 'manual-git-identity',
+	          status: 'running',
+	          error: null,
+	          output: [],
+	          verifyAttempt: 0,
+	          verifyMax: 0,
+	          updatedAt: new Date().toISOString()
+	        });
+
+	        const res = await fetch('/api/setup-actions/configure-git-identity', {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify({ name, email })
+	        });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok || data?.ok === false) {
+	          throw new Error(String(data?.error || `HTTP ${res.status}`));
+	        }
+
+	        state.gitIdentity.name = String(data?.name || name).trim();
+	        state.gitIdentity.email = String(data?.email || email).trim();
+
+	        const detected = await verifyActionWithoutRun(id, { attempts: 6, delayMs: 350 });
+	        if (detected) {
+	          this.showToast('Git identity saved and detected automatically.', 'success');
+	        } else {
+	          this.showToast('Git identity saved, but detection is delayed. Try saving again in a few seconds.', 'warning');
+	        }
+	      } catch (err) {
+	        updateActionRunState(id, {
+	          status: 'failed',
+	          error: String(err?.message || err),
+	          updatedAt: new Date().toISOString()
+	        });
+	        this.showToast(`Failed to save Git identity: ${String(err?.message || err)}`, 'error');
+	      } finally {
+	        if (button) button.disabled = false;
+	        await loadAndRender({ open: true, forceAutoShow: true });
 	      }
 	    };
 
@@ -7820,9 +8643,9 @@ class ClaudeOrchestrator {
 	        return;
 	      }
 
-	      const recheckBtn = event.target.closest('[data-setup-recheck]');
-	      if (recheckBtn) {
-	        await loadAndRender({ open: true, forceAutoShow: true });
+	      const saveGitBtn = event.target.closest('[data-setup-git-save]');
+	      if (saveGitBtn) {
+	        await saveGitIdentity(saveGitBtn);
 	        return;
 	      }
 
@@ -7836,14 +8659,33 @@ class ClaudeOrchestrator {
 	      const nextBtn = event.target.closest('[data-setup-next]');
 	      if (nextBtn) {
 	        const total = Array.isArray(state.actions) ? state.actions.length : 0;
+	        const steps = getResolvedSteps();
+	        syncSkippedSteps(steps);
+	        const currentStep = steps[state.currentStep];
+	        if (!currentStep?.done) {
+	          if (!currentStep?.optional) {
+	            this.showToast('Install this dependency before continuing.', 'warning');
+	            return;
+	          }
+	          setStepSkipped(currentStep?.id, true);
+	          this.showToast('Skipping optional setup for now. You can configure it later.', 'warning');
+	        } else {
+	          setStepSkipped(currentStep?.id, false);
+	        }
 	        if (state.currentStep >= (total - 1)) {
 	          writeCompleted(true);
 	          writeDismissed(false);
-	          closeModal();
+	          closeModal({ force: true });
 	          this.showToast('Dependency onboarding complete.', 'success');
 	          return;
 	        }
 	        setCurrentStep(state.currentStep + 1);
+	        render();
+	        return;
+	      }
+	      const beginBtn = event.target.closest('[data-setup-begin]');
+	      if (beginBtn) {
+	        state.showWelcome = false;
 	        render();
 	        return;
 	      }
@@ -7858,9 +8700,11 @@ class ClaudeOrchestrator {
 	        return;
 	      }
 
-	      const copyBtn = event.target.closest('[data-setup-copy]');
+	      const copyBtn = event.target.closest('[data-setup-copy-id]');
 	      if (copyBtn) {
-	        const command = String(copyBtn.getAttribute('data-setup-copy') || '').trim();
+	        const actionId = String(copyBtn.getAttribute('data-setup-copy-id') || '').trim();
+	        const action = (Array.isArray(state.actions) ? state.actions : []).find((item) => String(item?.id || '').trim() === actionId);
+	        const command = String(action?.command || '').trim();
 	        if (!command) return;
 	        try {
 	          await navigator.clipboard.writeText(command);
@@ -7868,6 +8712,54 @@ class ClaudeOrchestrator {
 	        } catch (err) {
 	          this.showToast(`Copy failed: ${String(err?.message || err)}`, 'error');
 	        }
+	        return;
+	      }
+
+	      const copyGhCodeBtn = event.target.closest('[data-setup-copy-gh-code]');
+	      if (copyGhCodeBtn) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	        const code = String(copyGhCodeBtn.getAttribute('data-setup-copy-gh-code') || '').trim();
+	        if (!code) return;
+	        try {
+	          await navigator.clipboard.writeText(code);
+	          this.showToast('GitHub one-time code copied.', 'success');
+	        } catch (err) {
+	          this.showToast(`Copy failed: ${String(err?.message || err)}`, 'error');
+	        }
+	        return;
+	      }
+
+	      const openGhLoginBtn = event.target.closest('[data-setup-open-gh-login]');
+	      if (openGhLoginBtn) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	        const link = String(openGhLoginBtn.getAttribute('data-setup-open-gh-login') || '').trim();
+	        if (!link) return;
+	        try {
+	          const res = await fetch('/api/setup-actions/open-url', {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ url: link })
+	          });
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok || data?.ok === false) {
+	            throw new Error(String(data?.error || `HTTP ${res.status}`));
+	          }
+	          this.showToast('Opened GitHub login in your browser.', 'info');
+	        } catch (err) {
+	          this.showToast(`Could not open login link: ${String(err?.message || err)}`, 'error');
+	        }
+	        return;
+	      }
+
+	      const toggleGitHelpBtn = event.target.closest('[data-setup-toggle-git-help]');
+	      if (toggleGitHelpBtn) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	        state.gitIdentityHelpVisible = !state.gitIdentityHelpVisible;
+	        render();
+	        return;
 	      }
 	    });
 
@@ -7878,28 +8770,8 @@ class ClaudeOrchestrator {
 	        loadAndRender({ open: true, forceAutoShow: true });
 	      });
 	    }
-	    if (refreshBtn) {
-	      refreshBtn.addEventListener('click', () => {
-	        loadAndRender({ open: !modal.classList.contains('hidden'), forceAutoShow: true });
-	      });
-	    }
-	    if (openDiagnosticsBtn) {
-	      openDiagnosticsBtn.addEventListener('click', () => {
-	        this.openDiagnosticsPanel({ refresh: true });
-	      });
-	    }
-	    if (continueBtn) {
-	      continueBtn.addEventListener('click', closeModal);
-	    }
-	    if (dismissBtn) {
-	      dismissBtn.addEventListener('click', () => {
-	        writeDismissed(true);
-	        closeModal();
-	        this.showToast('Dependency onboarding skipped for now. Reopen it from Diagnostics any time.', 'info');
-	      });
-	    }
 	    if (closeBtn) {
-	      closeBtn.addEventListener('click', closeModal);
+	      closeBtn.addEventListener('click', () => closeModal());
 	    }
 
 	    modal.addEventListener('click', (event) => {
@@ -7912,10 +8784,8 @@ class ClaudeOrchestrator {
 	      closeModal();
 	    });
 
-	    setTimeout(() => {
-	      loadAndRender({ open: false, forceAutoShow: false });
-	    }, 700);
-	  }
+		    runBootstrapLoad();
+		  }
 
 	  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {
 	    const msg = String(message || '').trim();
@@ -7951,45 +8821,58 @@ class ClaudeOrchestrator {
     }
   }
   
-  showToast(message, type = 'info') {
+  showToast(message, type = 'info', options = {}) {
+    const rawMessage = String(message || '').trim();
+    if (!rawMessage) return;
+
+    const normalizedType = (['info', 'success', 'warning', 'error'].includes(type)) ? type : 'info';
+    const durationMsRaw = Number(options?.durationMs);
+    const durationMs = Number.isFinite(durationMsRaw) ? Math.max(1200, durationMsRaw) : 5000;
+
+    let stack = document.getElementById('toast-stack');
+    if (!stack) {
+      stack = document.createElement('div');
+      stack.id = 'toast-stack';
+      stack.className = 'toast-stack';
+      document.body.appendChild(stack);
+    }
+
+    const iconByType = {
+      info: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 10v6"></path><path d="M12 7h.01"></path></svg>',
+      success: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 12.5 2.3 2.3 4.7-4.8"></path></svg>',
+      warning: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 16H3L12 3Z"></path><path d="M12 9v5"></path><path d="M12 17h.01"></path></svg>',
+      error: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m9 9 6 6"></path><path d="m15 9-6 6"></path></svg>'
+    };
+
     const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
+    toast.className = `toast toast-${normalizedType}`;
+    toast.setAttribute('role', 'status');
     toast.innerHTML = `
       <div class="toast-content">
-        <span class="toast-icon">${type === 'success' ? '✅' : type === 'warning' ? '⚠️' : type === 'error' ? '❌' : 'ℹ️'}</span>
-        <span class="toast-text">${message}</span>
+        <span class="toast-icon">${iconByType[normalizedType] || iconByType.info}</span>
+        <span class="toast-text">${this.escapeHtml(rawMessage)}</span>
       </div>
+      <button class="toast-close" type="button" aria-label="Dismiss notification">✕</button>
     `;
-    
-    // Add styles for different toast types
-    const styles = {
-      info: 'var(--accent-primary)',
-      success: 'var(--accent-success)', 
-      warning: 'var(--accent-warning)',
-      error: 'var(--accent-danger)'
-    };
-    
-    toast.style.cssText = `
-      position: fixed;
-      top: calc(var(--header-height) + 20px);
-      right: 20px;
-      background: ${styles[type]};
-      color: white;
-      padding: var(--space-sm) var(--space-md);
-      border-radius: var(--radius-md);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      z-index: 1000;
-      animation: slideInRight 0.3s ease-out, fadeOutRight 0.3s ease-in 4.7s forwards;
-    `;
-    
-    document.body.appendChild(toast);
-    
-    // Remove after 5 seconds
-    setTimeout(() => {
-      if (toast.parentNode) {
+
+    const removeToast = () => {
+      if (!toast.parentNode) return;
+      if (toast.classList.contains('is-leaving')) return;
+      toast.classList.add('is-leaving');
+      setTimeout(() => {
         toast.remove();
-      }
-    }, 5000);
+        if (stack && !stack.children.length) {
+          stack.remove();
+        }
+      }, 240);
+    };
+
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn?.addEventListener('click', removeToast);
+
+    stack.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('is-visible'));
+    setTimeout(removeToast, durationMs);
   }
 
   async launchDiffViewer(githubUrl) {
