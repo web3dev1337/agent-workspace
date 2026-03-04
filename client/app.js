@@ -7521,7 +7521,8 @@ class ClaudeOrchestrator {
 	      gitIdentity: {
 	        name: '',
 	        email: ''
-	      }
+	      },
+	      gitIdentityHelpVisible: false
 	    };
 
 	    const readDismissed = () => {
@@ -7724,6 +7725,7 @@ class ClaudeOrchestrator {
 	      const parsed = Number.parseInt(String(nextStep), 10);
 	      const safe = Number.isFinite(parsed) ? parsed : 0;
 	      state.currentStep = Math.max(0, Math.min(safe, maxStep));
+	      state.gitIdentityHelpVisible = false;
 	      if (persist) writeSavedStep(state.currentStep);
 	      return state.currentStep;
 	    };
@@ -7820,7 +7822,6 @@ class ClaudeOrchestrator {
 	      const hasGhLoginRun = isGhLoginStep && !!runInfo;
 	      const gitIdentityName = this.escapeHtml(String(state.gitIdentity?.name || ''));
 	      const gitIdentityEmail = this.escapeHtml(String(state.gitIdentity?.email || ''));
-	      const gitIdentityHelpUrl = this.escapeHtml(String(current?.docsUrl || 'https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup'));
 	      const ghLoginUiPhase = (() => {
 	        if (!isGhLoginStep || current?.done) return 'none';
 	        if (!hasGhLoginRun) return 'start';
@@ -7930,8 +7931,15 @@ class ClaudeOrchestrator {
 			              </div>
 			              <div class="dependency-git-identity-actions">
 			                <button class="btn-secondary" type="button" data-setup-git-save="true" ${isRunBusy ? 'disabled' : ''}>${isRunBusy ? 'Saving...' : (current?.done ? 'Update identity' : 'Save identity')}</button>
-			                <button class="btn-secondary dependency-git-help-btn" type="button" data-setup-open-git-help="${gitIdentityHelpUrl}" title="How to choose name and email">?</button>
+			                <button class="btn-secondary dependency-git-help-btn" type="button" data-setup-toggle-git-help="true" title="How to choose name and email">?</button>
 			              </div>
+			              ${state.gitIdentityHelpVisible ? `
+			                <div class="dependency-git-help-inline">
+			                  <div class="dependency-git-help-line"><strong>Name:</strong> use your real display name (for example, Jane Developer).</div>
+			                  <div class="dependency-git-help-line"><strong>Email:</strong> use the same email tied to your GitHub account so commits link correctly.</div>
+			                  <div class="dependency-git-help-line">You can change both later at any time.</div>
+			                </div>
+			              ` : ''}
 			            </div>
 			          ` : ''}
 			          ${isGhLoginStep && !current?.done ? `
@@ -8476,26 +8484,12 @@ class ClaudeOrchestrator {
 	        return;
 	      }
 
-	      const openGitHelpBtn = event.target.closest('[data-setup-open-git-help]');
-	      if (openGitHelpBtn) {
+	      const toggleGitHelpBtn = event.target.closest('[data-setup-toggle-git-help]');
+	      if (toggleGitHelpBtn) {
 	        event.preventDefault();
 	        event.stopPropagation();
-	        const link = String(openGitHelpBtn.getAttribute('data-setup-open-git-help') || '').trim();
-	        if (!link) return;
-	        try {
-	          const res = await fetch('/api/setup-actions/open-url', {
-	            method: 'POST',
-	            headers: { 'Content-Type': 'application/json' },
-	            body: JSON.stringify({ url: link })
-	          });
-	          const data = await res.json().catch(() => ({}));
-	          if (!res.ok || data?.ok === false) {
-	            throw new Error(String(data?.error || `HTTP ${res.status}`));
-	          }
-	          this.showToast('Opened Git setup help in your browser.', 'info');
-	        } catch (err) {
-	          this.showToast(`Could not open help link: ${String(err?.message || err)}`, 'error');
-	        }
+	        state.gitIdentityHelpVisible = !state.gitIdentityHelpVisible;
+	        render();
 	        return;
 	      }
 	    });

@@ -3987,6 +3987,23 @@ body.dependency-onboarding-active #dependency-setup-modal {
   font-weight: 700;
 }
 
+.dependency-git-help-inline {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.dependency-git-help-line {
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.dependency-git-help-line + .dependency-git-help-line {
+  margin-top: 6px;
+}
+
 .dependency-gh-login-helper-text {
   color: var(--text-secondary);
   margin-bottom: 8px;
