@@ -7499,6 +7499,7 @@ class ClaudeOrchestrator {
 	      diagnostics: null,
 	      actions: [],
 	      currentStep: 0,
+	      showWelcome: true,
 	      skippedActionIds: new Set(),
 	      actionRuns: new Map(),
 	      actionRunPollers: new Map(),
@@ -7628,6 +7629,46 @@ class ClaudeOrchestrator {
 	        return { name: '', email: raw };
 	      }
 	      return { name: raw, email: '' };
+	    };
+
+	    const stripAnsiText = (value) => String(value || '').replace(/\u001b\[[0-9;]*m/g, '');
+
+	    const collectRunOutputLines = (runInfo, { limit = 25 } = {}) => {
+	      const lines = Array.isArray(runInfo?.output)
+	        ? runInfo.output
+	            .map((entry) => stripAnsiText(String(entry?.line || '')).trim())
+	            .filter(Boolean)
+	        : [];
+	      if (!Number.isFinite(limit) || limit <= 0) return lines;
+	      return lines.slice(-Math.max(1, Number(limit) || 1));
+	    };
+
+	    const extractGithubLoginInfo = (lines = []) => {
+	      const fallbackUrl = 'https://github.com/login/device';
+	      let link = fallbackUrl;
+	      let code = '';
+	      let sawDeviceHint = false;
+
+	      (Array.isArray(lines) ? lines : []).forEach((lineRaw) => {
+	        const line = String(lineRaw || '').trim();
+	        if (!line) return;
+
+	        if (/one[-\s]?time code|login\/device|authenticate in your web browser|copied to your clipboard|open this url/i.test(line)) {
+	          sawDeviceHint = true;
+	        }
+
+	        const linkMatch = line.match(/https:\/\/github\.com\/login\/device(?:\S*)?/i);
+	        if (linkMatch?.[0]) link = linkMatch[0].trim();
+
+	        const codeMatch = line.match(/\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/i);
+	        if (codeMatch?.[1]) code = String(codeMatch[1]).toUpperCase();
+	      });
+
+	      return {
+	        link,
+	        code,
+	        sawDeviceHint
+	      };
 	    };
 
 	    const hydrateGitIdentityDraft = (diagnostics) => {
@@ -7780,7 +7821,7 @@ class ClaudeOrchestrator {
 	      if (id === 'configure-git-identity') return 'optional';
 	      if (id === 'install-gh' || id === 'gh-login') return 'optional';
 	      if (id === 'install-claude') return 'optional';
-	      if (id === 'install-codex') return 'core-option';
+	      if (id === 'install-codex') return 'optional';
 	      return 'recommended';
 	    };
 
@@ -7825,30 +7866,38 @@ class ClaudeOrchestrator {
 	      if (!req.gitOk) missingCore.push('Git');
 	      if (!req.hasAgentCli) missingCore.push('Claude Code or Codex CLI');
 
-	      if (req.coreReady) {
-	        summaryEl.textContent = `Step ${stepNo} of ${totalSteps}. Core tools are ready. We'll still verify each step and mark installed tools automatically.`;
-	      } else {
-	        summaryEl.textContent = `Step ${stepNo} of ${totalSteps}. Missing core tools: ${missingCore.join(' + ')}.`;
+	      if (state.showWelcome) {
+	        summaryEl.textContent = '';
+	        listEl.innerHTML = `
+	          <div class="onboarding-welcome-card">
+	            <h3 class="onboarding-welcome-title">Let’s get you ready in a minute.</h3>
+	            <p class="onboarding-welcome-copy">
+	              We’ll check your system and install what’s needed.
+	              Optional tools can be skipped.
+	            </p>
+	            <div class="onboarding-nav-row onboarding-welcome-actions">
+	              <button class="onboarding-btn-primary" type="button" data-setup-begin="true">Start setup</button>
+	            </div>
+	          </div>`;
+	        return { req, steps, current };
 	      }
+
+	      summaryEl.textContent = '';
 
 	      const currentId = String(current?.id || '').trim();
 	      const currentStepIconSvg = getStepIconSvg(currentId);
 	      const currentTitle = this.escapeHtml(String(current?.title || currentId || 'Setup action'));
 	      const currentDesc = this.escapeHtml(String(current?.description || ''));
 	      const commandRaw = String(current?.command || '');
-	      const command = this.escapeHtml(commandRaw);
 	      const runInfo = state.actionRuns.get(currentId) || null;
 	      const runStatus = String(runInfo?.status || '').trim().toLowerCase();
 	      const isRunning = runStatus === 'running';
 	      const isVerifying = runStatus === 'verifying';
-	      const isRunBusy = isRunning || isVerifying;
+	      const isFinalizing = runStatus === 'success' || runStatus === 'completed';
+	      const isRunBusy = isRunning || isVerifying || isFinalizing;
 	      const isGitIdentityStep = currentId === 'configure-git-identity';
-	      const runOutput = Array.isArray(runInfo?.output)
-	        ? runInfo.output
-	            .map((entry) => String(entry?.line || '').trim())
-	            .filter(Boolean)
-	            .slice(-8)
-	        : [];
+	      const runOutputAll = collectRunOutputLines(runInfo, { limit: 160 });
+	      const runOutput = runOutputAll.slice(-8);
 	      const runOutputText = this.escapeHtml(runOutput.join('\n'));
 	      const shouldShowInstallerOutput = currentId !== 'gh-login' && !isGitIdentityStep && (
 	        runOutput.length > 0 ||
@@ -7866,49 +7915,71 @@ class ClaudeOrchestrator {
 	                  : 'No installer output captured yet.')
 	          );
 	      const githubDeviceUrl = 'https://github.com/login/device';
-	      const ghLoginLink = (() => {
-	        if (currentId !== 'gh-login') return githubDeviceUrl;
-	        for (let i = runOutput.length - 1; i >= 0; i -= 1) {
-	          const line = String(runOutput[i] || '');
-	          const match = line.match(/https:\/\/github\.com\/login\/device(?:\S*)?/i);
-	          if (match?.[0]) return match[0].trim();
-	        }
-	        return githubDeviceUrl;
+	      const ghInstalled = !!toolsMap.get('gh');
+	      const ghLoggedIn = !!toolsMap.get('ghAuth');
+	      const ghLoginRunInfo = state.actionRuns.get('gh-login') || null;
+	      const ghLoginRunStatus = String(ghLoginRunInfo?.status || '').trim().toLowerCase();
+	      const ghLoginIsRunning = ghLoginRunStatus === 'running';
+	      const ghLoginIsVerifying = ghLoginRunStatus === 'verifying';
+	      const ghLoginIsFinalizing = ghLoginRunStatus === 'success' || ghLoginRunStatus === 'completed';
+	      const ghLoginIsBusy = ghLoginIsRunning || ghLoginIsVerifying || ghLoginIsFinalizing;
+	      const ghLoginOutputAll = collectRunOutputLines(ghLoginRunInfo, { limit: 160 });
+	      const ghLoginInfo = extractGithubLoginInfo(ghLoginOutputAll);
+	      const ghLoginLink = String(ghLoginRunInfo?.ghDeviceUrl || ghLoginInfo.link || githubDeviceUrl).trim() || githubDeviceUrl;
+	      const ghLoginCode = String(ghLoginRunInfo?.ghDeviceCode || ghLoginInfo.code || '').trim().toUpperCase();
+	      const ghLoginHasSignal = !!(
+	        ghLoginRunInfo?.ghHasDeviceHint
+	        || ghLoginInfo.sawDeviceHint
+	        || ghLoginCode
+	        || ghLoginLink !== githubDeviceUrl
+	      );
+	      const ghLoginUiPhase = (() => {
+	        if (!ghInstalled || ghLoggedIn) return 'none';
+	        if (!ghLoginRunInfo) return 'start';
+	        if (ghLoginCode) return 'code';
+	        if (ghLoginIsBusy) return 'wait-code';
+	        return 'retry';
 	      })();
-	      const ghLoginCode = (() => {
-	        if (currentId !== 'gh-login') return '';
-	        for (let i = runOutput.length - 1; i >= 0; i -= 1) {
-	          const line = String(runOutput[i] || '');
-	          const match = line.match(/\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/);
-	          if (match?.[1]) return match[1];
-	        }
-	        return '';
+	      const ghLoginInlineStatusText = (() => {
+	        if (!ghInstalled) return 'Install GitHub CLI first';
+	        if (ghLoggedIn) return 'Logged in';
+	        if (ghLoginIsFinalizing) return 'Finalizing login';
+	        if (ghLoginIsRunning) return 'Signing in';
+	        if (ghLoginIsVerifying) return 'Checking login';
+	        return 'Not logged in';
 	      })();
+	      const ghLoginInlineStatusClass = ghLoggedIn
+	        ? 'status-ok'
+	        : ((ghLoginIsBusy || ghLoginRunStatus === 'needs-attention') ? 'status-pending' : 'status-missing');
+	      const ghLoginInlineRunLabel = (() => {
+	        if (ghLoggedIn) return 'Logged in';
+	        if (ghLoginIsFinalizing) return 'Finalizing...';
+	        if (ghLoginIsBusy) return 'Waiting...';
+	        return 'Start login';
+	      })();
+	      const ghLoginInlineRunDisabled = !ghInstalled || ghLoggedIn || ghLoginIsBusy;
+	      const showInlineGhLogin = currentId === 'install-gh' && ghInstalled;
 	      const isGhLoginStep = currentId === 'gh-login';
-	      const hasGhLoginRun = isGhLoginStep && !!runInfo;
+	      const codexNeedsNode = currentId === 'install-codex' && !(toolsMap.get('node') && toolsMap.get('npm'));
 	      const gitIdentityName = this.escapeHtml(String(state.gitIdentity?.name || ''));
 	      const gitIdentityEmail = this.escapeHtml(String(state.gitIdentity?.email || ''));
-	      const ghLoginUiPhase = (() => {
-	        if (!isGhLoginStep || current?.done) return 'none';
-	        if (!hasGhLoginRun) return 'start';
-	        if (!ghLoginCode) return 'wait-code';
-	        return 'code';
-	      })();
 	      const showRunButton = current?.runSupported !== false && !isGitIdentityStep && !(isGhLoginStep && current?.done);
-	      const runDisabled = !!current?.done || isRunBusy;
+	      const runDisabled = !!current?.done || runStatus === 'verified' || isRunBusy || codexNeedsNode;
 	      const runLabel = (() => {
-	        if (current?.done) {
+	        if (current?.done || runStatus === 'verified') {
 	          if (currentId === 'gh-login') return 'Logged in';
 	          if (currentId === 'configure-git-identity') return 'Configured';
 	          return 'Installed';
 	        }
-	        if (isRunBusy) return 'Running...';
+	        if (isFinalizing) return 'Finalizing...';
+	        if (isRunBusy) return isGhLoginStep ? 'Waiting...' : 'Running...';
 	        if (currentId === 'gh-login') return 'Start login';
 	        return 'Run step';
 	      })();
 	      const baseStatusText = String(current?.statusText || (current?.done ? 'Installed' : 'Missing'));
 	      const statusText = (() => {
 	        if (runStatus === 'verified') return baseStatusText;
+	        if (isFinalizing) return isGhLoginStep ? 'Finalizing login' : 'Finalizing';
 	        if (isRunning) return isGhLoginStep ? 'Signing in' : (isGitIdentityStep ? 'Saving' : 'Installing');
 	        if (isVerifying) return isGhLoginStep ? 'Checking login' : (isGitIdentityStep ? 'Checking' : 'Verifying');
 	        if (runStatus === 'failed') return isGhLoginStep ? 'Login failed' : (isGitIdentityStep ? 'Save failed' : 'Failed');
@@ -7916,26 +7987,32 @@ class ClaudeOrchestrator {
 	      })();
 	      const statusClass = current?.done || runStatus === 'verified'
 	        ? 'status-ok'
-	        : ((isRunning || isVerifying) ? 'status-pending' : (runStatus === 'failed' ? 'status-missing' : (current?.statusClass || 'status-missing')));
+	        : ((isRunning || isVerifying || isFinalizing) ? 'status-pending' : (runStatus === 'failed' ? 'status-missing' : (current?.statusClass || 'status-missing')));
 	      let guidance = 'Run this step. We will detect completion automatically.';
 	      if (current?.done || runStatus === 'verified') {
 	        guidance = isGhLoginStep
 	          ? 'GitHub CLI is authenticated. Continue to the next step.'
-	          : (isGitIdentityStep
-	              ? 'Git identity is configured. Continue to the next step.'
-	              : 'Already installed on this machine. Continue to the next step.');
+	          : (currentId === 'install-gh'
+	              ? 'GitHub CLI is installed. Optional next step: sign in with GitHub to enable PR and repo actions.'
+	              : (isGitIdentityStep
+	                  ? 'Git identity is configured. Continue to the next step.'
+	                  : 'Already installed on this machine. Continue to the next step.'));
 	      } else if (isRunning) {
 	        guidance = isGhLoginStep
-	          ? 'Starting GitHub login. Follow the steps below and we will detect completion automatically.'
+	          ? 'GitHub login started. Use the browser flow below and keep this window open; we recheck automatically.'
 	          : (isGitIdentityStep
 	              ? 'Saving Git identity now. Keep this window open and we will recheck automatically.'
 	              : 'Installing now via PowerShell. Keep this window open and we will recheck automatically.');
 	      } else if (isVerifying) {
 	        guidance = isGhLoginStep
-	          ? 'Checking GitHub login status automatically...'
+	          ? 'Checking GitHub login automatically...'
 	          : (isGitIdentityStep
 	              ? 'Git identity saved. Checking your system automatically...'
 	              : 'Install command finished. Checking your system automatically...');
+	      } else if (isFinalizing) {
+	        guidance = isGhLoginStep
+	          ? 'Login command finished. Finalizing and checking status automatically...'
+	          : 'Install command finished. Finalizing and checking your system automatically...';
 	      } else if (runStatus === 'failed') {
 	        const errorText = String(runInfo?.error || '').trim();
 	        guidance = errorText
@@ -7943,22 +8020,43 @@ class ClaudeOrchestrator {
 	          : `${isGhLoginStep ? 'Login failed' : (isGitIdentityStep ? 'Save failed' : 'Install failed')}. Review and run the step again.`;
 	      } else if (runStatus === 'needs-attention') {
 	        guidance = isGhLoginStep
-	          ? 'GitHub login is not detected yet. Finish sign-in in your browser, then click Start login again.'
+	          ? (ghLoginHasSignal
+	              ? 'GitHub login is not detected yet. If browser sign-in is complete, click Start login again to request a new code.'
+	              : 'GitHub CLI did not return a one-time code. Click Start login again; if needed, reinstall GitHub CLI first.')
 	          : (isGitIdentityStep
 	              ? 'Git identity was saved, but it is still not detected. Check your values and save again.'
 	              : 'Install command finished, but this dependency is still not detected. Review output below and run again.');
 	      } else if (isGitIdentityStep) {
 	        guidance = 'Enter your Git name and email, then click Save identity. We will detect it automatically.';
+	      } else if (isGhLoginStep) {
+	        guidance = 'Optional after GitHub CLI install. Start login when you are ready.';
+	      } else if (codexNeedsNode) {
+	        guidance = 'Install Node.js LTS first. Codex uses npm and cannot be installed until Node is detected.';
 	      } else if (!current?.runSupported && current?.optional) {
 	        guidance = 'Optional but strongly recommended: set Git user.name and user.email so commits and PR authorship are correct.';
 	      } else if (!current?.runSupported) {
 	        guidance = 'Manual step: run the command below in your terminal. We will detect it automatically afterward.';
 	      }
+	      if (currentId === 'install-gh' && (current?.done || runStatus === 'verified')) {
+	        if (ghLoggedIn) {
+	          guidance = 'GitHub CLI is installed and authenticated. You can continue.';
+	        } else if (ghLoginIsRunning) {
+	          guidance = 'GitHub login started. Use the browser flow in this step and keep this window open.';
+	        } else if (ghLoginIsVerifying) {
+	          guidance = 'Checking GitHub login automatically...';
+	        } else if (ghLoginIsFinalizing) {
+	          guidance = 'Login command finished. Finalizing and checking status automatically...';
+	        } else if (ghLoginRunStatus === 'needs-attention') {
+	          guidance = ghLoginHasSignal
+	            ? 'GitHub login is not detected yet. If browser sign-in is complete, click Start login again to request a new code.'
+	            : 'GitHub CLI did not return a one-time code. Click Start login again.';
+	        }
+	      }
 	      const canAdvance = !!current?.done || !!current?.optional;
 	      const nextLabel = !canAdvance
 	        ? 'Complete this step first'
 	        : (!current?.done && current?.optional
-	            ? 'Skip optional step'
+	            ? 'Skip'
 	            : (stepNo >= totalSteps ? 'Finish onboarding' : 'Next step'));
 
 	      listEl.innerHTML = `
@@ -8020,13 +8118,19 @@ class ClaudeOrchestrator {
 	              </div>
 	            ` : ''}
 	            
-	            ${isGhLoginStep && !current?.done ? `
-	              <div class="dependency-gh-login-helper">
-	                ${ghLoginUiPhase === 'start' ? '<div class="dependency-gh-login-helper-text">Click <strong>Start login</strong> on the right to authenticate via GitHub.</div>' : ''}
-	                ${ghLoginUiPhase === 'wait-code' ? '<div class="dependency-gh-login-helper-text">Waiting for one-time code from GitHub CLI...</div>' : ''}
-	                ${ghLoginUiPhase === 'code' ? `<div class="dependency-gh-login-helper-text">Click <strong>Open GitHub login</strong> and paste this code.</div><div class="dependency-gh-login-code-wrap"><span class="dependency-gh-login-code mono">${this.escapeHtml(ghLoginCode)}</span><button class="onboarding-btn-secondary" type="button" data-setup-copy-gh-code="${this.escapeHtml(ghLoginCode)}">Copy code</button></div>` : ''}
-	              </div>
-	            ` : ''}
+		            ${showInlineGhLogin ? `
+		              <div class="dependency-gh-login-helper">
+		                <div class="dependency-gh-login-helper-text">GitHub authentication (optional) <span class="onboarding-inline-status ${ghLoginInlineStatusClass}">(${this.escapeHtml(ghLoginInlineStatusText)})</span></div>
+		                ${ghLoginUiPhase === 'start' ? '<div class="dependency-gh-login-helper-text">Click <strong>Start login</strong> to begin browser sign-in.</div>' : ''}
+		                ${ghLoginUiPhase === 'wait-code' ? '<div class="dependency-gh-login-helper-text">Waiting for GitHub CLI login details. If code is not shown here, it is copied to your clipboard automatically.</div>' : ''}
+		                ${ghLoginUiPhase === 'retry' ? '<div class="dependency-gh-login-helper-text">Login is not complete yet. Start login again to request a new one-time code.</div>' : ''}
+		                ${ghLoginUiPhase === 'code' ? `<div class="dependency-gh-login-helper-text">Open GitHub login and paste this one-time code.</div><div class="dependency-gh-login-code-wrap"><span class="dependency-gh-login-code mono">${this.escapeHtml(ghLoginCode)}</span><button class="onboarding-btn-secondary" type="button" data-setup-copy-gh-code="${this.escapeHtml(ghLoginCode)}">Copy code</button></div>` : ''}
+		                <div class="dependency-gh-login-helper-actions">
+		                  <button class="onboarding-btn-secondary" type="button" data-setup-run="gh-login" ${ghLoginInlineRunDisabled ? 'disabled' : ''}>${this.escapeHtml(ghLoginInlineRunLabel)}</button>
+		                  ${ghLoginRunInfo ? `<button class="onboarding-btn-secondary" type="button" data-setup-open-gh-login="${this.escapeHtml(ghLoginLink)}">Open GitHub login</button>` : ''}
+		                </div>
+		              </div>
+		            ` : ''}
 	            
 	            ${shouldShowInstallerOutput ? `
 	              <div class="dependency-onboarding-command-wrap">
@@ -8034,19 +8138,12 @@ class ClaudeOrchestrator {
 	              </div>
 	            ` : ''}
 	            
-	            ${command && !isGhLoginStep && !isGitIdentityStep && !current?.done ? `
-	              <div class="dependency-onboarding-command-wrap">
-	                <pre class="mono dependency-setup-item-command">${command}</pre>
-	              </div>
-	            ` : ''}
-                
-                <div class="onboarding-step-actions">
-                  ${showRunButton ? `<button class="onboarding-btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>` : ''}
-                  ${!isGhLoginStep && !isGitIdentityStep ? `<button class="onboarding-btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>` : ''}
-                  ${isGhLoginStep && !current?.done && ghLoginUiPhase === 'code' ? `<button class="onboarding-btn-secondary" type="button" data-setup-open-gh-login="${this.escapeHtml(ghLoginLink)}">Open GitHub login</button>` : ''}
-                </div>
-	          </div>
-	        </div>
+	                <div class="onboarding-step-actions">
+	                  ${showRunButton ? `<button class="onboarding-btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>` : ''}
+	                  ${!isGhLoginStep && !isGitIdentityStep ? `<button class="onboarding-btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>` : ''}
+	                </div>
+		          </div>
+		        </div>
 	        
 	        <div class="onboarding-nav-row">
 	          <button class="onboarding-btn-back" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Back</button>
@@ -8067,10 +8164,19 @@ class ClaudeOrchestrator {
 	      setBootstrapPending(false);
 	      return true;
 	    };
-	    const openModal = () => {
+	    const openModal = ({ showWelcome = null } = {}) => {
+	      const wasHidden = modal.classList.contains('hidden');
 	      modal.classList.remove('hidden');
 	      setBootstrapPending(false);
 	      body?.classList?.add?.('dependency-onboarding-active');
+	      if (typeof showWelcome === 'boolean') {
+	        state.showWelcome = showWelcome;
+	      } else if (wasHidden) {
+	        state.showWelcome = true;
+	      }
+	      if (state.diagnostics && Array.isArray(state.actions) && state.actions.length > 0) {
+	        render();
+	      }
 	      applyOnboardingLockUI();
 	    };
 
@@ -8078,7 +8184,7 @@ class ClaudeOrchestrator {
 	      state.loading = !!loading;
 	      if (openBtn) openBtn.disabled = state.loading;
 	      if (state.loading) {
-	        summaryEl.textContent = 'Checking local dependencies...';
+	        summaryEl.textContent = '';
 	      }
 	    };
 
@@ -8106,12 +8212,7 @@ class ClaudeOrchestrator {
 	        hydrateGitIdentityDraft(diagData);
 	        const allActions = Array.isArray(actionsData?.actions) ? actionsData.actions : [];
 	        const toolsMap = toToolMap(diagData);
-	        state.actions = allActions.filter((action) => {
-	          const id = String(action?.id || '').trim();
-	          // Only offer GitHub login once GitHub CLI is actually installed/detected.
-	          if (id === 'gh-login' && !toolsMap.get('gh')) return false;
-	          return true;
-	        });
+	        state.actions = allActions.filter((action) => String(action?.id || '').trim() !== 'gh-login');
 	        const allowedActionIds = new Set(
 	          state.actions
 	            .map((action) => String(action?.id || '').trim())
@@ -8184,7 +8285,7 @@ class ClaudeOrchestrator {
 	    const getVerifyPolicyForAction = (actionId) => {
 	      const id = String(actionId || '').trim();
 	      if (id === 'gh-login') {
-	        return { attempts: 20, delayMs: 1000 };
+	        return { attempts: 14, delayMs: 900 };
 	      }
 	      if (id === 'install-git' || id === 'install-node' || id === 'install-gh') {
 	        return { attempts: 10, delayMs: 650 };
@@ -8307,7 +8408,43 @@ class ClaudeOrchestrator {
 	            return;
 	          }
 
-	          if (String(run?.status || '').toLowerCase() === 'failed') {
+	      if (String(run?.status || '').toLowerCase() === 'failed') {
+	        if (id === 'gh-login') {
+	          const ghRunLines = collectRunOutputLines(run, { limit: 160 });
+	          const ghRunInfo = extractGithubLoginInfo(ghRunLines);
+	          const hasDeviceSignal = ghRunInfo.sawDeviceHint || !!ghRunInfo.code || /login\/device/i.test(ghRunLines.join('\n'));
+	          const verifyOptions = hasDeviceSignal
+	            ? { attempts: 14, delayMs: 900 }
+	            : { attempts: 5, delayMs: 700 };
+	          const detected = await verifyActionWithoutRun(id, verifyOptions);
+	          if (detected) {
+	            this.showToast('GitHub login detected automatically.', 'success');
+	            return;
+	          }
+
+	          const runError = String(run?.error || '').trim();
+	          const exitCode = Number(run?.exitCode);
+	          const interrupted = exitCode === 1 || /code\s*1/i.test(runError) || /cancel|not completed/i.test(runError);
+	          const missingDeviceCode = !hasDeviceSignal;
+	          updateActionRunState(id, {
+	            status: 'needs-attention',
+	            error: interrupted
+	              ? 'Login was not completed in browser.'
+	              : (missingDeviceCode
+	                  ? 'GitHub CLI did not return a one-time code.'
+	                  : (runError || 'Login was not completed.')),
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast(
+	            missingDeviceCode
+	              ? 'GitHub CLI did not return a one-time code. Click Start login again.'
+	              : (interrupted
+	                  ? 'GitHub login is still not detected. If browser sign-in just finished, click Start login again.'
+	                  : `GitHub login failed: ${runError || 'Unknown error'}`),
+	            (interrupted || missingDeviceCode) ? 'warning' : 'error'
+	          );
+	          return;
+	        }
 	            this.showToast(`Install failed: ${String(run?.error || 'Unknown error')}`, 'error');
 	          }
 	        } catch (err) {
@@ -8343,6 +8480,49 @@ class ClaudeOrchestrator {
 	      const button = btnEl || null;
 	      if (button) button.disabled = true;
 	      try {
+	        const existingRunStatus = String(state.actionRuns.get(id)?.status || '').trim().toLowerCase();
+	        if (existingRunStatus === 'running' || existingRunStatus === 'verifying' || existingRunStatus === 'success' || existingRunStatus === 'completed') {
+	          this.showToast(
+	            id === 'gh-login'
+	              ? 'Login is still in progress. Please wait while we finish checking.'
+	              : 'Install is still in progress. Please wait while we finish checking.',
+	            'info'
+	          );
+	          return;
+	        }
+
+	        const existingStep = getResolvedSteps().find((step) => String(step?.id || '').trim() === id);
+	        const toolsMap = toToolMap(state.diagnostics);
+	        if (id === 'gh-login' && !toToolMap(state.diagnostics).get('gh')) {
+	          updateActionRunState(id, {
+	            status: 'needs-attention',
+	            error: 'Install GitHub CLI before starting login.',
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Install GitHub CLI first. Login is optional and only available after installation.', 'warning');
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	          return;
+	        }
+	        if (id === 'install-codex' && !(toolsMap.get('node') && toolsMap.get('npm'))) {
+	          updateActionRunState(id, {
+	            status: 'needs-attention',
+	            error: 'Install Node.js LTS first. Codex requires npm.',
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Install Node.js LTS first. Codex depends on npm.', 'warning');
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	          return;
+	        }
+	        if (existingStep?.done) {
+	          updateActionRunState(id, {
+	            status: 'verified',
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Dependency already detected.', 'success');
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	          return;
+	        }
+
 	        updateActionRunState(id, {
 	          runId: null,
 	          status: 'running',
@@ -8500,6 +8680,12 @@ class ClaudeOrchestrator {
 	          return;
 	        }
 	        setCurrentStep(state.currentStep + 1);
+	        render();
+	        return;
+	      }
+	      const beginBtn = event.target.closest('[data-setup-begin]');
+	      if (beginBtn) {
+	        state.showWelcome = false;
 	        render();
 	        return;
 	      }

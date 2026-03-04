@@ -29,7 +29,13 @@ async function checkCommand(command, args, options = {}) {
     const { stdout, stderr } = result || {};
     const output = String(stdout || stderr || '').trim();
     const firstLine = output.split(/\r?\n/).find(Boolean) || '';
-    return { ok: true, command, args, version: firstLine || null };
+    return {
+      ok: true,
+      command,
+      args,
+      version: firstLine || null,
+      output: output || null
+    };
   } catch (error) {
     const code = error?.code || null;
     const message = String(error?.message || error || '').trim();
@@ -61,6 +67,34 @@ function uniqueCommandCandidates(candidates = []) {
     out.push({ command, args, options: candidate?.options });
   }
   return out;
+}
+
+async function checkNpmGlobalPackage(npmCommand, packageName) {
+  const npm = String(npmCommand || '').trim();
+  const pkg = String(packageName || '').trim();
+  if (!npm || !pkg) {
+    return { ok: false, error: 'Missing npm command or package name' };
+  }
+
+  const res = await checkCommand(npm, ['list', '-g', pkg, '--depth=0'], { timeoutMs: 7000 });
+  const combined = String(res?.output || res?.version || '').trim();
+  const pkgPattern = new RegExp(`${pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}@([^\\s]+)`, 'i');
+  const versionMatch = combined.match(pkgPattern);
+  if (!res.ok || !versionMatch?.[1]) {
+    return {
+      ok: false,
+      command: npm,
+      args: ['list', '-g', pkg, '--depth=0'],
+      error: String(res?.error || `Package ${pkg} not found in npm global list`)
+    };
+  }
+
+  return {
+    ok: true,
+    command: `npm-global:${pkg}`,
+    args: ['list', '-g', pkg, '--depth=0'],
+    version: `${pkg}@${versionMatch[1]} (npm global)`
+  };
 }
 
 async function checkGitIdentity(gitCommand, gitInstalled) {
@@ -204,9 +238,8 @@ async function collectDiagnostics() {
     platform === 'win32' ? { command: 'claude.exe', args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.APPDATA || '', 'npm', 'claude.cmd'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.APPDATA || '', 'npm', 'claude'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Links', 'claude.exe'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.local', 'bin', 'claude.exe'), args: ['--version'] } : null,
-    // Some Windows installs can leave this renamed but still executable by full path.
-    platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.local', 'bin', 'claude.exe.disabled'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.claude', 'local', 'claude.exe'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Claude', 'claude.exe'), args: ['--version'] } : null
   ]);
@@ -222,13 +255,20 @@ async function collectDiagnostics() {
     platform === 'win32' ? { command: 'codex.exe', args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.APPDATA || '', 'npm', 'codex'), args: ['--version'] } : null,
-    platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.local', 'bin', 'codex.exe'), args: ['--version'] } : null,
-    platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.local', 'bin', 'codex.exe.disabled'), args: ['--version'] } : null
+    platform === 'win32' ? { command: path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WinGet', 'Links', 'codex.exe'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.local', 'bin', 'codex.exe'), args: ['--version'] } : null
   ]);
+  let codexCheck = await checkFirstAvailable(codexCandidates);
+  if (!codexCheck?.ok && npmCheck?.ok) {
+    const npmPackageCheck = await checkNpmGlobalPackage(String(npmCheck.command || '').trim(), '@openai/codex');
+    if (npmPackageCheck?.ok) {
+      codexCheck = npmPackageCheck;
+    }
+  }
   tools.push({
     id: 'codex',
     name: 'Codex CLI',
-    ...(await checkFirstAvailable(codexCandidates))
+    ...codexCheck
   });
 
   tools.push({

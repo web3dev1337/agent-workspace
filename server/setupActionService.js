@@ -1,6 +1,8 @@
 const crypto = require('crypto');
 const util = require('util');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const { spawn, execFile } = require('child_process');
 
 const execFileAsync = util.promisify(execFile);
@@ -8,6 +10,36 @@ const execFileAsync = util.promisify(execFile);
 const setupActionRuns = new Map();
 const latestRunByActionId = new Map();
 const MAX_OUTPUT_LINES = 180;
+const GH_LOGIN_CODE_PATTERN = /\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/i;
+const GH_LOGIN_URL_PATTERN = /https:\/\/github\.com\/login\/device(?:\S*)?/i;
+const GH_LOGIN_HINT_PATTERN = /one[-\s]?time code|login\/device|authenticate in your web browser|copied to your clipboard|open this url/i;
+
+function stripAnsi(value) {
+  return String(value || '').replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+function getGhLoginDebugLogPath() {
+  const customDataDir = String(process.env.ORCHESTRATOR_DATA_DIR || '').trim();
+  if (customDataDir) {
+    return path.join(customDataDir, 'logs', 'gh-login-debug.log');
+  }
+  return path.join(os.tmpdir(), 'orchestrator-gh-login-debug.log');
+}
+
+function appendGhLoginDebugLog(event, payload = {}) {
+  const line = JSON.stringify({
+    at: new Date().toISOString(),
+    event: String(event || '').trim() || 'event',
+    ...(payload && typeof payload === 'object' ? payload : {})
+  });
+  const logPath = getGhLoginDebugLogPath();
+  try {
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    fs.appendFileSync(logPath, `${line}\n`, 'utf8');
+  } catch {
+    // Best-effort debug logging; never block setup flow.
+  }
+}
 
 function uniqueStrings(values = []) {
   const seen = new Set();
@@ -142,7 +174,7 @@ function getSetupActions(platform = process.platform) {
     {
       id: 'install-gh',
       title: 'GitHub CLI',
-      description: 'Recommended for seamless PR creation and repo management.',
+      description: 'Optional. Install now, then continue to GitHub login in the next step.',
       command: 'winget install --id GitHub.cli --exact --source winget --accept-source-agreements --accept-package-agreements',
       docsUrl: 'https://cli.github.com/',
       required: false,
@@ -152,8 +184,36 @@ function getSetupActions(platform = process.platform) {
     {
       id: 'gh-login',
       title: 'GitHub Authentication',
-      description: 'Sign in to enable native repository features.',
-      command: 'gh auth login --hostname github.com --git-protocol https --web --clipboard',
+      description: 'Optional after GitHub CLI install. Sign in to enable PR and repo actions.',
+      command: [
+        "$ErrorActionPreference = 'Stop'",
+        '$env:NO_COLOR = "1"',
+        '$env:GH_PAGER = ""',
+        '$gh = ""',
+        '$cmd = Get-Command gh -ErrorAction SilentlyContinue',
+        'if ($cmd -and $cmd.Source) { $gh = $cmd.Source }',
+        'if (-not $gh) {',
+        '  $candidates = @(',
+        '    "$env:ProgramFiles\\GitHub CLI\\gh.exe",',
+        '    "$env:ProgramFiles(x86)\\GitHub CLI\\gh.exe",',
+        '    "$env:LOCALAPPDATA\\Programs\\GitHub CLI\\gh.exe"',
+        '  )',
+        '  foreach ($candidate in $candidates) {',
+        '    if (Test-Path $candidate) { $gh = $candidate; break }',
+        '  }',
+        '}',
+        'if (-not $gh) { throw "GitHub CLI executable not found. Install GitHub CLI first." }',
+        '$prevErrorAction = $ErrorActionPreference',
+        '$ErrorActionPreference = "Continue"',
+        '& $gh auth status --hostname github.com *> $null',
+        '$authStatusExitCode = $LASTEXITCODE',
+        '$ErrorActionPreference = $prevErrorAction',
+        'if ($authStatusExitCode -eq 0) { Write-Output "GitHub CLI is already authenticated."; exit 0 }',
+        'Write-Output "Starting GitHub CLI web login..."',
+        'Write-Output "Expect a one-time code and https://github.com/login/device below."',
+        '& $gh auth login --hostname github.com --git-protocol https --web --skip-ssh-key',
+        'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'
+      ].join('\n'),
       docsUrl: 'https://cli.github.com/manual/gh_auth_login',
       required: false,
       optional: true,
@@ -163,7 +223,7 @@ function getSetupActions(platform = process.platform) {
       id: 'install-claude',
       title: 'Claude Code CLI',
       description: 'Primary AI agent powered by Anthropic.',
-      command: 'Set-ExecutionPolicy Bypass -Scope Process -Force; irm https://claude.ai/install.ps1 | iex',
+      command: 'winget install --id Anthropic.ClaudeCode --exact --source winget --accept-source-agreements --accept-package-agreements',
       docsUrl: 'https://docs.claude.com/en/docs/claude-code/setup',
       required: false,
       optional: true,
@@ -173,7 +233,26 @@ function getSetupActions(platform = process.platform) {
       id: 'install-codex',
       title: 'Codex CLI',
       description: 'Alternative AI agent tool for development.',
-      command: 'npm install -g @openai/codex',
+      command: [
+        "$ErrorActionPreference = 'Stop'",
+        '$npm = ""',
+        '$cmd = Get-Command npm -ErrorAction SilentlyContinue',
+        'if ($cmd -and $cmd.Source) { $npm = $cmd.Source }',
+        'if (-not $npm) {',
+        '  $candidates = @(',
+        '    "$env:ProgramFiles\\nodejs\\npm.cmd",',
+        '    "$env:ProgramFiles(x86)\\nodejs\\npm.cmd",',
+        '    "$env:LOCALAPPDATA\\Programs\\nodejs\\npm.cmd",',
+        '    "$env:APPDATA\\npm\\npm.cmd"',
+        '  )',
+        '  foreach ($candidate in $candidates) {',
+        '    if (Test-Path $candidate) { $npm = $candidate; break }',
+        '  }',
+        '}',
+        'if (-not $npm) { throw "npm was not found. Install Node.js LTS first, then run this step again." }',
+        '& $npm install -g @openai/codex',
+        'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'
+      ].join('\n'),
       docsUrl: 'https://developers.openai.com/codex/cli',
       required: false,
       runSupported: true
@@ -205,6 +284,10 @@ function getRunSummary(run) {
     exitCode: Number.isInteger(run.exitCode) ? run.exitCode : null,
     error: run.error || null,
     output: Array.isArray(run.output) ? run.output.slice(-25) : [],
+    ghDeviceCode: run.ghDeviceCode || null,
+    ghDeviceUrl: run.ghDeviceUrl || null,
+    ghHasDeviceHint: !!run.ghHasDeviceHint,
+    ghDebugLogPath: run.ghDebugLogPath || null,
     updatedAt: run.updatedAt || run.startedAt
   };
 }
@@ -216,12 +299,25 @@ function appendRunOutput(run, chunk, stream = 'stdout') {
   const lines = text
     .replace(/\r/g, '')
     .split('\n')
-    .map((line) => line.trimEnd())
+    .map((line) => stripAnsi(line).trimEnd())
     .filter(Boolean);
   if (!lines.length) return;
   const at = new Date().toISOString();
   lines.forEach((line) => {
-    run.output.push({ at, stream, line: String(line).slice(0, 1600) });
+    const cleanLine = String(line || '').slice(0, 1600);
+    run.output.push({ at, stream, line: cleanLine });
+    if (run.actionId === 'gh-login') {
+      const codeMatch = cleanLine.match(GH_LOGIN_CODE_PATTERN);
+      const urlMatch = cleanLine.match(GH_LOGIN_URL_PATTERN);
+      if (codeMatch?.[1]) run.ghDeviceCode = String(codeMatch[1]).toUpperCase();
+      if (urlMatch?.[0]) run.ghDeviceUrl = String(urlMatch[0]).trim();
+      if (GH_LOGIN_HINT_PATTERN.test(cleanLine)) run.ghHasDeviceHint = true;
+      appendGhLoginDebugLog('output', {
+        runId: run.runId,
+        stream,
+        line: cleanLine
+      });
+    }
   });
   if (run.output.length > MAX_OUTPUT_LINES) {
     run.output.splice(0, run.output.length - MAX_OUTPUT_LINES);
@@ -243,9 +339,19 @@ function launchPowerShellCommand(action) {
     exitCode: null,
     error: null,
     output: [],
+    ghDeviceCode: null,
+    ghDeviceUrl: null,
+    ghHasDeviceHint: false,
+    ghDebugLogPath: action.id === 'gh-login' ? getGhLoginDebugLogPath() : null,
     updatedAt: null
   };
   run.updatedAt = run.startedAt;
+  if (action.id === 'gh-login') {
+    appendGhLoginDebugLog('run_started', {
+      runId: run.runId,
+      title: run.title
+    });
+  }
 
   setupActionRuns.set(runId, run);
   latestRunByActionId.set(action.id, runId);
@@ -271,6 +377,12 @@ function launchPowerShellCommand(action) {
       run.error = String(error?.message || error || 'Failed to launch setup action');
       run.endedAt = new Date().toISOString();
       run.updatedAt = run.endedAt;
+      if (action.id === 'gh-login') {
+        appendGhLoginDebugLog('run_error', {
+          runId: run.runId,
+          error: run.error
+        });
+      }
     });
 
     child.on('close', (code) => {
@@ -281,12 +393,29 @@ function launchPowerShellCommand(action) {
       }
       run.endedAt = new Date().toISOString();
       run.updatedAt = run.endedAt;
+      if (action.id === 'gh-login') {
+        appendGhLoginDebugLog('run_closed', {
+          runId: run.runId,
+          status: run.status,
+          exitCode: run.exitCode,
+          error: run.error || null,
+          parsedCode: run.ghDeviceCode || null,
+          parsedUrl: run.ghDeviceUrl || null,
+          sawHint: !!run.ghHasDeviceHint
+        });
+      }
     });
   } catch (error) {
     run.status = 'failed';
     run.error = String(error?.message || error || 'Failed to launch setup action');
     run.endedAt = new Date().toISOString();
     run.updatedAt = run.endedAt;
+    if (action.id === 'gh-login') {
+      appendGhLoginDebugLog('run_launch_failed', {
+        runId: run.runId,
+        error: run.error
+      });
+    }
   }
 
   return run;
