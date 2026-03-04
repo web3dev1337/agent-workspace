@@ -7930,7 +7930,7 @@ class ClaudeOrchestrator {
 			              </div>
 			              <div class="dependency-git-identity-actions">
 			                <button class="btn-secondary" type="button" data-setup-git-save="true" ${isRunBusy ? 'disabled' : ''}>${isRunBusy ? 'Saving...' : (current?.done ? 'Update identity' : 'Save identity')}</button>
-			                <a class="btn-secondary dependency-git-help-btn" href="${gitIdentityHelpUrl}" target="_blank" rel="noopener noreferrer" title="How to choose name and email">?</a>
+			                <button class="btn-secondary dependency-git-help-btn" type="button" data-setup-open-git-help="${gitIdentityHelpUrl}" title="How to choose name and email">?</button>
 			              </div>
 			            </div>
 			          ` : ''}
@@ -8472,6 +8472,29 @@ class ClaudeOrchestrator {
 	          this.showToast('Opened GitHub login in your browser.', 'info');
 	        } catch (err) {
 	          this.showToast(`Could not open login link: ${String(err?.message || err)}`, 'error');
+	        }
+	        return;
+	      }
+
+	      const openGitHelpBtn = event.target.closest('[data-setup-open-git-help]');
+	      if (openGitHelpBtn) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	        const link = String(openGitHelpBtn.getAttribute('data-setup-open-git-help') || '').trim();
+	        if (!link) return;
+	        try {
+	          const res = await fetch('/api/setup-actions/open-url', {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ url: link })
+	          });
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok || data?.ok === false) {
+	            throw new Error(String(data?.error || `HTTP ${res.status}`));
+	          }
+	          this.showToast('Opened Git setup help in your browser.', 'info');
+	        } catch (err) {
+	          this.showToast(`Could not open help link: ${String(err?.message || err)}`, 'error');
 	        }
 	        return;
 	      }
