@@ -222,7 +222,8 @@ async function collectDiagnostics() {
     platform === 'win32' ? { command: 'codex.exe', args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.APPDATA || '', 'npm', 'codex.cmd'), args: ['--version'] } : null,
     platform === 'win32' ? { command: path.join(process.env.APPDATA || '', 'npm', 'codex'), args: ['--version'] } : null,
-    platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.local', 'bin', 'codex.exe'), args: ['--version'] } : null
+    platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.local', 'bin', 'codex.exe'), args: ['--version'] } : null,
+    platform === 'win32' ? { command: path.join(process.env.USERPROFILE || '', '.local', 'bin', 'codex.exe.disabled'), args: ['--version'] } : null
   ]);
   tools.push({
     id: 'codex',

@@ -74,7 +74,7 @@ function getSetupActions(platform = process.platform) {
       title: 'Install Codex CLI',
       description: 'Install the Codex command used by agent sessions.',
       command: 'npm install -g @openai/codex',
-      docsUrl: 'https://platform.openai.com/docs/codex',
+      docsUrl: 'https://developers.openai.com/codex/cli',
       required: false,
       runSupported: true
     }
