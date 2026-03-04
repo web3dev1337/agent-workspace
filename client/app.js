@@ -10057,7 +10057,7 @@ class ClaudeOrchestrator {
 
 	    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 
-	    const loadAndRender = async ({ open = false, forceAutoShow = false, bootstrap = false } = {}) => {
+	    const loadAndRender = async ({ open = false, forceAutoShow = false, bootstrap = false, explicitOpen = false } = {}) => {
 	      if (state.loading) return false;
 	      setLoading(true);
 	      try {
@@ -10097,8 +10097,11 @@ class ClaudeOrchestrator {
 	        applyOnboardingLockUI();
 	        if (view.req?.coreReady) writeDismissed(false);
 
-	        const shouldAutoShow = forceAutoShow || (!readDismissed() && (!readCompleted() || !(view.req?.coreReady)));
-	        if (open || shouldAutoShow) {
+	        const hasCompletedOnboarding = readCompleted();
+	        const coreReady = !!view.req?.coreReady;
+	        const shouldAutoShow = (!hasCompletedOnboarding || !coreReady) && (forceAutoShow || !readDismissed());
+	        const shouldKeepVisible = open && !modal.classList.contains('hidden');
+	        if (explicitOpen || shouldKeepVisible || shouldAutoShow) {
 	          openModal();
 	        } else {
 	          setBootstrapPending(false);
@@ -10107,7 +10110,8 @@ class ClaudeOrchestrator {
 	      } catch (err) {
 	        summaryEl.textContent = `Dependency check failed: ${String(err?.message || err)}`;
 	        listEl.innerHTML = '<div class="dependency-setup-empty">Unable to load setup actions right now.</div>';
-	        if (open) openModal();
+	        const shouldOpenOnError = explicitOpen || (open && !modal.classList.contains('hidden'));
+	        if (shouldOpenOnError) openModal();
 	        else if (!bootstrap) setBootstrapPending(false);
 	        return false;
 	      } finally {
@@ -10634,7 +10638,7 @@ class ClaudeOrchestrator {
 	      openBtn.addEventListener('click', () => {
 	        writeDismissed(false);
 	        setCurrentStep(0);
-	        loadAndRender({ open: true, forceAutoShow: true });
+	        loadAndRender({ open: true, forceAutoShow: true, explicitOpen: true });
 	      });
 	    }
 	    if (closeBtn) {
