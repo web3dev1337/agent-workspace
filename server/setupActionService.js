@@ -113,8 +113,8 @@ function getSetupActions(platform = process.platform) {
   return [
     {
       id: 'install-git',
-      title: 'Install Git',
-      description: 'Required for repository and worktree operations.',
+      title: 'Git Integration',
+      description: 'Required for repository and worktree access.',
       command: 'winget install --id Git.Git --exact --source winget --accept-source-agreements --accept-package-agreements',
       docsUrl: 'https://git-scm.com/download/win',
       required: true,
@@ -122,8 +122,8 @@ function getSetupActions(platform = process.platform) {
     },
     {
       id: 'configure-git-identity',
-      title: 'Configure Git identity',
-      description: 'Optional but strongly recommended so commits use the correct author name and email.',
+      title: 'Git Identity',
+      description: 'Set your name and email for accurate commits.',
       command: 'git config --global user.name "Your Name"\ngit config --global user.email "you@example.com"',
       docsUrl: 'https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup',
       required: false,
@@ -132,8 +132,8 @@ function getSetupActions(platform = process.platform) {
     },
     {
       id: 'install-node',
-      title: 'Install Node.js LTS',
-      description: 'Needed to install CLI tools like Claude Code and Codex.',
+      title: 'Node.js LTS',
+      description: 'Required core dependency for running agents.',
       command: 'winget install --id OpenJS.NodeJS.LTS --exact --source winget --accept-source-agreements --accept-package-agreements',
       docsUrl: 'https://nodejs.org/en/download',
       required: false,
@@ -141,8 +141,8 @@ function getSetupActions(platform = process.platform) {
     },
     {
       id: 'install-gh',
-      title: 'Install GitHub CLI',
-      description: 'Recommended for PR and repository workflows.',
+      title: 'GitHub CLI',
+      description: 'Recommended for seamless PR creation and repo management.',
       command: 'winget install --id GitHub.cli --exact --source winget --accept-source-agreements --accept-package-agreements',
       docsUrl: 'https://cli.github.com/',
       required: false,
@@ -151,8 +151,8 @@ function getSetupActions(platform = process.platform) {
     },
     {
       id: 'gh-login',
-      title: 'Login GitHub CLI',
-      description: 'Authenticate GitHub CLI for PR and repo APIs.',
+      title: 'GitHub Authentication',
+      description: 'Sign in to enable native repository features.',
       command: 'gh auth login --hostname github.com --git-protocol https --web --clipboard',
       docsUrl: 'https://cli.github.com/manual/gh_auth_login',
       required: false,
@@ -161,8 +161,8 @@ function getSetupActions(platform = process.platform) {
     },
     {
       id: 'install-claude',
-      title: 'Install Claude Code CLI',
-      description: 'Install the Claude command used by agent sessions.',
+      title: 'Claude Code CLI',
+      description: 'Primary AI agent powered by Anthropic.',
       command: 'Set-ExecutionPolicy Bypass -Scope Process -Force; irm https://claude.ai/install.ps1 | iex',
       docsUrl: 'https://docs.claude.com/en/docs/claude-code/setup',
       required: false,
@@ -171,8 +171,8 @@ function getSetupActions(platform = process.platform) {
     },
     {
       id: 'install-codex',
-      title: 'Install Codex CLI',
-      description: 'Install the Codex command used by agent sessions.',
+      title: 'Codex CLI',
+      description: 'Alternative AI agent tool for development.',
       command: 'npm install -g @openai/codex',
       docsUrl: 'https://developers.openai.com/codex/cli',
       required: false,
