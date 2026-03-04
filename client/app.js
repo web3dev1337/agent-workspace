@@ -7940,6 +7940,7 @@ class ClaudeOrchestrator {
 			                <div class="dependency-git-help-inline">
 			                  <div class="dependency-git-help-line"><strong>Name:</strong> use your real display name (for example, Jane Developer).</div>
 			                  <div class="dependency-git-help-line"><strong>Email:</strong> use the same email tied to your GitHub account so commits link correctly.</div>
+			                  <div class="dependency-git-help-line">Prefer privacy? Use your GitHub no-reply email from GitHub Settings → Emails.</div>
 			                  <div class="dependency-git-help-line">You can change both later at any time.</div>
 			                </div>
 			              ` : ''}
