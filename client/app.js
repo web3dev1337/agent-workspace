@@ -7484,7 +7484,6 @@ class ClaudeOrchestrator {
 	    const openBtn = document.getElementById('dependency-setup-open');
 	    const summaryEl = document.getElementById('dependency-setup-summary');
 	    const listEl = document.getElementById('dependency-setup-list');
-	    const refreshBtn = document.getElementById('dependency-setup-refresh');
 	    const closeBtn = document.getElementById('dependency-setup-close');
 	    if (!modal || !summaryEl || !listEl) return;
 	    const body = document.body;
@@ -7928,7 +7927,6 @@ class ClaudeOrchestrator {
 
 	    const setLoading = (loading) => {
 	      state.loading = !!loading;
-	      if (refreshBtn) refreshBtn.disabled = state.loading;
 	      if (openBtn) openBtn.disabled = state.loading;
 	      if (state.loading) {
 	        summaryEl.textContent = 'Checking local dependencies...';
@@ -8305,11 +8303,6 @@ class ClaudeOrchestrator {
 	        writeDismissed(false);
 	        setCurrentStep(0);
 	        loadAndRender({ open: true, forceAutoShow: true });
-	      });
-	    }
-	    if (refreshBtn) {
-	      refreshBtn.addEventListener('click', () => {
-	        loadAndRender({ open: !modal.classList.contains('hidden'), forceAutoShow: true });
 	      });
 	    }
 	    if (closeBtn) {
