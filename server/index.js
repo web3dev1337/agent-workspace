@@ -4069,7 +4069,7 @@ app.get('/api/setup-actions', (req, res) => {
   }
 });
 
-app.post('/api/setup-actions/run', (req, res) => {
+app.post('/api/setup-actions/run', requirePolicyAction('write'), express.json(), (req, res) => {
   try {
     const actionId = String(req.body?.actionId || '').trim();
     if (!actionId) {
@@ -4086,7 +4086,7 @@ app.post('/api/setup-actions/run', (req, res) => {
   }
 });
 
-app.post('/api/setup-actions/configure-git-identity', async (req, res) => {
+app.post('/api/setup-actions/configure-git-identity', requirePolicyAction('write'), express.json(), async (req, res) => {
   try {
     const name = String(req.body?.name || '').trim();
     const email = String(req.body?.email || '').trim();
@@ -4128,7 +4128,7 @@ app.get('/api/setup-actions/run-status', (req, res) => {
   }
 });
 
-app.post('/api/setup-actions/open-url', (req, res) => {
+app.post('/api/setup-actions/open-url', requirePolicyAction('write'), express.json(), (req, res) => {
   try {
     const rawUrl = String(req.body?.url || '').trim();
     if (!rawUrl) {

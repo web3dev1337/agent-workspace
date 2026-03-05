@@ -9356,6 +9356,10 @@ class ClaudeOrchestrator {
 	      body?.classList?.remove?.('dependency-onboarding-booting');
 	    };
 	    setBootstrapPending(true);
+	    if (!isWindowsHost) {
+	      setBootstrapPending(false);
+	      return;
+	    }
 
 	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v3';
 	    const completedKey = 'orchestrator-dependency-onboarding-completed-v2';
@@ -9653,6 +9657,8 @@ class ClaudeOrchestrator {
 	    };
 
 	    const isOnboardingLocked = () => {
+	      if (!isWindowsHost) return false;
+	      if (!Array.isArray(state.actions) || state.actions.length === 0) return false;
 	      const toolsMap = toToolMap(state.diagnostics);
 	      const req = getRequirementState(toolsMap);
 	      if (!req?.coreReady) return true;
@@ -10099,7 +10105,7 @@ class ClaudeOrchestrator {
 
 	        const hasCompletedOnboarding = readCompleted();
 	        const coreReady = !!view.req?.coreReady;
-	        const shouldAutoShow = (!hasCompletedOnboarding || !coreReady) && (forceAutoShow || !readDismissed());
+	        const shouldAutoShow = isWindowsHost && (!hasCompletedOnboarding || !coreReady) && (forceAutoShow || !readDismissed());
 	        const shouldKeepVisible = open && !modal.classList.contains('hidden');
 	        if (explicitOpen || shouldKeepVisible || shouldAutoShow) {
 	          openModal();
