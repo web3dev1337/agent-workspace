@@ -407,6 +407,7 @@ sessionManager.setGitHelper(gitHelper);
 
 // Initialize workspace system
 let workspaceInitialized = false;
+let workspaceSystemReady = null;
 async function initializeWorkspaceSystem() {
   try {
     logger.info('Initializing workspace system...');
@@ -432,21 +433,23 @@ async function initializeWorkspaceSystem() {
 }
 
 // Initialize workspace system before starting server
-initializeWorkspaceSystem().then(() => {
-  logger.info('Workspace system initialized');
-  loadPlugins()
-    .then((status) => {
-      logger.info('Plugin loader finished', {
-        loaded: Array.isArray(status?.loaded) ? status.loaded.length : 0,
-        failed: Array.isArray(status?.failed) ? status.failed.length : 0
-      });
-    })
-    .catch((error) => {
-      logger.error('Plugin loader failed', { error: error.message, stack: error.stack });
+workspaceSystemReady = initializeWorkspaceSystem()
+  .then(() => {
+    logger.info('Workspace system initialized');
+    return true;
+  })
+  .then(() => loadPlugins())
+  .then((status) => {
+    logger.info('Plugin loader finished', {
+      loaded: Array.isArray(status?.loaded) ? status.loaded.length : 0,
+      failed: Array.isArray(status?.failed) ? status.failed.length : 0
     });
-}).catch(error => {
-  logger.error('Workspace system initialization failed', { error: error.message, stack: error.stack });
-});
+    return true;
+  })
+  .catch(error => {
+    logger.error('Workspace system initialization failed', { error: error.message, stack: error.stack });
+    return false;
+  });
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
@@ -7960,7 +7963,13 @@ httpServer.listen(PORT, HOST, () => {
     }
   })();
 
-  sessionManager.initializeSessions()
+  workspaceSystemReady
+    .then((workspaceReady) => {
+      if (!workspaceReady) {
+        return;
+      }
+      return sessionManager.initializeSessions();
+    })
     .then(() => {
       if (!shouldAutoEnsureDiscordServices) return;
       // Don’t block server startup; just best-effort keep Services running after restarts.
