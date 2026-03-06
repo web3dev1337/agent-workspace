@@ -897,7 +897,7 @@ class GreenfieldWizard {
 
     // Switch to the new workspace
     if (this.orchestrator && this.orchestrator.socket) {
-      this.orchestrator.socket.emit('switch-workspace', { workspaceId });
+      this.orchestrator.emitWorkspaceSwitch(workspaceId, 'greenfield-wizard.openWorkspace');
     }
   }
 }

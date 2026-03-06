@@ -7,6 +7,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const winston = require('winston');
+const { logDesktopLaunch } = require('./desktopLaunchTraceService');
 
 // Ensure log directory exists early (some services create file transports at require-time).
 try {
@@ -41,6 +42,56 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+function getLaunchTraceId(req, extras = {}) {
+  const extraTraceId = String(extras?.traceId || '').trim();
+  if (extraTraceId) return extraTraceId;
+  return String(
+    req?.get?.('x-launch-trace-id')
+    || req?.body?.traceId
+    || req?.query?.traceId
+    || ''
+  ).trim();
+}
+
+function summarizeDiagnosticTools(data) {
+  const tools = Array.isArray(data?.tools) ? data.tools : [];
+  const summary = {};
+  tools.forEach((tool) => {
+    const id = String(tool?.id || '').trim();
+    if (!id) return;
+    summary[id] = {
+      ok: !!tool?.ok,
+      version: tool?.version ? String(tool.version) : null
+    };
+  });
+  const gitOk = !!summary.git?.ok;
+  const claudeOk = !!summary.claude?.ok;
+  const codexOk = !!summary.codex?.ok;
+  return {
+    coreReady: gitOk && (claudeOk || codexOk),
+    tools: summary
+  };
+}
+
+function summarizeOnboardingState(settings) {
+  const onboarding = settings?.global?.ui?.onboarding?.desktopDependencySetup || {};
+  return {
+    completed: onboarding.completed === true,
+    completedAt: onboarding.completedAt || null
+  };
+}
+
+function traceRequest(req, event, payload = {}, extras = {}) {
+  const traceId = getLaunchTraceId(req, extras);
+  if (!traceId) return;
+  logDesktopLaunch(event, {
+    traceId,
+    method: req?.method || null,
+    path: req?.path || null,
+    ...payload
+  });
+}
 
 // Import services
 const { SessionManager } = require('./sessionManager');
@@ -213,6 +264,26 @@ app.use((req, res, next) => {
 // Serve the UI as default
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/index.html'));
+});
+
+app.post('/api/desktop-launch-trace', express.json({ limit: '64kb' }), (req, res) => {
+  const traceId = getLaunchTraceId(req);
+  if (!traceId) {
+    return res.status(400).json({ ok: false, error: 'traceId is required' });
+  }
+
+  const event = String(req.body?.event || '').trim() || 'client.event';
+  logDesktopLaunch(event, {
+    traceId,
+    seq: Number.isFinite(Number(req.body?.seq)) ? Number(req.body.seq) : null,
+    source: String(req.body?.source || '').trim() || 'client',
+    details: req.body?.details && typeof req.body.details === 'object' ? req.body.details : {},
+    userAgent: req.get('user-agent') || '',
+    origin: req.get('origin') || '',
+    referer: req.get('referer') || ''
+  });
+
+  res.json({ ok: true });
 });
 
 // Serve static files from client directory (but exclude index files)
@@ -865,12 +936,27 @@ io.on('connection', (socket) => {
   });
 
   // Workspace management handlers
-  socket.on('switch-workspace', async ({ workspaceId }) => {
-    const requestedWorkspaceId = String(workspaceId || '').trim();
+  socket.on('switch-workspace', async (payload = {}) => {
+    const requestedWorkspaceId = String(payload?.workspaceId || '').trim();
+    const traceId = String(payload?.traceId || '').trim() || null;
+    const source = String(payload?.source || '').trim() || 'unknown';
+    logDesktopLaunch('server.workspace-switch.received', {
+      traceId,
+      source,
+      socketId: socket.id,
+      requestedWorkspaceId,
+      currentWorkspaceId: workspaceManager.getActiveWorkspace?.()?.id || null
+    });
     if (requestedWorkspaceId && inFlightWorkspaceSwitchId === requestedWorkspaceId) {
       logger.info('Ignoring duplicate workspace switch request while switch is already in progress', {
         workspaceId: requestedWorkspaceId,
         socketId: socket.id
+      });
+      logDesktopLaunch('server.workspace-switch.ignored-duplicate', {
+        traceId,
+        source,
+        socketId: socket.id,
+        requestedWorkspaceId
       });
       return;
     }
@@ -885,6 +971,13 @@ io.on('connection', (socket) => {
       });
 
       logger.info('Workspace switch requested', { workspaceId: requestedWorkspaceId });
+      logDesktopLaunch('server.workspace-switch.started', {
+        traceId,
+        source,
+        socketId: socket.id,
+        previousWorkspaceId: previous?.id || null,
+        requestedWorkspaceId
+      });
 
       const newWorkspace = await workspaceManager.switchWorkspace(requestedWorkspaceId);
 
@@ -894,7 +987,12 @@ io.on('connection', (socket) => {
 
       // Switch active workspace while preserving existing PTYs for other workspace tabs.
       const { sessions: newSessions, backlog } =
-        await sessionManager.switchWorkspacePreservingSessions(newWorkspace);
+        await sessionManager.switchWorkspacePreservingSessions(newWorkspace, {
+          reason: 'workspace-switch',
+          traceId,
+          source,
+          socketId: socket.id
+        });
 
       // Emit success with ONLY the new workspace sessions (active workspace map)
       logger.info('Sending workspace-changed event', {
@@ -919,6 +1017,15 @@ io.on('connection', (socket) => {
       }
 
       logger.info('Workspace switched successfully', { workspace: newWorkspace.name });
+      logDesktopLaunch('server.workspace-switch.completed', {
+        traceId,
+        source,
+        socketId: socket.id,
+        previousWorkspaceId: previous?.id || null,
+        workspaceId: newWorkspace?.id || null,
+        sessionCount: Object.keys(newSessions || {}).length,
+        backlogSessionCount: backlog && typeof backlog === 'object' ? Object.keys(backlog).length : 0
+      });
       activityFeed.track('workspace.switch.completed', {
         fromWorkspaceId: previous?.id || null,
         toWorkspaceId: newWorkspace?.id || null,
@@ -926,6 +1033,13 @@ io.on('connection', (socket) => {
         socketId: socket.id
       });
     } catch (error) {
+      logDesktopLaunch('server.workspace-switch.failed', {
+        traceId,
+        source,
+        socketId: socket.id,
+        requestedWorkspaceId,
+        error: error.message
+      });
       activityFeed.track('workspace.switch.failed', {
         toWorkspaceId: requestedWorkspaceId || null,
         socketId: socket.id,
@@ -3737,6 +3851,9 @@ app.put('/api/process/automations/pr-review/config', express.json(), async (req,
 app.get('/api/user-settings', (req, res) => {
   try {
     const settings = userSettingsService.getAllSettings();
+    traceRequest(req, 'server.user-settings.loaded', {
+      onboarding: summarizeOnboardingState(settings)
+    });
     res.json(settings);
   } catch (error) {
     logger.error('Failed to get user settings', { error: error.message, stack: error.stack });
@@ -3752,6 +3869,10 @@ app.put('/api/user-settings/global', express.json(), (req, res) => {
     
     if (success) {
       const updatedSettings = userSettingsService.getAllSettings();
+      traceRequest(req, 'server.user-settings.global-updated', {
+        onboarding: summarizeOnboardingState(updatedSettings),
+        updatedKeys: global && typeof global === 'object' ? Object.keys(global).slice(0, 20) : []
+      });
       res.json(updatedSettings);
       
       // Notify all clients about settings change
@@ -3996,6 +4117,7 @@ app.get('/api/agents', (req, res) => {
 app.get('/api/diagnostics', async (req, res) => {
   try {
     const data = await collectDiagnostics();
+    traceRequest(req, 'server.diagnostics.loaded', summarizeDiagnosticTools(data));
     res.json({ ok: true, ...data });
   } catch (error) {
     logger.error('Failed to collect diagnostics', { error: error.message, stack: error.stack });
@@ -4080,6 +4202,10 @@ app.get('/api/setup-actions', (req, res) => {
   try {
     const platform = process.platform;
     const actions = getSetupActions(platform);
+    traceRequest(req, 'server.setup-actions.loaded', {
+      platform,
+      actionIds: actions.map((action) => String(action?.id || '').trim()).filter(Boolean)
+    });
     res.json({ ok: true, platform, actions });
   } catch (error) {
     logger.error('Failed to get setup actions', { error: error.message, stack: error.stack });
@@ -7983,7 +8109,7 @@ httpServer.listen(PORT, HOST, () => {
       if (!workspaceReady) {
         return;
       }
-      return sessionManager.initializeSessions();
+      return sessionManager.initializeSessions({ reason: 'server-startup' });
     })
     .then(() => {
       if (!shouldAutoEnsureDiscordServices) return;

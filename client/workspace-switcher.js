@@ -218,7 +218,7 @@ class WorkspaceSwitcher {
     }
 
     // Emit switch request
-    this.orchestrator.socket.emit('switch-workspace', { workspaceId });
+    this.orchestrator.emitWorkspaceSwitch(workspaceId, 'workspace-switcher.switchWorkspace');
 
     // Wait for workspace-changed event (handled in app.js)
     this.orchestrator.socket.once('workspace-changed', () => {

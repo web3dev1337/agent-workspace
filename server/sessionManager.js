@@ -13,6 +13,7 @@ const path = require('path');
 const { ClaudeVersionChecker } = require('./claudeVersionChecker');
 const { UserSettingsService } = require('./userSettingsService');
 const { WorktreeHelper } = require('./worktreeHelper');
+const { logDesktopLaunch } = require('./desktopLaunchTraceService');
 const sessionRecoveryService = require('./sessionRecoveryService');
 const { parseWorktreeKey } = require('./lifecyclePolicyService');
 const {
@@ -161,7 +162,7 @@ class SessionManager extends EventEmitter {
    * - Restores (or creates) the session map for the new workspace id as `this.sessions`
    * - Ensures sessions exist for the new workspace without killing old PTYs
    */
-  async switchWorkspacePreservingSessions(workspace) {
+  async switchWorkspacePreservingSessions(workspace, options = {}) {
     if (!workspace?.id) {
       throw new Error('Workspace missing id');
     }
@@ -178,7 +179,13 @@ class SessionManager extends EventEmitter {
     this.workspaceSessionMaps.set(workspace.id, this.sessions);
 
     // Ensure sessions exist for the active workspace without clearing existing ones.
-    await this.initializeSessions({ preserveExisting: true });
+    await this.initializeSessions({
+      preserveExisting: true,
+      reason: String(options.reason || '').trim() || 'workspace-switch',
+      traceId: String(options.traceId || '').trim() || null,
+      source: String(options.source || '').trim() || null,
+      socketId: String(options.socketId || '').trim() || null
+    });
 
     // Return any buffered output that occurred while this workspace was inactive.
     return {
@@ -243,8 +250,23 @@ class SessionManager extends EventEmitter {
   
   async initializeSessions(options = {}) {
     const preserveExisting = !!options.preserveExisting;
+    const reason = String(options.reason || '').trim() || (preserveExisting ? 'preserve-existing' : 'workspace-initialize');
+    const traceId = String(options.traceId || '').trim() || null;
+    const source = String(options.source || '').trim() || null;
+    const socketId = String(options.socketId || '').trim() || null;
     // Set flag to prevent auto-restart during initialization
     this.isWorkspaceSwitching = true;
+
+    logDesktopLaunch('session-manager.initialize.begin', {
+      traceId,
+      source,
+      socketId,
+      reason,
+      preserveExisting,
+      workspaceId: this.workspace?.id || null,
+      workspaceName: this.workspace?.name || null,
+      worktreeIds: Array.isArray(this.worktrees) ? this.worktrees.map((worktree) => worktree?.id || null) : []
+    });
 
     if (!preserveExisting) {
       // Clear ALL existing sessions first
@@ -305,6 +327,14 @@ class SessionManager extends EventEmitter {
     // If no workspace is set, skip session creation
     if (!this.workspace) {
       logger.warn('No workspace set, skipping session initialization');
+      logDesktopLaunch('session-manager.initialize.skipped', {
+        traceId,
+        source,
+        socketId,
+        reason,
+        preserveExisting,
+        cause: 'missing-workspace'
+      });
       this.isWorkspaceSwitching = false;
       return;
     }
@@ -387,7 +417,11 @@ class SessionManager extends EventEmitter {
               worktreeId: terminal.worktree,
               repositoryName: terminal.repository.name,
               repositoryType: terminal.repository.type,  // Add repository type for dynamic launch options
-              timeoutMs
+              timeoutMs,
+              debugSource: reason,
+              launchTraceId: traceId,
+              launchSource: source,
+              launchSocketId: socketId
             });
           }).catch(error => {
             logger.error(`Failed to initialize ${terminal.terminalType} session`, {
@@ -412,7 +446,11 @@ class SessionManager extends EventEmitter {
               args: buildShellArgs(`cd "${worktree.path}"`),
               cwd: worktree.path,
               type: 'claude',
-              worktreeId: worktree.id
+              worktreeId: worktree.id,
+              debugSource: reason,
+              launchTraceId: traceId,
+              launchSource: source,
+              launchSocketId: socketId
             });
           }).catch(error => {
             logger.error('Failed to initialize Claude session', {
@@ -445,7 +483,11 @@ class SessionManager extends EventEmitter {
               ]),
               cwd: worktree.path,
               type: 'server',
-              worktreeId: worktree.id
+              worktreeId: worktree.id,
+              debugSource: reason,
+              launchTraceId: traceId,
+              launchSource: source,
+              launchSocketId: socketId
             });
           }).catch(error => {
             logger.error('Failed to initialize server session', {
@@ -478,6 +520,17 @@ class SessionManager extends EventEmitter {
     // Wait for all sessions to be created in parallel
     await Promise.all(sessionPromises);
     logger.info('All sessions initialized', { count: sessionPromises.length });
+    logDesktopLaunch('session-manager.initialize.completed', {
+      traceId,
+      source,
+      socketId,
+      reason,
+      preserveExisting,
+      workspaceId: this.workspace?.id || null,
+      workspaceName: this.workspace?.name || null,
+      createdSessionCount: this.sessions.size,
+      sessionIds: Array.from(this.sessions.keys())
+    });
 
     // Keep an authoritative reference from workspace id -> session map for tab switching.
     if (this.workspace?.id) {
@@ -722,10 +775,33 @@ class SessionManager extends EventEmitter {
   
   createSession(sessionId, config) {
     logger.info('Creating session', { sessionId, type: config.type });
+    logDesktopLaunch('session-manager.session.create.requested', {
+      traceId: String(config?.launchTraceId || '').trim() || null,
+      source: String(config?.launchSource || '').trim() || null,
+      socketId: String(config?.launchSocketId || '').trim() || null,
+      debugSource: String(config?.debugSource || '').trim() || null,
+      workspaceId: this.workspace?.id || null,
+      sessionId,
+      sessionType: config?.type || null,
+      worktreeId: config?.worktreeId || null,
+      cwd: config?.cwd || null,
+      command: config?.command || null,
+      args: Array.isArray(config?.args) ? config.args : []
+    });
     
     try {
       if (!pty) {
         logger.error('Cannot create session - node-pty unavailable', { sessionId, type: config.type });
+        logDesktopLaunch('session-manager.session.create.failed', {
+          traceId: String(config?.launchTraceId || '').trim() || null,
+          source: String(config?.launchSource || '').trim() || null,
+          socketId: String(config?.launchSocketId || '').trim() || null,
+          debugSource: String(config?.debugSource || '').trim() || null,
+          workspaceId: this.workspace?.id || null,
+          sessionId,
+          sessionType: config?.type || null,
+          error: 'node-pty unavailable'
+        });
         throw new Error('node-pty unavailable');
       }
       const homeDir = process.env.HOME || os.homedir();
@@ -749,6 +825,17 @@ class SessionManager extends EventEmitter {
         rows: 24,
         cwd: config.cwd,
         env
+      });
+      logDesktopLaunch('session-manager.session.spawned', {
+        traceId: String(config?.launchTraceId || '').trim() || null,
+        source: String(config?.launchSource || '').trim() || null,
+        socketId: String(config?.launchSocketId || '').trim() || null,
+        debugSource: String(config?.debugSource || '').trim() || null,
+        workspaceId: this.workspace?.id || null,
+        sessionId,
+        sessionType: config?.type || null,
+        worktreeId: config?.worktreeId || null,
+        pid: Number.isFinite(ptyProcess?.pid) ? ptyProcess.pid : null
       });
 
       const initialCwd = config.cwd || process.cwd();
@@ -828,6 +915,18 @@ class SessionManager extends EventEmitter {
       ptyProcess.onExit(({ exitCode, signal }) => {
         logger.info('Session exited', { sessionId, exitCode, signal });
         const workspaceId = session.workspace || this.workspace?.id || null;
+        logDesktopLaunch('session-manager.session.exited', {
+          traceId: String(config?.launchTraceId || '').trim() || null,
+          source: String(config?.launchSource || '').trim() || null,
+          socketId: String(config?.launchSocketId || '').trim() || null,
+          debugSource: String(config?.debugSource || '').trim() || null,
+          workspaceId,
+          sessionId,
+          sessionType: session.type,
+          worktreeId: session.worktreeId || null,
+          exitCode,
+          signal
+        });
         
         clearTimeout(session.inactivityTimer);
         if (session.pendingStatusTimer) {
@@ -932,6 +1031,17 @@ class SessionManager extends EventEmitter {
       }, 5000);
       
     } catch (error) {
+      logDesktopLaunch('session-manager.session.create.failed', {
+        traceId: String(config?.launchTraceId || '').trim() || null,
+        source: String(config?.launchSource || '').trim() || null,
+        socketId: String(config?.launchSocketId || '').trim() || null,
+        debugSource: String(config?.debugSource || '').trim() || null,
+        workspaceId: this.workspace?.id || null,
+        sessionId,
+        sessionType: config?.type || null,
+        worktreeId: config?.worktreeId || null,
+        error: error.message
+      });
       logger.error('Failed to create session', {
         sessionId,
         error: error.message

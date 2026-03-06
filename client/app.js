@@ -116,7 +116,128 @@ class ClaudeOrchestrator {
     // navigate Prev/Next without reopening the Queue overlay.
     this.reviewConsoleNav = null; // { source, createdAtMs, items: [{ id, kind, title, url, ... }], index }
 
+    this.currentTabId = null;
+    this.desktopLaunchTrace = {
+      id: this.createDesktopLaunchTraceId(),
+      enabled: this.shouldEnableDesktopLaunchTrace(),
+      seq: 0,
+      startedAt: new Date().toISOString()
+    };
+
     this.init();
+  }
+
+  shouldEnableDesktopLaunchTrace() {
+    try {
+      const platform = String(navigator?.platform || '').toLowerCase();
+      const userAgent = String(navigator?.userAgent || '').toLowerCase();
+      return !!window.__TAURI__ && (platform.includes('win') || userAgent.includes('windows'));
+    } catch {
+      return false;
+    }
+  }
+
+  createDesktopLaunchTraceId() {
+    return `launch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  sanitizeDesktopTraceValue(value, depth = 0, seen = new WeakSet()) {
+    if (value == null) return value;
+    if (typeof value === 'boolean' || typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      return value.length > 500 ? `${value.slice(0, 484)}...[truncated]` : value;
+    }
+    if (typeof value === 'function') return `[function:${value.name || 'anonymous'}]`;
+    if (depth >= 4) return '[depth-limit]';
+    if (Array.isArray(value)) {
+      const items = value.slice(0, 15).map((item) => this.sanitizeDesktopTraceValue(item, depth + 1, seen));
+      if (value.length > 15) items.push(`[+${value.length - 15} more]`);
+      return items;
+    }
+    if (typeof value === 'object') {
+      if (seen.has(value)) return '[circular]';
+      seen.add(value);
+      const out = {};
+      const keys = Object.keys(value).slice(0, 20);
+      keys.forEach((key) => {
+        out[key] = this.sanitizeDesktopTraceValue(value[key], depth + 1, seen);
+      });
+      if (Object.keys(value).length > keys.length) {
+        out.__truncatedKeys = Object.keys(value).length - keys.length;
+      }
+      seen.delete(value);
+      return out;
+    }
+    return String(value);
+  }
+
+  getDesktopLaunchTraceContext() {
+    return {
+      appStartedAt: this.desktopLaunchTrace?.startedAt || null,
+      currentWorkspaceId: this.currentWorkspace?.id || null,
+      currentWorkspaceName: this.currentWorkspace?.name || null,
+      currentTabId: this.currentTabId || null,
+      isDashboardMode: !!this.isDashboardMode,
+      socketConnected: !!this.socket?.connected,
+      visibilityState: document?.visibilityState || null,
+      location: window?.location?.pathname || null
+    };
+  }
+
+  withLaunchTraceHeaders(init = {}) {
+    if (!this.desktopLaunchTrace?.enabled) {
+      return init || {};
+    }
+    return {
+      ...(init || {}),
+      headers: {
+        ...(init?.headers || {}),
+        'x-launch-trace-id': this.desktopLaunchTrace.id
+      }
+    };
+  }
+
+  async traceDesktopLaunch(event, details = {}) {
+    if (!this.desktopLaunchTrace?.enabled) return false;
+
+    const safeDetails = this.sanitizeDesktopTraceValue(details);
+    const payload = {
+      traceId: this.desktopLaunchTrace.id,
+      seq: (this.desktopLaunchTrace.seq += 1),
+      event: String(event || '').trim() || 'client.event',
+      source: 'desktop-app',
+      details: (safeDetails && typeof safeDetails === 'object' && !Array.isArray(safeDetails))
+        ? { ...this.getDesktopLaunchTraceContext(), ...safeDetails }
+        : { ...this.getDesktopLaunchTraceContext(), value: safeDetails }
+    };
+
+    try {
+      await fetch('/api/desktop-launch-trace', this.withLaunchTraceHeaders({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        keepalive: true
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  emitWorkspaceSwitch(workspaceId, source = 'unknown', extra = {}) {
+    const id = String(workspaceId || '').trim();
+    if (!id || !this.socket) return;
+    void this.traceDesktopLaunch('client.workspace-switch.emitted', {
+      source,
+      workspaceId: id,
+      extra
+    });
+    this.socket.emit('switch-workspace', {
+      workspaceId: id,
+      source,
+      traceId: this.desktopLaunchTrace?.enabled ? this.desktopLaunchTrace.id : null,
+      ...extra
+    });
   }
 
   isMobileLayout() {
@@ -848,6 +969,12 @@ class ClaudeOrchestrator {
 
   async init() {
     try {
+      void this.traceDesktopLaunch('client.init.start', {
+        tauri: !!window.__TAURI__,
+        userAgent: String(navigator?.userAgent || ''),
+        platform: String(navigator?.platform || '')
+      });
+
       // Initialize managers
       this.terminalManager = new TerminalManager(this);
       this.terminalManager.autosuggestEnabled = this.settings.autoSuggestions !== false;
@@ -1030,6 +1157,9 @@ class ClaudeOrchestrator {
 
     } catch (error) {
       console.error('Failed to initialize:', error);
+      void this.traceDesktopLaunch('client.init.failed', {
+        error: String(error?.message || error)
+      });
       this.showError('Failed to initialize application');
     }
   }
@@ -1050,12 +1180,20 @@ class ClaudeOrchestrator {
       // Connection events
       this.socket.on('connect', () => {
         console.log('Connected to server');
+        void this.traceDesktopLaunch('client.socket.connected', {
+          serverUrl,
+          socketId: this.socket?.id || null
+        });
         this.updateConnectionStatus(true);
         resolve();
       });
 
       this.socket.on('connect_error', (error) => {
         console.error('Connection error:', error);
+        void this.traceDesktopLaunch('client.socket.connect-error', {
+          serverUrl,
+          error: String(error?.message || error)
+        });
         this.updateConnectionStatus(false);
 
         if (error.message === 'Authentication failed') {
@@ -1066,12 +1204,19 @@ class ClaudeOrchestrator {
 
       this.socket.on('disconnect', () => {
         console.log('Disconnected from server');
+        void this.traceDesktopLaunch('client.socket.disconnected', {
+          socketId: this.socket?.id || null
+        });
         this.updateConnectionStatus(false);
       });
 
       // Session events
       this.socket.on('sessions', async (sessionStates) => {
         console.log('Received sessions event:', sessionStates);
+        void this.traceDesktopLaunch('client.sessions.received', {
+          sessionCount: Object.keys(sessionStates || {}).length,
+          sessionIds: Object.keys(sessionStates || {})
+        });
 
         // Pre-fetch worktree configs if we have an active workspace
         if (this.currentWorkspace) {
@@ -1366,6 +1511,10 @@ class ClaudeOrchestrator {
 
       this.socket.on('user-settings-updated', (settings) => {
         console.log('User settings updated:', settings);
+        void this.traceDesktopLaunch('client.user-settings.updated', {
+          onboardingCompleted: settings?.global?.ui?.onboarding?.desktopDependencySetup?.completed === true,
+          onboardingCompletedAt: settings?.global?.ui?.onboarding?.desktopDependencySetup?.completedAt || null
+        });
         this.userSettings = settings;
         this.syncUserSettingsUI();
         this.applyThemeFromUserSettings();
@@ -1377,6 +1526,12 @@ class ClaudeOrchestrator {
       // Workspace events
       this.socket.on('workspace-info', async ({ active, available, config, workspaceTypes, frameworks, cascadedConfigs }) => {
         console.log('Received workspace info:', { active, available, config, workspaceTypes, frameworks, cascadedConfigs });
+        void this.traceDesktopLaunch('client.workspace-info.received', {
+          activeWorkspaceId: active?.id || null,
+          activeWorkspaceName: active?.name || null,
+          availableWorkspaceCount: Array.isArray(available) ? available.length : 0,
+          startupDashboard: config?.ui?.startupDashboard === true
+        });
         this.currentWorkspace = active;
         this.availableWorkspaces = available;
         this.orchestratorConfig = config;
@@ -1452,6 +1607,11 @@ class ClaudeOrchestrator {
 
       this.socket.on('workspace-changed', async ({ workspace, sessions }) => {
         console.log('Workspace changed:', workspace.name);
+        void this.traceDesktopLaunch('client.workspace-changed.received', {
+          workspaceId: workspace?.id || null,
+          workspaceName: workspace?.name || null,
+          sessionCount: Object.keys(sessions || {}).length
+        });
 
         // If tab manager is enabled, create a new tab for this workspace
         if (this.tabManager) {
@@ -3578,6 +3738,11 @@ class ClaudeOrchestrator {
 
 	  handleInitialSessions(sessionStates) {
 	    console.log('Received initial sessions:', sessionStates);
+    void this.traceDesktopLaunch('client.sessions.rendered', {
+      sessionCount: Object.keys(sessionStates || {}).length,
+      sessionIds: Object.keys(sessionStates || {}),
+      workspaceId: this.currentWorkspace?.id || null
+    });
 
     // Preserve per-workspace worktree visibility (hide/show toggles) when we
     // receive a sessions refresh for the SAME workspace (e.g. after adding a
@@ -9350,6 +9515,9 @@ class ClaudeOrchestrator {
 	    })();
 	    const isDesktopWindowsApp = isWindowsHost && !!window.__TAURI__;
 	    let desktopCompleted = false;
+      const traceOnboarding = (event, details = {}) => {
+        void this.traceDesktopLaunch(`client.onboarding.${event}`, details);
+      };
 
 	    const setBootstrapPending = (pending) => {
 	      if (!isWindowsHost) return;
@@ -9392,6 +9560,11 @@ class ClaudeOrchestrator {
 	      return desktopCompleted;
 	    };
 	    syncDesktopCompleted();
+      traceOnboarding('wizard-ready', {
+        isWindowsHost,
+        isDesktopWindowsApp,
+        desktopCompleted
+      });
 
 	    const readDismissed = () => {
 	      try {
@@ -9425,11 +9598,24 @@ class ClaudeOrchestrator {
 	      if (isDesktopWindowsApp) {
 	        const next = !!value;
 	        desktopCompleted = next;
+          traceOnboarding('completion-write-start', {
+            nextCompleted: next
+          });
 	        if (this.userSettings) {
 	          await this.updateGlobalUserSetting('ui.onboarding.desktopDependencySetup', {
 	            completed: next,
 	            completedAt: next ? new Date().toISOString() : null
 	          });
+            traceOnboarding('completion-write-success', {
+              nextCompleted: next,
+              persistedCompleted: !!this.userSettings?.global?.ui?.onboarding?.desktopDependencySetup?.completed,
+              persistedCompletedAt: this.userSettings?.global?.ui?.onboarding?.desktopDependencySetup?.completedAt || null
+            });
+          } else {
+            traceOnboarding('completion-write-skipped', {
+              nextCompleted: next,
+              reason: 'user-settings-missing'
+            });
 	        }
 	        return;
 	      }
@@ -10054,6 +10240,10 @@ class ClaudeOrchestrator {
 
 	    const closeModal = ({ force = false } = {}) => {
 	      const locked = applyOnboardingLockUI();
+        traceOnboarding('modal-close-requested', {
+          force,
+          locked
+        });
 	      if (!force && locked) {
 	        openModal();
 	        return false;
@@ -10065,6 +10255,10 @@ class ClaudeOrchestrator {
 	    };
 	    const openModal = ({ showWelcome = null } = {}) => {
 	      const wasHidden = modal.classList.contains('hidden');
+        traceOnboarding('modal-opened', {
+          wasHidden,
+          requestedShowWelcome: typeof showWelcome === 'boolean' ? showWelcome : null
+        });
 	      modal.classList.remove('hidden');
 	      setBootstrapPending(false);
 	      body?.classList?.add?.('dependency-onboarding-active');
@@ -10091,11 +10285,17 @@ class ClaudeOrchestrator {
 
 	    const loadAndRender = async ({ open = false, forceAutoShow = false, bootstrap = false, explicitOpen = false } = {}) => {
 	      if (state.loading) return false;
+        traceOnboarding('load-start', {
+          open,
+          forceAutoShow,
+          bootstrap,
+          explicitOpen
+        });
 	      setLoading(true);
 	      try {
 	        const [diagRes, actionsRes] = await Promise.all([
-	          fetch('/api/diagnostics'),
-	          fetch('/api/setup-actions')
+	          fetch('/api/diagnostics', this.withLaunchTraceHeaders()),
+	          fetch('/api/setup-actions', this.withLaunchTraceHeaders())
 	        ]);
 	        const diagData = await diagRes.json().catch(() => ({}));
 	        const actionsData = await actionsRes.json().catch(() => ({}));
@@ -10132,11 +10332,34 @@ class ClaudeOrchestrator {
 	        let hasCompletedOnboarding = readCompleted();
 	        const coreReady = !!view.req?.coreReady;
 	        if (isDesktopWindowsApp && coreReady && !hasCompletedOnboarding) {
+            traceOnboarding('auto-complete-triggered', {
+              coreReady,
+              hasCompletedOnboarding
+            });
 	          await writeCompleted(true);
 	          hasCompletedOnboarding = readCompleted();
 	        }
+          const dismissed = readDismissed();
 	        const shouldAutoShow = isWindowsHost && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
 	        const shouldKeepVisible = open && !modal.classList.contains('hidden');
+          traceOnboarding('load-success', {
+            open,
+            forceAutoShow,
+            bootstrap,
+            explicitOpen,
+            coreReady,
+            hasCompletedOnboarding,
+            dismissed,
+            shouldAutoShow,
+            shouldKeepVisible,
+            actionIds: state.actions.map((action) => String(action?.id || '').trim()).filter(Boolean),
+            toolStates: Array.isArray(diagData?.tools)
+              ? diagData.tools.map((tool) => ({
+                  id: String(tool?.id || '').trim(),
+                  ok: !!tool?.ok
+                })).filter((tool) => tool.id)
+              : []
+          });
 	        if (explicitOpen || shouldKeepVisible || shouldAutoShow) {
 	          openModal();
 	        } else {
@@ -10144,6 +10367,13 @@ class ClaudeOrchestrator {
 	        }
 	        return true;
 	      } catch (err) {
+          traceOnboarding('load-failed', {
+            open,
+            forceAutoShow,
+            bootstrap,
+            explicitOpen,
+            error: String(err?.message || err)
+          });
 	        summaryEl.textContent = `Dependency check failed: ${String(err?.message || err)}`;
 	        listEl.innerHTML = '<div class="dependency-setup-empty">Unable to load setup actions right now.</div>';
 	        const shouldOpenOnError = explicitOpen || (open && !modal.classList.contains('hidden'));
@@ -10698,6 +10928,9 @@ class ClaudeOrchestrator {
 
 	    this.syncDependencySetupWizardPreferences = () => {
 	      syncDesktopCompleted();
+        traceOnboarding('preferences-synced', {
+          desktopCompleted
+        });
 	      if (isDesktopWindowsApp && desktopCompleted) {
 	        setBootstrapPending(false);
 	      }
@@ -10705,8 +10938,14 @@ class ClaudeOrchestrator {
 	    };
 	    this.bootstrapDependencySetupWizard = () => {
 	      syncDesktopCompleted();
+        traceOnboarding('bootstrap-requested', {
+          desktopCompleted
+        });
 	      if (isDesktopWindowsApp && readCompleted()) {
 	        setBootstrapPending(false);
+          traceOnboarding('bootstrap-skipped', {
+            reason: 'already-completed'
+          });
 	        return Promise.resolve(false);
 	      }
 	      return runBootstrapLoad();
@@ -16294,10 +16533,15 @@ class ClaudeOrchestrator {
   // User Settings Methods
   async loadUserSettings() {
     try {
-      const response = await fetch('/api/user-settings');
+      void this.traceDesktopLaunch('client.user-settings.load-start');
+      const response = await fetch('/api/user-settings', this.withLaunchTraceHeaders());
       if (response.ok) {
         this.userSettings = await response.json();
         console.log('User settings loaded:', this.userSettings);
+        void this.traceDesktopLaunch('client.user-settings.load-success', {
+          onboardingCompleted: this.userSettings?.global?.ui?.onboarding?.desktopDependencySetup?.completed === true,
+          onboardingCompletedAt: this.userSettings?.global?.ui?.onboarding?.desktopDependencySetup?.completedAt || null
+        });
         this.syncUserSettingsUI();
         this.applyThemeFromUserSettings();
         this.applySimpleModeConfig();
@@ -16308,9 +16552,15 @@ class ClaudeOrchestrator {
         this.updateTierFilterButtons();
       } else {
         console.error('Failed to load user settings:', response.statusText);
+        void this.traceDesktopLaunch('client.user-settings.load-failed', {
+          statusText: response.statusText || ''
+        });
       }
     } catch (error) {
       console.error('Error loading user settings:', error);
+      void this.traceDesktopLaunch('client.user-settings.load-error', {
+        error: String(error?.message || error)
+      });
     }
   }
 
@@ -16340,22 +16590,35 @@ class ClaudeOrchestrator {
       }
       current[pathParts[pathParts.length - 1]] = value;
 
-      const response = await fetch('/api/user-settings/global', {
+      const response = await fetch('/api/user-settings/global', this.withLaunchTraceHeaders({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ global: newGlobal })
-      });
+      }));
 
       if (response.ok) {
         const updatedSettings = await response.json();
         this.userSettings = updatedSettings;
         console.log('Global setting updated:', path, '=', value);
+        void this.traceDesktopLaunch('client.user-settings.global-update-success', {
+          path,
+          onboardingCompleted: updatedSettings?.global?.ui?.onboarding?.desktopDependencySetup?.completed === true,
+          onboardingCompletedAt: updatedSettings?.global?.ui?.onboarding?.desktopDependencySetup?.completedAt || null
+        });
         this.applyUiVisibility();
       } else {
         console.error('Failed to update global setting:', response.statusText);
+        void this.traceDesktopLaunch('client.user-settings.global-update-failed', {
+          path,
+          statusText: response.statusText || ''
+        });
       }
     } catch (error) {
       console.error('Error updating global setting:', error);
+      void this.traceDesktopLaunch('client.user-settings.global-update-error', {
+        path,
+        error: String(error?.message || error)
+      });
     }
   }
 
@@ -17364,7 +17627,7 @@ class ClaudeOrchestrator {
 
   switchToWorkspace(workspaceId) {
     console.log('Switching to workspace:', workspaceId);
-    this.socket.emit('switch-workspace', { workspaceId });
+    this.emitWorkspaceSwitch(workspaceId, 'app.switchToWorkspace');
   }
 
   async waitForWorkspaceActive(workspaceId, { timeoutMs = 7000 } = {}) {

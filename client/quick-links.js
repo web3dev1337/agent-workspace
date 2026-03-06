@@ -682,7 +682,7 @@ class QuickLinks {
     if (window.orchestrator) {
       // If we need to switch workspace first
       if (window.orchestrator.currentWorkspace?.id !== workspaceId) {
-        window.orchestrator.socket.emit('switch-workspace', { workspaceId });
+        window.orchestrator.emitWorkspaceSwitch(workspaceId, 'quick-links.openWorkspace');
       }
 
       // Track this session access
