@@ -128,17 +128,34 @@ class ClaudeOrchestrator {
   }
 
   shouldEnableDesktopLaunchTrace() {
+    return this.isDesktopWindowsRuntime();
+  }
+
+  createDesktopLaunchTraceId() {
+    return `launch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  isWindowsHostEnvironment() {
     try {
       const platform = String(navigator?.platform || '').toLowerCase();
       const userAgent = String(navigator?.userAgent || '').toLowerCase();
-      return !!window.__TAURI__ && (platform.includes('win') || userAgent.includes('windows'));
+      return platform.includes('win') || userAgent.includes('windows');
     } catch {
       return false;
     }
   }
 
-  createDesktopLaunchTraceId() {
-    return `launch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  hasDesktopLaunchToken() {
+    try {
+      const params = new URLSearchParams(window?.location?.search || '');
+      return !!String(params.get('token') || '').trim();
+    } catch {
+      return false;
+    }
+  }
+
+  isDesktopWindowsRuntime() {
+    return this.isWindowsHostEnvironment() && (this.hasDesktopLaunchToken() || !!window.__TAURI__);
   }
 
   sanitizeDesktopTraceValue(value, depth = 0, seen = new WeakSet()) {
@@ -227,6 +244,15 @@ class ClaudeOrchestrator {
   emitWorkspaceSwitch(workspaceId, source = 'unknown', extra = {}) {
     const id = String(workspaceId || '').trim();
     if (!id || !this.socket) return;
+    if (this.isDesktopWindowsRuntime() && this.userSettings?.global?.ui?.onboarding?.desktopDependencySetup?.completed !== true) {
+      void this.traceDesktopLaunch('client.workspace-switch.blocked-onboarding', {
+        source,
+        workspaceId: id
+      });
+      this.showToast('Finish Orchestrator Setup before opening a workspace.', 'warning');
+      this.openDependencySetupWizard?.({ resetStep: false, source: 'workspace-switch-blocked' });
+      return;
+    }
     void this.traceDesktopLaunch('client.workspace-switch.emitted', {
       source,
       workspaceId: id,
@@ -971,6 +997,7 @@ class ClaudeOrchestrator {
     try {
       void this.traceDesktopLaunch('client.init.start', {
         tauri: !!window.__TAURI__,
+        desktopRuntime: this.isDesktopWindowsRuntime(),
         userAgent: String(navigator?.userAgent || ''),
         platform: String(navigator?.platform || '')
       });
@@ -9504,16 +9531,8 @@ class ClaudeOrchestrator {
 	    const closeBtn = document.getElementById('dependency-setup-close');
 	    if (!modal || !summaryEl || !listEl) return;
 	    const body = document.body;
-	    const isWindowsHost = (() => {
-	      try {
-	        const platform = String(navigator?.platform || '').toLowerCase();
-	        const userAgent = String(navigator?.userAgent || '').toLowerCase();
-	        return platform.includes('win') || userAgent.includes('windows');
-	      } catch {
-	        return false;
-	      }
-	    })();
-	    const isDesktopWindowsApp = isWindowsHost && !!window.__TAURI__;
+	    const isWindowsHost = this.isWindowsHostEnvironment();
+	    const isDesktopWindowsApp = this.isDesktopWindowsRuntime();
 	    let desktopCompleted = false;
       const traceOnboarding = (event, details = {}) => {
         void this.traceDesktopLaunch(`client.onboarding.${event}`, details);
@@ -10907,9 +10926,7 @@ class ClaudeOrchestrator {
 
 	    if (openBtn) {
 	      openBtn.addEventListener('click', () => {
-	        writeDismissed(false);
-	        setCurrentStep(0);
-	        loadAndRender({ open: true, forceAutoShow: true, explicitOpen: true });
+	        this.openDependencySetupWizard?.({ resetStep: true, source: 'manual-open-button' });
 	      });
 	    }
 	    if (closeBtn) {
@@ -10936,6 +10953,15 @@ class ClaudeOrchestrator {
 	      }
 	      applyOnboardingLockUI();
 	    };
+      this.openDependencySetupWizard = ({ resetStep = true, source = 'manual-open' } = {}) => {
+        traceOnboarding('manual-open-requested', {
+          source,
+          resetStep
+        });
+        writeDismissed(false);
+        if (resetStep) setCurrentStep(0);
+        return loadAndRender({ open: true, forceAutoShow: true, explicitOpen: true });
+      };
 	    this.bootstrapDependencySetupWizard = () => {
 	      syncDesktopCompleted();
         traceOnboarding('bootstrap-requested', {
