@@ -69,8 +69,9 @@ curl -sS "https://api.trello.com/1/cards/CARD_ID/customFieldItems?key=$KEY&token
 2. Re-add worktrees with tier: `POST /api/workspaces/add-mixed-worktree` (include `startTier`)
 3. Start agent: send launch command + `\r`
 4. Wait 3 seconds
-5. Send FULL prompt (title + ENTIRE description + workflow)
-6. Send `\r` to submit
+5. **Accept the `--dangerously-skip-permissions` prompt**: Claude now shows a confirmation prompt on launch — send `1` + `\r` to accept it, then wait 2 seconds for Claude to fully initialize
+6. Send FULL prompt (title + ENTIRE description + workflow)
+7. Send `\r` to submit
 7. Move Trello card to Doing list
 
 **Add worktree with tier:**
@@ -169,6 +170,7 @@ curl -sS -X POST "http://localhost:$PORT/api/commander/send-to-session" \
 - Two-request pattern: text first, then `\r` separately
 - 3s sleep for Codex init (it initializes in ~2-3s, not 15)
 - Use `\u0015` (Ctrl+U) before Codex command to clear line
+- **Claude `--dangerously-skip-permissions` acceptance**: After launching Claude, send `1` + `\r` to accept the confirmation prompt, then wait 2s before sending the task prompt
 
 ## Codex CLI Reference
 
@@ -703,6 +705,7 @@ SERVICES:     Modular service architecture with clear interfaces
 15. **XTerm rendering race**: Wrap fitTerminal() in requestAnimationFrame() to allow renderer initialization
 16. **Repository name extraction**: For mixed-repo workspaces, use workspace config's terminal.repository.name, not session ID parsing
 17. **ALWAYS check active workspace first**: Before adding worktrees or launching agents, call `GET /api/workspaces/active` to find which workspace the user currently has open. Add worktrees to THAT workspace — never guess or pick a workspace by name
+18. **`remove-worktree` nukes ALL repos with matching worktreeId**: `POST /api/workspaces/remove-worktree` with just `worktreeId: "work1"` removes EVERY repo's work1 in the workspace. **ALWAYS scope with `repositoryName`** to remove only the intended repo's worktree
 
 ## Development Setup - Two Isolated Instances
 
