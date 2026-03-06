@@ -2,8 +2,12 @@ const https = require('https');
 const { execFile } = require('child_process');
 const winston = require('winston');
 
-const execFileAsync = (command, args, options) => new Promise((resolve, reject) => {
-  execFile(command, args, options, (error, stdout, stderr) => {
+const execFileAsync = (command, args, options = {}) => new Promise((resolve, reject) => {
+  const runOptions = {
+    ...options,
+    windowsHide: options.windowsHide ?? true
+  };
+  execFile(command, args, runOptions, (error, stdout, stderr) => {
     if (error) {
       reject(error);
       return;

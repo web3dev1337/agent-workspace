@@ -268,20 +268,24 @@ class WorktreeHelper {
   executeGitCommand(command, cwd) {
     return new Promise((resolve, reject) => {
       const [cmd, ...args] = command.split(' ');
-      const process = spawn(cmd, args, { cwd, stdio: 'pipe' });
+      const child = spawn(cmd, args, {
+        cwd,
+        stdio: 'pipe',
+        windowsHide: globalThis.process.platform === 'win32'
+      });
 
       let stdout = '';
       let stderr = '';
 
-      process.stdout.on('data', (data) => {
+      child.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      process.stderr.on('data', (data) => {
+      child.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      process.on('close', (code) => {
+      child.on('close', (code) => {
         if (code === 0) {
           resolve(stdout.trim());
         } else {
@@ -289,7 +293,7 @@ class WorktreeHelper {
         }
       });
 
-      process.on('error', (error) => {
+      child.on('error', (error) => {
         reject(new Error(`Failed to execute git command: ${command}\nError: ${error.message}`));
       });
     });

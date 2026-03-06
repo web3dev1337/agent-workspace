@@ -10129,9 +10129,13 @@ class ClaudeOrchestrator {
 	        applyOnboardingLockUI();
 	        if (view.req?.coreReady) writeDismissed(false);
 
-	        const hasCompletedOnboarding = readCompleted();
+	        let hasCompletedOnboarding = readCompleted();
 	        const coreReady = !!view.req?.coreReady;
-	        const shouldAutoShow = isWindowsHost && (!hasCompletedOnboarding || !coreReady) && (forceAutoShow || !readDismissed());
+	        if (isDesktopWindowsApp && coreReady && !hasCompletedOnboarding) {
+	          await writeCompleted(true);
+	          hasCompletedOnboarding = readCompleted();
+	        }
+	        const shouldAutoShow = isWindowsHost && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
 	        const shouldKeepVisible = open && !modal.classList.contains('hidden');
 	        if (explicitOpen || shouldKeepVisible || shouldAutoShow) {
 	          openModal();
