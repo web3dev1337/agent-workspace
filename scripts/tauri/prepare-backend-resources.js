@@ -37,16 +37,45 @@ function run(cmd, args, opts) {
   }
 }
 
-function runNpm(args, opts) {
-  // When invoked via `npm run ...`, npm provides the JS entry path, which is
-  // the most reliable cross-platform invocation target.
-  const npmExecPath = String(process.env.npm_execpath || '').trim();
-  if (npmExecPath) {
-    run(process.execPath, [npmExecPath, ...args], opts);
+function getNodeExecutable(rawPath) {
+  const candidate = String(rawPath || '').trim();
+  if (!candidate) {
+    return '';
+  }
+  return path.resolve(candidate);
+}
+
+function getBundledNpmPath(nodeExecutable) {
+  const nodePath = getNodeExecutable(nodeExecutable);
+  if (!nodePath) {
+    return '';
+  }
+
+  const npmCli = path.join(path.dirname(nodePath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+  if (fs.existsSync(npmCli)) {
+    return npmCli;
+  }
+
+  return '';
+}
+
+function runNpmWithNode(nodeExecutable, args, opts) {
+  const npmCli = getBundledNpmPath(nodeExecutable);
+  if (npmCli) {
+    run(nodeExecutable, [npmCli, ...args], opts);
     return;
   }
+
   const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  run(npmCmd, args, opts);
+  run(npmCmd, args, {
+    env: {
+      ...process.env,
+      // Keep the node source of truth explicit for nested helpers like ensure-pty.
+      ORCHESTRATOR_NODE_PATH: getNodeExecutable(nodeExecutable),
+      TAURI_NODE_PATH: getNodeExecutable(nodeExecutable)
+    },
+    ...opts
+  });
 }
 
 function main() {
@@ -83,7 +112,17 @@ function main() {
 
   // Default: bundle the Node runtime we’re currently running on.
   // This makes `npm run tauri:build` much more “it just works” on Windows.
-  const bundledNodePathRaw = bundledNodePathRawFromEnv || (shouldBundleNode ? process.execPath : '');
+  const bundledNodePathRaw = getNodeExecutable(
+    bundledNodePathRawFromEnv || (shouldBundleNode ? process.execPath : '')
+  );
+
+  const nodeEnv = bundledNodePathRaw
+    ? {
+        ...process.env,
+        ORCHESTRATOR_NODE_PATH: bundledNodePathRaw,
+        TAURI_NODE_PATH: bundledNodePathRaw
+      }
+    : process.env;
 
   if (clean && fs.existsSync(outDir)) {
     fs.rmSync(outDir, { recursive: true, force: true });
@@ -116,12 +155,32 @@ function main() {
 
   if (installProd) {
     try {
-      runNpm(['ci', '--omit=dev', '--no-audit', '--no-fund'], { cwd: outDir });
+      runNpmWithNode(
+        bundledNodePathRaw || process.execPath,
+        ['ci', '--omit=dev', '--no-audit', '--no-fund'],
+        { cwd: outDir, env: nodeEnv }
+      );
     } catch (error) {
       // Some Windows setups have issues with `npm ci` for native modules.
       // Fall back to `npm install` so contributors can still build installers.
       console.warn('[tauri] NOTE: npm ci failed, falling back to npm install --omit=dev');
-      runNpm(['install', '--omit=dev', '--no-audit', '--no-fund'], { cwd: outDir });
+      runNpmWithNode(
+        bundledNodePathRaw || process.execPath,
+        ['install', '--omit=dev', '--no-audit', '--no-fund'],
+        { cwd: outDir, env: nodeEnv }
+      );
+    }
+
+    try {
+      const nodePath = bundledNodePathRaw || process.execPath;
+      const ensureScriptPath = path.join(repoRoot, 'scripts', 'ensure-pty.js');
+      run(nodePath, [ensureScriptPath], {
+        cwd: outDir,
+        env: nodeEnv
+      });
+    } catch (error) {
+      console.error('[tauri] NOTE: node-pty compatibility check failed after install:', error.message);
+      throw error;
     }
   }
 

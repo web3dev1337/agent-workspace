@@ -2364,7 +2364,14 @@ class SessionManager extends EventEmitter {
     if (process.platform === 'win32') {
       const { execFile } = require('child_process');
       const psCmd = `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${pid}").Count`;
-      execFile('powershell.exe', ['-NoProfile', '-Command', psCmd], { timeout: 2000 }, (err, stdout) => {
+      execFile(
+        'powershell.exe',
+        ['-NoProfile', '-Command', psCmd],
+        {
+          timeout: 2000,
+          windowsHide: true
+        },
+        (err, stdout) => {
         if (err) return;
         const processCount = parseInt(String(stdout || '').trim(), 10);
         if (!Number.isFinite(processCount)) return;
