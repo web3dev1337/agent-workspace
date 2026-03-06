@@ -1001,6 +1001,8 @@ class ClaudeOrchestrator {
 
 	      // Load user settings from server
 	      await this.loadUserSettings();
+        this.syncDependencySetupWizardPreferences?.();
+        void this.bootstrapDependencySetupWizard?.();
         this.applySidebarDesktopCollapsedFromPrefs();
 	      this.refreshLicenseStatus?.().catch(() => {});
 	      this.syncTerminalFiltersFromUserSettings();
@@ -1369,6 +1371,7 @@ class ClaudeOrchestrator {
         this.applyThemeFromUserSettings();
         this.applySimpleModeConfig();
         this.maybeAutoOpenSimpleMode();
+        this.syncDependencySetupWizardPreferences?.();
       });
 
       // Workspace events
@@ -9345,6 +9348,8 @@ class ClaudeOrchestrator {
 	        return false;
 	      }
 	    })();
+	    const isDesktopWindowsApp = isWindowsHost && !!window.__TAURI__;
+	    let desktopCompleted = false;
 
 	    const setBootstrapPending = (pending) => {
 	      if (!isWindowsHost) return;
@@ -9355,11 +9360,11 @@ class ClaudeOrchestrator {
 	      }
 	      body?.classList?.remove?.('dependency-onboarding-booting');
 	    };
-	    setBootstrapPending(true);
 	    if (!isWindowsHost) {
 	      setBootstrapPending(false);
 	      return;
 	    }
+	    setBootstrapPending(false);
 
 	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v3';
 	    const completedKey = 'orchestrator-dependency-onboarding-completed-v2';
@@ -9381,6 +9386,13 @@ class ClaudeOrchestrator {
 	      gitIdentityHelpVisible: false
 	    };
 
+	    const syncDesktopCompleted = () => {
+	      if (!isDesktopWindowsApp) return false;
+	      desktopCompleted = !!this.userSettings?.global?.ui?.onboarding?.desktopDependencySetup?.completed;
+	      return desktopCompleted;
+	    };
+	    syncDesktopCompleted();
+
 	    const readDismissed = () => {
 	      try {
 	        return localStorage.getItem(dismissKey) === 'true';
@@ -9399,6 +9411,9 @@ class ClaudeOrchestrator {
 	    };
 
 	    const readCompleted = () => {
+	      if (isDesktopWindowsApp) {
+	        return syncDesktopCompleted();
+	      }
 	      try {
 	        return localStorage.getItem(completedKey) === 'true';
 	      } catch {
@@ -9406,7 +9421,18 @@ class ClaudeOrchestrator {
 	      }
 	    };
 
-	    const writeCompleted = (value) => {
+	    const writeCompleted = async (value) => {
+	      if (isDesktopWindowsApp) {
+	        const next = !!value;
+	        desktopCompleted = next;
+	        if (this.userSettings) {
+	          await this.updateGlobalUserSetting('ui.onboarding.desktopDependencySetup', {
+	            completed: next,
+	            completedAt: next ? new Date().toISOString() : null
+	          });
+	        }
+	        return;
+	      }
 	      try {
 	        if (value) localStorage.setItem(completedKey, 'true');
 	        else localStorage.removeItem(completedKey);
@@ -10340,6 +10366,11 @@ class ClaudeOrchestrator {
 	    };
 
 	    const runBootstrapLoad = async () => {
+	      if (isDesktopWindowsApp && readCompleted()) {
+	        setBootstrapPending(false);
+	        return;
+	      }
+	      setBootstrapPending(true);
 	      const delaysMs = [0, 240, 420, 700, 1050, 1450, 1900];
 	      for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
 	        if (attempt > 0) {
@@ -10550,7 +10581,7 @@ class ClaudeOrchestrator {
 	          setStepSkipped(currentStep?.id, false);
 	        }
 	        if (state.currentStep >= (total - 1)) {
-	          writeCompleted(true);
+	          await writeCompleted(true);
 	          writeDismissed(false);
 	          closeModal({ force: true });
 	          this.showToast('Dependency onboarding complete.', 'success');
@@ -10661,7 +10692,24 @@ class ClaudeOrchestrator {
 	      closeModal();
 	    });
 
-		    runBootstrapLoad();
+	    this.syncDependencySetupWizardPreferences = () => {
+	      syncDesktopCompleted();
+	      if (isDesktopWindowsApp && desktopCompleted) {
+	        setBootstrapPending(false);
+	      }
+	      applyOnboardingLockUI();
+	    };
+	    this.bootstrapDependencySetupWizard = () => {
+	      syncDesktopCompleted();
+	      if (isDesktopWindowsApp && readCompleted()) {
+	        setBootstrapPending(false);
+	        return Promise.resolve(false);
+	      }
+	      return runBootstrapLoad();
+	    };
+	    if (this.userSettings) {
+	      void this.bootstrapDependencySetupWizard();
+	    }
 		  }
 
 	  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {
@@ -16251,6 +16299,7 @@ class ClaudeOrchestrator {
         this.applySimpleModeConfig();
         this.maybeAutoOpenSimpleMode();
         this.applyUiVisibility();
+        this.syncDependencySetupWizardPreferences?.();
         this.refreshBranchLabels();
         this.updateTierFilterButtons();
       } else {

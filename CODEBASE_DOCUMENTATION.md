@@ -56,6 +56,7 @@ server/notificationService.js      - System notification manager
 server/claudeVersionChecker.js     - Claude Code version detection
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
+├─ Desktop onboarding state: persists Windows/Tauri dependency-onboarding completion in `global.ui.onboarding.desktopDependencySetup`
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
 ├─ Recovery filtering: stale/non-configured session entries are pruned when requested by workspace-scoped APIs
 ├─ Agent clearing: `clearAgent()` resets stale `lastAgent` markers when a Claude/Codex terminal falls back to plain shell

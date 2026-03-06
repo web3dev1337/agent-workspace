@@ -19,7 +19,8 @@ class ClaudeVersionChecker {
     return new Promise((resolve) => {
       const process = spawn('claude', ['--version'], {
         stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 5000
+        timeout: 5000,
+        windowsHide: true
       });
 
       let stdout = '';

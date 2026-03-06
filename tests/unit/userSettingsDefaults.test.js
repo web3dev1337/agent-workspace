@@ -46,6 +46,14 @@ describe('UserSettingsService defaults', () => {
     expect(defaults.global.ui.workflow.notifications.mode).toBeTruthy();
   });
 
+  test('includes desktop onboarding defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    const onboarding = defaults?.global?.ui?.onboarding?.desktopDependencySetup;
+    expect(onboarding).toBeTruthy();
+    expect(onboarding.completed).toBe(false);
+    expect(onboarding.completedAt).toBeNull();
+  });
+
   test('includes ui.worktrees auto-create defaults', () => {
     const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
     expect(defaults?.global?.ui?.worktrees).toBeTruthy();
@@ -186,6 +194,10 @@ describe('UserSettingsService defaults', () => {
     // Does not drop workflow defaults when only mode is provided.
     expect(merged.global.ui.workflow.focus).toBeTruthy();
     expect(merged.global.ui.workflow.notifications).toBeTruthy();
+    // Keeps onboarding defaults while allowing desktop completion to persist.
+    expect(merged.global.ui.onboarding).toBeTruthy();
+    expect(merged.global.ui.onboarding.desktopDependencySetup.completed).toBe(false);
+    expect(merged.global.ui.onboarding.desktopDependencySetup.completedAt).toBeNull();
     // Keeps ui.skin when provided.
     expect(merged.global.ui.skin).toBe('blue');
     // Keeps simpleMode defaults while allowing partial override.
@@ -213,5 +225,24 @@ describe('UserSettingsService defaults', () => {
     expect(merged.global.pager.customInstruction).toBe('keep going');
     expect(merged.global.pager.doneCheck.enabled).toBe(true);
     expect(typeof merged.global.pager.doneCheck.token).toBe('string');
+  });
+
+  test('mergeSettings deep-merges desktop onboarding state', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    const merged = UserSettingsService.prototype.mergeSettings.call({}, defaults, {
+      global: {
+        ui: {
+          onboarding: {
+            desktopDependencySetup: {
+              completed: true,
+              completedAt: '2026-03-06T00:00:00.000Z'
+            }
+          }
+        }
+      }
+    });
+
+    expect(merged.global.ui.onboarding.desktopDependencySetup.completed).toBe(true);
+    expect(merged.global.ui.onboarding.desktopDependencySetup.completedAt).toBe('2026-03-06T00:00:00.000Z');
   });
 });

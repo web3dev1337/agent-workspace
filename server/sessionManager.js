@@ -455,19 +455,6 @@ class SessionManager extends EventEmitter {
           })
         );
 
-        // Add git branch update to promises array
-        if (this.gitHelper) {
-          sessionPromises.push(
-            Promise.resolve().then(() => {
-              return this.updateGitBranch(worktree.id, worktree.path);
-            }).catch(error => {
-              logger.error('Failed to update git branch', {
-                worktree: worktree.id,
-                error: error.message
-              });
-            })
-          );
-        }
       }
     }
 
