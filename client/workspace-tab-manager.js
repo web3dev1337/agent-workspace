@@ -173,11 +173,6 @@ class WorkspaceTabManager {
 
     console.log(`Created tab ${tabId} for workspace ${workspace.name}`);
 
-    // If this is the first tab, activate it
-    if (this.tabs.size === 1) {
-      this.switchTab(tabId);
-    }
-
     return tabId;
   }
 

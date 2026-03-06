@@ -454,6 +454,7 @@ workspaceSystemReady = initializeWorkspaceSystem()
 // WebSocket connection handling
 io.on('connection', (socket) => {
   logger.info('Client connected', { socketId: socket.id });
+  let inFlightWorkspaceSwitchId = null;
 
   // Send workspace info
   const activeWorkspace = workspaceManager.getActiveWorkspace();
@@ -865,17 +866,27 @@ io.on('connection', (socket) => {
 
   // Workspace management handlers
   socket.on('switch-workspace', async ({ workspaceId }) => {
+    const requestedWorkspaceId = String(workspaceId || '').trim();
+    if (requestedWorkspaceId && inFlightWorkspaceSwitchId === requestedWorkspaceId) {
+      logger.info('Ignoring duplicate workspace switch request while switch is already in progress', {
+        workspaceId: requestedWorkspaceId,
+        socketId: socket.id
+      });
+      return;
+    }
+
+    inFlightWorkspaceSwitchId = requestedWorkspaceId || null;
     try {
       const previous = workspaceManager.getActiveWorkspace?.() || null;
       activityFeed.track('workspace.switch.requested', {
         fromWorkspaceId: previous?.id || null,
-        toWorkspaceId: String(workspaceId || '').trim() || null,
+        toWorkspaceId: requestedWorkspaceId || null,
         socketId: socket.id
       });
 
-      logger.info('Workspace switch requested', { workspaceId });
+      logger.info('Workspace switch requested', { workspaceId: requestedWorkspaceId });
 
-      const newWorkspace = await workspaceManager.switchWorkspace(workspaceId);
+      const newWorkspace = await workspaceManager.switchWorkspace(requestedWorkspaceId);
 
       // Ensure worktrees exist for the new workspace
       logger.info('Ensuring worktrees exist for new workspace');
@@ -916,12 +927,16 @@ io.on('connection', (socket) => {
       });
     } catch (error) {
       activityFeed.track('workspace.switch.failed', {
-        toWorkspaceId: String(workspaceId || '').trim() || null,
+        toWorkspaceId: requestedWorkspaceId || null,
         socketId: socket.id,
         error: error.message
       });
       logger.error('Failed to switch workspace', { error: error.message, stack: error.stack });
       socket.emit('error', { message: 'Failed to switch workspace', error: error.message, stack: error.stack });
+    } finally {
+      if (inFlightWorkspaceSwitchId === requestedWorkspaceId) {
+        inFlightWorkspaceSwitchId = null;
+      }
     }
   });
 
