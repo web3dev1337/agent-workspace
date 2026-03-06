@@ -50,9 +50,9 @@ function getDefaultShell() {
 // Helper function to build shell args for executing commands
 function buildShellArgs(commands) {
   if (process.platform === 'win32') {
-    // PowerShell: join commands with ; and use -NoExit -Command to keep shell open
+    // PowerShell: hide the backing console window while keeping the shell interactive in the PTY.
     const joined = Array.isArray(commands) ? commands.join('; ') : commands.replace(/&&/g, ';');
-    return ['-NoExit', '-Command', joined];
+    return ['-WindowStyle', 'Hidden', '-NoLogo', '-NoExit', '-Command', joined];
   } else {
     // Bash: join commands with && and keep the terminal open by exec'ing into an interactive shell.
     const joined = Array.isArray(commands) ? commands.join(' && ') : commands;

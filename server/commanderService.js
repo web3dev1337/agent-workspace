@@ -62,7 +62,9 @@ class CommanderService {
     try {
       // Detect shell based on platform
       const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
-      const shellArgs = process.platform === 'win32' ? ['-NoExit'] : [];
+      const shellArgs = process.platform === 'win32'
+        ? ['-WindowStyle', 'Hidden', '-NoLogo', '-NoExit']
+        : [];
 
       // Spawn Claude Code terminal
       const ptyProcess = pty.spawn(shell, shellArgs, {
