@@ -28,8 +28,18 @@ describe('SessionManager branch updates', () => {
     sessionManager.startBranchRefresh();
     jest.advanceTimersByTime(11);
 
-    expect(updateSpy).toHaveBeenCalledWith('work2', toPlatformPath('/tmp/repo-a/work2'), true);
-    expect(updateSpy).toHaveBeenCalledWith('work1', toPlatformPath('/tmp/repo-a/work1'), true);
+    expect(updateSpy).toHaveBeenCalledWith(
+      'work2',
+      toPlatformPath('/tmp/repo-a/work2'),
+      true,
+      expect.objectContaining({ branchOnly: true })
+    );
+    expect(updateSpy).toHaveBeenCalledWith(
+      'work1',
+      toPlatformPath('/tmp/repo-a/work1'),
+      true,
+      expect.objectContaining({ branchOnly: true })
+    );
   });
 
   test('startBranchRefresh also refreshes loose sessions (not in worktrees)', () => {
@@ -53,7 +63,44 @@ describe('SessionManager branch updates', () => {
     sessionManager.startBranchRefresh();
     jest.advanceTimersByTime(11);
 
-    expect(updateSpy).toHaveBeenCalledWith('adhoc', toPlatformPath('/tmp/repo-z/adhoc'), true);
+    expect(updateSpy).toHaveBeenCalledWith(
+      'adhoc',
+      toPlatformPath('/tmp/repo-z/adhoc'),
+      true,
+      expect.objectContaining({ branchOnly: true })
+    );
+  });
+
+  test('startBranchRefresh is disabled on Windows', () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    });
+
+    try {
+      const io = { emit: jest.fn() };
+      const sessionManager = new SessionManager(io, null);
+      sessionManager.branchRefreshMs = 10;
+      sessionManager.worktrees = [
+        { id: 'work1', path: 'C:\\repo\\work1' }
+      ];
+
+      const updateSpy = jest
+        .spyOn(sessionManager, 'updateGitBranch')
+        .mockImplementation(() => Promise.resolve());
+
+      sessionManager.startBranchRefresh();
+      jest.advanceTimersByTime(25);
+
+      expect(updateSpy).not.toHaveBeenCalled();
+      expect(sessionManager.branchRefreshInterval).toBeNull();
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      });
+    }
   });
 
   test('updateGitBranch falls back to matching by cwd path', async () => {
@@ -160,5 +207,41 @@ describe('SessionManager branch updates', () => {
       'branch-update',
       expect.objectContaining({ sessionId: 'repo-a-work2-codex', branch: 'feature/test' })
     );
+  });
+
+  test('updateGitBranch can skip expensive metadata lookups', async () => {
+    const io = { emit: jest.fn() };
+    const sessionManager = new SessionManager(io, null);
+    const gitHelper = {
+      getCurrentBranch: jest.fn(async () => 'feature/test'),
+      getRemoteUrl: jest.fn(async () => 'git@github.com:owner/repo.git'),
+      getDefaultBranch: jest.fn(async () => 'main'),
+      checkForExistingPR: jest.fn(async () => 'https://github.com/owner/repo/pull/123')
+    };
+    sessionManager.setGitHelper(gitHelper);
+
+    sessionManager.sessions.set('work2-claude', {
+      id: 'work2-claude',
+      type: 'claude',
+      worktreeId: 'work2',
+      config: { cwd: '/tmp/repo-a/work2/' },
+      branch: 'unknown',
+      remoteUrl: 'https://github.com/owner/repo',
+      defaultBranch: 'main',
+      existingPR: 'https://github.com/owner/repo/pull/99'
+    });
+
+    await sessionManager.updateGitBranch('work2', '/tmp/repo-a/work2', true, { branchOnly: true });
+
+    expect(gitHelper.getCurrentBranch).toHaveBeenCalledTimes(1);
+    expect(gitHelper.getRemoteUrl).not.toHaveBeenCalled();
+    expect(gitHelper.getDefaultBranch).not.toHaveBeenCalled();
+    expect(gitHelper.checkForExistingPR).not.toHaveBeenCalled();
+    expect(sessionManager.sessions.get('work2-claude')).toEqual(expect.objectContaining({
+      branch: 'feature/test',
+      remoteUrl: 'https://github.com/owner/repo',
+      defaultBranch: 'main',
+      existingPR: 'https://github.com/owner/repo/pull/99'
+    }));
   });
 });

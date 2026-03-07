@@ -61,6 +61,32 @@ function buildShellArgs(commands) {
   }
 }
 
+function buildServerTerminalIntroCommands(worktreePath, label) {
+  const commands = [
+    `cd "${worktreePath}"`,
+    `echo "=== ${label} ==="`,
+    `echo "Directory: ${worktreePath}"`
+  ];
+
+  // Avoid spawning extra Git-for-Windows helper processes during terminal boot on Windows.
+  if (process.platform !== 'win32') {
+    commands.push(
+      getShellKind() === 'powershell'
+        ? `$b = git branch --show-current 2>$null; if (-not $b) { $b = 'unknown' }; Write-Output "Branch: $b"`
+        : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`
+    );
+  }
+
+  commands.push(
+    `echo ""`,
+    `echo "Ready to run: bun index.ts"`,
+    `echo "Available commands: bun, npm, node"`,
+    `echo ""`
+  );
+
+  return commands;
+}
+
 const HOME_DIR = process.env.HOME || os.homedir();
 
 class SessionManager extends EventEmitter {
@@ -108,6 +134,17 @@ class SessionManager extends EventEmitter {
     // process-limit probe shells out once per session on an interval. Skip that probe on
     // Windows until we have a non-console-backed process inspection path.
     return process.platform !== 'win32';
+  }
+
+  shouldPollBranches() {
+    return process.platform !== 'win32' && this.branchRefreshMs > 0;
+  }
+
+  getGitBranchUpdateOptions(overrides = {}) {
+    return {
+      branchOnly: process.platform === 'win32',
+      ...(overrides && typeof overrides === 'object' ? overrides : {})
+    };
   }
 
   // Determine effective inactivity timeout per session (ms)
@@ -401,28 +438,21 @@ class SessionManager extends EventEmitter {
             } else {
               // Server terminal
               command = getDefaultShell();
-              const header = `=== ${terminal.repository.name}/${terminal.worktree} (${terminal.id}) ===`;
               if (startCommand) {
                 args = buildShellArgs([
                   `cd "${worktree.path}"`,
-                  `echo "${header}"`,
+                  `echo "=== ${terminal.repository.name}/${terminal.worktree} (${terminal.id}) ==="`,
                   `echo "Directory: ${worktree.path}"`,
                   `echo ""`,
                   startCommand
                 ]);
               } else {
-                args = buildShellArgs([
-                  `cd "${worktree.path}"`,
-                  `echo "=== Server Terminal for ${terminal.repository.name}/${terminal.worktree} ==="`,
-                  `echo "Directory: ${worktree.path}"`,
-                  getShellKind() === 'powershell'
-                    ? `$b = git branch --show-current 2>$null; if (-not $b) { $b = 'unknown' }; Write-Output "Branch: $b"`
-                    : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
-                  `echo ""`,
-                  `echo "Ready to run: bun index.ts"`,
-                  `echo "Available commands: bun, npm, node"`,
-                  `echo ""`
-                ]);
+                args = buildShellArgs(
+                  buildServerTerminalIntroCommands(
+                    worktree.path,
+                    `Server Terminal for ${terminal.repository.name}/${terminal.worktree}`
+                  )
+                );
               }
             }
 
@@ -486,18 +516,7 @@ class SessionManager extends EventEmitter {
             }
             this.createSession(sessionId, {
               command: getDefaultShell(),
-              args: buildShellArgs([
-                `cd "${worktree.path}"`,
-                `echo "=== Server Terminal for ${worktree.id} ==="`,
-                `echo "Directory: ${worktree.path}"`,
-                getShellKind() === 'powershell'
-                  ? `$b = git branch --show-current 2>$null; if (-not $b) { $b = 'unknown' }; Write-Output "Branch: $b"`
-                  : `echo "Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"`,
-                `echo ""`,
-                `echo "Ready to run: bun index.ts"`,
-                `echo "Available commands: bun, npm, node"`,
-                `echo ""`
-              ]),
+              args: buildShellArgs(buildServerTerminalIntroCommands(worktree.path, `Server Terminal for ${worktree.id}`)),
               cwd: worktree.path,
               type: 'server',
               worktreeId: worktree.id,
@@ -517,26 +536,15 @@ class SessionManager extends EventEmitter {
       }
     }
 
-    // Git branch updates for all worktrees (both traditional and mixed-repo)
-    if (this.gitHelper) {
-      for (const worktree of this.worktrees) {
-        sessionPromises.push(
-          Promise.resolve().then(() => {
-            const worktreeIdForGit = worktree.worktreeId || worktree.id;
-            return this.updateGitBranch(worktreeIdForGit, worktree.path);
-          }).catch(error => {
-            logger.error('Failed to update git branch', {
-              worktree: worktree.id,
-              error: error.message
-            });
-          })
-        );
-      }
-    }
-    
     // Wait for all sessions to be created in parallel
     await Promise.all(sessionPromises);
     logger.info('All sessions initialized', { count: sessionPromises.length });
+
+    // Emit sessions as soon as terminals exist; git metadata can catch up afterward.
+    if (this.io) {
+      this.io.emit('sessions', this.getSessionStates());
+    }
+
     logDesktopLaunch('session-manager.initialize.completed', {
       traceId,
       source,
@@ -562,11 +570,32 @@ class SessionManager extends EventEmitter {
     
     // Setup file watchers for instant branch detection
     this.setupGitWatchers();
+
+    // Git branch updates for all worktrees (both traditional and mixed-repo)
+    if (this.gitHelper) {
+      const branchUpdateOptions = this.getGitBranchUpdateOptions();
+      await Promise.all(this.worktrees.map((worktree) => (
+        Promise.resolve().then(() => {
+          const worktreeIdForGit = worktree.worktreeId || worktree.id;
+          return this.updateGitBranch(worktreeIdForGit, worktree.path, false, branchUpdateOptions);
+        }).catch(error => {
+          logger.error('Failed to update git branch', {
+            worktree: worktree.id,
+            error: error.message
+          });
+        })
+      )));
+    }
   }
   
   startBranchRefresh() {
     if (this.branchRefreshInterval) {
       clearInterval(this.branchRefreshInterval);
+    }
+
+    if (!this.shouldPollBranches()) {
+      this.branchRefreshInterval = null;
+      return;
     }
 
     const refreshWorktrees = () => {
@@ -576,7 +605,7 @@ class SessionManager extends EventEmitter {
         if (!normalized) return;
         if (refreshedPaths.has(normalized)) return;
         refreshedPaths.add(normalized);
-        this.updateGitBranch(worktreeId, normalized, true);
+        this.updateGitBranch(worktreeId, normalized, true, this.getGitBranchUpdateOptions({ branchOnly: true }));
       };
 
       this.worktrees.forEach(worktree => {
@@ -608,8 +637,6 @@ class SessionManager extends EventEmitter {
       }
     };
 
-    // Do an initial refresh immediately (don't wait for the first interval tick).
-    refreshWorktrees();
     this.branchRefreshInterval = setInterval(refreshWorktrees, this.branchRefreshMs);
   }
   
@@ -678,7 +705,12 @@ class SessionManager extends EventEmitter {
 	          setTimeout(() => {
 	            logger.debug('File watcher triggered branch update', { worktree: worktree.id });
 	            const worktreeIdForGit = worktree.worktreeId || worktree.id;
-	            this.updateGitBranch(worktreeIdForGit, worktree.path, true);
+	            this.updateGitBranch(
+                worktreeIdForGit,
+                worktree.path,
+                true,
+                this.getGitBranchUpdateOptions({ branchOnly: true })
+              );
 	          }, 50);
 	        }
 	      });
@@ -1264,7 +1296,12 @@ class SessionManager extends EventEmitter {
         worktreeId: session.worktreeId,
         delay: `${delay}ms`
       });
-      this.updateGitBranch(session.worktreeId, this.getSessionCwd(session), true);
+      this.updateGitBranch(
+        session.worktreeId,
+        this.getSessionCwd(session),
+        true,
+        this.getGitBranchUpdateOptions({ branchOnly: true })
+      );
     }, delay);
   }
 
@@ -2004,11 +2041,44 @@ class SessionManager extends EventEmitter {
     return this.isSameOrSubpath(a, b) || this.isSameOrSubpath(b, a);
   }
 
-  async updateGitBranch(worktreeId, worktreePath, skipCache = false) {
+  getSessionsForWorktreeBranchUpdate(worktreeId, worktreePath) {
+    const sessionsToUpdate = new Set();
+
+    const claudeId = `${worktreeId}-claude`;
+    const codexId = `${worktreeId}-codex`;
+    const serverId = `${worktreeId}-server`;
+    if (this.sessions.has(claudeId)) sessionsToUpdate.add(claudeId);
+    if (this.sessions.has(codexId)) sessionsToUpdate.add(codexId);
+    if (this.sessions.has(serverId)) sessionsToUpdate.add(serverId);
+
+    const normalizedWorktreePath = this.normalizeCwdPath(worktreePath);
+    if (sessionsToUpdate.size === 0) {
+      for (const [sessionId, session] of this.sessions) {
+        if (session.worktreeId === worktreeId && session.config &&
+          this.pathsOverlap(session.config.cwd, normalizedWorktreePath)) {
+          sessionsToUpdate.add(sessionId);
+        }
+      }
+    }
+
+    if (sessionsToUpdate.size === 0) {
+      for (const [sessionId, session] of this.sessions) {
+        if (!session?.config?.cwd) continue;
+        if (!this.pathsOverlap(session.config.cwd, normalizedWorktreePath)) continue;
+        if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
+        sessionsToUpdate.add(sessionId);
+      }
+    }
+
+    return sessionsToUpdate;
+  }
+
+  async updateGitBranch(worktreeId, worktreePath, skipCache = false, options = {}) {
     logger.info('🔄 updateGitBranch called', { 
       worktreeId, 
       path: worktreePath, 
       skipCache,
+      branchOnly: !!options?.branchOnly,
       timestamp: new Date().toISOString()
     });
     
@@ -2019,49 +2089,19 @@ class SessionManager extends EventEmitter {
     
     try {
       const branch = await this.gitHelper.getCurrentBranch(worktreePath, skipCache);
-      const remoteUrl = await this.gitHelper.getRemoteUrl(worktreePath);
-      const defaultBranch = await this.gitHelper.getDefaultBranch(worktreePath);
-      
-      // Check for existing PR for this branch
-      const existingPR = await this.gitHelper.checkForExistingPR(remoteUrl, branch);
-      
-      // Update claude/codex/server sessions for this worktree
-      // For mixed-repo workspaces, session IDs have workspace prefix (e.g., "mixed-terminals-work1-claude")
-      // For traditional workspaces, session IDs are just worktreeId-type (e.g., "work1-claude")
-      // So we need to search through sessions to find matching ones
-      const sessionsToUpdate = new Set();
+      const sessionsToUpdate = this.getSessionsForWorktreeBranchUpdate(worktreeId, worktreePath);
+      const matchingSessions = Array.from(sessionsToUpdate)
+        .map((sessionId) => this.sessions.get(sessionId))
+        .filter(Boolean);
 
-      // First try direct match (traditional workspaces)
-      const claudeId = `${worktreeId}-claude`;
-      const codexId = `${worktreeId}-codex`;
-      const serverId = `${worktreeId}-server`;
-      if (this.sessions.has(claudeId)) sessionsToUpdate.add(claudeId);
-      if (this.sessions.has(codexId)) sessionsToUpdate.add(codexId);
-      if (this.sessions.has(serverId)) sessionsToUpdate.add(serverId);
+      let remoteUrl = matchingSessions.find((session) => session?.remoteUrl)?.remoteUrl || null;
+      let defaultBranch = matchingSessions.find((session) => session?.defaultBranch)?.defaultBranch || null;
+      let existingPR = matchingSessions.find((session) => session?.existingPR)?.existingPR || null;
 
-      // If no direct match, search by worktreeId AND path (mixed-repo workspaces)
-      // Important: Must match both worktreeId AND path to avoid cross-contamination
-      const normalizedWorktreePath = this.normalizeCwdPath(worktreePath);
-      if (sessionsToUpdate.size === 0) {
-        for (const [sessionId, session] of this.sessions) {
-          // Check if this session belongs to the same worktree by comparing paths
-          if (session.worktreeId === worktreeId && session.config &&
-            this.pathsOverlap(session.config.cwd, normalizedWorktreePath)) {
-            sessionsToUpdate.add(sessionId);
-          }
-        }
-      }
-
-      // Final fallback: match by path only.
-      // This handles cases where the worktreeId used for watchers/refresh differs from the
-      // session's stored worktreeId, but the cwd is authoritative.
-      if (sessionsToUpdate.size === 0) {
-        for (const [sessionId, session] of this.sessions) {
-          if (!session?.config?.cwd) continue;
-          if (!this.pathsOverlap(session.config.cwd, normalizedWorktreePath)) continue;
-          if (session.type !== 'claude' && session.type !== 'codex' && session.type !== 'server') continue;
-          sessionsToUpdate.add(sessionId);
-        }
+      if (!options?.branchOnly) {
+        remoteUrl = await this.gitHelper.getRemoteUrl(worktreePath);
+        defaultBranch = await this.gitHelper.getDefaultBranch(worktreePath);
+        existingPR = await this.gitHelper.checkForExistingPR(remoteUrl, branch);
       }
 
       sessionsToUpdate.forEach(sessionId => {

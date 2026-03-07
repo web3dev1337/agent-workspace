@@ -52,8 +52,21 @@ describe('SessionManager.initializeSessions', () => {
 
     expect(sm.createSession).toHaveBeenCalledTimes(4);
     expect(sm.updateGitBranch).toHaveBeenCalledTimes(2);
-    expect(sm.updateGitBranch).toHaveBeenNthCalledWith(1, 'work1', '/tmp/test/work1');
-    expect(sm.updateGitBranch).toHaveBeenNthCalledWith(2, 'work2', '/tmp/test/work2');
+    expect(sm.updateGitBranch).toHaveBeenNthCalledWith(
+      1,
+      'work1',
+      '/tmp/test/work1',
+      false,
+      expect.objectContaining({ branchOnly: false })
+    );
+    expect(sm.updateGitBranch).toHaveBeenNthCalledWith(
+      2,
+      'work2',
+      '/tmp/test/work2',
+      false,
+      expect.objectContaining({ branchOnly: false })
+    );
+    expect(io.emit).toHaveBeenCalledWith('sessions', expect.any(Object));
   });
 
   test('uses hidden PowerShell startup args for Windows sessions', async () => {
@@ -114,6 +127,12 @@ describe('SessionManager.initializeSessions', () => {
     expect(serverConfig.args.slice(0, 4)).toEqual(['-WindowStyle', 'Hidden', '-NoLogo', '-NoExit']);
     expect(claudeConfig.args).toContain('-Command');
     expect(serverConfig.args).toContain('-Command');
+    expect(sm.updateGitBranch).toHaveBeenCalledWith(
+      'work1',
+      'C:\\test\\work1',
+      false,
+      expect.objectContaining({ branchOnly: true })
+    );
   });
 
   test('skips the external process monitor on Windows', () => {

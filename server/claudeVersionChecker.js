@@ -15,8 +15,45 @@ const logger = winston.createLogger({
 });
 
 class ClaudeVersionChecker {
-  static async checkVersion() {
-    return new Promise((resolve) => {
+  static get cacheTtlMs() {
+    return 5 * 60 * 1000;
+  }
+
+  static getCachedResult() {
+    const cached = ClaudeVersionChecker.versionCache;
+    if (!cached) return null;
+    if ((Date.now() - cached.timestamp) > ClaudeVersionChecker.cacheTtlMs) {
+      ClaudeVersionChecker.versionCache = null;
+      return null;
+    }
+    return cached.result;
+  }
+
+  static setCachedResult(result) {
+    ClaudeVersionChecker.versionCache = {
+      result,
+      timestamp: Date.now()
+    };
+    return result;
+  }
+
+  static resetCache() {
+    ClaudeVersionChecker.versionCache = null;
+    ClaudeVersionChecker.versionPromise = null;
+  }
+
+  static async checkVersion({ force = false } = {}) {
+    if (!force) {
+      const cached = ClaudeVersionChecker.getCachedResult();
+      if (cached) {
+        return cached;
+      }
+      if (ClaudeVersionChecker.versionPromise) {
+        return ClaudeVersionChecker.versionPromise;
+      }
+    }
+
+    const versionPromise = new Promise((resolve) => {
       const process = spawn('claude', ['--version'], {
         stdio: ['ignore', 'pipe', 'pipe'],
         timeout: 5000,
@@ -52,34 +89,43 @@ class ClaudeVersionChecker {
             };
             
             logger.info('Claude version check', result);
-            resolve(result);
+            resolve(ClaudeVersionChecker.setCachedResult(result));
           } else {
             logger.warn('Could not parse Claude version', { stdout, stderr });
-            resolve({
+            resolve(ClaudeVersionChecker.setCachedResult({
               version: null,
               isCompatible: false,
               error: 'Could not parse version'
-            });
+            }));
           }
         } else {
           logger.error('Claude version check failed', { code, stderr });
-          resolve({
+          resolve(ClaudeVersionChecker.setCachedResult({
             version: null,
             isCompatible: false,
             error: `Exit code ${code}: ${stderr}`
-          });
+          }));
         }
       });
 
       process.on('error', (error) => {
         logger.error('Claude version check error', { error: error.message, stack: error.stack });
-        resolve({
+        resolve(ClaudeVersionChecker.setCachedResult({
           version: null,
           isCompatible: false,
           error: error.message
-        });
+        }));
       });
     });
+
+    ClaudeVersionChecker.versionPromise = versionPromise;
+    versionPromise.finally(() => {
+      if (ClaudeVersionChecker.versionPromise === versionPromise) {
+        ClaudeVersionChecker.versionPromise = null;
+      }
+    });
+
+    return versionPromise;
   }
 
   static generateUpdateInstructions(versionInfo) {
