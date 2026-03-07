@@ -103,6 +103,13 @@ class SessionManager extends EventEmitter {
     this.worktrees = [];
   }
 
+  shouldMonitorSessionProcesses() {
+    // Windows desktop builds were flashing visible PowerShell/conhost windows because the
+    // process-limit probe shells out once per session on an interval. Skip that probe on
+    // Windows until we have a non-console-backed process inspection path.
+    return process.platform !== 'win32';
+  }
+
   // Determine effective inactivity timeout per session (ms)
   getSessionTimeout(session) {
     if (!session) return this.sessionTimeout;
@@ -179,13 +186,23 @@ class SessionManager extends EventEmitter {
     this.workspaceSessionMaps.set(workspace.id, this.sessions);
 
     // Ensure sessions exist for the active workspace without clearing existing ones.
-    await this.initializeSessions({
+    const initializePromise = this.initializeSessions({
       preserveExisting: true,
       reason: String(options.reason || '').trim() || 'workspace-switch',
       traceId: String(options.traceId || '').trim() || null,
       source: String(options.source || '').trim() || null,
       socketId: String(options.socketId || '').trim() || null
     });
+
+    if (options.deferInitialize) {
+      return {
+        sessions: this.getSessionStates(),
+        backlog: this.getUndeliveredOutputAndMarkDelivered(),
+        initializePromise
+      };
+    }
+
+    await initializePromise;
 
     // Return any buffered output that occurred while this workspace was inactive.
     return {
@@ -1022,13 +1039,18 @@ class SessionManager extends EventEmitter {
         });
       }
       
-      // Monitor for fork bombs (every 5 seconds)
-      session.processMonitor = setInterval(() => {
-        this.checkProcessLimit(session);
-        // Re-evaluate status even when there is no new output, so sessions can
-        // transition out of "busy" after quiet periods.
-        this.refreshSessionStatus(session.id, session);
-      }, 5000);
+      // Monitor for fork bombs (every 5 seconds) when the platform supports a
+      // non-intrusive process probe.
+      if (this.shouldMonitorSessionProcesses()) {
+        session.processMonitor = setInterval(() => {
+          this.checkProcessLimit(session);
+          // Re-evaluate status even when there is no new output, so sessions can
+          // transition out of "busy" after quiet periods.
+          this.refreshSessionStatus(session.id, session);
+        }, 5000);
+      } else {
+        session.processMonitor = null;
+      }
       
     } catch (error) {
       logDesktopLaunch('session-manager.session.create.failed', {

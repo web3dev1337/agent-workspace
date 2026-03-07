@@ -962,6 +962,7 @@ io.on('connection', (socket) => {
     }
 
     inFlightWorkspaceSwitchId = requestedWorkspaceId || null;
+    let releaseInFlightWorkspaceSwitchInFinally = true;
     try {
       const previous = workspaceManager.getActiveWorkspace?.() || null;
       activityFeed.track('workspace.switch.requested', {
@@ -986,12 +987,17 @@ io.on('connection', (socket) => {
       await worktreeHelper.ensureWorktreesExist(newWorkspace);
 
       // Switch active workspace while preserving existing PTYs for other workspace tabs.
-      const { sessions: newSessions, backlog } =
+      const {
+        sessions: newSessions,
+        backlog,
+        initializePromise
+      } =
         await sessionManager.switchWorkspacePreservingSessions(newWorkspace, {
           reason: 'workspace-switch',
           traceId,
           source,
-          socketId: socket.id
+          socketId: socket.id,
+          deferInitialize: true
         });
 
       // Emit success with ONLY the new workspace sessions (active workspace map)
@@ -1024,7 +1030,8 @@ io.on('connection', (socket) => {
         previousWorkspaceId: previous?.id || null,
         workspaceId: newWorkspace?.id || null,
         sessionCount: Object.keys(newSessions || {}).length,
-        backlogSessionCount: backlog && typeof backlog === 'object' ? Object.keys(backlog).length : 0
+        backlogSessionCount: backlog && typeof backlog === 'object' ? Object.keys(backlog).length : 0,
+        pendingSessionInitialization: !!initializePromise
       });
       activityFeed.track('workspace.switch.completed', {
         fromWorkspaceId: previous?.id || null,
@@ -1032,6 +1039,51 @@ io.on('connection', (socket) => {
         toWorkspaceName: newWorkspace?.name || null,
         socketId: socket.id
       });
+
+      if (initializePromise && typeof initializePromise.then === 'function') {
+        releaseInFlightWorkspaceSwitchInFinally = false;
+        initializePromise
+          .then(() => {
+            const activeWorkspaceId = workspaceManager.getActiveWorkspace?.()?.id || null;
+            if (activeWorkspaceId !== newWorkspace?.id) {
+              return;
+            }
+            const refreshedSessions = sessionManager.getSessionStates();
+            socket.emit('sessions', refreshedSessions);
+            logDesktopLaunch('server.workspace-switch.sessions-ready', {
+              traceId,
+              source,
+              socketId: socket.id,
+              workspaceId: newWorkspace?.id || null,
+              sessionCount: Object.keys(refreshedSessions || {}).length
+            });
+          })
+          .catch((error) => {
+            logger.error('Deferred workspace session initialization failed', {
+              workspaceId: newWorkspace?.id || null,
+              error: error.message,
+              stack: error.stack
+            });
+            logDesktopLaunch('server.workspace-switch.session-init-failed', {
+              traceId,
+              source,
+              socketId: socket.id,
+              workspaceId: newWorkspace?.id || null,
+              error: error.message
+            });
+            if (workspaceManager.getActiveWorkspace?.()?.id === newWorkspace?.id) {
+              socket.emit('error', {
+                message: 'Failed to initialize workspace sessions',
+                error: error.message
+              });
+            }
+          })
+          .finally(() => {
+            if (inFlightWorkspaceSwitchId === requestedWorkspaceId) {
+              inFlightWorkspaceSwitchId = null;
+            }
+          });
+      }
     } catch (error) {
       logDesktopLaunch('server.workspace-switch.failed', {
         traceId,
@@ -1048,7 +1100,7 @@ io.on('connection', (socket) => {
       logger.error('Failed to switch workspace', { error: error.message, stack: error.stack });
       socket.emit('error', { message: 'Failed to switch workspace', error: error.message, stack: error.stack });
     } finally {
-      if (inFlightWorkspaceSwitchId === requestedWorkspaceId) {
+      if (releaseInFlightWorkspaceSwitchInFinally && inFlightWorkspaceSwitchId === requestedWorkspaceId) {
         inFlightWorkspaceSwitchId = null;
       }
     }
