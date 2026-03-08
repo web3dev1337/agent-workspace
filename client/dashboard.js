@@ -3775,7 +3775,7 @@ class Dashboard {
     }
 
     // Emit workspace switch event
-    this.orchestrator.socket.emit('switch-workspace', { workspaceId });
+    this.orchestrator.emitWorkspaceSwitch(workspaceId, 'dashboard.openWorkspace');
 
     // Wait for workspace-changed event
     this.orchestrator.socket.once('workspace-changed', ({ workspace, sessions }) => {

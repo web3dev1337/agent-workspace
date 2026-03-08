@@ -56,6 +56,7 @@ server/notificationService.js      - System notification manager
 server/claudeVersionChecker.js     - Claude Code version detection
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
+├─ Desktop onboarding state: persists Windows/Tauri dependency-onboarding completion in `global.ui.onboarding.desktopDependencySetup`
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
 ├─ Recovery filtering: stale/non-configured session entries are pruned when requested by workspace-scoped APIs
 ├─ Agent clearing: `clearAgent()` resets stale `lastAgent` markers when a Claude/Codex terminal falls back to plain shell
@@ -537,6 +538,17 @@ LOGGING:      Winston-based structured logging with rotation
 8. **Worktree creation**: Validate paths and handle existing worktree conflicts
 9. **Mixed-repo workspaces**: Terminal naming must avoid conflicts between repos
 10. **Template validation**: Always validate workspace templates against schemas
+
+
+## First-Run Dependency Onboarding (Windows)
+
+```
+server/setupActionService.js     - Defines setup actions and launches PowerShell installers
+server/index.js                  - Routes: GET /api/setup-actions, POST /api/setup-actions/run
+client/app.js                    - Guided dependency onboarding steps + diagnostics integration
+client/index.html                - Dependency onboarding modal markup + launch button
+client/styles.css                - Dependency onboarding progress/step styling
+```
 
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨

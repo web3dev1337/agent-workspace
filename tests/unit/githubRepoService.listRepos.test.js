@@ -26,6 +26,12 @@ describe('GitHubRepoService listRepos', () => {
       { nameWithOwner: 'foo/bar', name: 'bar', owner: 'foo', isPrivate: false, isFork: true, visibility: 'public' },
       { nameWithOwner: 'acme/secret', name: 'secret', owner: 'acme', isPrivate: true, isFork: false, visibility: 'private' }
     ]);
+    expect(execFile).toHaveBeenCalledWith(
+      'gh',
+      ['repo', 'list', '--limit', '50', '--json', 'nameWithOwner,name,owner,isPrivate,visibility,isFork'],
+      expect.objectContaining({ windowsHide: true }),
+      expect.any(Function)
+    );
   });
 
   it('caches list results (no force)', async () => {

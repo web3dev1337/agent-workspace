@@ -153,6 +153,12 @@ class UserSettingsService {
           skin: 'blue',
           // 0..100 (applied as 0..1 multiplier for skin tint in CSS)
           skinIntensity: 100,
+          onboarding: {
+            desktopDependencySetup: {
+              completed: false,
+              completedAt: null
+            }
+          },
           visibility: {
             processBanner: false,
             header: {
@@ -687,6 +693,21 @@ class UserSettingsService {
           merged.global.ui.simpleMode = {
             ...(uiDefaults.simpleMode || {}),
             ...(ui.simpleMode || {})
+          };
+        }
+
+        if (ui.onboarding && typeof ui.onboarding === 'object') {
+          const defaultsOnboarding = (uiDefaults.onboarding && typeof uiDefaults.onboarding === 'object')
+            ? uiDefaults.onboarding
+            : {};
+          const nextOnboarding = ui.onboarding || {};
+          merged.global.ui.onboarding = {
+            ...defaultsOnboarding,
+            ...nextOnboarding,
+            desktopDependencySetup: {
+              ...(defaultsOnboarding.desktopDependencySetup || {}),
+              ...(nextOnboarding.desktopDependencySetup || {})
+            }
           };
         }
 

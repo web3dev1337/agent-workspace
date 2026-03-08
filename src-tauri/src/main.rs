@@ -10,6 +10,14 @@ use uuid::Uuid;
 use tauri_plugin_updater::UpdaterExt;
 use url::Url;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+#[cfg(target_os = "windows")]
+const DETACHED_PROCESS: u32 = 0x00000008;
+
 mod terminal;
 mod file_watcher;
 use terminal::{TerminalManager, TerminalOutput};
@@ -521,6 +529,16 @@ fn main() {
     std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "0");
     
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app
+                .get_webview_window("main")
+                .or_else(|| app.webview_windows().values().next().cloned())
+            {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -602,6 +620,8 @@ fn main() {
                         cmd.arg(entry);
                         cmd.current_dir(&data_dir);
                         cmd.stdin(Stdio::null());
+                        cmd.stdout(Stdio::null());
+                        cmd.stderr(Stdio::null());
                         cmd.env("ORCHESTRATOR_HOST", "127.0.0.1");
                         cmd.env("ORCHESTRATOR_PORT", port.to_string());
                         cmd.env("AUTH_TOKEN", token.clone());
@@ -610,6 +630,11 @@ fn main() {
                         // If we didn't bundle diff-viewer, disable auto-start so packaged builds don't fail noisily.
                         if !has_diff_viewer_folder(&app_handle) {
                             cmd.env("AUTO_START_DIFF_VIEWER", "false");
+                        }
+
+                        #[cfg(target_os = "windows")]
+                        {
+                            cmd.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
                         }
 
                         match cmd.spawn() {

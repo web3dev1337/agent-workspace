@@ -7,6 +7,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const winston = require('winston');
+const { logDesktopLaunch } = require('./desktopLaunchTraceService');
 
 // Ensure log directory exists early (some services create file transports at require-time).
 try {
@@ -41,6 +42,56 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+function getLaunchTraceId(req, extras = {}) {
+  const extraTraceId = String(extras?.traceId || '').trim();
+  if (extraTraceId) return extraTraceId;
+  return String(
+    req?.get?.('x-launch-trace-id')
+    || req?.body?.traceId
+    || req?.query?.traceId
+    || ''
+  ).trim();
+}
+
+function summarizeDiagnosticTools(data) {
+  const tools = Array.isArray(data?.tools) ? data.tools : [];
+  const summary = {};
+  tools.forEach((tool) => {
+    const id = String(tool?.id || '').trim();
+    if (!id) return;
+    summary[id] = {
+      ok: !!tool?.ok,
+      version: tool?.version ? String(tool.version) : null
+    };
+  });
+  const gitOk = !!summary.git?.ok;
+  const claudeOk = !!summary.claude?.ok;
+  const codexOk = !!summary.codex?.ok;
+  return {
+    coreReady: gitOk && (claudeOk || codexOk),
+    tools: summary
+  };
+}
+
+function summarizeOnboardingState(settings) {
+  const onboarding = settings?.global?.ui?.onboarding?.desktopDependencySetup || {};
+  return {
+    completed: onboarding.completed === true,
+    completedAt: onboarding.completedAt || null
+  };
+}
+
+function traceRequest(req, event, payload = {}, extras = {}) {
+  const traceId = getLaunchTraceId(req, extras);
+  if (!traceId) return;
+  logDesktopLaunch(event, {
+    traceId,
+    method: req?.method || null,
+    path: req?.path || null,
+    ...payload
+  });
+}
 
 // Import services
 const { SessionManager } = require('./sessionManager');
@@ -99,6 +150,13 @@ const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
 const sessionRecoveryService = require('./sessionRecoveryService');
 const { collectDiagnostics, collectFirstRunDiagnostics, collectInstallWizard, runFirstRunRepair, runFirstRunSafeRepairs } = require('./diagnosticsService');
+const {
+  getSetupActions,
+  runSetupAction,
+  getSetupActionRun,
+  getLatestSetupActionRun,
+  configureGitIdentity
+} = require('./setupActionService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { PagerService } = require('./pagerService');
@@ -206,6 +264,26 @@ app.use((req, res, next) => {
 // Serve the UI as default
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/index.html'));
+});
+
+app.post('/api/desktop-launch-trace', express.json({ limit: '64kb' }), (req, res) => {
+  const traceId = getLaunchTraceId(req);
+  if (!traceId) {
+    return res.status(400).json({ ok: false, error: 'traceId is required' });
+  }
+
+  const event = String(req.body?.event || '').trim() || 'client.event';
+  logDesktopLaunch(event, {
+    traceId,
+    seq: Number.isFinite(Number(req.body?.seq)) ? Number(req.body.seq) : null,
+    source: String(req.body?.source || '').trim() || 'client',
+    details: req.body?.details && typeof req.body.details === 'object' ? req.body.details : {},
+    userAgent: req.get('user-agent') || '',
+    origin: req.get('origin') || '',
+    referer: req.get('referer') || ''
+  });
+
+  res.json({ ok: true });
 });
 
 // Serve static files from client directory (but exclude index files)
@@ -400,6 +478,7 @@ sessionManager.setGitHelper(gitHelper);
 
 // Initialize workspace system
 let workspaceInitialized = false;
+let workspaceSystemReady = null;
 async function initializeWorkspaceSystem() {
   try {
     logger.info('Initializing workspace system...');
@@ -425,25 +504,28 @@ async function initializeWorkspaceSystem() {
 }
 
 // Initialize workspace system before starting server
-initializeWorkspaceSystem().then(() => {
-  logger.info('Workspace system initialized');
-  loadPlugins()
-    .then((status) => {
-      logger.info('Plugin loader finished', {
-        loaded: Array.isArray(status?.loaded) ? status.loaded.length : 0,
-        failed: Array.isArray(status?.failed) ? status.failed.length : 0
-      });
-    })
-    .catch((error) => {
-      logger.error('Plugin loader failed', { error: error.message, stack: error.stack });
+workspaceSystemReady = initializeWorkspaceSystem()
+  .then(() => {
+    logger.info('Workspace system initialized');
+    return true;
+  })
+  .then(() => loadPlugins())
+  .then((status) => {
+    logger.info('Plugin loader finished', {
+      loaded: Array.isArray(status?.loaded) ? status.loaded.length : 0,
+      failed: Array.isArray(status?.failed) ? status.failed.length : 0
     });
-}).catch(error => {
-  logger.error('Workspace system initialization failed', { error: error.message, stack: error.stack });
-});
+    return true;
+  })
+  .catch(error => {
+    logger.error('Workspace system initialization failed', { error: error.message, stack: error.stack });
+    return false;
+  });
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
   logger.info('Client connected', { socketId: socket.id });
+  let inFlightWorkspaceSwitchId = null;
 
   // Send workspace info
   const activeWorkspace = workspaceManager.getActiveWorkspace();
@@ -854,26 +936,69 @@ io.on('connection', (socket) => {
   });
 
   // Workspace management handlers
-  socket.on('switch-workspace', async ({ workspaceId }) => {
+  socket.on('switch-workspace', async (payload = {}) => {
+    const requestedWorkspaceId = String(payload?.workspaceId || '').trim();
+    const traceId = String(payload?.traceId || '').trim() || null;
+    const source = String(payload?.source || '').trim() || 'unknown';
+    logDesktopLaunch('server.workspace-switch.received', {
+      traceId,
+      source,
+      socketId: socket.id,
+      requestedWorkspaceId,
+      currentWorkspaceId: workspaceManager.getActiveWorkspace?.()?.id || null
+    });
+    if (requestedWorkspaceId && inFlightWorkspaceSwitchId === requestedWorkspaceId) {
+      logger.info('Ignoring duplicate workspace switch request while switch is already in progress', {
+        workspaceId: requestedWorkspaceId,
+        socketId: socket.id
+      });
+      logDesktopLaunch('server.workspace-switch.ignored-duplicate', {
+        traceId,
+        source,
+        socketId: socket.id,
+        requestedWorkspaceId
+      });
+      return;
+    }
+
+    inFlightWorkspaceSwitchId = requestedWorkspaceId || null;
+    let releaseInFlightWorkspaceSwitchInFinally = true;
     try {
       const previous = workspaceManager.getActiveWorkspace?.() || null;
       activityFeed.track('workspace.switch.requested', {
         fromWorkspaceId: previous?.id || null,
-        toWorkspaceId: String(workspaceId || '').trim() || null,
+        toWorkspaceId: requestedWorkspaceId || null,
         socketId: socket.id
       });
 
-      logger.info('Workspace switch requested', { workspaceId });
+      logger.info('Workspace switch requested', { workspaceId: requestedWorkspaceId });
+      logDesktopLaunch('server.workspace-switch.started', {
+        traceId,
+        source,
+        socketId: socket.id,
+        previousWorkspaceId: previous?.id || null,
+        requestedWorkspaceId
+      });
 
-      const newWorkspace = await workspaceManager.switchWorkspace(workspaceId);
+      const newWorkspace = await workspaceManager.switchWorkspace(requestedWorkspaceId);
 
       // Ensure worktrees exist for the new workspace
       logger.info('Ensuring worktrees exist for new workspace');
       await worktreeHelper.ensureWorktreesExist(newWorkspace);
 
       // Switch active workspace while preserving existing PTYs for other workspace tabs.
-      const { sessions: newSessions, backlog } =
-        await sessionManager.switchWorkspacePreservingSessions(newWorkspace);
+      const {
+        sessions: newSessions,
+        backlog,
+        initializePromise
+      } =
+        await sessionManager.switchWorkspacePreservingSessions(newWorkspace, {
+          reason: 'workspace-switch',
+          traceId,
+          source,
+          socketId: socket.id,
+          deferInitialize: true
+        });
 
       // Emit success with ONLY the new workspace sessions (active workspace map)
       logger.info('Sending workspace-changed event', {
@@ -898,20 +1023,86 @@ io.on('connection', (socket) => {
       }
 
       logger.info('Workspace switched successfully', { workspace: newWorkspace.name });
+      logDesktopLaunch('server.workspace-switch.completed', {
+        traceId,
+        source,
+        socketId: socket.id,
+        previousWorkspaceId: previous?.id || null,
+        workspaceId: newWorkspace?.id || null,
+        sessionCount: Object.keys(newSessions || {}).length,
+        backlogSessionCount: backlog && typeof backlog === 'object' ? Object.keys(backlog).length : 0,
+        pendingSessionInitialization: !!initializePromise
+      });
       activityFeed.track('workspace.switch.completed', {
         fromWorkspaceId: previous?.id || null,
         toWorkspaceId: newWorkspace?.id || null,
         toWorkspaceName: newWorkspace?.name || null,
         socketId: socket.id
       });
+
+      if (initializePromise && typeof initializePromise.then === 'function') {
+        releaseInFlightWorkspaceSwitchInFinally = false;
+        initializePromise
+          .then(() => {
+            const activeWorkspaceId = workspaceManager.getActiveWorkspace?.()?.id || null;
+            if (activeWorkspaceId !== newWorkspace?.id) {
+              return;
+            }
+            const refreshedSessions = sessionManager.getSessionStates();
+            socket.emit('sessions', refreshedSessions);
+            logDesktopLaunch('server.workspace-switch.sessions-ready', {
+              traceId,
+              source,
+              socketId: socket.id,
+              workspaceId: newWorkspace?.id || null,
+              sessionCount: Object.keys(refreshedSessions || {}).length
+            });
+          })
+          .catch((error) => {
+            logger.error('Deferred workspace session initialization failed', {
+              workspaceId: newWorkspace?.id || null,
+              error: error.message,
+              stack: error.stack
+            });
+            logDesktopLaunch('server.workspace-switch.session-init-failed', {
+              traceId,
+              source,
+              socketId: socket.id,
+              workspaceId: newWorkspace?.id || null,
+              error: error.message
+            });
+            if (workspaceManager.getActiveWorkspace?.()?.id === newWorkspace?.id) {
+              socket.emit('error', {
+                message: 'Failed to initialize workspace sessions',
+                error: error.message
+              });
+            }
+          })
+          .finally(() => {
+            if (inFlightWorkspaceSwitchId === requestedWorkspaceId) {
+              inFlightWorkspaceSwitchId = null;
+            }
+          });
+      }
     } catch (error) {
+      logDesktopLaunch('server.workspace-switch.failed', {
+        traceId,
+        source,
+        socketId: socket.id,
+        requestedWorkspaceId,
+        error: error.message
+      });
       activityFeed.track('workspace.switch.failed', {
-        toWorkspaceId: String(workspaceId || '').trim() || null,
+        toWorkspaceId: requestedWorkspaceId || null,
         socketId: socket.id,
         error: error.message
       });
       logger.error('Failed to switch workspace', { error: error.message, stack: error.stack });
       socket.emit('error', { message: 'Failed to switch workspace', error: error.message, stack: error.stack });
+    } finally {
+      if (releaseInFlightWorkspaceSwitchInFinally && inFlightWorkspaceSwitchId === requestedWorkspaceId) {
+        inFlightWorkspaceSwitchId = null;
+      }
     }
   });
 
@@ -3712,6 +3903,9 @@ app.put('/api/process/automations/pr-review/config', express.json(), async (req,
 app.get('/api/user-settings', (req, res) => {
   try {
     const settings = userSettingsService.getAllSettings();
+    traceRequest(req, 'server.user-settings.loaded', {
+      onboarding: summarizeOnboardingState(settings)
+    });
     res.json(settings);
   } catch (error) {
     logger.error('Failed to get user settings', { error: error.message, stack: error.stack });
@@ -3727,6 +3921,10 @@ app.put('/api/user-settings/global', express.json(), (req, res) => {
     
     if (success) {
       const updatedSettings = userSettingsService.getAllSettings();
+      traceRequest(req, 'server.user-settings.global-updated', {
+        onboarding: summarizeOnboardingState(updatedSettings),
+        updatedKeys: global && typeof global === 'object' ? Object.keys(global).slice(0, 20) : []
+      });
       res.json(updatedSettings);
       
       // Notify all clients about settings change
@@ -3971,6 +4169,7 @@ app.get('/api/agents', (req, res) => {
 app.get('/api/diagnostics', async (req, res) => {
   try {
     const data = await collectDiagnostics();
+    traceRequest(req, 'server.diagnostics.loaded', summarizeDiagnosticTools(data));
     res.json({ ok: true, ...data });
   } catch (error) {
     logger.error('Failed to collect diagnostics', { error: error.message, stack: error.stack });
@@ -4047,6 +4246,127 @@ app.get('/api/lifecycle/policy', (req, res) => {
   } catch (error) {
     logger.error('Failed to load lifecycle policy', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to load lifecycle policy' });
+  }
+});
+
+// Setup helper actions for first-run dependency wizard.
+app.get('/api/setup-actions', (req, res) => {
+  try {
+    const platform = process.platform;
+    const actions = getSetupActions(platform);
+    traceRequest(req, 'server.setup-actions.loaded', {
+      platform,
+      actionIds: actions.map((action) => String(action?.id || '').trim()).filter(Boolean)
+    });
+    res.json({ ok: true, platform, actions });
+  } catch (error) {
+    logger.error('Failed to get setup actions', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get setup actions' });
+  }
+});
+
+app.post('/api/setup-actions/run', requirePolicyAction('write'), express.json(), (req, res) => {
+  try {
+    const actionId = String(req.body?.actionId || '').trim();
+    if (!actionId) {
+      return res.status(400).json({ ok: false, error: 'actionId is required' });
+    }
+
+    const result = runSetupAction(actionId, process.platform);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    const code = String(error?.code || '');
+    const status = (code === 'unsupported_platform' || code === 'unknown_action' || code === 'not_runnable') ? 400 : 500;
+    logger.error('Failed to run setup action', { actionId: req.body?.actionId, error: error.message, stack: error.stack });
+    res.status(status).json({ ok: false, error: String(error?.message || 'Failed to run setup action') });
+  }
+});
+
+app.post('/api/setup-actions/configure-git-identity', requirePolicyAction('write'), express.json(), async (req, res) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim();
+    const result = await configureGitIdentity({ name, email }, process.platform);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    const code = String(error?.code || '');
+    const status = (
+      code === 'unsupported_platform'
+      || code === 'invalid_input'
+      || code === 'missing_git'
+      || code === 'verify_failed'
+    ) ? 400 : 500;
+    logger.error('Failed to configure git identity', {
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(status).json({ ok: false, error: String(error?.message || 'Failed to configure git identity') });
+  }
+});
+
+app.get('/api/setup-actions/run-status', (req, res) => {
+  try {
+    const runId = String(req.query?.runId || '').trim();
+    const actionId = String(req.query?.actionId || '').trim();
+    const run = runId ? getSetupActionRun(runId) : getLatestSetupActionRun(actionId);
+    if (!run) {
+      return res.status(404).json({ ok: false, error: 'Setup action run not found' });
+    }
+    res.json({ ok: true, run });
+  } catch (error) {
+    logger.error('Failed to get setup action run status', {
+      runId: req.query?.runId,
+      actionId: req.query?.actionId,
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ ok: false, error: 'Failed to get setup action run status' });
+  }
+});
+
+app.post('/api/setup-actions/open-url', requirePolicyAction('write'), express.json(), (req, res) => {
+  try {
+    const rawUrl = String(req.body?.url || '').trim();
+    if (!rawUrl) {
+      return res.status(400).json({ ok: false, error: 'url is required' });
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ ok: false, error: 'Invalid URL' });
+    }
+
+    if (!['http:', 'https:'].includes(String(parsed.protocol || '').toLowerCase())) {
+      return res.status(400).json({ ok: false, error: 'Only http/https URLs are supported' });
+    }
+
+    const targetUrl = parsed.toString();
+    const { execFile } = require('child_process');
+
+    const finish = (error) => {
+      if (error) {
+        logger.error('Failed to open setup URL', { url: targetUrl, error: error.message, stack: error.stack });
+        return res.status(500).json({ ok: false, error: 'Failed to open URL' });
+      }
+      res.json({ ok: true, opened: targetUrl });
+    };
+
+    if (process.platform === 'win32') {
+      execFile('explorer.exe', [targetUrl], { windowsHide: true }, finish);
+      return;
+    }
+
+    if (process.platform === 'darwin') {
+      execFile('open', [targetUrl], { windowsHide: true }, finish);
+      return;
+    }
+
+    execFile('xdg-open', [targetUrl], { windowsHide: true }, finish);
+  } catch (error) {
+    logger.error('Failed to open setup URL', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to open URL' });
   }
 });
 
@@ -7836,7 +8156,13 @@ httpServer.listen(PORT, HOST, () => {
     }
   })();
 
-  sessionManager.initializeSessions()
+  workspaceSystemReady
+    .then((workspaceReady) => {
+      if (!workspaceReady) {
+        return;
+      }
+      return sessionManager.initializeSessions({ reason: 'server-startup' });
+    })
     .then(() => {
       if (!shouldAutoEnsureDiscordServices) return;
       // Don’t block server startup; just best-effort keep Services running after restarts.

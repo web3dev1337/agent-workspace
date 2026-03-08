@@ -173,11 +173,6 @@ class WorkspaceTabManager {
 
     console.log(`Created tab ${tabId} for workspace ${workspace.name}`);
 
-    // If this is the first tab, activate it
-    if (this.tabs.size === 1) {
-      this.switchTab(tabId);
-    }
-
     return tabId;
   }
 
@@ -270,7 +265,7 @@ class WorkspaceTabManager {
     const currentWorkspaceId = this.orchestrator?.currentWorkspace?.id || null;
     if (this.orchestrator?.socket?.connected && targetTab.workspaceId && targetTab.workspaceId !== currentWorkspaceId) {
       console.log(`Requesting backend workspace switch for tab ${tabId}: ${currentWorkspaceId} → ${targetTab.workspaceId}`);
-      this.orchestrator.socket.emit('switch-workspace', { workspaceId: targetTab.workspaceId });
+      this.orchestrator.emitWorkspaceSwitch(targetTab.workspaceId, 'workspace-tab-manager.switchTab');
       return;
     }
 
