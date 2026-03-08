@@ -389,21 +389,21 @@ class NotificationManager {
 // Add notification styles
 const notificationStyles = document.createElement('style');
 notificationStyles.textContent = `
-  .empty-message {
+  .notifications-panel .empty-message {
     padding: var(--space-xl);
     text-align: center;
     color: var(--text-secondary);
     font-size: 0.875rem;
   }
   
-  .notification-header {
+  .notifications-panel .notification-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: var(--space-xs);
   }
   
-  .notification-meta {
+  .notifications-panel .notification-meta {
     font-size: 0.75rem;
     color: var(--text-secondary);
     margin-top: var(--space-xs);

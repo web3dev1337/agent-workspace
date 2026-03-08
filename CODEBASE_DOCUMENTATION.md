@@ -538,5 +538,16 @@ LOGGING:      Winston-based structured logging with rotation
 9. **Mixed-repo workspaces**: Terminal naming must avoid conflicts between repos
 10. **Template validation**: Always validate workspace templates against schemas
 
+
+## First-Run Dependency Onboarding (Windows)
+
+```
+server/setupActionService.js     - Defines setup actions and launches PowerShell installers
+server/index.js                  - Routes: GET /api/setup-actions, POST /api/setup-actions/run
+client/app.js                    - Guided dependency onboarding steps + diagnostics integration
+client/index.html                - Dependency onboarding modal markup + launch button
+client/styles.css                - Dependency onboarding progress/step styling
+```
+
 ---
 🚨 **END OF FILE - ENSURE YOU READ EVERYTHING ABOVE** 🚨
