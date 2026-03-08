@@ -131,6 +131,9 @@ claude-orchestrator/
 ├── config/                    # Shared configuration files
 ├── plugins/                   # Plugin system (extensible)
 └── docs/                      # Additional documentation
+    ├── windows/              # Windows install and build guides
+    ├── diff-viewer/          # Diff viewer setup and features
+    └── historical/           # Archived plans and implementation notes
 ```
 
 ### Runtime Data

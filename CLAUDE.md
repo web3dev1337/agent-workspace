@@ -226,8 +226,6 @@ Because `main` is usually checked out in the `master/` worktree, **do not try to
 
 ## 🚨 CRITICAL: READ THESE FILES 🚨
 **2. Read `CODEBASE_DOCUMENTATION.md`** - Contains system docs and file locations (READ THE ENTIRE FILE)
-**3. Read `COMPLETE_IMPLEMENTATION.md`** - Multi-workspace system overview (ESSENTIAL)
-**4. Read `PR_SUMMARY.md`** - Technical implementation details (FOR CHANGES)
 
 ## 🚨 CRITICAL: ALWAYS CREATE A PR WHEN DONE 🚨
 **When you complete ANY feature or fix, you MUST create a pull request using `gh pr create`. This is mandatory. Add "Create PR" as your final checklist item to ensure you never forget.**
@@ -287,7 +285,7 @@ Commander Claude is a special Claude Code instance that runs from the orchestrat
 
 **Read the full Commander instructions:**
 ```bash
-cat ~/GitHub/tools/automation/claude-orchestrator/master/COMMANDER_CLAUDE.md
+cat ~/GitHub/tools/automation/claude-orchestrator/master/docs/COMMANDER_CLAUDE.md
 ```
 
 ### Port Detection (MANDATORY — do this first)
@@ -413,6 +411,7 @@ Workspaces are stored in `~/.orchestrator/workspaces/`. Each workspace has:
 
 ### Important Files to Read First
 - `CODEBASE_DOCUMENTATION.md`: Comprehensive system overview
+- `docs/COMMANDER_CLAUDE.md`: Commander AI API reference
 - `server/index.js`: Main backend entry point
 - `package.json`: Dependencies and scripts
 - `src-tauri/src/main.rs`: Tauri app entry point

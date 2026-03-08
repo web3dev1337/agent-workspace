@@ -12,7 +12,7 @@ const publicDocs = [
   'README.md',
   'SECURITY.md',
   'CONTRIBUTING.md',
-  'WINDOWS_QUICK_START.md',
+  'docs/windows/WINDOWS_QUICK_START.md',
   'PLANS/2026-02-06/SELLABLE_WINDOWS_RELEASE_PLAYBOOK.md',
   'scripts/windows-launchers/README.md'
 ];
