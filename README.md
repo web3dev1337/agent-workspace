@@ -1,212 +1,233 @@
-# Agent Orchestrator (repo: `claude-orchestrator`)
+# Agent Orchestrator
 
-A multi-workspace development environment for AI coding agent sessions (Claude Code, Codex) with dynamic repository management, mixed-repo workspaces, and one-click startup.
+A multi-workspace terminal orchestrator for AI coding agents (Claude Code, Codex CLI). Manages unlimited concurrent sessions across multiple repositories with browser-like tabs, dynamic git worktrees, and a native Windows desktop app.
 
-> Note: the repository is still named `claude-orchestrator` for historical reasons. The UI/product name is **Agent Orchestrator**.
+> The repository is named `claude-orchestrator` for historical reasons. The product name is **Agent Orchestrator**.
 
-## 🚀 Features
+## What It Does
 
-### 🎯 **Multi-Workspace Management**
-- **Unlimited Workspaces**: Switch between HyFire, Epic Survivors, websites, writing projects
-- **Dashboard UI**: Visual workspace selection with activity indicators
-- **Dynamic Configuration**: 1-16 terminal pairs per workspace
-- **Project Type Awareness**: Auto-detects Hytopia, MonoGame, website, writing projects
+Agent Orchestrator gives you a single UI to run and monitor many AI coding sessions at once. Each workspace can hold 1-16 terminal pairs (agent + server), drawn from any combination of your git repositories. Workspaces live in browser-like tabs so you can switch between projects without losing terminal state.
 
-### 🧠 **Process Layer (Tiers + Queue + Risk + Prompts + Dependencies)**
-- **Workflow Modes**: Focus (T1–T2) / Review (all; opens Queue) / Background (T3–T4)
-- **Tier Tagging**: Per-agent tier selector (`None/T1–T4`) + tier filters
-- **Review Inbox (“📥 Queue”)**: Unified PR/worktree/session list with Next/Prev navigation
-- **Focus Helpers**: `T2 Auto/Always` + `Swap T2` auto-switch while Tier 1 is busy
-- **Risk Metadata**: Base project risk + per-task change risk + `pFailFirstPass` + `verifyMinutes`
-- **Prompt Artifacts**: Store massive prompts locally (private by default) with optional Trello embed
-- **Dependencies**:
-  - Trello-backed: checklist convention named `Dependencies`
-  - Orchestrator-native: stored in local task records for non-Trello tasks
-- **Review Automation (v1)**:
-  - Queue: “Auto Reviewer” for Tier 3 PRs + manual “Reviewer” and “Fixer” actions
-  - Dependency graph modal + “pick from queue” dependency linking
+Key capabilities:
 
-### 🛠️ **Mixed-Repository Workspaces**
-- **Revolutionary Feature**: Combine terminals from multiple repositories in one workspace
-- **Example**: 2 HyFire + 4 Epic Survivors + 1 Website terminals together
-- **Per-Terminal Buttons**: Each terminal shows repo-appropriate controls
-- **Conflict Detection**: Smart indicators for worktree usage across workspaces
+- **Multi-workspace tabs** with full state isolation (terminals, sessions, scroll positions)
+- **Mixed-repository workspaces** combining terminals from different repos in one view
+- **Dynamic git worktree management** with auto-creation and conflict detection
+- **Auto-discovery** of projects under `~/GitHub/` (configurable scan root)
+- **Cascaded configuration** at 5 hierarchy levels (global, category, framework, project, worktree)
+- **Process workflow layer** with tier tagging (T1-T4), review queue, risk metadata, and prompt artifacts
+- **Commander panel** for a top-level AI that orchestrates other sessions
+- **Projects kanban board** for tracking work across workspaces
+- **Diff viewer** for AI-assisted code review (separate sub-app on its own port)
+- **Native Windows app** via Tauri with bundled Node.js backend and auto-updater
+- **First-run diagnostics** that check prerequisites and offer one-click repairs
 
-### ⚡ **Dynamic Worktree Management**
-- **Auto-Creation**: Creates git worktrees on-demand when switching workspaces
-- **On-Demand Expansion**: Add more worktrees via "+ Add Worktree" button
-- **Deep Repository Scanning**: Finds all projects (HyFire2, Epic Survivors, scripts, etc.)
-- **Smart Conflict Detection**: Shows ⚠️ In use vs ✅ Available status
+## Prerequisites
 
-### 🎨 **Advanced UI Components**
-- **Workspace Creation Wizard**: 3-step guided setup with auto-type detection
-- **Enhanced Sidebar**: Quick links, worktree management, global shortcuts
-- **Cross-Workspace Notifications**: Background monitoring with muting controls
-- **Launch Settings Templates**: Project-type specific configuration UIs
+| Requirement | Notes |
+|-------------|-------|
+| **Node.js** v18+ | Runtime for the backend server |
+| **Git** | Required for worktree operations |
+| **npm** | Comes with Node.js |
 
-### 🔧 **Zero-Friction Workflow**
-- **One-Click Startup**: `orchestrator` command launches everything
-- **Desktop Integration**: Click shortcut → auto-opens browser
-- **Auto-Update**: Git pull on startup with dependency management
-- **Smart Detection**: Opens browser if already running
+Optional but recommended:
 
-## 📊 Quick Start
+| Tool | Purpose |
+|------|---------|
+| GitHub CLI (`gh`) | PR review/merge workflows, commander features |
+| Claude Code CLI | AI agent sessions |
+| Codex CLI | Alternative AI agent sessions |
+| Rust + Cargo | Only if building the native desktop app |
 
-### Installation (WSL/Linux)
+On first launch, the diagnostics panel shows what's installed and what's missing, with repair actions for common issues.
+
+## Quick Start
+
+### Web Mode (Linux / WSL / macOS)
+
 ```bash
-# Navigate to orchestrator directory
-cd ~/GitHub/tools/automation/claude-orchestrator/claude-orchestrator-dev
+git clone https://github.com/web3dev1337/claude-orchestrator.git
+cd claude-orchestrator
 
-# Install deps
-npm ci
+# Create .env with your port preferences
+cat > .env << 'EOF'
+ORCHESTRATOR_PORT=3000
+CLIENT_PORT=2080
+DIFF_VIEWER_PORT=7655
+LOG_LEVEL=info
+NODE_ENV=development
+ENABLE_FILE_WATCHING=true
+EOF
 
-# Run migration to set up workspace system
-node scripts/migrate-to-workspaces.js
+npm install
+cd diff-viewer && npm install && cd ..
 
-# (Optional) Install one-click startup shortcuts
-bash scripts/install-startup.sh
-```
-
-### Installation (Windows native)
-- Follow `WINDOWS_QUICK_START.md` (short) or `WINDOWS_BUILD_GUIDE.md` (full).
-- Recommended “ready to sell” path is the Tauri build: `npm run tauri:build` (creates an installer).
-
-### Launch Orchestrator
-```bash
-# Command line (after install)
-orchestrator
-
-# Or desktop shortcut
-# Click "Claude Orchestrator" icon
-
-# Or manual startup
 npm run dev
+# Server starts on :3000, UI on :2080
 ```
 
-### Process docs (resume-safe)
-- `PLANS/2026-01-25/WORKFLOW_TIER_RISK_PROMPTS.md` (what’s shipped vs missing)
-- `PLANS/2026-01-25/BRAIN_DUMP_IMPLEMENTATION_PLAN.md` (brain dump → PR-sized plan)
-- `PLANS/2026-01-25/DATA_MODEL.md` (where the data lives)
+Open `http://localhost:2080` in your browser.
 
-### Tier persistence (refresh-safe)
-Tier tagging (T1–T4) persists across page refreshes and server restarts because it is stored in task records:
-- `~/.orchestrator/task-records.json` (`session:<id>`, `pr:owner/repo#123`, `worktree:/path`)
+### Windows Desktop App (Tauri)
 
-### Create Your First Custom Workspace
-1. **Access Dashboard**: http://localhost:2080
-2. **Click "Create New"** → Opens workspace wizard
-3. **Select Repository**: Choose from categorized list (Hytopia Games, MonoGame Games, Writing, etc.)
-4. **Configure**: Set name, terminal count, access level
-5. **Review & Create**: Workspace ready immediately
+If you have a pre-built installer (`.msi` or `.exe`), just run it. The app bundles Node.js and all dependencies — no dev tools needed.
 
-### Add Mixed-Repo Terminals
-1. **In any workspace** → Click **"+ Add Worktree"** in sidebar
-2. **Browse Categories**: Hytopia Games, MonoGame Games, Writing, Tools
-3. **Select Worktree**: See ⚠️ In use vs ✅ Available status for each work1-8
-4. **Add to Workspace**: Creates mixed-repo workspace automatically
+To build from source:
 
-## 🏗️ Architecture
+```bash
+# Requires: Node.js, Rust, Visual Studio 2022 (C++ workload)
+npm install
+npm run tauri:build
+# Produces installer in src-tauri/target/release/bundle/
+```
 
-### Backend Services
-- **WorkspaceManager**: Core workspace CRUD with JSON config persistence
-- **SessionManager**: Dynamic session management for single/mixed-repo workspaces
-- **WorktreeHelper**: Automated git worktree creation with conflict resolution
-- **Deep Scanner**: Recursive project discovery with path-based type detection
+The desktop app shows a bootstrap screen on launch, spawns the Node.js backend automatically, and opens the UI once the server is ready (~3-5 seconds).
 
-### Frontend Components
-- **Dashboard**: Visual workspace cards with activity and stats
-- **WorkspaceSwitcher**: Header dropdown for instant workspace switching
-- **WorkspaceWizard**: Guided workspace creation with repository categorization
-- **Advanced Add Worktree**: Multi-repo selection with conflict detection
+### First Time Setup
 
-### Configuration
+1. Launch the app (web or desktop)
+2. The dashboard shows available workspaces (empty on first run)
+3. Click **"Create New"** to open the workspace wizard
+4. The wizard auto-scans `~/GitHub/` for git repositories, grouped by category
+5. Pick a repository (or enter a custom path), set terminal count, and create
+6. Your workspace is ready — terminals spawn automatically
+
+## Architecture
+
+```
+claude-orchestrator/
+├── server/                    # Express.js backend (83 service modules, ~41k lines)
+│   ├── index.js              # Entry point, Express + Socket.IO setup
+│   ├── sessionManager.js     # Terminal session lifecycle
+│   ├── workspaceManager.js   # Workspace CRUD, mixed-repo orchestration
+│   ├── worktreeHelper.js     # Git worktree creation and conflict resolution
+│   ├── statusDetector.js     # Agent session state monitoring
+│   ├── commanderService.js   # Top-level AI orchestration
+│   ├── projectBoardService.js # Kanban board backend
+│   ├── configDiscoveryService.js # Cascaded config resolution
+│   ├── diagnosticsService.js # First-run checks and repairs
+│   └── ...                   # 74 more service modules
+├── client/                    # Vanilla JS frontend (24 modules)
+│   ├── app.js                # Main application, Socket.IO client
+│   ├── terminal-manager.js   # XTerm.js terminal grid
+│   ├── workspace-tab-manager.js # Browser-like tab system
+│   ├── dashboard.js          # Workspace cards and navigation
+│   ├── workspace-wizard.js   # 3-step workspace creation
+│   ├── commander-panel.js    # Commander AI interface
+│   ├── projects-board.js     # Kanban drag-and-drop board
+│   └── ...                   # 17 more client modules
+├── src-tauri/                 # Rust/Tauri native desktop app
+│   ├── src/main.rs           # Backend spawning, port management, auth
+│   ├── src/terminal.rs       # Native terminal module
+│   ├── src/file_watcher.rs   # File watching via notify-rs
+│   └── tauri.conf.json       # App metadata, bundling, updater config
+├── diff-viewer/               # Standalone diff/review sub-app
+├── templates/launch-settings/ # Per-project-type button/flag configs
+├── scripts/                   # Build, migration, release, and CI scripts
+├── tests/
+│   ├── unit/                  # 81 unit tests (Jest)
+│   └── e2e/                   # 35 end-to-end tests (Playwright)
+├── .github/workflows/         # CI: tests, gitleaks, Windows Tauri build
+├── config/                    # Shared configuration files
+├── plugins/                   # Plugin system (extensible)
+└── docs/                      # Additional documentation
+```
+
+### Runtime Data
+
 ```
 ~/.orchestrator/
-├── config.json                    # Master configuration
-├── workspaces/                    # Workspace definitions
-│   ├── hyfire2.json              # Single-repo workspace
-│   ├── epic-survivors.json       # Single-repo workspace
-│   └── custom-dev.json           # Mixed-repo workspace
-├── templates/                     # Project type templates
-└── session-states/               # Persistent session states
+├── config.json               # Global settings
+├── workspaces/               # Workspace definitions (JSON per workspace)
+├── task-records.json         # Tier tags, ticket links, risk metadata
+└── session-states/           # Persisted terminal states
 ```
 
-## 🎯 Workspace Types
+### Key Patterns
 
-### Single-Repository Workspaces
-Traditional approach where all terminals come from one repository:
-- **HyFire 2**: 8 terminal pairs from HyFire repository
-- **Epic Survivors**: 1-8 terminal pairs from Epic Survivors repository
-- **Website**: 1-4 terminal pairs from website repository
+- **Service-based architecture**: Each `server/*.js` file is a focused service module
+- **Singleton managers**: `SessionManager.getInstance()`, `WorkspaceManager.getInstance()`
+- **Real-time communication**: Socket.IO events between server and all clients
+- **Cascaded configuration**: 5-level merge (global → category → framework → project → worktree)
+- **Event-driven**: Terminal output, session state changes, and workspace switches all via events
 
-### Mixed-Repository Workspaces
-Revolutionary approach combining terminals from multiple repositories:
-- **Custom Dev**: 2 HyFire + 4 Epic Survivors + 1 Website terminals
-- **Game Focus**: 4 HyFire + 2 MonoGame + 2 Tools terminals
-- **Any Combination**: Complete flexibility in terminal composition
+## Available Scripts
 
-## 🔧 Development
-
-### Project Structure
-```
-claude-orchestrator-dev/
-├── server/                      # Backend services
-│   ├── workspaceManager.js     # Core workspace management
-│   ├── sessionManager.js       # Session lifecycle with mixed-repo support
-│   ├── worktreeHelper.js       # Dynamic worktree creation
-│   └── workspaceSchemas.js     # Single/mixed workspace schemas
-├── client/                      # Frontend components
-│   ├── dashboard.js            # Workspace dashboard UI
-│   ├── workspace-switcher.js   # Header dropdown switcher
-│   ├── workspace-wizard.js     # Workspace creation wizard
-│   └── app.js                  # Main orchestrator application
-├── templates/                   # Project type templates
-│   └── launch-settings/        # Launch configuration templates
-├── scripts/                     # Automation scripts
-│   ├── migrate-to-workspaces.js # Migration from old config
-│   ├── orchestrator-startup.sh  # One-click startup
-│   └── install-startup.sh       # Desktop shortcut installer
-└── ~/.orchestrator/            # User configuration directory
-```
-
-### Available Scripts
 ```bash
-npm run dev              # Start backend + UI dev server
-npm run dev:server       # Start backend only (port 3000)
-npm run dev:client       # Start UI dev server only (port 2080)
-npm run dev:full         # Start backend + UI + tauri dev
-npm run tauri:build      # Build native app for distribution (Windows installer)
-npm run tauri:dev        # Native app development
+# Development
+npm run dev              # Backend + UI (web mode)
+npm run dev:full         # Backend + UI + Tauri native app
+npm run dev:server       # Backend only
+npm run dev:client       # UI dev server only
+npm run tauri:dev        # Tauri app with hot reload
+
+# Testing
+npm run test             # All tests (unit + e2e)
+npm run test:unit        # Jest unit tests
+npm run test:e2e:safe    # Playwright e2e (auto-picks safe port)
+
+# Building
+npm run tauri:build      # Build native Windows/Linux app
+
+# Release prep
+npm run audit:public-release           # Scan for secrets/credentials
+npm run report:release-readiness       # Generate readiness report
+npm run check:command-surface          # Check for API surface drift
 ```
 
-## 📈 Capabilities
+## Configuration
 
-### Repository Discovery
-- **Deep Scanning**: Finds individual projects in nested folder structures
-- **Auto-Type Detection**: Determines project type from folder path
-- **Categories**: Hytopia Games, MonoGame Games, Websites, Writing, Tools
-- **Project Examples**: HyFire2, Epic Survivors, cb-fry-scripts, 2d-test, etc.
+### Environment Variables (`.env`)
 
-### Workspace Management
-- **Unlimited Workspaces**: Create as many as needed
-- **Dynamic Terminal Counts**: 1-16 pairs per workspace
-- **Clean Isolation**: Perfect separation between workspace sessions
-- **Instant Switching**: < 5 second workspace transitions
+```env
+ORCHESTRATOR_PORT=3000       # Backend API port
+CLIENT_PORT=2080             # UI dev server port
+DIFF_VIEWER_PORT=7655        # Diff viewer port
+LOG_LEVEL=info               # Winston log level
+NODE_ENV=development
+ENABLE_FILE_WATCHING=true    # Watch for file changes in worktrees
+```
 
-### Advanced Features
-- **Worktree Conflict Detection**: Visual status indicators (⚠️ In use / ✅ Available)
-- **Mixed-Repo Composition**: Any combination of repositories in one workspace
-- **3-Layer Button System**: Game → Framework → Project specific controls
-- **Background Monitoring**: Cross-workspace notifications with muting
+### Cascaded Project Configs
 
-## 🚀 Getting Started
+Place `.orchestrator-config.json` files at any level of your project hierarchy to define custom terminal buttons, game modes, and flags. Configs merge from global down to worktree level.
 
-1. **Installation**: WSL/Linux: `bash scripts/install-startup.sh` (optional) • Windows: `WINDOWS_QUICK_START.md`
-2. **Launch**: `npm run dev` (or `orchestrator` if installed)
-3. **Create Workspace**: Dashboard → Create New → Select repository
-4. **Add Mixed Terminals**: "+ Add Worktree" → Browse repositories
-5. **Enjoy**: Complete development environment ready!
+```json
+{
+  "buttons": {
+    "claude": { "review": { "label": "Review", "command": "gh pr view --web" } },
+    "server": { "play": { "label": "Play", "command": "npm run dev" } }
+  }
+}
+```
 
----
+## Running Two Instances (Dev + Production)
 
-**Transforms Claude Orchestrator from single-project tool to unlimited multi-workspace development environment with mixed-repository support and zero-friction workflows.**
+For developing the orchestrator itself while using it for daily work:
+
+| Instance | Directory | Ports | Purpose |
+|----------|-----------|-------|---------|
+| Production | `claude-orchestrator/master` | 3000 / 2080 / 7655 | Daily AI agent work |
+| Development | `claude-orchestrator/claude-orchestrator-dev` | 4000 / 2081 / 7656 | Modifying the orchestrator |
+
+Each instance gets its own `.env` with different port numbers. Both can run simultaneously.
+
+## CI / CD
+
+Three GitHub Actions workflows:
+
+- **`tests.yml`** — Unit tests on every push
+- **`gitleaks.yml`** — Secret scanning on every push
+- **`windows.yml`** — Windows unit tests + Tauri installer build (on tags or manual dispatch)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+
+## License
+
+[MIT](LICENSE)
