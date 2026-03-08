@@ -54,6 +54,7 @@ class UserSettingsService {
         terminal: {
           // Add other global terminal settings here in the future
         },
+        serverOnlyFileWatching: false,
         process: {
           status: {
             lookbackHours: 24,
@@ -594,6 +595,9 @@ class UserSettingsService {
       }
       if (userSettings.global.terminal) {
         Object.assign(merged.global.terminal, userSettings.global.terminal);
+      }
+      if (typeof userSettings.global.serverOnlyFileWatching === 'boolean') {
+        merged.global.serverOnlyFileWatching = userSettings.global.serverOnlyFileWatching;
       }
       if (userSettings.global.process) {
         const procDefaults = (merged.global.process || {});
