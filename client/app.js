@@ -9500,8 +9500,7 @@ class ClaudeOrchestrator {
 	        });
 	      return persistedSetupState.savePromise;
 	    };
-	    const completedEarly = getPersistedSetupState().completed;
-	    setBootstrapPending(!completedEarly);
+	    setBootstrapPending(true);
 
 	    const state = {
 	      loading: false,
@@ -9516,7 +9515,8 @@ class ClaudeOrchestrator {
 	        name: '',
 	        email: ''
 	      },
-	      gitIdentityHelpVisible: false
+	      gitIdentityHelpVisible: false,
+	      startupPending: true
 	    };
 
 	    const readDismissed = () => getPersistedSetupState().dismissed === true;
@@ -10070,9 +10070,17 @@ class ClaudeOrchestrator {
 	      setBootstrapPending(false);
 	      return true;
 	    };
-	    const openModal = ({ showWelcome = null } = {}) => {
+	    const openModal = ({ showWelcome = null, allowDuringStartup = false } = {}) => {
+	      if (readCompleted()) {
+	        closeModal({ force: true });
+	        return false;
+	      }
+	      if (state.startupPending && !allowDuringStartup) {
+	        return false;
+	      }
 	      const wasHidden = modal.classList.contains('hidden');
 	      modal.classList.remove('hidden');
+	      state.startupPending = false;
 	      setBootstrapPending(false);
 	      body?.classList?.add?.('dependency-onboarding-active');
 	      if (typeof showWelcome === 'boolean') {
@@ -10084,6 +10092,7 @@ class ClaudeOrchestrator {
 	        render();
 	      }
 	      applyOnboardingLockUI();
+	      return true;
 	    };
 
 	    const setLoading = (loading) => {
@@ -10142,11 +10151,16 @@ class ClaudeOrchestrator {
 
 	        const hasCompletedOnboarding = readCompleted();
 	        const coreReady = !!view.req?.coreReady;
+	        if (hasCompletedOnboarding) {
+	          state.startupPending = false;
+	          closeModal({ force: true });
+	        }
 	        const shouldAutoShow = isWindowsHost && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
-	        const shouldKeepVisible = open && !modal.classList.contains('hidden');
+	        const shouldKeepVisible = !hasCompletedOnboarding && open && !modal.classList.contains('hidden');
 	        if (explicitOpen || shouldKeepVisible || shouldAutoShow) {
-	          openModal();
+	          openModal({ allowDuringStartup: bootstrap || explicitOpen });
 	        } else {
+	          state.startupPending = false;
 	          setBootstrapPending(false);
 	        }
 	        return true;
@@ -10154,7 +10168,7 @@ class ClaudeOrchestrator {
 	        summaryEl.textContent = `Dependency check failed: ${String(err?.message || err)}`;
 	        listEl.innerHTML = '<div class="dependency-setup-empty">Unable to load setup actions right now.</div>';
 	        const shouldOpenOnError = explicitOpen || (open && !modal.classList.contains('hidden'));
-	        if (shouldOpenOnError) openModal();
+	        if (shouldOpenOnError) openModal({ allowDuringStartup: bootstrap || explicitOpen });
 	        else if (!bootstrap) setBootstrapPending(false);
 	        return false;
 	      } finally {
@@ -10377,12 +10391,8 @@ class ClaudeOrchestrator {
 	    };
 
 	    const runBootstrapLoad = async () => {
-	      try {
-	        const persisted = await loadPersistedSetupState();
-	        setBootstrapPending(!(persisted?.completed === true));
-	      } catch {
-	        // ignore
-	      }
+	      state.startupPending = true;
+	      setBootstrapPending(true);
 	      const delaysMs = [0, 240, 420, 700, 1050, 1450, 1900];
 	      for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
 	        if (attempt > 0) {
@@ -10391,6 +10401,7 @@ class ClaudeOrchestrator {
 	        const ok = await loadAndRender({ open: false, forceAutoShow: false, bootstrap: true });
 	        if (ok) return;
 	      }
+	      state.startupPending = false;
 	      setBootstrapPending(false);
 	    };
 
