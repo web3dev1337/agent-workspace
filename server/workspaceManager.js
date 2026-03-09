@@ -707,20 +707,31 @@ class WorkspaceManager {
     // 3. First available workspace
     // 4. None (show dashboard)
 
-    // Don't auto-select workspace - let user choose from dashboard
-    // if (this.config.activeWorkspace && this.workspaces.has(this.config.activeWorkspace)) {
-    //   this.activeWorkspace = this.workspaces.get(this.config.activeWorkspace);
-    //   logger.info(`Set active workspace from config: ${this.activeWorkspace.name}`);
-    //   return;
-    // }
+    const rememberLastWorkspace = this.config?.ui?.rememberLastWorkspace !== false;
+    const configuredWorkspaceId = String(this.config?.activeWorkspace || '').trim();
 
-    // Don't auto-select first workspace - show dashboard instead
-    // if (this.workspaces.size > 0) {
-    //   const firstWorkspace = Array.from(this.workspaces.values())[0];
-    //   this.activeWorkspace = firstWorkspace;
-    //   logger.info(`Set active workspace (first available): ${this.activeWorkspace.name}`);
-    //   return;
-    // }
+    if (rememberLastWorkspace && configuredWorkspaceId && this.workspaces.has(configuredWorkspaceId)) {
+      this.activeWorkspace = this.workspaces.get(configuredWorkspaceId);
+      logger.info(`Set active workspace from config: ${this.activeWorkspace.name}`);
+      return;
+    }
+
+    if (rememberLastWorkspace && configuredWorkspaceId && !this.workspaces.has(configuredWorkspaceId)) {
+      logger.warn(`Configured active workspace missing: ${configuredWorkspaceId}`);
+    }
+
+    if (rememberLastWorkspace && this.workspaces.size > 0) {
+      const sorted = Array.from(this.workspaces.values())
+        .sort((a, b) => {
+          const aTime = a.lastAccess ? new Date(a.lastAccess).getTime() : 0;
+          const bTime = b.lastAccess ? new Date(b.lastAccess).getTime() : 0;
+          return bTime - aTime;
+        });
+      const firstWorkspace = sorted[0];
+      this.activeWorkspace = firstWorkspace;
+      logger.info(`Set active workspace by fallback: ${this.activeWorkspace.name}`);
+      return;
+    }
 
     logger.info('No active workspace set (no workspaces available)');
   }
@@ -1004,7 +1015,7 @@ class WorkspaceManager {
           enabled: true,
           count: pairs,
           namingPattern: 'work{n}',
-          autoCreate: false
+          autoCreate: true // auto-create worktrees when workspace is first opened
         },
         terminals: {
           pairs

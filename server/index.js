@@ -99,6 +99,14 @@ const voiceCommandService = require('./voiceCommandService');
 const whisperService = require('./whisperService');
 const sessionRecoveryService = require('./sessionRecoveryService');
 const { collectDiagnostics, collectFirstRunDiagnostics, collectInstallWizard, runFirstRunRepair, runFirstRunSafeRepairs } = require('./diagnosticsService');
+const {
+  getSetupActions,
+  runSetupAction,
+  getSetupActionRun,
+  getLatestSetupActionRun,
+  configureGitIdentity
+} = require('./setupActionService');
+const { OnboardingStateService } = require('./onboardingStateService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { PagerService } = require('./pagerService');
@@ -203,6 +211,20 @@ app.use((req, res, next) => {
 });
 
 // Define specific routes BEFORE static file serving
+app.get('/bootstrap/setup-state.js', (req, res) => {
+  try {
+    const state = onboardingStateService.getDependencySetupState();
+    res.type('application/javascript');
+    res.set('Cache-Control', 'no-store');
+    res.send(`window.__ORCHESTRATOR_SETUP_STATE__ = ${JSON.stringify(state)};`);
+  } catch (error) {
+    logger.error('Failed to serve setup bootstrap state', { error: error.message, stack: error.stack });
+    res.type('application/javascript');
+    res.set('Cache-Control', 'no-store');
+    res.send('window.__ORCHESTRATOR_SETUP_STATE__ = null;');
+  }
+});
+
 // Serve the UI as default
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/index.html'));
@@ -295,6 +317,7 @@ const processTaskService = ProcessTaskService.getInstance({ sessionManager, work
 const taskRecordService = TaskRecordService.getInstance();
 const userSettingsService = UserSettingsService.getInstance();
 const licenseService = LicenseService.getInstance();
+const onboardingStateService = OnboardingStateService.getInstance({ logger });
 const proOnly = requirePro(licenseService);
 const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager, userSettingsService });
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
@@ -400,6 +423,7 @@ sessionManager.setGitHelper(gitHelper);
 
 // Initialize workspace system
 let workspaceInitialized = false;
+let workspaceSystemReady = null;
 async function initializeWorkspaceSystem() {
   try {
     logger.info('Initializing workspace system...');
@@ -425,21 +449,33 @@ async function initializeWorkspaceSystem() {
 }
 
 // Initialize workspace system before starting server
-initializeWorkspaceSystem().then(() => {
-  logger.info('Workspace system initialized');
-  loadPlugins()
-    .then((status) => {
-      logger.info('Plugin loader finished', {
-        loaded: Array.isArray(status?.loaded) ? status.loaded.length : 0,
-        failed: Array.isArray(status?.failed) ? status.failed.length : 0
+workspaceSystemReady = initializeWorkspaceSystem()
+  .then(() => {
+    logger.info('Workspace system initialized');
+    return true;
+  })
+  .catch(error => {
+    logger.error('Workspace system initialization failed', { error: error.message, stack: error.stack });
+    return false;
+  });
+
+workspaceSystemReady
+  .then((workspaceReady) => {
+    if (!workspaceReady) return null;
+    return loadPlugins()
+      .then((status) => {
+        logger.info('Plugin loader finished', {
+          loaded: Array.isArray(status?.loaded) ? status.loaded.length : 0,
+          failed: Array.isArray(status?.failed) ? status.failed.length : 0
+        });
+        return status;
+      })
+      .catch((error) => {
+        logger.error('Plugin loader failed', { error: error.message, stack: error.stack });
+        return null;
       });
-    })
-    .catch((error) => {
-      logger.error('Plugin loader failed', { error: error.message, stack: error.stack });
-    });
-}).catch(error => {
-  logger.error('Workspace system initialization failed', { error: error.message, stack: error.stack });
-});
+  })
+  .catch(() => null);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
@@ -2303,9 +2339,7 @@ app.post('/api/files/sync', async (req, res) => {
 });
 
 app.get('/api/process/performance', async (req, res) => {
-  const { execFile } = require('child_process');
-  const util = require('util');
-  const execFileAsync = util.promisify(execFile);
+  const { spawn: spawnProc } = require('child_process');
   const isWin = process.platform === 'win32';
 
   const parseIntSafe = (s) => {
@@ -2313,15 +2347,27 @@ app.get('/api/process/performance', async (req, res) => {
     return Number.isFinite(n) ? Math.round(n) : null;
   };
 
+  const spawnQuiet = (cmd, args, timeout = 1500) => new Promise((resolve) => {
+    const child = spawnProc(cmd, args, {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+      ...(isWin ? { creationFlags: 0x08000000 } : {})
+    });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    const timer = setTimeout(() => { child.kill(); resolve(''); }, timeout);
+    child.on('close', () => { clearTimeout(timer); resolve(out); });
+    child.on('error', () => { clearTimeout(timer); resolve(''); });
+  });
+
   const getChildPids = async (pid) => {
     const p = Number(pid);
     if (!Number.isFinite(p) || p <= 0) return [];
     try {
       if (isWin) {
-        const { stdout } = await execFileAsync(
+        const stdout = await spawnQuiet(
           'powershell.exe',
-          ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${p}").ProcessId`],
-          { timeout: 1500, windowsHide: true }
+          ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${p}").ProcessId`]
         );
         return String(stdout || '')
           .split(/\s+/)
@@ -2329,7 +2375,7 @@ app.get('/api/process/performance', async (req, res) => {
           .filter(n => Number.isFinite(n) && n > 0);
       }
 
-      const { stdout } = await execFileAsync('pgrep', ['-P', String(p)], { timeout: 1500, windowsHide: true });
+      const stdout = await spawnQuiet('pgrep', ['-P', String(p)]);
       return String(stdout || '')
         .split('\n')
         .map(l => parseIntSafe(l))
@@ -2344,17 +2390,16 @@ app.get('/api/process/performance', async (req, res) => {
     if (!Number.isFinite(p) || p <= 0) return null;
     try {
       if (isWin) {
-        const { stdout } = await execFileAsync(
+        const stdout = await spawnQuiet(
           'powershell.exe',
-          ['-NoProfile', '-Command', `(Get-Process -Id ${p} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty WorkingSet64)`],
-          { timeout: 1500, windowsHide: true }
+          ['-NoProfile', '-Command', `(Get-Process -Id ${p} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty WorkingSet64)`]
         );
         const bytes = Number(String(stdout || '').trim());
         if (!Number.isFinite(bytes) || bytes <= 0) return null;
         return Math.round(bytes / 1024);
       }
 
-      const { stdout } = await execFileAsync('ps', ['-o', 'rss=', '-p', String(p)], { timeout: 1500, windowsHide: true });
+      const stdout = await spawnQuiet('ps', ['-o', 'rss=', '-p', String(p)]);
       return parseIntSafe(stdout);
     } catch {
       return null;
@@ -4047,6 +4092,144 @@ app.get('/api/lifecycle/policy', (req, res) => {
   } catch (error) {
     logger.error('Failed to load lifecycle policy', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to load lifecycle policy' });
+  }
+});
+
+// Setup helper actions for first-run dependency wizard.
+app.get('/api/setup-actions', (req, res) => {
+  try {
+    const platform = process.platform;
+    const actions = getSetupActions(platform);
+    res.json({ ok: true, platform, actions });
+  } catch (error) {
+    logger.error('Failed to get setup actions', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get setup actions' });
+  }
+});
+
+app.get('/api/setup-actions/state', (req, res) => {
+  try {
+    const state = onboardingStateService.getDependencySetupState();
+    res.json({ ok: true, state });
+  } catch (error) {
+    logger.error('Failed to get setup action state', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get setup action state' });
+  }
+});
+
+app.put('/api/setup-actions/state', express.json(), (req, res) => {
+  try {
+    const patch = (req.body && typeof req.body === 'object') ? req.body : {};
+    const state = onboardingStateService.updateDependencySetupState(patch);
+    res.json({ ok: true, state });
+  } catch (error) {
+    logger.error('Failed to update setup action state', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to update setup action state' });
+  }
+});
+
+app.post('/api/setup-actions/run', requirePolicyAction('write'), express.json(), (req, res) => {
+  try {
+    const actionId = String(req.body?.actionId || '').trim();
+    if (!actionId) {
+      return res.status(400).json({ ok: false, error: 'actionId is required' });
+    }
+
+    const result = runSetupAction(actionId, process.platform);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    const code = String(error?.code || '');
+    const status = (code === 'unsupported_platform' || code === 'unknown_action' || code === 'not_runnable') ? 400 : 500;
+    logger.error('Failed to run setup action', { actionId: req.body?.actionId, error: error.message, stack: error.stack });
+    res.status(status).json({ ok: false, error: String(error?.message || 'Failed to run setup action') });
+  }
+});
+
+app.post('/api/setup-actions/configure-git-identity', requirePolicyAction('write'), express.json(), async (req, res) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim();
+    const result = await configureGitIdentity({ name, email }, process.platform);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    const code = String(error?.code || '');
+    const status = (
+      code === 'unsupported_platform'
+      || code === 'invalid_input'
+      || code === 'missing_git'
+      || code === 'verify_failed'
+    ) ? 400 : 500;
+    logger.error('Failed to configure git identity', {
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(status).json({ ok: false, error: String(error?.message || 'Failed to configure git identity') });
+  }
+});
+
+app.get('/api/setup-actions/run-status', (req, res) => {
+  try {
+    const runId = String(req.query?.runId || '').trim();
+    const actionId = String(req.query?.actionId || '').trim();
+    const run = runId ? getSetupActionRun(runId) : getLatestSetupActionRun(actionId);
+    if (!run) {
+      return res.status(404).json({ ok: false, error: 'Setup action run not found' });
+    }
+    res.json({ ok: true, run });
+  } catch (error) {
+    logger.error('Failed to get setup action run status', {
+      runId: req.query?.runId,
+      actionId: req.query?.actionId,
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ ok: false, error: 'Failed to get setup action run status' });
+  }
+});
+
+app.post('/api/setup-actions/open-url', requirePolicyAction('write'), express.json(), (req, res) => {
+  try {
+    const rawUrl = String(req.body?.url || '').trim();
+    if (!rawUrl) {
+      return res.status(400).json({ ok: false, error: 'url is required' });
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ ok: false, error: 'Invalid URL' });
+    }
+
+    if (!['http:', 'https:'].includes(String(parsed.protocol || '').toLowerCase())) {
+      return res.status(400).json({ ok: false, error: 'Only http/https URLs are supported' });
+    }
+
+    const targetUrl = parsed.toString();
+    const { execFile } = require('child_process');
+
+    const finish = (error) => {
+      if (error) {
+        logger.error('Failed to open setup URL', { url: targetUrl, error: error.message, stack: error.stack });
+        return res.status(500).json({ ok: false, error: 'Failed to open URL' });
+      }
+      res.json({ ok: true, opened: targetUrl });
+    };
+
+    if (process.platform === 'win32') {
+      execFile('explorer.exe', [targetUrl], { windowsHide: true }, finish);
+      return;
+    }
+
+    if (process.platform === 'darwin') {
+      execFile('open', [targetUrl], { windowsHide: true }, finish);
+      return;
+    }
+
+    execFile('xdg-open', [targetUrl], { windowsHide: true }, finish);
+  } catch (error) {
+    logger.error('Failed to open setup URL', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to open URL' });
   }
 });
 
@@ -7836,7 +8019,13 @@ httpServer.listen(PORT, HOST, () => {
     }
   })();
 
-  sessionManager.initializeSessions()
+  workspaceSystemReady
+    .then((workspaceReady) => {
+      if (!workspaceReady) {
+        return;
+      }
+      return sessionManager.initializeSessions();
+    })
     .then(() => {
       if (!shouldAutoEnsureDiscordServices) return;
       // Don’t block server startup; just best-effort keep Services running after restarts.

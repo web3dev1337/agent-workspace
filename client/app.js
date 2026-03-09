@@ -845,7 +845,7 @@ class ClaudeOrchestrator {
       if (!expiresAt || expiresAt <= now) this.pendingWorktreeReservations.delete(key);
     }
   }
-  
+
   async init() {
     try {
       // Initialize managers
@@ -984,21 +984,21 @@ class ClaudeOrchestrator {
       if (this.settings.notifications) {
         this.notificationManager.requestPermission();
       }
-      
+
 	      // Set up UI
 	      this.setupEventListeners();
 	      this.applyTheme();
 	      this.syncSettingsUI();
 	      this.applySimpleModeConfig();
 	      this.installAuthFetchShim();
-	      
+
 	      // Connect to server
       await this.connectToServer();
       await this.ensureProjectTypeTaxonomy();
 
       // Hook panels that depend on socket events
       this.activityFeedPanel?.onSocketConnected?.(this.socket);
-      
+
 	      // Load user settings from server
 	      await this.loadUserSettings();
         this.applySidebarDesktopCollapsedFromPrefs();
@@ -1016,22 +1016,22 @@ class ClaudeOrchestrator {
 
       // WIP / Queue banner (process status)
       this.startProcessStatusBanner();
-      
+
       // Check for updates on startup
       this.checkForSettingsUpdates();
-      
+
       // Hide loading message if it exists
       const loadingMessage = document.getElementById('loading-message');
       if (loadingMessage) {
         loadingMessage.classList.add('hidden');
       }
-      
+
     } catch (error) {
       console.error('Failed to initialize:', error);
       this.showError('Failed to initialize application');
     }
   }
-  
+
   async connectToServer() {
     return new Promise((resolve, reject) => {
       console.log('Attempting to connect to server...');
@@ -1044,29 +1044,29 @@ class ClaudeOrchestrator {
       const serverUrl = window.location.origin;
       this.socket = io(serverUrl, socketOptions);
       console.log(`Socket connecting to ${serverUrl}...`);
-      
+
       // Connection events
       this.socket.on('connect', () => {
         console.log('Connected to server');
         this.updateConnectionStatus(true);
         resolve();
       });
-      
+
       this.socket.on('connect_error', (error) => {
         console.error('Connection error:', error);
         this.updateConnectionStatus(false);
-        
+
         if (error.message === 'Authentication failed') {
           this.showError('Authentication failed. Please check your token.');
         }
         reject(error);
       });
-      
+
       this.socket.on('disconnect', () => {
         console.log('Disconnected from server');
         this.updateConnectionStatus(false);
       });
-      
+
       // Session events
       this.socket.on('sessions', async (sessionStates) => {
         console.log('Received sessions event:', sessionStates);
@@ -1085,7 +1085,7 @@ class ClaudeOrchestrator {
         this.worktreeTags.set(worktreePath, tag || {});
         this.buildSidebar();
       });
-      
+
       this.socket.on('terminal-output', ({ sessionId, data }) => {
         this.terminalManager.handleOutput(sessionId, data);
 
@@ -1133,7 +1133,7 @@ class ClaudeOrchestrator {
           this.sessionActivity.set(sessionId, 'active');
         }
       });
-      
+
       this.socket.on('autosuggest-response', ({ sessionId, suggestion, prefix }) => {
         this.terminalManager.handleAutosuggestResponse(sessionId, suggestion, prefix);
       });
@@ -1142,15 +1142,15 @@ class ClaudeOrchestrator {
         this.updateSessionStatus(sessionId, status);
         this.maybeAutoSendPrompt(sessionId, status);
       });
-      
+
       this.socket.on('branch-update', ({ sessionId, branch, remoteUrl, defaultBranch, existingPR }) => {
         this.updateSessionBranch(sessionId, branch, remoteUrl, defaultBranch, existingPR);
       });
-      
+
       this.socket.on('notification-trigger', (notification) => {
         this.notificationManager.handleNotification(notification);
       });
-      
+
       this.socket.on('session-exited', ({ sessionId, exitCode }) => {
         this.handleSessionExit(sessionId, exitCode);
       });
@@ -1343,7 +1343,7 @@ class ClaudeOrchestrator {
         // Hide + persist dismissal so it doesn't resurrect on refresh/worktree-add
         this.hideStartupUI(sessionId);
         this.scheduleAutoPromptFallback(sessionId, 'claude');
-        
+
         // Enable the start button now that Claude has started
         const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
         if (startBtn) {
@@ -1361,7 +1361,7 @@ class ClaudeOrchestrator {
       this.socket.on('claude-update-required', (updateInfo) => {
         this.showClaudeUpdateRequired(updateInfo);
       });
-      
+
       this.socket.on('user-settings-updated', (settings) => {
         console.log('User settings updated:', settings);
         this.userSettings = settings;
@@ -1589,7 +1589,7 @@ class ClaudeOrchestrator {
       this.socket.on('git-updated', (result) => {
         console.log('Git updated:', result);
         this.showTemporaryMessage(`Repository updated successfully! ${result.wasUpToDate ? 'Already up to date.' : 'Changes pulled.'}`, 'success');
-        
+
         // Refresh the page after successful update
         if (!result.wasUpToDate) {
           setTimeout(() => {
@@ -1600,45 +1600,45 @@ class ClaudeOrchestrator {
           }, 3000);
         }
       });
-      
+
       // Build production events
       this.socket.on('build-started', ({ sessionId, worktreeNum }) => {
         console.log(`Build started for worktree ${worktreeNum}`);
       });
-      
+
       this.socket.on('build-completed', ({ sessionId, worktreeNum, zipPath }) => {
         console.log(`Build completed for worktree ${worktreeNum}: ${zipPath}`);
-        
+
         // Restore the build button (use work{num} pattern to find buttons)
         this.restoreBuildButton(`work${worktreeNum}`);
-        
+
         // Request to reveal the file in explorer
         this.socket.emit('reveal-in-explorer', { path: zipPath });
       });
-      
+
       this.socket.on('build-failed', ({ sessionId, worktreeNum, error }) => {
         console.error(`Build failed for worktree ${worktreeNum}:`, error);
         this.showError(`❌ Build failed for Worktree ${worktreeNum}: ${error}`);
-        
+
         // Restore the build button (use work{num} pattern to find buttons)
         this.restoreBuildButton(`work${worktreeNum}`);
       });
-      
+
       // Periodic heartbeat to keep sessions alive while UI is open
       this.startHeartbeats();
-      
+
       this.socket.on('server-started', ({ sessionId, port }) => {
         console.log(`[SERVER-STARTED EVENT] Session: ${sessionId}, Port: ${port}`);
         this.serverPorts.set(sessionId, port);
         console.log(`Server ${sessionId} started on port ${port}`);
         console.log('Current serverPorts:', Array.from(this.serverPorts.entries()));
-        
+
         // Only open localhost automatically - Hytopia needs manual click due to popup blockers
         setTimeout(() => {
           const localhostUrl = `https://localhost:${port}`;
           console.log(`Opening localhost for initialization: ${localhostUrl}`);
           window.open(localhostUrl, '_blank');
-          
+
           // Show notification that server is ready
           if (this.settings.notifications) {
             this.showNotification('Server Ready', `Server ${sessionId.replace('-server', '')} is running on port ${port}. Click 🎮 to play!`);
@@ -1657,14 +1657,14 @@ class ClaudeOrchestrator {
           reject(new Error('Connection timeout'));
         }
       }, 10000);
-      
+
       // Clear timeout on successful connection
       this.socket.on('connect', () => {
         clearTimeout(timeoutId);
       });
     });
   }
-  
+
   startHeartbeats() {
     if (this._heartbeatInterval) {
       clearInterval(this._heartbeatInterval);
@@ -1676,7 +1676,7 @@ class ClaudeOrchestrator {
       }
     }, 30000);
   }
-  
+
 		  setupEventListeners() {
 	    // Check if elements exist before adding listeners
 	    const elements = {
@@ -1739,7 +1739,7 @@ class ClaudeOrchestrator {
 	      'start-claude',
 	      'cancel-claude-startup'
 	    ]);
-	    
+
 	    // Check all elements exist
 	    for (const id in elements) {
 	      elements[id] = document.getElementById(id);
@@ -1747,7 +1747,7 @@ class ClaudeOrchestrator {
 	        console.warn(`Element not found: ${id}`);
 	      }
 	    }
-    
+
 	    // Sidebar worktree clicks - use toggle instead of show
 	    if (elements['worktree-list']) {
 	      elements['worktree-list'].addEventListener('click', (e) => {
@@ -1856,7 +1856,7 @@ class ClaudeOrchestrator {
 	      if (!document.body.classList.contains('sidebar-open')) return;
 	      this.closeSidebar();
 	    });
-    
+
 	    // View buttons
 	    const dashboardBtn = document.getElementById('dashboard-btn');
 	    if (dashboardBtn) {
@@ -1878,26 +1878,26 @@ class ClaudeOrchestrator {
 			      this.setViewMode('all');
 			      if (this.isMobileLayout()) this.closeSidebar();
 			    });
-		    
+
 		    document.getElementById('view-claude-only').addEventListener('click', () => {
 		      this.setViewMode('claude');
 		      if (this.isMobileLayout()) this.closeSidebar();
 		    });
-		    
+
 		    document.getElementById('view-servers-only').addEventListener('click', () => {
 		      this.setViewMode('server');
 		      if (this.isMobileLayout()) this.closeSidebar();
 		    });
-    
+
     // Presets
     document.getElementById('view-presets').addEventListener('click', () => {
       document.getElementById('presets-modal').classList.remove('hidden');
     });
-    
+
     document.getElementById('close-presets').addEventListener('click', () => {
       document.getElementById('presets-modal').classList.add('hidden');
     });
-    
+
     // Preset buttons
     document.querySelectorAll('.preset-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1906,9 +1906,9 @@ class ClaudeOrchestrator {
         document.getElementById('presets-modal').classList.add('hidden');
       });
     });
-    
+
 	    // Grid layout dropdown removed - using dynamic layout now
-    
+
 	    // Settings
 		    const settingsToggle = document.getElementById('settings-toggle');
 		    const closeSettingsPanel = () => {
@@ -1936,7 +1936,7 @@ class ClaudeOrchestrator {
 		    } else {
 		      console.error('Settings toggle button not found!');
 		    }
-	    
+
 	    document.getElementById('close-settings').addEventListener('click', () => {
 	      closeSettingsPanel();
 	    });
@@ -1962,7 +1962,7 @@ class ClaudeOrchestrator {
 	      if (panel.contains(e.target)) return;
 	      closeSettingsPanel();
 	    });
-    
+
     // Settings inputs
     document.getElementById('enable-notifications').addEventListener('change', (e) => {
       this.settings.notifications = e.target.checked;
@@ -1971,12 +1971,12 @@ class ClaudeOrchestrator {
         this.notificationManager.requestPermission();
       }
     });
-    
+
     document.getElementById('enable-sounds').addEventListener('change', (e) => {
       this.settings.sounds = e.target.checked;
       this.saveSettings();
     });
-    
+
     document.getElementById('auto-scroll').addEventListener('change', (e) => {
       this.settings.autoScroll = e.target.checked;
       this.saveSettings();
@@ -1994,7 +1994,7 @@ class ClaudeOrchestrator {
         }
       }
     });
-    
+
     document.getElementById('theme-select').addEventListener('change', (e) => {
       this.settings.theme = e.target.value;
       this.saveSettings();
@@ -2048,6 +2048,7 @@ class ClaudeOrchestrator {
 		    // Settings UI helpers: search + section jump so the panel doesn’t feel like an endless scroll.
 		    this.setupSettingsPanelNavigation();
 		    this.setupDiagnosticsPanel();
+		    this.setupDependencySetupWizard();
 
 	    const tasksThemeSelect = document.getElementById('tasks-theme-select');
 	    if (tasksThemeSelect) {
@@ -2306,7 +2307,7 @@ class ClaudeOrchestrator {
     document.getElementById('dismiss-git-notification').addEventListener('click', () => {
       document.getElementById('git-update-notification').classList.add('hidden');
     });
-    
+
     // Workflow notification settings (server-persisted)
     const workflowNotifyMode = document.getElementById('workflow-notify-mode');
     if (workflowNotifyMode) {
@@ -2727,33 +2728,33 @@ class ClaudeOrchestrator {
     if (markReadBtn) {
       markReadBtn.addEventListener('click', () => this.notificationManager?.markAllAsRead?.());
     }
-    
+
     // Claude startup modal handlers (simplified)
     const cancelClaudeBtn = document.getElementById('cancel-claude-startup');
-    
+
     if (cancelClaudeBtn) {
       cancelClaudeBtn.addEventListener('click', () => {
         this.hideClaudeStartupModal();
       });
     }
-    
+
     // Handle startup option button clicks
     document.addEventListener('click', (e) => {
       if (e.target.closest('.startup-option-btn')) {
         const btn = e.target.closest('.startup-option-btn');
         const mode = btn.dataset.mode;
-        
+
         // Check if modal YOLO is checked
         const modalYolo = document.getElementById('modal-yolo');
         const skipPermissions = modalYolo ? modalYolo.checked : false;
-        
+
         if (this.pendingClaudeSession) {
           this.startClaudeWithOptions(this.pendingClaudeSession, mode, skipPermissions);
           this.hideClaudeStartupModal();
         }
       }
     });
-    
+
     // Handle window resize to fix blank terminals
     let resizeTimeout;
 	    window.addEventListener('resize', () => {
@@ -2899,7 +2900,7 @@ class ClaudeOrchestrator {
       });
     });
   }
-	  
+
 	  setViewMode(mode, { persist = true } = {}) {
 	    const normalized = String(mode || '').toLowerCase();
 	    if (!['all', 'claude', 'server'].includes(normalized)) return;
@@ -2914,7 +2915,7 @@ class ClaudeOrchestrator {
 	      this.updateGlobalUserSetting('ui.terminals.viewMode', normalized);
 	    }
 	  }
-	  
+
   updateViewModeButtons() {
     const allBtn = document.getElementById('view-all');
     const claudeBtn = document.getElementById('view-claude-only');
@@ -3544,21 +3545,21 @@ class ClaudeOrchestrator {
 
     return null;
   }
-	  
+
 	  matchesViewMode(sessionId) {
 	    if (this.viewMode === 'all') return true;
-	
+
 	    const session = this.sessions.get(sessionId);
 	    const type = session?.type;
-	
+
 	    if (this.viewMode === 'claude') {
 	      return type === 'claude' || type === 'codex' || /-(claude|codex)$/.test(String(sessionId || ''));
 	    }
-	
+
 	    if (this.viewMode === 'server') {
 	      return type === 'server' || sessionId.includes('-server');
 	    }
-	
+
 	    return true;
 	  }
 
@@ -3571,7 +3572,7 @@ class ClaudeOrchestrator {
         && this.matchesTierFilter(sessionId)
         && this.matchesWorkflowMode(sessionId);
 	  }
-	  
+
 	  handleInitialSessions(sessionStates) {
 	    console.log('Received initial sessions:', sessionStates);
 
@@ -3588,7 +3589,7 @@ class ClaudeOrchestrator {
     this.sessions.clear();
     this.sessionActivity.clear();
     this.visibleTerminals.clear();
-    
+
     // Process sessions
     for (const [sessionId, state] of Object.entries(sessionStates)) {
       const sessionData = {
@@ -3634,13 +3635,13 @@ class ClaudeOrchestrator {
     this.pruneIntentHaikuState(new Set(Object.keys(sessionStates)));
 
     this.lastSessionsWorkspaceId = currentWorkspaceId;
-    
+
     // Hide loading message FIRST
     const loadingMessage = document.getElementById('loading-message');
     if (loadingMessage) {
       loadingMessage.style.display = 'none';
     }
-    
+
     // Build sidebar
     this.buildSidebar();
 
@@ -4237,10 +4238,10 @@ class ClaudeOrchestrator {
 
     // Always ensure filter toggle exists and is updated FIRST
     this.ensureFilterToggleExists();
-    
+
     // Clear and rebuild the worktree list
     worktreeList.innerHTML = '';
-    
+
     // Group sessions by worktree and repository for mixed-repo support
     const worktrees = new Map();
 
@@ -4274,22 +4275,22 @@ class ClaudeOrchestrator {
         worktree.server = session;
       }
     }
-    
+
     // Create sidebar items
     for (const [worktreeId, worktree] of worktrees) {
       // Check if worktree is active (has any session marked as active)
       const isActive = this.isWorktreeActive(worktreeId);
-      
+
       // Skip inactive worktrees if filter is enabled
       if (this.showActiveOnly && !isActive) {
         continue;
       }
-      
+
       // Check if any session in this worktree is visible.
       const claudeVisible = !!(worktree.claude && this.isSessionVisibleByWorktreeSelection(worktree.claude.sessionId, worktree.claude));
       const serverVisible = !!(worktree.server && this.isSessionVisibleByWorktreeSelection(worktree.server.sessionId, worktree.server));
       const isVisible = claudeVisible || serverVisible;
-      
+
       const item = document.createElement('div');
       // Only show visibility state, not activity state (activity filtering is handled separately)
       item.className = `worktree-item ${!isVisible ? 'hidden-terminal' : ''}`;
@@ -4408,9 +4409,9 @@ class ClaudeOrchestrator {
 	          </div>
 	        </div>
 	      `;
-      
+
       // Click handler is already attached via event delegation in setupEventListeners
-      
+
       worktreeList.appendChild(item);
     }
 
@@ -4791,21 +4792,21 @@ class ClaudeOrchestrator {
     const current = this.worktreeTags.get(worktreePath)?.readyForReview;
     return this.setWorktreeReadyForReview(worktreePath, !current);
   }
-  
+
   ensureFilterToggleExists() {
     let filterToggle = document.getElementById('filter-toggle');
-	    
+
 	    if (!filterToggle) {
 	      // Create the filter toggle element
 	      filterToggle = document.createElement('div');
 	      filterToggle.className = 'filter-toggle';
 	      filterToggle.id = 'filter-toggle';
-	      
+
 	      // Insert it right before the worktree list
 	      const worktreeList = document.getElementById('worktree-list');
 	      worktreeList.parentNode.insertBefore(filterToggle, worktreeList);
 	    }
-	    
+
 	    // Always update the button content
     const visibility = this.getUiVisibilityConfig().sidebar || {};
     const showActiveFilter = visibility.activeFilter !== false;
@@ -4838,7 +4839,7 @@ class ClaudeOrchestrator {
     if (status === 'error') return 'error';
     return 'idle';
   }
-  
+
   isWorktreeActive(worktreeIdOrKey) {
     // Check if any session for this worktree has been marked as active.
     // For mixed-repo workspaces we may receive:
@@ -4867,11 +4868,11 @@ class ClaudeOrchestrator {
 
     return false;
   }
-  
+
   toggleActivityFilter() {
     this.showActiveOnly = !this.showActiveOnly;
     this.buildSidebar();
-    
+
     // Also update the main grid view to match the filter
     if (this.showActiveOnly) {
       this.showActiveWorktreesOnly();
@@ -4879,11 +4880,11 @@ class ClaudeOrchestrator {
       this.showAllTerminals();
     }
   }
-  
+
   showActiveWorktreesOnly() {
     // Clear visible terminals first
     this.visibleTerminals.clear();
-    
+
     // Add only active worktree sessions to visible set
     for (const [sessionId, session] of this.sessions) {
       const sessionWorktreeId = session.worktreeId || sessionId.split('-')[0];
@@ -4894,7 +4895,7 @@ class ClaudeOrchestrator {
         this.visibleTerminals.add(sessionId);
       }
     }
-    
+
     // If no active sessions, show all
     if (this.visibleTerminals.size === 0) {
       this.showAllTerminals();
@@ -4903,7 +4904,7 @@ class ClaudeOrchestrator {
       this.buildSidebar();
     }
   }
-  
+
   resizeAllVisibleTerminals() {
 	    // Force resize all visible terminals to fit their containers
 	    this.activeView.forEach(sessionId => {
@@ -5037,7 +5038,7 @@ class ClaudeOrchestrator {
     this.updateTerminalGrid();
     this.buildSidebar();
   }
-  
+
   showWorktree(worktreeIdOrKey) {
     // Show terminals for this EXACT worktree key
     const claudeId = `${worktreeIdOrKey}-claude`;
@@ -5049,17 +5050,17 @@ class ClaudeOrchestrator {
     this.updateTerminalGrid();
     this.buildSidebar();
   }
-  
+
   showAllTerminals() {
     // Add all sessions to visible set
     for (const sessionId of this.sessions.keys()) {
       this.visibleTerminals.add(sessionId);
     }
-    
+
     this.updateTerminalGrid();
     this.buildSidebar();
   }
-  
+
   /**
    * Get the terminal grid container for the current tab
    */
@@ -5088,7 +5089,7 @@ class ClaudeOrchestrator {
     const allSessions = Array.from(this.sessions.keys());
     this.renderTerminalsWithVisibility(allSessions);
   }
-  
+
   renderTerminalsWithVisibility(sessionIds) {
     // Render all terminals but apply visibility using CSS (don't destroy DOM)
     this.activeView = sessionIds.filter(id => this.isSessionVisibleInCurrentView(id));
@@ -5232,18 +5233,18 @@ class ClaudeOrchestrator {
       this.resizeAllVisibleTerminals();
     }, 200);
   }
-  
+
 	  showClaudeOnly() {
 	    this.setViewMode('claude');
   }
-	  
+
 	  showServersOnly() {
 	    this.setViewMode('server');
 	  }
-	  
+
 	  applyPreset(preset) {
 	    this.visibleTerminals.clear();
-	    
+
 	    switch (preset) {
 	      case 'all':
 	        this.showAllTerminals();
@@ -5277,9 +5278,9 @@ class ClaudeOrchestrator {
         break;
     }
   }
-  
+
   // changeLayout method removed - using dynamic layout based on visible terminal count
-  
+
   showTerminals(sessionIds) {
     // Legacy function - update visible set and refresh everything
     this.visibleTerminals.clear();
@@ -5291,31 +5292,31 @@ class ClaudeOrchestrator {
     this.updateTerminalGrid();
     this.buildSidebar();
   }
-  
+
   renderTerminals(sessionIds) {
     // Core rendering function - just displays terminals without updating state
     this.activeView = sessionIds;
     const grid = this.getTerminalGrid();
-    
+
     // Sort sessionIds to ensure proper ordering: work1-claude, work1-server, work2-claude, work2-server, etc.
     const sortedSessionIds = sessionIds.slice().sort((a, b) => {
       // Extract worktree number
       const getWorkNum = (id) => parseInt(id.match(/work(\d+)/)?.[1] || 0);
       const numA = getWorkNum(a);
       const numB = getWorkNum(b);
-      
+
       // First sort by worktree number
       if (numA !== numB) return numA - numB;
-      
+
       // Then claude before server
       if (a.includes('claude') && b.includes('server')) return -1;
       if (a.includes('server') && b.includes('claude')) return 1;
       return 0;
     });
-    
+
     // Clear grid but don't destroy terminals
     grid.innerHTML = '';
-    
+
     // Create terminal elements for active view
     sortedSessionIds.forEach((sessionId) => {
       const session = this.sessions.get(sessionId);
@@ -5324,7 +5325,7 @@ class ClaudeOrchestrator {
         grid.appendChild(wrapper);
       }
     });
-    
+
     // Now handle terminal instances
     sortedSessionIds.forEach((sessionId, index) => {
       const session = this.sessions.get(sessionId);
@@ -5332,25 +5333,25 @@ class ClaudeOrchestrator {
 	        setTimeout(() => {
 	          const terminalEl = document.getElementById(this.getSessionDomId('terminal', sessionId));
 	          if (!terminalEl) return;
-          
+
           if (this.terminalManager.terminals.has(sessionId)) {
             // Re-attach existing terminal to the new element
             const term = this.terminalManager.terminals.get(sessionId);
-            
+
             // Clear and re-open the terminal in the new element
             terminalEl.innerHTML = '';
             term.open(terminalEl);
-            
+
             // Force a resize and refresh
             this.terminalManager.fitTerminal(sessionId);
-            
+
             // Force a screen refresh to show content
             term.refresh(0, term.rows - 1);
           } else {
             // Create new terminal only if it doesn't exist
             this.terminalManager.createTerminal(sessionId, session);
           }
-          
+
           // Don't auto-start Claude - let user choose via modal or button
         }, 50 + (index * 25)); // Reduced stagger time
       }
@@ -5576,41 +5577,41 @@ class ClaudeOrchestrator {
 	  getTicketMetaForSession(sessionId, sessionOverride = null) {
 	    const sid = String(sessionId || '').trim();
 	    if (!sid) return null;
-	
+
 	    const session = sessionOverride || this.sessions.get(sid);
 	    const recordIds = [];
 	    recordIds.push(`session:${sid}`);
-	
+
 	    const worktreePath = session?.config?.cwd || session?.cwd || session?.worktreePath || null;
 	    if (worktreePath) recordIds.push(`worktree:${worktreePath}`);
-	
+
 	    const prUrl = this.githubLinks.get(sid)?.pr || null;
 	    const prTaskId = prUrl ? this.getPRTaskIdFromUrl(prUrl) : null;
 	    if (prTaskId) recordIds.push(prTaskId);
-	
+
 	    for (const id of recordIds) {
 	      const rec = this.taskRecords.get(id);
 	      if (!rec) continue;
-	
+
 	      const ticketProvider = String(rec.ticketProvider || '').trim().toLowerCase();
 	      const ticketCardId = String(rec.ticketCardId || '').trim();
 	      const ticketCardUrl = String(rec.ticketCardUrl || '').trim();
 	      const ticketTitle = String(rec.ticketTitle || '').trim();
-	
+
 	      if (!ticketTitle && !ticketCardId && !ticketCardUrl) continue;
-	
+
 		      const rawUrl =
 		        ticketCardUrl
 		        || ((ticketProvider === 'trello' || !ticketProvider) && ticketCardId ? `https://trello.com/c/${ticketCardId}` : '');
 		      const url = (rawUrl && /^https?:\/\//i.test(rawUrl)) ? rawUrl : '';
-	
+
 	      const label = ticketTitle || (ticketProvider && ticketCardId ? `${ticketProvider}:${ticketCardId}` : (ticketCardId ? ticketCardId : url));
 	      const tooltipParts = [
 	        ticketTitle || null,
 	        ticketProvider && ticketCardId ? `${ticketProvider}:${ticketCardId}` : null,
 	        url || null
 	      ].filter(Boolean);
-	
+
 	      return {
 	        provider: ticketProvider || null,
 	        cardId: ticketCardId || null,
@@ -5620,36 +5621,36 @@ class ClaudeOrchestrator {
 	        tooltip: tooltipParts.join(' • ')
 	      };
 	    }
-	
+
 	    return null;
 	  }
-	
+
 		  updateTerminalTicketLabel(sessionId) {
 		    const sid = String(sessionId || '').trim();
 		    if (!sid) return;
-		
+
 		    const wrapper = this.getSessionWrapperElement(sid);
 		    if (!wrapper) return;
-	
+
 	    const titleRow = wrapper.querySelector('.terminal-title');
 	    if (!titleRow) return;
-	
+
 	    const existing = titleRow.querySelector('.terminal-ticket');
 	    const meta = this.getTicketMetaForSession(sid);
-	
+
 	    if (!meta || !meta.label) {
 	      existing?.remove();
 	      return;
 	    }
-	
+
 	    const label = `🧾 ${meta.label}`;
 	    const tooltip = meta.tooltip || meta.title || meta.label;
 	    const url = meta.url || '';
-	
+
 	    const wantsLink = !!url;
 	    const isLink = existing && existing.tagName && existing.tagName.toLowerCase() === 'a';
 	    const isSpan = existing && existing.tagName && existing.tagName.toLowerCase() === 'span';
-	
+
 	    if (wantsLink) {
 	      let el = existing;
 	      if (!isLink) {
@@ -5658,7 +5659,7 @@ class ClaudeOrchestrator {
 	        el.className = 'terminal-ticket';
 	        el.target = '_blank';
 	        el.rel = 'noopener noreferrer';
-	
+
 	        const branchEl = titleRow.querySelector('.terminal-branch');
 	        if (branchEl && branchEl.parentElement === titleRow) {
 	          branchEl.insertAdjacentElement('afterend', el);
@@ -5671,7 +5672,7 @@ class ClaudeOrchestrator {
 	      el.title = tooltip;
 	      return;
 	    }
-	
+
 	    let el = existing;
 	    if (!isSpan) {
 	      existing?.remove();
@@ -5687,7 +5688,7 @@ class ClaudeOrchestrator {
 	    el.textContent = label;
 	    el.title = tooltip;
 	  }
-	
+
 	  refreshBranchLabels() {
 	    try {
 	      for (const [sessionId, session] of this.sessions) {
@@ -5699,7 +5700,7 @@ class ClaudeOrchestrator {
 	    }
 	    this.buildSidebar();
   }
-  
+
   createTerminalElement(sessionId, session) {
     const wrapper = document.createElement('div');
     wrapper.className = 'terminal-wrapper';
@@ -5709,7 +5710,7 @@ class ClaudeOrchestrator {
     wrapper.addEventListener('mousedown', () => {
       this.lastInteractedSessionId = sessionId;
     });
-    
+
     const sessionType = String(session?.type || '').trim().toLowerCase();
     const isAgentSession = sessionType === 'claude' || sessionType === 'codex';
     const isServerSession = sessionType === 'server';
@@ -5819,7 +5820,7 @@ class ClaudeOrchestrator {
 
     return wrapper;
   }
-  
+
   updateSessionStatus(sessionId, status) {
     const statusElement = document.getElementById(this.getSessionDomId('status', sessionId));
     // Update session data
@@ -5903,7 +5904,7 @@ class ClaudeOrchestrator {
         apply(status);
       }
     }
-    
+
     // Update quick actions for agent sessions
     if (/-claude$|-codex$/.test(sessionId)) {
       // Clear any pending notification timer if agent goes busy again
@@ -5935,11 +5936,11 @@ class ClaudeOrchestrator {
         }, 3000);
       }
     }
-    
+
     // Update sidebar
     this.updateSidebarStatus(sessionId, status);
   }
-  
+
   updateSidebarStatus(sessionId, status) {
     const session = this.sessions.get(sessionId);
     const key = this.getSessionWorktreeKey(sessionId, session);
@@ -5996,7 +5997,7 @@ class ClaudeOrchestrator {
       }
     }
   }
-  
+
   updateSessionBranch(sessionId, branch, remoteUrl, defaultBranch, existingPR) {
     const session = this.sessions.get(sessionId);
     if (session) {
@@ -6007,9 +6008,9 @@ class ClaudeOrchestrator {
       if (defaultBranch) {
         session.defaultBranch = defaultBranch;
       }
-      
+
       console.log(`Branch updated for ${sessionId}: ${branch}`, existingPR ? `(existing PR: ${existingPR})` : '');
-      
+
       // If there's an existing PR, add it to GitHub links automatically
       if (existingPR) {
         const links = this.githubLinks.get(sessionId) || {};
@@ -6019,17 +6020,17 @@ class ClaudeOrchestrator {
         this.maybeSchedulePrIntentRefresh(sessionId, existingPR);
       }
     }
-    
+
     // Update terminal branch display
     this.updateTerminalBranchLabel(sessionId, branch || '');
-    
+
     // Update sidebar
     this.buildSidebar();
-    
+
     // Update GitHub buttons with new remote URL
     this.updateTerminalControls(sessionId);
   }
-  
+
   // Server control methods
   toggleServer(sessionId, environment = 'development') {
     const status = this.serverStatuses.get(sessionId);
@@ -6056,22 +6057,22 @@ class ClaudeOrchestrator {
       });
     }
   }
-  
+
   killServer(sessionId) {
     // Send force kill
     this.socket.emit('server-control', { sessionId, action: 'kill' });
     this.serverStatuses.set(sessionId, 'idle');
-    
+
     // Update UI
     const button = document.getElementById(`server-toggle-${sessionId}`);
     if (button) {
       button.textContent = '▶';
     }
-    
+
     this.updateSidebarStatus(sessionId, 'idle');
     this.updateServerControls(sessionId);
   }
-  
+
   playInHytopia(sessionId) {
     console.log(`[PLAY IN HYTOPIA] Session: ${sessionId}`);
     console.log('Available ports:', Array.from(this.serverPorts.entries()));
@@ -6089,21 +6090,21 @@ class ClaudeOrchestrator {
       }
       return;
     }
-    
+
     const serverUrl = `localhost:${port}`;
     const hytopiaUrl = `https://hytopia.com/play/?${serverUrl}`;
-    
+
     console.log(`Opening Hytopia for ${sessionId} at ${hytopiaUrl}`);
     window.open(hytopiaUrl, '_blank');
   }
-  
+
   restoreBuildButton(sessionId) {
     // Find any button that might be building for this worktree
     const worktreeMatch = sessionId.match(/work(\d+)/);
     if (!worktreeMatch) return;
-    
+
     const worktreeNum = worktreeMatch[1];
-    
+
     // Check both claude and server buttons for this worktree
     [`work${worktreeNum}-claude`, `work${worktreeNum}-server`].forEach(id => {
       const btn = this.buildingButtons?.get(id);
@@ -6115,7 +6116,7 @@ class ClaudeOrchestrator {
       }
     });
   }
-  
+
   buildProduction(sessionId) {
     // Extract worktree number from sessionId (e.g., 'work1-claude' -> 1)
     const worktreeMatch = sessionId.match(/work(\d+)/);
@@ -6124,10 +6125,10 @@ class ClaudeOrchestrator {
       this.showError('Failed to identify worktree for build');
       return;
     }
-    
+
     const worktreeNum = worktreeMatch[1];
     console.log(`Building production ZIP for worktree ${worktreeNum}`);
-    
+
 	    // Disable the build button and show loading state
 	    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
 	    const buildBtn = wrapper ? wrapper.querySelector('button[onclick*="buildProduction"]') : null;
@@ -6136,26 +6137,26 @@ class ClaudeOrchestrator {
       buildBtn.innerHTML = '<span class="loading-spinner"></span>';
       buildBtn.classList.add('building');
     }
-    
+
     // Store the button reference for later
     this.buildingButtons = this.buildingButtons || new Map();
     this.buildingButtons.set(sessionId, buildBtn);
-    
+
     // Emit socket event to trigger build on backend
-    this.socket.emit('build-production', { 
+    this.socket.emit('build-production', {
       sessionId,
-      worktreeNum 
+      worktreeNum
     });
   }
-  
+
   detectGitHubLinks(sessionId, data) {
     // Look for GitHub URLs with improved pattern matching
     const githubUrlPattern = /https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(?:\/(?!https:\/\/github\.com\/)[^\s\)\]\}\>\"\'\`]*)?/g;
     const matches = data.match(githubUrlPattern);
-    
+
     if (matches) {
       const links = this.githubLinks.get(sessionId) || {};
-      
+
       matches.forEach(originalUrl => {
         // Clean up ANSI escape codes and other terminal artifacts
         let url = originalUrl
@@ -6164,7 +6165,7 @@ class ClaudeOrchestrator {
           .replace(/\u001b\[[0-9;]*m/g, '') // Remove Unicode ANSI codes
           .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Remove other control characters
           .trim();
-        
+
         // Remove common trailing punctuation that might be captured
         url = url.replace(/[,;.!?)\]}>'"`]*$/, '');
 
@@ -6173,7 +6174,7 @@ class ClaudeOrchestrator {
         if (secondUrlIndex > 0) {
           url = url.slice(0, secondUrlIndex);
         }
-        
+
         // Validate URL format
         try {
           new URL(url);
@@ -6181,7 +6182,7 @@ class ClaudeOrchestrator {
           console.warn('Invalid GitHub URL detected:', url);
           return;
         }
-        
+
         // Categorize the URL
         if (url.includes('/pull/') && url.match(/\/pull\/\d+\/?$/)) {
           if (links.pr !== url) {
@@ -6201,36 +6202,36 @@ class ClaudeOrchestrator {
           }
         }
       });
-      
+
       this.githubLinks.set(sessionId, links);
       this.updateTerminalControls(sessionId);
     }
   }
-  
+
   clearGitHubLinks(sessionId) {
     this.githubLinks.delete(sessionId);
     this.githubLinkLogs.delete(sessionId);
     this.updateTerminalControls(sessionId);
   }
-  
+
   copyLocalhostUrl(sessionId) {
     const port = this.serverPorts.get(sessionId);
     if (!port) {
       console.error('No port found for server', sessionId);
       return;
     }
-    
+
     const url = `https://localhost:${port}`;
     navigator.clipboard.writeText(url).then(() => {
       console.log(`Copied ${url} to clipboard`);
       this.showNotification('Copied!', `${url} copied to clipboard`);
     });
   }
-  
+
   openHytopiaWebsite() {
     window.open('https://hytopia.com', '_blank');
   }
-  
+
   openPRLink(url) {
     try {
       // Validate the URL
@@ -6242,17 +6243,17 @@ class ClaudeOrchestrator {
       this.showToast('Invalid PR URL', 'error');
     }
   }
-  
+
   getGitHubButtons(sessionId) {
     const links = this.githubLinks.get(sessionId) || {};
     let buttons = '';
     const visibility = this.getTerminalVisibilityConfig();
-    
+
     // Always show branch button (uses current session's git info)
     const session = this.sessions.get(sessionId);
     if (session && session.branch && session.branch !== 'master' && session.branch !== 'main') {
       const worktreeId = sessionId.split('-')[0];
-      
+
       // Use dynamic remote URL if available
       if (session.remoteUrl) {
         const encodeRef = (ref) => encodeURIComponent(String(ref || '').trim());
@@ -6261,7 +6262,7 @@ class ClaudeOrchestrator {
         // Use the actual default branch from git, fallback to 'main' if not available
         const defaultBranch = session.defaultBranch || 'main';
         const compareUrl = `${session.remoteUrl}/compare/${encodeRef(defaultBranch)}...${branchRef}`;
-        
+
         if (visibility.viewBranchOnGithub !== false) {
           buttons += `<button class="control-btn" onclick="window.open('${branchUrl}', '_blank')" title="View Branch on GitHub">🌿</button>`;
         }
@@ -6273,7 +6274,7 @@ class ClaudeOrchestrator {
         }
       }
     }
-    
+
     // Show PR button if PR link detected
     if (links.pr) {
       const lastLogged = this.githubLinkLogs.get(sessionId);
@@ -6288,17 +6289,17 @@ class ClaudeOrchestrator {
         buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${links.pr}')" title="Advanced Diff View">🔍</button>`;
       }
     }
-    
+
     // Check for commit URLs
     if (links.commit) {
       if (visibility.advancedDiff !== false) {
         buttons += `<button class="control-btn diff-viewer-btn" onclick="window.orchestrator.launchDiffViewer('${links.commit}')" title="Advanced Diff View">🔍</button>`;
       }
     }
-    
+
     return buttons;
   }
-  
+
 			  updateTerminalControls(sessionId) {
 			    const wrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
 			    if (!wrapper) return;
@@ -6378,43 +6379,43 @@ class ClaudeOrchestrator {
                 : '';
 					    return [stopBtn, removeBtn].filter(Boolean).join('\n');
 					  }
-  
+
   updateServerStatus(sessionId, output) {
     // Check if server started - look for various startup messages
-    if (output.includes('Server started') || 
-        output.includes('Listening on') || 
+    if (output.includes('Server started') ||
+        output.includes('Listening on') ||
         output.includes('Server running') ||
         output.includes('Started server') ||
         output.includes('🚀')) {
       this.serverStatuses.set(sessionId, 'running');
       this.updateSidebarStatus(sessionId, 'running');
-      
+
       const button = document.getElementById(`server-toggle-${sessionId}`);
       if (button) {
         button.textContent = '⏹';
       }
-      
+
       this.updateServerControls(sessionId);
       const linkedClaude = this.getLinkedClaudeSessionIdForServer(sessionId);
       if (linkedClaude) this.updateTerminalControls(linkedClaude);
     }
-    
+
     // Check if server stopped
     if (output.includes('Server stopped') || output.includes('exit')) {
       this.serverStatuses.set(sessionId, 'idle');
       this.updateSidebarStatus(sessionId, 'idle');
-      
+
       const button = document.getElementById(`server-toggle-${sessionId}`);
       if (button) {
         button.textContent = '▶';
       }
-      
+
       this.updateServerControls(sessionId);
       const linkedClaude = this.getLinkedClaudeSessionIdForServer(sessionId);
       if (linkedClaude) this.updateTerminalControls(linkedClaude);
     }
   }
-  
+
   /**
    * Get dynamic launch options based on current workspace
    */
@@ -6485,14 +6486,14 @@ class ClaudeOrchestrator {
     // Use dynamic button system
     controlsDiv.innerHTML = this.getServerControlsHTML(sessionId);
   }
-  
+
   handleServerError(sessionId, output) {
     const worktreeId = sessionId.split('-')[0];
-    
+
     // Update status
     this.serverStatuses.set(sessionId, 'error');
     this.updateSidebarStatus(sessionId, 'error');
-    
+
     // Show notification
     this.notificationManager.handleNotification({
       sessionId,
@@ -6518,13 +6519,13 @@ class ClaudeOrchestrator {
     session.hasUserInput = false;
     this.updateSidebarStatus(sid, String(session.status || 'idle').trim().toLowerCase() || 'idle');
   }
-  
+
   sendTerminalInput(sessionId, data) {
     if (!this.socket || !this.socket.connected) {
       console.error('Not connected to server');
       return;
     }
-    
+
     // Mark session as active when user first provides input
     // But only for meaningful input (not just arrow keys, etc.)
     if (data.length > 0 && !data.match(/^[\x1b\x7f\r\n]/) && data.trim().length > 0) {
@@ -6547,7 +6548,7 @@ class ClaudeOrchestrator {
       console.error('Failed to interrupt session', e);
     }
   }
-  
+
   resizeTerminal(sessionId, cols, rows) {
     if (this.socket && this.socket.connected) {
       this.socket.emit('terminal-resize', { sessionId, cols, rows });
@@ -7522,7 +7523,7 @@ class ClaudeOrchestrator {
       }
     }
   }
-  
+
   handleSessionRestart(sessionId) {
     console.log(`Session ${sessionId} restarted`);
     // Terminal will automatically reconnect and show new content
@@ -7551,20 +7552,20 @@ class ClaudeOrchestrator {
       }
     }
   }
-  
+
   restartClaudeSession(sessionId) {
     console.log(`Restarting Claude session: ${sessionId}`);
-    
+
     if (this.socket && this.socket.connected) {
       this.socket.emit('restart-session', { sessionId });
-      
+
       // Update UI to show restarting
       this.updateSessionStatus(sessionId, 'restarting');
     } else {
       this.showError('Not connected to server');
     }
   }
-  
+
   refreshTerminal(sessionId) {
     console.log('Refreshing terminal:', sessionId);
     const term = this.terminalManager.terminals.get(sessionId);
@@ -7572,10 +7573,10 @@ class ClaudeOrchestrator {
       // Force fit and refresh
       this.terminalManager.fitTerminal(sessionId);
       term.refresh(0, term.rows - 1);
-      
+
       // Also try scrolling to bottom to trigger redraw
 	      term.scrollToBottom();
-	      
+
 	      // If still blank, re-attach to DOM
 	      const terminalEl = document.getElementById(this.getSessionDomId('terminal', sessionId));
 	      if (terminalEl && terminalEl.children.length === 0) {
@@ -7583,13 +7584,13 @@ class ClaudeOrchestrator {
 	      }
     }
   }
-  
+
   updateConnectionStatus(connected) {
     const statusElement = document.getElementById('connection-status');
     if (statusElement) {
       const dot = statusElement.querySelector('.status-dot');
       const text = statusElement.querySelector('span:last-child');
-      
+
       if (connected) {
         dot.classList.remove('disconnected');
         dot.classList.add('connected');
@@ -7601,12 +7602,12 @@ class ClaudeOrchestrator {
       }
     }
   }
-  
+
   showError(message) {
     // For now, use alert. Could be improved with a toast notification
     alert(`Error: ${message}`);
   }
-  
+
   showClaudeUpdateRequired(updateInfo) {
     // Create update banner
     const banner = document.createElement('div');
@@ -7621,10 +7622,10 @@ class ClaudeOrchestrator {
         <button onclick="this.parentElement.parentElement.remove()" class="dismiss-btn">Dismiss</button>
       </div>
     `;
-    
+
     // Add to top of page
     document.body.insertBefore(banner, document.body.firstChild);
-    
+
     // Also show in console
     console.warn('Claude Update Required:', updateInfo);
   }
@@ -7661,36 +7662,18 @@ class ClaudeOrchestrator {
       return;
     }
     this.lastNotificationTime[sessionId] = now;
-    
+
     const worktreeId = sessionId.replace('-claude', '');
     const session = this.sessions.get(sessionId);
     const branch = session ? session.branch : '';
-    
-    // Create small toast notification
-    const toast = document.createElement('div');
-    toast.className = 'ready-toast';
-    toast.innerHTML = `
-      <div class="toast-content">
-        <span class="toast-icon">✅</span>
-        <span class="toast-text">Claude ${worktreeId} ready ${branch ? `(${branch})` : ''}</span>
-      </div>
-    `;
-    
-    // Add to page
-    document.body.appendChild(toast);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-      if (toast.parentNode) {
-        toast.remove();
-      }
-    }, 3000);
-    
+
+    this.showToast(`Claude ${worktreeId} ready ${branch ? `(${branch})` : ''}`, 'success', { durationMs: 3000 });
+
     // Play notification sound if enabled
     if (this.settings.sounds) {
       this.playNotificationSound();
     }
-    
+
     // Browser notification if enabled
     if (this.settings.notifications && 'Notification' in window && Notification.permission === 'granted') {
       new Notification(`Claude ${worktreeId} Ready`, {
@@ -7709,26 +7692,26 @@ class ClaudeOrchestrator {
       });
     }
   }
-  
+
   playNotificationSound() {
     // Create a simple notification sound
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
-    
+
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    
+
     oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
     oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
-    
+
     gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-    
+
     oscillator.start(audioContext.currentTime);
     oscillator.stop(audioContext.currentTime + 0.3);
   }
-  
+
   loadSettings() {
     const stored = localStorage.getItem('claude-orchestrator-settings');
     const defaults = {
@@ -8501,11 +8484,11 @@ class ClaudeOrchestrator {
     globalNodeInput.value = nodeOptions.join(' ');
     globalArgsInput.value = gameArgs.join(' ');
   }
-  
+
   saveSettings() {
     localStorage.setItem('claude-orchestrator-settings', JSON.stringify(this.settings));
   }
-  
+
 	  applyTheme() {
 	    const mode = this.settings.theme === 'light' ? 'light' : 'dark';
 	    document.body.classList.toggle('light-theme', mode === 'light');
@@ -8683,7 +8666,7 @@ class ClaudeOrchestrator {
     }
     return normalized;
   }
-  
+
 	  syncSettingsUI() {
 	    // Sync checkbox states with settings
 	    document.getElementById('enable-notifications').checked = this.settings.notifications;
@@ -8702,29 +8685,29 @@ class ClaudeOrchestrator {
 	      const label = document.getElementById('skin-intensity-value');
 	      if (label) label.textContent = `${v}%`;
 	    }
-	    
+
 	    // Sync user settings UI if loaded
 	    if (this.userSettings) {
 	      this.syncUserSettingsUI();
 	    }
 	  }
-  
+
 	  showCodeReviewDropdown(sessionId) {
     // Close any existing dropdowns
     document.querySelectorAll('.review-dropdown').forEach(dropdown => dropdown.remove());
-    
+
     // Get the terminal controls container
 	    const terminalWrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
 	    const controlsContainer = terminalWrapper.querySelector('.terminal-controls');
-    
+
     // Create dropdown
     const dropdown = document.createElement('div');
     dropdown.className = 'review-dropdown';
     dropdown.innerHTML = this.buildReviewerDropdownHTML(sessionId);
-    
+
     // Position and add to DOM
     controlsContainer.appendChild(dropdown);
-    
+
     // Close dropdown when clicking outside
     const closeDropdown = (e) => {
       if (!dropdown.contains(e.target)) {
@@ -8732,22 +8715,22 @@ class ClaudeOrchestrator {
         document.removeEventListener('click', closeDropdown);
       }
     };
-    
+
     // Add close listener after a short delay to prevent immediate closure
     setTimeout(() => {
       document.addEventListener('click', closeDropdown);
     }, 100);
   }
-  
+
   buildReviewerDropdownHTML(requestingSessionId) {
     const availableReviewers = this.getAvailableReviewers(requestingSessionId);
-    
+
     let html = `
       <div class="review-dropdown-header">
         Assign Code Review
       </div>
     `;
-    
+
     if (availableReviewers.length === 0) {
       html += `
         <div class="reviewer-option disabled">
@@ -8767,19 +8750,19 @@ class ClaudeOrchestrator {
         `;
       });
     }
-    
+
     return html;
   }
-  
+
   getAvailableReviewers(requestingSessionId) {
     const reviewers = [];
-    
+
     for (const [sessionId, session] of this.sessions) {
       // Only include Claude sessions that are not the requesting session
       if (sessionId.includes('-claude') && sessionId !== requestingSessionId) {
         const worktreeNumber = sessionId.replace('-claude', '').replace('work', '');
         const isActive = this.sessionActivity.get(sessionId) === 'active';
-        
+
         // Prefer active sessions, but include inactive ones as backup
         if (isActive || session.status === 'waiting') {
           reviewers.push({
@@ -8792,7 +8775,7 @@ class ClaudeOrchestrator {
         }
       }
     }
-    
+
     // Sort by preference: active + ready first, then active + busy, then inactive
     reviewers.sort((a, b) => {
       if (a.isActive && !b.isActive) return -1;
@@ -8801,48 +8784,48 @@ class ClaudeOrchestrator {
       if (a.status !== 'waiting' && b.status === 'waiting') return 1;
       return 0;
     });
-    
+
     return reviewers;
   }
-  
+
   async assignCodeReview(requestingSessionId, reviewerSessionId) {
     // Close dropdown
     document.querySelectorAll('.review-dropdown').forEach(dropdown => dropdown.remove());
-    
+
     try {
       // Extract code/PR information from the requesting session
       const codeInfo = await this.extractCodeForReview(requestingSessionId);
-      
+
       if (!codeInfo.hasContent) {
         this.showToast(`No code changes detected in Claude ${requestingSessionId.replace('work', '').replace('-claude', '')}`, 'warning');
         return;
       }
-      
+
       // Format review request
       const reviewRequest = this.formatReviewRequest(codeInfo, requestingSessionId);
-      
+
       // Send to reviewer Claude
       this.sendTerminalInput(reviewerSessionId, reviewRequest);
-      
+
       // Mark both sessions as active
       this.sessionActivity.set(reviewerSessionId, 'active');
       this.buildSidebar();
-      
+
       // Show success message
       const requestingWorktree = requestingSessionId.replace('work', '').replace('-claude', '');
       const reviewerWorktree = reviewerSessionId.replace('work', '').replace('-claude', '');
       this.showToast(`Code review assigned: Claude ${requestingWorktree} → Claude ${reviewerWorktree}`, 'success');
-      
+
     } catch (error) {
       console.error('Error assigning code review:', error);
       this.showToast('Failed to assign code review', 'error');
     }
   }
-  
+
   async extractCodeForReview(sessionId) {
     // Get terminal content
     const terminalContent = this.terminalManager.getTerminalContent(sessionId);
-    
+
     // Look for various types of code content
     const codePatterns = {
       prUrl: /https:\/\/github\.com\/[^\s]+\/pull\/\d+/g,
@@ -8851,7 +8834,7 @@ class ClaudeOrchestrator {
       codeBlocks: /```[\s\S]*?```/g,
       bashCommands: /(?:git\s+(?:diff|log|show)|gh\s+pr)/g
     };
-    
+
     const extracted = {
       prUrls: [...(terminalContent.match(codePatterns.prUrl) || [])],
       gitDiffs: [...(terminalContent.match(codePatterns.gitDiff) || [])],
@@ -8859,20 +8842,20 @@ class ClaudeOrchestrator {
       recentCommands: this.extractRecentCommands(terminalContent),
       hasContent: false
     };
-    
+
     // Determine if there's reviewable content
-    extracted.hasContent = extracted.prUrls.length > 0 || 
-                          extracted.gitDiffs.length > 0 || 
+    extracted.hasContent = extracted.prUrls.length > 0 ||
+                          extracted.gitDiffs.length > 0 ||
                           extracted.codeBlocks.length > 0 ||
                           extracted.recentCommands.some(cmd => cmd.includes('git') || cmd.includes('gh pr'));
-    
+
     return extracted;
   }
-  
+
   extractRecentCommands(terminalContent) {
     const lines = terminalContent.split('\n');
     const commands = [];
-    
+
     // Look for command patterns (simple approach)
     for (let i = lines.length - 1; i >= 0 && commands.length < 10; i--) {
       const line = lines[i].trim();
@@ -8880,15 +8863,15 @@ class ClaudeOrchestrator {
         commands.unshift(line);
       }
     }
-    
+
     return commands;
   }
-  
+
   formatReviewRequest(codeInfo, requestingSessionId) {
     const requestingWorktree = requestingSessionId.replace('work', '').replace('-claude', '');
-    
+
     let request = `Please review the code from Claude ${requestingWorktree}:\n\n`;
-    
+
     if (codeInfo.prUrls.length > 0) {
       request += `**Pull Request(s):**\n`;
       codeInfo.prUrls.forEach(url => {
@@ -8900,19 +8883,19 @@ class ClaudeOrchestrator {
       request += `- Suggestions for improvement\n`;
       request += `- Architecture and design patterns\n\n`;
     }
-    
+
     if (codeInfo.gitDiffs.length > 0) {
       request += `**Git Diff:**\n\`\`\`diff\n`;
       request += codeInfo.gitDiffs.slice(0, 2).join('\n'); // Limit to first 2 diffs
       request += `\n\`\`\`\n\n`;
     }
-    
+
     if (codeInfo.codeBlocks.length > 0) {
       request += `**Code Changes:**\n`;
       request += codeInfo.codeBlocks.slice(0, 3).join('\n\n'); // Limit to first 3 blocks
       request += `\n\n`;
     }
-    
+
     if (codeInfo.recentCommands.length > 0) {
       request += `**Recent Commands:**\n`;
       codeInfo.recentCommands.forEach(cmd => {
@@ -8920,9 +8903,9 @@ class ClaudeOrchestrator {
       });
       request += `\n`;
     }
-    
+
     request += `Please provide a thorough code review with specific feedback and suggestions.\n`;
-    
+
     return request;
   }
 
@@ -9320,6 +9303,1431 @@ class ClaudeOrchestrator {
 	    });
 	  }
 
+	  openDiagnosticsPanel({ refresh = true } = {}) {
+	    try {
+	      document.getElementById('settings-panel')?.classList?.remove?.('hidden');
+	      setTimeout(() => {
+	        try {
+	          document.getElementById('diagnostics-output')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+	        } catch {
+	          // ignore
+	        }
+	        if (!refresh) return;
+	        if (typeof this.refreshDiagnosticsPanel === 'function') {
+	          this.refreshDiagnosticsPanel();
+	          return;
+	        }
+	        try {
+	          document.getElementById('diagnostics-refresh')?.click?.();
+	        } catch {
+	          // ignore
+	        }
+	      }, 50);
+	    } catch {
+	      // ignore
+	    }
+	  }
+
+	  setupDependencySetupWizard() {
+	    const modal = document.getElementById('dependency-setup-modal');
+	    const openBtn = document.getElementById('dependency-setup-open');
+	    const summaryEl = document.getElementById('dependency-setup-summary');
+	    const listEl = document.getElementById('dependency-setup-list');
+	    const closeBtn = document.getElementById('dependency-setup-close');
+	    if (!modal || !summaryEl || !listEl) return;
+	    const body = document.body;
+	    const isWindowsHost = (() => {
+	      try {
+	        const platform = String(navigator?.platform || '').toLowerCase();
+	        const userAgent = String(navigator?.userAgent || '').toLowerCase();
+	        return platform.includes('win') || userAgent.includes('windows');
+	      } catch {
+	        return false;
+	      }
+	    })();
+
+	    const setBootstrapPending = (pending) => {
+	      if (pending) {
+	        if (!isWindowsHost) return;
+	        body?.classList?.add?.('dependency-onboarding-booting');
+	        body?.classList?.remove?.('dependency-onboarding-active');
+	        return;
+	      }
+	      body?.classList?.remove?.('dependency-onboarding-booting');
+	    };
+	    if (!isWindowsHost) {
+	      setBootstrapPending(false);
+	      return;
+	    }
+
+	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v3';
+	    const completedKey = 'orchestrator-dependency-onboarding-completed-v2';
+	    const progressKey = 'orchestrator-dependency-onboarding-progress-v2';
+	    const skippedStepsKey = 'orchestrator-dependency-onboarding-skipped-v1';
+	    const setupStateUrl = '/api/setup-actions/state';
+	    const readLegacyBool = (key) => {
+	      try {
+	        return localStorage.getItem(key) === 'true';
+	      } catch {
+	        return false;
+	      }
+	    };
+	    const readLegacyStep = () => {
+	      try {
+	        const raw = Number.parseInt(String(localStorage.getItem(progressKey) || ''), 10);
+	        if (Number.isFinite(raw) && raw >= 0) return raw;
+	        return 0;
+	      } catch {
+	        return 0;
+	      }
+	    };
+	    const readLegacySkippedActionIds = () => {
+	      try {
+	        const raw = localStorage.getItem(skippedStepsKey);
+	        if (!raw) return [];
+	        const parsed = JSON.parse(raw);
+	        if (!Array.isArray(parsed)) return [];
+	        const seen = new Set();
+	        return parsed
+	          .map((value) => String(value || '').trim())
+	          .filter((value) => {
+	            if (!value || seen.has(value)) return false;
+	            seen.add(value);
+	            return true;
+	          });
+	      } catch {
+	        return [];
+	      }
+	    };
+	    const normalizeSetupState = (value) => {
+	      const currentStepRaw = Number.parseInt(String(value?.currentStep ?? 0), 10);
+	      const skippedActionIds = Array.isArray(value?.skippedActionIds) ? value.skippedActionIds : [];
+	      const seen = new Set();
+	      return {
+	        dismissed: value?.dismissed === true,
+	        completed: value?.completed === true,
+	        currentStep: Number.isFinite(currentStepRaw) && currentStepRaw >= 0 ? currentStepRaw : 0,
+	        skippedActionIds: skippedActionIds
+	          .map((entry) => String(entry || '').trim())
+	          .filter((entry) => {
+	            if (!entry || seen.has(entry)) return false;
+	            seen.add(entry);
+	            return true;
+	          })
+	      };
+	    };
+	    const readBootstrapSetupState = () => {
+	      try {
+	        const bootstrapState = window.__ORCHESTRATOR_SETUP_STATE__;
+	        if (bootstrapState && typeof bootstrapState === 'object') {
+	          return normalizeSetupState(bootstrapState);
+	        }
+	      } catch {
+	        // ignore and fall back to legacy/local state
+	      }
+	      return normalizeSetupState({
+	        dismissed: readLegacyBool(dismissKey),
+	        completed: readLegacyBool(completedKey),
+	        currentStep: readLegacyStep(),
+	        skippedActionIds: readLegacySkippedActionIds()
+	      });
+	    };
+	    const persistedSetupState = {
+	      loaded: false,
+	      loadPromise: null,
+	      savePromise: Promise.resolve(),
+	      current: readBootstrapSetupState()
+	    };
+	    const syncLegacySetupState = () => {
+	      const current = persistedSetupState.current || normalizeSetupState({});
+	      try {
+	        if (current.dismissed) localStorage.setItem(dismissKey, 'true');
+	        else localStorage.removeItem(dismissKey);
+	        if (current.completed) localStorage.setItem(completedKey, 'true');
+	        else localStorage.removeItem(completedKey);
+	        localStorage.setItem(progressKey, String(Math.max(0, Number(current.currentStep) || 0)));
+	        if (Array.isArray(current.skippedActionIds) && current.skippedActionIds.length > 0) {
+	          localStorage.setItem(skippedStepsKey, JSON.stringify(current.skippedActionIds));
+	        } else {
+	          localStorage.removeItem(skippedStepsKey);
+	        }
+	      } catch {
+	        // ignore
+	      }
+	    };
+	    const getPersistedSetupState = () => ({
+	      ...(persistedSetupState.current || normalizeSetupState({})),
+	      skippedActionIds: Array.isArray(persistedSetupState.current?.skippedActionIds)
+	        ? [...persistedSetupState.current.skippedActionIds]
+	        : []
+	    });
+	    const applyPersistedSetupState = (value) => {
+	      persistedSetupState.current = normalizeSetupState(value || {});
+	      syncLegacySetupState();
+	      return getPersistedSetupState();
+	    };
+	    const loadPersistedSetupState = async ({ force = false } = {}) => {
+	      if (persistedSetupState.loaded && !force) return getPersistedSetupState();
+	      if (persistedSetupState.loadPromise && !force) return persistedSetupState.loadPromise;
+	      persistedSetupState.loadPromise = (async () => {
+	        try {
+	          const res = await fetch(setupStateUrl);
+	          const data = await res.json().catch(() => ({}));
+	          if (res.ok && data?.ok !== false) {
+	            applyPersistedSetupState(data?.state || {});
+	          }
+	        } catch {
+	          // ignore and keep local fallback state
+	        } finally {
+	          persistedSetupState.loaded = true;
+	          persistedSetupState.loadPromise = null;
+	        }
+	        return getPersistedSetupState();
+	      })();
+	      return persistedSetupState.loadPromise;
+	    };
+	    const savePersistedSetupState = async (patch = {}) => {
+	      applyPersistedSetupState({
+	        ...(persistedSetupState.current || normalizeSetupState({})),
+	        ...((patch && typeof patch === 'object') ? patch : {})
+	      });
+	      persistedSetupState.savePromise = persistedSetupState.savePromise
+	        .catch(() => null)
+	        .then(async () => {
+	          try {
+	            const res = await fetch(setupStateUrl, {
+	              method: 'PUT',
+	              headers: { 'Content-Type': 'application/json' },
+	              body: JSON.stringify(patch || {})
+	            });
+	            const data = await res.json().catch(() => ({}));
+	            if (res.ok && data?.ok !== false) {
+	              applyPersistedSetupState(data?.state || {});
+	            }
+	          } catch {
+	            // ignore and keep local state
+	          }
+	          return getPersistedSetupState();
+	        });
+	      return persistedSetupState.savePromise;
+	    };
+	    setBootstrapPending(true);
+
+	    const state = {
+	      loading: false,
+	      diagnostics: null,
+	      actions: [],
+	      currentStep: 0,
+	      showWelcome: true,
+	      skippedActionIds: new Set(),
+	      actionRuns: new Map(),
+	      actionRunPollers: new Map(),
+	      gitIdentity: {
+	        name: '',
+	        email: ''
+	      },
+	      gitIdentityHelpVisible: false,
+	      startupPending: true
+	    };
+
+	    const readDismissed = () => getPersistedSetupState().dismissed === true;
+
+	    const writeDismissed = (value) => {
+	      const next = value === true;
+	      if (readDismissed() === next) return;
+	      void savePersistedSetupState({ dismissed: next });
+	    };
+
+	    const readCompleted = () => getPersistedSetupState().completed === true;
+
+	    const writeCompleted = (value) => {
+	      const next = value === true;
+	      if (readCompleted() === next) return;
+	      void savePersistedSetupState({ completed: next });
+	    };
+
+	    const readSavedStep = () => Math.max(0, Number(getPersistedSetupState().currentStep) || 0);
+
+	    const writeSavedStep = (step) => {
+	      const next = Math.max(0, Number(step) || 0);
+	      if (readSavedStep() === next) return;
+	      void savePersistedSetupState({ currentStep: next });
+	    };
+
+	    const readSkippedStepIds = () => new Set(getPersistedSetupState().skippedActionIds);
+
+	    const writeSkippedStepIds = () => {
+	      const next = Array.from(state.skippedActionIds || [])
+	        .map((value) => String(value || '').trim())
+	        .filter(Boolean);
+	      const prev = getPersistedSetupState().skippedActionIds || [];
+	      if (next.length === prev.length && next.every((value, index) => value === prev[index])) return;
+	      void savePersistedSetupState({ skippedActionIds: next });
+	    };
+
+	    const setStepSkipped = (actionId, skipped) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return;
+	      if (skipped) state.skippedActionIds.add(id);
+	      else state.skippedActionIds.delete(id);
+	      writeSkippedStepIds();
+	    };
+
+	    const toToolMap = (diagnostics) => {
+	      const map = new Map();
+	      const tools = Array.isArray(diagnostics?.tools) ? diagnostics.tools : [];
+	      tools.forEach((tool) => {
+	        const id = String(tool?.id || '').trim();
+	        if (!id) return;
+	        map.set(id, !!tool?.ok);
+	      });
+	      return map;
+	    };
+
+	    const getToolResult = (diagnostics, toolId) => {
+	      const id = String(toolId || '').trim();
+	      if (!id) return null;
+	      const tools = Array.isArray(diagnostics?.tools) ? diagnostics.tools : [];
+	      return tools.find((tool) => String(tool?.id || '').trim() === id) || null;
+	    };
+
+	    const parseGitIdentityVersion = (value) => {
+	      const raw = String(value || '').trim();
+	      if (!raw) return { name: '', email: '' };
+	      const pair = raw.match(/^(.*)\s<([^<>]+)>$/);
+	      if (pair?.[1] && pair?.[2]) {
+	        return {
+	          name: String(pair[1] || '').trim(),
+	          email: String(pair[2] || '').trim()
+	        };
+	      }
+	      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
+	        return { name: '', email: raw };
+	      }
+	      return { name: raw, email: '' };
+	    };
+
+	    const stripAnsiText = (value) => String(value || '').replace(/\u001b\[[0-9;]*m/g, '');
+
+	    const collectRunOutputLines = (runInfo, { limit = 25 } = {}) => {
+	      const lines = Array.isArray(runInfo?.output)
+	        ? runInfo.output
+	            .map((entry) => stripAnsiText(String(entry?.line || '')).trim())
+	            .filter(Boolean)
+	        : [];
+	      if (!Number.isFinite(limit) || limit <= 0) return lines;
+	      return lines.slice(-Math.max(1, Number(limit) || 1));
+	    };
+
+	    const extractGithubLoginInfo = (lines = []) => {
+	      const fallbackUrl = 'https://github.com/login/device';
+	      let link = fallbackUrl;
+	      let code = '';
+	      let sawDeviceHint = false;
+
+	      (Array.isArray(lines) ? lines : []).forEach((lineRaw) => {
+	        const line = String(lineRaw || '').trim();
+	        if (!line) return;
+
+	        if (/one[-\s]?time code|login\/device|authenticate in your web browser|copied to your clipboard|open this url/i.test(line)) {
+	          sawDeviceHint = true;
+	        }
+
+	        const linkMatch = line.match(/https:\/\/github\.com\/login\/device(?:\S*)?/i);
+	        if (linkMatch?.[0]) link = linkMatch[0].trim();
+
+	        const codeMatch = line.match(/\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/i);
+	        if (codeMatch?.[1]) code = String(codeMatch[1]).toUpperCase();
+	      });
+
+	      return {
+	        link,
+	        code,
+	        sawDeviceHint
+	      };
+	    };
+
+	    const hydrateGitIdentityDraft = (diagnostics) => {
+	      const gitIdentityTool = getToolResult(diagnostics, 'gitIdentity');
+	      const parsed = parseGitIdentityVersion(String(gitIdentityTool?.version || ''));
+	      if (!state.gitIdentity.name && parsed.name) {
+	        state.gitIdentity.name = parsed.name;
+	      }
+	      if (!state.gitIdentity.email && parsed.email) {
+	        state.gitIdentity.email = parsed.email;
+	      }
+	    };
+
+	    const getRequirementState = (toolsMap) => {
+	      const gitOk = !!toolsMap.get('git');
+	      const claudeOk = !!toolsMap.get('claude');
+	      const codexOk = !!toolsMap.get('codex');
+	      const hasAgentCli = claudeOk || codexOk;
+	      const coreReady = gitOk && hasAgentCli;
+	      const missingCore = [];
+	      if (!gitOk) missingCore.push('git');
+	      if (!hasAgentCli) missingCore.push('agent-cli');
+	      return {
+	        gitOk,
+	        claudeOk,
+	        codexOk,
+	        hasAgentCli,
+	        coreReady,
+	        missingCore
+	      };
+	    };
+
+	    const isActionComplete = (actionId, toolsMap) => {
+	      switch (String(actionId || '').trim()) {
+	        case 'install-git':
+	          return !!toolsMap.get('git');
+	        case 'configure-git-identity':
+	          return !!toolsMap.get('gitIdentity');
+	        case 'install-node':
+	          return !!toolsMap.get('node') && !!toolsMap.get('npm');
+	        case 'install-gh':
+	          return !!toolsMap.get('gh');
+	        case 'gh-login':
+	          return !!toolsMap.get('ghAuth');
+	        case 'install-claude':
+	          return !!toolsMap.get('claude');
+	        case 'install-codex':
+	          return !!toolsMap.get('codex');
+	        default:
+	          return false;
+	      }
+	    };
+
+	    const getActionLevelText = (level) => {
+	      if (level === 'required') return 'Required';
+	      if (level === 'optional') return 'Optional';
+	      if (level === 'core-option') return 'Core option';
+	      return 'Recommended';
+	    };
+
+	    const getActionLevelClass = (level) => {
+	      if (level === 'optional') return 'level-optional';
+	      return level === 'recommended' ? 'level-recommended' : 'level-required';
+	    };
+
+	    const getActionStatusText = (actionId, done) => {
+	      const id = String(actionId || '').trim();
+	      if (id === 'gh-login') return done ? 'Logged in' : 'Not logged in';
+	      if (id === 'configure-git-identity') return done ? 'Configured' : 'Not configured';
+	      return done ? 'Installed' : 'Missing';
+	    };
+
+	    const getResolvedSteps = () => {
+	      const toolsMap = toToolMap(state.diagnostics);
+	      const actions = Array.isArray(state.actions) ? state.actions : [];
+	      return actions.map((action) => {
+	        const id = String(action?.id || '').trim();
+	        const level = getActionLevel(id);
+	        const done = isActionComplete(id, toolsMap);
+	        return {
+	          ...action,
+	          id,
+	          level,
+	          optional: action?.optional === true || level === 'optional',
+	          done,
+	          levelText: getActionLevelText(level),
+	          levelClass: getActionLevelClass(level),
+	          statusText: getActionStatusText(id, done),
+	          statusClass: done ? 'status-ok' : 'status-missing',
+	          runSupported: action?.runSupported !== false
+	        };
+	      });
+	    };
+
+	    const syncSkippedSteps = (steps) => {
+	      if (!(state.skippedActionIds instanceof Set)) {
+	        state.skippedActionIds = new Set();
+	      }
+	      const validSkippedIds = new Set(
+	        (Array.isArray(steps) ? steps : [])
+	          .filter((step) => {
+	            const id = String(step?.id || '').trim();
+	            return !!id && step?.optional && !step?.done;
+	          })
+	          .map((step) => String(step?.id || '').trim())
+	      );
+	      let changed = false;
+	      for (const id of Array.from(state.skippedActionIds)) {
+	        if (!validSkippedIds.has(id)) {
+	          state.skippedActionIds.delete(id);
+	          changed = true;
+	        }
+	      }
+	      if (changed) writeSkippedStepIds();
+	    };
+
+	    const isOnboardingLocked = () => {
+	      if (!isWindowsHost) return false;
+	      if (readCompleted()) return false;
+	      if (!Array.isArray(state.actions) || state.actions.length === 0) return false;
+	      const toolsMap = toToolMap(state.diagnostics);
+	      const req = getRequirementState(toolsMap);
+	      return !req?.coreReady;
+	    };
+
+	    const applyOnboardingLockUI = () => {
+	      const locked = isOnboardingLocked();
+	      if (closeBtn) {
+	        closeBtn.disabled = locked;
+	        closeBtn.style.visibility = locked ? 'hidden' : '';
+	      }
+	      modal.setAttribute('data-onboarding-locked', locked ? 'true' : 'false');
+	      return locked;
+	    };
+
+	    const setCurrentStep = (nextStep, { persist = true } = {}) => {
+	      const previousStep = state.currentStep;
+	      const maxStep = Math.max(0, (Array.isArray(state.actions) ? state.actions.length : 0) - 1);
+	      const parsed = Number.parseInt(String(nextStep), 10);
+	      const safe = Number.isFinite(parsed) ? parsed : 0;
+	      state.currentStep = Math.max(0, Math.min(safe, maxStep));
+	      if (state.currentStep !== previousStep) {
+	        state.gitIdentityHelpVisible = false;
+	      }
+	      if (persist) writeSavedStep(state.currentStep);
+	      return state.currentStep;
+	    };
+
+	    const getActionLevel = (actionId) => {
+	      const id = String(actionId || '').trim();
+	      if (id === 'install-git') return 'required';
+	      if (id === 'configure-git-identity') return 'optional';
+	      if (id === 'install-gh' || id === 'gh-login') return 'optional';
+	      if (id === 'install-claude') return 'optional';
+	      if (id === 'install-codex') return 'optional';
+	      return 'recommended';
+	    };
+
+	    const buildStepIconSvg = (iconMarkup) => (
+	      `<svg class="onboarding-step-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${iconMarkup}</svg>`
+	    );
+
+	    const stepIconSvgByActionId = Object.freeze({
+	      'install-git': buildStepIconSvg('<circle cx="6" cy="6" r="2"></circle><circle cx="18" cy="6" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M8 6h8"></path><path d="M18 8v8"></path><path d="M8 6v8a4 4 0 0 0 4 4h4"></path>'),
+	      'configure-git-identity': buildStepIconSvg('<circle cx="12" cy="8" r="3.5"></circle><path d="M5 19a7 7 0 0 1 14 0"></path>'),
+	      'install-node': buildStepIconSvg('<path d="m12 3 7 4v10l-7 4-7-4V7l7-4Z"></path><path d="M12 7v10"></path><path d="m5 7 7 4 7-4"></path>'),
+	      'install-gh': buildStepIconSvg('<rect x="3.5" y="5" width="17" height="14" rx="2.5"></rect><path d="m8 10 3 2-3 2"></path><path d="M13.5 16h3.5"></path>'),
+	      'gh-login': buildStepIconSvg('<path d="M14 7V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5a2 2 0 0 0 2-2v-2"></path><path d="M10 12h10"></path><path d="m17 8 3.5 4-3.5 4"></path>'),
+	      'install-claude': buildStepIconSvg('<path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3Z"></path><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z"></path>'),
+	      'install-codex': buildStepIconSvg('<path d="m8 8-4 4 4 4"></path><path d="m16 8 4 4-4 4"></path><path d="m13 6-2 12"></path>')
+	    });
+
+	    const getStepIconSvg = (actionId) => {
+	      const id = String(actionId || '').trim();
+	      return stepIconSvgByActionId[id]
+	        || buildStepIconSvg('<path d="M12 3v18"></path><path d="M3 12h18"></path>');
+	    };
+
+	    const render = () => {
+	      const toolsMap = toToolMap(state.diagnostics);
+	      const req = getRequirementState(toolsMap);
+	      const steps = getResolvedSteps();
+	      syncSkippedSteps(steps);
+	      if (!steps.length) {
+	        summaryEl.textContent = 'No setup actions are available for this platform.';
+	        listEl.innerHTML = '<div class="dependency-setup-empty">No setup actions are available for this platform.</div>';
+	        return { req, steps, current: null };
+	      }
+
+	      setCurrentStep(state.currentStep, { persist: false });
+	      const current = steps[state.currentStep];
+	      const stepNo = state.currentStep + 1;
+	      const totalSteps = steps.length;
+	      const detectedCount = steps.filter((step) => step.done).length;
+	      const doneRatio = totalSteps > 0 ? Math.round((detectedCount / totalSteps) * 100) : 0;
+	      const missingCore = [];
+	      if (!req.gitOk) missingCore.push('Git');
+	      if (!req.hasAgentCli) missingCore.push('Claude Code or Codex CLI');
+
+	      if (state.showWelcome) {
+	        summaryEl.textContent = '';
+	        listEl.innerHTML = `
+	          <div class="onboarding-welcome-card">
+	            <h3 class="onboarding-welcome-title">Let’s get you ready in a minute.</h3>
+	            <p class="onboarding-welcome-copy">
+	              We’ll check your system and install what’s needed.
+	              Optional tools can be skipped.
+	            </p>
+	            <div class="onboarding-nav-row onboarding-welcome-actions">
+	              <button class="onboarding-btn-primary" type="button" data-setup-begin="true">Start setup</button>
+	            </div>
+	          </div>`;
+	        return { req, steps, current };
+	      }
+
+	      summaryEl.textContent = '';
+
+	      const currentId = String(current?.id || '').trim();
+	      const currentStepIconSvg = getStepIconSvg(currentId);
+	      const currentTitle = this.escapeHtml(String(current?.title || currentId || 'Setup action'));
+	      const currentDesc = this.escapeHtml(String(current?.description || ''));
+	      const commandRaw = String(current?.command || '');
+	      const runInfo = state.actionRuns.get(currentId) || null;
+	      const runStatus = String(runInfo?.status || '').trim().toLowerCase();
+	      const isRunning = runStatus === 'running';
+	      const isVerifying = runStatus === 'verifying';
+	      const isFinalizing = runStatus === 'success' || runStatus === 'completed';
+	      const isRunBusy = isRunning || isVerifying || isFinalizing;
+	      const isGitIdentityStep = currentId === 'configure-git-identity';
+	      const runOutputAll = collectRunOutputLines(runInfo, { limit: 160 });
+	      const runOutput = runOutputAll.slice(-8);
+	      const runOutputText = this.escapeHtml(runOutput.join('\n'));
+	      const shouldShowInstallerOutput = currentId !== 'gh-login' && !isGitIdentityStep && (
+	        runOutput.length > 0 ||
+	        isRunBusy ||
+	        runStatus === 'failed' ||
+	        runStatus === 'needs-attention'
+	      );
+	      const installerOutputText = runOutput.length
+	        ? runOutputText
+	        : this.escapeHtml(
+	            isRunning
+	              ? 'Installer started. Waiting for output...'
+	              : (isVerifying
+	                  ? 'Installer finished. Verifying dependency...'
+	                  : 'No installer output captured yet.')
+	          );
+	      const githubDeviceUrl = 'https://github.com/login/device';
+	      const ghInstalled = !!toolsMap.get('gh');
+	      const ghLoggedIn = !!toolsMap.get('ghAuth');
+	      const ghLoginRunInfo = state.actionRuns.get('gh-login') || null;
+	      const ghLoginRunStatus = String(ghLoginRunInfo?.status || '').trim().toLowerCase();
+	      const ghLoginIsRunning = ghLoginRunStatus === 'running';
+	      const ghLoginIsVerifying = ghLoginRunStatus === 'verifying';
+	      const ghLoginIsFinalizing = ghLoginRunStatus === 'success' || ghLoginRunStatus === 'completed';
+	      const ghLoginIsBusy = ghLoginIsRunning || ghLoginIsVerifying || ghLoginIsFinalizing;
+	      const ghLoginOutputAll = collectRunOutputLines(ghLoginRunInfo, { limit: 160 });
+	      const ghLoginInfo = extractGithubLoginInfo(ghLoginOutputAll);
+	      const ghLoginLink = String(ghLoginRunInfo?.ghDeviceUrl || ghLoginInfo.link || githubDeviceUrl).trim() || githubDeviceUrl;
+	      const ghLoginCode = String(ghLoginRunInfo?.ghDeviceCode || ghLoginInfo.code || '').trim().toUpperCase();
+	      const ghLoginHasSignal = !!(
+	        ghLoginRunInfo?.ghHasDeviceHint
+	        || ghLoginInfo.sawDeviceHint
+	        || ghLoginCode
+	        || ghLoginLink !== githubDeviceUrl
+	      );
+	      const ghLoginUiPhase = (() => {
+	        if (!ghInstalled || ghLoggedIn) return 'none';
+	        if (!ghLoginRunInfo) return 'start';
+	        if (ghLoginCode) return 'code';
+	        if (ghLoginIsBusy) return 'wait-code';
+	        return 'retry';
+	      })();
+	      const ghLoginInlineStatusText = (() => {
+	        if (!ghInstalled) return 'Install GitHub CLI first';
+	        if (ghLoggedIn) return 'Logged in';
+	        if (ghLoginIsFinalizing) return 'Finalizing login';
+	        if (ghLoginIsRunning) return 'Signing in';
+	        if (ghLoginIsVerifying) return 'Checking login';
+	        return 'Not logged in';
+	      })();
+	      const ghLoginInlineStatusClass = ghLoggedIn
+	        ? 'status-ok'
+	        : ((ghLoginIsBusy || ghLoginRunStatus === 'needs-attention') ? 'status-pending' : 'status-missing');
+	      const ghLoginInlineRunLabel = (() => {
+	        if (ghLoggedIn) return 'Logged in';
+	        if (ghLoginIsFinalizing) return 'Finalizing...';
+	        if (ghLoginIsBusy) return 'Waiting...';
+	        return 'Start login';
+	      })();
+	      const ghLoginInlineRunDisabled = !ghInstalled || ghLoggedIn || ghLoginIsBusy;
+	      const showInlineGhLogin = currentId === 'install-gh' && ghInstalled;
+	      const isGhLoginStep = currentId === 'gh-login';
+	      const codexNeedsNode = currentId === 'install-codex' && !(toolsMap.get('node') && toolsMap.get('npm'));
+	      const gitIdentityName = this.escapeHtml(String(state.gitIdentity?.name || ''));
+	      const gitIdentityEmail = this.escapeHtml(String(state.gitIdentity?.email || ''));
+	      const showRunButton = current?.runSupported !== false && !isGitIdentityStep && !(isGhLoginStep && current?.done);
+	      const runDisabled = !!current?.done || runStatus === 'verified' || isRunBusy || codexNeedsNode;
+	      const runLabel = (() => {
+	        if (current?.done || runStatus === 'verified') {
+	          if (currentId === 'gh-login') return 'Logged in';
+	          if (currentId === 'configure-git-identity') return 'Configured';
+	          return 'Installed';
+	        }
+	        if (isFinalizing) return 'Finalizing...';
+	        if (isRunBusy) return isGhLoginStep ? 'Waiting...' : 'Running...';
+	        if (currentId === 'gh-login') return 'Start login';
+	        return 'Run step';
+	      })();
+	      const baseStatusText = String(current?.statusText || (current?.done ? 'Installed' : 'Missing'));
+	      const statusText = (() => {
+	        if (runStatus === 'verified') return baseStatusText;
+	        if (isFinalizing) return isGhLoginStep ? 'Finalizing login' : 'Finalizing';
+	        if (isRunning) return isGhLoginStep ? 'Signing in' : (isGitIdentityStep ? 'Saving' : 'Installing');
+	        if (isVerifying) return isGhLoginStep ? 'Checking login' : (isGitIdentityStep ? 'Checking' : 'Verifying');
+	        if (runStatus === 'failed') return isGhLoginStep ? 'Login failed' : (isGitIdentityStep ? 'Save failed' : 'Failed');
+	        return baseStatusText;
+	      })();
+	      const statusClass = current?.done || runStatus === 'verified'
+	        ? 'status-ok'
+	        : ((isRunning || isVerifying || isFinalizing) ? 'status-pending' : (runStatus === 'failed' ? 'status-missing' : (current?.statusClass || 'status-missing')));
+	      const canAdvance = !!current?.done || !!current?.optional;
+	      const nextLabel = !canAdvance
+	        ? 'Complete this step first'
+	        : (!current?.done && current?.optional
+	            ? 'Skip'
+	            : (stepNo >= totalSteps ? 'Finish onboarding' : 'Next step'));
+
+	      listEl.innerHTML = `
+	        <div class="onboarding-stepper-row">
+	          ${steps.map((step, idx) => {
+	            const isActive = idx === state.currentStep;
+	            const actionId = String(step?.id || '').trim();
+	            const isSkipped = state.skippedActionIds.has(actionId);
+	            const isDone = step.done || isSkipped;
+	            const isPast = idx < state.currentStep;
+	            const isFuture = idx > state.currentStep;
+	            let statusClass = 'stepper-upcoming';
+	            if (isActive) {
+	              statusClass = 'stepper-active';
+	            } else if (isPast && isDone) {
+	              statusClass = 'stepper-done';
+	            } else {
+	              statusClass = 'stepper-upcoming';
+	            }
+	            const stepStateLabel = isActive
+	              ? 'Current step'
+	              : (isPast && isDone ? 'Completed' : (isFuture ? 'Upcoming' : 'Pending'));
+	            return `
+	              <div class="onboarding-stepper-item ${statusClass}" title="${this.escapeHtml(`${step.title} (${stepStateLabel})`)}">
+	                <div class="stepper-icon-box">
+	                  ${isActive ? `<span class="stepper-active-label">Step ${stepNo}</span>` : ''}
+	                  <div class="stepper-diamond"></div>
+	                </div>
+	              </div>
+	            `;
+	          }).join('')}
+	        </div>
+
+	        <div class="onboarding-step-card ${current?.done ? 'card-done' : ''}" data-setup-item="${this.escapeHtml(currentId)}">
+	          <div class="onboarding-step-icon">
+	            ${currentStepIconSvg}
+	          </div>
+	          <div class="onboarding-step-content">
+	            <h3 class="onboarding-step-title">${currentTitle}</h3>
+
+	            <div class="onboarding-step-status-row">
+	              ${current?.done ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="onboarding-check"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+	              <p class="onboarding-step-desc">${currentDesc} ${statusText ? `<span class="onboarding-inline-status ${statusClass}">(${statusText})</span>` : ''}</p>
+	            </div>
+
+	            ${isGitIdentityStep ? `
+	              <div class="dependency-git-identity-helper">
+	                <div class="dependency-git-identity-fields">
+	                  <label class="dependency-git-identity-field">
+	                    <span>Name</span>
+	                    <input type="text" data-setup-git-name placeholder="Jane Developer" autocomplete="name" value="${gitIdentityName}" ${isRunBusy ? 'disabled' : ''}>
+	                  </label>
+	                  <label class="dependency-git-identity-field">
+	                    <span>Email</span>
+	                    <input type="email" data-setup-git-email placeholder="you@example.com" autocomplete="email" value="${gitIdentityEmail}" ${isRunBusy ? 'disabled' : ''}>
+	                  </label>
+	                  <button class="onboarding-btn-secondary" type="button" data-setup-git-save="true" ${isRunBusy ? 'disabled' : ''}>${isRunBusy ? 'Saving...' : (current?.done ? 'Update identity' : 'Save identity')}</button>
+	                </div>
+	              </div>
+	            ` : ''}
+
+		            ${showInlineGhLogin ? `
+		              <div class="dependency-gh-login-helper">
+		                <div class="dependency-gh-login-helper-text">GitHub authentication (optional) <span class="onboarding-inline-status ${ghLoginInlineStatusClass}">(${this.escapeHtml(ghLoginInlineStatusText)})</span></div>
+		                ${ghLoginUiPhase === 'start' ? '<div class="dependency-gh-login-helper-text">Click <strong>Start login</strong> to begin browser sign-in.</div>' : ''}
+		                ${ghLoginUiPhase === 'wait-code' ? '<div class="dependency-gh-login-helper-text">Waiting for GitHub CLI login details. If code is not shown here, it is copied to your clipboard automatically.</div>' : ''}
+		                ${ghLoginUiPhase === 'retry' ? '<div class="dependency-gh-login-helper-text">Login is not complete yet. Start login again to request a new one-time code.</div>' : ''}
+		                ${ghLoginUiPhase === 'code' ? `<div class="dependency-gh-login-helper-text">Open GitHub login and paste this one-time code.</div><div class="dependency-gh-login-code-wrap"><span class="dependency-gh-login-code mono">${this.escapeHtml(ghLoginCode)}</span><button class="onboarding-btn-secondary" type="button" data-setup-copy-gh-code="${this.escapeHtml(ghLoginCode)}">Copy code</button></div>` : ''}
+		                <div class="dependency-gh-login-helper-actions">
+		                  <button class="onboarding-btn-secondary" type="button" data-setup-run="gh-login" ${ghLoginInlineRunDisabled ? 'disabled' : ''}>${this.escapeHtml(ghLoginInlineRunLabel)}</button>
+		                  ${ghLoginRunInfo ? `<button class="onboarding-btn-secondary" type="button" data-setup-open-gh-login="${this.escapeHtml(ghLoginLink)}">Open GitHub login</button>` : ''}
+		                </div>
+		              </div>
+		            ` : ''}
+
+	            ${shouldShowInstallerOutput ? `
+	              <div class="dependency-onboarding-command-wrap">
+	                <pre class="mono dependency-setup-item-output">${installerOutputText}</pre>
+	              </div>
+	            ` : ''}
+
+	                <div class="onboarding-step-actions">
+	                  ${showRunButton ? `<button class="onboarding-btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>` : ''}
+	                  ${!isGhLoginStep && !isGitIdentityStep ? `<button class="onboarding-btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>` : ''}
+	                </div>
+		          </div>
+		        </div>
+
+	        <div class="onboarding-nav-row">
+	          <button class="onboarding-btn-back" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Back</button>
+	          <button class="onboarding-btn-primary" type="button" data-setup-next="true" ${canAdvance ? '' : 'disabled'}>${nextLabel}</button>
+	        </div>`;
+
+	      return { req, steps, current };
+	    };
+
+	    const closeModal = ({ force = false } = {}) => {
+	      const locked = applyOnboardingLockUI();
+	      if (!force && locked) {
+	        openModal();
+	        return false;
+	      }
+	      if (!force && !readCompleted()) {
+	        writeDismissed(true);
+	      }
+	      modal.classList.add('hidden');
+	      body?.classList?.remove?.('dependency-onboarding-active');
+	      setBootstrapPending(false);
+	      return true;
+	    };
+	    const openModal = ({ showWelcome = null, allowDuringStartup = false } = {}) => {
+	      if (readCompleted()) {
+	        closeModal({ force: true });
+	        return false;
+	      }
+	      if (state.startupPending && !allowDuringStartup) {
+	        return false;
+	      }
+	      const wasHidden = modal.classList.contains('hidden');
+	      modal.classList.remove('hidden');
+	      state.startupPending = false;
+	      setBootstrapPending(false);
+	      body?.classList?.add?.('dependency-onboarding-active');
+	      if (typeof showWelcome === 'boolean') {
+	        state.showWelcome = showWelcome;
+	      } else if (wasHidden) {
+	        state.showWelcome = true;
+	      }
+	      if (state.diagnostics && Array.isArray(state.actions) && state.actions.length > 0) {
+	        render();
+	      }
+	      applyOnboardingLockUI();
+	      return true;
+	    };
+
+	    const setLoading = (loading) => {
+	      state.loading = !!loading;
+	      if (openBtn) openBtn.disabled = state.loading;
+	      if (state.loading) {
+	        summaryEl.textContent = '';
+	      }
+	    };
+
+	    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+
+	    const loadAndRender = async ({ open = false, forceAutoShow = false, bootstrap = false, explicitOpen = false } = {}) => {
+	      if (state.loading) return false;
+	      setLoading(true);
+	      try {
+	        const [persisted, diagRes, actionsRes] = await Promise.all([
+	          loadPersistedSetupState(),
+	          fetch('/api/diagnostics'),
+	          fetch('/api/setup-actions')
+	        ]);
+	        const diagData = await diagRes.json().catch(() => ({}));
+	        const actionsData = await actionsRes.json().catch(() => ({}));
+
+	        if (!diagRes.ok || diagData?.ok === false) {
+	          throw new Error(String(diagData?.error || `Diagnostics HTTP ${diagRes.status}`));
+	        }
+	        if (!actionsRes.ok || actionsData?.ok === false) {
+	          throw new Error(String(actionsData?.error || `Setup actions HTTP ${actionsRes.status}`));
+	        }
+
+	        state.diagnostics = diagData;
+	        hydrateGitIdentityDraft(diagData);
+	        const allActions = Array.isArray(actionsData?.actions) ? actionsData.actions : [];
+	        const toolsMap = toToolMap(diagData);
+	        state.actions = allActions.filter((action) => String(action?.id || '').trim() !== 'gh-login');
+	        const allowedActionIds = new Set(
+	          state.actions
+	            .map((action) => String(action?.id || '').trim())
+	            .filter(Boolean)
+	        );
+	        const persistedSkippedIds = new Set(
+	          (Array.isArray(persisted?.skippedActionIds) ? persisted.skippedActionIds : [])
+	            .filter((id) => allowedActionIds.has(String(id || '').trim()))
+	        );
+	        state.skippedActionIds = new Set(
+	          Array.from(persistedSkippedIds)
+	        );
+	        if (state.actions.length > 0) {
+	          const savedStep = Math.max(0, Number(persisted?.currentStep) || 0);
+	          setCurrentStep(savedStep, { persist: false });
+	        }
+	        const view = render();
+	        applyOnboardingLockUI();
+
+	        const hasCompletedOnboarding = readCompleted();
+	        const coreReady = !!view.req?.coreReady;
+	        if (hasCompletedOnboarding) {
+	          state.startupPending = false;
+	          closeModal({ force: true });
+	        }
+	        const shouldAutoShow = isWindowsHost && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
+	        const shouldKeepVisible = !hasCompletedOnboarding && open && !modal.classList.contains('hidden');
+	        if (explicitOpen || shouldKeepVisible || shouldAutoShow) {
+	          openModal({ allowDuringStartup: bootstrap || explicitOpen });
+	        } else {
+	          state.startupPending = false;
+	          setBootstrapPending(false);
+	        }
+	        return true;
+	      } catch (err) {
+	        summaryEl.textContent = `Dependency check failed: ${String(err?.message || err)}`;
+	        listEl.innerHTML = '<div class="dependency-setup-empty">Unable to load setup actions right now.</div>';
+	        const shouldOpenOnError = explicitOpen || (open && !modal.classList.contains('hidden'));
+	        if (shouldOpenOnError) openModal({ allowDuringStartup: bootstrap || explicitOpen });
+	        else if (!bootstrap) setBootstrapPending(false);
+	        return false;
+	      } finally {
+	        setLoading(false);
+	      }
+	    };
+
+	    const stopRunPolling = (actionId) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return;
+	      const poller = state.actionRunPollers.get(id);
+	      if (poller?.timer) clearTimeout(poller.timer);
+	      state.actionRunPollers.delete(id);
+	    };
+
+	    const updateActionRunState = (actionId, patch = {}, { rerender = true } = {}) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return null;
+	      const prev = state.actionRuns.get(id) || { actionId: id };
+	      const next = {
+	        ...prev,
+	        ...patch,
+	        actionId: id
+	      };
+	      state.actionRuns.set(id, next);
+	      if (rerender) render();
+	      return next;
+	    };
+
+	    const fetchSetupActionRunStatus = async ({ runId = '', actionId = '' } = {}) => {
+	      const params = new URLSearchParams();
+	      if (runId) params.set('runId', String(runId));
+	      if (actionId) params.set('actionId', String(actionId));
+	      const res = await fetch(`/api/setup-actions/run-status?${params.toString()}`);
+	      const data = await res.json().catch(() => ({}));
+	      if (!res.ok || data?.ok === false || !data?.run) {
+	        throw new Error(String(data?.error || `HTTP ${res.status}`));
+	      }
+	      return data.run;
+	    };
+
+	    const getVerifyPolicyForAction = (actionId) => {
+	      const id = String(actionId || '').trim();
+	      if (id === 'gh-login') {
+	        return { attempts: 14, delayMs: 900 };
+	      }
+	      if (id === 'install-git' || id === 'install-node' || id === 'install-gh') {
+	        return { attempts: 10, delayMs: 650 };
+	      }
+	      return { attempts: 8, delayMs: 650 };
+	    };
+
+	    const verifyActionInstalled = async (actionId, runId, options = {}) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return false;
+	      const policy = {
+	        ...getVerifyPolicyForAction(id),
+	        ...(options && typeof options === 'object' ? options : {})
+	      };
+	      const attempts = Math.max(1, Number(policy.attempts) || 1);
+	      const delayMs = Math.max(250, Number(policy.delayMs) || 650);
+
+	      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+	        const runState = state.actionRuns.get(id);
+	        if (!runState || String(runState?.runId || '') !== String(runId || '')) return false;
+
+	        updateActionRunState(id, {
+	          status: 'verifying',
+	          verifyAttempt: attempt,
+	          verifyMax: attempts,
+	          updatedAt: new Date().toISOString()
+	        });
+
+	        await loadAndRender({ open: true, forceAutoShow: true });
+	        const toolsMap = toToolMap(state.diagnostics);
+	        if (isActionComplete(id, toolsMap)) {
+	          updateActionRunState(id, {
+	            status: 'verified',
+	            verifyAttempt: attempts,
+	            verifyMax: attempts,
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Dependency detected automatically.', 'success');
+	          return true;
+	        }
+	        await sleep(delayMs);
+	      }
+
+	      updateActionRunState(id, {
+	        status: 'needs-attention',
+	        updatedAt: new Date().toISOString()
+	      });
+	      this.showToast(
+	        id === 'gh-login'
+	          ? 'GitHub login is not detected yet. Complete sign-in in browser and try again.'
+	          : 'Install finished but dependency is still missing. Review output and run again if needed.',
+	        'warning'
+	      );
+	      return false;
+	    };
+
+	    const verifyActionWithoutRun = async (actionId, options = {}) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return false;
+	      const policy = {
+	        ...getVerifyPolicyForAction(id),
+	        ...(options && typeof options === 'object' ? options : {})
+	      };
+	      const attempts = Math.max(1, Number(policy.attempts) || 1);
+	      const delayMs = Math.max(250, Number(policy.delayMs) || 650);
+
+	      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+	        updateActionRunState(id, {
+	          status: 'verifying',
+	          verifyAttempt: attempt,
+	          verifyMax: attempts,
+	          updatedAt: new Date().toISOString()
+	        });
+
+	        await loadAndRender({ open: true, forceAutoShow: true });
+	        const toolsMap = toToolMap(state.diagnostics);
+	        if (isActionComplete(id, toolsMap)) {
+	          updateActionRunState(id, {
+	            status: 'verified',
+	            verifyAttempt: attempts,
+	            verifyMax: attempts,
+	            updatedAt: new Date().toISOString()
+	          });
+	          return true;
+	        }
+	        if (attempt < attempts) {
+	          await sleep(delayMs);
+	        }
+	      }
+
+	      updateActionRunState(id, {
+	        status: 'needs-attention',
+	        updatedAt: new Date().toISOString()
+	      });
+	      return false;
+	    };
+
+	    const pollRunUntilDone = async (actionId, runId) => {
+	      const id = String(actionId || '').trim();
+	      const rid = String(runId || '').trim();
+	      if (!id || !rid) return;
+
+	      stopRunPolling(id);
+	      const pollLoop = async () => {
+	        try {
+	          const run = await fetchSetupActionRunStatus({ runId: rid, actionId: id });
+	          updateActionRunState(id, run);
+
+	          if (String(run?.status || '').toLowerCase() === 'running') {
+	            const timer = setTimeout(pollLoop, 850);
+	            state.actionRunPollers.set(id, { runId: rid, timer });
+	            return;
+	          }
+
+	          stopRunPolling(id);
+	          await loadAndRender({ open: true, forceAutoShow: true });
+
+	          if (String(run?.status || '').toLowerCase() === 'success') {
+	            await verifyActionInstalled(id, rid);
+	            return;
+	          }
+
+	      if (String(run?.status || '').toLowerCase() === 'failed') {
+	        if (id === 'gh-login') {
+	          const ghRunLines = collectRunOutputLines(run, { limit: 160 });
+	          const ghRunInfo = extractGithubLoginInfo(ghRunLines);
+	          const hasDeviceSignal = ghRunInfo.sawDeviceHint || !!ghRunInfo.code || /login\/device/i.test(ghRunLines.join('\n'));
+	          const verifyOptions = hasDeviceSignal
+	            ? { attempts: 14, delayMs: 900 }
+	            : { attempts: 5, delayMs: 700 };
+	          const detected = await verifyActionWithoutRun(id, verifyOptions);
+	          if (detected) {
+	            this.showToast('GitHub login detected automatically.', 'success');
+	            return;
+	          }
+
+	          const runError = String(run?.error || '').trim();
+	          const exitCode = Number(run?.exitCode);
+	          const interrupted = exitCode === 1 || /code\s*1/i.test(runError) || /cancel|not completed/i.test(runError);
+	          const missingDeviceCode = !hasDeviceSignal;
+	          updateActionRunState(id, {
+	            status: 'needs-attention',
+	            error: interrupted
+	              ? 'Login was not completed in browser.'
+	              : (missingDeviceCode
+	                  ? 'GitHub CLI did not return a one-time code.'
+	                  : (runError || 'Login was not completed.')),
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast(
+	            missingDeviceCode
+	              ? 'GitHub CLI did not return a one-time code. Click Start login again.'
+	              : (interrupted
+	                  ? 'GitHub login is still not detected. If browser sign-in just finished, click Start login again.'
+	                  : `GitHub login failed: ${runError || 'Unknown error'}`),
+	            (interrupted || missingDeviceCode) ? 'warning' : 'error'
+	          );
+	          return;
+	        }
+	            this.showToast(`Install failed: ${String(run?.error || 'Unknown error')}`, 'error');
+	          }
+	        } catch (err) {
+	          stopRunPolling(id);
+	          updateActionRunState(id, {
+	            status: 'failed',
+	            error: String(err?.message || err || 'Failed to fetch setup status'),
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast(`Install monitoring failed: ${String(err?.message || err)}`, 'error');
+	        }
+	      };
+
+	      const timer = setTimeout(pollLoop, 250);
+	      state.actionRunPollers.set(id, { runId: rid, timer });
+	    };
+
+	    const runBootstrapLoad = async () => {
+	      state.startupPending = true;
+	      setBootstrapPending(true);
+	      const delaysMs = [0, 240, 420, 700, 1050, 1450, 1900];
+	      for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
+	        if (attempt > 0) {
+	          await sleep(delaysMs[attempt]);
+	        }
+	        const ok = await loadAndRender({ open: false, forceAutoShow: false, bootstrap: true });
+	        if (ok) return;
+	      }
+	      state.startupPending = false;
+	      setBootstrapPending(false);
+	    };
+
+	    const runSetupAction = async (actionId, btnEl) => {
+	      const id = String(actionId || '').trim();
+	      if (!id) return;
+	      const button = btnEl || null;
+	      if (button) button.disabled = true;
+	      try {
+	        const existingRunStatus = String(state.actionRuns.get(id)?.status || '').trim().toLowerCase();
+	        if (existingRunStatus === 'running' || existingRunStatus === 'verifying' || existingRunStatus === 'success' || existingRunStatus === 'completed') {
+	          this.showToast(
+	            id === 'gh-login'
+	              ? 'Login is still in progress. Please wait while we finish checking.'
+	              : 'Install is still in progress. Please wait while we finish checking.',
+	            'info'
+	          );
+	          return;
+	        }
+
+	        const existingStep = getResolvedSteps().find((step) => String(step?.id || '').trim() === id);
+	        const toolsMap = toToolMap(state.diagnostics);
+	        if (id === 'gh-login' && !toToolMap(state.diagnostics).get('gh')) {
+	          updateActionRunState(id, {
+	            status: 'needs-attention',
+	            error: 'Install GitHub CLI before starting login.',
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Install GitHub CLI first. Login is optional and only available after installation.', 'warning');
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	          return;
+	        }
+	        if (id === 'install-codex' && !(toolsMap.get('node') && toolsMap.get('npm'))) {
+	          updateActionRunState(id, {
+	            status: 'needs-attention',
+	            error: 'Install Node.js LTS first. Codex requires npm.',
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Install Node.js LTS first. Codex depends on npm.', 'warning');
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	          return;
+	        }
+	        if (existingStep?.done) {
+	          updateActionRunState(id, {
+	            status: 'verified',
+	            updatedAt: new Date().toISOString()
+	          });
+	          this.showToast('Dependency already detected.', 'success');
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	          return;
+	        }
+
+	        updateActionRunState(id, {
+	          runId: null,
+	          status: 'running',
+	          error: null,
+	          output: [],
+	          verifyAttempt: 0,
+	          verifyMax: 0,
+	          updatedAt: new Date().toISOString()
+	        });
+	        const res = await fetch('/api/setup-actions/run', {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify({ actionId: id })
+	        });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok || data?.ok === false) {
+	          throw new Error(String(data?.error || `HTTP ${res.status}`));
+	        }
+	        const run = (data?.run && typeof data.run === 'object') ? data.run : null;
+	        if (run) {
+	          updateActionRunState(id, {
+	            ...run,
+	            verifyAttempt: 0,
+	            verifyMax: 0
+	          });
+	          if (run?.runId) {
+	            await pollRunUntilDone(id, run.runId);
+	          } else {
+	            await loadAndRender({ open: true, forceAutoShow: true });
+	          }
+	        } else {
+	          await loadAndRender({ open: true, forceAutoShow: true });
+	        }
+	        const defaultMessage = data?.alreadyRunning
+	          ? (id === 'gh-login'
+	              ? 'GitHub login is already running. Complete it in your browser.'
+	              : 'Install is already running. Watching for completion...')
+	          : (id === 'gh-login'
+	              ? 'GitHub login started. Complete sign-in in your browser.'
+	              : 'Install started. We will check this step automatically.');
+	        this.showToast(String(data?.message || defaultMessage), 'info');
+	      } catch (err) {
+	        updateActionRunState(id, {
+	          status: 'failed',
+	          error: String(err?.message || err),
+	          updatedAt: new Date().toISOString()
+	        });
+	        this.showToast(`Failed to start action: ${String(err?.message || err)}`, 'error');
+	      } finally {
+	        if (button) button.disabled = false;
+	      }
+	    };
+
+	    const saveGitIdentity = async (btnEl) => {
+	      const button = btnEl || null;
+	      const id = 'configure-git-identity';
+	      const nameInput = listEl.querySelector('[data-setup-git-name]');
+	      const emailInput = listEl.querySelector('[data-setup-git-email]');
+	      const name = String(nameInput?.value || state.gitIdentity?.name || '').trim();
+	      const email = String(emailInput?.value || state.gitIdentity?.email || '').trim();
+
+	      state.gitIdentity.name = name;
+	      state.gitIdentity.email = email;
+
+	      if (!name || !email) {
+	        this.showToast('Enter both Git name and email.', 'warning');
+	        return;
+	      }
+
+	      if (button) button.disabled = true;
+	      try {
+	        updateActionRunState(id, {
+	          runId: 'manual-git-identity',
+	          status: 'running',
+	          error: null,
+	          output: [],
+	          verifyAttempt: 0,
+	          verifyMax: 0,
+	          updatedAt: new Date().toISOString()
+	        });
+
+	        const res = await fetch('/api/setup-actions/configure-git-identity', {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify({ name, email })
+	        });
+	        const data = await res.json().catch(() => ({}));
+	        if (!res.ok || data?.ok === false) {
+	          throw new Error(String(data?.error || `HTTP ${res.status}`));
+	        }
+
+	        state.gitIdentity.name = String(data?.name || name).trim();
+	        state.gitIdentity.email = String(data?.email || email).trim();
+
+	        const detected = await verifyActionWithoutRun(id, { attempts: 6, delayMs: 350 });
+	        if (detected) {
+	          this.showToast('Git identity saved and detected automatically.', 'success');
+	        } else {
+	          this.showToast('Git identity saved, but detection is delayed. Try saving again in a few seconds.', 'warning');
+	        }
+	      } catch (err) {
+	        updateActionRunState(id, {
+	          status: 'failed',
+	          error: String(err?.message || err),
+	          updatedAt: new Date().toISOString()
+	        });
+	        this.showToast(`Failed to save Git identity: ${String(err?.message || err)}`, 'error');
+	      } finally {
+	        if (button) button.disabled = false;
+	        await loadAndRender({ open: true, forceAutoShow: true });
+	      }
+	    };
+
+	    listEl.addEventListener('click', async (event) => {
+	      const runBtn = event.target.closest('[data-setup-run]');
+	      if (runBtn) {
+	        await runSetupAction(runBtn.getAttribute('data-setup-run'), runBtn);
+	        return;
+	      }
+
+	      const saveGitBtn = event.target.closest('[data-setup-git-save]');
+	      if (saveGitBtn) {
+	        await saveGitIdentity(saveGitBtn);
+	        return;
+	      }
+
+	      const prevBtn = event.target.closest('[data-setup-prev]');
+	      if (prevBtn) {
+	        setCurrentStep(state.currentStep - 1);
+	        render();
+	        return;
+	      }
+
+	      const nextBtn = event.target.closest('[data-setup-next]');
+	      if (nextBtn) {
+	        const total = Array.isArray(state.actions) ? state.actions.length : 0;
+	        const steps = getResolvedSteps();
+	        syncSkippedSteps(steps);
+	        const currentStep = steps[state.currentStep];
+	        if (!currentStep?.done) {
+	          if (!currentStep?.optional) {
+	            this.showToast('Install this dependency before continuing.', 'warning');
+	            return;
+	          }
+	          setStepSkipped(currentStep?.id, true);
+	          this.showToast('Skipping optional setup for now. You can configure it later.', 'warning');
+	        } else {
+	          setStepSkipped(currentStep?.id, false);
+	        }
+	        if (state.currentStep >= (total - 1)) {
+	          writeCompleted(true);
+	          writeDismissed(false);
+	          closeModal({ force: true });
+	          this.showToast('Dependency onboarding complete.', 'success');
+	          return;
+	        }
+	        setCurrentStep(state.currentStep + 1);
+	        render();
+	        return;
+	      }
+	      const beginBtn = event.target.closest('[data-setup-begin]');
+	      if (beginBtn) {
+	        state.showWelcome = false;
+	        render();
+	        return;
+	      }
+
+	      const jumpBtn = event.target.closest('[data-setup-jump]');
+	      if (jumpBtn) {
+	        const idx = Number.parseInt(String(jumpBtn.getAttribute('data-setup-jump') || ''), 10);
+	        if (Number.isFinite(idx)) {
+	          setCurrentStep(idx);
+	          render();
+	        }
+	        return;
+	      }
+
+	      const copyBtn = event.target.closest('[data-setup-copy-id]');
+	      if (copyBtn) {
+	        const actionId = String(copyBtn.getAttribute('data-setup-copy-id') || '').trim();
+	        const action = (Array.isArray(state.actions) ? state.actions : []).find((item) => String(item?.id || '').trim() === actionId);
+	        const command = String(action?.command || '').trim();
+	        if (!command) return;
+	        try {
+	          await navigator.clipboard.writeText(command);
+	          this.showToast('Command copied to clipboard.', 'success');
+	        } catch (err) {
+	          this.showToast(`Copy failed: ${String(err?.message || err)}`, 'error');
+	        }
+	        return;
+	      }
+
+	      const copyGhCodeBtn = event.target.closest('[data-setup-copy-gh-code]');
+	      if (copyGhCodeBtn) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	        const code = String(copyGhCodeBtn.getAttribute('data-setup-copy-gh-code') || '').trim();
+	        if (!code) return;
+	        try {
+	          await navigator.clipboard.writeText(code);
+	          this.showToast('GitHub one-time code copied.', 'success');
+	        } catch (err) {
+	          this.showToast(`Copy failed: ${String(err?.message || err)}`, 'error');
+	        }
+	        return;
+	      }
+
+	      const openGhLoginBtn = event.target.closest('[data-setup-open-gh-login]');
+	      if (openGhLoginBtn) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	        const link = String(openGhLoginBtn.getAttribute('data-setup-open-gh-login') || '').trim();
+	        if (!link) return;
+	        try {
+	          const res = await fetch('/api/setup-actions/open-url', {
+	            method: 'POST',
+	            headers: { 'Content-Type': 'application/json' },
+	            body: JSON.stringify({ url: link })
+	          });
+	          const data = await res.json().catch(() => ({}));
+	          if (!res.ok || data?.ok === false) {
+	            throw new Error(String(data?.error || `HTTP ${res.status}`));
+	          }
+	          this.showToast('Opened GitHub login in your browser.', 'info');
+	        } catch (err) {
+	          this.showToast(`Could not open login link: ${String(err?.message || err)}`, 'error');
+	        }
+	        return;
+	      }
+
+	      const toggleGitHelpBtn = event.target.closest('[data-setup-toggle-git-help]');
+	      if (toggleGitHelpBtn) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	        state.gitIdentityHelpVisible = !state.gitIdentityHelpVisible;
+	        render();
+	        return;
+	      }
+	    });
+
+	    if (openBtn) {
+	      openBtn.addEventListener('click', () => {
+	        writeDismissed(false);
+	        setCurrentStep(0);
+	        loadAndRender({ open: true, forceAutoShow: true, explicitOpen: true });
+	      });
+	    }
+	    if (closeBtn) {
+	      closeBtn.addEventListener('click', () => closeModal());
+	    }
+
+	    modal.addEventListener('click', (event) => {
+	      if (event.target === modal) closeModal();
+	    });
+
+	    document.addEventListener('keydown', (event) => {
+	      if (event.key !== 'Escape') return;
+	      if (modal.classList.contains('hidden')) return;
+	      closeModal();
+	    });
+
+		    runBootstrapLoad();
+		  }
+
 	  notifyWorkflow({ type = 'info', message = '', sessionId = null, metadata = null } = {}) {
 	    const msg = String(message || '').trim();
 	    if (!msg) return;
@@ -9353,46 +10761,59 @@ class ClaudeOrchestrator {
       }
     }
   }
-  
-  showToast(message, type = 'info') {
+
+  showToast(message, type = 'info', options = {}) {
+    const rawMessage = String(message || '').trim();
+    if (!rawMessage) return;
+
+    const normalizedType = (['info', 'success', 'warning', 'error'].includes(type)) ? type : 'info';
+    const durationMsRaw = Number(options?.durationMs);
+    const durationMs = Number.isFinite(durationMsRaw) ? Math.max(1200, durationMsRaw) : 5000;
+
+    let stack = document.getElementById('toast-stack');
+    if (!stack) {
+      stack = document.createElement('div');
+      stack.id = 'toast-stack';
+      stack.className = 'toast-stack';
+      document.body.appendChild(stack);
+    }
+
+    const iconByType = {
+      info: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 10v6"></path><path d="M12 7h.01"></path></svg>',
+      success: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 12.5 2.3 2.3 4.7-4.8"></path></svg>',
+      warning: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 16H3L12 3Z"></path><path d="M12 9v5"></path><path d="M12 17h.01"></path></svg>',
+      error: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m9 9 6 6"></path><path d="m15 9-6 6"></path></svg>'
+    };
+
     const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
+    toast.className = `toast toast-${normalizedType}`;
+    toast.setAttribute('role', 'status');
     toast.innerHTML = `
       <div class="toast-content">
-        <span class="toast-icon">${type === 'success' ? '✅' : type === 'warning' ? '⚠️' : type === 'error' ? '❌' : 'ℹ️'}</span>
-        <span class="toast-text">${message}</span>
+        <span class="toast-icon">${iconByType[normalizedType] || iconByType.info}</span>
+        <span class="toast-text">${this.escapeHtml(rawMessage)}</span>
       </div>
+      <button class="toast-close" type="button" aria-label="Dismiss notification">✕</button>
     `;
-    
-    // Add styles for different toast types
-    const styles = {
-      info: 'var(--accent-primary)',
-      success: 'var(--accent-success)', 
-      warning: 'var(--accent-warning)',
-      error: 'var(--accent-danger)'
-    };
-    
-    toast.style.cssText = `
-      position: fixed;
-      top: calc(var(--header-height) + 20px);
-      right: 20px;
-      background: ${styles[type]};
-      color: white;
-      padding: var(--space-sm) var(--space-md);
-      border-radius: var(--radius-md);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      z-index: 1000;
-      animation: slideInRight 0.3s ease-out, fadeOutRight 0.3s ease-in 4.7s forwards;
-    `;
-    
-    document.body.appendChild(toast);
-    
-    // Remove after 5 seconds
-    setTimeout(() => {
-      if (toast.parentNode) {
+
+    const removeToast = () => {
+      if (!toast.parentNode) return;
+      if (toast.classList.contains('is-leaving')) return;
+      toast.classList.add('is-leaving');
+      setTimeout(() => {
         toast.remove();
-      }
-    }, 5000);
+        if (stack && !stack.children.length) {
+          stack.remove();
+        }
+      }, 240);
+    };
+
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn?.addEventListener('click', removeToast);
+
+    stack.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('is-visible'));
+    setTimeout(removeToast, durationMs);
   }
 
   async launchDiffViewer(githubUrl) {
@@ -9400,9 +10821,9 @@ class ClaudeOrchestrator {
     const prMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
     const commitMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/commit\/([a-f0-9]{40})/);
     const compareMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/compare\/([^?#]+)/);
-    
+
     let diffViewerPath = '';
-    
+
     if (prMatch) {
       const [, owner, repo, pr] = prMatch;
       diffViewerPath = `/pr/${owner}/${repo}/${pr}`;
@@ -9430,7 +10851,7 @@ class ClaudeOrchestrator {
       this.showToast('Unable to parse GitHub URL', 'error');
       return;
     }
-    
+
     // Open a placeholder tab immediately (avoids popup blockers), then redirect once ready.
     const popup = window.open('', '_blank');
     if (!popup) {
@@ -12743,19 +14164,7 @@ class ClaudeOrchestrator {
 		      });
 		      bodyEl.querySelectorAll?.('[data-open-diagnostics="true"]')?.forEach?.((btn) => {
 		        btn.addEventListener('click', () => {
-		          try {
-		            document.getElementById('settings-panel')?.classList?.remove?.('hidden');
-		            setTimeout(() => {
-		              try {
-		                document.getElementById('diagnostics-output')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-		              } catch {}
-		              try {
-		                document.getElementById('diagnostics-refresh')?.click?.();
-		              } catch {}
-		            }, 50);
-		          } catch {
-		            // ignore
-		          }
+		          this.openDiagnosticsPanel({ refresh: true });
 		        });
 		      });
 		      bodyEl.querySelectorAll('[data-pr-refresh]').forEach((btn0) => {
@@ -12899,7 +14308,7 @@ class ClaudeOrchestrator {
     // Check URL params first
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('token');
-    
+
     if (tokenFromUrl) {
       // Save to localStorage for future use
       localStorage.setItem('claude-orchestrator-token', tokenFromUrl);
@@ -12907,7 +14316,7 @@ class ClaudeOrchestrator {
       window.history.replaceState({}, document.title, window.location.pathname);
       return tokenFromUrl;
     }
-    
+
 	    // Check localStorage
     return localStorage.getItem('claude-orchestrator-token');
   }
@@ -13733,7 +15142,7 @@ class ClaudeOrchestrator {
     this.showToast?.(`Pruned ${prunedCount} old recoverable session(s)`, 'success');
     return true;
   }
-  
+
   installAuthFetchShim() {
     if (window.__claudeOrchestratorFetchAuthInstalled) return;
     if (typeof window.fetch !== 'function') return;
@@ -13777,7 +15186,7 @@ class ClaudeOrchestrator {
 
 	    window.__claudeOrchestratorFetchAuthInstalled = true;
 	  }
-	  
+
 	  // Terminal Focus Feature - Now shows only that worktree
 	  focusTerminal(sessionId) {
     // Extract worktree ID from session ID
@@ -13815,14 +15224,14 @@ class ClaudeOrchestrator {
         console.error(`Terminal instance not found for ${sessionId}`);
         return;
       }
-      
+
       // Store original parent for unfocus
       const terminalElement = terminalWrapper.querySelector('.terminal');
       if (!terminalElement) {
         console.error(`Terminal element not found in wrapper for ${sessionId}`);
         return;
       }
-      
+
       this.focusedTerminalInfo = {
         sessionId: sessionId,
         originalParent: terminalElement.parentElement,
@@ -13834,41 +15243,41 @@ class ClaudeOrchestrator {
           rows: xtermInstance.rows || 24
         }
       };
-      
+
       // Add focusing animation to original terminal
       terminalWrapper.classList.add('focusing');
-      
+
       // Update overlay header
       const focusedTitle = document.getElementById('focused-title');
       const focusedBranch = document.getElementById('focused-branch');
       const focusedStatus = document.getElementById('focused-status');
-      
+
       const isAgentSession = /-(claude|codex)$/.test(String(sessionId || ''));
       const worktreeNumber = sessionId.split('-')[0].replace('work', '');
-      
+
       if (focusedTitle) focusedTitle.textContent = `${isAgentSession ? '🤖 Agent' : '💻 Server'} ${worktreeNumber}`;
       if (focusedBranch) focusedBranch.textContent = this.formatBranchLabel(session.branch || '', { context: 'terminal' }).text || '';
       if (focusedStatus) focusedStatus.className = `status-indicator ${session.status || 'idle'}`;
-      
+
       // Move the actual terminal element to focused container
       const focusedTerminalBody = document.getElementById('focused-terminal-body');
       if (!focusedTerminalBody) {
         console.error('Focused terminal body container not found');
         return;
       }
-      
+
       focusedTerminalBody.innerHTML = '';
       focusedTerminalBody.appendChild(terminalElement);
-      
+
       // Hide original wrapper
       terminalWrapper.style.visibility = 'hidden';
-      
+
       // Activate focus overlay with animation
       const focusOverlay = document.getElementById('focus-overlay');
       if (focusOverlay) {
         focusOverlay.classList.add('active');
       }
-      
+
       // Bind ESC key for unfocus
       this.handleEscKey = (e) => {
         if (e.key === 'Escape') {
@@ -13876,41 +15285,41 @@ class ClaudeOrchestrator {
         }
       };
       document.addEventListener('keydown', this.handleEscKey);
-      
+
       // Resize terminal to fit the focused container after animation
       setTimeout(() => {
         try {
           // Store original font size
           this.focusedTerminalInfo.originalFontSize = xtermInstance.options.fontSize || 12;
-          
+
           // Increase font size for better readability in focused mode
           const originalSize = this.focusedTerminalInfo.originalFontSize;
           const newFontSize = Math.round(originalSize * 1.8); // 1.8x larger (reduced from 3x by ~60%)
           xtermInstance.options.fontSize = newFontSize;
-          
+
           const rect = focusedTerminalBody.getBoundingClientRect();
           // Calculate new dimensions based on container size with larger font
           const charWidth = newFontSize * 0.6;  // Approximate character width
           const lineHeight = newFontSize * 1.4; // Approximate line height
-          
+
           const cols = Math.floor((rect.width - 30) / charWidth);
           const rows = Math.floor((rect.height - 30) / lineHeight);
-          
+
           // Apply reasonable limits
           const finalCols = Math.min(200, Math.max(80, cols));
           const finalRows = Math.min(80, Math.max(24, rows));
-          
+
           console.log(`Resizing focused terminal from ${xtermInstance.cols}x${xtermInstance.rows} to ${finalCols}x${finalRows} with font size ${newFontSize}px`);
-          
+
           // Resize xterm
           xtermInstance.resize(finalCols, finalRows);
-          
+
           // Use fit addon if available
           const fitAddon = this.terminalManager?.fitAddons?.get(sessionId);
           if (fitAddon) {
             fitAddon.fit();
           }
-          
+
           // Send resize command to backend
           if (this.socket) {
             this.socket.emit('resize', {
@@ -13919,46 +15328,46 @@ class ClaudeOrchestrator {
               rows: finalRows
             });
           }
-          
+
           // Focus the terminal for input
           xtermInstance.focus();
         } catch (resizeError) {
           console.error('Error resizing focused terminal:', resizeError);
         }
       }, 200);
-      
+
       // Remove focusing animation after transition
       setTimeout(() => {
         terminalWrapper.classList.remove('focusing');
       }, 300);
-      
+
     } catch (error) {
       console.error('Error focusing terminal:', error);
     }
   }
-  
+
   unfocusTerminal() {
     try {
       if (!this.focusedTerminalInfo) return;
-      
+
       const { sessionId, originalParent, originalNextSibling, terminalElement, terminalWrapper, originalDimensions } = this.focusedTerminalInfo;
-      
+
       // Move terminal element back to original location
       if (originalNextSibling) {
         originalParent.insertBefore(terminalElement, originalNextSibling);
       } else {
         originalParent.appendChild(terminalElement);
       }
-      
+
       // Show original wrapper
       terminalWrapper.style.visibility = 'visible';
-      
+
       // Deactivate focus overlay
       const focusOverlay = document.getElementById('focus-overlay');
       if (focusOverlay) {
         focusOverlay.classList.remove('active');
       }
-      
+
       // Restore original terminal size and font
       const xtermInstance = this.terminalManager?.terminals?.get(sessionId);
       if (xtermInstance) {
@@ -13966,21 +15375,21 @@ class ClaudeOrchestrator {
         const originalFontSize = this.focusedTerminalInfo.originalFontSize || 12;
         console.log(`Restoring font size from ${xtermInstance.options.fontSize}px to ${originalFontSize}px`);
         xtermInstance.options.fontSize = originalFontSize;
-        
+
         // Force a refresh of the terminal to apply font change
         xtermInstance.refresh(0, xtermInstance.rows - 1);
-        
+
         if (originalDimensions) {
           setTimeout(() => {
             console.log(`Restoring terminal dimensions to ${originalDimensions.cols}x${originalDimensions.rows}`);
             xtermInstance.resize(originalDimensions.cols, originalDimensions.rows);
-            
+
             // Use fit addon if available
             const fitAddon = this.terminalManager?.fitAddons?.get(sessionId);
             if (fitAddon) {
               setTimeout(() => fitAddon.fit(), 50);
             }
-            
+
             // Send resize command to backend
             if (this.socket) {
               this.socket.emit('resize', {
@@ -13992,10 +15401,10 @@ class ClaudeOrchestrator {
           }, 100);
         }
       }
-      
+
       // Clean up
       this.focusedTerminalInfo = null;
-      
+
       // Remove ESC key listener
       if (this.handleEscKey) {
         document.removeEventListener('keydown', this.handleEscKey);
@@ -14005,14 +15414,14 @@ class ClaudeOrchestrator {
       console.error('Error unfocusing terminal:', error);
     }
   }
-  
+
   calculateTerminalDimensions(container) {
     if (!container) return null;
-    
+
     const rect = container.getBoundingClientRect();
     const cols = Math.floor(rect.width / 9);  // Approximate character width
     const rows = Math.floor(rect.height / 20); // Approximate line height
-    
+
     return { cols: Math.max(80, cols), rows: Math.max(24, rows) };
   }
 
@@ -14149,7 +15558,7 @@ class ClaudeOrchestrator {
       if (startupUI) {
         startupUI.style.display = 'none';
       }
-      
+
     } catch (error) {
       console.error('Error auto-starting Claude:', error);
       this.showError('Failed to start Claude with settings');
@@ -14178,7 +15587,7 @@ class ClaudeOrchestrator {
       }
     }
   }
-  
+
   hideClaudeStartupModal() {
     const modal = document.getElementById('claude-startup-modal');
     if (modal) {
@@ -14186,7 +15595,7 @@ class ClaudeOrchestrator {
       this.pendingClaudeSession = null;
     }
   }
-  
+
   async startClaudeWithOptions(sessionId, mode, skipPermissions) {
     if (!this.socket || !this.socket.connected) {
       this.showError('Not connected to server');
@@ -14316,7 +15725,7 @@ class ClaudeOrchestrator {
     if (startupUI) startupUI.style.display = 'none';
     this.dismissedStartupUI.set(sid, true);
   }
-  
+
   quickStartClaude(sessionId, mode) {
     // Check if YOLO mode is enabled
     const yoloCheckbox = document.getElementById(`yolo-${sessionId}`);
@@ -14817,7 +16226,7 @@ class ClaudeOrchestrator {
       document.addEventListener('keydown', handleEsc);
     });
   }
-  
+
   updateYoloState(sessionId, checked) {
     // Update button styles to show YOLO is active
     const buttons = [
@@ -14825,7 +16234,7 @@ class ClaudeOrchestrator {
       document.getElementById(`btn-continue-${sessionId}`),
       document.getElementById(`btn-resume-${sessionId}`)
     ];
-    
+
     buttons.forEach(btn => {
       if (btn) {
         if (checked) {
@@ -14836,25 +16245,25 @@ class ClaudeOrchestrator {
       }
     });
   }
-  
+
   async startClaudeFromTerminal(sessionId) {
     if (!this.socket || !this.socket.connected) {
       return;
     }
-    
+
     try {
       // Get effective settings for this session
       const response = await fetch(`/api/user-settings/effective/${sessionId}`);
       let effectiveSettings = { claudeFlags: { skipPermissions: false } };
-      
+
       if (response.ok) {
         effectiveSettings = await response.json();
       }
-      
+
       // Get selected options from the inline UI, but use effective settings as fallback
       const mode = document.querySelector(`input[name="claude-mode-${sessionId}"]:checked`)?.value || 'fresh';
       const skipPermissions = document.getElementById(`skip-permissions-${sessionId}`)?.checked ?? effectiveSettings.claudeFlags.skipPermissions;
-      
+
       // Send command to server
       this.socket.emit('start-claude', {
         sessionId: sessionId,
@@ -14863,19 +16272,19 @@ class ClaudeOrchestrator {
           skipPermissions: skipPermissions
         }
       });
-      
+
       // Hide the startup UI
       const startupUI = document.getElementById(this.getSessionDomId('startup-ui', sessionId));
       if (startupUI) {
         startupUI.style.display = 'none';
       }
-      
+
       // Enable the start button for future use
       const startBtn = document.getElementById(`claude-start-btn-${sessionId}`);
       if (startBtn) {
         startBtn.disabled = false;
       }
-      
+
     } catch (error) {
       console.error('Error starting Claude from terminal:', error);
     }
@@ -14883,10 +16292,10 @@ class ClaudeOrchestrator {
 
   restartClaudeSession(sessionId) {
     console.log(`Restarting Claude session: ${sessionId}`);
-    
+
     if (this.socket && this.socket.connected) {
       this.socket.emit('restart-session', { sessionId });
-      
+
       // Update UI to show restarting
       this.updateSessionStatus(sessionId, 'restarting');
     } else {
@@ -14922,16 +16331,16 @@ class ClaudeOrchestrator {
       if (!this.userSettings) {
         console.warn('User settings not loaded, attempting to load...');
         await this.loadUserSettings();
-        
+
         if (!this.userSettings) {
           console.error('Failed to load user settings');
           return;
         }
       }
-      
+
       const pathParts = path.split('.');
       const newGlobal = JSON.parse(JSON.stringify(this.userSettings.global));
-      
+
       // Navigate to the correct nested property
       let current = newGlobal;
       for (let i = 0; i < pathParts.length - 1; i++) {
@@ -15556,7 +16965,7 @@ class ClaudeOrchestrator {
         this.userSettings = updatedSettings;
         this.syncUserSettingsUI();
         console.log('Reset to defaults successfully');
-        
+
         // Show user feedback
         this.showTemporaryMessage('Settings reset to defaults');
       } else {
@@ -15582,7 +16991,7 @@ class ClaudeOrchestrator {
 
       if (response.ok) {
         console.log('Saved as default template successfully');
-        
+
         // Show user feedback with commit reminder
         this.showTemporaryMessage('Settings saved as default template. Remember to commit and push the changes to user-settings.default.json!', 'success');
       } else {
@@ -15600,7 +17009,7 @@ class ClaudeOrchestrator {
     const messageEl = document.createElement('div');
     messageEl.className = `temporary-message ${type}`;
     messageEl.textContent = message;
-    
+
     // Style the message
     messageEl.style.cssText = `
       position: fixed;
@@ -15616,14 +17025,14 @@ class ClaudeOrchestrator {
       transform: translateX(100%);
       transition: transform 0.3s ease;
     `;
-    
+
     document.body.appendChild(messageEl);
-    
+
     // Animate in
     setTimeout(() => {
       messageEl.style.transform = 'translateX(0)';
     }, 100);
-    
+
     // Remove after delay
     setTimeout(() => {
       messageEl.style.transform = 'translateX(100%)';
@@ -15642,9 +17051,9 @@ class ClaudeOrchestrator {
         this.showTemporaryMessage('Invalid session ID for replay viewer', 'error');
         return;
       }
-      
+
       const worktreeNum = worktreeMatch[1];
-      
+
       // Get worktree configuration from server for accurate path
       let worktreeConfig = null;
       try {
@@ -15655,19 +17064,19 @@ class ClaudeOrchestrator {
       } catch (error) {
         console.warn('Could not get worktree config, using defaults:', error);
       }
-      
+
       // Use server-hosted replay viewer (avoids browser file:// restrictions)
       const replayViewerUrl = `${window.location.origin}/replay-viewer/work${worktreeNum}/`;
-      
+
       console.log(`Opening replay viewer for ${sessionId} at ${replayViewerUrl}`);
-      
+
       // Open in new tab (simpler approach)
       window.open(replayViewerUrl, '_blank');
-      
+
       // Show success message with URL for reference
       this.showTemporaryMessage(`Opening replay viewer for work${worktreeNum}`, 'success');
       console.log(`Replay viewer URL: ${replayViewerUrl}`);
-      
+
     } catch (error) {
       console.error('Error opening replay viewer:', error);
       this.showTemporaryMessage('Failed to open replay viewer', 'error');
@@ -15687,7 +17096,7 @@ class ClaudeOrchestrator {
         setTimeout(checkAndStart, 500); // Check again in 500ms
       }
     };
-    
+
     setTimeout(checkAndStart, 1000); // Initial delay for terminal setup
   }
 
@@ -15696,7 +17105,7 @@ class ClaudeOrchestrator {
       const response = await fetch('/api/user-settings/check-updates');
       if (response.ok) {
         const result = await response.json();
-        
+
         if (result && result.hasUpdates) {
           const notification = document.getElementById('settings-update-notification');
           notification.classList.remove('hidden');
@@ -15802,17 +17211,17 @@ class ClaudeOrchestrator {
 
     try {
       this.showTemporaryMessage('Checking for updates...', 'info');
-      
+
       const response = await fetch('/api/git/check-updates');
       if (response.ok) {
         const result = await response.json();
-        
+
         if (result.hasUpdates) {
           const notification = document.getElementById('git-update-notification');
           const textElement = document.getElementById('git-notification-text');
           textElement.textContent = `${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available on ${result.currentBranch}`;
           notification.classList.remove('hidden');
-          
+
           this.showTemporaryMessage(`Found ${result.commitsBehind} update${result.commitsBehind > 1 ? 's' : ''} available`, 'success');
         } else if (result.hasUpdates === false) {
           this.showTemporaryMessage('Repository is up to date', 'success');
@@ -15835,7 +17244,7 @@ class ClaudeOrchestrator {
       }
 
       this.showTemporaryMessage('Pulling latest changes...', 'info');
-      
+
       const response = await fetch('/api/git/pull', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
@@ -15843,14 +17252,14 @@ class ClaudeOrchestrator {
 
       if (response.ok) {
         const result = await response.json();
-        
+
         if (result.success) {
           // Success message will be handled by socket event
           const notification = document.getElementById('git-update-notification');
           notification.classList.add('hidden');
         } else {
           this.showTemporaryMessage(result.error || 'Failed to pull changes', 'error');
-          
+
           // Show specific error details if available
           if (result.changes && result.changes.length > 0) {
             console.log('Uncommitted changes:', result.changes);
@@ -19679,7 +21088,7 @@ class ClaudeOrchestrator {
 	        applyView();
 	        return;
 	      }
-	
+
 	      state.selectedCardId = card.id || null;
 	      applyView();
 
@@ -21029,7 +22438,7 @@ class ClaudeOrchestrator {
             col.style.setProperty('--tasks-card-rows', '1');
             return;
 	          }
-	
+
 	          const containerHeight = cardsContainer.clientHeight;
 	          if (!containerHeight || containerHeight < 40) {
 	            col.style.setProperty('--tasks-card-columns', '1');
@@ -21047,7 +22456,7 @@ class ClaudeOrchestrator {
 	            return;
 	          }
 	          delete col.dataset.tasksWrapExpandRetry;
-	
+
 	          const styles = window.getComputedStyle(cardsContainer);
 	          const rowGap = Number.parseFloat(styles.rowGap || styles.gap || '0') || 0;
 	          const columnGap = Number.parseFloat(styles.columnGap || styles.gap || '0') || 0;
@@ -21092,10 +22501,10 @@ class ClaudeOrchestrator {
               col.style.minWidth = `${Math.round(target)}px`;
             }
           };
-	
+
 	          apply(rowsFit);
 	          const fits = () => (cardsContainer.scrollHeight <= cardsContainer.clientHeight + 1);
-	
+
 	          // If we still overflow vertically, reduce rows (creating more columns) until we fit.
 	          for (let attempt = 0; attempt < 24; attempt++) {
 	            // Force reflow and then check overflow.
@@ -30324,7 +31733,7 @@ class ClaudeOrchestrator {
     // While worktree sessions are spinning up, we reserve the worktree so it isn't recommended again.
     this.cleanupExpiredWorktreeReservations();
     if (this.isWorktreeReserved(repoPathNorm, worktreeId)) return true;
-	
+
 	    // Extract repo name from path for session matching
 	    const repoName = (repoNameOverride || repoPathNorm.split('/').pop() || '').toLowerCase();
 

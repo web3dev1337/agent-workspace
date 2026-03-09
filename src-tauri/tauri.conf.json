@@ -40,7 +40,13 @@
       "resources/backend/*",
       "resources/backend/server/*",
       "resources/backend/client/*",
+      "resources/backend/node/*",
       "resources/backend/node_modules"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": ""
+    }
   }
 }

@@ -1,36 +1,88 @@
+const { EventEmitter } = require('events');
+const { Readable } = require('stream');
+
 describe('diagnosticsService platform smoke', () => {
   afterEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
   });
 
+  function fakeSpawn(command, args) {
+    const child = new EventEmitter();
+    const stdout = new Readable({ read() {} });
+    const stderr = new Readable({ read() {} });
+    child.stdout = stdout;
+    child.stderr = stderr;
+    child.kill = () => {};
+
+    const cmd = String(command || '');
+    const argv = Array.isArray(args) ? args.map(String) : [];
+
+    // Resolve .cmd wrappers through cmd.exe
+    let resolvedCmd = cmd;
+    if (cmd === 'cmd.exe' && argv[0] === '/d' && argv[1] === '/c') {
+      resolvedCmd = argv[2] || '';
+    }
+
+    process.nextTick(() => {
+      if (resolvedCmd === process.execPath || resolvedCmd === 'node') {
+        stdout.push('v22.0.0\n'); stdout.push(null); stderr.push(null);
+        child.emit('close', 0);
+      } else if (resolvedCmd === 'npm' || resolvedCmd === 'npm.cmd') {
+        stdout.push('10.0.0\n'); stdout.push(null); stderr.push(null);
+        child.emit('close', 0);
+      } else if (resolvedCmd === 'git' || resolvedCmd === 'git.exe') {
+        if (argv.includes('user.name')) {
+          stdout.push('Test User\n'); stdout.push(null); stderr.push(null);
+          child.emit('close', 0);
+        } else if (argv.includes('user.email')) {
+          stdout.push('test@example.com\n'); stdout.push(null); stderr.push(null);
+          child.emit('close', 0);
+        } else {
+          stdout.push('git version 2.44.0\n'); stdout.push(null); stderr.push(null);
+          child.emit('close', 0);
+        }
+      } else if (resolvedCmd === 'gh' && argv.includes('--version')) {
+        stdout.push('gh version 2.61.0\n'); stdout.push(null); stderr.push(null);
+        child.emit('close', 0);
+      } else if (resolvedCmd === 'gh' && argv.includes('auth')) {
+        stdout.push(null); stderr.push('not logged in\n'); stderr.push(null);
+        child.emit('close', 1);
+      } else if (resolvedCmd === 'claude' || resolvedCmd === 'claude.cmd') {
+        stdout.push(null); stderr.push(null);
+        child.emit('error', Object.assign(new Error('missing command: claude'), { code: 'ENOENT' }));
+      } else if (resolvedCmd === 'codex' || resolvedCmd === 'codex.cmd') {
+        stdout.push(null); stderr.push(null);
+        child.emit('error', Object.assign(new Error('missing command: codex'), { code: 'ENOENT' }));
+      } else if (resolvedCmd === 'bash' || resolvedCmd === 'bash.exe' || resolvedCmd === 'powershell.exe') {
+        stdout.push('shell ok\n'); stdout.push(null); stderr.push(null);
+        child.emit('close', 0);
+      } else if (resolvedCmd === 'ffmpeg') {
+        stdout.push(null); stderr.push(null);
+        child.emit('error', Object.assign(new Error('missing command: ffmpeg'), { code: 'ENOENT' }));
+      } else if (resolvedCmd === 'wsl.exe') {
+        stdout.push(null); stderr.push(null);
+        child.emit('error', Object.assign(new Error('missing command: wsl.exe'), { code: 'ENOENT' }));
+      } else {
+        stdout.push(null); stderr.push(null);
+        child.emit('error', Object.assign(new Error(`missing command: ${resolvedCmd}`), { code: 'ENOENT' }));
+      }
+    });
+
+    return child;
+  }
+
   const mockChildProcess = () => {
     jest.doMock('child_process', () => ({
+      spawn: fakeSpawn,
       execFile: (command, args, options, callback) => {
+        // Legacy fallback for any code still using execFile
         const cmd = String(command || '');
-        const argv = Array.isArray(args) ? args.map(String) : [];
         if (cmd === process.execPath || cmd === 'node') return callback(null, 'v22.0.0\n', '');
         if (cmd === 'npm' || cmd === 'npm.cmd') return callback(null, '10.0.0\n', '');
         if (cmd === 'git') return callback(null, 'git version 2.44.0\n', '');
-        if (cmd === 'gh' && argv[0] === '--version') return callback(null, 'gh version 2.61.0\n', '');
-        if (cmd === 'gh' && argv[0] === 'auth') {
-          const err = new Error('not logged in');
-          err.code = 1;
-          return callback(err, '', 'not logged in');
-        }
-        if (cmd === 'claude') {
-          const err = new Error('missing command: claude');
-          err.code = 'ENOENT';
-          return callback(err, '', '');
-        }
-        if (cmd === 'codex') {
-          const err = new Error('missing command: codex');
-          err.code = 'ENOENT';
-          return callback(err, '', '');
-        }
-        if (cmd === 'bash' || cmd === 'bash.exe' || cmd === 'powershell.exe') {
-          return callback(null, 'shell ok\n', '');
-        }
+        if (cmd === 'gh') return callback(null, 'gh version 2.61.0\n', '');
+        if (cmd === 'bash' || cmd === 'bash.exe' || cmd === 'powershell.exe') return callback(null, 'shell ok\n', '');
         const err = new Error(`missing command: ${cmd}`);
         err.code = 'ENOENT';
         return callback(err, '', '');
