@@ -10041,7 +10041,7 @@ class ClaudeOrchestrator {
 
 	        const hasCompletedOnboarding = readCompleted();
 	        const coreReady = !!view.req?.coreReady;
-	        const shouldAutoShow = isWindowsHost && (!hasCompletedOnboarding || !coreReady) && (forceAutoShow || !readDismissed());
+	        const shouldAutoShow = isWindowsHost && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
 	        const shouldKeepVisible = open && !modal.classList.contains('hidden');
 	        if (explicitOpen || shouldKeepVisible || shouldAutoShow) {
 	          openModal();
