@@ -2373,6 +2373,9 @@ class SessionManager extends EventEmitter {
       let stdout = '';
       child.stdout.on('data', (d) => { stdout += d; });
       const timer = setTimeout(() => child.kill(), 2000);
+      child.on('error', () => {
+        clearTimeout(timer);
+      });
       child.on('close', () => {
         clearTimeout(timer);
         const processCount = parseInt(String(stdout || '').trim(), 10);
@@ -2397,6 +2400,9 @@ class SessionManager extends EventEmitter {
     let stdout = '';
     child.stdout.on('data', (d) => { stdout += d; });
     const timer = setTimeout(() => child.kill(), 2000);
+    child.on('error', () => {
+      clearTimeout(timer);
+    });
     child.on('close', (code) => {
       clearTimeout(timer);
       // pgrep exits with code 1 when no child process matches; treat as zero children.

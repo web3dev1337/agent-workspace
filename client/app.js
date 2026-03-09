@@ -9347,8 +9347,8 @@ class ClaudeOrchestrator {
 	    })();
 
 	    const setBootstrapPending = (pending) => {
-	      if (!isWindowsHost) return;
 	      if (pending) {
+	        if (!isWindowsHost) return;
 	        body?.classList?.add?.('dependency-onboarding-booting');
 	        body?.classList?.remove?.('dependency-onboarding-active');
 	        return;
@@ -10158,7 +10158,6 @@ class ClaudeOrchestrator {
 	        }
 	        const view = render();
 	        applyOnboardingLockUI();
-	        if (view.req?.coreReady) writeDismissed(false);
 
 	        const hasCompletedOnboarding = readCompleted();
 	        const coreReady = !!view.req?.coreReady;

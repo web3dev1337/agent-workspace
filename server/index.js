@@ -454,18 +454,28 @@ workspaceSystemReady = initializeWorkspaceSystem()
     logger.info('Workspace system initialized');
     return true;
   })
-  .then(() => loadPlugins())
-  .then((status) => {
-    logger.info('Plugin loader finished', {
-      loaded: Array.isArray(status?.loaded) ? status.loaded.length : 0,
-      failed: Array.isArray(status?.failed) ? status.failed.length : 0
-    });
-    return true;
-  })
   .catch(error => {
     logger.error('Workspace system initialization failed', { error: error.message, stack: error.stack });
     return false;
   });
+
+workspaceSystemReady
+  .then((workspaceReady) => {
+    if (!workspaceReady) return null;
+    return loadPlugins()
+      .then((status) => {
+        logger.info('Plugin loader finished', {
+          loaded: Array.isArray(status?.loaded) ? status.loaded.length : 0,
+          failed: Array.isArray(status?.failed) ? status.failed.length : 0
+        });
+        return status;
+      })
+      .catch((error) => {
+        logger.error('Plugin loader failed', { error: error.message, stack: error.stack });
+        return null;
+      });
+  })
+  .catch(() => null);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
