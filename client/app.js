@@ -9658,11 +9658,11 @@ class ClaudeOrchestrator {
 
 	    const isOnboardingLocked = () => {
 	      if (!isWindowsHost) return false;
+	      if (readCompleted()) return false;
 	      if (!Array.isArray(state.actions) || state.actions.length === 0) return false;
 	      const toolsMap = toToolMap(state.diagnostics);
 	      const req = getRequirementState(toolsMap);
-	      if (!req?.coreReady) return true;
-	      return !readCompleted();
+	      return !req?.coreReady;
 	    };
 
 	    const applyOnboardingLockUI = () => {
