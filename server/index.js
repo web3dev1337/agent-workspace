@@ -106,6 +106,7 @@ const {
   getLatestSetupActionRun,
   configureGitIdentity
 } = require('./setupActionService');
+const { OnboardingStateService } = require('./onboardingStateService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { PagerService } = require('./pagerService');
@@ -302,6 +303,7 @@ const processTaskService = ProcessTaskService.getInstance({ sessionManager, work
 const taskRecordService = TaskRecordService.getInstance();
 const userSettingsService = UserSettingsService.getInstance();
 const licenseService = LicenseService.getInstance();
+const onboardingStateService = OnboardingStateService.getInstance({ logger });
 const proOnly = requirePro(licenseService);
 const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager, userSettingsService });
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
@@ -4078,6 +4080,27 @@ app.get('/api/setup-actions', (req, res) => {
   } catch (error) {
     logger.error('Failed to get setup actions', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to get setup actions' });
+  }
+});
+
+app.get('/api/setup-actions/state', (req, res) => {
+  try {
+    const state = onboardingStateService.getDependencySetupState();
+    res.json({ ok: true, state });
+  } catch (error) {
+    logger.error('Failed to get setup action state', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get setup action state' });
+  }
+});
+
+app.put('/api/setup-actions/state', express.json(), (req, res) => {
+  try {
+    const patch = (req.body && typeof req.body === 'object') ? req.body : {};
+    const state = onboardingStateService.updateDependencySetupState(patch);
+    res.json({ ok: true, state });
+  } catch (error) {
+    logger.error('Failed to update setup action state', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to update setup action state' });
   }
 });
 
