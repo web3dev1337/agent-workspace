@@ -211,6 +211,20 @@ app.use((req, res, next) => {
 });
 
 // Define specific routes BEFORE static file serving
+app.get('/bootstrap/setup-state.js', (req, res) => {
+  try {
+    const state = onboardingStateService.getDependencySetupState();
+    res.type('application/javascript');
+    res.set('Cache-Control', 'no-store');
+    res.send(`window.__ORCHESTRATOR_SETUP_STATE__ = ${JSON.stringify(state)};`);
+  } catch (error) {
+    logger.error('Failed to serve setup bootstrap state', { error: error.message, stack: error.stack });
+    res.type('application/javascript');
+    res.set('Cache-Control', 'no-store');
+    res.send('window.__ORCHESTRATOR_SETUP_STATE__ = null;');
+  }
+});
+
 // Serve the UI as default
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/index.html'));

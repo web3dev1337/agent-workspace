@@ -9416,16 +9416,27 @@ class ClaudeOrchestrator {
 	          })
 	      };
 	    };
-	    const persistedSetupState = {
-	      loaded: false,
-	      loadPromise: null,
-	      savePromise: Promise.resolve(),
-	      current: normalizeSetupState({
+	    const readBootstrapSetupState = () => {
+	      try {
+	        const bootstrapState = window.__ORCHESTRATOR_SETUP_STATE__;
+	        if (bootstrapState && typeof bootstrapState === 'object') {
+	          return normalizeSetupState(bootstrapState);
+	        }
+	      } catch {
+	        // ignore and fall back to legacy/local state
+	      }
+	      return normalizeSetupState({
 	        dismissed: readLegacyBool(dismissKey),
 	        completed: readLegacyBool(completedKey),
 	        currentStep: readLegacyStep(),
 	        skippedActionIds: readLegacySkippedActionIds()
-	      })
+	      });
+	    };
+	    const persistedSetupState = {
+	      loaded: false,
+	      loadPromise: null,
+	      savePromise: Promise.resolve(),
+	      current: readBootstrapSetupState()
 	    };
 	    const syncLegacySetupState = () => {
 	      const current = persistedSetupState.current || normalizeSetupState({});
