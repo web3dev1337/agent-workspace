@@ -7,11 +7,11 @@ class NotificationManager {
     this.permission = 'default';
     this.soundEnabled = false;
     
-    // Create audio elements for notifications
-    this.sounds = {
-      waiting: this.createSound('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjGH0fPTgjMGHm7A7+OZURE'),
-      completed: this.createSound('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjGH0fPTgjMGHm7A7+OZURE'),
-      error: this.createSound('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjGH0fPTgjMGHm7A7+OZURE')
+    // Sound configs (AudioContext oscillator - no media files needed)
+    this.soundConfigs = {
+      waiting:   { freq: [800, 600], duration: 0.3 },
+      completed: { freq: [400, 600, 800], duration: 0.4 },
+      error:     { freq: [300, 200], duration: 0.4 }
     };
     
     this.init();
@@ -61,10 +61,25 @@ class NotificationManager {
     return t === 'error' || t === 'waiting';
   }
   
-  createSound(dataUri) {
-    const audio = new Audio(dataUri);
-    audio.volume = 0.5;
-    return audio;
+  createOscillatorSound(config) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + config.duration);
+
+      const step = config.duration / config.freq.length;
+      config.freq.forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        osc.connect(gain);
+        osc.frequency.setValueAtTime(f, ctx.currentTime + i * step);
+        osc.start(ctx.currentTime + i * step);
+        osc.stop(ctx.currentTime + (i + 1) * step);
+      });
+    } catch (e) {
+      // AudioContext not available
+    }
   }
   
   async requestPermission() {
@@ -204,13 +219,9 @@ class NotificationManager {
   }
   
   playSound(type) {
-    const sound = this.sounds[type] || this.sounds.waiting;
-    
-    if (sound && this.orchestrator.settings.sounds) {
-      sound.play().catch(err => {
-        console.warn('Failed to play notification sound:', err);
-      });
-    }
+    if (!this.orchestrator.settings.sounds) return;
+    const config = this.soundConfigs[type] || this.soundConfigs.waiting;
+    this.createOscillatorSound(config);
   }
   
   renderNotifications() {
