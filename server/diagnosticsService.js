@@ -1,31 +1,55 @@
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const util = require('util');
-const { execFile } = require('child_process');
+const { spawn } = require('child_process');
 
-const execFileAsync = util.promisify(execFile);
+const IS_WIN = process.platform === 'win32';
+const CREATE_NO_WINDOW = 0x08000000;
+
+function execQuiet(command, args, options = {}) {
+  const timeout = Number(options.timeout) || 2500;
+  const maxBuffer = options.maxBuffer || 1024 * 1024;
+  return new Promise((resolve, reject) => {
+    const cmdStr = String(command || '').trim();
+    const argsArr = Array.isArray(args) ? args : [];
+    // On Windows, route .cmd/.bat through cmd.exe directly to avoid retry flashing
+    let spawnCmd = cmdStr;
+    let spawnArgs = argsArr;
+    if (IS_WIN && /\.(cmd|bat)$/i.test(cmdStr)) {
+      spawnCmd = 'cmd.exe';
+      spawnArgs = ['/d', '/c', cmdStr, ...argsArr];
+    }
+    const child = spawn(spawnCmd, spawnArgs, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      ...(IS_WIN ? { creationFlags: CREATE_NO_WINDOW } : {})
+    });
+    let stdout = '';
+    let stderr = '';
+    let killed = false;
+    const timer = setTimeout(() => { killed = true; child.kill(); }, timeout);
+    child.stdout.on('data', (d) => {
+      stdout += d;
+      if (stdout.length > maxBuffer) { killed = true; child.kill(); }
+    });
+    child.stderr.on('data', (d) => {
+      stderr += d;
+      if (stderr.length > maxBuffer) { killed = true; child.kill(); }
+    });
+    child.on('error', (err) => { clearTimeout(timer); reject(err); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (killed) return reject(Object.assign(new Error('TIMEOUT'), { code: 'ETIMEDOUT' }));
+      if (code !== 0) return reject(Object.assign(new Error(stderr || `Exit code ${code}`), { code: 'EXIT', exitCode: code }));
+      resolve({ stdout, stderr });
+    });
+  });
+}
 
 async function checkCommand(command, args, options = {}) {
   const timeout = Number(options.timeoutMs) || 2500;
   try {
-    const runOptions = {
-      timeout,
-      windowsHide: true,
-      maxBuffer: 1024 * 1024
-    };
-
-    const commandStr = String(command || '').trim();
-    const argsArr = Array.isArray(args) ? args : [];
-    let result;
-    try {
-      result = await execFileAsync(commandStr, argsArr, runOptions);
-    } catch (error) {
-      const isWindowsScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandStr);
-      const shouldRetryWithCmd = isWindowsScript && (error?.code === 'EINVAL' || error?.code === 'ENOENT');
-      if (!shouldRetryWithCmd) throw error;
-      result = await execFileAsync('cmd.exe', ['/d', '/c', commandStr, ...argsArr], runOptions);
-    }
+    const result = await execQuiet(command, args, { timeout, maxBuffer: 1024 * 1024 });
 
     const { stdout, stderr } = result || {};
     const output = String(stdout || stderr || '').trim();
@@ -749,11 +773,9 @@ async function runFirstRunRepair({ action, rootDir, homeDir } = {}) {
   }
 
   if (actionId === 'rebuild-node-pty') {
-    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    const { stdout, stderr } = await execFileAsync(npmCmd, ['rebuild', 'node-pty'], {
-      cwd: resolvedRoot,
+    const npmCmd = IS_WIN ? 'npm.cmd' : 'npm';
+    const { stdout, stderr } = await execQuiet(npmCmd, ['rebuild', 'node-pty'], {
       timeout: 180000,
-      windowsHide: true,
       maxBuffer: 4 * 1024 * 1024
     });
     const output = String(stdout || stderr || '').trim();

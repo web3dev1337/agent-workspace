@@ -1,11 +1,50 @@
 const crypto = require('crypto');
-const util = require('util');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { spawn, execFile } = require('child_process');
+const { spawn } = require('child_process');
 
-const execFileAsync = util.promisify(execFile);
+const IS_WIN = process.platform === 'win32';
+const CREATE_NO_WINDOW = 0x08000000;
+
+function execQuiet(command, args, options = {}) {
+  const timeout = Number(options.timeout) || 3000;
+  const maxBuffer = options.maxBuffer || 1024 * 1024;
+  return new Promise((resolve, reject) => {
+    const cmdStr = String(command || '').trim();
+    const argsArr = Array.isArray(args) ? args : [];
+    let spawnCmd = cmdStr;
+    let spawnArgs = argsArr;
+    if (IS_WIN && /\.(cmd|bat)$/i.test(cmdStr)) {
+      spawnCmd = 'cmd.exe';
+      spawnArgs = ['/d', '/c', cmdStr, ...argsArr];
+    }
+    const child = spawn(spawnCmd, spawnArgs, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      ...(IS_WIN ? { creationFlags: CREATE_NO_WINDOW } : {})
+    });
+    let stdout = '';
+    let stderr = '';
+    let killed = false;
+    const timer = setTimeout(() => { killed = true; child.kill(); }, timeout);
+    child.stdout.on('data', (d) => {
+      stdout += d;
+      if (stdout.length > maxBuffer) { killed = true; child.kill(); }
+    });
+    child.stderr.on('data', (d) => {
+      stderr += d;
+      if (stderr.length > maxBuffer) { killed = true; child.kill(); }
+    });
+    child.on('error', (err) => { clearTimeout(timer); reject(err); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (killed) return reject(Object.assign(new Error('TIMEOUT'), { code: 'ETIMEDOUT' }));
+      if (code !== 0) return reject(Object.assign(new Error(stderr || `Exit code ${code}`), { code: 'EXIT', exitCode: code }));
+      resolve({ stdout, stderr });
+    });
+  });
+}
 
 const setupActionRuns = new Map();
 const latestRunByActionId = new Map();
@@ -66,28 +105,10 @@ async function checkExecutable(command, args = ['--version']) {
   const commandStr = String(command || '').trim();
   if (!commandStr) return { ok: false, error: 'Missing command' };
 
-  const runOptions = {
-    windowsHide: true,
-    timeout: 3000,
-    maxBuffer: 1024 * 1024
-  };
-
   try {
-    await execFileAsync(commandStr, Array.isArray(args) ? args : [], runOptions);
+    await execQuiet(commandStr, Array.isArray(args) ? args : [], { timeout: 3000 });
     return { ok: true };
   } catch (error) {
-    const isWindowsScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandStr);
-    if (isWindowsScript && (error?.code === 'EINVAL' || error?.code === 'ENOENT')) {
-      try {
-        await execFileAsync('cmd.exe', ['/d', '/c', commandStr, ...(Array.isArray(args) ? args : [])], runOptions);
-        return { ok: true };
-      } catch (fallbackError) {
-        return {
-          ok: false,
-          error: String(fallbackError?.message || fallbackError || 'Command check failed')
-        };
-      }
-    }
     return {
       ok: false,
       error: String(error?.message || error || 'Command check failed')
@@ -122,16 +143,10 @@ async function resolveGitCommand(platform = process.platform) {
 
 async function runGitCommand(command, args = []) {
   try {
-    const result = await execFileAsync(command, Array.isArray(args) ? args : [], {
-      windowsHide: true,
-      timeout: 9000,
-      maxBuffer: 1024 * 1024
-    });
+    const result = await execQuiet(command, Array.isArray(args) ? args : [], { timeout: 9000 });
     return String(result?.stdout || result?.stderr || '');
   } catch (error) {
-    const stderr = String(error?.stderr || '').trim();
-    const stdout = String(error?.stdout || '').trim();
-    const message = stderr || stdout || String(error?.message || error || 'Git command failed');
+    const message = String(error?.message || error || 'Git command failed');
     const err = new Error(message);
     err.code = String(error?.code || 'git_command_failed');
     throw err;
@@ -373,7 +388,8 @@ function launchPowerShellCommand(action) {
       {
         detached: false,
         windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
+        ...(IS_WIN ? { creationFlags: CREATE_NO_WINDOW } : {})
       }
     );
     run.pid = Number.isFinite(child?.pid) ? child.pid : null;
