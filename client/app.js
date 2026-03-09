@@ -9355,11 +9355,13 @@ class ClaudeOrchestrator {
 	      }
 	      body?.classList?.remove?.('dependency-onboarding-booting');
 	    };
-	    setBootstrapPending(true);
 	    if (!isWindowsHost) {
 	      setBootstrapPending(false);
 	      return;
 	    }
+
+	    const completedEarly = (() => { try { return localStorage.getItem(completedKey) === 'true'; } catch { return false; } })();
+	    setBootstrapPending(!completedEarly);
 
 	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v3';
 	    const completedKey = 'orchestrator-dependency-onboarding-completed-v2';
