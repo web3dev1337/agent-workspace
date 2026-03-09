@@ -9839,13 +9839,9 @@ class ClaudeOrchestrator {
 	      const stepNo = state.currentStep + 1;
 	      const totalSteps = steps.length;
 	      const detectedCount = steps.filter((step) => step.done).length;
-	      const doneRatio = totalSteps > 0 ? Math.round((detectedCount / totalSteps) * 100) : 0;
-	      const missingCore = [];
-	      if (!req.gitOk) missingCore.push('Git');
-	      if (!req.hasAgentCli) missingCore.push('Claude Code or Codex CLI');
 
 	      if (state.showWelcome) {
-	        summaryEl.textContent = '';
+	        summaryEl.textContent = `${detectedCount} of ${totalSteps} tools already detected.`;
 	        listEl.innerHTML = `
 	          <div class="onboarding-welcome-card">
 	            <h3 class="onboarding-welcome-title">Let’s get you ready in a minute.</h3>
@@ -9860,7 +9856,8 @@ class ClaudeOrchestrator {
 	        return { req, steps, current };
 	      }
 
-	      summaryEl.textContent = '';
+	      const skippedCount = state.skippedActionIds.size;
+	      summaryEl.textContent = `${detectedCount} of ${totalSteps} steps ready${skippedCount ? ` • ${skippedCount} skipped for now` : ''}`;
 
 	      const currentId = String(current?.id || '').trim();
 	      const currentStepIconSvg = getStepIconSvg(currentId);
@@ -9942,6 +9939,8 @@ class ClaudeOrchestrator {
 	      const gitIdentityName = this.escapeHtml(String(state.gitIdentity?.name || ''));
 	      const gitIdentityEmail = this.escapeHtml(String(state.gitIdentity?.email || ''));
 	      const showRunButton = current?.runSupported !== false && !isGitIdentityStep && !(isGhLoginStep && current?.done);
+	      const showCopyButton = !isGhLoginStep && !isGitIdentityStep;
+	      const hasStepActions = showRunButton || showCopyButton;
 	      const runDisabled = !!current?.done || runStatus === 'verified' || isRunBusy || codexNeedsNode;
 	      const runLabel = (() => {
 	        if (current?.done || runStatus === 'verified') {
@@ -9966,102 +9965,134 @@ class ClaudeOrchestrator {
 	      const statusClass = current?.done || runStatus === 'verified'
 	        ? 'status-ok'
 	        : ((isRunning || isVerifying || isFinalizing) ? 'status-pending' : (runStatus === 'failed' ? 'status-missing' : (current?.statusClass || 'status-missing')));
-	      const canAdvance = !!current?.done || !!current?.optional;
-	      const nextLabel = !canAdvance
-	        ? 'Complete this step first'
-	        : (!current?.done && current?.optional
-	            ? 'Skip'
-	            : (stepNo >= totalSteps ? 'Finish onboarding' : 'Next step'));
+	      const isLastStep = stepNo >= totalSteps;
+	      const showSkipButton = !!current?.optional && !current?.done;
+	      const canAdvance = !!current?.done;
+	      const nextLabel = isLastStep ? 'Finish onboarding' : 'Next step';
+	      const stepLevelText = this.escapeHtml(String(current?.levelText || (current?.optional ? 'Optional' : 'Recommended')));
+	      const footerEyebrow = this.escapeHtml(
+	        current?.done
+	          ? 'Ready to continue'
+	          : (current?.optional ? 'Optional step' : 'Complete this step')
+	      );
+	      const footerCopy = this.escapeHtml(
+	        current?.done
+	          ? 'This step is complete. You can move on whenever you are ready.'
+	          : (current?.optional
+	              ? 'You can finish this now or skip it and come back later.'
+	              : 'This step needs to be completed before you can continue.')
+	      );
 
 	      listEl.innerHTML = `
-	        <div class="onboarding-stepper-row">
-	          ${steps.map((step, idx) => {
-	            const isActive = idx === state.currentStep;
-	            const actionId = String(step?.id || '').trim();
-	            const isSkipped = state.skippedActionIds.has(actionId);
-	            const isDone = step.done || isSkipped;
-	            const isPast = idx < state.currentStep;
-	            const isFuture = idx > state.currentStep;
-	            let statusClass = 'stepper-upcoming';
-	            if (isActive) {
-	              statusClass = 'stepper-active';
-	            } else if (isPast && isDone) {
-	              statusClass = 'stepper-done';
-	            } else {
-	              statusClass = 'stepper-upcoming';
-	            }
-	            const stepStateLabel = isActive
-	              ? 'Current step'
-	              : (isPast && isDone ? 'Completed' : (isFuture ? 'Upcoming' : 'Pending'));
-	            return `
-	              <div class="onboarding-stepper-item ${statusClass}" title="${this.escapeHtml(`${step.title} (${stepStateLabel})`)}">
-	                <div class="stepper-icon-box">
-	                  ${isActive ? `<span class="stepper-active-label">Step ${stepNo}</span>` : ''}
-	                  <div class="stepper-diamond"></div>
-	                </div>
-	              </div>
-	            `;
-	          }).join('')}
-	        </div>
-
-	        <div class="onboarding-step-card ${current?.done ? 'card-done' : ''}" data-setup-item="${this.escapeHtml(currentId)}">
-	          <div class="onboarding-step-icon">
-	            ${currentStepIconSvg}
-	          </div>
-	          <div class="onboarding-step-content">
-	            <h3 class="onboarding-step-title">${currentTitle}</h3>
-
-	            <div class="onboarding-step-status-row">
-	              ${current?.done ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="onboarding-check"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
-	              <p class="onboarding-step-desc">${currentDesc} ${statusText ? `<span class="onboarding-inline-status ${statusClass}">(${statusText})</span>` : ''}</p>
+	        <div class="onboarding-flow-shell">
+	          <div class="onboarding-flow-main">
+	            <div class="onboarding-stepper-row">
+	              ${steps.map((step, idx) => {
+	                const isActive = idx === state.currentStep;
+	                const actionId = String(step?.id || '').trim();
+	                const isSkipped = state.skippedActionIds.has(actionId);
+	                const isDone = step.done || isSkipped;
+	                const isPast = idx < state.currentStep;
+	                const isFuture = idx > state.currentStep;
+	                let statusClass = 'stepper-upcoming';
+	                if (isActive) {
+	                  statusClass = 'stepper-active';
+	                } else if (isPast && isDone) {
+	                  statusClass = 'stepper-done';
+	                } else {
+	                  statusClass = 'stepper-upcoming';
+	                }
+	                const stepStateLabel = isActive
+	                  ? 'Current step'
+	                  : (isPast && isDone ? 'Completed' : (isFuture ? 'Upcoming' : 'Pending'));
+	                return `
+	                  <div class="onboarding-stepper-item ${statusClass}" title="${this.escapeHtml(`${step.title} (${stepStateLabel})`)}">
+	                    <div class="stepper-icon-box">
+	                      ${isActive ? `<span class="stepper-active-label">Step ${stepNo}</span>` : ''}
+	                      <div class="stepper-diamond"></div>
+	                    </div>
+	                  </div>
+	                `;
+	              }).join('')}
 	            </div>
 
-	            ${isGitIdentityStep ? `
-	              <div class="dependency-git-identity-helper">
-	                <div class="dependency-git-identity-fields">
-	                  <label class="dependency-git-identity-field">
-	                    <span>Name</span>
-	                    <input type="text" data-setup-git-name placeholder="Jane Developer" autocomplete="name" value="${gitIdentityName}" ${isRunBusy ? 'disabled' : ''}>
-	                  </label>
-	                  <label class="dependency-git-identity-field">
-	                    <span>Email</span>
-	                    <input type="email" data-setup-git-email placeholder="you@example.com" autocomplete="email" value="${gitIdentityEmail}" ${isRunBusy ? 'disabled' : ''}>
-	                  </label>
-	                  <button class="onboarding-btn-secondary" type="button" data-setup-git-save="true" ${isRunBusy ? 'disabled' : ''}>${isRunBusy ? 'Saving...' : (current?.done ? 'Update identity' : 'Save identity')}</button>
-	                </div>
+	            <div class="onboarding-step-card ${current?.done ? 'card-done' : ''}" data-setup-item="${this.escapeHtml(currentId)}">
+	              <div class="onboarding-step-icon">
+	                ${currentStepIconSvg}
 	              </div>
-	            ` : ''}
-
-		            ${showInlineGhLogin ? `
-		              <div class="dependency-gh-login-helper">
-		                <div class="dependency-gh-login-helper-text">GitHub authentication (optional) <span class="onboarding-inline-status ${ghLoginInlineStatusClass}">(${this.escapeHtml(ghLoginInlineStatusText)})</span></div>
-		                ${ghLoginUiPhase === 'start' ? '<div class="dependency-gh-login-helper-text">Click <strong>Start login</strong> to begin browser sign-in.</div>' : ''}
-		                ${ghLoginUiPhase === 'wait-code' ? '<div class="dependency-gh-login-helper-text">Waiting for GitHub CLI login details. If code is not shown here, it is copied to your clipboard automatically.</div>' : ''}
-		                ${ghLoginUiPhase === 'retry' ? '<div class="dependency-gh-login-helper-text">Login is not complete yet. Start login again to request a new one-time code.</div>' : ''}
-		                ${ghLoginUiPhase === 'code' ? `<div class="dependency-gh-login-helper-text">Open GitHub login and paste this one-time code.</div><div class="dependency-gh-login-code-wrap"><span class="dependency-gh-login-code mono">${this.escapeHtml(ghLoginCode)}</span><button class="onboarding-btn-secondary" type="button" data-setup-copy-gh-code="${this.escapeHtml(ghLoginCode)}">Copy code</button></div>` : ''}
-		                <div class="dependency-gh-login-helper-actions">
-		                  <button class="onboarding-btn-secondary" type="button" data-setup-run="gh-login" ${ghLoginInlineRunDisabled ? 'disabled' : ''}>${this.escapeHtml(ghLoginInlineRunLabel)}</button>
-		                  ${ghLoginRunInfo ? `<button class="onboarding-btn-secondary" type="button" data-setup-open-gh-login="${this.escapeHtml(ghLoginLink)}">Open GitHub login</button>` : ''}
-		                </div>
-		              </div>
-		            ` : ''}
-
-	            ${shouldShowInstallerOutput ? `
-	              <div class="dependency-onboarding-command-wrap">
-	                <pre class="mono dependency-setup-item-output">${installerOutputText}</pre>
-	              </div>
-	            ` : ''}
-
-	                <div class="onboarding-step-actions">
-	                  ${showRunButton ? `<button class="onboarding-btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>` : ''}
-	                  ${!isGhLoginStep && !isGitIdentityStep ? `<button class="onboarding-btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>` : ''}
+	              <div class="onboarding-step-content">
+	                <div class="onboarding-step-kicker-row">
+	                  <span class="onboarding-step-badge ${this.escapeHtml(String(current?.levelClass || 'level-required'))}">${stepLevelText}</span>
+	                  <span class="onboarding-step-count">Step ${stepNo} of ${totalSteps}</span>
 	                </div>
-		          </div>
-		        </div>
+	                <h3 class="onboarding-step-title">${currentTitle}</h3>
 
-	        <div class="onboarding-nav-row">
-	          <button class="onboarding-btn-back" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Back</button>
-	          <button class="onboarding-btn-primary" type="button" data-setup-next="true" ${canAdvance ? '' : 'disabled'}>${nextLabel}</button>
+	                <div class="onboarding-step-status-row">
+	                  ${current?.done ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="onboarding-check"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+	                  <p class="onboarding-step-desc">${currentDesc} ${statusText ? `<span class="onboarding-inline-status ${statusClass}">(${statusText})</span>` : ''}</p>
+	                </div>
+
+	                <div class="onboarding-step-body">
+	                  ${isGitIdentityStep ? `
+	                    <div class="dependency-git-identity-helper">
+	                      <div class="dependency-git-identity-fields">
+	                        <label class="dependency-git-identity-field">
+	                          <span>Name</span>
+	                          <input type="text" data-setup-git-name placeholder="Jane Developer" autocomplete="name" value="${gitIdentityName}" ${isRunBusy ? 'disabled' : ''}>
+	                        </label>
+	                        <label class="dependency-git-identity-field">
+	                          <span>Email</span>
+	                          <input type="email" data-setup-git-email placeholder="you@example.com" autocomplete="email" value="${gitIdentityEmail}" ${isRunBusy ? 'disabled' : ''}>
+	                        </label>
+	                        <button class="onboarding-btn-secondary" type="button" data-setup-git-save="true" ${isRunBusy ? 'disabled' : ''}>${isRunBusy ? 'Saving...' : (current?.done ? 'Update identity' : 'Save identity')}</button>
+	                      </div>
+	                    </div>
+	                  ` : ''}
+
+			              ${showInlineGhLogin ? `
+			                <div class="dependency-gh-login-helper">
+			                  <div class="dependency-gh-login-helper-text">GitHub authentication (optional) <span class="onboarding-inline-status ${ghLoginInlineStatusClass}">(${this.escapeHtml(ghLoginInlineStatusText)})</span></div>
+			                  ${ghLoginUiPhase === 'start' ? '<div class="dependency-gh-login-helper-text">Click <strong>Start login</strong> to begin browser sign-in.</div>' : ''}
+			                  ${ghLoginUiPhase === 'wait-code' ? '<div class="dependency-gh-login-helper-text">Waiting for GitHub CLI login details. If code is not shown here, it is copied to your clipboard automatically.</div>' : ''}
+			                  ${ghLoginUiPhase === 'retry' ? '<div class="dependency-gh-login-helper-text">Login is not complete yet. Start login again to request a new one-time code.</div>' : ''}
+			                  ${ghLoginUiPhase === 'code' ? `<div class="dependency-gh-login-helper-text">Open GitHub login and paste this one-time code.</div><div class="dependency-gh-login-code-wrap"><span class="dependency-gh-login-code mono">${this.escapeHtml(ghLoginCode)}</span><button class="onboarding-btn-secondary" type="button" data-setup-copy-gh-code="${this.escapeHtml(ghLoginCode)}">Copy code</button></div>` : ''}
+			                  <div class="dependency-gh-login-helper-actions">
+			                    <button class="onboarding-btn-secondary" type="button" data-setup-run="gh-login" ${ghLoginInlineRunDisabled ? 'disabled' : ''}>${this.escapeHtml(ghLoginInlineRunLabel)}</button>
+			                    ${ghLoginRunInfo ? `<button class="onboarding-btn-secondary" type="button" data-setup-open-gh-login="${this.escapeHtml(ghLoginLink)}">Open GitHub login</button>` : ''}
+			                  </div>
+			                </div>
+			              ` : ''}
+
+	                  ${shouldShowInstallerOutput ? `
+	                    <div class="dependency-onboarding-command-wrap">
+	                      <pre class="mono dependency-setup-item-output">${installerOutputText}</pre>
+	                    </div>
+	                  ` : ''}
+	                </div>
+
+	                ${hasStepActions ? `
+	                  <div class="onboarding-step-actions">
+	                    ${showRunButton ? `<button class="onboarding-btn-secondary" type="button" data-setup-run="${this.escapeHtml(currentId)}" ${runDisabled ? 'disabled' : ''}>${runLabel}</button>` : ''}
+	                    ${showCopyButton ? `<button class="onboarding-btn-secondary" type="button" data-setup-copy-id="${this.escapeHtml(currentId)}" ${commandRaw ? '' : 'disabled'}>Copy command</button>` : ''}
+	                  </div>
+	                ` : ''}
+	              </div>
+	            </div>
+	          </div>
+
+	          <div class="onboarding-footer">
+	            <div class="onboarding-footer-copy">
+	              <div class="onboarding-footer-eyebrow">${footerEyebrow}</div>
+	              <p class="onboarding-footer-text">${footerCopy}</p>
+	            </div>
+	            <div class="onboarding-nav-row">
+	              <button class="onboarding-btn-back" type="button" data-setup-prev="true" ${state.currentStep <= 0 ? 'disabled' : ''}>Back</button>
+	              <div class="onboarding-nav-actions">
+	                ${showSkipButton ? `<button class="onboarding-btn-skip" type="button" data-setup-skip="true">${isLastStep ? 'Skip and finish' : 'Skip for now'}</button>` : ''}
+	                <button class="onboarding-btn-primary" type="button" data-setup-next="true" ${canAdvance ? '' : 'disabled'}>${nextLabel}</button>
+	              </div>
+	            </div>
+	          </div>
 	        </div>`;
 
 	      return { req, steps, current };
@@ -10577,6 +10608,45 @@ class ClaudeOrchestrator {
 	      }
 	    };
 
+	    const advanceCurrentStep = ({ skipCurrent = false } = {}) => {
+	      const steps = getResolvedSteps();
+	      syncSkippedSteps(steps);
+	      const currentStep = steps[state.currentStep];
+	      if (!currentStep) return false;
+
+	      if (!currentStep.done) {
+	        if (!skipCurrent) {
+	          this.showToast(
+	            currentStep.optional
+	              ? 'Complete this step or use Skip for now to continue.'
+	              : 'Install this dependency before continuing.',
+	            'warning'
+	          );
+	          return false;
+	        }
+	        if (!currentStep.optional) {
+	          this.showToast('This step cannot be skipped.', 'warning');
+	          return false;
+	        }
+	        setStepSkipped(currentStep?.id, true);
+	        this.showToast('Skipping optional setup for now. You can configure it later.', 'warning');
+	      } else {
+	        setStepSkipped(currentStep?.id, false);
+	      }
+
+	      if (state.currentStep >= (steps.length - 1)) {
+	        writeCompleted(true);
+	        writeDismissed(false);
+	        closeModal({ force: true });
+	        this.showToast('Dependency onboarding complete.', 'success');
+	        return true;
+	      }
+
+	      setCurrentStep(state.currentStep + 1);
+	      render();
+	      return true;
+	    };
+
 	    listEl.addEventListener('click', async (event) => {
 	      const runBtn = event.target.closest('[data-setup-run]');
 	      if (runBtn) {
@@ -10599,29 +10669,13 @@ class ClaudeOrchestrator {
 
 	      const nextBtn = event.target.closest('[data-setup-next]');
 	      if (nextBtn) {
-	        const total = Array.isArray(state.actions) ? state.actions.length : 0;
-	        const steps = getResolvedSteps();
-	        syncSkippedSteps(steps);
-	        const currentStep = steps[state.currentStep];
-	        if (!currentStep?.done) {
-	          if (!currentStep?.optional) {
-	            this.showToast('Install this dependency before continuing.', 'warning');
-	            return;
-	          }
-	          setStepSkipped(currentStep?.id, true);
-	          this.showToast('Skipping optional setup for now. You can configure it later.', 'warning');
-	        } else {
-	          setStepSkipped(currentStep?.id, false);
-	        }
-	        if (state.currentStep >= (total - 1)) {
-	          writeCompleted(true);
-	          writeDismissed(false);
-	          closeModal({ force: true });
-	          this.showToast('Dependency onboarding complete.', 'success');
-	          return;
-	        }
-	        setCurrentStep(state.currentStep + 1);
-	        render();
+	        advanceCurrentStep({ skipCurrent: false });
+	        return;
+	      }
+
+	      const skipBtn = event.target.closest('[data-setup-skip]');
+	      if (skipBtn) {
+	        advanceCurrentStep({ skipCurrent: true });
 	        return;
 	      }
 	      const beginBtn = event.target.closest('[data-setup-begin]');
