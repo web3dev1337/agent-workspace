@@ -106,6 +106,7 @@ const {
   getLatestSetupActionRun,
   configureGitIdentity
 } = require('./setupActionService');
+const { OnboardingStateService } = require('./onboardingStateService');
 const { PluginLoaderService } = require('./pluginLoaderService');
 const { SchedulerService } = require('./schedulerService');
 const { PagerService } = require('./pagerService');
@@ -210,6 +211,20 @@ app.use((req, res, next) => {
 });
 
 // Define specific routes BEFORE static file serving
+app.get('/bootstrap/setup-state.js', (req, res) => {
+  try {
+    const state = onboardingStateService.getDependencySetupState();
+    res.type('application/javascript');
+    res.set('Cache-Control', 'no-store');
+    res.send(`window.__ORCHESTRATOR_SETUP_STATE__ = ${JSON.stringify(state)};`);
+  } catch (error) {
+    logger.error('Failed to serve setup bootstrap state', { error: error.message, stack: error.stack });
+    res.type('application/javascript');
+    res.set('Cache-Control', 'no-store');
+    res.send('window.__ORCHESTRATOR_SETUP_STATE__ = null;');
+  }
+});
+
 // Serve the UI as default
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/index.html'));
@@ -302,6 +317,7 @@ const processTaskService = ProcessTaskService.getInstance({ sessionManager, work
 const taskRecordService = TaskRecordService.getInstance();
 const userSettingsService = UserSettingsService.getInstance();
 const licenseService = LicenseService.getInstance();
+const onboardingStateService = OnboardingStateService.getInstance({ logger });
 const proOnly = requirePro(licenseService);
 const processStatusService = ProcessStatusService.getInstance({ processTaskService, taskRecordService, sessionManager, workspaceManager, userSettingsService });
 const processTelemetryService = ProcessTelemetryService.getInstance({ taskRecordService });
@@ -438,18 +454,28 @@ workspaceSystemReady = initializeWorkspaceSystem()
     logger.info('Workspace system initialized');
     return true;
   })
-  .then(() => loadPlugins())
-  .then((status) => {
-    logger.info('Plugin loader finished', {
-      loaded: Array.isArray(status?.loaded) ? status.loaded.length : 0,
-      failed: Array.isArray(status?.failed) ? status.failed.length : 0
-    });
-    return true;
-  })
   .catch(error => {
     logger.error('Workspace system initialization failed', { error: error.message, stack: error.stack });
     return false;
   });
+
+workspaceSystemReady
+  .then((workspaceReady) => {
+    if (!workspaceReady) return null;
+    return loadPlugins()
+      .then((status) => {
+        logger.info('Plugin loader finished', {
+          loaded: Array.isArray(status?.loaded) ? status.loaded.length : 0,
+          failed: Array.isArray(status?.failed) ? status.failed.length : 0
+        });
+        return status;
+      })
+      .catch((error) => {
+        logger.error('Plugin loader failed', { error: error.message, stack: error.stack });
+        return null;
+      });
+  })
+  .catch(() => null);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
@@ -4078,6 +4104,27 @@ app.get('/api/setup-actions', (req, res) => {
   } catch (error) {
     logger.error('Failed to get setup actions', { error: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: 'Failed to get setup actions' });
+  }
+});
+
+app.get('/api/setup-actions/state', (req, res) => {
+  try {
+    const state = onboardingStateService.getDependencySetupState();
+    res.json({ ok: true, state });
+  } catch (error) {
+    logger.error('Failed to get setup action state', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to get setup action state' });
+  }
+});
+
+app.put('/api/setup-actions/state', express.json(), (req, res) => {
+  try {
+    const patch = (req.body && typeof req.body === 'object') ? req.body : {};
+    const state = onboardingStateService.updateDependencySetupState(patch);
+    res.json({ ok: true, state });
+  } catch (error) {
+    logger.error('Failed to update setup action state', { error: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: 'Failed to update setup action state' });
   }
 });
 

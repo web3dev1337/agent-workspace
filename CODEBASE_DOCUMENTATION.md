@@ -465,6 +465,9 @@ POST /api/discord/process-queue    - Dispatch queue processing prompt with optio
 POST /api/sessions/intent-haiku   - Generate <=200 char intent summary for an active Claude/Codex session
 GET /api/greenfield/categories    - Greenfield category list (taxonomy-backed)
 POST /api/greenfield/detect-category - Infer category from description (taxonomy keyword matching)
+GET /api/setup-actions            - List Windows dependency-onboarding actions
+GET /api/setup-actions/state      - Read persisted dependency-onboarding state (completed/dismissed/current step)
+PUT /api/setup-actions/state      - Persist dependency-onboarding state into app data for desktop restarts
 GET /api/user-settings            - Get user preferences
 PUT /api/user-settings            - Update user preferences
 
@@ -543,7 +546,8 @@ LOGGING:      Winston-based structured logging with rotation
 
 ```
 server/setupActionService.js     - Defines setup actions and launches PowerShell installers
-server/index.js                  - Routes: GET /api/setup-actions, POST /api/setup-actions/run
+server/onboardingStateService.js - Persists Windows dependency-onboarding state in app data so Tauri restarts survive per-launch localhost ports
+server/index.js                  - Routes: GET/PUT /api/setup-actions/state plus setup action execution endpoints
 client/app.js                    - Guided dependency onboarding steps + diagnostics integration
 client/index.html                - Dependency onboarding modal markup + launch button
 client/styles.css                - Dependency onboarding progress/step styling

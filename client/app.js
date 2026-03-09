@@ -9347,8 +9347,8 @@ class ClaudeOrchestrator {
 	    })();
 
 	    const setBootstrapPending = (pending) => {
-	      if (!isWindowsHost) return;
 	      if (pending) {
+	        if (!isWindowsHost) return;
 	        body?.classList?.add?.('dependency-onboarding-booting');
 	        body?.classList?.remove?.('dependency-onboarding-active');
 	        return;
@@ -9360,13 +9360,159 @@ class ClaudeOrchestrator {
 	      return;
 	    }
 
-	    const completedEarly = (() => { try { return localStorage.getItem(completedKey) === 'true'; } catch { return false; } })();
-	    setBootstrapPending(!completedEarly);
-
 	    const dismissKey = 'orchestrator-dependency-setup-dismissed-v3';
 	    const completedKey = 'orchestrator-dependency-onboarding-completed-v2';
 	    const progressKey = 'orchestrator-dependency-onboarding-progress-v2';
 	    const skippedStepsKey = 'orchestrator-dependency-onboarding-skipped-v1';
+	    const setupStateUrl = '/api/setup-actions/state';
+	    const readLegacyBool = (key) => {
+	      try {
+	        return localStorage.getItem(key) === 'true';
+	      } catch {
+	        return false;
+	      }
+	    };
+	    const readLegacyStep = () => {
+	      try {
+	        const raw = Number.parseInt(String(localStorage.getItem(progressKey) || ''), 10);
+	        if (Number.isFinite(raw) && raw >= 0) return raw;
+	        return 0;
+	      } catch {
+	        return 0;
+	      }
+	    };
+	    const readLegacySkippedActionIds = () => {
+	      try {
+	        const raw = localStorage.getItem(skippedStepsKey);
+	        if (!raw) return [];
+	        const parsed = JSON.parse(raw);
+	        if (!Array.isArray(parsed)) return [];
+	        const seen = new Set();
+	        return parsed
+	          .map((value) => String(value || '').trim())
+	          .filter((value) => {
+	            if (!value || seen.has(value)) return false;
+	            seen.add(value);
+	            return true;
+	          });
+	      } catch {
+	        return [];
+	      }
+	    };
+	    const normalizeSetupState = (value) => {
+	      const currentStepRaw = Number.parseInt(String(value?.currentStep ?? 0), 10);
+	      const skippedActionIds = Array.isArray(value?.skippedActionIds) ? value.skippedActionIds : [];
+	      const seen = new Set();
+	      return {
+	        dismissed: value?.dismissed === true,
+	        completed: value?.completed === true,
+	        currentStep: Number.isFinite(currentStepRaw) && currentStepRaw >= 0 ? currentStepRaw : 0,
+	        skippedActionIds: skippedActionIds
+	          .map((entry) => String(entry || '').trim())
+	          .filter((entry) => {
+	            if (!entry || seen.has(entry)) return false;
+	            seen.add(entry);
+	            return true;
+	          })
+	      };
+	    };
+	    const readBootstrapSetupState = () => {
+	      try {
+	        const bootstrapState = window.__ORCHESTRATOR_SETUP_STATE__;
+	        if (bootstrapState && typeof bootstrapState === 'object') {
+	          return normalizeSetupState(bootstrapState);
+	        }
+	      } catch {
+	        // ignore and fall back to legacy/local state
+	      }
+	      return normalizeSetupState({
+	        dismissed: readLegacyBool(dismissKey),
+	        completed: readLegacyBool(completedKey),
+	        currentStep: readLegacyStep(),
+	        skippedActionIds: readLegacySkippedActionIds()
+	      });
+	    };
+	    const persistedSetupState = {
+	      loaded: false,
+	      loadPromise: null,
+	      savePromise: Promise.resolve(),
+	      current: readBootstrapSetupState()
+	    };
+	    const syncLegacySetupState = () => {
+	      const current = persistedSetupState.current || normalizeSetupState({});
+	      try {
+	        if (current.dismissed) localStorage.setItem(dismissKey, 'true');
+	        else localStorage.removeItem(dismissKey);
+	        if (current.completed) localStorage.setItem(completedKey, 'true');
+	        else localStorage.removeItem(completedKey);
+	        localStorage.setItem(progressKey, String(Math.max(0, Number(current.currentStep) || 0)));
+	        if (Array.isArray(current.skippedActionIds) && current.skippedActionIds.length > 0) {
+	          localStorage.setItem(skippedStepsKey, JSON.stringify(current.skippedActionIds));
+	        } else {
+	          localStorage.removeItem(skippedStepsKey);
+	        }
+	      } catch {
+	        // ignore
+	      }
+	    };
+	    const getPersistedSetupState = () => ({
+	      ...(persistedSetupState.current || normalizeSetupState({})),
+	      skippedActionIds: Array.isArray(persistedSetupState.current?.skippedActionIds)
+	        ? [...persistedSetupState.current.skippedActionIds]
+	        : []
+	    });
+	    const applyPersistedSetupState = (value) => {
+	      persistedSetupState.current = normalizeSetupState(value || {});
+	      syncLegacySetupState();
+	      return getPersistedSetupState();
+	    };
+	    const loadPersistedSetupState = async ({ force = false } = {}) => {
+	      if (persistedSetupState.loaded && !force) return getPersistedSetupState();
+	      if (persistedSetupState.loadPromise && !force) return persistedSetupState.loadPromise;
+	      persistedSetupState.loadPromise = (async () => {
+	        try {
+	          const res = await fetch(setupStateUrl);
+	          const data = await res.json().catch(() => ({}));
+	          if (res.ok && data?.ok !== false) {
+	            applyPersistedSetupState(data?.state || {});
+	          }
+	        } catch {
+	          // ignore and keep local fallback state
+	        } finally {
+	          persistedSetupState.loaded = true;
+	          persistedSetupState.loadPromise = null;
+	        }
+	        return getPersistedSetupState();
+	      })();
+	      return persistedSetupState.loadPromise;
+	    };
+	    const savePersistedSetupState = async (patch = {}) => {
+	      applyPersistedSetupState({
+	        ...(persistedSetupState.current || normalizeSetupState({})),
+	        ...((patch && typeof patch === 'object') ? patch : {})
+	      });
+	      persistedSetupState.savePromise = persistedSetupState.savePromise
+	        .catch(() => null)
+	        .then(async () => {
+	          try {
+	            const res = await fetch(setupStateUrl, {
+	              method: 'PUT',
+	              headers: { 'Content-Type': 'application/json' },
+	              body: JSON.stringify(patch || {})
+	            });
+	            const data = await res.json().catch(() => ({}));
+	            if (res.ok && data?.ok !== false) {
+	              applyPersistedSetupState(data?.state || {});
+	            }
+	          } catch {
+	            // ignore and keep local state
+	          }
+	          return getPersistedSetupState();
+	        });
+	      return persistedSetupState.savePromise;
+	    };
+	    setBootstrapPending(true);
+
 	    const state = {
 	      loading: false,
 	      diagnostics: null,
@@ -9380,86 +9526,43 @@ class ClaudeOrchestrator {
 	        name: '',
 	        email: ''
 	      },
-	      gitIdentityHelpVisible: false
+	      gitIdentityHelpVisible: false,
+	      startupPending: true
 	    };
 
-	    const readDismissed = () => {
-	      try {
-	        return localStorage.getItem(dismissKey) === 'true';
-	      } catch {
-	        return false;
-	      }
-	    };
+	    const readDismissed = () => getPersistedSetupState().dismissed === true;
 
 	    const writeDismissed = (value) => {
-	      try {
-	        if (value) localStorage.setItem(dismissKey, 'true');
-	        else localStorage.removeItem(dismissKey);
-	      } catch {
-	        // ignore
-	      }
+	      const next = value === true;
+	      if (readDismissed() === next) return;
+	      void savePersistedSetupState({ dismissed: next });
 	    };
 
-	    const readCompleted = () => {
-	      try {
-	        return localStorage.getItem(completedKey) === 'true';
-	      } catch {
-	        return false;
-	      }
-	    };
+	    const readCompleted = () => getPersistedSetupState().completed === true;
 
 	    const writeCompleted = (value) => {
-	      try {
-	        if (value) localStorage.setItem(completedKey, 'true');
-	        else localStorage.removeItem(completedKey);
-	      } catch {
-	        // ignore
-	      }
+	      const next = value === true;
+	      if (readCompleted() === next) return;
+	      void savePersistedSetupState({ completed: next });
 	    };
 
-	    const readSavedStep = () => {
-	      try {
-	        const raw = Number.parseInt(String(localStorage.getItem(progressKey) || ''), 10);
-	        if (Number.isFinite(raw) && raw >= 0) return raw;
-	        return 0;
-	      } catch {
-	        return 0;
-	      }
-	    };
+	    const readSavedStep = () => Math.max(0, Number(getPersistedSetupState().currentStep) || 0);
 
 	    const writeSavedStep = (step) => {
-	      try {
-	        localStorage.setItem(progressKey, String(Math.max(0, Number(step) || 0)));
-	      } catch {
-	        // ignore
-	      }
+	      const next = Math.max(0, Number(step) || 0);
+	      if (readSavedStep() === next) return;
+	      void savePersistedSetupState({ currentStep: next });
 	    };
 
-	    const readSkippedStepIds = () => {
-	      try {
-	        const raw = localStorage.getItem(skippedStepsKey);
-	        if (!raw) return new Set();
-	        const parsed = JSON.parse(raw);
-	        if (!Array.isArray(parsed)) return new Set();
-	        const ids = parsed
-	          .map((value) => String(value || '').trim())
-	          .filter(Boolean);
-	        return new Set(ids);
-	      } catch {
-	        return new Set();
-	      }
-	    };
+	    const readSkippedStepIds = () => new Set(getPersistedSetupState().skippedActionIds);
 
 	    const writeSkippedStepIds = () => {
-	      try {
-	        if (!(state.skippedActionIds instanceof Set) || state.skippedActionIds.size === 0) {
-	          localStorage.removeItem(skippedStepsKey);
-	          return;
-	        }
-	        localStorage.setItem(skippedStepsKey, JSON.stringify(Array.from(state.skippedActionIds)));
-	      } catch {
-	        // ignore
-	      }
+	      const next = Array.from(state.skippedActionIds || [])
+	        .map((value) => String(value || '').trim())
+	        .filter(Boolean);
+	      const prev = getPersistedSetupState().skippedActionIds || [];
+	      if (next.length === prev.length && next.every((value, index) => value === prev[index])) return;
+	      void savePersistedSetupState({ skippedActionIds: next });
 	    };
 
 	    const setStepSkipped = (actionId, skipped) => {
@@ -9970,14 +10073,25 @@ class ClaudeOrchestrator {
 	        openModal();
 	        return false;
 	      }
+	      if (!force && !readCompleted()) {
+	        writeDismissed(true);
+	      }
 	      modal.classList.add('hidden');
 	      body?.classList?.remove?.('dependency-onboarding-active');
 	      setBootstrapPending(false);
 	      return true;
 	    };
-	    const openModal = ({ showWelcome = null } = {}) => {
+	    const openModal = ({ showWelcome = null, allowDuringStartup = false } = {}) => {
+	      if (readCompleted()) {
+	        closeModal({ force: true });
+	        return false;
+	      }
+	      if (state.startupPending && !allowDuringStartup) {
+	        return false;
+	      }
 	      const wasHidden = modal.classList.contains('hidden');
 	      modal.classList.remove('hidden');
+	      state.startupPending = false;
 	      setBootstrapPending(false);
 	      body?.classList?.add?.('dependency-onboarding-active');
 	      if (typeof showWelcome === 'boolean') {
@@ -9989,6 +10103,7 @@ class ClaudeOrchestrator {
 	        render();
 	      }
 	      applyOnboardingLockUI();
+	      return true;
 	    };
 
 	    const setLoading = (loading) => {
@@ -10005,7 +10120,8 @@ class ClaudeOrchestrator {
 	      if (state.loading) return false;
 	      setLoading(true);
 	      try {
-	        const [diagRes, actionsRes] = await Promise.all([
+	        const [persisted, diagRes, actionsRes] = await Promise.all([
+	          loadPersistedSetupState(),
 	          fetch('/api/diagnostics'),
 	          fetch('/api/setup-actions')
 	        ]);
@@ -10029,25 +10145,32 @@ class ClaudeOrchestrator {
 	            .map((action) => String(action?.id || '').trim())
 	            .filter(Boolean)
 	        );
-	        const persistedSkippedIds = readSkippedStepIds();
+	        const persistedSkippedIds = new Set(
+	          (Array.isArray(persisted?.skippedActionIds) ? persisted.skippedActionIds : [])
+	            .filter((id) => allowedActionIds.has(String(id || '').trim()))
+	        );
 	        state.skippedActionIds = new Set(
-	          Array.from(persistedSkippedIds).filter((id) => allowedActionIds.has(id))
+	          Array.from(persistedSkippedIds)
 	        );
 	        if (state.actions.length > 0) {
-	          const savedStep = readSavedStep();
+	          const savedStep = Math.max(0, Number(persisted?.currentStep) || 0);
 	          setCurrentStep(savedStep, { persist: false });
 	        }
 	        const view = render();
 	        applyOnboardingLockUI();
-	        if (view.req?.coreReady) writeDismissed(false);
 
 	        const hasCompletedOnboarding = readCompleted();
 	        const coreReady = !!view.req?.coreReady;
+	        if (hasCompletedOnboarding) {
+	          state.startupPending = false;
+	          closeModal({ force: true });
+	        }
 	        const shouldAutoShow = isWindowsHost && !hasCompletedOnboarding && (forceAutoShow || !readDismissed());
-	        const shouldKeepVisible = open && !modal.classList.contains('hidden');
+	        const shouldKeepVisible = !hasCompletedOnboarding && open && !modal.classList.contains('hidden');
 	        if (explicitOpen || shouldKeepVisible || shouldAutoShow) {
-	          openModal();
+	          openModal({ allowDuringStartup: bootstrap || explicitOpen });
 	        } else {
+	          state.startupPending = false;
 	          setBootstrapPending(false);
 	        }
 	        return true;
@@ -10055,7 +10178,7 @@ class ClaudeOrchestrator {
 	        summaryEl.textContent = `Dependency check failed: ${String(err?.message || err)}`;
 	        listEl.innerHTML = '<div class="dependency-setup-empty">Unable to load setup actions right now.</div>';
 	        const shouldOpenOnError = explicitOpen || (open && !modal.classList.contains('hidden'));
-	        if (shouldOpenOnError) openModal();
+	        if (shouldOpenOnError) openModal({ allowDuringStartup: bootstrap || explicitOpen });
 	        else if (!bootstrap) setBootstrapPending(false);
 	        return false;
 	      } finally {
@@ -10278,6 +10401,8 @@ class ClaudeOrchestrator {
 	    };
 
 	    const runBootstrapLoad = async () => {
+	      state.startupPending = true;
+	      setBootstrapPending(true);
 	      const delaysMs = [0, 240, 420, 700, 1050, 1450, 1900];
 	      for (let attempt = 0; attempt < delaysMs.length; attempt += 1) {
 	        if (attempt > 0) {
@@ -10286,6 +10411,7 @@ class ClaudeOrchestrator {
 	        const ok = await loadAndRender({ open: false, forceAutoShow: false, bootstrap: true });
 	        if (ok) return;
 	      }
+	      state.startupPending = false;
 	      setBootstrapPending(false);
 	    };
 
