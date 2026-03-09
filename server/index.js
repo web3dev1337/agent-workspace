@@ -2313,9 +2313,7 @@ app.post('/api/files/sync', async (req, res) => {
 });
 
 app.get('/api/process/performance', async (req, res) => {
-  const { execFile } = require('child_process');
-  const util = require('util');
-  const execFileAsync = util.promisify(execFile);
+  const { spawn: spawnProc } = require('child_process');
   const isWin = process.platform === 'win32';
 
   const parseIntSafe = (s) => {
@@ -2323,15 +2321,27 @@ app.get('/api/process/performance', async (req, res) => {
     return Number.isFinite(n) ? Math.round(n) : null;
   };
 
+  const spawnQuiet = (cmd, args, timeout = 1500) => new Promise((resolve) => {
+    const child = spawnProc(cmd, args, {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+      ...(isWin ? { creationFlags: 0x08000000 } : {})
+    });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    const timer = setTimeout(() => { child.kill(); resolve(''); }, timeout);
+    child.on('close', () => { clearTimeout(timer); resolve(out); });
+    child.on('error', () => { clearTimeout(timer); resolve(''); });
+  });
+
   const getChildPids = async (pid) => {
     const p = Number(pid);
     if (!Number.isFinite(p) || p <= 0) return [];
     try {
       if (isWin) {
-        const { stdout } = await execFileAsync(
+        const stdout = await spawnQuiet(
           'powershell.exe',
-          ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${p}").ProcessId`],
-          { timeout: 1500, windowsHide: true }
+          ['-NoProfile', '-Command', `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${p}").ProcessId`]
         );
         return String(stdout || '')
           .split(/\s+/)
@@ -2339,7 +2349,7 @@ app.get('/api/process/performance', async (req, res) => {
           .filter(n => Number.isFinite(n) && n > 0);
       }
 
-      const { stdout } = await execFileAsync('pgrep', ['-P', String(p)], { timeout: 1500, windowsHide: true });
+      const stdout = await spawnQuiet('pgrep', ['-P', String(p)]);
       return String(stdout || '')
         .split('\n')
         .map(l => parseIntSafe(l))
@@ -2354,17 +2364,16 @@ app.get('/api/process/performance', async (req, res) => {
     if (!Number.isFinite(p) || p <= 0) return null;
     try {
       if (isWin) {
-        const { stdout } = await execFileAsync(
+        const stdout = await spawnQuiet(
           'powershell.exe',
-          ['-NoProfile', '-Command', `(Get-Process -Id ${p} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty WorkingSet64)`],
-          { timeout: 1500, windowsHide: true }
+          ['-NoProfile', '-Command', `(Get-Process -Id ${p} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty WorkingSet64)`]
         );
         const bytes = Number(String(stdout || '').trim());
         if (!Number.isFinite(bytes) || bytes <= 0) return null;
         return Math.round(bytes / 1024);
       }
 
-      const { stdout } = await execFileAsync('ps', ['-o', 'rss=', '-p', String(p)], { timeout: 1500, windowsHide: true });
+      const stdout = await spawnQuiet('ps', ['-o', 'rss=', '-p', String(p)]);
       return parseIntSafe(stdout);
     } catch {
       return null;

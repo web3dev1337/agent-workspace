@@ -2357,15 +2357,24 @@ class SessionManager extends EventEmitter {
   
   checkProcessLimit(session) {
     if (!session.pty || !session.pty.pid) return;
-    
+
     const pid = Number(session.pty.pid);
     if (!Number.isFinite(pid) || pid <= 0) return;
 
+    const { spawn } = require('child_process');
+
     if (process.platform === 'win32') {
-      const { execFile } = require('child_process');
       const psCmd = `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${pid}").Count`;
-      execFile('powershell.exe', ['-NoProfile', '-Command', psCmd], { timeout: 2000 }, (err, stdout) => {
-        if (err) return;
+      const child = spawn('powershell.exe', ['-NoProfile', '-Command', psCmd], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        windowsHide: true,
+        creationFlags: 0x08000000 // CREATE_NO_WINDOW
+      });
+      let stdout = '';
+      child.stdout.on('data', (d) => { stdout += d; });
+      const timer = setTimeout(() => child.kill(), 2000);
+      child.on('close', () => {
+        clearTimeout(timer);
         const processCount = parseInt(String(stdout || '').trim(), 10);
         if (!Number.isFinite(processCount)) return;
         if (processCount > this.maxProcessesPerSession) {
@@ -2381,10 +2390,17 @@ class SessionManager extends EventEmitter {
     }
 
     // POSIX: use pgrep to count child processes without shell interpolation.
-    const { execFile } = require('child_process');
-    execFile('pgrep', ['-P', String(pid)], { timeout: 2000, windowsHide: true }, (err, stdout) => {
+    const child = spawn('pgrep', ['-P', String(pid)], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true
+    });
+    let stdout = '';
+    child.stdout.on('data', (d) => { stdout += d; });
+    const timer = setTimeout(() => child.kill(), 2000);
+    child.on('close', (code) => {
+      clearTimeout(timer);
       // pgrep exits with code 1 when no child process matches; treat as zero children.
-      if (err && Number(err?.code) !== 1) return;
+      if (code !== 0 && code !== 1) return;
       const lines = String(stdout || '')
         .split(/\r?\n/)
         .map((line) => line.trim())
@@ -2392,7 +2408,7 @@ class SessionManager extends EventEmitter {
       const processCount = lines.length;
       if (!Number.isFinite(processCount)) return;
       if (processCount > this.maxProcessesPerSession) {
-        logger.error('Process limit exceeded', { 
+        logger.error('Process limit exceeded', {
           sessionId: session.id,
           processCount,
           limit: this.maxProcessesPerSession
@@ -2468,13 +2484,13 @@ class SessionManager extends EventEmitter {
     if (!Number.isFinite(numericPid) || numericPid <= 0) return;
 
     if (process.platform === 'win32') {
-      const { execFile } = require('child_process');
-      execFile(
-        'taskkill',
-        ['/PID', String(numericPid), '/T', '/F'],
-        { windowsHide: true, timeout: 2500 },
-        () => {}
-      );
+      const { spawn: spawnProc } = require('child_process');
+      const child = spawnProc('taskkill', ['/PID', String(numericPid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+        creationFlags: 0x08000000
+      });
+      child.on('error', () => {});
       return;
     }
 
