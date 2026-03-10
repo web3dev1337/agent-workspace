@@ -682,19 +682,18 @@ class ClaudeOrchestrator {
     const toggle = document.getElementById('sidebar-toggle');
     if (!toggle) return;
 
-    const shouldShowRightArrow = this.isMobileLayout()
+    const isCollapsed = this.isMobileLayout()
       ? !document.body.classList.contains('sidebar-open')
       : document.body.classList.contains('sidebar-collapsed');
+    const shouldBeExpanded = !isCollapsed;
+    const label = shouldBeExpanded ? 'Collapse sidebar' : 'Expand sidebar';
+    const icon = toggle.querySelector('.sidebar-toggle-icon');
 
-    if (shouldShowRightArrow) {
-      toggle.textContent = '▸';
-      toggle.title = 'Expand sidebar';
-      toggle.setAttribute('aria-label', 'Expand sidebar');
-    } else {
-      toggle.textContent = '◂';
-      toggle.title = 'Collapse sidebar';
-      toggle.setAttribute('aria-label', 'Collapse sidebar');
-    }
+    if (icon) icon.textContent = '◂';
+    toggle.classList.toggle('is-collapsed', isCollapsed);
+    toggle.title = label;
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('aria-expanded', String(shouldBeExpanded));
   }
 
   getSidebarDesktopCollapsedPref() {
