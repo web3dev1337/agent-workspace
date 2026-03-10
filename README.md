@@ -1,12 +1,12 @@
-# Agent Orchestrator
+# Agent Workspace
 
 A multi-workspace terminal orchestrator for AI coding agents (Claude Code, Codex CLI). Manages unlimited concurrent sessions across multiple repositories with browser-like tabs, dynamic git worktrees, and a native Windows desktop app.
 
-> The repository is named `claude-orchestrator` for historical reasons. The product name is **Agent Orchestrator**.
+> The repository is named `claude-orchestrator` for historical reasons. The product name is **Agent Workspace**.
 
 ## What It Does
 
-Agent Orchestrator gives you a single UI to run and monitor many AI coding sessions at once. Each workspace can hold 1-16 terminal pairs (agent + server), drawn from any combination of your git repositories. Workspaces live in browser-like tabs so you can switch between projects without losing terminal state.
+Agent Workspace gives you a single UI to run and monitor many AI coding sessions at once. Each workspace can hold 1-16 terminal pairs (agent + server), drawn from any combination of your git repositories. Workspaces live in browser-like tabs so you can switch between projects without losing terminal state.
 
 Key capabilities:
 

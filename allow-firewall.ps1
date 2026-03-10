@@ -1,7 +1,7 @@
 # PowerShell script to allow orchestrator through Windows firewall
 # Run this in PowerShell as Administrator
 
-New-NetFirewallRule -DisplayName "Claude Orchestrator" `
+New-NetFirewallRule -DisplayName "Agent Workspace" `
     -Direction Inbound `
     -Protocol TCP `
     -LocalPort 3000 `

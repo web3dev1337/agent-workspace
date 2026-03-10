@@ -9,7 +9,7 @@ A semantic diff viewer that reduces code review time by 30-40% through AST-based
 - **File Tree Navigation**: Hierarchical view of changed files with additions/deletions counts
 - **Keyboard Shortcuts**: `j`/`k` for file navigation, `s` to toggle semantic view
 - **30% Line Reduction**: Filters out noise to show only meaningful changes
-- **Dark Theme**: Matches Claude Orchestrator design
+- **Dark Theme**: Matches Agent Workspace design
 - **GitHub Integration**: Direct links from PR/commit URLs in Claude terminals
 
 ## Quick Start
@@ -45,7 +45,7 @@ cd diff-viewer/client
 npm run dev
 ```
 
-### 4. Access from Claude Orchestrator
+### 4. Access from Agent Workspace
 
 When Claude detects a GitHub PR or commit URL, click the "Advanced Diff" button to launch the viewer.
 

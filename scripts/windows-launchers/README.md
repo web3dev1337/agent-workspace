@@ -1,6 +1,6 @@
 # Windows Launcher Scripts
 
-These scripts provide one-click launching of the Claude Orchestrator from Windows.
+These scripts provide one-click launching of the Agent Workspace from Windows.
 
 ## Quick Setup
 
@@ -74,6 +74,6 @@ For a professional shortcut with custom icon:
 
 1. Right-click Desktop → New → Shortcut
 2. Target: `C:\Windows\System32\cmd.exe /c "path\to\Launch-Orchestrator.bat"`
-3. Name it: `🚀 Claude Orchestrator`
+3. Name it: `🚀 Agent Workspace`
 4. Right-click → Properties → Change Icon
 5. Pin to taskbar or Start menu!

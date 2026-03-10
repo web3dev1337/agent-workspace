@@ -319,7 +319,7 @@ class GreenfieldService {
       await execAsync('git init', { cwd: masterPath });
       await execAsync('git add .', { cwd: masterPath });
       await execAsync(
-        'git -c user.name="Claude Orchestrator" -c user.email="orchestrator@local" commit -m "Initial commit"',
+        'git -c user.name="Agent Workspace" -c user.email="orchestrator@local" commit -m "Initial commit"',
         { cwd: masterPath }
       );
       logger.info('Git initialized in master');
@@ -411,7 +411,7 @@ ${description}
 
 ## Getting Started
 
-This project was created with Claude Orchestrator's Greenfield wizard.
+This project was created with Agent Workspace's Greenfield wizard.
 
 ## Development
 
@@ -654,7 +654,7 @@ Start by understanding the requirements, then design and implement the solution.
     await execAsync('git init', { cwd: projectPath });
     await execAsync('git add .', { cwd: projectPath });
     await execAsync(
-      'git -c user.name="Claude Orchestrator" -c user.email="orchestrator@local" commit -m "Initial commit"',
+      'git -c user.name="Agent Workspace" -c user.email="orchestrator@local" commit -m "Initial commit"',
       { cwd: projectPath }
     );
 

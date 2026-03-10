@@ -1,6 +1,6 @@
 # {{projectName}}
 
-A CLI tool created with Claude Orchestrator.
+A CLI tool created with Agent Workspace.
 
 ## Installation
 

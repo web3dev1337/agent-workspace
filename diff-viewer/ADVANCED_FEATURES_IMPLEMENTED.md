@@ -84,7 +84,7 @@ s           - Toggle semantic view
 
 ## 📈 Usage
 
-1. Open any GitHub PR/commit link from Claude Orchestrator
+1. Open any GitHub PR/commit link from Agent Workspace
 2. Click "Advanced Diff" button
 3. Use keyboard shortcuts for speed
 4. Review progress persists across sessions

@@ -1,5 +1,5 @@
 # ============================================
-# Claude Orchestrator - Windows Startup Installer
+# Agent Workspace - Windows Startup Installer
 # ============================================
 # This script:
 # 1. Creates a scheduled task to run orchestrator on login
@@ -23,7 +23,7 @@ $StartScript = Join-Path $ScriptDir "start-orchestrator.bat"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Claude Orchestrator - Setup" -ForegroundColor Cyan
+Write-Host "  Agent Workspace - Setup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -75,7 +75,7 @@ if (-not $NoStartupTask) {
         -Action $Action `
         -Trigger $Trigger `
         -Settings $Settings `
-        -Description "Launches Claude Orchestrator on Windows startup" `
+        -Description "Launches Agent Workspace on Windows startup" `
         -RunLevel Limited | Out-Null
 
     Write-Host "Startup task created!" -ForegroundColor Green
@@ -86,13 +86,13 @@ if ($DesktopShortcut) {
     Write-Host "Creating desktop shortcut..." -ForegroundColor Yellow
 
     $Desktop = [Environment]::GetFolderPath("Desktop")
-    $ShortcutPath = Join-Path $Desktop "Claude Orchestrator.lnk"
+    $ShortcutPath = Join-Path $Desktop "Agent Workspace.lnk"
 
     $WshShell = New-Object -ComObject WScript.Shell
     $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
     $Shortcut.TargetPath = $StartScript
     $Shortcut.WorkingDirectory = $ScriptDir
-    $Shortcut.Description = "Launch Claude Orchestrator"
+    $Shortcut.Description = "Launch Agent Workspace"
     $Shortcut.Save()
 
     Write-Host "Desktop shortcut created!" -ForegroundColor Green

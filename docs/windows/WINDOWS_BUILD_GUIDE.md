@@ -1,8 +1,8 @@
 # Windows Build & Installation Guide
 
-**Complete documentation of Windows support implementation for Claude Orchestrator**
+**Complete documentation of Windows support implementation for Agent Workspace**
 
-*This document chronicles the complete process of making Claude Orchestrator work on Windows, including every issue encountered and how it was resolved.*
+*This document chronicles the complete process of making Agent Workspace work on Windows, including every issue encountered and how it was resolved.*
 
 ---
 
@@ -398,7 +398,7 @@ const shellArgs = process.platform === 'win32' ? ['-NoExit'] : [];
 
 **Error:**
 ```
-Starting Claude Orchestrator…
+Starting Agent Workspace…
 If this screen doesn't advance within ~20 seconds, ensure Node is available
 or set ORCHESTRATOR_NODE_PATH.
 ```
@@ -565,8 +565,8 @@ npx tauri build
 **Expected output:**
 ```
 Finished 2 bundles at:
-  C:\...\src-tauri\target\release\bundle\msi\Claude Orchestrator_0.1.0_x64_en-US.msi
-  C:\...\src-tauri\target\release\bundle\nsis\Claude Orchestrator_0.1.0_x64-setup.exe
+  C:\...\src-tauri\target\release\bundle\msi\Agent Workspace_0.1.0_x64_en-US.msi
+  C:\...\src-tauri\target\release\bundle\nsis\Agent Workspace_0.1.0_x64-setup.exe
 ```
 
 **Build artifacts:**
@@ -578,7 +578,7 @@ Finished 2 bundles at:
 
 ```bash
 # Run either installer
-start src-tauri/target/release/bundle/nsis/Claude Orchestrator_0.1.0_x64-setup.exe
+start src-tauri/target/release/bundle/nsis/Agent Workspace_0.1.0_x64-setup.exe
 ```
 
 Or install the MSI for enterprise deployment.
@@ -1026,7 +1026,7 @@ npm start
 
 **Production:** Run from installed app
 ```
-%LOCALAPPDATA%\\Claude Orchestrator\\claude-orchestrator.exe
+%LOCALAPPDATA%\\Agent Workspace\\claude-orchestrator.exe
 # Uses bundled resources from installation
 ```
 
@@ -1138,7 +1138,7 @@ describe('Windows support', () => {
 
 ## Conclusion
 
-The Claude Orchestrator now fully supports Windows with native PowerShell integration. All cross-platform issues have been identified and resolved. Future developers can follow this guide to build and deploy on Windows without encountering the same issues.
+The Agent Workspace now fully supports Windows with native PowerShell integration. All cross-platform issues have been identified and resolved. Future developers can follow this guide to build and deploy on Windows without encountering the same issues.
 
 **For questions or issues, refer to:**
 - This guide: `WINDOWS_BUILD_GUIDE.md`

@@ -1,7 +1,7 @@
 # Discord Bot Architecture, Risks, and Hardening Plan
 
 ## Scope
-This document describes how the current Discord integration works in Claude Orchestrator, key risks in the current implementation, and practical improvements.
+This document describes how the current Discord integration works in Agent Workspace, key risks in the current implementation, and practical improvements.
 
 ## Current Implementation (How It Works)
 

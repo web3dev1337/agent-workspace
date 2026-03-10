@@ -1,6 +1,6 @@
 @echo off
 REM ============================================
-REM Claude Orchestrator - Windows Startup Script
+REM Agent Workspace - Windows Startup Script
 REM ============================================
 REM This script waits for WSL to be ready, then launches
 REM VS Code with the orchestrator and opens the browser.
@@ -9,7 +9,7 @@ REM Install via: scripts/windows/install-startup.ps1
 REM Or manually add to Task Scheduler
 REM ============================================
 
-echo Starting Claude Orchestrator...
+echo Starting Agent Workspace...
 echo.
 
 REM Configuration - modify these if needed

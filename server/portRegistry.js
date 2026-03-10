@@ -26,8 +26,8 @@ const logger = winston.createLogger({
 const PORT_RANGE_START = 8080;
 const PORT_RANGE_END = 8199;
 const RESERVED_PORTS = [
-  3000,  // Claude Orchestrator server
-  4000,  // Claude Orchestrator dev server
+  3000,  // Agent Workspace server
+  4000,  // Agent Workspace dev server
   2080,  // Client dev server
   2081,  // Client dev server (dev instance)
   7655,  // Diff viewer
@@ -588,8 +588,8 @@ class PortRegistry {
   identifyService(port, processName, projectInfo = null) {
     // Known ports mapping
     const knownPorts = {
-      3000: { name: 'Claude Orchestrator', type: 'orchestrator', icon: '🎛️' },
-      4000: { name: 'Claude Orchestrator (Dev)', type: 'orchestrator-dev', icon: '🔧' },
+      3000: { name: 'Agent Workspace', type: 'orchestrator', icon: '🎛️' },
+      4000: { name: 'Agent Workspace (Dev)', type: 'orchestrator-dev', icon: '🔧' },
       2080: { name: 'Orchestrator Client', type: 'client', icon: '🖥️' },
       2081: { name: 'Orchestrator Client (Dev)', type: 'client-dev', icon: '🖥️' },
       7655: { name: 'Diff Viewer', type: 'diff-viewer', icon: '📝' },

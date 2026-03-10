@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🔍 Environment Check for Claude Orchestrator"
+echo "🔍 Environment Check for Agent Workspace"
 echo "==========================================="
 
 # Check Node.js
