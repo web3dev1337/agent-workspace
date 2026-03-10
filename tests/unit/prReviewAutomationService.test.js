@@ -197,6 +197,61 @@ describe('PrReviewAutomationService reviewer spawning', () => {
       })
     );
   });
+
+  test('stores review snapshot and pastes needs-fix feedback back to the source session', async () => {
+    const { service, sessionManager, taskRecordService } = makeAutomationService();
+    service.userSettingsService = {
+      getAllSettings: () => ({
+        global: {
+          ui: {
+            tasks: {
+              automations: {
+                prReview: {
+                  enabled: true,
+                  webhookEnabled: true,
+                  needsFixFeedbackAction: 'paste_and_notify'
+                }
+              }
+            }
+          }
+        }
+      })
+    };
+    taskRecordService.get.mockReturnValue({
+      reviewSourceSessionId: 'demo-work2-claude',
+      reviewSourceWorktreeId: 'work2',
+      reviewerPostAction: 'feedback'
+    });
+    sessionManager.getAllSessionEntries.mockReturnValue([
+      ['demo-work2-claude', { status: 'waiting' }]
+    ]);
+
+    const result = await service.onReviewSubmitted({
+      owner: 'acme',
+      repo: 'demo',
+      number: 77,
+      reviewState: 'changes_requested',
+      reviewBody: 'Fix the failing edge case and add a regression test.',
+      reviewUser: 'review-bot',
+      url: 'https://github.com/acme/demo/pull/77',
+      reviewUrl: 'https://github.com/acme/demo/pull/77#pullrequestreview-1'
+    });
+
+    expect(result).toEqual(expect.objectContaining({ ok: true, outcome: 'needs_fix' }));
+    expect(taskRecordService.upsert).toHaveBeenCalledWith(
+      'pr:acme/demo#77',
+      expect.objectContaining({
+        latestReviewOutcome: 'needs_fix',
+        latestReviewUser: 'review-bot',
+        latestReviewSummary: expect.stringContaining('Fix the failing edge case'),
+        latestReviewUrl: 'https://github.com/acme/demo/pull/77#pullrequestreview-1'
+      })
+    );
+    expect(sessionManager.writeToSession).toHaveBeenCalledWith(
+      'demo-work2-claude',
+      expect.stringContaining('CHANGES REQUESTED')
+    );
+  });
 });
 
 describe('SessionManager.buildClaudeCommand', () => {

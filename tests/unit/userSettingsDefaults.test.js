@@ -114,6 +114,18 @@ describe('UserSettingsService defaults', () => {
     expect(typeof pager.doneCheck.enabled).toBe('boolean');
   });
 
+  test('includes PR review automation defaults', () => {
+    const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
+    const prReview = defaults?.global?.ui?.tasks?.automations?.prReview;
+    expect(prReview).toBeTruthy();
+    expect(prReview.reviewerAgent).toBe('claude');
+    expect(prReview.notifyOnReviewerSpawn).toBe(true);
+    expect(prReview.notifyOnReviewCompleted).toBe(true);
+    expect(prReview.approvedDeliveryAction).toBe('notify');
+    expect(prReview.commentedDeliveryAction).toBe('notify');
+    expect(prReview.needsFixFeedbackAction).toBe('paste_and_notify');
+  });
+
   test('mergeSettings deep-merges ui.tasks without dropping defaults', () => {
     const defaults = UserSettingsService.prototype.getDefaultSettings.call({});
     const merged = UserSettingsService.prototype.mergeSettings.call({}, defaults, {

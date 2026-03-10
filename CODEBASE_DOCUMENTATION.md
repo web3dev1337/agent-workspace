@@ -83,7 +83,7 @@ server/auditExportService.js       - Redacted audit export across activity + sch
 server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
 server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
 server/projectTypeService.js       - Project taxonomy loader/validator for category→framework→template metadata (`config/project-types.json`)
-server/prReviewAutomationService.js - PR review automation pipeline (poll/webhook trigger, reviewer selection, worktree assignment, feedback routing)
+server/prReviewAutomationService.js - PR review automation pipeline (poll/webhook trigger, reviewer selection, worktree assignment, feedback routing, saved review snapshots)
 ```
 
 ### Multi-Workspace System (Core Feature)
@@ -309,13 +309,30 @@ user-settings.default.json         - Default user settings template
 - `autoSpawnReviewer`: boolean
 - `autoFeedbackToAuthor`: boolean
 - `autoSpawnFixer`: boolean
+- `notifyOnReviewerSpawn`: boolean
+- `notifyOnReviewCompleted`: boolean
+- `approvedDeliveryAction`: `notify` | `paste` | `paste_and_notify` | `none`
+- `commentedDeliveryAction`: `notify` | `paste` | `paste_and_notify` | `none`
+- `needsFixFeedbackAction`: `notify` | `paste` | `paste_and_notify` | `none`
 - `reviewerPostAction`: optional per-item record override (`feedback` or `auto_fix`)
 - `maxConcurrentReviewers`: number
 - `repos`: string array
 
-When a reviewer marks PR changes as requested, the result is routed by outcome:
-- `feedback`: comments are posted back to the PR author.
-- `auto_fix`: a fixer agent is spawned automatically and uses the stored task `notes` as the fix request.
+Saved task-record review fields used by Queue + feedback handoff include:
+- `reviewSourceSessionId` / `reviewSourceWorktreeId`: best-effort source agent to paste review updates back into
+- `reviewerSessionId` / `reviewerAgent`: which agent/worktree handled the background review
+- `latestReviewSummary` / `latestReviewBody`: locally cached review snapshot for Queue details + paste-back
+- `latestReviewOutcome` / `latestReviewUser` / `latestReviewUrl` / `latestReviewSubmittedAt`: latest GitHub review metadata
+- `latestReviewDeliveredAt`: when the saved review summary was pasted back into an agent session
+
+When a reviewer completes, the result is routed by outcome:
+- `approvedDeliveryAction` / `commentedDeliveryAction`: optional notify and/or paste-back to the source agent
+- `reviewerPostAction=feedback`: use `needsFixFeedbackAction` to notify and/or paste changes-requested feedback back to the source agent
+- `reviewerPostAction=auto_fix`: a fixer agent is spawned automatically and uses the stored review body as the fix request
+
+Queue detail actions now include saved-review affordances:
+- `Open latest review`: opens the saved review URL (or PR URL fallback)
+- `Paste to agent`: writes the saved review summary/body back into the source agent terminal via the existing terminal-input path
 
 ### Workspace Templates & Scripts
 ```

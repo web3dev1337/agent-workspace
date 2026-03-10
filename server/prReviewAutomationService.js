@@ -38,6 +38,37 @@ const normalizeReviewerPostAction = (v) => {
   return s === 'auto_fix' || s === 'auto-fix' ? 'auto_fix' : 'feedback';
 };
 
+const normalizeDeliveryAction = (value, fallback = 'notify') => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return fallback;
+  if (raw === 'paste_and_notify' || raw === 'paste-and-notify') return 'paste_and_notify';
+  if (raw === 'paste' || raw === 'notify' || raw === 'none') return raw;
+  return fallback;
+};
+
+const normalizeAgentId = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  return raw === 'codex' ? 'codex' : 'claude';
+};
+
+const summarizeReviewBody = (value) => {
+  const lines = String(value || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) return '';
+
+  const picked = [];
+  for (const line of lines) {
+    if (picked.join('\n').length >= 1200) break;
+    picked.push(line);
+    if (picked.length >= 8) break;
+  }
+
+  return picked.join('\n').slice(0, 1200);
+};
+
 const DEFAULT_CONFIG = {
   enabled: false,
   pollEnabled: true,
@@ -56,6 +87,11 @@ const DEFAULT_CONFIG = {
   autoSpawnReviewer: true,
   autoFeedbackToAuthor: true,
   autoSpawnFixer: false,
+  notifyOnReviewerSpawn: true,
+  notifyOnReviewCompleted: true,
+  approvedDeliveryAction: 'notify',
+  commentedDeliveryAction: 'notify',
+  needsFixFeedbackAction: 'paste_and_notify',
   maxConcurrentReviewers: 3,
   repos: []
 };
@@ -229,6 +265,79 @@ class PrReviewAutomationService {
     return 'feedback';
   }
 
+  _resolveOutcomeDeliveryAction(outcome, cfg = {}) {
+    const key = String(outcome || '').trim().toLowerCase();
+    if (key === 'approved') {
+      return normalizeDeliveryAction(cfg.approvedDeliveryAction, 'notify');
+    }
+    if (key === 'commented') {
+      return normalizeDeliveryAction(cfg.commentedDeliveryAction, 'notify');
+    }
+    return normalizeDeliveryAction(cfg.needsFixFeedbackAction, 'paste_and_notify');
+  }
+
+  _inferReviewerAgent(prId, reviewInfo = {}, cfg = {}) {
+    const active = this.activeReviewers.get(prId) || null;
+    const fromSession = String(active?.sessionId || '').trim().toLowerCase();
+    if (fromSession.endsWith('-codex')) return 'codex';
+    if (fromSession.endsWith('-claude')) return 'claude';
+
+    const record = this.taskRecordService?.get?.(prId) || null;
+    const stored = String(record?.reviewerAgent || '').trim().toLowerCase();
+    if (stored === 'codex' || stored === 'claude') return stored;
+
+    const latest = String(reviewInfo?.latestReviewAgent || '').trim().toLowerCase();
+    if (latest === 'codex' || latest === 'claude') return latest;
+
+    return normalizeAgentId(cfg.reviewerAgent || 'claude');
+  }
+
+  _buildReviewSnapshot(prId, reviewInfo = {}, outcome, cfg = {}) {
+    const reviewBody = String(reviewInfo?.reviewBody || '').trim();
+    const reviewSummary = summarizeReviewBody(reviewBody) || '(No detailed comments)';
+    return {
+      latestReviewBody: reviewBody || null,
+      latestReviewSummary: reviewSummary,
+      latestReviewOutcome: outcome || null,
+      latestReviewUser: String(reviewInfo?.reviewUser || '').trim() || null,
+      latestReviewUrl: String(reviewInfo?.reviewUrl || reviewInfo?.url || '').trim() || null,
+      latestReviewSubmittedAt: reviewInfo?.reviewSubmittedAt || new Date().toISOString(),
+      latestReviewAgent: this._inferReviewerAgent(prId, reviewInfo, cfg)
+    };
+  }
+
+  _buildReviewFeedbackMessage(prId, reviewInfo = {}, outcome) {
+    const { number } = this._getPrIdentityFromId(prId);
+    const normalizedOutcome = String(outcome || '').trim().toLowerCase();
+    const outcomeLabel = normalizedOutcome === 'approved'
+      ? 'APPROVED'
+      : normalizedOutcome === 'commented'
+        ? 'COMMENTED'
+        : 'CHANGES REQUESTED';
+    const reviewUrl = String(reviewInfo?.reviewUrl || reviewInfo?.url || '').trim();
+    const summary = String(reviewInfo?.reviewSummary || summarizeReviewBody(reviewInfo?.reviewBody || '') || '(No detailed comments)').trim();
+
+    return [
+      '',
+      '--- PR Review Update ---',
+      `PR #${reviewInfo.number || number || '?'} reviewed by ${reviewInfo.reviewUser || 'AI reviewer'}.`,
+      `Outcome: ${outcomeLabel}`,
+      reviewInfo.reviewAgent ? `Reviewer agent: ${String(reviewInfo.reviewAgent).trim()}` : '',
+      reviewUrl ? `GitHub: ${reviewUrl}` : '',
+      '',
+      'Summary:',
+      summary,
+      '',
+      normalizedOutcome === 'needs_fix'
+        ? 'Please address the feedback and push updated commits.'
+        : normalizedOutcome === 'approved'
+          ? 'The PR review approved the current changes.'
+          : 'The reviewer left comments but did not block the PR.',
+      '--- End PR Review Update ---',
+      ''
+    ].filter(Boolean).join('\n');
+  }
+
   _getPrIdentityFromId(prId) {
     const raw = String(prId || '').trim();
     const match = raw.match(/^pr:([^/]+)\/([^#]+)#(\d+)$/);
@@ -376,7 +485,7 @@ class PrReviewAutomationService {
     return { ok: true, prId, spawned: false };
   }
 
-  async onReviewSubmitted({ owner, repo, number, reviewState, reviewBody, reviewUser, url }) {
+  async onReviewSubmitted({ owner, repo, number, reviewState, reviewBody, reviewUser, url, reviewUrl }) {
     const cfg = this.getConfig();
     if (!cfg.enabled || !cfg.webhookEnabled) {
       return { ignored: true, reason: 'disabled' };
@@ -390,33 +499,60 @@ class PrReviewAutomationService {
       : state === 'changes_requested' ? 'needs_fix'
       : 'commented';
 
+    const snapshot = this._buildReviewSnapshot(prId, {
+      owner,
+      repo,
+      number,
+      url,
+      reviewBody,
+      reviewUser,
+      reviewSubmittedAt: new Date().toISOString(),
+      reviewUrl: reviewUrl || url
+    }, outcome, cfg);
+
     this.taskRecordService?.upsert?.(prId, {
       reviewed: true,
       reviewedAt: new Date().toISOString(),
       reviewOutcome: outcome,
-      reviewEndedAt: new Date().toISOString()
+      reviewEndedAt: new Date().toISOString(),
+      ...snapshot
     });
 
     // Clean up active reviewer tracking
     this.activeReviewers.delete(prId);
 
-    if (outcome === 'needs_fix') {
-      await this._routeNeedsFixReview(
-        prId,
-        {
-          owner,
-          repo,
-          number,
-          url,
-          reviewBody,
-          reviewUser,
-          outcome
-        },
-        cfg
-      );
-    }
+    const reviewInfo = {
+      owner,
+      repo,
+      number,
+      url,
+      reviewBody,
+      reviewUser,
+      outcome,
+      reviewUrl: reviewUrl || url,
+      reviewSubmittedAt: snapshot.latestReviewSubmittedAt,
+      reviewSummary: snapshot.latestReviewSummary,
+      reviewAgent: snapshot.latestReviewAgent
+    };
 
-    this._emitUpdate('review-completed', { prId, outcome, reviewUser });
+    const followUp = await this._handleReviewFollowUp(prId, reviewInfo, cfg, outcome);
+    this._emitUpdate('review-completed', {
+      prId,
+      outcome,
+      reviewUser,
+      recordPatch: {
+        reviewed: true,
+        reviewedAt: new Date().toISOString(),
+        reviewOutcome: outcome,
+        reviewEndedAt: new Date().toISOString(),
+        ...snapshot,
+        ...(followUp?.recordPatch || {})
+      },
+      reviewSummary: snapshot.latestReviewSummary,
+      reviewUrl: snapshot.latestReviewUrl,
+      pastedToSessionId: followUp?.sessionId || null,
+      deliveryAction: followUp?.deliveryAction || null
+    });
     return { ok: true, prId, outcome };
   }
 
@@ -523,6 +659,8 @@ class PrReviewAutomationService {
               number,
               title: prData?.title || '',
               url: prData?.html_url || prData?.url || '',
+              reviewUrl: latestReview.html_url || prData?.html_url || prData?.url || '',
+              reviewSubmittedAt: submittedAt,
               reviewState: latestReview.state,
               reviewBody: latestReview.body || '',
               reviewUser: latestReview.author?.login || ''
@@ -565,21 +703,69 @@ class PrReviewAutomationService {
       : outcome === 'changes_requested' ? 'needs_fix'
       : 'commented';
 
+    const snapshot = this._buildReviewSnapshot(item.prId, {
+      ...item,
+      reviewSubmittedAt: item.reviewSubmittedAt || new Date().toISOString(),
+      reviewUrl: item.reviewUrl || item.url || ''
+    }, mappedOutcome, cfg);
+
     this.taskRecordService?.upsert?.(item.prId, {
       reviewed: true,
       reviewedAt: new Date().toISOString(),
       reviewOutcome: mappedOutcome,
-      reviewEndedAt: new Date().toISOString()
+      reviewEndedAt: new Date().toISOString(),
+      ...snapshot
     });
 
     this.activeReviewers.delete(item.prId);
     logger.info('Review completed', { prId: item.prId, outcome: mappedOutcome });
 
-    if (mappedOutcome === 'needs_fix') {
-      await this._routeNeedsFixReview(item.prId, item, cfg);
+    const followUp = await this._handleReviewFollowUp(item.prId, {
+      ...item,
+      reviewSubmittedAt: snapshot.latestReviewSubmittedAt,
+      reviewUrl: snapshot.latestReviewUrl,
+      reviewSummary: snapshot.latestReviewSummary,
+      reviewAgent: snapshot.latestReviewAgent
+    }, cfg, mappedOutcome);
+
+    this._emitUpdate('review-completed', {
+      prId: item.prId,
+      outcome: mappedOutcome,
+      reviewUser: item.reviewUser,
+      recordPatch: {
+        reviewed: true,
+        reviewedAt: new Date().toISOString(),
+        reviewOutcome: mappedOutcome,
+        reviewEndedAt: new Date().toISOString(),
+        ...snapshot,
+        ...(followUp?.recordPatch || {})
+      },
+      reviewSummary: snapshot.latestReviewSummary,
+      reviewUrl: snapshot.latestReviewUrl,
+      pastedToSessionId: followUp?.sessionId || null,
+      deliveryAction: followUp?.deliveryAction || null
+    });
+  }
+
+  async _handleReviewFollowUp(prId, reviewInfo, cfg, outcome) {
+    if (outcome === 'needs_fix') {
+      return this._routeNeedsFixReview(prId, reviewInfo, cfg);
     }
 
-    this._emitUpdate('review-completed', { prId: item.prId, outcome: mappedOutcome });
+    const deliveryAction = this._resolveOutcomeDeliveryAction(outcome, cfg);
+    if (deliveryAction === 'none') {
+      return { deliveryAction };
+    }
+
+    return this._sendFeedbackToAuthor(prId, {
+      ...reviewInfo,
+      reviewSummary: reviewInfo?.reviewSummary || summarizeReviewBody(reviewInfo?.reviewBody || ''),
+      reviewAgent: reviewInfo?.reviewAgent || this._inferReviewerAgent(prId, reviewInfo, cfg)
+    }, cfg, {
+      outcome,
+      deliveryAction,
+      allowNotesFallback: false
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -691,6 +877,7 @@ class PrReviewAutomationService {
         reviewerSpawnedAt: new Date().toISOString(),
         reviewerWorktreeId: worktreeId,
         reviewerSessionId: sessionId,
+        reviewerAgent: reviewerConfig.agentId,
         reviewStartedAt: new Date().toISOString()
       });
 
@@ -702,7 +889,19 @@ class PrReviewAutomationService {
         mode: reviewerConfig.mode,
         provider: reviewerConfig.provider
       });
-      this._emitUpdate('reviewer-spawned', { prId: pr.prId, sessionId, worktreeId });
+      this._emitUpdate('reviewer-spawned', {
+        prId: pr.prId,
+        sessionId,
+        worktreeId,
+        agentId: reviewerConfig.agentId,
+        recordPatch: {
+          reviewerSpawnedAt: new Date().toISOString(),
+          reviewerWorktreeId: worktreeId,
+          reviewerSessionId: sessionId,
+          reviewerAgent: reviewerConfig.agentId,
+          reviewStartedAt: new Date().toISOString()
+        }
+      });
       return true;
     } catch (e) {
       logger.error('Error spawning reviewer', { prId: pr.prId, error: e.message, stack: e.stack });
@@ -788,6 +987,7 @@ class PrReviewAutomationService {
   async _routeNeedsFixReview(prId, reviewInfo, cfg) {
     const action = this._resolvePostReviewAction(prId, cfg);
     const parsed = this._getPrIdentityFromId(prId);
+    const deliveryAction = this._resolveOutcomeDeliveryAction('needs_fix', cfg);
 
     if (action === 'auto_fix') {
       const record = this.taskRecordService?.get?.(prId) || {};
@@ -823,17 +1023,38 @@ class PrReviewAutomationService {
       );
 
       if (!spawnOk) {
-        await this._sendFeedbackToAuthor(prId, resolved, cfg);
+        return this._sendFeedbackToAuthor(prId, {
+          ...resolved,
+          reviewSummary: summarizeReviewBody(resolved.reviewBody || ''),
+          reviewAgent: reviewInfo?.reviewAgent || this._inferReviewerAgent(prId, reviewInfo, cfg)
+        }, cfg, {
+          outcome: 'needs_fix',
+          deliveryAction,
+          allowNotesFallback: true
+        });
       }
 
-      return;
+      return {
+        deliveryAction: 'auto_fix',
+        recordPatch: {
+          fixerSpawnedAt: new Date().toISOString(),
+          fixerWorktreeId: spawnOk?.worktreeId || null
+        },
+        sessionId: spawnOk?.sessionId || null
+      };
     }
 
-    await this._sendFeedbackToAuthor(prId, {
+    return this._sendFeedbackToAuthor(prId, {
       ...reviewInfo,
       owner: reviewInfo?.owner || '',
-      repo: reviewInfo?.repo || ''
-    }, cfg);
+      repo: reviewInfo?.repo || '',
+      reviewSummary: reviewInfo?.reviewSummary || summarizeReviewBody(reviewInfo?.reviewBody || ''),
+      reviewAgent: reviewInfo?.reviewAgent || this._inferReviewerAgent(prId, reviewInfo, cfg)
+    }, cfg, {
+      outcome: 'needs_fix',
+      deliveryAction,
+      allowNotesFallback: true
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -928,23 +1149,24 @@ class PrReviewAutomationService {
   // Internal: send feedback to original author session
   // ---------------------------------------------------------------------------
 
-  async _sendFeedbackToAuthor(prId, reviewInfo, cfg) {
+  async _sendFeedbackToAuthor(prId, reviewInfo, cfg, options = {}) {
     const record = this.taskRecordService?.get?.(prId);
     if (!record) return;
 
-    // Try to find the original author's session from the task record
-    // Session IDs follow pattern: repoName-worktreeId-claude
+    const outcome = String(options?.outcome || reviewInfo?.outcome || 'needs_fix').trim().toLowerCase();
+    const deliveryAction = normalizeDeliveryAction(options?.deliveryAction, outcome === 'needs_fix' ? 'paste_and_notify' : 'notify');
+    const allowNotesFallback = options?.allowNotesFallback !== false;
+
     const match = prId.match(/^pr:([^/]+)\/([^#]+)#(\d+)$/);
     if (!match) return;
     const [, , repo] = match;
 
-    const reviewerConfig = this._resolveReviewerConfig(cfg);
-    const preferredSuffix = `-${reviewerConfig.agentId}`;
+    const preferredAgentId = normalizeAgentId(reviewInfo?.reviewAgent || record?.reviewerAgent || cfg?.reviewerAgent || 'claude');
+    const preferredSuffix = `-${preferredAgentId}`;
     const repoNeedle = String(repo || '').trim().toLowerCase();
-    const targetWorktree = String(record.reviewerWorktreeId || '').trim().toLowerCase();
-    const configuredSessionId = String(record.reviewerSessionId || '').trim();
+    const targetWorktree = String(record.reviewSourceWorktreeId || '').trim().toLowerCase();
+    const configuredSessionId = String(record.reviewSourceSessionId || '').trim();
 
-    // Look through all active sessions for one working on the same repo/worktree
     const entries = this.sessionManager?.getAllSessionEntries?.() || [];
     let targetSession = null;
 
@@ -998,35 +1220,29 @@ class PrReviewAutomationService {
       }
     }
 
-    const feedbackMsg = [
-      `\n--- PR Review Feedback ---`,
-      `PR #${reviewInfo.number} has been reviewed by ${reviewInfo.reviewUser || 'AI reviewer'}.`,
-      `Outcome: CHANGES REQUESTED`,
-      '',
-      reviewInfo.reviewBody || '(No detailed comments)',
-      '',
-      'Please address the feedback and push updated commits.',
-      `--- End Review Feedback ---\n`
-    ].join('\n');
+    const feedbackMsg = this._buildReviewFeedbackMessage(prId, reviewInfo, outcome);
+    const notesSummary = String(reviewInfo?.reviewSummary || summarizeReviewBody(reviewInfo?.reviewBody || '') || '(No detailed comments)').trim();
 
-    if (targetSession) {
+    if (targetSession && (deliveryAction === 'paste' || deliveryAction === 'paste_and_notify')) {
       logger.info('Sending review feedback to session', { prId, sessionId: targetSession });
       this.sessionManager.writeToSession(targetSession, feedbackMsg);
-      return;
+      const deliveredAt = new Date().toISOString();
+      this.taskRecordService?.upsert?.(prId, { latestReviewDeliveredAt: deliveredAt });
+      return {
+        deliveryAction,
+        sessionId: targetSession,
+        recordPatch: { latestReviewDeliveredAt: deliveredAt }
+      };
     }
 
-    // If no active session found and autoSpawnFixer is on, spawn a fixer
-    if (cfg.autoSpawnFixer) {
-      logger.info('Original session not found, would spawn fixer', { prId });
+    if (allowNotesFallback) {
+      logger.info('No active session found for review delivery, storing in task record', { prId, deliveryAction });
       this.taskRecordService?.upsert?.(prId, {
-        notes: `Review feedback pending - original session not found. Fixer needed.`
-      });
-    } else {
-      logger.info('No active session found for feedback, storing in task record', { prId });
-      this.taskRecordService?.upsert?.(prId, {
-        notes: `Review: changes requested by ${reviewInfo.reviewUser || 'AI'}. Feedback: ${(reviewInfo.reviewBody || '').slice(0, 500)}`
+        notes: `Review (${outcome}) by ${reviewInfo.reviewUser || 'AI'}: ${notesSummary}`
       });
     }
+
+    return { deliveryAction, sessionId: null };
   }
 
   // ---------------------------------------------------------------------------

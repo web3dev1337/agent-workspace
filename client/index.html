@@ -822,6 +822,81 @@
             </div>
 
             <div class="setting-section">
+                <h4>PR Review Automation</h4>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="pr-review-auto-enabled" />
+                        Enable PR-review automation
+                    </label>
+                    <p class="setting-description">Allows webhook/poll review tracking and background reviewer launches when configured.</p>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Reviewer agent:
+                        <select id="pr-review-reviewer-agent">
+                            <option value="claude">Claude</option>
+                            <option value="codex">Codex</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Reviewer mode:
+                        <select id="pr-review-reviewer-mode">
+                            <option value="fresh">Fresh</option>
+                            <option value="continue">Continue</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="pr-review-notify-started" />
+                        Notify when reviewer starts
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="pr-review-notify-completed" />
+                        Notify when review completes
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Approved action:
+                        <select id="pr-review-approved-action">
+                            <option value="notify">Notify</option>
+                            <option value="paste">Paste to source agent</option>
+                            <option value="paste_and_notify">Paste + notify</option>
+                            <option value="none">Do nothing</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Commented action:
+                        <select id="pr-review-commented-action">
+                            <option value="notify">Notify</option>
+                            <option value="paste">Paste to source agent</option>
+                            <option value="paste_and_notify">Paste + notify</option>
+                            <option value="none">Do nothing</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        Needs-fix feedback action:
+                        <select id="pr-review-needs-fix-action">
+                            <option value="paste_and_notify">Paste + notify</option>
+                            <option value="paste">Paste to source agent</option>
+                            <option value="notify">Notify only</option>
+                            <option value="none">Do nothing</option>
+                        </select>
+                    </label>
+                    <p class="setting-description">Per-task “Needs-fix action” in Queue still overrides this when set to auto-fix.</p>
+                </div>
+            </div>
+
+            <div class="setting-section">
                 <h4>Tasks Launch</h4>
                 <div class="setting-group">
                     <label>

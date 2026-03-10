@@ -1151,6 +1151,10 @@ class ClaudeOrchestrator {
         this.notificationManager.handleNotification(notification);
       });
 
+      this.socket.on('pr-review-automation', (payload) => {
+        this.handlePrReviewAutomationEvent(payload);
+      });
+
       this.socket.on('session-exited', ({ sessionId, exitCode }) => {
         this.handleSessionExit(sessionId, exitCode);
       });
@@ -2085,6 +2089,58 @@ class ClaudeOrchestrator {
     if (prMergeComment) {
       prMergeComment.addEventListener('change', (e) => {
         this.updateGlobalUserSetting('ui.tasks.automations.trello.onPrMerged.comment', !!e.target.checked);
+      });
+    }
+
+    const prReviewEnabled = document.getElementById('pr-review-auto-enabled');
+    if (prReviewEnabled) {
+      prReviewEnabled.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.tasks.automations.prReview.enabled', !!e.target.checked);
+      });
+    }
+    const prReviewReviewerAgent = document.getElementById('pr-review-reviewer-agent');
+    if (prReviewReviewerAgent) {
+      prReviewReviewerAgent.addEventListener('change', (e) => {
+        const next = String(e.target.value || '').trim().toLowerCase() === 'codex' ? 'codex' : 'claude';
+        this.updateGlobalUserSetting('ui.tasks.automations.prReview.reviewerAgent', next);
+      });
+    }
+    const prReviewReviewerMode = document.getElementById('pr-review-reviewer-mode');
+    if (prReviewReviewerMode) {
+      prReviewReviewerMode.addEventListener('change', (e) => {
+        const raw = String(e.target.value || '').trim().toLowerCase();
+        const next = raw === 'continue' ? 'continue' : 'fresh';
+        this.updateGlobalUserSetting('ui.tasks.automations.prReview.reviewerMode', next);
+      });
+    }
+    const prReviewNotifyStarted = document.getElementById('pr-review-notify-started');
+    if (prReviewNotifyStarted) {
+      prReviewNotifyStarted.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.tasks.automations.prReview.notifyOnReviewerSpawn', !!e.target.checked);
+      });
+    }
+    const prReviewNotifyCompleted = document.getElementById('pr-review-notify-completed');
+    if (prReviewNotifyCompleted) {
+      prReviewNotifyCompleted.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.tasks.automations.prReview.notifyOnReviewCompleted', !!e.target.checked);
+      });
+    }
+    const prReviewApprovedAction = document.getElementById('pr-review-approved-action');
+    if (prReviewApprovedAction) {
+      prReviewApprovedAction.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.tasks.automations.prReview.approvedDeliveryAction', String(e.target.value || 'notify').trim());
+      });
+    }
+    const prReviewCommentedAction = document.getElementById('pr-review-commented-action');
+    if (prReviewCommentedAction) {
+      prReviewCommentedAction.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.tasks.automations.prReview.commentedDeliveryAction', String(e.target.value || 'notify').trim());
+      });
+    }
+    const prReviewNeedsFixAction = document.getElementById('pr-review-needs-fix-action');
+    if (prReviewNeedsFixAction) {
+      prReviewNeedsFixAction.addEventListener('change', (e) => {
+        this.updateGlobalUserSetting('ui.tasks.automations.prReview.needsFixFeedbackAction', String(e.target.value || 'paste_and_notify').trim());
       });
     }
 
@@ -6546,6 +6602,179 @@ class ClaudeOrchestrator {
       this.sendTerminalInput(sessionId, '\x03');
     } catch (e) {
       console.error('Failed to interrupt session', e);
+    }
+  }
+
+  resolvePreferredReviewSourceSession(task) {
+    const t = task && typeof task === 'object' ? task : {};
+    const recordFromMap = t?.id ? (this.taskRecords.get(String(t.id)) || {}) : {};
+    const record = (t.record && typeof t.record === 'object')
+      ? { ...recordFromMap, ...t.record }
+      : recordFromMap;
+
+    const candidateIds = [
+      record.reviewSourceSessionId,
+      t.sessionId
+    ]
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
+
+    for (const sessionId of candidateIds) {
+      const session = this.sessions.get(sessionId);
+      if (session && session.status !== 'exited') return sessionId;
+    }
+
+    const candidateWorktreeId = String(
+      record.reviewSourceWorktreeId
+      || this.extractWorktreeLabel(String(t.worktreePath || '').trim())
+      || ''
+    ).trim().toLowerCase();
+
+    const candidateWorktreePath = String(
+      t.worktreePath
+      || (t.sessionId ? this.resolveWorktreePathForSession(t.sessionId) : '')
+      || ''
+    ).trim();
+
+    let fallbackSessionId = null;
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (!/-(claude|codex)$/.test(String(sessionId || ''))) continue;
+      if (session?.status === 'exited') continue;
+
+      const sessionWorktreePath = this.resolveWorktreePathForSession(sessionId, session);
+      if (candidateWorktreePath && sessionWorktreePath && sessionWorktreePath === candidateWorktreePath) {
+        return sessionId;
+      }
+
+      if (!fallbackSessionId && candidateWorktreeId) {
+        const inferred = String(session?.worktreeId || this.extractWorktreeLabel(sessionWorktreePath) || '').trim().toLowerCase();
+        if (inferred && inferred === candidateWorktreeId) {
+          fallbackSessionId = sessionId;
+        }
+      }
+    }
+
+    return fallbackSessionId;
+  }
+
+  buildLatestReviewMessageForTask(task) {
+    const t = task && typeof task === 'object' ? task : {};
+    const recordFromMap = t?.id ? (this.taskRecords.get(String(t.id)) || {}) : {};
+    const record = (t.record && typeof t.record === 'object')
+      ? { ...recordFromMap, ...t.record }
+      : recordFromMap;
+
+    const summary = String(record.latestReviewSummary || '').trim();
+    const body = String(record.latestReviewBody || '').trim();
+    const outcome = String(record.latestReviewOutcome || '').trim().toLowerCase();
+    const outcomeLabel = outcome === 'approved'
+      ? 'APPROVED'
+      : outcome === 'commented'
+        ? 'COMMENTED'
+        : outcome === 'needs_fix'
+          ? 'CHANGES REQUESTED'
+          : 'REVIEW UPDATE';
+    const reviewUser = String(record.latestReviewUser || '').trim() || 'AI reviewer';
+    const reviewUrl = String(record.latestReviewUrl || t.url || '').trim();
+    const reviewAgent = String(record.latestReviewAgent || record.reviewerAgent || '').trim();
+    const prNumber = String(t.prNumber || '').trim() || (String(t.id || '').match(/#(\d+)$/)?.[1] || '?');
+    const text = summary || body;
+    if (!text) return '';
+
+    return [
+      '',
+      '--- Saved PR Review ---',
+      `PR #${prNumber} reviewed by ${reviewUser}.`,
+      `Outcome: ${outcomeLabel}`,
+      reviewAgent ? `Reviewer agent: ${reviewAgent}` : '',
+      reviewUrl ? `GitHub: ${reviewUrl}` : '',
+      '',
+      text,
+      '',
+      '--- End Saved PR Review ---',
+      ''
+    ].filter(Boolean).join('\n');
+  }
+
+  openLatestReviewForTask(task) {
+    const t = task && typeof task === 'object' ? task : {};
+    const recordFromMap = t?.id ? (this.taskRecords.get(String(t.id)) || {}) : {};
+    const record = (t.record && typeof t.record === 'object')
+      ? { ...recordFromMap, ...t.record }
+      : recordFromMap;
+    const url = String(record.latestReviewUrl || t.url || '').trim();
+    if (!url) {
+      this.showToast?.('No saved review URL for this task', 'warning');
+      return false;
+    }
+
+    try {
+      window.open(url, '_blank', 'noopener');
+      return true;
+    } catch (error) {
+      this.showToast?.(String(error?.message || error), 'error');
+      return false;
+    }
+  }
+
+  pasteLatestReviewToTaskSession(task) {
+    const t = task && typeof task === 'object' ? task : {};
+    const sessionId = this.resolvePreferredReviewSourceSession(t);
+    if (!sessionId) {
+      this.showToast?.('No active agent session found for this review', 'warning');
+      return false;
+    }
+
+    const payload = this.buildLatestReviewMessageForTask(t);
+    if (!payload) {
+      this.showToast?.('No saved review summary is available yet', 'warning');
+      return false;
+    }
+
+    this.sendTerminalInput(sessionId, `${payload}\n`);
+    this.showToast?.(`Pasted saved review into ${sessionId}`, 'success');
+    return true;
+  }
+
+  handlePrReviewAutomationEvent(payload = {}) {
+    const event = String(payload?.event || '').trim().toLowerCase();
+    const prId = String(payload?.prId || '').trim();
+    const recordPatch = (payload?.recordPatch && typeof payload.recordPatch === 'object') ? payload.recordPatch : null;
+    if (prId && recordPatch) {
+      const existing = this.taskRecords.get(prId) || {};
+      this.taskRecords.set(prId, { ...(existing && typeof existing === 'object' ? existing : {}), ...recordPatch });
+    }
+
+    this.queuePanelApi?.handleAutomationEvent?.(payload);
+
+    const cfg = this.userSettings?.global?.ui?.tasks?.automations?.prReview || {};
+    const label = prId || 'PR review';
+
+    if (event === 'reviewer-spawned') {
+      if (cfg.notifyOnReviewerSpawn === false) return;
+      const agentLabel = String(payload?.agentId || '').trim() || 'agent';
+      const message = `Reviewer started for ${label} (${agentLabel})`;
+      this.showToast?.(message, 'info');
+      this.notificationManager?.handleNotification?.({ type: 'completed', message, sessionId: payload?.sessionId || null });
+      return;
+    }
+
+    if (event === 'review-completed') {
+      if (cfg.notifyOnReviewCompleted === false) return;
+      const outcome = String(payload?.outcome || '').trim().toLowerCase();
+      const summary = String(payload?.reviewSummary || '').trim();
+      const message = summary
+        ? `${label}: ${outcome || 'completed'} — ${summary}`
+        : `${label}: ${outcome || 'completed'}`;
+      const toastType = outcome === 'needs_fix' ? 'warning' : (outcome === 'approved' ? 'success' : 'info');
+      const notificationType = outcome === 'needs_fix' ? 'waiting' : 'completed';
+      this.showToast?.(message, toastType, { durationMs: outcome === 'needs_fix' ? 8000 : 5000 });
+      this.notificationManager?.handleNotification?.({
+        type: notificationType,
+        message,
+        sessionId: payload?.pastedToSessionId || null,
+        metadata: { prId, outcome, reviewUrl: payload?.reviewUrl || null }
+      });
     }
   }
 
@@ -16721,6 +16950,43 @@ class ClaudeOrchestrator {
       prMergeComment.checked = cfg.comment !== false;
     }
 
+    const prReviewCfg = this.userSettings.global?.ui?.tasks?.automations?.prReview || {};
+    const prReviewEnabled = document.getElementById('pr-review-auto-enabled');
+    if (prReviewEnabled) {
+      prReviewEnabled.checked = prReviewCfg.enabled === true;
+    }
+    const prReviewReviewerAgent = document.getElementById('pr-review-reviewer-agent');
+    if (prReviewReviewerAgent) {
+      prReviewReviewerAgent.value = String(prReviewCfg.reviewerAgent || 'claude').trim().toLowerCase() === 'codex' ? 'codex' : 'claude';
+    }
+    const prReviewReviewerMode = document.getElementById('pr-review-reviewer-mode');
+    if (prReviewReviewerMode) {
+      prReviewReviewerMode.value = String(prReviewCfg.reviewerMode || 'fresh').trim().toLowerCase() === 'continue' ? 'continue' : 'fresh';
+    }
+    const prReviewNotifyStarted = document.getElementById('pr-review-notify-started');
+    if (prReviewNotifyStarted) {
+      prReviewNotifyStarted.checked = prReviewCfg.notifyOnReviewerSpawn !== false;
+    }
+    const prReviewNotifyCompleted = document.getElementById('pr-review-notify-completed');
+    if (prReviewNotifyCompleted) {
+      prReviewNotifyCompleted.checked = prReviewCfg.notifyOnReviewCompleted !== false;
+    }
+    const prReviewApprovedAction = document.getElementById('pr-review-approved-action');
+    if (prReviewApprovedAction) {
+      const value = String(prReviewCfg.approvedDeliveryAction || 'notify').trim().toLowerCase();
+      prReviewApprovedAction.value = ['notify', 'paste', 'paste_and_notify', 'none'].includes(value) ? value : 'notify';
+    }
+    const prReviewCommentedAction = document.getElementById('pr-review-commented-action');
+    if (prReviewCommentedAction) {
+      const value = String(prReviewCfg.commentedDeliveryAction || 'notify').trim().toLowerCase();
+      prReviewCommentedAction.value = ['notify', 'paste', 'paste_and_notify', 'none'].includes(value) ? value : 'notify';
+    }
+    const prReviewNeedsFixAction = document.getElementById('pr-review-needs-fix-action');
+    if (prReviewNeedsFixAction) {
+      const value = String(prReviewCfg.needsFixFeedbackAction || 'paste_and_notify').trim().toLowerCase();
+      prReviewNeedsFixAction.value = ['notify', 'paste', 'paste_and_notify', 'none'].includes(value) ? value : 'paste_and_notify';
+    }
+
     const identityClaimName = document.getElementById('identity-claim-name');
     if (identityClaimName) {
       const v = this.getIdentityClaimName();
@@ -25948,6 +26214,24 @@ class ClaudeOrchestrator {
 	      else this.taskRecords.delete(id);
 	    };
 
+	    const buildReviewSourcePatch = (task) => {
+	      const t = task && typeof task === 'object' ? task : {};
+	      const patch = {};
+	      const sourceSessionId = this.resolvePreferredReviewSourceSession(t);
+	      if (sourceSessionId) patch.reviewSourceSessionId = sourceSessionId;
+
+	      const session = sourceSessionId ? this.sessions.get(sourceSessionId) : null;
+	      const worktreeId = String(
+	        session?.worktreeId
+	        || t?.record?.reviewSourceWorktreeId
+	        || this.extractWorktreeLabel(String(t?.worktreePath || this.resolveWorktreePathForSession(sourceSessionId, session) || '').trim())
+	        || ''
+	      ).trim();
+	      if (worktreeId) patch.reviewSourceWorktreeId = worktreeId;
+
+	      return patch;
+	    };
+
     const stopReviewTimer = async ({ endedAtIso, reason = 'manual', nudge = false } = {}) => {
       const activeId = state.reviewTimer?.taskId;
       if (!activeId) return;
@@ -26878,6 +27162,15 @@ class ClaudeOrchestrator {
       const reviewManualDone = !!reviewChecklist?.manual?.done;
       const reviewManualSteps = String(reviewChecklist?.manual?.steps || '');
       const reviewerPostAction = String(record.reviewerPostAction || 'feedback').trim().toLowerCase() || 'feedback';
+      const latestReviewSummary = String(record.latestReviewSummary || '').trim();
+      const latestReviewBody = String(record.latestReviewBody || '').trim();
+      const latestReviewOutcome = String(record.latestReviewOutcome || '').trim().toLowerCase();
+      const latestReviewUser = String(record.latestReviewUser || '').trim();
+      const latestReviewUrl = String(record.latestReviewUrl || '').trim();
+      const latestReviewSubmittedAt = String(record.latestReviewSubmittedAt || '').trim();
+      const latestReviewAgent = String(record.latestReviewAgent || record.reviewerAgent || '').trim();
+      const latestReviewDeliveredAt = String(record.latestReviewDeliveredAt || '').trim();
+      const latestReviewText = latestReviewSummary || latestReviewBody;
 
 	      const normalizePrUrl = (value) => {
 	        const raw = String(value || '').trim();
@@ -27087,6 +27380,19 @@ class ClaudeOrchestrator {
         </div>
 
 	        <div class="tasks-detail-block">
+	          <div class="tasks-detail-block-title">Latest Review</div>
+	          <div class="tasks-detail-meta">
+	            ${latestReviewOutcome ? `${escapeHtml(latestReviewOutcome)}${latestReviewUser ? ` • ${escapeHtml(latestReviewUser)}` : ''}${latestReviewSubmittedAt ? ` • ${escapeHtml(latestReviewSubmittedAt)}` : ''}${latestReviewAgent ? ` • ${escapeHtml(latestReviewAgent)}` : ''}` : 'No saved review yet.'}
+	          </div>
+	          ${latestReviewDeliveredAt ? `<div class="tasks-detail-meta">delivered: ${escapeHtml(latestReviewDeliveredAt)}</div>` : ''}
+	          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap; margin-top:8px;">
+	            <button class="btn-secondary" id="queue-open-latest-review" ${latestReviewUrl || url ? '' : 'disabled'} title="Open the saved review URL or PR">🔎 Open latest review</button>
+	            <button class="btn-secondary" id="queue-paste-latest-review" ${latestReviewText ? '' : 'disabled'} title="Paste the saved review summary back into the source agent">↩ Paste to agent</button>
+	          </div>
+	          <div class="tasks-detail-meta" style="white-space:pre-wrap; margin-top:8px;">${escapeHtml(latestReviewText || 'No saved review summary yet.')}</div>
+	        </div>
+
+	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Claim</div>
 	          <div class="tasks-inline-row" style="gap:8px; flex-wrap:wrap;">
 	            <span class="tasks-detail-meta" id="queue-claim-meta">
@@ -27286,8 +27592,10 @@ class ClaudeOrchestrator {
           const spawnReviewerBtn = detailEl.querySelector('#queue-review-pr') || detailEl.querySelector('#queue-spawn-reviewer');
 				      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
 				      const repromptBtn = detailEl.querySelector('#queue-reprompt');
-				      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
-		      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
+		      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
+		      const openLatestReviewBtn = detailEl.querySelector('#queue-open-latest-review');
+		      const pasteLatestReviewBtn = detailEl.querySelector('#queue-paste-latest-review');
+	      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
 		      const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
 		      const notesEl = detailEl.querySelector('#queue-notes');
       const reviewTestsDoneEl = detailEl.querySelector('#queue-review-tests-done');
@@ -28260,6 +28568,14 @@ class ClaudeOrchestrator {
 	        }
 	      });
 
+	      openLatestReviewBtn?.addEventListener('click', () => {
+	        this.openLatestReviewForTask(getTaskById(t.id) || t);
+	      });
+
+	      pasteLatestReviewBtn?.addEventListener('click', () => {
+	        this.pasteLatestReviewToTaskSession(getTaskById(t.id) || t);
+	      });
+
 	      const runGitHubReview = async ({ action, body } = {}) => {
 	        const res = await fetch('/api/prs/review', {
 	          method: 'POST',
@@ -28396,7 +28712,7 @@ class ClaudeOrchestrator {
 		          spawnReviewerBtn.disabled = true;
 		          const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
               if (info) {
-                const patch = { reviewerSpawnedAt: new Date().toISOString() };
+                const patch = { reviewerSpawnedAt: new Date().toISOString(), ...buildReviewSourcePatch(t) };
                 if (info.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
                 const rec = await upsertRecord(t.id, patch);
                 updateTaskRecordInState(t.id, rec);
@@ -28614,7 +28930,7 @@ class ClaudeOrchestrator {
       try {
         const info = await this.spawnReviewAgentForPRTask(task, { tier: 3, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
         if (!info) return;
-        const patch = { reviewerSpawnedAt: new Date().toISOString() };
+        const patch = { reviewerSpawnedAt: new Date().toISOString(), ...buildReviewSourcePatch(task) };
         if (info?.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
         const rec = await upsertRecord(task.id, patch);
         updateTaskRecordInState(task.id, rec);
@@ -29185,7 +29501,7 @@ class ClaudeOrchestrator {
           try {
             const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
             if (info) {
-              const patch = { reviewerSpawnedAt: new Date().toISOString() };
+              const patch = { reviewerSpawnedAt: new Date().toISOString(), ...buildReviewSourcePatch(t) };
               if (info.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
               const rec = await upsertRecord(t.id, patch);
               updateTaskRecordInState(t.id, rec);
@@ -29923,11 +30239,22 @@ class ClaudeOrchestrator {
             await fetchTasks().catch(() => {});
             renderDetail(getTaskById(t.id));
             return true;
-          } catch (err) {
-            this.showToast?.(String(err?.message || err), 'error');
-            return false;
-          }
-        },
+        } catch (err) {
+          this.showToast?.(String(err?.message || err), 'error');
+          return false;
+        }
+      },
+	      handleAutomationEvent: (payload = {}) => {
+	        const prId = String(payload?.prId || '').trim();
+	        const recordPatch = (payload?.recordPatch && typeof payload.recordPatch === 'object') ? payload.recordPatch : null;
+	        if (!prId || !recordPatch) return false;
+	        const existing = getTaskById(prId);
+	        if (!existing) return false;
+	        updateTaskRecordInState(prId, recordPatch);
+	        renderList();
+	        if (state.selectedId === prId) renderDetail(getTaskById(prId));
+	        return true;
+	      },
 	      next: () => navigate(1),
 	      prev: () => navigate(-1)
 	    };
