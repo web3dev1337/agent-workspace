@@ -370,19 +370,18 @@ body {
     max-width: 44px;
   }
 
-  body.sidebar-collapsed .sidebar > * {
+  body.sidebar-collapsed .sidebar > *:not(.sidebar-toggle) {
     display: none;
   }
 
   body.sidebar-collapsed .sidebar-toggle {
     display: inline-flex;
-    width: 44px;
-    height: 44px;
-    margin: 0;
+    margin: 8px 6px 0 auto;
     padding: 0;
     justify-content: center;
     align-items: center;
-    border-right: none;
+    width: 32px;
+    height: 32px;
   }
 }
 
@@ -930,6 +929,7 @@ header {
   display: inline-flex;
   width: 32px;
   height: 32px;
+  margin: 8px 6px 0 auto;
   padding: 0;
   align-items: center;
   justify-content: center;
