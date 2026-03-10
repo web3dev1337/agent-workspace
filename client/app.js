@@ -668,12 +668,33 @@ class ClaudeOrchestrator {
 
   openSidebar() {
     document.body.classList.add('sidebar-open');
+    this.updateSidebarToggleIcon();
     this.syncSidebarBackdrop();
   }
 
   closeSidebar() {
     document.body.classList.remove('sidebar-open');
+    this.updateSidebarToggleIcon();
     this.syncSidebarBackdrop();
+  }
+
+  updateSidebarToggleIcon() {
+    const toggle = document.getElementById('sidebar-toggle');
+    if (!toggle) return;
+
+    const shouldShowRightArrow = this.isMobileLayout()
+      ? !document.body.classList.contains('sidebar-open')
+      : document.body.classList.contains('sidebar-collapsed');
+
+    if (shouldShowRightArrow) {
+      toggle.textContent = '▸';
+      toggle.title = 'Expand sidebar';
+      toggle.setAttribute('aria-label', 'Expand sidebar');
+    } else {
+      toggle.textContent = '◂';
+      toggle.title = 'Collapse sidebar';
+      toggle.setAttribute('aria-label', 'Collapse sidebar');
+    }
   }
 
   getSidebarDesktopCollapsedPref() {
@@ -689,6 +710,7 @@ class ClaudeOrchestrator {
   setSidebarDesktopCollapsed(collapsed) {
     const next = !!collapsed;
     document.body.classList.toggle('sidebar-collapsed', next);
+    this.updateSidebarToggleIcon();
     try {
       localStorage.setItem('sidebar-desktop-collapsed', next ? 'true' : 'false');
     } catch {
@@ -704,6 +726,7 @@ class ClaudeOrchestrator {
   applySidebarDesktopCollapsedFromPrefs() {
     try {
       document.body.classList.toggle('sidebar-collapsed', !!this.getSidebarDesktopCollapsedPref());
+      this.updateSidebarToggleIcon();
     } catch {
       // ignore
     }
@@ -2758,6 +2781,7 @@ class ClaudeOrchestrator {
     // Handle window resize to fix blank terminals
     let resizeTimeout;
 	    window.addEventListener('resize', () => {
+      this.updateSidebarToggleIcon();
 	      clearTimeout(resizeTimeout);
 	      resizeTimeout = setTimeout(() => {
 	        // Refit all visible terminals
