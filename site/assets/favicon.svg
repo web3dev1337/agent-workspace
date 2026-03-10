@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Agent Workspace">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d78d4d" />
+      <stop offset="100%" stop-color="#a14f1d" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="#17191c" />
+  <rect x="8" y="8" width="48" height="48" rx="14" fill="url(#g)" />
+  <path d="M19 37.5 27.5 19h4.2l8.6 18.5h-5l-1.7-4H25.7l-1.7 4Zm8.3-7.8h5.1L29.9 24Z" fill="#fff7ef" />
+  <path d="M40 41.5h5v4.5h-5z" fill="#fff7ef" />
+</svg>

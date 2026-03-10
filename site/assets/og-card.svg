@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Agent Workspace showcase">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f8f2ea" />
+      <stop offset="100%" stop-color="#ebdfd0" />
+    </linearGradient>
+    <linearGradient id="card" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d2229" />
+      <stop offset="100%" stop-color="#121418" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d28d4c" />
+      <stop offset="100%" stop-color="#ab571d" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <circle cx="102" cy="96" r="168" fill="#d28d4c" fill-opacity="0.12" />
+  <circle cx="1060" cy="72" r="148" fill="#2f716c" fill-opacity="0.1" />
+  <rect x="72" y="72" width="1056" height="486" rx="34" fill="url(#card)" />
+  <rect x="106" y="110" width="170" height="32" rx="16" fill="url(#accent)" />
+  <text x="106" y="245" fill="#fdf8f2" font-family="Sora, Arial, sans-serif" font-size="74" font-weight="700">
+    Agent Workspace
+  </text>
+  <text x="106" y="304" fill="#d2dbe4" font-family="Manrope, Arial, sans-serif" font-size="30">
+    Keep parallel coding sessions readable.
+  </text>
+  <text x="106" y="352" fill="#9cb0c4" font-family="Manrope, Arial, sans-serif" font-size="24">
+    Local-first orchestration for Claude Code and Codex across workspaces, worktrees, tabs, and review flow.
+  </text>
+  <rect x="106" y="402" width="220" height="54" rx="27" fill="#fef7f0" />
+  <text x="151" y="437" fill="#17191c" font-family="Manrope, Arial, sans-serif" font-size="22" font-weight="700">
+    Multi-repo
+  </text>
+  <rect x="344" y="402" width="220" height="54" rx="27" fill="#fef7f0" fill-opacity="0.15" stroke="#fef7f0" stroke-opacity="0.16" />
+  <text x="392" y="437" fill="#f3f6fa" font-family="Manrope, Arial, sans-serif" font-size="22" font-weight="700">
+    Commander
+  </text>
+  <rect x="706" y="132" width="332" height="286" rx="26" fill="#252b33" stroke="#ffffff" stroke-opacity="0.08" />
+  <rect x="742" y="172" width="112" height="26" rx="13" fill="#ffffff" fill-opacity="0.1" />
+  <rect x="876" y="172" width="122" height="26" rx="13" fill="#2f716c" fill-opacity="0.32" />
+  <rect x="742" y="226" width="258" height="72" rx="20" fill="#1a1f26" stroke="#ffffff" stroke-opacity="0.08" />
+  <rect x="742" y="318" width="258" height="72" rx="20" fill="#1a1f26" stroke="#ffffff" stroke-opacity="0.08" />
+  <rect x="742" y="246" width="120" height="10" rx="5" fill="#d28d4c" />
+  <rect x="742" y="266" width="210" height="8" rx="4" fill="#8ea5bb" fill-opacity="0.66" />
+  <rect x="742" y="338" width="140" height="10" rx="5" fill="#6acb95" />
+  <rect x="742" y="358" width="184" height="8" rx="4" fill="#8ea5bb" fill-opacity="0.66" />
+</svg>
