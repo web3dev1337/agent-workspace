@@ -25396,7 +25396,7 @@ class ClaudeOrchestrator {
 				              <button class="btn-secondary tasks-view-btn" id="queue-auto-diff" title="Toggle: auto-open diff for PR items">Auto Diff</button>
 				              <button class="btn-secondary tasks-view-btn" id="queue-auto-console" title="Toggle: auto-open Review Console for PR/worktree/session items">Auto Console</button>
 				              <button class="btn-secondary tasks-view-btn" id="queue-auto-next" title="Toggle: auto-advance when you complete a review">Auto Next</button>
-				              <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn a reviewer agent for Tier 3 PRs">Auto Reviewer</button>
+				              <button class="btn-secondary tasks-view-btn" id="queue-auto-reviewer" title="Toggle: auto-spawn an external reviewer for the selected or next visible PR">Auto Reviewer</button>
 				              <button class="btn-secondary tasks-view-btn" id="queue-auto-fixer" title="Toggle: auto-spawn a fixer when Outcome=needs_fix and Notes is set">Auto Fixer</button>
 				              <button class="btn-secondary tasks-view-btn" id="queue-auto-recheck" title="Toggle: auto-spawn a recheck reviewer after fixes land on the PR">Auto Recheck</button>
 				            </div>
@@ -25743,11 +25743,19 @@ class ClaudeOrchestrator {
 		      syncReviewControlsUI();
 		    });
 
-		    autoReviewerBtn?.addEventListener('click', () => {
+		    autoReviewerBtn?.addEventListener('click', async () => {
 		      state.autoReviewer = !state.autoReviewer;
 		      localStorage.setItem('queue-auto-reviewer', state.autoReviewer ? 'true' : 'false');
 		      syncReviewControlsUI();
 		      if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+          if (!state.autoReviewer) {
+            this.showToast?.('Auto Reviewer disabled', 'info');
+            return;
+          }
+          const result = await triggerAutoReviewerForQueue({ notify: true, preferSelected: true });
+          if (!result?.started && result?.reason === 'no_candidate') {
+            this.showToast?.('Auto Reviewer armed: it will start on the selected or next visible unreviewed PR', 'info');
+          }
 	    });
 
 	    autoFixerBtn?.addEventListener('click', () => {
@@ -26552,6 +26560,9 @@ class ClaudeOrchestrator {
         state.selectedId = ordered[0]?.id || null;
       }
       renderList();
+      if (state.autoReviewer) {
+        Promise.resolve().then(() => triggerAutoReviewerForQueue({ notify: false, preferSelected: true })).catch(() => {});
+      }
       refreshConflicts().catch(() => {});
     };
 
@@ -29296,35 +29307,57 @@ class ClaudeOrchestrator {
       }
     };
 
-	    const maybeAutoSpawnReviewer = async (t) => {
-	      if (!state.autoReviewer) return;
-	      const task = t || {};
-	      if (task.kind !== 'pr') return;
+	    const getAutoReviewerEligibility = (task) => {
+	      const t = task || {};
+	      if (!state.autoReviewer) return { ok: false, reason: 'disabled' };
+	      if (t.kind !== 'pr') return { ok: false, reason: 'not_pr' };
+	      if (t?.record?.reviewedAt) return { ok: false, reason: 'reviewed' };
+	      if (t?.record?.reviewerSpawnedAt) return { ok: false, reason: 'already_started' };
+	      if (state.reviewerSpawning?.has?.(t.id)) return { ok: false, reason: 'starting' };
+	      return { ok: true, reason: '' };
+	    };
 
-      const tier = Number(task?.record?.tier);
-      if (tier !== 3) return;
+	    const getAutoReviewerCandidate = ({ preferSelected = true } = {}) => {
+	      if (preferSelected && state.selectedId) {
+	        const selected = getTaskById(state.selectedId);
+	        if (getAutoReviewerEligibility(selected).ok) return selected;
+	      }
+	      const ordered = getOrderedTasks(getFilteredTasks());
+	      return ordered.find((task) => getAutoReviewerEligibility(task).ok) || null;
+	    };
 
-      if (task?.record?.reviewedAt) return;
-      if (task?.record?.reviewerSpawnedAt) return;
+	    const maybeAutoSpawnReviewer = async (task, { silent = true } = {}) => {
+	      const eligibility = getAutoReviewerEligibility(task);
+	      if (!eligibility.ok) return false;
+	      const nextTask = task || {};
 
-      if (state.reviewerSpawning?.has?.(task.id)) return;
-      state.reviewerSpawning.add(task.id);
+	      state.reviewerSpawning.add(nextTask.id);
 
-      try {
-        const info = await this.spawnReviewAgentForPRTask(task, { tier: 3, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
-        if (!info) return;
-        const patch = { reviewerSpawnedAt: new Date().toISOString(), ...buildReviewSourcePatch(task) };
-        if (info?.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
-        const rec = await upsertRecord(task.id, patch);
-        updateTaskRecordInState(task.id, rec);
-        renderList();
-        renderDetail(getTaskById(task.id));
-      } catch (e) {
-        // best-effort; keep it silent unless it was user-initiated
-        console.warn('Auto reviewer spawn failed:', e);
-      } finally {
-        state.reviewerSpawning.delete(task.id);
-      }
+	      try {
+	        const info = await this.spawnReviewAgentForPRTask(nextTask, { tier: 3, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
+	        if (!info) return false;
+	        const patch = { reviewerSpawnedAt: new Date().toISOString(), ...buildReviewSourcePatch(nextTask) };
+	        if (info?.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
+	        const rec = await upsertRecord(nextTask.id, patch);
+	        updateTaskRecordInState(nextTask.id, rec);
+	        renderList();
+	        renderDetail(getTaskById(nextTask.id));
+	        return true;
+	      } catch (e) {
+	        if (!silent) this.showToast?.(String(e?.message || e), 'error');
+	        else console.warn('Auto reviewer spawn failed:', e);
+	        return false;
+	      } finally {
+	        state.reviewerSpawning.delete(nextTask.id);
+	      }
+	    };
+
+	    const triggerAutoReviewerForQueue = async ({ notify = false, preferSelected = true } = {}) => {
+	      if (!state.autoReviewer) return { started: false, reason: 'disabled' };
+	      const candidate = getAutoReviewerCandidate({ preferSelected });
+	      if (!candidate) return { started: false, reason: 'no_candidate' };
+	      const started = await maybeAutoSpawnReviewer(candidate, { silent: !notify });
+	      return { started, taskId: candidate?.id || '', reason: started ? '' : 'failed' };
 	    };
 
     const parseIsoMaybe = (v) => {
