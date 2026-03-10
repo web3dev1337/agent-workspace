@@ -4820,7 +4820,8 @@ class ClaudeOrchestrator {
     ` : '';
 
     filterToggle.innerHTML = `
-      <div class="filter-toggle-row filter-toggle-row-compact" role="group" aria-label="Worktree filters">
+      <div class="filter-toggle-label">Tier</div>
+      <div class="filter-toggle-row filter-toggle-row-compact" role="group" aria-label="Tier filter">
         ${tierButtons}
       </div>
     `;
