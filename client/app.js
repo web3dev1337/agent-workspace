@@ -1208,6 +1208,7 @@ class ClaudeOrchestrator {
             const links = this.githubLinks.get(sessionId) || {};
             links.pr = sessionState.existingPR;
             this.githubLinks.set(sessionId, links);
+            this.maybeLinkPrTaskToSession(sessionId, sessionState.existingPR, { sessionOverride: this.sessions.get(sessionId) }).catch(() => {});
           }
 
           // Mark new sessions as active (active-only filter should treat background work as active too).
@@ -3578,6 +3579,47 @@ class ClaudeOrchestrator {
     return `pr:${owner}/${repo}#${prNum}`;
   }
 
+  async maybeLinkPrTaskToSession(sessionId, prUrl, { sessionOverride = null } = {}) {
+    const sid = String(sessionId || '').trim();
+    const url = String(prUrl || '').trim();
+    if (!sid || !url) return null;
+    if (sid.endsWith('-server')) return null;
+
+    const prTaskId = this.getPRTaskIdFromUrl(url);
+    if (!prTaskId) return null;
+
+    const session = sessionOverride || this.sessions.get(sid) || null;
+    const worktreePath = this.resolveWorktreePathForSession(sid, session);
+    const worktreeId = String(session?.worktreeId || this.extractWorktreeLabel(worktreePath) || '').trim();
+
+    const existing = this.taskRecords.get(prTaskId) || {};
+    if (
+      String(existing?.reviewSourceSessionId || '').trim() === sid
+      && String(existing?.reviewSourceWorktreeId || '').trim() === worktreeId
+    ) {
+      return existing;
+    }
+
+    const patch = {
+      reviewSourceSessionId: sid,
+      reviewSourceWorktreeId: worktreeId || null
+    };
+
+    try {
+      const rec = await this.upsertTaskRecord(prTaskId, patch);
+      if (rec) {
+        const merged = { ...(existing && typeof existing === 'object' ? existing : {}), ...rec };
+        this.taskRecords.set(prTaskId, merged);
+        this.queuePanelApi?.handleAutomationEvent?.({ prId: prTaskId, recordPatch: rec });
+        return merged;
+      }
+    } catch (error) {
+      console.warn('Failed to link PR task to source session:', { sessionId: sid, prUrl: url, error: error?.message || error });
+    }
+
+    return null;
+  }
+
   getTierForSession(sessionId) {
     const session = this.sessions.get(sessionId);
     const prUrl = this.githubLinks.get(sessionId)?.pr || null;
@@ -3669,6 +3711,7 @@ class ClaudeOrchestrator {
         links.pr = state.existingPR;
         this.githubLinks.set(sessionId, links);
         console.log('Loaded existing PR for session:', sessionId, state.existingPR);
+        this.maybeLinkPrTaskToSession(sessionId, state.existingPR, { sessionOverride: sessionData }).catch(() => {});
       }
 
       // For mixed-repo workspaces, set terminals as active immediately so they show by default
@@ -6074,6 +6117,7 @@ class ClaudeOrchestrator {
         this.githubLinks.set(sessionId, links);
         console.log('Automatically detected existing PR:', existingPR);
         this.maybeSchedulePrIntentRefresh(sessionId, existingPR);
+        this.maybeLinkPrTaskToSession(sessionId, existingPR, { sessionOverride: session }).catch(() => {});
       }
     }
 
