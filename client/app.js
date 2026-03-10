@@ -949,7 +949,8 @@ class ClaudeOrchestrator {
           autoAdvance: false,
           reviewActive: false,
           prioritizeActive: true,
-          projectFilter: reviewContext.projectFilter || ''
+          projectFilter: reviewContext.projectFilter || '',
+          repoScope: reviewContext.repoSlug || ''
         };
         this.showQueuePanel({ selectedId: reviewContext.prTaskId || null });
       });
@@ -3187,6 +3188,7 @@ class ClaudeOrchestrator {
       reviewRouteActive: false,
       kindFilter: defaults.kind,
       projectFilter: projectFilter || '',
+      repoScope: reviewContext.repoSlug || '',
       prioritizeActive: defaults.prioritizeActive,
       quickReview: !!quick
     };
@@ -3656,7 +3658,7 @@ class ClaudeOrchestrator {
 
     return {
       repoSlug: repoSlug || '',
-      projectFilter: explicitProject || repoSlug || '',
+      projectFilter: explicitProject || '',
       prTaskId: prTaskId || ''
     };
   }
@@ -25157,6 +25159,7 @@ class ClaudeOrchestrator {
 				      mode: 'mine', // mine | all
               kindFilter: 'all', // all | pr | worktree | session
               projectFilter: '',
+              repoScope: '',
               prioritizeActive: localStorage.getItem('queue-prioritize-active') === 'true',
 				      query: '',
 				      tasks: [],
@@ -25261,6 +25264,9 @@ class ClaudeOrchestrator {
       }
       if (preset.projectFilter !== undefined) {
         state.projectFilter = String(preset.projectFilter || '').trim();
+      }
+      if (preset.repoScope !== undefined) {
+        state.repoScope = String(preset.repoScope || '').trim();
       }
       if (preset.prioritizeActive !== undefined) {
         state.prioritizeActive = !!preset.prioritizeActive;
@@ -25434,6 +25440,9 @@ class ClaudeOrchestrator {
       }
       if (projectFilterEl) {
         projectFilterEl.value = String(state.projectFilter || '');
+        projectFilterEl.title = state.repoScope
+          ? `Project filter within ${state.repoScope}`
+          : 'Project filter';
       }
 
 	    const showPairingModal = async () => {
@@ -25541,6 +25550,11 @@ class ClaudeOrchestrator {
 
     const setMode = (mode) => {
       state.mode = mode === 'all' ? 'all' : 'mine';
+      const hasRepoScope = !!String(state.repoScope || '').trim();
+      mineBtn.textContent = 'Mine';
+      mineBtn.title = hasRepoScope ? `My PRs in ${state.repoScope}` : 'My PRs across GitHub';
+      allBtn.textContent = hasRepoScope ? 'Repo' : 'All';
+      allBtn.title = hasRepoScope ? `All PRs in ${state.repoScope}` : 'All PRs across GitHub';
       mineBtn.classList.toggle('active', state.mode === 'mine');
       allBtn.classList.toggle('active', state.mode === 'all');
     };
@@ -26423,7 +26437,7 @@ class ClaudeOrchestrator {
       url.searchParams.set('mode', state.mode);
       url.searchParams.set('state', 'open');
       url.searchParams.set('include', 'dependencySummary');
-      const repoSlug = extractRepoSlug(state.projectFilter);
+      const repoSlug = String(state.repoScope || '').trim() || extractRepoSlug(state.projectFilter);
       if (repoSlug) url.searchParams.set('repo', repoSlug);
       const res = await fetch(url.toString());
       const data = await res.json().catch(() => ({}));
