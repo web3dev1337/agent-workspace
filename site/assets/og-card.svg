@@ -1,47 +1,62 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Agent Workspace showcase">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f8f2ea" />
-      <stop offset="100%" stop-color="#ebdfd0" />
+      <stop offset="0%" stop-color="#020814" />
+      <stop offset="100%" stop-color="#091224" />
     </linearGradient>
     <linearGradient id="card" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1d2229" />
-      <stop offset="100%" stop-color="#121418" />
+      <stop offset="0%" stop-color="#0b162c" />
+      <stop offset="100%" stop-color="#050c18" />
     </linearGradient>
     <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#d28d4c" />
-      <stop offset="100%" stop-color="#ab571d" />
+      <stop offset="0%" stop-color="#4b92ff" />
+      <stop offset="100%" stop-color="#54d4ff" />
     </linearGradient>
   </defs>
   <rect width="1200" height="630" fill="url(#bg)" />
-  <circle cx="102" cy="96" r="168" fill="#d28d4c" fill-opacity="0.12" />
-  <circle cx="1060" cy="72" r="148" fill="#2f716c" fill-opacity="0.1" />
+  <circle cx="122" cy="104" r="184" fill="#4b92ff" fill-opacity="0.14" />
+  <circle cx="1068" cy="88" r="144" fill="#69dbff" fill-opacity="0.1" />
   <rect x="72" y="72" width="1056" height="486" rx="34" fill="url(#card)" />
-  <rect x="106" y="110" width="170" height="32" rx="16" fill="url(#accent)" />
-  <text x="106" y="245" fill="#fdf8f2" font-family="Sora, Arial, sans-serif" font-size="74" font-weight="700">
-    Agent Workspace
+  <rect x="106" y="108" width="182" height="34" rx="17" fill="#0f1f3a" stroke="#4b92ff" stroke-opacity="0.3" />
+  <text x="134" y="131" fill="#8fc3ff" font-family="IBM Plex Sans, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="2">
+    AGENT WORKSPACE
   </text>
-  <text x="106" y="304" fill="#d2dbe4" font-family="Manrope, Arial, sans-serif" font-size="30">
-    Keep parallel coding sessions readable.
+  <text x="106" y="228" fill="#eef6ff" font-family="Space Grotesk, Arial, sans-serif" font-size="62" font-weight="700">
+    All your agents in
   </text>
-  <text x="106" y="352" fill="#9cb0c4" font-family="Manrope, Arial, sans-serif" font-size="24">
-    Local-first orchestration for Claude Code and Codex across workspaces, worktrees, tabs, and review flow.
+  <text x="106" y="292" fill="#eef6ff" font-family="Space Grotesk, Arial, sans-serif" font-size="62" font-weight="700">
+    one workspace.
   </text>
-  <rect x="106" y="402" width="220" height="54" rx="27" fill="#fef7f0" />
-  <text x="151" y="437" fill="#17191c" font-family="Manrope, Arial, sans-serif" font-size="22" font-weight="700">
-    Multi-repo
+  <text x="106" y="344" fill="#73cfff" font-family="IBM Plex Sans, Arial, sans-serif" font-size="28" font-weight="700">
+    All your projects in one workspace.
   </text>
-  <rect x="344" y="402" width="220" height="54" rx="27" fill="#fef7f0" fill-opacity="0.15" stroke="#fef7f0" stroke-opacity="0.16" />
-  <text x="392" y="437" fill="#f3f6fa" font-family="Manrope, Arial, sans-serif" font-size="22" font-weight="700">
-    Commander
+  <text x="106" y="392" fill="#9cb1ca" font-family="IBM Plex Sans, Arial, sans-serif" font-size="24">
+    Run Claude and Codex side by side across repos, worktrees, and reviews.
   </text>
-  <rect x="706" y="132" width="332" height="286" rx="26" fill="#252b33" stroke="#ffffff" stroke-opacity="0.08" />
-  <rect x="742" y="172" width="112" height="26" rx="13" fill="#ffffff" fill-opacity="0.1" />
-  <rect x="876" y="172" width="122" height="26" rx="13" fill="#2f716c" fill-opacity="0.32" />
-  <rect x="742" y="226" width="258" height="72" rx="20" fill="#1a1f26" stroke="#ffffff" stroke-opacity="0.08" />
-  <rect x="742" y="318" width="258" height="72" rx="20" fill="#1a1f26" stroke="#ffffff" stroke-opacity="0.08" />
-  <rect x="742" y="246" width="120" height="10" rx="5" fill="#d28d4c" />
-  <rect x="742" y="266" width="210" height="8" rx="4" fill="#8ea5bb" fill-opacity="0.66" />
-  <rect x="742" y="338" width="140" height="10" rx="5" fill="#6acb95" />
-  <rect x="742" y="358" width="184" height="8" rx="4" fill="#8ea5bb" fill-opacity="0.66" />
+  <rect x="106" y="430" width="176" height="44" rx="14" fill="#0f1f3a" stroke="#f4c068" stroke-opacity="0.34" />
+  <text x="140" y="458" fill="#ffe2a8" font-family="IBM Plex Sans, Arial, sans-serif" font-size="18" font-weight="700">
+    Claude Max
+  </text>
+  <rect x="296" y="430" width="150" height="44" rx="14" fill="#0f1f3a" stroke="#4b92ff" stroke-opacity="0.34" />
+  <text x="342" y="458" fill="#d8ebff" font-family="IBM Plex Sans, Arial, sans-serif" font-size="18" font-weight="700">
+    Codex
+  </text>
+  <text x="106" y="514" fill="#d8ebff" font-family="IBM Plex Sans, Arial, sans-serif" font-size="20" font-weight="700">
+    Works with the plans you already have.
+  </text>
+  <rect x="690" y="118" width="348" height="308" rx="24" fill="#0a1323" stroke="#8dc0ff" stroke-opacity="0.18" />
+  <rect x="720" y="150" width="286" height="34" rx="11" fill="#0e1b33" />
+  <circle cx="740" cy="167" r="5" fill="#4b92ff" />
+  <circle cx="758" cy="167" r="5" fill="#69dbff" />
+  <circle cx="776" cy="167" r="5" fill="#5edea5" />
+  <rect x="720" y="204" width="88" height="34" rx="10" fill="#0f1f3a" stroke="#4b92ff" stroke-opacity="0.28" />
+  <rect x="826" y="204" width="112" height="34" rx="10" fill="#0f1f3a" stroke="#69dbff" stroke-opacity="0.26" />
+  <rect x="720" y="260" width="128" height="120" rx="16" fill="#0d182b" stroke="#ffffff" stroke-opacity="0.07" />
+  <rect x="864" y="260" width="142" height="120" rx="16" fill="#0d182b" stroke="#ffffff" stroke-opacity="0.07" />
+  <rect x="740" y="282" width="66" height="16" rx="8" fill="#5edea5" fill-opacity="0.18" />
+  <rect x="740" y="314" width="82" height="10" rx="5" fill="#56c8ff" />
+  <rect x="740" y="334" width="82" height="8" rx="4" fill="#8ea5bb" fill-opacity="0.66" />
+  <rect x="884" y="282" width="78" height="16" rx="8" fill="#f4c068" fill-opacity="0.18" />
+  <rect x="884" y="314" width="94" height="10" rx="5" fill="#8ec3ff" />
+  <rect x="884" y="334" width="88" height="8" rx="4" fill="#8ea5bb" fill-opacity="0.66" />
 </svg>

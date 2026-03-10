@@ -316,7 +316,7 @@ site/                              - Concise product/showcase site kept separate
 ├─ index.html                      - Single-page product overview and quick-start narrative
 ├─ styles.css                      - Showcase visual system, layout, and motion
 ├─ script.js                       - Small reveal-on-scroll enhancement
-├─ assets/                         - Favicon + Open Graph artwork
+├─ assets/                         - Favicon, provider logos, generated Open Graph preview, and real UI screenshot
 └─ README.md                       - Local preview and future publishing notes
 ```
 

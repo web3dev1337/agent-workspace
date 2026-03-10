@@ -6,20 +6,20 @@
   <title>Agent Workspace</title>
   <meta
     name="description"
-    content="Agent Workspace is a local-first orchestration layer for Claude Code and Codex across multiple repositories, worktrees, review flows, and browser-like workspace tabs."
+    content="All your agents in one workspace. All your projects in one workspace. Run Claude and Codex side by side with the plans you already have."
   >
   <meta property="og:title" content="Agent Workspace">
   <meta
     property="og:description"
-    content="A polished overview of how Agent Workspace helps you run, monitor, and review many AI coding sessions from one surface."
+    content="Run Claude and Codex side by side across local repos, worktrees, and reviews from one UI."
   >
   <meta property="og:type" content="website">
-  <meta property="og:image" content="assets/og-card.svg">
+  <meta property="og:image" content="assets/og-card.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;700;800&family=Sora:wght@600;700;800&display=swap"
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap"
     rel="stylesheet"
   >
   <link rel="stylesheet" href="styles.css">
@@ -32,13 +32,13 @@
         <span class="brand-mark">AW</span>
         <span class="brand-copy">
           <strong>Agent Workspace</strong>
-          <span>Multi-session orchestration</span>
+          <span>Workspace for agent CLIs</span>
         </span>
       </a>
       <nav class="site-nav" aria-label="Primary">
         <a href="#overview">Overview</a>
         <a href="#flow">Flow</a>
-        <a href="#architecture">Architecture</a>
+        <a href="#compat">Plans</a>
         <a href="#setup">Setup</a>
       </nav>
       <a class="nav-cta" href="https://github.com/web3dev1337/claude-orchestrator">View Repo</a>
@@ -47,231 +47,105 @@
     <main>
       <section class="hero reveal" id="top">
         <div class="hero-copy">
-          <p class="eyebrow">Local-first orchestration for AI coding work</p>
-          <h1>Keep parallel coding sessions readable.</h1>
+          <p class="eyebrow">Runs on your machine</p>
+          <h1>All your agents in one workspace.</h1>
+          <p class="hero-kicker">All your projects in one workspace.</p>
           <p class="lede">
-            Agent Workspace gives Claude Code and Codex a shared control plane:
-            workspaces, worktrees, live status, review flow, and a desktop app when you want it.
+            See Claude and Codex side by side across repos, worktrees, and reviews.
           </p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#flow">See how it works</a>
+            <a class="button button-primary" href="#overview">See the UI</a>
             <a class="button button-secondary" href="#setup">Quick start</a>
           </div>
           <div class="signal-row" aria-label="Key product signals">
-            <span>Mixed repositories</span>
-            <span>Browser-like workspace tabs</span>
-            <span>Commander + diff review</span>
-            <span>Tauri desktop app</span>
+            <span class="signal-pill-blue">Multiple agents</span>
+            <span class="signal-pill-cyan">Multiple projects</span>
+            <span class="signal-pill-green">Local terminals</span>
+            <span class="signal-pill-amber">Reviews in place</span>
           </div>
+          <div class="compat-strip" id="compat">
+            <div class="logo-chip logo-chip-claude">
+              <img class="logo-monochrome" src="assets/claude-logo.png" alt="Claude logo">
+              <span>Claude</span>
+            </div>
+            <div class="logo-chip logo-chip-codex">
+              <img src="assets/codex-logo.png" alt="Codex logo">
+              <span>Codex</span>
+            </div>
+            <p class="compat-copy">Works with Claude Max and Codex plans.</p>
+          </div>
+          <p class="direct-note">
+            Use the providers you already have. Agent Workspace organizes local CLIs, worktrees, and repos without replacing them.
+          </p>
         </div>
 
-        <div class="hero-visual" aria-hidden="true">
-          <div class="product-shell">
-            <div class="product-topbar">
-              <div class="window-dots">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-              <div class="workspace-tabs">
-                <span class="workspace-tab workspace-tab-active">Zoo Game</span>
-                <span class="workspace-tab">Diff Viewer</span>
-                <span class="workspace-tab">Website</span>
-              </div>
-            </div>
-
-            <div class="product-body">
-              <aside class="product-sidebar">
-                <p class="sidebar-label">Worktrees</p>
-                <div class="worktree-item worktree-item-focus">
-                  <span>work1</span>
-                  <span class="status-pill status-busy">Busy</span>
-                </div>
-                <div class="worktree-item">
-                  <span>work2</span>
-                  <span class="status-pill status-waiting">Waiting</span>
-                </div>
-                <div class="worktree-item">
-                  <span>work3</span>
-                  <span class="status-pill status-ready">Ready</span>
-                </div>
-                <div class="worktree-item">
-                  <span>work4</span>
-                  <span class="status-pill status-review">Review</span>
-                </div>
-              </aside>
-
-              <div class="product-main">
-                <div class="product-toolbar">
-                  <span class="toolbar-chip toolbar-chip-focus">Focus</span>
-                  <span class="toolbar-chip">Commander</span>
-                  <span class="toolbar-chip">Review Inbox</span>
-                </div>
-
-                <div class="terminal-grid">
-                  <article class="terminal-card terminal-card-busy">
-                    <div class="terminal-header">
-                      <span>work1-claude</span>
-                      <span class="terminal-state">busy</span>
-                    </div>
-                    <div class="terminal-lines">
-                      <span>thinking through worktree launch orchestration...</span>
-                      <span>checking repository status and branch metadata</span>
-                      <span>building PR review context</span>
-                    </div>
-                  </article>
-
-                  <article class="terminal-card terminal-card-waiting">
-                    <div class="terminal-header">
-                      <span>work2-codex</span>
-                      <span class="terminal-state">waiting</span>
-                    </div>
-                    <div class="terminal-lines">
-                      <span>tests green on safe port</span>
-                      <span>branch ready for push</span>
-                      <span>awaiting next prompt</span>
-                    </div>
-                  </article>
-
-                  <article class="terminal-card terminal-card-neutral">
-                    <div class="terminal-header">
-                      <span>Commander</span>
-                      <span class="terminal-state">routing</span>
-                    </div>
-                    <div class="terminal-lines">
-                      <span>queue: 3 pending reviews</span>
-                      <span>session map synced across workspaces</span>
-                      <span>diff viewer linked to active PR</span>
-                    </div>
-                  </article>
-
-                  <article class="terminal-card terminal-card-review">
-                    <div class="terminal-header">
-                      <span>Review Route</span>
-                      <span class="terminal-state">open</span>
-                    </div>
-                    <div class="terminal-lines">
-                      <span>pull requests, branch links, activity feed</span>
-                      <span>mixed-repo visibility stays intact</span>
-                      <span>ship from one surface</span>
-                    </div>
-                  </article>
-                </div>
-
-                <div class="review-strip">
-                  <span>From create-workspace to merge-ready review, without losing terminal state.</span>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div class="hero-visual">
+          <figure class="ui-shot">
+            <div class="ui-shot-label">Actual Agent Workspace UI</div>
+            <img
+              src="assets/orchestrator-ui.png"
+              alt="Agent Workspace showing multiple local agent and server sessions across several projects in one interface."
+            >
+          </figure>
         </div>
       </section>
 
       <section class="section reveal" id="overview">
         <div class="section-heading">
-          <p class="eyebrow">What it is</p>
-          <h2>A workspace layer for many local agent sessions.</h2>
-          <p>
-            This project is less about a prettier terminal and more about coordination:
-            repositories, worktrees, session state, review loops, and recovery all in one place.
-          </p>
+          <p class="eyebrow">Overview</p>
+          <h2>One UI for every active agent session and project.</h2>
         </div>
 
         <div class="intro-grid">
           <article class="info-card">
-            <h3>Control surface</h3>
-            <p>
-              Create workspaces, mix repositories, open browser-like tabs, and keep each terminal pair mapped to a worktree.
-            </p>
+            <h3>Run many agents</h3>
+            <p>See Claude and Codex together instead of one session at a time.</p>
           </article>
           <article class="info-card">
-            <h3>Operational awareness</h3>
-            <p>
-              Track busy, waiting, and ready states, surface PR links, and route work through Commander, queue, and review tools.
-            </p>
+            <h3>Keep projects together</h3>
+            <p>Keep repos, worktrees, and branches together in one workspace.</p>
           </article>
           <article class="info-card">
-            <h3>Local by default</h3>
-            <p>
-              The stack runs on your machine with loopback-oriented defaults, local workspace data, and a native Tauri wrapper for desktop use.
-            </p>
+            <h3>Stay local</h3>
+            <p>Your terminals stay on your machine. This is the control surface around them.</p>
           </article>
         </div>
       </section>
 
       <section class="section reveal" id="flow">
         <div class="section-heading">
-          <p class="eyebrow">How it works</p>
-          <h2>From repositories to a reviewable session map.</h2>
+          <p class="eyebrow">Flow</p>
+          <h2>Pick repos. Launch agents. Review in one place.</h2>
         </div>
 
         <div class="flow-grid">
           <article class="flow-step">
             <span class="flow-count">01</span>
-            <h3>Choose repositories</h3>
-            <p>Scan your local GitHub tree or point the workspace wizard at a repo directly.</p>
+            <h3>Add repositories</h3>
+            <p>Point the workspace wizard at the repos you want open.</p>
           </article>
           <article class="flow-step">
             <span class="flow-count">02</span>
-            <h3>Split into worktrees</h3>
-            <p>Map terminal pairs to worktrees so multiple branches and tasks stay isolated.</p>
+            <h3>Launch local agents</h3>
+            <p>Start Claude or Codex in local terminals and map them to worktrees.</p>
           </article>
           <article class="flow-step">
             <span class="flow-count">03</span>
-            <h3>Run and monitor agents</h3>
-            <p>Launch Claude Code or Codex, keep tabs alive, and watch state changes in real time.</p>
+            <h3>Track live work</h3>
+            <p>See branches, tasks, statuses, and reviews across projects in one place.</p>
           </article>
           <article class="flow-step">
             <span class="flow-count">04</span>
-            <h3>Review and ship</h3>
-            <p>Open PRs, use the diff viewer, queue reviews, and coordinate sessions from Commander.</p>
+            <h3>Ship from one surface</h3>
+            <p>Use Commander, review tools, and diff flow without leaving the workspace.</p>
           </article>
-        </div>
-      </section>
-
-      <section class="section reveal" id="architecture">
-        <div class="section-heading">
-          <p class="eyebrow">Architecture</p>
-          <h2>Three layers, one operating surface.</h2>
-        </div>
-
-        <div class="architecture-grid">
-          <article class="stack-card">
-            <span class="stack-label">Server</span>
-            <h3>Express + Socket.IO</h3>
-            <p>
-              Session lifecycle, workspace state, git/worktree operations, review APIs, recommendations, and recovery services.
-            </p>
-          </article>
-          <article class="stack-card">
-            <span class="stack-label">Client</span>
-            <h3>Vanilla JS terminal UI</h3>
-            <p>
-              Terminal grids, tabbed workspaces, wizards, board views, Commander panel, and live status rendering in the browser.
-            </p>
-          </article>
-          <article class="stack-card">
-            <span class="stack-label">Desktop</span>
-            <h3>Tauri app shell</h3>
-            <p>
-              Native packaging, backend bootstrapping, local auth handoff, and a desktop-friendly experience when a browser is not enough.
-            </p>
-          </article>
-        </div>
-
-        <div class="feature-band">
-          <div class="feature-pill">Mixed-repo workspaces</div>
-          <div class="feature-pill">Session recovery</div>
-          <div class="feature-pill">Cascaded project config</div>
-          <div class="feature-pill">Activity + review flow</div>
-          <div class="feature-pill">Standalone diff viewer</div>
         </div>
       </section>
 
       <section class="section reveal" id="setup">
         <div class="section-heading">
-          <p class="eyebrow">How to use it</p>
-          <h2>Get the web build running, then create your first workspace.</h2>
+          <p class="eyebrow">Setup</p>
+          <h2>Use the plans you already have, then launch locally.</h2>
         </div>
 
         <div class="setup-layout">
@@ -279,22 +153,22 @@
             <article class="setup-step">
               <span>01</span>
               <div>
-                <h3>Install the app</h3>
-                <p>Clone the repo, create your `.env`, and install root plus diff-viewer dependencies.</p>
+                <h3>Use your existing plans</h3>
+                <p>Bring your Claude Max or Codex access. Agent Workspace sits around local CLIs.</p>
               </div>
             </article>
             <article class="setup-step">
               <span>02</span>
               <div>
-                <h3>Start the local stack</h3>
-                <p>Run the web mode for browser use, or build the Tauri app if you want a desktop shell.</p>
+                <h3>Run the app locally</h3>
+                <p>Start the web UI or desktop shell, then create a workspace for the repos you want.</p>
               </div>
             </article>
             <article class="setup-step">
               <span>03</span>
               <div>
-                <h3>Create a workspace</h3>
-                <p>Use the dashboard wizard, add worktrees, and start your agent/server session pairs.</p>
+                <h3>Start agents and keep context</h3>
+                <p>Launch agents, add worktrees, and keep sessions, branches, and reviews visible together.</p>
               </div>
             </article>
           </div>
@@ -312,44 +186,14 @@ npm install
 cd diff-viewer && npm install && cd ..
 
 npm run dev</code></pre>
-            <p class="code-note">
-              Then open the local client, launch the workspace wizard, and choose how many worktree-backed terminal pairs you want.
-            </p>
+            <p class="code-note">Open the local app and create your first workspace.</p>
           </div>
-        </div>
-      </section>
-
-      <section class="section reveal" id="proof">
-        <div class="section-heading">
-          <p class="eyebrow">Why this is interesting</p>
-          <h2>It treats agent work as an operating environment, not a single chat box.</h2>
-        </div>
-
-        <div class="proof-grid">
-          <article class="proof-card">
-            <h3>Local control</h3>
-            <p>Designed for machine-local orchestration, with loopback-safe defaults and direct terminal ownership.</p>
-          </article>
-          <article class="proof-card">
-            <h3>Scale without clutter</h3>
-            <p>Workspaces, worktrees, and tabs keep many parallel tasks visible without collapsing into window sprawl.</p>
-          </article>
-          <article class="proof-card">
-            <h3>Review stays inside the tool</h3>
-            <p>PR links, queueing, activity, and the diff viewer sit next to the sessions that produced the code.</p>
-          </article>
-          <article class="proof-card">
-            <h3>Not locked to one agent</h3>
-            <p>Claude Code and Codex fit into the same operational model, with room for more providers over time.</p>
-          </article>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      <p>
-        Showcase source is isolated in <code>/site</code> so the eventual GitHub Pages surface can stay separate from the repo’s internal documentation tree.
-      </p>
+      <p>Runs locally. Works with the plans you already have.</p>
       <div class="footer-links">
         <a href="https://github.com/web3dev1337/claude-orchestrator">Repository</a>
         <a href="https://github.com/web3dev1337/claude-orchestrator/blob/main/README.md">README</a>
