@@ -725,6 +725,17 @@ class CommandRegistry {
       }
     });
 
+    this.register('queue-review-pr', {
+      category: 'process',
+      description: 'Start a PR review agent for the selected Queue PR (Tier 3 reviewer)',
+      params: [],
+      examples: [],
+      handler: (params, { io }) => {
+        io.emit('commander-action', { action: 'queue-review-pr' });
+        return { message: 'Queue: review PR' };
+      }
+    });
+
     this.register('queue-spawn-reviewer', {
       category: 'process',
       description: 'Spawn a reviewer agent for the selected Queue PR (Tier 3 reviewer)',

@@ -2756,7 +2756,7 @@ class SessionManager extends EventEmitter {
     return getShellKind();
   }
 
-  buildClaudeCommand({ shellKind, mode, resumeId, skipPermissions }) {
+  buildClaudeCommand({ shellKind, mode, resumeId, skipPermissions, model }) {
     let cmd = 'claude';
 
     if (mode === 'continue') {
@@ -2765,6 +2765,10 @@ class SessionManager extends EventEmitter {
       cmd = resumeId
         ? `claude --resume ${quoteForShell(resumeId, shellKind)}`
         : 'claude --resume';
+    }
+
+    if (model) {
+      cmd += ` --model ${quoteForShell(model, shellKind)}`;
     }
 
     if (skipPermissions) {
@@ -2853,6 +2857,7 @@ class SessionManager extends EventEmitter {
       shellKind,
       mode: finalOptions.mode,
       resumeId: finalOptions.resumeId,
+      model: finalOptions.model,
       skipPermissions: !!finalOptions.skipPermissions
     });
 
@@ -2932,6 +2937,7 @@ class SessionManager extends EventEmitter {
           shellKind,
           mode: finalConfig.mode,
           resumeId: finalConfig.resumeId,
+          model: finalConfig.model,
           skipPermissions
         });
         const resolvedCommand = this.resolveClaudeCommand(claudeCmd, provider);

@@ -12,6 +12,24 @@ const logger = winston.createLogger({
   ]
 });
 
+const extractRepoSlugFromPullRequest = (pr) => {
+  const nameWithOwner = String(pr?.repository?.nameWithOwner || '').trim();
+  if (nameWithOwner) return nameWithOwner;
+
+  const owner = pr?.repository?.owner?.login || pr?.repository?.owner?.name || null;
+  const name = pr?.repository?.name || null;
+  if (owner && name) return `${owner}/${name}`;
+
+  const repoSlug = String(pr?.repository || '').trim();
+  if (/^[^/]+\/[^/]+$/.test(repoSlug)) return repoSlug;
+
+  const url = String(pr?.url || '').trim();
+  const match = url.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/\d+/i);
+  if (match) return `${match[1]}/${match[2]}`;
+
+  return null;
+};
+
 class ProcessTaskService {
   constructor({ sessionManager, worktreeTagService, pullRequestService } = {}) {
     this.sessionManager = sessionManager;
@@ -84,9 +102,7 @@ class ProcessTaskService {
     });
 
     return (result.prs || []).map(pr => {
-      const owner = pr?.repository?.owner?.login || pr?.repository?.owner?.name || null;
-      const name = pr?.repository?.name || null;
-      const repoSlug = owner && name ? `${owner}/${name}` : null;
+      const repoSlug = extractRepoSlugFromPullRequest(pr);
 
       return {
         id: repoSlug && pr?.number ? `pr:${repoSlug}#${pr.number}` : `pr:${pr?.url || pr?.number || Math.random()}`,
@@ -128,4 +144,3 @@ class ProcessTaskService {
 }
 
 module.exports = { ProcessTaskService };
-

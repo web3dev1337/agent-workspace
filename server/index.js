@@ -3645,7 +3645,8 @@ app.post('/api/webhooks/github', async (req, res) => {
           reviewState: review.state || '',
           reviewBody: review.body || '',
           reviewUser: review.user?.login || '',
-          url: pr.html_url || pr.url || ''
+          url: pr.html_url || pr.url || '',
+          reviewUrl: review.html_url || review.url || pr.html_url || pr.url || ''
         });
         return res.json({ ok: true, event, verified: sig.verified, action, result });
       }

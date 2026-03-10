@@ -177,9 +177,9 @@
         },
         "reviewInbox": {
           "mode": "mine",
-          "tiers": "t3t4",
+          "tiers": "all",
           "kind": "pr",
-          "unreviewedOnly": true,
+          "unreviewedOnly": false,
           "autoConsole": false,
           "autoAdvance": false,
           "prioritizeActive": true,
@@ -258,6 +258,34 @@
               "closeIfNoDoneList": false,
               "pollMs": 60000
             }
+          },
+          "prReview": {
+            "enabled": false,
+            "pollEnabled": true,
+            "pollMs": 60000,
+            "webhookEnabled": true,
+            "reviewerAgent": "claude",
+            "reviewerMode": "fresh",
+            "reviewerProvider": "anthropic",
+            "reviewerClaudeModel": "",
+            "reviewerSkipPermissions": true,
+            "reviewerCodexModel": "",
+            "reviewerCodexReasoning": "",
+            "reviewerCodexVerbosity": "",
+            "reviewerCodexFlags": [
+              "yolo"
+            ],
+            "reviewerTier": 3,
+            "autoSpawnReviewer": true,
+            "autoFeedbackToAuthor": true,
+            "autoSpawnFixer": false,
+            "notifyOnReviewerSpawn": true,
+            "notifyOnReviewCompleted": true,
+            "approvedDeliveryAction": "notify",
+            "commentedDeliveryAction": "notify",
+            "needsFixFeedbackAction": "paste_and_notify",
+            "maxConcurrentReviewers": 3,
+            "repos": []
           }
         },
         "kanban": {

@@ -86,6 +86,7 @@ server/auditExportService.js       - Redacted audit export across activity + sch
 server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
 server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
 server/projectTypeService.js       - Project taxonomy loader/validator for category→framework→template metadata (`config/project-types.json`)
+server/prReviewAutomationService.js - PR review automation pipeline (poll/webhook trigger, reviewer selection, worktree assignment, feedback routing, saved review snapshots)
 ```
 
 ### Multi-Workspace System (Core Feature)
@@ -290,6 +291,56 @@ user-settings.json                 - User preferences and workspace settings
 user-settings.default.json         - Default user settings template
 ```
 
+#### PR Review Automation Defaults
+
+`global.ui.tasks.automations.prReview` includes these keys in `user-settings.default.json`:
+
+- `enabled`: boolean
+- `pollEnabled`: boolean
+- `pollMs`: number
+- `webhookEnabled`: boolean
+- `reviewerAgent`: `claude` | `codex`
+- `reviewerMode`: `fresh` | `continue` | `resume`
+- `reviewerProvider`: provider string (Claude-only)
+- `reviewerClaudeModel`: optional Claude CLI `--model` value such as `opus`, `sonnet`, or a full model id
+- `reviewerSkipPermissions`: boolean (Claude-only)
+- `reviewerCodexModel`: optional Codex CLI `-m` model override (blank uses the local Codex default/config)
+- `reviewerCodexReasoning`: `low` | `medium` | `high` | `xhigh` (Codex-only; blank uses the local Codex default/config)
+- `reviewerCodexVerbosity`: `low` | `medium` | `high` (Codex-only; blank uses the local Codex default/config)
+- `reviewerCodexFlags`: array of Codex flags
+- `reviewerTier`: number
+- `autoSpawnReviewer`: boolean
+- `autoFeedbackToAuthor`: boolean
+- `autoSpawnFixer`: boolean
+- `notifyOnReviewerSpawn`: boolean
+- `notifyOnReviewCompleted`: boolean
+- `approvedDeliveryAction`: `notify` | `paste` | `paste_and_notify` | `none`
+- `commentedDeliveryAction`: `notify` | `paste` | `paste_and_notify` | `none`
+- `needsFixFeedbackAction`: `notify` | `paste` | `paste_and_notify` | `none`
+- `reviewerPostAction`: optional per-item record override (`feedback` or `auto_fix`)
+- `maxConcurrentReviewers`: number
+- `repos`: string array
+
+Saved task-record review fields used by Queue + feedback handoff include:
+- `reviewSourceSessionId` / `reviewSourceWorktreeId`: best-effort source agent to paste review updates back into
+- `reviewerSessionId` / `reviewerAgent`: which agent/worktree handled the background review
+- `latestReviewSummary` / `latestReviewBody`: locally cached review snapshot for Queue details + paste-back
+- `latestReviewOutcome` / `latestReviewUser` / `latestReviewUrl` / `latestReviewSubmittedAt`: latest GitHub review metadata
+- `latestReviewDeliveredAt`: when the saved review summary was pasted back into an agent session
+
+When a reviewer completes, the result is routed by outcome:
+- `approvedDeliveryAction` / `commentedDeliveryAction`: optional notify and/or paste-back to the source agent
+- `reviewerPostAction=feedback`: use `needsFixFeedbackAction` to notify and/or paste changes-requested feedback back to the source agent
+- `reviewerPostAction=auto_fix`: a fixer agent is spawned automatically and uses the stored review body as the fix request
+
+Queue detail actions now include saved-review affordances:
+- `Open latest review`: opens the saved review URL (or PR URL fallback)
+- `Paste to agent`: writes the saved review summary/body back into the source agent terminal via the existing terminal-input path
+- agent terminal headers also surface `⏳` while a review is running plus `📝` / `↩` buttons once a saved review snapshot exists for that session's linked PR
+
+Source-session linking is no longer Queue-only:
+- whenever any non-server terminal picks up an `existingPR` link through branch detection/session restore, the client now upserts `reviewSourceSessionId` / `reviewSourceWorktreeId` on the PR task record so background review completion can route back to that terminal automatically
+
 ### Workspace Templates & Scripts
 ```
 templates/launch-settings/         - Workspace configuration templates
@@ -462,6 +513,10 @@ GET /api/project-types/categories - Project categories with resolved base paths
 GET /api/project-types/frameworks?categoryId=... - Framework catalog (optionally scoped by category)
 GET /api/project-types/templates?frameworkId=...&categoryId=... - Template catalog (optionally scoped)
 POST /api/projects/create-workspace - Create project scaffold + matching workspace in one request
+GET /api/process/automations          - Combined automation status (merge + review)
+GET /api/process/automations/pr-review/status - PR review automation status + timestamps
+POST /api/process/automations/pr-review/run - Trigger one PR review automation cycle
+PUT /api/process/automations/pr-review/config - Update PR review automation settings
 GET /api/discord/status            - Discord queue + services health/status (counts + signature status); endpoint can be gated by `DISCORD_API_TOKEN`
 POST /api/discord/ensure-services  - Ensure Services workspace/session bootstrap; accepts optional `dangerousModeOverride` (gated by `DISCORD_ALLOW_DANGEROUS_OVERRIDE`)
 POST /api/discord/process-queue    - Dispatch queue processing prompt with optional `Idempotency-Key`/`idempotencyKey`, queue signature verification, idempotent replay, audit logging, and per-endpoint rate limiting

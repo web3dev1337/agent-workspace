@@ -10,7 +10,7 @@ describe('ProcessTaskService', () => {
             title: 'PR title',
             state: 'OPEN',
             url: 'https://example.com/pr/5',
-            repository: { name: 'repo', owner: { login: 'me' } },
+            repository: { name: 'repo', nameWithOwner: 'me/repo' },
             createdAt: '2026-01-01T00:00:00Z',
             updatedAt: '2026-01-03T00:00:00Z',
             author: { login: 'me' }
@@ -42,8 +42,13 @@ describe('ProcessTaskService', () => {
 
     const service = new ProcessTaskService({ sessionManager, worktreeTagService, pullRequestService });
     const tasks = await service.listTasks();
+    const prTask = tasks.find(t => t.kind === 'pr' && t.prNumber === 5);
 
-    expect(tasks.some(t => t.kind === 'pr' && t.prNumber === 5)).toBe(true);
+    expect(prTask).toMatchObject({
+      id: 'pr:me/repo#5',
+      repository: 'me/repo',
+      prNumber: 5
+    });
     expect(tasks.some(t => t.kind === 'worktree' && t.worktreePath === '/tmp/work1')).toBe(true);
     expect(tasks.some(t => t.kind === 'session' && t.sessionId === 's1')).toBe(true);
 
@@ -51,4 +56,3 @@ describe('ProcessTaskService', () => {
     expect(tasks[0].kind).toBe('session');
   });
 });
-

@@ -28,6 +28,24 @@ const riskRank = (risk) => {
   return 0;
 };
 
+const extractRepoSlugFromPullRequest = (pr) => {
+  const nameWithOwner = String(pr?.repository?.nameWithOwner || '').trim();
+  if (nameWithOwner) return nameWithOwner;
+
+  const owner = pr?.repository?.owner?.login || pr?.repository?.owner?.name || null;
+  const name = pr?.repository?.name || null;
+  if (owner && name) return `${owner}/${name}`;
+
+  const repoSlug = String(pr?.repository || '').trim();
+  if (/^[^/]+\/[^/]+$/.test(repoSlug)) return repoSlug;
+
+  const url = String(pr?.url || '').trim();
+  const match = url.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/\d+/i);
+  if (match) return `${match[1]}/${match[2]}`;
+
+  return null;
+};
+
 class ProcessProjectDashboardService {
   constructor({ pullRequestService, taskRecordService } = {}) {
     this.pullRequestService = pullRequestService;
@@ -64,9 +82,7 @@ class ProcessProjectDashboardService {
       const recordsById = new Map();
       if (this.taskRecordService?.get) {
         for (const pr of prs) {
-          const owner = pr?.repository?.owner?.login || pr?.repository?.owner?.name || null;
-          const name = pr?.repository?.name || null;
-          const repoSlug = owner && name ? `${owner}/${name}` : null;
+          const repoSlug = extractRepoSlugFromPullRequest(pr);
           const id = repoSlug && pr?.number ? `pr:${repoSlug}#${pr.number}` : null;
           if (!id) continue;
           // eslint-disable-next-line no-await-in-loop
@@ -78,9 +94,7 @@ class ProcessProjectDashboardService {
       const byRepo = new Map();
 
       for (const pr of prs) {
-        const owner = pr?.repository?.owner?.login || pr?.repository?.owner?.name || null;
-        const name = pr?.repository?.name || null;
-        const repoSlug = owner && name ? `${owner}/${name}` : null;
+        const repoSlug = extractRepoSlugFromPullRequest(pr);
         if (!repoSlug) continue;
 
         const prId = pr?.number ? `pr:${repoSlug}#${pr.number}` : null;
@@ -225,4 +239,3 @@ class ProcessProjectDashboardService {
 }
 
 module.exports = { ProcessProjectDashboardService };
-

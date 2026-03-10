@@ -278,6 +278,15 @@ class VoiceCommandService {
       },
       {
         patterns: [
+          /^(?:review|start|run)\s+pr$/i,
+          /^(?:review|start|run)\s+pull\s+request$/i,
+          /^(?:review|start|run)\s+review\s+pr$/i,
+        ],
+        command: 'queue-review-pr',
+        extractParams: () => ({})
+      },
+      {
+        patterns: [
           /^(?:spawn|start|run)\s+fixer$/i,
           /^(?:spawn|start|run)\s+fix\s+agent$/i,
         ],

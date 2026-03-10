@@ -135,6 +135,17 @@ const normalizeReviewOutcome = (v) => {
   return allowed.has(s) ? s : null;
 };
 
+const normalizeReviewerPostAction = (v) => {
+  const s = String(v || '').trim().toLowerCase();
+  return s === 'auto_fix' ? 'auto_fix' : 'feedback';
+};
+
+const normalizeAgentId = (v) => {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return null;
+  return s === 'codex' ? 'codex' : (s === 'claude' ? 'claude' : null);
+};
+
 const normalizeDateTime = (v) => {
   if (v === null || v === '') return null;
   const dt = new Date(v);
@@ -198,6 +209,44 @@ const normalizeReviewChecklist = (raw) => {
   return Object.keys(out).length ? out : null;
 };
 
+const canonicalizePrTaskRecordId = (id) => {
+  const raw = String(id || '').trim();
+  if (!raw) return '';
+
+  const legacyMatch = raw.match(/^pr:https?:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/i);
+  if (legacyMatch) {
+    return `pr:${legacyMatch[1]}/${legacyMatch[2]}#${legacyMatch[3]}`;
+  }
+
+  return raw;
+};
+
+const toLegacyPrTaskRecordId = (id) => {
+  const raw = String(id || '').trim();
+  if (!raw) return null;
+
+  const canonicalMatch = raw.match(/^pr:([^/]+)\/([^#]+)#(\d+)$/i);
+  if (!canonicalMatch) return null;
+
+  return `pr:https://github.com/${canonicalMatch[1]}/${canonicalMatch[2]}/pull/${canonicalMatch[3]}`;
+};
+
+const resolveStoredTaskRecordId = (records, id) => {
+  const raw = String(id || '').trim();
+  if (!raw) return '';
+
+  const all = records && typeof records === 'object' ? records : {};
+  if (all[raw]) return raw;
+
+  const canonical = canonicalizePrTaskRecordId(raw);
+  if (canonical && canonical !== raw && all[canonical]) return canonical;
+
+  const legacy = toLegacyPrTaskRecordId(raw);
+  if (legacy && all[legacy]) return legacy;
+
+  return raw;
+};
+
 class TaskRecordService {
   constructor({ filePath } = {}) {
     this.filePath = filePath || DEFAULT_PATH;
@@ -237,24 +286,37 @@ class TaskRecordService {
 
   list() {
     const records = this.data?.records || {};
-    return Object.entries(records).map(([id]) => ({ id, ...(this.get(id) || {}) }));
+    const normalized = new Map();
+
+    for (const [storedId] of Object.entries(records)) {
+      const id = canonicalizePrTaskRecordId(storedId) || storedId;
+      const record = this.get(id) || this.get(storedId);
+      if (!record) continue;
+
+      if (!normalized.has(id) || storedId === id) {
+        normalized.set(id, { id, ...record });
+      }
+    }
+
+    return Array.from(normalized.values());
   }
 
   get(id) {
     if (!id) return null;
 
-    const local = this.data?.records?.[id] || null;
+    const storageId = resolveStoredTaskRecordId(this.data?.records, id);
+    const local = this.data?.records?.[storageId] || null;
     const visibility = String(local?.recordVisibility || '').trim().toLowerCase();
     if (visibility !== 'shared' && visibility !== 'encrypted') return local;
 
     const repoRoot = String(local?.recordRepoRoot || '').trim();
-    const relPath = String(local?.recordPath || '').trim() || getDefaultRepoTaskRecordPaths(id)[visibility];
+    const relPath = String(local?.recordPath || '').trim() || getDefaultRepoTaskRecordPaths(storageId)[visibility];
     if (!repoRoot || !relPath) return local;
 
     try {
       const passphrase = visibility === 'encrypted' ? getTaskRecordPassphrase() : '';
       if (visibility === 'encrypted' && !passphrase) return local;
-      const fromRepo = readTaskRecordFromRepoSync({ id, repoRoot, relPath, visibility, passphrase });
+      const fromRepo = readTaskRecordFromRepoSync({ id: storageId, repoRoot, relPath, visibility, passphrase });
       if (!fromRepo) return local;
       return {
         ...stripRecordPointers(fromRepo),
@@ -397,6 +459,14 @@ class TaskRecordService {
       }
     }
 
+    if (p.reviewerPostAction !== undefined) {
+      if (p.reviewerPostAction === null || p.reviewerPostAction === '') {
+        clear.add('reviewerPostAction');
+      } else {
+        next.reviewerPostAction = normalizeReviewerPostAction(p.reviewerPostAction);
+      }
+    }
+
     if (p.reviewStartedAt !== undefined) {
       const dt = normalizeDateTime(p.reviewStartedAt);
       if (dt) next.reviewStartedAt = dt;
@@ -435,6 +505,39 @@ class TaskRecordService {
         clear.add('reviewerWorktreeId');
       } else {
         next.reviewerWorktreeId = String(p.reviewerWorktreeId || '').trim();
+      }
+    }
+
+    if (p.reviewerSessionId !== undefined) {
+      if (p.reviewerSessionId === null || p.reviewerSessionId === '') {
+        clear.add('reviewerSessionId');
+      } else {
+        next.reviewerSessionId = String(p.reviewerSessionId || '').trim().slice(0, 240);
+      }
+    }
+
+    if (p.reviewerAgent !== undefined) {
+      if (p.reviewerAgent === null || p.reviewerAgent === '') {
+        clear.add('reviewerAgent');
+      } else {
+        const agentId = normalizeAgentId(p.reviewerAgent);
+        if (agentId !== null) next.reviewerAgent = agentId;
+      }
+    }
+
+    if (p.reviewSourceSessionId !== undefined) {
+      if (p.reviewSourceSessionId === null || p.reviewSourceSessionId === '') {
+        clear.add('reviewSourceSessionId');
+      } else {
+        next.reviewSourceSessionId = String(p.reviewSourceSessionId || '').trim().slice(0, 240);
+      }
+    }
+
+    if (p.reviewSourceWorktreeId !== undefined) {
+      if (p.reviewSourceWorktreeId === null || p.reviewSourceWorktreeId === '') {
+        clear.add('reviewSourceWorktreeId');
+      } else {
+        next.reviewSourceWorktreeId = String(p.reviewSourceWorktreeId || '').trim().slice(0, 120);
       }
     }
 
@@ -478,6 +581,68 @@ class TaskRecordService {
       } else {
         next.overnightWorktreeId = String(p.overnightWorktreeId || '').trim();
       }
+    }
+
+    if (p.latestReviewBody !== undefined) {
+      if (p.latestReviewBody === null || p.latestReviewBody === '') {
+        clear.add('latestReviewBody');
+      } else {
+        next.latestReviewBody = String(p.latestReviewBody || '').trim().slice(0, 20_000);
+      }
+    }
+
+    if (p.latestReviewSummary !== undefined) {
+      if (p.latestReviewSummary === null || p.latestReviewSummary === '') {
+        clear.add('latestReviewSummary');
+      } else {
+        next.latestReviewSummary = String(p.latestReviewSummary || '').trim().slice(0, 4_000);
+      }
+    }
+
+    if (p.latestReviewOutcome !== undefined) {
+      if (p.latestReviewOutcome === null || p.latestReviewOutcome === '') {
+        clear.add('latestReviewOutcome');
+      } else {
+        const outcome = normalizeReviewOutcome(p.latestReviewOutcome);
+        if (outcome !== null) next.latestReviewOutcome = outcome;
+      }
+    }
+
+    if (p.latestReviewUser !== undefined) {
+      if (p.latestReviewUser === null || p.latestReviewUser === '') {
+        clear.add('latestReviewUser');
+      } else {
+        next.latestReviewUser = String(p.latestReviewUser || '').trim().slice(0, 240);
+      }
+    }
+
+    if (p.latestReviewUrl !== undefined) {
+      if (p.latestReviewUrl === null || p.latestReviewUrl === '') {
+        clear.add('latestReviewUrl');
+      } else {
+        next.latestReviewUrl = String(p.latestReviewUrl || '').trim().slice(0, 600);
+      }
+    }
+
+    if (p.latestReviewSubmittedAt !== undefined) {
+      const dt = normalizeDateTime(p.latestReviewSubmittedAt);
+      if (dt) next.latestReviewSubmittedAt = dt;
+      else clear.add('latestReviewSubmittedAt');
+    }
+
+    if (p.latestReviewAgent !== undefined) {
+      if (p.latestReviewAgent === null || p.latestReviewAgent === '') {
+        clear.add('latestReviewAgent');
+      } else {
+        const agentId = normalizeAgentId(p.latestReviewAgent);
+        if (agentId !== null) next.latestReviewAgent = agentId;
+      }
+    }
+
+    if (p.latestReviewDeliveredAt !== undefined) {
+      const dt = normalizeDateTime(p.latestReviewDeliveredAt);
+      if (dt) next.latestReviewDeliveredAt = dt;
+      else clear.add('latestReviewDeliveredAt');
     }
 
     // Optional external ticket/task link (v1: Trello)
@@ -619,10 +784,11 @@ class TaskRecordService {
     if (!id) throw new Error('id is required');
     if (!this.data.records) this.data.records = {};
 
+    const storageId = resolveStoredTaskRecordId(this.data.records, id);
     const nowIso = new Date().toISOString();
 
-    const existed = !!this.data.records[id];
-    const existingLocal = this.data.records[id] || {};
+    const existed = !!this.data.records[storageId];
+    const existingLocal = this.data.records[storageId] || {};
     const { next, clear } = this.normalizePatch(patch);
 
     const pointerVisibility = String(next.recordVisibility || existingLocal.recordVisibility || 'private').trim().toLowerCase();
@@ -632,14 +798,14 @@ class TaskRecordService {
     if (!toSharedOrEncrypted && (existingLocal.recordVisibility === 'shared' || existingLocal.recordVisibility === 'encrypted')) {
       const oldVisibility = String(existingLocal.recordVisibility).trim().toLowerCase();
       const repoRoot = String(existingLocal.recordRepoRoot || '').trim();
-      const relPath = String(existingLocal.recordPath || '').trim() || getDefaultRepoTaskRecordPaths(id)[oldVisibility];
+      const relPath = String(existingLocal.recordPath || '').trim() || getDefaultRepoTaskRecordPaths(storageId)[oldVisibility];
       if (repoRoot && relPath) {
         try {
           const passphrase = oldVisibility === 'encrypted' ? getTaskRecordPassphrase() : '';
           if (oldVisibility !== 'encrypted' || passphrase) {
-            const fromRepo = readTaskRecordFromRepoSync({ id, repoRoot, relPath, visibility: oldVisibility, passphrase });
+            const fromRepo = readTaskRecordFromRepoSync({ id: storageId, repoRoot, relPath, visibility: oldVisibility, passphrase });
             if (fromRepo) {
-              this.data.records[id] = {
+              this.data.records[storageId] = {
                 ...stripRecordPointers(fromRepo),
                 createdAt: fromRepo.createdAt || existingLocal.createdAt || nowIso,
                 updatedAt: fromRepo.updatedAt || nowIso
@@ -652,7 +818,7 @@ class TaskRecordService {
       }
     }
 
-    const baseLocal = this.data.records[id] || {};
+    const baseLocal = this.data.records[storageId] || {};
     const nextNonPointers = {};
     for (const [k, v] of Object.entries(next)) {
       if (RECORD_POINTER_KEYS.has(k)) continue;
@@ -668,14 +834,14 @@ class TaskRecordService {
       // private store (local JSON)
       const merged = { ...mergedCandidate };
       for (const k of Array.from(RECORD_POINTER_KEYS)) delete merged[k];
-      this.data.records[id] = merged;
+      this.data.records[storageId] = merged;
       await this.save();
       return merged;
     }
 
     const repoRoot = String(next.recordRepoRoot || existingLocal.recordRepoRoot || '').trim();
     if (!repoRoot) throw new Error('recordRepoRoot is required for shared/encrypted records');
-    const relPath = String(next.recordPath || existingLocal.recordPath || '').trim() || getDefaultRepoTaskRecordPaths(id)[pointerVisibility];
+    const relPath = String(next.recordPath || existingLocal.recordPath || '').trim() || getDefaultRepoTaskRecordPaths(storageId)[pointerVisibility];
     if (!relPath) throw new Error('recordPath is required for shared/encrypted records');
 
     if (pointerVisibility === 'encrypted') {
@@ -689,7 +855,7 @@ class TaskRecordService {
     const passphrase = pointerVisibility === 'encrypted' ? getTaskRecordPassphrase() : '';
     const existingRepo = (() => {
       try {
-        return readTaskRecordFromRepoSync({ id, repoRoot, relPath, visibility: pointerVisibility, passphrase }) || null;
+        return readTaskRecordFromRepoSync({ id: storageId, repoRoot, relPath, visibility: pointerVisibility, passphrase }) || null;
       } catch {
         return null;
       }
@@ -700,7 +866,7 @@ class TaskRecordService {
     for (const k of clearNonPointers) delete mergedRepo[k];
 
     await writeTaskRecordToRepo({
-      id,
+      id: storageId,
       repoRoot,
       relPath,
       visibility: pointerVisibility,
@@ -714,7 +880,7 @@ class TaskRecordService {
       recordRepoRoot: repoRoot,
       recordPath: relPath
     };
-    this.data.records[id] = cached;
+    this.data.records[storageId] = cached;
     await this.save();
     return cached;
   }
@@ -722,8 +888,9 @@ class TaskRecordService {
   async remove(id) {
     if (!id) throw new Error('id is required');
     if (!this.data.records) this.data.records = {};
-    const existed = !!this.data.records[id];
-    delete this.data.records[id];
+    const storageId = resolveStoredTaskRecordId(this.data.records, id);
+    const existed = !!this.data.records[storageId];
+    delete this.data.records[storageId];
     await this.save();
     return existed;
   }
@@ -740,7 +907,8 @@ class TaskRecordService {
 
     const root = String(repoRoot || '').trim();
     if (!root) throw new Error('repoRoot is required');
-    const defaults = this.defaultRepoTaskRecordPaths(taskId);
+    const storageId = resolveStoredTaskRecordId(this.data?.records, taskId);
+    const defaults = this.defaultRepoTaskRecordPaths(storageId);
     const rp = String(relPath || defaults[store] || '').trim();
     if (!rp) throw new Error('relPath is required');
 
@@ -749,11 +917,11 @@ class TaskRecordService {
       throw new Error('Encrypted task records require ORCHESTRATOR_TASK_RECORDS_ENCRYPTION_KEY (or ORCHESTRATOR_TASK_RECORDS_PASSPHRASE) to be set');
     }
 
-    const existing = this.data?.records?.[taskId] || null;
+    const existing = this.data?.records?.[storageId] || null;
     if (!existing) return null;
     const record = stripRecordPointers(existing);
 
-    await writeTaskRecordToRepo({ id: taskId, repoRoot: root, relPath: rp, visibility: store, record, passphrase });
+    await writeTaskRecordToRepo({ id: storageId, repoRoot: root, relPath: rp, visibility: store, record, passphrase });
 
     const cached = {
       ...stripRecordPointers(record),
@@ -763,7 +931,7 @@ class TaskRecordService {
       updatedAt: new Date().toISOString()
     };
     if (!cached.createdAt) cached.createdAt = existing?.createdAt || cached.updatedAt;
-    this.data.records[taskId] = cached;
+    this.data.records[storageId] = cached;
     await this.save();
     return cached;
   }
