@@ -9955,7 +9955,7 @@ class ClaudeOrchestrator {
 	      })();
 	      const baseStatusText = String(current?.statusText || (current?.done ? 'Installed' : 'Missing'));
 	      const statusText = (() => {
-	        if (runStatus === 'verified') return baseStatusText;
+	        if (current?.done || runStatus === 'verified') return baseStatusText;
 	        if (isFinalizing) return isGhLoginStep ? 'Finalizing login' : 'Finalizing';
 	        if (isRunning) return isGhLoginStep ? 'Signing in' : (isGitIdentityStep ? 'Saving' : 'Installing');
 	        if (isVerifying) return isGhLoginStep ? 'Checking login' : (isGitIdentityStep ? 'Checking' : 'Verifying');
