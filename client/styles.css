@@ -1596,6 +1596,7 @@ header h1 {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  align-items: center;
 }
 
 .filter-toggle-label {
@@ -1604,12 +1605,14 @@ header h1 {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  text-align: center;
 }
 
 .filter-toggle-row {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .filter-toggle-row-compact {
