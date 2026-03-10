@@ -83,6 +83,7 @@ server/auditExportService.js       - Redacted audit export across activity + sch
 server/networkSecurityPolicy.js    - Bind-host/auth safety policy helpers (loopback defaults + LAN auth guardrails)
 server/processTelemetryBenchmarkService.js - Release benchmark metrics (onboarding/runtime/review), snapshot comparisons, release-note markdown generation
 server/projectTypeService.js       - Project taxonomy loader/validator for category→framework→template metadata (`config/project-types.json`)
+server/prReviewAutomationService.js - PR review automation pipeline (poll/webhook trigger, reviewer selection, worktree assignment, feedback routing)
 ```
 
 ### Multi-Workspace System (Core Feature)
@@ -287,6 +288,29 @@ user-settings.json                 - User preferences and workspace settings
 user-settings.default.json         - Default user settings template
 ```
 
+#### PR Review Automation Defaults
+
+`global.ui.tasks.automations.prReview` includes these keys in `user-settings.default.json`:
+
+- `enabled`: boolean
+- `pollEnabled`: boolean
+- `pollMs`: number
+- `webhookEnabled`: boolean
+- `reviewerAgent`: `claude` | `codex`
+- `reviewerMode`: `fresh` | `continue` | `resume`
+- `reviewerProvider`: provider string (Claude-only)
+- `reviewerSkipPermissions`: boolean (Claude-only)
+- `reviewerCodexModel`: string
+- `reviewerCodexReasoning`: `low` | `medium` | `high` (Codex-only)
+- `reviewerCodexVerbosity`: `low` | `medium` | `high` (Codex-only)
+- `reviewerCodexFlags`: array of Codex flags
+- `reviewerTier`: number
+- `autoSpawnReviewer`: boolean
+- `autoFeedbackToAuthor`: boolean
+- `autoSpawnFixer`: boolean
+- `maxConcurrentReviewers`: number
+- `repos`: string array
+
 ### Workspace Templates & Scripts
 ```
 templates/launch-settings/         - Workspace configuration templates
@@ -459,6 +483,10 @@ GET /api/project-types/categories - Project categories with resolved base paths
 GET /api/project-types/frameworks?categoryId=... - Framework catalog (optionally scoped by category)
 GET /api/project-types/templates?frameworkId=...&categoryId=... - Template catalog (optionally scoped)
 POST /api/projects/create-workspace - Create project scaffold + matching workspace in one request
+GET /api/process/automations          - Combined automation status (merge + review)
+GET /api/process/automations/pr-review/status - PR review automation status + timestamps
+POST /api/process/automations/pr-review/run - Trigger one PR review automation cycle
+PUT /api/process/automations/pr-review/config - Update PR review automation settings
 GET /api/discord/status            - Discord queue + services health/status (counts + signature status); endpoint can be gated by `DISCORD_API_TOKEN`
 POST /api/discord/ensure-services  - Ensure Services workspace/session bootstrap; accepts optional `dangerousModeOverride` (gated by `DISCORD_ALLOW_DANGEROUS_OVERRIDE`)
 POST /api/discord/process-queue    - Dispatch queue processing prompt with optional `Idempotency-Key`/`idempotencyKey`, queue signature verification, idempotent replay, audit logging, and per-endpoint rate limiting

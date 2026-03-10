@@ -258,6 +258,28 @@
               "closeIfNoDoneList": false,
               "pollMs": 60000
             }
+          },
+          "prReview": {
+            "enabled": false,
+            "pollEnabled": true,
+            "pollMs": 60000,
+            "webhookEnabled": true,
+            "reviewerAgent": "claude",
+            "reviewerMode": "fresh",
+            "reviewerProvider": "anthropic",
+            "reviewerSkipPermissions": true,
+            "reviewerCodexModel": "gpt-5-codex",
+            "reviewerCodexReasoning": "high",
+            "reviewerCodexVerbosity": "high",
+            "reviewerCodexFlags": [
+              "yolo"
+            ],
+            "reviewerTier": 3,
+            "autoSpawnReviewer": true,
+            "autoFeedbackToAuthor": true,
+            "autoSpawnFixer": false,
+            "maxConcurrentReviewers": 3,
+            "repos": []
           }
         },
         "kanban": {

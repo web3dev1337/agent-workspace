@@ -8738,18 +8738,19 @@ class ClaudeOrchestrator {
           <span>No available reviewers</span>
         </div>
       `;
-    } else {
+      } else {
       availableReviewers.forEach(({ sessionId, session, worktreeNumber, status }) => {
         const statusClass = status === 'waiting' ? 'ready' : status === 'busy' ? 'busy' : 'inactive';
+        const reviewerAgent = String(sessionId || '').includes('-codex') ? 'Codex' : 'Claude';
         html += `
           <div class="reviewer-option" onclick="window.orchestrator.assignCodeReview('${requestingSessionId}', '${sessionId}')">
             <span class="reviewer-status ${statusClass}"></span>
-            <span>🤖 Claude ${worktreeNumber}</span>
+            <span>🤖 ${reviewerAgent} ${worktreeNumber}</span>
             <span style="font-size: 0.75rem; color: var(--text-secondary);">(${session.branch || 'unknown'})</span>
           </div>
         `;
       });
-    }
+      }
 
     return html;
   }
@@ -8758,9 +8759,13 @@ class ClaudeOrchestrator {
     const reviewers = [];
 
     for (const [sessionId, session] of this.sessions) {
-      // Only include Claude sessions that are not the requesting session
-      if (sessionId.includes('-claude') && sessionId !== requestingSessionId) {
-        const worktreeNumber = sessionId.replace('-claude', '').replace('work', '');
+      // Only include agent sessions that are not the requesting session
+      const isAgentSession = /-(claude|codex)$/.test(String(sessionId || ''));
+      if (!isAgentSession || String(sessionId || '') === String(requestingSessionId || '')) {
+        continue;
+      }
+
+      const worktreeNumber = String(sessionId || '').replace(/-(claude|codex)$/, '').replace('work', '');
         const isActive = this.sessionActivity.get(sessionId) === 'active';
 
         // Prefer active sessions, but include inactive ones as backup
@@ -8797,14 +8802,16 @@ class ClaudeOrchestrator {
       const codeInfo = await this.extractCodeForReview(requestingSessionId);
 
       if (!codeInfo.hasContent) {
-        this.showToast(`No code changes detected in Claude ${requestingSessionId.replace('work', '').replace('-claude', '')}`, 'warning');
+        const requestWorktree = String(requestingSessionId || '').replace(/-(claude|codex)$/, '').replace('work', '');
+        const requestAgent = String(requestingSessionId || '').includes('-codex') ? 'Codex' : 'Claude';
+        this.showToast(`No code changes detected in ${requestAgent} ${requestWorktree}`, 'warning');
         return;
       }
 
       // Format review request
       const reviewRequest = this.formatReviewRequest(codeInfo, requestingSessionId);
 
-      // Send to reviewer Claude
+      // Send to reviewer session
       this.sendTerminalInput(reviewerSessionId, reviewRequest);
 
       // Mark both sessions as active
@@ -8812,9 +8819,11 @@ class ClaudeOrchestrator {
       this.buildSidebar();
 
       // Show success message
-      const requestingWorktree = requestingSessionId.replace('work', '').replace('-claude', '');
-      const reviewerWorktree = reviewerSessionId.replace('work', '').replace('-claude', '');
-      this.showToast(`Code review assigned: Claude ${requestingWorktree} → Claude ${reviewerWorktree}`, 'success');
+      const requestingWorktree = String(requestingSessionId || '').replace(/-(claude|codex)$/, '').replace('work', '');
+      const reviewerWorktree = String(reviewerSessionId || '').replace(/-(claude|codex)$/, '').replace('work', '');
+      const requestingAgent = String(requestingSessionId || '').includes('-codex') ? 'Codex' : 'Claude';
+      const reviewerAgent = String(reviewerSessionId || '').includes('-codex') ? 'Codex' : 'Claude';
+      this.showToast(`Code review assigned: ${requestingAgent} ${requestingWorktree} → ${reviewerAgent} ${reviewerWorktree}`, 'success');
 
     } catch (error) {
       console.error('Error assigning code review:', error);
@@ -24674,6 +24683,11 @@ class ClaudeOrchestrator {
             reprompted: []
 			    };
 
+    const resolveQueueAgentId = () => {
+      const raw = String(localStorage.getItem('tasks-launch-agent') || 'claude').trim().toLowerCase();
+      return raw === 'codex' ? 'codex' : 'claude';
+    };
+
     const loadSnoozes = () => {
       try {
         const raw = localStorage.getItem('queue-snoozes');
@@ -28348,7 +28362,7 @@ class ClaudeOrchestrator {
 		      spawnOvernightBtn?.addEventListener('click', async () => {
 		        try {
 		          spawnOvernightBtn.disabled = true;
-		          const info = await this.spawnOvernightRunnerForPRTask(t, { tier: 4, agentId: 'claude', mode: 'fresh', yolo: true });
+		          const info = await this.spawnOvernightRunnerForPRTask(t, { tier: 4, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
 		          if (info) {
 		            const rec = await upsertRecord(t.id, {
 		              overnightSpawnedAt: new Date().toISOString(),
@@ -28368,7 +28382,7 @@ class ClaudeOrchestrator {
 		      spawnReviewerBtn?.addEventListener('click', async () => {
 		        try {
 		          spawnReviewerBtn.disabled = true;
-		          const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+		          const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
               if (info) {
                 const patch = { reviewerSpawnedAt: new Date().toISOString() };
                 if (info.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
@@ -28387,7 +28401,7 @@ class ClaudeOrchestrator {
       spawnFixerBtn?.addEventListener('click', async () => {
         try {
           spawnFixerBtn.disabled = true;
-          const info = await this.spawnFixAgentForPRTask(t, { tier: 2, agentId: 'claude', mode: 'fresh', yolo: true, notes: String(notesEl?.value || '') });
+          const info = await this.spawnFixAgentForPRTask(t, { tier: 2, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true, notes: String(notesEl?.value || '') });
           if (info) {
             const rec = await upsertRecord(t.id, {
               fixerSpawnedAt: new Date().toISOString(),
@@ -28413,7 +28427,7 @@ class ClaudeOrchestrator {
           const existingFixerId = String(t?.record?.fixerWorktreeId || '').trim();
           const info = await this.spawnFixAgentForPRTask(t, {
             tier: 2,
-            agentId: 'claude',
+            agentId: resolveQueueAgentId(),
             mode: 'fresh',
             yolo: true,
             notes,
@@ -28441,7 +28455,7 @@ class ClaudeOrchestrator {
 	      spawnRecheckBtn?.addEventListener('click', async () => {
 	        try {
 	          spawnRecheckBtn.disabled = true;
-	          const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+	          const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
           if (info) {
             const rec = await upsertRecord(t.id, {
               recheckSpawnedAt: new Date().toISOString(),
@@ -28585,7 +28599,7 @@ class ClaudeOrchestrator {
       state.reviewerSpawning.add(task.id);
 
       try {
-        const info = await this.spawnReviewAgentForPRTask(task, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+        const info = await this.spawnReviewAgentForPRTask(task, { tier: 3, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
         if (!info) return;
         const patch = { reviewerSpawnedAt: new Date().toISOString() };
         if (info?.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
@@ -28625,7 +28639,7 @@ class ClaudeOrchestrator {
 	      state.fixerSpawning.add(task.id);
 
 	      try {
-	        const info = await this.spawnFixAgentForPRTask(task, { tier: 2, agentId: 'claude', mode: 'fresh', yolo: true, notes });
+	        const info = await this.spawnFixAgentForPRTask(task, { tier: 2, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true, notes });
 	        if (!info) return;
 	        const patch = { fixerSpawnedAt: new Date().toISOString() };
 	        if (info?.worktreeId) patch.fixerWorktreeId = info.worktreeId;
@@ -28662,7 +28676,7 @@ class ClaudeOrchestrator {
 	      state.recheckSpawning.add(task.id);
 
 	      try {
-	        const info = await this.spawnReviewAgentForPRTask(task, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+	        const info = await this.spawnReviewAgentForPRTask(task, { tier: 3, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
 	        if (!info) return;
 	        const patch = { recheckSpawnedAt: new Date().toISOString() };
 	        if (info?.worktreeId) patch.recheckWorktreeId = info.worktreeId;
@@ -29137,7 +29151,7 @@ class ClaudeOrchestrator {
             return false;
           }
           try {
-            const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+            const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
             if (info) {
               const patch = { reviewerSpawnedAt: new Date().toISOString() };
               if (info.worktreeId) patch.reviewerWorktreeId = info.worktreeId;
@@ -29167,7 +29181,7 @@ class ClaudeOrchestrator {
             return false;
           }
           try {
-            const info = await this.spawnFixAgentForPRTask(t, { tier: 2, agentId: 'claude', mode: 'fresh', yolo: true, notes: String(getTaskById(t.id)?.record?.notes || '') });
+            const info = await this.spawnFixAgentForPRTask(t, { tier: 2, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true, notes: String(getTaskById(t.id)?.record?.notes || '') });
             if (info) {
               const rec = await upsertRecord(t.id, {
                 fixerSpawnedAt: new Date().toISOString(),
@@ -29198,7 +29212,7 @@ class ClaudeOrchestrator {
             return false;
           }
           try {
-            const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: 'claude', mode: 'fresh', yolo: true });
+            const info = await this.spawnReviewAgentForPRTask(t, { tier: 3, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
             if (info) {
               const rec = await upsertRecord(t.id, {
                 recheckSpawnedAt: new Date().toISOString(),
@@ -29229,7 +29243,7 @@ class ClaudeOrchestrator {
             return false;
           }
           try {
-            const info = await this.spawnOvernightRunnerForPRTask(t, { tier: 4, agentId: 'claude', mode: 'fresh', yolo: true });
+            const info = await this.spawnOvernightRunnerForPRTask(t, { tier: 4, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true });
             if (info) {
               const rec = await upsertRecord(t.id, {
                 overnightSpawnedAt: new Date().toISOString(),

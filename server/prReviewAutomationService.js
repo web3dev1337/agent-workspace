@@ -19,6 +19,13 @@ const DEFAULT_CONFIG = {
   pollMs: 60_000,
   webhookEnabled: true,
   reviewerAgent: 'claude',
+  reviewerMode: 'fresh',
+  reviewerProvider: 'anthropic',
+  reviewerSkipPermissions: true,
+  reviewerCodexModel: 'gpt-5-codex',
+  reviewerCodexReasoning: 'high',
+  reviewerCodexVerbosity: 'high',
+  reviewerCodexFlags: ['yolo'],
   reviewerTier: 3,
   autoSpawnReviewer: true,
   autoFeedbackToAuthor: true,
@@ -78,6 +85,52 @@ class PrReviewAutomationService {
     const ok = this.userSettingsService.updateGlobalSettings(global);
     if (!ok) throw new Error('Failed to persist prReview config');
     return next;
+  }
+
+  _resolveReviewerConfig(cfg = {}) {
+    const rawAgent = String(cfg.reviewerAgent || 'claude').trim().toLowerCase();
+    const agentId = rawAgent === 'codex' ? 'codex' : 'claude';
+    const modeRaw = String(cfg.reviewerMode || 'fresh').trim().toLowerCase();
+    const mode = (modeRaw === 'resume' || modeRaw === 'continue' || modeRaw === 'fresh') ? modeRaw : 'fresh';
+
+    if (agentId === 'codex') {
+      const model = String(cfg.reviewerCodexModel || '').trim() || undefined;
+
+      const reasoningRaw = String(cfg.reviewerCodexReasoning || 'high').trim().toLowerCase();
+      const reasoning = (reasoningRaw === 'low' || reasoningRaw === 'medium' || reasoningRaw === 'high')
+        ? reasoningRaw
+        : 'high';
+
+      const verbosityRaw = String(cfg.reviewerCodexVerbosity || 'high').trim().toLowerCase();
+      const verbosity = (verbosityRaw === 'low' || verbosityRaw === 'medium' || verbosityRaw === 'high')
+        ? verbosityRaw
+        : 'high';
+
+      const providedFlags = Array.isArray(cfg.reviewerCodexFlags) ? cfg.reviewerCodexFlags : [];
+      const validFlags = new Set(['yolo', 'workspaceWrite', 'readOnly', 'neverAsk', 'askOnRequest']);
+      const flags = providedFlags
+        .map((f) => String(f || '').trim())
+        .filter((f) => validFlags.has(f));
+
+      return {
+        agentId,
+        mode,
+        model,
+        reasoning,
+        verbosity,
+        flags: flags.length ? [...new Set(flags)] : ['yolo']
+      };
+    }
+
+    const provider = String(cfg.reviewerProvider || 'anthropic').trim() || 'anthropic';
+    const reviewerSkipPermissions = cfg.reviewerSkipPermissions === undefined ? true : !!cfg.reviewerSkipPermissions;
+
+    return {
+      agentId,
+      mode,
+      provider,
+      flags: reviewerSkipPermissions ? ['skipPermissions'] : []
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -440,22 +493,27 @@ class PrReviewAutomationService {
     }
 
     // Find an available worktree in the active workspace
-    const worktreeId = await this._findAvailableWorktree(pr, cfg);
+    const reviewerConfig = this._resolveReviewerConfig(cfg);
+    const assignment = await this._findAvailableWorktree(pr, cfg);
+
+    const worktreeId = assignment?.worktreeId;
     if (!worktreeId) {
       logger.warn('No available worktree for reviewer', { prId: pr.prId });
       return false;
     }
 
-    const sessionId = `${pr.repo || 'review'}-${worktreeId}-claude`;
+    const sessionId = assignment?.sessionId || `${pr.repo || 'review'}-${worktreeId}-${reviewerConfig.agentId}`;
     const prompt = this._buildReviewPrompt(pr, cfg);
 
     try {
-      // Start the agent
-      const agent = cfg.reviewerAgent || 'claude';
       const started = this.sessionManager.startAgentWithConfig(sessionId, {
-        provider: agent,
-        skipPermissions: true,
-        mode: 'fresh'
+        agentId: reviewerConfig.agentId,
+        provider: reviewerConfig.provider,
+        mode: reviewerConfig.mode,
+        flags: reviewerConfig.flags,
+        model: reviewerConfig.model,
+        reasoning: reviewerConfig.reasoning,
+        verbosity: reviewerConfig.verbosity
       });
 
       if (!started) {
@@ -464,7 +522,7 @@ class PrReviewAutomationService {
       }
 
       // Wait for agent init, then send prompt
-      const initDelay = agent === 'codex' ? 15_000 : 8_000;
+      const initDelay = reviewerConfig.agentId === 'codex' ? 15_000 : 8_000;
       setTimeout(() => {
         this.sessionManager.writeToSession(sessionId, prompt + '\n');
       }, initDelay);
@@ -480,10 +538,18 @@ class PrReviewAutomationService {
       this.taskRecordService?.upsert?.(pr.prId, {
         reviewerSpawnedAt: new Date().toISOString(),
         reviewerWorktreeId: worktreeId,
+        reviewerSessionId: sessionId,
         reviewStartedAt: new Date().toISOString()
       });
 
-      logger.info('Reviewer agent spawned', { prId: pr.prId, sessionId, worktreeId, agent });
+      logger.info('Reviewer agent spawned', {
+        prId: pr.prId,
+        sessionId,
+        worktreeId,
+        agent: reviewerConfig.agentId,
+        mode: reviewerConfig.mode,
+        provider: reviewerConfig.provider
+      });
       this._emitUpdate('reviewer-spawned', { prId: pr.prId, sessionId, worktreeId });
       return true;
     } catch (e) {
@@ -509,6 +575,12 @@ class PrReviewAutomationService {
 
     const workspace = this.workspaceManager.getWorkspaceById?.(wsId);
     if (!workspace) return null;
+    const reviewerConfig = this._resolveReviewerConfig(cfg);
+    const fallbackRepo = String(pr?.repo || '').trim() || 'review';
+
+    const preferredSuffixes = [`-${reviewerConfig.agentId}`];
+    if (reviewerConfig.agentId !== 'claude') preferredSuffixes.push('-claude');
+    if (reviewerConfig.agentId !== 'codex') preferredSuffixes.push('-codex');
 
     // Find worktrees that aren't currently used by active reviewers
     const usedWorktrees = new Set(
@@ -523,11 +595,22 @@ class PrReviewAutomationService {
 
       // Check if the session in this worktree is idle/exited
       const repoName = terminal.repository?.name || terminal.repositoryName || '';
-      const claudeSessionId = `${repoName}-${wId}-claude`;
-      const session = this.sessionManager?.getSessionById?.(claudeSessionId);
-      if (!session || session.status === 'exited' || session.status === 'idle') {
-        return wId;
+      const repoPrefix = String(repoName || fallbackRepo).trim();
+      for (const suffix of preferredSuffixes) {
+        const candidateSessionId = `${repoPrefix}-${wId}${suffix}`;
+        const session = this.sessionManager?.getSessionById?.(candidateSessionId);
+        if (!session || session.status === 'exited' || session.status === 'idle') {
+          return {
+            worktreeId: wId,
+            sessionId: candidateSessionId
+          };
+        }
       }
+
+      return {
+        worktreeId: wId,
+        sessionId: `${repoPrefix}-${wId}-${reviewerConfig.agentId}`
+      };
     }
 
     return null;
@@ -578,15 +661,63 @@ class PrReviewAutomationService {
     if (!match) return;
     const [, , repo] = match;
 
-    // Look through all sessions for one working on this repo
-    const sessions = this.sessionManager?.getAllSessions?.() || [];
+    const reviewerConfig = this._resolveReviewerConfig(cfg);
+    const preferredSuffix = `-${reviewerConfig.agentId}`;
+    const repoNeedle = String(repo || '').trim().toLowerCase();
+    const targetWorktree = String(record.reviewerWorktreeId || '').trim().toLowerCase();
+    const configuredSessionId = String(record.reviewerSessionId || '').trim();
+
+    // Look through all active sessions for one working on the same repo/worktree
+    const entries = this.sessionManager?.getAllSessionEntries?.() || [];
     let targetSession = null;
 
-    for (const [sid, session] of sessions) {
-      if (sid.includes(repo) && sid.endsWith('-claude') && session.status !== 'exited') {
-        // Check if this session's worktree matches the PR branch
-        targetSession = sid;
+    if (configuredSessionId) {
+      for (const [sid, session] of entries) {
+        if (String(sid || '').trim() !== configuredSessionId) continue;
+        if (session?.status === 'exited') continue;
+        targetSession = configuredSessionId;
         break;
+      }
+    }
+
+    const isAgentSession = (sid, session) => {
+      const lower = String(sid || '').toLowerCase();
+      if (session?.status === 'exited') return false;
+      return lower.endsWith('-claude') || lower.endsWith('-codex');
+    };
+
+    if (!targetSession) {
+      for (const [sid, session] of entries) {
+        const sidLower = String(sid || '').toLowerCase();
+        if (!isAgentSession(sid, session)) continue;
+        if (targetWorktree && sidLower.includes(`-${targetWorktree}-`) && sidLower.endsWith(preferredSuffix)) {
+          targetSession = sid;
+          break;
+        }
+      }
+    }
+
+    if (!targetSession) {
+      for (const [sid, session] of entries) {
+        const sidLower = String(sid || '').toLowerCase();
+        if (!isAgentSession(sid, session)) continue;
+        if (!repoNeedle || sidLower.includes(repoNeedle)) {
+          if (sidLower.endsWith(preferredSuffix)) {
+            targetSession = sid;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!targetSession) {
+      for (const [sid, session] of entries) {
+        const sidLower = String(sid || '').toLowerCase();
+        if (!isAgentSession(sid, session)) continue;
+        if (!repoNeedle || sidLower.includes(repoNeedle)) {
+          targetSession = sid;
+          break;
+        }
       }
     }
 
