@@ -14,6 +14,9 @@ const logger = winston.createLogger({
   ]
 });
 
+const REQUIRED_VERSION = '1.0.24';
+const REQUIRED_VERSION_NUMBER = 1 * 10000 + 0 * 100 + 24;
+
 class ClaudeVersionChecker {
   static async checkVersion() {
     return new Promise((resolve) => {
@@ -41,13 +44,12 @@ class ClaudeVersionChecker {
           if (version) {
             const [major, minor, patch] = version.split('.').map(Number);
             const versionNumber = major * 10000 + minor * 100 + patch;
-            const requiredVersion = 1 * 10000 + 0 * 100 + 24; // 1.0.24
             
             const result = {
               version,
-              isCompatible: versionNumber >= requiredVersion,
+              isCompatible: versionNumber >= REQUIRED_VERSION_NUMBER,
               versionNumber,
-              requiredVersion: '1.0.24'
+              requiredVersion: REQUIRED_VERSION
             };
             
             logger.info('Claude version check', result);
@@ -57,6 +59,7 @@ class ClaudeVersionChecker {
             resolve({
               version: null,
               isCompatible: false,
+              requiredVersion: REQUIRED_VERSION,
               error: 'Could not parse version'
             });
           }
@@ -65,6 +68,7 @@ class ClaudeVersionChecker {
           resolve({
             version: null,
             isCompatible: false,
+            requiredVersion: REQUIRED_VERSION,
             error: `Exit code ${code}: ${stderr}`
           });
         }
@@ -75,6 +79,7 @@ class ClaudeVersionChecker {
         resolve({
           version: null,
           isCompatible: false,
+          requiredVersion: REQUIRED_VERSION,
           error: error.message
         });
       });
@@ -86,9 +91,15 @@ class ClaudeVersionChecker {
       return null;
     }
 
+    const requiredVersion = versionInfo.requiredVersion || REQUIRED_VERSION;
+    const detectedVersion = versionInfo.version || 'unknown';
+    const message = versionInfo.version
+      ? `Your Claude CLI version (${detectedVersion}) is outdated. Version ${requiredVersion} or higher is required.`
+      : `Your Claude CLI version could not be detected (${detectedVersion}). Version ${requiredVersion} or higher is required.`;
+
     return {
       title: 'Claude CLI Update Required',
-      message: `Your Claude CLI version (${versionInfo.version || 'unknown'}) is outdated. Version ${versionInfo.requiredVersion} or higher is required.`,
+      message,
       instructions: [
         'Run the following command to update:',
         '  claude update',

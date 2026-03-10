@@ -54,6 +54,7 @@ server/gitHelper.js                - Git operations wrapper
 ```
 server/notificationService.js      - System notification manager
 server/claudeVersionChecker.js     - Claude Code version detection
+tests/unit/claudeVersionChecker.test.js - Coverage for update-banner version fallback messaging
 server/tokenCounter.js             - Token usage tracking (if applicable)
 server/userSettingsService.js      - User preferences and settings management
 server/sessionRecoveryService.js   - Session recovery state persistence (CWD, agents, conversations)
