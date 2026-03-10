@@ -333,6 +333,7 @@ When a reviewer completes, the result is routed by outcome:
 Queue detail actions now include saved-review affordances:
 - `Open latest review`: opens the saved review URL (or PR URL fallback)
 - `Paste to agent`: writes the saved review summary/body back into the source agent terminal via the existing terminal-input path
+- agent terminal headers also surface `⏳` while a review is running plus `📝` / `↩` buttons once a saved review snapshot exists for that session's linked PR
 
 Source-session linking is no longer Queue-only:
 - whenever any non-server terminal picks up an `existingPR` link through branch detection/session restore, the client now upserts `reviewSourceSessionId` / `reviewSourceWorktreeId` on the PR task record so background review completion can route back to that terminal automatically

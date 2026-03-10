@@ -3611,6 +3611,7 @@ class ClaudeOrchestrator {
         const merged = { ...(existing && typeof existing === 'object' ? existing : {}), ...rec };
         this.taskRecords.set(prTaskId, merged);
         this.queuePanelApi?.handleAutomationEvent?.({ prId: prTaskId, recordPatch: rec });
+        this.updateTerminalControlsForPrTask(prTaskId);
         return merged;
       }
     } catch (error) {
@@ -3618,6 +3619,105 @@ class ClaudeOrchestrator {
     }
 
     return null;
+  }
+
+  getPrReviewMetaForSession(sessionId) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return null;
+
+    const prUrl = String(this.githubLinks.get(sid)?.pr || '').trim();
+    const prTaskId = prUrl ? this.getPRTaskIdFromUrl(prUrl) : null;
+    if (!prTaskId) return null;
+
+    const record = this.taskRecords.get(prTaskId) || {};
+    const latestReviewSummary = String(record?.latestReviewSummary || '').trim();
+    const latestReviewBody = String(record?.latestReviewBody || '').trim();
+    const latestReviewOutcome = String(record?.latestReviewOutcome || '').trim().toLowerCase();
+    const reviewPending = !!record?.reviewerSpawnedAt && !record?.reviewedAt;
+
+    return {
+      prTaskId,
+      prUrl,
+      record,
+      latestReviewSummary,
+      latestReviewBody,
+      latestReviewOutcome,
+      hasLatestReview: !!(latestReviewSummary || latestReviewBody),
+      reviewPending
+    };
+  }
+
+  getLinkedSessionIdsForPrTask(prTaskId) {
+    const taskId = String(prTaskId || '').trim();
+    if (!taskId) return [];
+
+    const linked = new Set();
+    for (const [sessionId, links] of this.githubLinks.entries()) {
+      const prUrl = String(links?.pr || '').trim();
+      if (!prUrl) continue;
+      if (this.getPRTaskIdFromUrl(prUrl) === taskId) linked.add(sessionId);
+    }
+
+    const record = this.taskRecords.get(taskId) || {};
+    const sourceSessionId = String(record?.reviewSourceSessionId || '').trim();
+    if (sourceSessionId) linked.add(sourceSessionId);
+
+    return Array.from(linked);
+  }
+
+  updateTerminalControlsForPrTask(prTaskId) {
+    this.getLinkedSessionIdsForPrTask(prTaskId).forEach((sessionId) => {
+      this.updateTerminalControls(sessionId);
+    });
+  }
+
+  openLatestReviewForSession(sessionId) {
+    const meta = this.getPrReviewMetaForSession(sessionId);
+    if (!meta?.prTaskId) {
+      this.showToast?.('No linked PR review found for this terminal', 'warning');
+      return false;
+    }
+    return this.openLatestReviewForTask({ id: meta.prTaskId, url: meta.prUrl, record: meta.record });
+  }
+
+  pasteLatestReviewToSessionFromHeader(sessionId) {
+    const sid = String(sessionId || '').trim();
+    const meta = this.getPrReviewMetaForSession(sid);
+    if (!sid || !meta?.prTaskId) {
+      this.showToast?.('No linked PR review found for this terminal', 'warning');
+      return false;
+    }
+
+    const payload = this.buildLatestReviewMessageForTask({ id: meta.prTaskId, url: meta.prUrl, record: meta.record });
+    if (!payload) {
+      this.showToast?.('No saved review summary is available yet', 'warning');
+      return false;
+    }
+
+    this.sendTerminalInput(sid, `${payload}\n`);
+    this.showToast?.(`Pasted saved review into ${sid}`, 'success');
+    return true;
+  }
+
+  getPrReviewButtons(sessionId) {
+    const sid = String(sessionId || '').trim();
+    const meta = this.getPrReviewMetaForSession(sid);
+    if (!meta) return '';
+
+    const parts = [];
+    if (meta.reviewPending) {
+      parts.push(`<button class="control-btn pr-review-status-btn pending" data-disabled="true" aria-disabled="true" title="Background PR review is running for this terminal">⏳</button>`);
+    }
+
+    if (meta.hasLatestReview) {
+      const outcome = meta.latestReviewOutcome || 'review';
+      const openTitle = `Open saved ${outcome} review`;
+      const pasteTitle = `Paste saved ${outcome} review back into this terminal`;
+      parts.push(`<button class="control-btn pr-review-status-btn ready" onclick="window.orchestrator.openLatestReviewForSession('${sid}')" title="${this.escapeHtml(openTitle)}">📝</button>`);
+      parts.push(`<button class="control-btn pr-review-paste-btn" onclick="window.orchestrator.pasteLatestReviewToSessionFromHeader('${sid}')" title="${this.escapeHtml(pasteTitle)}">↩</button>`);
+    }
+
+    return parts.join('');
   }
 
   getTierForSession(sessionId) {
@@ -6397,6 +6497,7 @@ class ClaudeOrchestrator {
       }
     }
 
+    buttons += this.getPrReviewButtons(sessionId);
     return buttons;
   }
 
@@ -6790,6 +6891,7 @@ class ClaudeOrchestrator {
     }
 
     this.queuePanelApi?.handleAutomationEvent?.(payload);
+    if (prId) this.updateTerminalControlsForPrTask(prId);
 
     const cfg = this.userSettings?.global?.ui?.tasks?.automations?.prReview || {};
     const label = prId || 'PR review';
