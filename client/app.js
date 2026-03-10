@@ -935,8 +935,20 @@ class ClaudeOrchestrator {
       });
       document.getElementById('workflow-review')?.addEventListener('click', () => {
         this.setWorkflowMode('review');
-        // Batch review defaults (Tier 3, unreviewed, console+diff ready).
-        this.queuePanelPreset = { reviewTier: 3, unreviewedOnly: true, autoOpenDiff: true, autoConsole: true, autoAdvance: true, reviewActive: true };
+        // Open a simple PR-first picker; power-user review lanes still live under Flows.
+        this.queuePanelPreset = {
+          mode: 'mine',
+          kindFilter: 'pr',
+          reviewTier: 'all',
+          tierSet: null,
+          unreviewedOnly: false,
+          blockedOnly: false,
+          autoOpenDiff: false,
+          autoConsole: false,
+          autoAdvance: false,
+          reviewActive: false,
+          prioritizeActive: true
+        };
         this.showQueuePanel();
       });
       document.getElementById('workflow-background')?.addEventListener('click', () => {
@@ -3577,6 +3589,27 @@ class ClaudeOrchestrator {
     if (!m) return null;
     const [, owner, repo, prNum] = m;
     return `pr:${owner}/${repo}#${prNum}`;
+  }
+
+  getRepositorySlugForPRTask(task) {
+    const t = task && typeof task === 'object' ? task : {};
+    const direct = String(t.repository || '').trim();
+    if (direct) return direct;
+
+    const parse = (value) => {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+
+      const prTaskMatch = raw.match(/^pr:([^/]+\/[^#]+)#\d+$/i);
+      if (prTaskMatch) return prTaskMatch[1];
+
+      const urlMatch = raw.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/\d+/i);
+      if (urlMatch) return `${urlMatch[1]}/${urlMatch[2]}`;
+
+      return '';
+    };
+
+    return parse(t.url) || parse(t.id) || '';
   }
 
   async maybeLinkPrTaskToSession(sessionId, prUrl, { sessionOverride = null } = {}) {
@@ -28722,6 +28755,22 @@ class ClaudeOrchestrator {
 	        this.pasteLatestReviewToTaskSession(getTaskById(t.id) || t);
 	      });
 
+	      reviewPostActionEl?.addEventListener('change', async () => {
+	        try {
+	          const value = String(reviewPostActionEl.value || '').trim().toLowerCase();
+	          reviewPostActionEl.disabled = true;
+	          const patch = { reviewerPostAction: value || 'feedback' };
+	          const rec = await upsertRecord(t.id, patch);
+	          updateTaskRecordInState(t.id, rec);
+	          await maybeAutoSpawnFixer({ ...(t || {}), record: rec });
+	          renderDetail(getTaskById(t.id));
+	        } catch (e) {
+	          this.showToast(String(e?.message || e), 'error');
+	        } finally {
+	          if (reviewPostActionEl) reviewPostActionEl.disabled = false;
+	        }
+	      });
+
 	      const runGitHubReview = async ({ action, body } = {}) => {
 	        const res = await fetch('/api/prs/review', {
 	          method: 'POST',
@@ -29232,22 +29281,6 @@ class ClaudeOrchestrator {
 	    if (pairingBtn) {
 	      pairingBtn.addEventListener('click', () => {
 	        showPairingModal().catch((e) => this.showToast(String(e?.message || e), 'error'));
-	      });
-
-	      reviewPostActionEl?.addEventListener('change', async () => {
-	        try {
-	          const value = String(reviewPostActionEl.value || '').trim().toLowerCase();
-	          reviewPostActionEl.disabled = true;
-	          const patch = { reviewerPostAction: value || 'feedback' };
-	          const rec = await upsertRecord(t.id, patch);
-	          updateTaskRecordInState(t.id, rec);
-	          await maybeAutoSpawnFixer({ ...(t || {}), record: rec });
-	          renderDetail(getTaskById(t.id));
-	        } catch (e) {
-	          this.showToast(String(e?.message || e), 'error');
-	        } finally {
-	          if (reviewPostActionEl) reviewPostActionEl.disabled = false;
-	        }
 	      });
 	    }
 
@@ -32924,12 +32957,12 @@ class ClaudeOrchestrator {
     return { agentId: 'claude', mode: m, flags };
   }
 
-	  async spawnReviewAgentForPRTask(prTask, { tier = 3, agentId = 'claude', mode = 'fresh', yolo = true, worktreeId = null } = {}) {
+  async spawnReviewAgentForPRTask(prTask, { tier = 3, agentId = 'claude', mode = 'fresh', yolo = true, worktreeId = null } = {}) {
     const t = prTask || {};
     if (t.kind !== 'pr') return;
 
     const url = String(t.url || '').trim();
-    const repoSlug = String(t.repository || '').trim();
+    const repoSlug = this.getRepositorySlugForPRTask(t);
     if (!repoSlug) {
       this.showToast('PR task is missing repository slug', 'error');
       return;
@@ -33037,7 +33070,7 @@ class ClaudeOrchestrator {
     if (t.kind !== 'pr') return null;
 
     const url = String(t.url || '').trim();
-    const repoSlug = String(t.repository || '').trim();
+    const repoSlug = this.getRepositorySlugForPRTask(t);
     if (!repoSlug) {
       this.showToast('PR task is missing repository slug', 'error');
       return null;
@@ -33151,7 +33184,7 @@ class ClaudeOrchestrator {
     if (t.kind !== 'pr') return null;
 
     const url = String(t.url || '').trim();
-    const repoSlug = String(t.repository || '').trim();
+    const repoSlug = this.getRepositorySlugForPRTask(t);
     if (!repoSlug) {
       this.showToast('PR task is missing repository slug', 'error');
       return null;

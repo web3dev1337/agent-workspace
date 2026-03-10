@@ -151,6 +151,24 @@ describe('TaskRecordService', () => {
     expect(rec2.reviewedAt).toBeUndefined();
   });
 
+  test('legacy PR URL ids resolve through canonical ids', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-task-records-'));
+    const filePath = path.join(tmp, 'task-records.json');
+    const svc = new TaskRecordService({ filePath });
+
+    const legacyId = 'pr:https://github.com/me/repo/pull/42';
+    await svc.upsert(legacyId, { tier: 3, claimedBy: 'me' });
+
+    expect(svc.get('pr:me/repo#42')).toMatchObject({ tier: 3, claimedBy: 'me' });
+    expect(svc.list().map((r) => r.id)).toContain('pr:me/repo#42');
+
+    await svc.upsert('pr:me/repo#42', { reviewOutcome: 'needs_fix' });
+
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    expect(raw.records[legacyId].reviewOutcome).toBe('needs_fix');
+    expect(raw.records['pr:me/repo#42']).toBeUndefined();
+  });
+
   test('upsert supports overnight runner fields', async () => {
     const svc = TaskRecordService.getInstance();
     svc.data = { version: 1, records: {} };
