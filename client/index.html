@@ -28,10 +28,13 @@
 	        </div>
 	        <div class="sidebar-footer">
 	            <button id="add-worktree" class="button-primary button-success" onclick="window.orchestrator.showAddWorktreeModal()" title="Add New Worktree">+ Add Worktree</button>
-	            <div class="worktree-view-mode-group" role="group" aria-label="Worktree session view mode">
-	                <button id="view-all" class="button-secondary">View All</button>
-	                <button id="view-claude-only" class="button-secondary">Agent Only</button>
-	                <button id="view-servers-only" class="button-secondary">Servers Only</button>
+	            <div class="worktree-view-mode-stack">
+	                <div class="worktree-view-mode-label">Terminal Visibility</div>
+	                <div class="worktree-view-mode-group" role="group" aria-label="Terminal visibility">
+	                    <button id="view-all" class="button-secondary">View All</button>
+	                    <button id="view-claude-only" class="button-secondary">Agent Only</button>
+	                    <button id="view-servers-only" class="button-secondary">Servers Only</button>
+	                </div>
 	            </div>
 	        </div>
 	        

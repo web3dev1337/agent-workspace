@@ -860,6 +860,20 @@ body {
   overflow: hidden;
 }
 
+.worktree-view-mode-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.worktree-view-mode-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .worktree-view-mode-group .button-secondary {
   border: none;
   border-radius: 0;
