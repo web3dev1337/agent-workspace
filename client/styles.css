@@ -852,6 +852,26 @@ body {
   gap: var(--space-sm);
 }
 
+.worktree-view-mode-group {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.worktree-view-mode-group .button-secondary {
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  flex: 1;
+  width: auto;
+}
+
+.worktree-view-mode-group .button-secondary + .button-secondary {
+  border-left: 1px solid var(--border-color);
+}
+
 /* Main Container */
 .main-container {
   flex: 1;
@@ -1680,6 +1700,16 @@ header h1 {
 .button-secondary.active:hover {
   background: var(--accent-primary-hover);
   border-color: var(--accent-primary-hover);
+}
+
+.button-success {
+  background: var(--accent-success);
+  color: white;
+  border: none;
+}
+
+.button-success:hover {
+  background: color-mix(in srgb, var(--accent-success) 78%, #ffffff 22%);
 }
 
 .icon-button {
