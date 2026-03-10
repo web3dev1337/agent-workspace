@@ -950,7 +950,7 @@ class ClaudeOrchestrator {
           reviewActive: false,
           prioritizeActive: true,
           projectFilter: '',
-          repoScope: ''
+          repoScope: reviewContext.repoScope || ''
         };
         this.showQueuePanel({ selectedId: reviewContext.prTaskId || null });
       });
@@ -3174,7 +3174,6 @@ class ClaudeOrchestrator {
     const defaults = this.getReviewInboxDefaults(quick ? 'quickReview' : 'reviewInbox');
     const reviewContext = this.getCurrentReviewContext({ project });
     const projectFilter = String(reviewContext.projectFilter || defaults.project || '').trim();
-    const repoScope = projectFilter ? (reviewContext.repoSlug || '') : '';
     this.queuePanelPreset = {
       mode: defaults.mode,
       reviewTier: defaults.reviewTier,
@@ -3189,7 +3188,7 @@ class ClaudeOrchestrator {
       reviewRouteActive: false,
       kindFilter: defaults.kind,
       projectFilter: projectFilter || '',
-      repoScope: repoScope,
+      repoScope: reviewContext.repoScope || '',
       prioritizeActive: defaults.prioritizeActive,
       quickReview: !!quick
     };
@@ -3615,50 +3614,101 @@ class ClaudeOrchestrator {
     const explicitProject = String(project || '').trim();
     const explicitRepo = this.extractGitHubRepoSlug(explicitProject);
     const candidateSessionIds = [];
+    const repoSlugs = new Set();
     const pushCandidate = (value) => {
       const sid = String(value || '').trim();
       if (!sid || candidateSessionIds.includes(sid)) return;
       candidateSessionIds.push(sid);
     };
+    const addRepoSlug = (value) => {
+      const slug = this.extractGitHubRepoSlug(value);
+      if (!slug) return '';
+      repoSlugs.add(slug);
+      return slug;
+    };
+    const normalizePath = (value) => String(value || '').trim().replace(/\\/g, '/').replace(/\/+$/, '');
+    const workspaceTerminalIds = new Set(
+      (Array.isArray(this.currentWorkspace?.terminals) ? this.currentWorkspace.terminals : [])
+        .map((terminal) => String(terminal?.id || '').trim())
+        .filter(Boolean)
+    );
+    const workspaceRepoPaths = new Set(
+      (Array.isArray(this.currentWorkspace?.terminals) ? this.currentWorkspace.terminals : [])
+        .map((terminal) => normalizePath(terminal?.repository?.path))
+        .filter(Boolean)
+    );
+    const workspaceRepoPath = normalizePath(this.currentWorkspace?.repository?.path);
+    const addSessionRepoContext = (sessionId, session) => {
+      if (!sessionId || !session) return;
+      const links = this.githubLinks.get(sessionId) || {};
+      addRepoSlug(session?.repositorySlug);
+      addRepoSlug(links.pr);
+      addRepoSlug(links.commit);
+      addRepoSlug(session?.remoteUrl);
+    };
+    const deriveSessionRepoPath = (sessionId, session) => {
+      const directRoot = normalizePath(session?.repositoryRoot);
+      if (directRoot) return directRoot;
+      const cwd = normalizePath(this.resolveWorktreePathForSession(sessionId, session));
+      const worktreeId = String(session?.worktreeId || '').trim();
+      if (cwd && worktreeId && cwd.endsWith(`/${worktreeId}`)) {
+        return cwd.slice(0, -(`/${worktreeId}`).length);
+      }
+      return '';
+    };
+    const belongsToCurrentWorkspace = (sessionId, session) => {
+      const sid = String(sessionId || '').trim();
+      if (!sid || !session) return false;
+
+      const currentWorkspaceId = String(this.currentWorkspace?.id || '').trim();
+      const sessionWorkspaceId = String(session?.workspace || '').trim();
+      if (currentWorkspaceId && sessionWorkspaceId) return sessionWorkspaceId === currentWorkspaceId;
+
+      if (workspaceTerminalIds.size && workspaceTerminalIds.has(sid)) return true;
+
+      const sessionRepoPath = deriveSessionRepoPath(sid, session);
+      if (workspaceRepoPath && sessionRepoPath && sessionRepoPath === workspaceRepoPath) return true;
+      if (workspaceRepoPaths.size && sessionRepoPath && workspaceRepoPaths.has(sessionRepoPath)) return true;
+
+      return !currentWorkspaceId;
+    };
 
     pushCandidate(this.focusedTerminalInfo?.sessionId);
     pushCandidate(this.lastInteractedSessionId);
 
-    const currentWorkspaceId = String(this.currentWorkspace?.id || '').trim();
-    for (const [sid, session] of this.sessions) {
-      if (!sid || !session) continue;
-      if (currentWorkspaceId) {
-        const sessionWorkspaceId = String(session?.workspace || '').trim();
-        if (sessionWorkspaceId && sessionWorkspaceId !== currentWorkspaceId) continue;
-      }
-      pushCandidate(sid);
-    }
-
     let prTaskId = '';
-    let repoSlug = explicitRepo;
+    let repoSlug = addRepoSlug(explicitRepo);
 
     for (const sessionId of candidateSessionIds) {
       const session = this.sessions.get(sessionId);
+      if (!session) continue;
       const links = this.githubLinks.get(sessionId) || {};
 
       if (!prTaskId) prTaskId = this.getPRTaskIdFromUrl(links.pr) || '';
-      if (!repoSlug) repoSlug = String(session?.repositorySlug || '').trim();
+      if (!repoSlug) repoSlug = addRepoSlug(session?.repositorySlug);
       if (!repoSlug) {
-        repoSlug = this.extractGitHubRepoSlug(links.pr)
-          || this.extractGitHubRepoSlug(links.commit)
-          || this.extractGitHubRepoSlug(session?.remoteUrl);
+        repoSlug = addRepoSlug(links.pr)
+          || addRepoSlug(links.commit)
+          || addRepoSlug(session?.remoteUrl);
       }
-      if (repoSlug && prTaskId) break;
+      addSessionRepoContext(sessionId, session);
     }
 
-    if (!repoSlug) {
-      repoSlug = this.extractGitHubRepoSlug(this.currentWorkspace?.repository?.remote)
-        || this.extractGitHubRepoSlug(this.currentWorkspace?.remoteUrl);
+    for (const [sid, session] of this.sessions) {
+      if (!belongsToCurrentWorkspace(sid, session)) continue;
+      addSessionRepoContext(sid, session);
     }
+
+    addRepoSlug(this.currentWorkspace?.repository?.remote);
+    addRepoSlug(this.currentWorkspace?.remoteUrl);
+
+    if (!repoSlug) repoSlug = Array.from(repoSlugs)[0] || '';
     if (!repoSlug && prTaskId) repoSlug = this.getRepositorySlugForPRTask({ id: prTaskId });
+    if (repoSlug) addRepoSlug(repoSlug);
 
     return {
       repoSlug: repoSlug || '',
+      repoScope: Array.from(repoSlugs).join(','),
       projectFilter: explicitProject || '',
       prTaskId: prTaskId || ''
     };
@@ -25322,7 +25372,7 @@ class ClaudeOrchestrator {
           </select>
           <div class="tasks-view-toggle" role="group" aria-label="Queue mode">
             <button class="btn-secondary tasks-view-btn" id="queue-mode-mine" data-mode="mine" title="Only PRs authored by me">My PRs</button>
-            <button class="btn-secondary tasks-view-btn" id="queue-mode-all" data-mode="all" title="PRs from any author">Any Author</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-mode-all" data-mode="all" title="PRs from any author in the current workspace repos">Workspace PRs</button>
           </div>
           <div class="tasks-view-toggle" role="group" aria-label="Review tier">
             <button class="btn-secondary tasks-view-btn" id="queue-tier-all" data-tier="all" title="Show every tier">Any Tier</button>
@@ -25441,9 +25491,12 @@ class ClaudeOrchestrator {
       }
       if (projectFilterEl) {
         projectFilterEl.value = String(state.projectFilter || '');
-        projectFilterEl.title = state.repoScope
-          ? `Project filter within ${state.repoScope}`
-          : 'Filter the current PR list by repo or project';
+        const scopedRepos = String(state.repoScope || '').split(',').map((value) => String(value || '').trim()).filter(Boolean);
+        projectFilterEl.title = scopedRepos.length > 1
+          ? 'Filter within the current workspace repos'
+          : scopedRepos.length === 1
+            ? `Project filter within ${scopedRepos[0]}`
+            : 'Filter the current PR list by repo or project';
       }
 
 	    const showPairingModal = async () => {
@@ -25551,11 +25604,20 @@ class ClaudeOrchestrator {
 
     const setMode = (mode) => {
       state.mode = mode === 'all' ? 'all' : 'mine';
-      const hasRepoScope = !!String(state.repoScope || '').trim();
+      const scopedRepos = String(state.repoScope || '').split(',').map((value) => String(value || '').trim()).filter(Boolean);
+      const repoCount = scopedRepos.length;
       mineBtn.textContent = 'My PRs';
-      mineBtn.title = hasRepoScope ? `Only my PRs in ${state.repoScope}` : 'Only PRs authored by me';
-      allBtn.textContent = hasRepoScope ? 'This Repo' : 'Any Author';
-      allBtn.title = hasRepoScope ? `PRs from any author in ${state.repoScope}` : 'PRs from any author';
+      mineBtn.title = repoCount > 1
+        ? 'Only my PRs in the current workspace repos'
+        : repoCount === 1
+          ? `Only my PRs in ${scopedRepos[0]}`
+          : 'Only PRs authored by me';
+      allBtn.textContent = repoCount > 1 ? 'Workspace PRs' : repoCount === 1 ? 'This Repo' : 'Any Author';
+      allBtn.title = repoCount > 1
+        ? 'PRs from any author in the current workspace repos'
+        : repoCount === 1
+          ? `PRs from any author in ${scopedRepos[0]}`
+          : 'PRs from any author';
       mineBtn.classList.toggle('active', state.mode === 'mine');
       allBtn.classList.toggle('active', state.mode === 'all');
     };
