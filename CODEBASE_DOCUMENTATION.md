@@ -308,8 +308,13 @@ user-settings.default.json         - Default user settings template
 - `autoSpawnReviewer`: boolean
 - `autoFeedbackToAuthor`: boolean
 - `autoSpawnFixer`: boolean
+- `reviewerPostAction`: optional per-item record override (`feedback` or `auto_fix`)
 - `maxConcurrentReviewers`: number
 - `repos`: string array
+
+When a reviewer marks PR changes as requested, the result is routed by outcome:
+- `feedback`: comments are posted back to the PR author.
+- `auto_fix`: a fixer agent is spawned automatically and uses the stored task `notes` as the fix request.
 
 ### Workspace Templates & Scripts
 ```

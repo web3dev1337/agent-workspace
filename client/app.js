@@ -7157,6 +7157,7 @@ class ClaudeOrchestrator {
           .catch?.((err) => console.error('Failed to refresh conflicts:', err));
         break;
 
+      case 'queue-review-pr':
       case 'queue-spawn-reviewer':
         this.showQueuePanel?.()
           .then(() => setTimeout(() => this.queuePanelApi?.spawnReviewerSelected?.(), 50))
@@ -26877,6 +26878,7 @@ class ClaudeOrchestrator {
       const reviewTestsCommand = String(reviewChecklist?.tests?.command || '');
       const reviewManualDone = !!reviewChecklist?.manual?.done;
       const reviewManualSteps = String(reviewChecklist?.manual?.steps || '');
+      const reviewerPostAction = String(record.reviewerPostAction || 'feedback').trim().toLowerCase() || 'feedback';
 
 	      const normalizePrUrl = (value) => {
 	        const raw = String(value || '').trim();
@@ -27061,20 +27063,29 @@ class ClaudeOrchestrator {
 	                </label>
 	              </div>
 	            </div>
-	            <div class="tasks-kv-row tasks-kv-row-edit">
-	              <div class="tasks-kv-key">Outcome</div>
-	              <div class="tasks-kv-val tasks-kv-val-edit">
-	                <select id="queue-review-outcome" class="tasks-select tasks-select-inline" style="width:180px;">
-	                  <option value="">(none)</option>
-	                  <option value="approved" ${reviewOutcome === 'approved' ? 'selected' : ''}>approved</option>
-	                  <option value="needs_fix" ${reviewOutcome === 'needs_fix' ? 'selected' : ''}>needs_fix</option>
-	                  <option value="commented" ${reviewOutcome === 'commented' ? 'selected' : ''}>commented</option>
-	                  <option value="skipped" ${reviewOutcome === 'skipped' ? 'selected' : ''}>skipped</option>
-	                </select>
-	              </div>
-	            </div>
-	          </div>
-	        </div>
+            <div class="tasks-kv-row tasks-kv-row-edit">
+              <div class="tasks-kv-key">Outcome</div>
+              <div class="tasks-kv-val tasks-kv-val-edit">
+                <select id="queue-review-outcome" class="tasks-select tasks-select-inline" style="width:180px;">
+                  <option value="">(none)</option>
+                  <option value="approved" ${reviewOutcome === 'approved' ? 'selected' : ''}>approved</option>
+                  <option value="needs_fix" ${reviewOutcome === 'needs_fix' ? 'selected' : ''}>needs_fix</option>
+                  <option value="commented" ${reviewOutcome === 'commented' ? 'selected' : ''}>commented</option>
+                  <option value="skipped" ${reviewOutcome === 'skipped' ? 'selected' : ''}>skipped</option>
+                </select>
+              </div>
+            </div>
+            <div class="tasks-kv-row tasks-kv-row-edit">
+              <div class="tasks-kv-key">Needs-fix action</div>
+              <div class="tasks-kv-val tasks-kv-val-edit">
+                <select id="queue-review-post-action" class="tasks-select tasks-select-inline" style="width:240px;">
+                  <option value="feedback" ${reviewerPostAction === 'feedback' ? 'selected' : ''}>Send feedback to agent</option>
+                  <option value="auto_fix" ${reviewerPostAction === 'auto_fix' ? 'selected' : ''}>Auto-fix PR in agent</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
 
 	        <div class="tasks-detail-block">
 	          <div class="tasks-detail-block-title">Claim</div>
@@ -27273,17 +27284,18 @@ class ClaudeOrchestrator {
 			      const openInspectorBtn = detailEl.querySelector('#queue-open-inspector');
 				      const openConsoleBtn = detailEl.querySelector('#queue-open-console');
 				      const spawnOvernightBtn = detailEl.querySelector('#queue-spawn-overnight');
-				      const spawnReviewerBtn = detailEl.querySelector('#queue-spawn-reviewer');
+          const spawnReviewerBtn = detailEl.querySelector('#queue-review-pr') || detailEl.querySelector('#queue-spawn-reviewer');
 				      const spawnFixerBtn = detailEl.querySelector('#queue-spawn-fixer');
 				      const repromptBtn = detailEl.querySelector('#queue-reprompt');
 				      const spawnRecheckBtn = detailEl.querySelector('#queue-spawn-recheck');
 		      const timerStartBtn = detailEl.querySelector('#queue-review-timer-start');
 		      const timerStopBtn = detailEl.querySelector('#queue-review-timer-stop');
-      const notesEl = detailEl.querySelector('#queue-notes');
+		      const notesEl = detailEl.querySelector('#queue-notes');
       const reviewTestsDoneEl = detailEl.querySelector('#queue-review-tests-done');
       const reviewTestsCommandEl = detailEl.querySelector('#queue-review-tests-command');
       const reviewManualDoneEl = detailEl.querySelector('#queue-review-manual-done');
       const reviewManualStepsEl = detailEl.querySelector('#queue-review-manual-steps');
+      const reviewPostActionEl = detailEl.querySelector('#queue-review-post-action');
       const snoozeAutoBtn = detailEl.querySelector('#queue-snooze-auto');
       const snooze15Btn = detailEl.querySelector('#queue-snooze-15m');
       const snooze1hBtn = detailEl.querySelector('#queue-snooze-1h');
@@ -28316,10 +28328,11 @@ class ClaudeOrchestrator {
 	            nudged = true;
 	          }
 
-	          const patch = { reviewed: true, reviewOutcome: 'needs_fix', reviewEndedAt: new Date().toISOString(), claimedBy: null, claimedAt: null };
-	          const rec = await upsertRecord(t.id, patch);
-	          updateTaskRecordInState(t.id, rec);
-	          await maybeApplyTrelloNeedsFixLabel({ taskId: t.id, outcome: 'needs_fix', notes: body }).catch(() => {});
+          const patch = { reviewed: true, reviewOutcome: 'needs_fix', reviewEndedAt: new Date().toISOString(), claimedBy: null, claimedAt: null };
+          const rec = await upsertRecord(t.id, patch);
+          updateTaskRecordInState(t.id, rec);
+          await maybeAutoSpawnFixer({ ...(t || {}), record: rec });
+          await maybeApplyTrelloNeedsFixLabel({ taskId: t.id, outcome: 'needs_fix', notes: body }).catch(() => {});
 
 	          await fetchTasks().catch(() => {});
 	          renderDetail(getTaskById(t.id));
@@ -28531,6 +28544,7 @@ class ClaudeOrchestrator {
 	          updateTaskRecordInState(t.id, rec);
 	          if (value === 'needs_fix') {
 	            await maybeApplyTrelloNeedsFixLabel({ taskId: t.id, outcome: value, notes: String(notesEl?.value || '') });
+	            await maybeAutoSpawnFixer({ ...(t || {}), record: rec });
 	          }
 	          await fetchTasks();
 	          renderDetail(getTaskById(t.id));
@@ -28615,43 +28629,46 @@ class ClaudeOrchestrator {
       }
 	    };
 
-	    const parseIsoMaybe = (v) => {
-	      const ms = Date.parse(String(v || ''));
-	      return Number.isFinite(ms) ? ms : 0;
-	    };
+    const parseIsoMaybe = (v) => {
+      const ms = Date.parse(String(v || ''));
+      return Number.isFinite(ms) ? ms : 0;
+    };
 
-	    const maybeAutoSpawnFixer = async (t) => {
-	      if (!state.autoFixer) return;
-	      const task = t || {};
-	      if (task.kind !== 'pr') return;
+    const maybeAutoSpawnFixer = async (t) => {
+      const task = t || {};
+      if (task.kind !== 'pr') return;
+      const rec = (task?.record && typeof task.record === 'object') ? task.record : {};
+      const taskAction = String(rec?.reviewerPostAction || '').trim().toLowerCase();
+      if (!state.autoFixer && taskAction !== 'auto_fix') return;
+      const shouldAutoFix = taskAction ? taskAction === 'auto_fix' : !!state.autoFixer;
+      if (!shouldAutoFix) return;
 
-	      const tier = Number(task?.record?.tier);
-	      if (tier !== 3) return;
+      const tier = Number(task?.record?.tier);
+      if (tier !== 3) return;
 
-	      const rec = (task?.record && typeof task.record === 'object') ? task.record : {};
-	      if (rec?.fixerSpawnedAt) return;
-	      const outcome = String(rec?.reviewOutcome || '').trim().toLowerCase();
-	      if (outcome !== 'needs_fix') return;
-	      const notes = String(rec?.notes || '').trim();
-	      if (!notes) return;
+      if (rec?.fixerSpawnedAt) return;
+      const outcome = String(rec?.reviewOutcome || '').trim().toLowerCase();
+      if (outcome !== 'needs_fix') return;
+      const notes = String(rec?.notes || '').trim();
+      if (!notes) return;
 
-	      if (state.fixerSpawning?.has?.(task.id)) return;
-	      state.fixerSpawning.add(task.id);
+      if (state.fixerSpawning?.has?.(task.id)) return;
+      state.fixerSpawning.add(task.id);
 
-	      try {
-	        const info = await this.spawnFixAgentForPRTask(task, { tier: 2, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true, notes });
-	        if (!info) return;
-	        const patch = { fixerSpawnedAt: new Date().toISOString() };
-	        if (info?.worktreeId) patch.fixerWorktreeId = info.worktreeId;
-	        const next = await upsertRecord(task.id, patch);
-	        updateTaskRecordInState(task.id, next);
-	        renderList();
-	        renderDetail(getTaskById(task.id));
-	      } catch (e) {
-	        console.warn('Auto fixer spawn failed:', e);
-	      } finally {
-	        state.fixerSpawning.delete(task.id);
-	      }
+      try {
+        const info = await this.spawnFixAgentForPRTask(task, { tier: 2, agentId: resolveQueueAgentId(), mode: 'fresh', yolo: true, notes });
+        if (!info) return;
+        const patch = { fixerSpawnedAt: new Date().toISOString() };
+        if (info?.worktreeId) patch.fixerWorktreeId = info.worktreeId;
+        const next = await upsertRecord(task.id, patch);
+        updateTaskRecordInState(task.id, next);
+        renderList();
+        renderDetail(getTaskById(task.id));
+      } catch (e) {
+        console.warn('Auto fixer spawn failed:', e);
+      } finally {
+        state.fixerSpawning.delete(task.id);
+      }
 	    };
 
 	    const maybeAutoSpawnRecheck = async (t) => {
@@ -28754,6 +28771,22 @@ class ClaudeOrchestrator {
 	    if (pairingBtn) {
 	      pairingBtn.addEventListener('click', () => {
 	        showPairingModal().catch((e) => this.showToast(String(e?.message || e), 'error'));
+	      });
+
+	      reviewPostActionEl?.addEventListener('change', async () => {
+	        try {
+	          const value = String(reviewPostActionEl.value || '').trim().toLowerCase();
+	          reviewPostActionEl.disabled = true;
+	          const patch = { reviewerPostAction: value || 'feedback' };
+	          const rec = await upsertRecord(t.id, patch);
+	          updateTaskRecordInState(t.id, rec);
+	          await maybeAutoSpawnFixer({ ...(t || {}), record: rec });
+	          renderDetail(getTaskById(t.id));
+	        } catch (e) {
+	          this.showToast(String(e?.message || e), 'error');
+	        } finally {
+	          if (reviewPostActionEl) reviewPostActionEl.disabled = false;
+	        }
 	      });
 	    }
 
@@ -29606,8 +29639,10 @@ class ClaudeOrchestrator {
 
             const rec = await upsertRecord(t.id, patch);
             updateTaskRecordInState(t.id, rec);
+            const nextTask = { ...(t || {}), record: rec };
             if (value === 'needs_fix') {
               await maybeApplyTrelloNeedsFixLabel({ taskId: t.id, outcome: value, notes: String(getTaskById(t.id)?.record?.notes || '') });
+              await maybeAutoSpawnFixer(nextTask);
             }
 
             await fetchTasks().catch(() => {});
@@ -29835,6 +29870,7 @@ class ClaudeOrchestrator {
             const patch = { reviewed: true, reviewOutcome: 'needs_fix', reviewEndedAt: new Date().toISOString(), claimedBy: null, claimedAt: null };
             const rec = await upsertRecord(t.id, patch);
             updateTaskRecordInState(t.id, rec);
+            await maybeAutoSpawnFixer({ ...(t || {}), record: rec });
             await maybeApplyTrelloNeedsFixLabel({ taskId: t.id, outcome: 'needs_fix', notes: reviewBody }).catch(() => {});
 
             await fetchTasks().catch(() => {});
