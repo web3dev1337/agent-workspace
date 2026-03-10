@@ -26,11 +26,6 @@
 	            <h2>Worktrees</h2>
 	            <button id="view-presets" class="icon-button" title="View Presets" data-ui-visibility="sidebar.viewPresets">📋</button>
 	        </div>
-        
-        <div class="worktree-list" id="worktree-list">
-            <!-- Worktree items will be dynamically generated -->
-        </div>
-        
 	        <div class="sidebar-footer">
 	            <button id="add-worktree" class="button-primary button-success" onclick="window.orchestrator.showAddWorktreeModal()" title="Add New Worktree">+ Add Worktree</button>
 	            <div class="worktree-view-mode-group" role="group" aria-label="Worktree session view mode">
@@ -39,6 +34,10 @@
 	                <button id="view-servers-only" class="button-secondary">Servers Only</button>
 	            </div>
 	        </div>
+	        
+        <div class="worktree-list" id="worktree-list">
+            <!-- Worktree items will be dynamically generated -->
+        </div>
 	    </aside>
 	    <div id="sidebar-backdrop" class="sidebar-backdrop hidden" aria-hidden="true"></div>
 	    
