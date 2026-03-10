@@ -14,26 +14,33 @@ const logger = winston.createLogger({
   ]
 });
 
+const REQUIRED_VERSION = '1.0.24';
+const REQUIRED_VERSION_NUMBER = 1 * 10000 + 0 * 100 + 24;
+const IS_WIN = process.platform === 'win32';
+const CREATE_NO_WINDOW = 0x08000000;
+
 class ClaudeVersionChecker {
   static async checkVersion() {
     return new Promise((resolve) => {
-      const process = spawn('claude', ['--version'], {
+      const child = spawn('claude', ['--version'], {
         stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 5000
+        timeout: 5000,
+        windowsHide: true,
+        ...(IS_WIN ? { creationFlags: CREATE_NO_WINDOW } : {})
       });
 
       let stdout = '';
       let stderr = '';
 
-      process.stdout.on('data', (data) => {
+      child.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      process.stderr.on('data', (data) => {
+      child.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      process.on('close', (code) => {
+      child.on('close', (code) => {
         if (code === 0) {
           const versionMatch = stdout.match(/(\d+\.\d+\.\d+)/);
           const version = versionMatch ? versionMatch[1] : null;
@@ -41,13 +48,12 @@ class ClaudeVersionChecker {
           if (version) {
             const [major, minor, patch] = version.split('.').map(Number);
             const versionNumber = major * 10000 + minor * 100 + patch;
-            const requiredVersion = 1 * 10000 + 0 * 100 + 24; // 1.0.24
             
             const result = {
               version,
-              isCompatible: versionNumber >= requiredVersion,
+              isCompatible: versionNumber >= REQUIRED_VERSION_NUMBER,
               versionNumber,
-              requiredVersion: '1.0.24'
+              requiredVersion: REQUIRED_VERSION
             };
             
             logger.info('Claude version check', result);
@@ -57,6 +63,7 @@ class ClaudeVersionChecker {
             resolve({
               version: null,
               isCompatible: false,
+              requiredVersion: REQUIRED_VERSION,
               error: 'Could not parse version'
             });
           }
@@ -65,16 +72,18 @@ class ClaudeVersionChecker {
           resolve({
             version: null,
             isCompatible: false,
+            requiredVersion: REQUIRED_VERSION,
             error: `Exit code ${code}: ${stderr}`
           });
         }
       });
 
-      process.on('error', (error) => {
+      child.on('error', (error) => {
         logger.error('Claude version check error', { error: error.message, stack: error.stack });
         resolve({
           version: null,
           isCompatible: false,
+          requiredVersion: REQUIRED_VERSION,
           error: error.message
         });
       });
@@ -86,9 +95,15 @@ class ClaudeVersionChecker {
       return null;
     }
 
+    const requiredVersion = versionInfo.requiredVersion || REQUIRED_VERSION;
+    const detectedVersion = versionInfo.version || 'unknown';
+    const message = versionInfo.version
+      ? `Your Claude CLI version (${detectedVersion}) is outdated. Version ${requiredVersion} or higher is required.`
+      : `Your Claude CLI version could not be detected (${detectedVersion}). Version ${requiredVersion} or higher is required.`;
+
     return {
       title: 'Claude CLI Update Required',
-      message: `Your Claude CLI version (${versionInfo.version || 'unknown'}) is outdated. Version ${versionInfo.requiredVersion} or higher is required.`,
+      message,
       instructions: [
         'Run the following command to update:',
         '  claude update',
