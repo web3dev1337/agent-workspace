@@ -19,7 +19,7 @@ Deliverable is a Tauri installer:
 - `.msi` (enterprise-friendly)
 - NSIS `.exe` installer
 
-Once installed, launch “Claude Orchestrator” from Start Menu.
+Once installed, launch “Agent Workspace” from Start Menu.
 
 ---
 

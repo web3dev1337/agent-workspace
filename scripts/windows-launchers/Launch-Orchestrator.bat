@@ -1,5 +1,5 @@
 @echo off
-REM Claude Orchestrator - One-Click Launcher for Windows
+REM Agent Workspace - One-Click Launcher for Windows
 REM Copy this file to your Windows Desktop for easy access
 REM
 REM This script will:
@@ -9,7 +9,7 @@ REM   3. Open Chrome to http://localhost:3000
 
 echo.
 echo ========================================
-echo   Claude Orchestrator - Quick Launch
+echo   Agent Workspace - Quick Launch
 echo ========================================
 echo.
 echo Starting VS Code with orchestrator...

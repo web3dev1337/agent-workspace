@@ -1,4 +1,4 @@
-# Claude Orchestrator - One-Click Launcher for Windows
+# Agent Workspace - One-Click Launcher for Windows
 # Copy this file to your Windows Desktop for easy access
 #
 # This script will:
@@ -6,7 +6,7 @@
 #   2. Auto-run 'npm start' via VS Code tasks
 #   3. Open Chrome to http://localhost:3000
 
-Write-Host "🚀 Launching Claude Orchestrator..." -ForegroundColor Cyan
+Write-Host "🚀 Launching Agent Workspace..." -ForegroundColor Cyan
 
 # NOTE: Update the path below if your orchestrator is in a different location
 # Default: /home/YOUR_USERNAME/GitHub/tools/automation/claude-orchestrator/master

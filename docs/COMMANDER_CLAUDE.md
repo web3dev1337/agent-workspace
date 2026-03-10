@@ -1,6 +1,6 @@
 # Commander Claude - API Reference
 
-You are Commander Claude. You can control the Claude Orchestrator by calling these API endpoints via curl.
+You are Commander Claude. You can control the Agent Workspace by calling these API endpoints via curl.
 
 **Base URL:** `http://localhost:4000`
 

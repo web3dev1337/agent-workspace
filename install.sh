@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Claude Orchestrator Installation"
+echo "🚀 Agent Workspace Installation"
 echo "=================================="
 
 # Check if Node.js is installed
@@ -51,7 +51,7 @@ echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     cat > claude-orchestrator.service <<EOF
 [Unit]
-Description=Claude Orchestrator
+Description=Agent Workspace
 After=network.target
 
 [Service]

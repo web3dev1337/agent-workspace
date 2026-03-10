@@ -1,6 +1,6 @@
 # {{projectName}}
 
-A Hytopia game created with Claude Orchestrator.
+A Hytopia game created with Agent Workspace.
 
 ## Setup
 

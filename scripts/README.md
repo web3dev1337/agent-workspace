@@ -1,4 +1,4 @@
-# Claude Orchestrator - Startup Scripts
+# Agent Workspace - Startup Scripts
 
 Platform-specific scripts for auto-starting the orchestrator on system boot/login.
 
@@ -79,7 +79,7 @@ If the installers don't work for your setup:
 mkdir -p ~/.config/systemd/user
 cat > ~/.config/systemd/user/claude-orchestrator.service << EOF
 [Unit]
-Description=Claude Orchestrator
+Description=Agent Workspace
 After=network.target
 
 [Service]

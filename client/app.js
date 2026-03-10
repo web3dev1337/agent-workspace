@@ -1,4 +1,4 @@
-// Enhanced Claude Orchestrator with sidebar and flexible viewing
+// Enhanced Agent Workspace with sidebar and flexible viewing
 class ClaudeOrchestrator {
   constructor() {
     this.sessions = new Map();

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Claude Orchestrator One-Click Startup Script
+# Agent Workspace One-Click Startup Script
 
 set -e
 
@@ -13,7 +13,7 @@ ORCHESTRATOR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-4000}"
 CLIENT_PORT=2080
 
-echo -e "${BLUE}🚀 Claude Orchestrator Startup${NC}"
+echo -e "${BLUE}🚀 Agent Workspace Startup${NC}"
 echo -e "${BLUE}================================${NC}"
 
 # Check if already running
@@ -28,7 +28,7 @@ if lsof -i:$CLIENT_PORT >/dev/null 2>&1; then
     open "http://localhost:$CLIENT_PORT"
   fi
 
-  echo -e "${GREEN}🎉 Claude Orchestrator ready at http://localhost:$CLIENT_PORT${NC}"
+  echo -e "${GREEN}🎉 Agent Workspace ready at http://localhost:$CLIENT_PORT${NC}"
   exit 0
 fi
 
@@ -108,7 +108,7 @@ elif command -v open >/dev/null; then
   open "http://localhost:$CLIENT_PORT"
 fi
 
-echo -e "${GREEN}🎉 Claude Orchestrator ready at http://localhost:$CLIENT_PORT${NC}"
+echo -e "${GREEN}🎉 Agent Workspace ready at http://localhost:$CLIENT_PORT${NC}"
 echo -e "${BLUE}💡 Press Ctrl+C to stop services${NC}"
 echo -e "${BLUE}💡 Run with --no-update to skip git pull${NC}"
 

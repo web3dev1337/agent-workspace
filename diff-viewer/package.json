@@ -1,7 +1,7 @@
 {
   "name": "diff-viewer",
   "version": "1.0.0",
-  "description": "Advanced Git Diff Viewer for Claude Orchestrator",
+  "description": "Advanced Git Diff Viewer for Agent Workspace",
   "main": "server/index.js",
   "scripts": {
     "dev": "node server/index.js",

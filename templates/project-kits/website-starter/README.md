@@ -1,6 +1,6 @@
 # {{projectName}}
 
-A web application created with Claude Orchestrator.
+A web application created with Agent Workspace.
 
 ## Setup
 

@@ -191,7 +191,7 @@ function App() {
               <Route path="/" element={
                 <div className="welcome-container">
                   <h2>Welcome to Advanced Diff Viewer</h2>
-                  <p>Open a PR, commit, or branch compare from Claude Orchestrator to view diffs.</p>
+                  <p>Open a PR, commit, or branch compare from Agent Workspace to view diffs.</p>
                 </div>
               } />
             </Routes>

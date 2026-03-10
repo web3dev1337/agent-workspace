@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install Claude Orchestrator startup shortcuts
+# Install Agent Workspace startup shortcuts
 
 set -e
 
@@ -11,10 +11,10 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORCHESTRATOR_DIR="$(dirname "$SCRIPT_DIR")"
 BIN_PATH="$HOME/.local/bin/orchestrator"
-DESKTOP_FILE="$HOME/Desktop/Claude-Orchestrator.desktop"
+DESKTOP_FILE="$HOME/Desktop/Agent-Workspace.desktop"
 APPLICATIONS_FILE="$HOME/.local/share/applications/claude-orchestrator.desktop"
 
-echo -e "${BLUE}🚀 Installing Claude Orchestrator startup shortcuts...${NC}"
+echo -e "${BLUE}🚀 Installing Agent Workspace startup shortcuts...${NC}"
 
 # Ensure ~/.local/bin exists
 mkdir -p ~/.local/bin
@@ -31,7 +31,7 @@ cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Claude Orchestrator
+Name=Agent Workspace
 Comment=Multi-workspace development environment for Claude Code
 Exec=$BIN_PATH
 Icon=$ORCHESTRATOR_DIR/client/icon.png
@@ -54,8 +54,8 @@ echo -e "${GREEN}✅ Installation complete!${NC}"
 echo -e ""
 echo -e "${BLUE}📌 Available shortcuts:${NC}"
 echo -e "  ${GREEN}Command line:${NC} orchestrator"
-echo -e "  ${GREEN}Desktop:${NC} Click 'Claude Orchestrator' icon"
-echo -e "  ${GREEN}Applications:${NC} Search for 'Claude Orchestrator'"
+echo -e "  ${GREEN}Desktop:${NC} Click 'Agent Workspace' icon"
+echo -e "  ${GREEN}Applications:${NC} Search for 'Agent Workspace'"
 echo -e ""
 echo -e "${BLUE}💡 Usage:${NC}"
 echo -e "  orchestrator              # Start with auto-update"

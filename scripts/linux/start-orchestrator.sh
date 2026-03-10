@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================
-# Claude Orchestrator - Linux Startup Script
+# Agent Workspace - Linux Startup Script
 # ============================================
 # This script starts the orchestrator and opens the browser.
 #
@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 export ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-3000}"
 
-echo "Starting Claude Orchestrator..."
+echo "Starting Agent Workspace..."
 echo "  Path: $REPO_ROOT"
 echo "  Port: $ORCHESTRATOR_PORT"
 echo ""

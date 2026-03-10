@@ -1,6 +1,6 @@
 # {{projectName}}
 
-A project created with Claude Orchestrator.
+A project created with Agent Workspace.
 
 ## Getting Started
 

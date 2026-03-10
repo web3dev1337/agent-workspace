@@ -281,7 +281,7 @@ async function initializeGitRepo(masterPath) {
   await runCommand('git', ['init'], { cwd: masterPath });
   await runCommand('git', ['checkout', '-B', 'master'], { cwd: masterPath });
   await runCommand('git', ['add', '.'], { cwd: masterPath });
-  await runCommand('git', ['-c', 'user.name=Claude Orchestrator', '-c', 'user.email=orchestrator@local', 'commit', '-m', 'Initial scaffold'], { cwd: masterPath });
+  await runCommand('git', ['-c', 'user.name=Agent Workspace', '-c', 'user.email=orchestrator@local', 'commit', '-m', 'Initial scaffold'], { cwd: masterPath });
 }
 
 async function wireRemote({
