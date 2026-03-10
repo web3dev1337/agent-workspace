@@ -135,6 +135,11 @@ const normalizeReviewOutcome = (v) => {
   return allowed.has(s) ? s : null;
 };
 
+const normalizeReviewerPostAction = (v) => {
+  const s = String(v || '').trim().toLowerCase();
+  return s === 'auto_fix' ? 'auto_fix' : 'feedback';
+};
+
 const normalizeDateTime = (v) => {
   if (v === null || v === '') return null;
   const dt = new Date(v);
@@ -394,6 +399,14 @@ class TaskRecordService {
           next.reviewOutcome = outcome;
           if (!next.reviewedAt) next.reviewedAt = new Date().toISOString();
         }
+      }
+    }
+
+    if (p.reviewerPostAction !== undefined) {
+      if (p.reviewerPostAction === null || p.reviewerPostAction === '') {
+        clear.add('reviewerPostAction');
+      } else {
+        next.reviewerPostAction = normalizeReviewerPostAction(p.reviewerPostAction);
       }
     }
 

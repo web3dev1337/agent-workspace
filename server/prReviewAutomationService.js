@@ -13,6 +13,11 @@ const logger = winston.createLogger({
 
 const CONFIG_PATH = 'global.ui.tasks.automations.prReview';
 
+const normalizeReviewerPostAction = (v) => {
+  const s = String(v || '').trim().toLowerCase();
+  return s === 'auto_fix' || s === 'auto-fix' ? 'auto_fix' : 'feedback';
+};
+
 const DEFAULT_CONFIG = {
   enabled: false,
   pollEnabled: true,
@@ -47,6 +52,7 @@ class PrReviewAutomationService {
     this.lastPollAt = null;
     this.activeReviewers = new Map();
     this.processedPrKeys = new Set();
+    this.activeFixers = new Map();
     this.pollTimer = null;
   }
 
@@ -131,6 +137,55 @@ class PrReviewAutomationService {
       provider,
       flags: reviewerSkipPermissions ? ['skipPermissions'] : []
     };
+  }
+
+  _resolvePostReviewAction(prId, cfg = {}) {
+    const record = this.taskRecordService?.get?.(prId) || null;
+    if (record?.reviewerPostAction) {
+      return normalizeReviewerPostAction(record.reviewerPostAction);
+    }
+
+    if (cfg.autoFeedbackToAuthor) return 'feedback';
+    if (cfg.autoSpawnFixer) return 'auto_fix';
+
+    return 'feedback';
+  }
+
+  _getPrIdentityFromId(prId) {
+    const raw = String(prId || '').trim();
+    const match = raw.match(/^pr:([^/]+)\/([^#]+)#(\d+)$/);
+    if (!match) return {};
+    return {
+      owner: String(match[1] || '').trim(),
+      repo: String(match[2] || '').trim(),
+      number: Number(match[3]) || 0
+    };
+  }
+
+  _buildFixPrompt(pr, reviewInfo, cfg) {
+    const reviewText = String(reviewInfo?.reviewBody || reviewInfo?.notes || '').trim() || '(no review body provided)';
+    return [
+      `You are a fixer agent for PR ${pr.number} in ${pr.owner}/${pr.repo}.`,
+      pr.title ? `PR title: ${pr.title}` : '',
+      pr.author ? `PR author: ${pr.author}` : '',
+      pr.url ? `PR URL: ${pr.url}` : '',
+      '',
+      'You should implement only the changes requested in the latest review.',
+      '',
+      'Reviewer feedback:',
+      reviewText,
+      '',
+      `Use \`gh pr checkout ${pr.number}\` to check out the branch,`,
+      `then use \`gh pr diff ${pr.number}\` to review required changes and apply fixes.`,
+      'Keep changes scoped to this PR.',
+      'Run relevant tests/lint before finishing and summarize what was changed.',
+      '',
+      'Output format:',
+      '1) What you changed',
+      '2) Tests run (commands + result)',
+      '3) Remaining risks / follow-up actions',
+      `Review body from reviewer: ${String(reviewInfo?.reviewUser || '').trim() ? `by ${String(reviewInfo.reviewUser).trim()}` : 'unknown'}.`
+    ].filter(Boolean).join('\n');
   }
 
   // ---------------------------------------------------------------------------
@@ -267,8 +322,20 @@ class PrReviewAutomationService {
     // Clean up active reviewer tracking
     this.activeReviewers.delete(prId);
 
-    if (outcome === 'needs_fix' && cfg.autoFeedbackToAuthor) {
-      await this._sendFeedbackToAuthor(prId, { owner, repo, number, reviewBody, reviewUser, outcome }, cfg);
+    if (outcome === 'needs_fix') {
+      await this._routeNeedsFixReview(
+        prId,
+        {
+          owner,
+          repo,
+          number,
+          url,
+          reviewBody,
+          reviewUser,
+          outcome
+        },
+        cfg
+      );
     }
 
     this._emitUpdate('review-completed', { prId, outcome, reviewUser });
@@ -360,7 +427,7 @@ class PrReviewAutomationService {
       try {
         const prData = await this.pullRequestService.getPullRequest({
           owner, repo, number,
-          fields: ['reviews']
+          fields: ['reviews', 'html_url', 'url', 'title']
         });
         const reviews = prData?.reviews || [];
         const latestReview = reviews
@@ -376,6 +443,8 @@ class PrReviewAutomationService {
               owner,
               repo,
               number,
+              title: prData?.title || '',
+              url: prData?.html_url || prData?.url || '',
               reviewState: latestReview.state,
               reviewBody: latestReview.body || '',
               reviewUser: latestReview.author?.login || ''
@@ -428,8 +497,8 @@ class PrReviewAutomationService {
     this.activeReviewers.delete(item.prId);
     logger.info('Review completed', { prId: item.prId, outcome: mappedOutcome });
 
-    if (mappedOutcome === 'needs_fix' && cfg.autoFeedbackToAuthor) {
-      await this._sendFeedbackToAuthor(item.prId, item, cfg);
+    if (mappedOutcome === 'needs_fix') {
+      await this._routeNeedsFixReview(item.prId, item, cfg);
     }
 
     this._emitUpdate('review-completed', { prId: item.prId, outcome: mappedOutcome });
@@ -556,6 +625,127 @@ class PrReviewAutomationService {
       logger.error('Error spawning reviewer', { prId: pr.prId, error: e.message, stack: e.stack });
       return false;
     }
+  }
+
+  async _spawnFixerForPr(pr, cfg, reviewInfo = {}) {
+    if (!this.sessionManager || !this.workspaceManager) {
+      logger.warn('Cannot spawn fixer - sessionManager or workspaceManager not available');
+      return false;
+    }
+
+    if (this.activeFixers.has(pr.prId)) {
+      logger.info('Fixer already active for PR', { prId: pr.prId });
+      return false;
+    }
+
+    const fixerConfig = this._resolveReviewerConfig(cfg);
+    const assignment = await this._findAvailableWorktree(pr, cfg);
+
+    const worktreeId = assignment?.worktreeId;
+    if (!worktreeId) {
+      logger.warn('No available worktree for fixer', { prId: pr.prId });
+      return false;
+    }
+
+    const sessionId = assignment?.sessionId || `${pr.repo || 'fix'}-${worktreeId}-${fixerConfig.agentId}`;
+    const prompt = this._buildFixPrompt(pr, reviewInfo, cfg);
+
+    try {
+      const started = this.sessionManager.startAgentWithConfig(sessionId, {
+        agentId: fixerConfig.agentId,
+        provider: fixerConfig.provider,
+        mode: fixerConfig.mode,
+        flags: fixerConfig.flags,
+        model: fixerConfig.model,
+        reasoning: fixerConfig.reasoning,
+        verbosity: fixerConfig.verbosity
+      });
+
+      if (!started) {
+        logger.warn('Failed to start fixer agent', { sessionId, prId: pr.prId });
+        return false;
+      }
+
+      const initDelay = fixerConfig.agentId === 'codex' ? 15_000 : 8_000;
+      setTimeout(() => {
+        this.sessionManager.writeToSession(sessionId, prompt + '\n');
+      }, initDelay);
+
+      this.activeFixers.set(pr.prId, {
+        worktreeId,
+        sessionId,
+        spawnedAt: new Date().toISOString()
+      });
+
+      this.taskRecordService?.upsert?.(pr.prId, {
+        fixerSpawnedAt: new Date().toISOString(),
+        fixerWorktreeId: worktreeId
+      });
+
+      logger.info('Fixer agent spawned', {
+        prId: pr.prId,
+        sessionId,
+        worktreeId,
+        agent: fixerConfig.agentId,
+        mode: fixerConfig.mode
+      });
+      this._emitUpdate('fixer-spawned', { prId: pr.prId, sessionId, worktreeId });
+      return { worktreeId, sessionId };
+    } catch (e) {
+      logger.error('Error spawning fixer', { prId: pr.prId, error: e.message, stack: e.stack });
+      return false;
+    }
+  }
+
+  async _routeNeedsFixReview(prId, reviewInfo, cfg) {
+    const action = this._resolvePostReviewAction(prId, cfg);
+    const parsed = this._getPrIdentityFromId(prId);
+
+    if (action === 'auto_fix') {
+      const record = this.taskRecordService?.get?.(prId) || {};
+      const resolvedOwner = String(reviewInfo?.owner || '').trim()
+        || String(record.owner || '').trim()
+        || parsed.owner;
+      const resolvedRepo = String(reviewInfo?.repo || '').trim()
+        || String(record.repo || '').trim()
+        || parsed.repo;
+      const resolvedNumber = Number(reviewInfo?.number || parsed.number || 0);
+
+      const resolved = {
+        ...reviewInfo,
+        title: String(reviewInfo?.title || record.title || '').trim(),
+        owner: resolvedOwner,
+        repo: resolvedRepo,
+        number: resolvedNumber,
+        url: String(reviewInfo?.url || record.url || '').trim(),
+        reviewBody: reviewInfo?.reviewBody || record.notes || ''
+      };
+      const spawnOk = await this._spawnFixerForPr(
+        {
+          prId,
+          number: Number(resolved.number),
+          title: String(resolved.title || '').trim(),
+          owner: String(resolved.owner || '').trim(),
+          repo: String(resolved.repo || '').trim(),
+          author: String(resolved.reviewUser || '').trim(),
+          url: String(resolved.url || '').trim()
+        },
+        cfg,
+        { ...reviewInfo, reviewBody: resolved.reviewBody }
+      );
+
+      if (!spawnOk) {
+        await this._sendFeedbackToAuthor(prId, resolved, cfg);
+      }
+
+      return;
+    }
+
+    await this._sendFeedbackToAuthor(prId, {
+      ...reviewInfo,
+      owner: reviewInfo?.owner || '',
+      repo: reviewInfo?.repo || ''
+    }, cfg);
   }
 
   // ---------------------------------------------------------------------------
