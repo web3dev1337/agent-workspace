@@ -935,6 +935,7 @@ class ClaudeOrchestrator {
       });
       document.getElementById('workflow-review')?.addEventListener('click', () => {
         this.setWorkflowMode('review');
+        const reviewContext = this.getCurrentReviewContext();
         // Open a simple PR-first picker; power-user review lanes still live under Flows.
         this.queuePanelPreset = {
           mode: 'mine',
@@ -947,9 +948,10 @@ class ClaudeOrchestrator {
           autoConsole: false,
           autoAdvance: false,
           reviewActive: false,
-          prioritizeActive: true
+          prioritizeActive: true,
+          projectFilter: reviewContext.projectFilter || ''
         };
-        this.showQueuePanel();
+        this.showQueuePanel({ selectedId: reviewContext.prTaskId || null });
       });
       document.getElementById('workflow-background')?.addEventListener('click', () => {
         this.setWorkflowMode('background');
@@ -3169,7 +3171,8 @@ class ClaudeOrchestrator {
   async openReviewInbox({ quick = false, project = '' } = {}) {
     this.setWorkflowMode('review');
     const defaults = this.getReviewInboxDefaults(quick ? 'quickReview' : 'reviewInbox');
-    const projectFilter = String(project || defaults.project || '').trim();
+    const reviewContext = this.getCurrentReviewContext({ project });
+    const projectFilter = String(reviewContext.projectFilter || defaults.project || '').trim();
     this.queuePanelPreset = {
       mode: defaults.mode,
       reviewTier: defaults.reviewTier,
@@ -3187,7 +3190,7 @@ class ClaudeOrchestrator {
       prioritizeActive: defaults.prioritizeActive,
       quickReview: !!quick
     };
-    return this.showQueuePanel();
+    return this.showQueuePanel({ selectedId: reviewContext.prTaskId || null });
   }
 
   async openQuickReview({ project = '' } = {}) {
@@ -3591,6 +3594,73 @@ class ClaudeOrchestrator {
     return `pr:${owner}/${repo}#${prNum}`;
   }
 
+  extractGitHubRepoSlug(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+
+    const directMatch = raw.match(/^([^/\s]+)\/([^/\s]+?)(?:\.git)?$/);
+    if (directMatch) return `${directMatch[1]}/${directMatch[2]}`;
+
+    const normalized = raw.replace(/\.git(?=$|[/?#])/i, '');
+    const urlMatch = normalized.match(/github\.com[:/]([^/:\s]+)\/([^/#?\s]+?)(?:[/?#]|$)/i);
+    if (urlMatch) return `${urlMatch[1]}/${urlMatch[2]}`;
+
+    return '';
+  }
+
+  getCurrentReviewContext({ project = '' } = {}) {
+    const explicitProject = String(project || '').trim();
+    const explicitRepo = this.extractGitHubRepoSlug(explicitProject);
+    const candidateSessionIds = [];
+    const pushCandidate = (value) => {
+      const sid = String(value || '').trim();
+      if (!sid || candidateSessionIds.includes(sid)) return;
+      candidateSessionIds.push(sid);
+    };
+
+    pushCandidate(this.focusedTerminalInfo?.sessionId);
+    pushCandidate(this.lastInteractedSessionId);
+
+    const currentWorkspaceId = String(this.currentWorkspace?.id || '').trim();
+    for (const [sid, session] of this.sessions) {
+      if (!sid || !session) continue;
+      if (currentWorkspaceId) {
+        const sessionWorkspaceId = String(session?.workspace || '').trim();
+        if (sessionWorkspaceId && sessionWorkspaceId !== currentWorkspaceId) continue;
+      }
+      pushCandidate(sid);
+    }
+
+    let prTaskId = '';
+    let repoSlug = explicitRepo;
+
+    for (const sessionId of candidateSessionIds) {
+      const session = this.sessions.get(sessionId);
+      const links = this.githubLinks.get(sessionId) || {};
+
+      if (!prTaskId) prTaskId = this.getPRTaskIdFromUrl(links.pr) || '';
+      if (!repoSlug) repoSlug = String(session?.repositorySlug || '').trim();
+      if (!repoSlug) {
+        repoSlug = this.extractGitHubRepoSlug(links.pr)
+          || this.extractGitHubRepoSlug(links.commit)
+          || this.extractGitHubRepoSlug(session?.remoteUrl);
+      }
+      if (repoSlug && prTaskId) break;
+    }
+
+    if (!repoSlug) {
+      repoSlug = this.extractGitHubRepoSlug(this.currentWorkspace?.repository?.remote)
+        || this.extractGitHubRepoSlug(this.currentWorkspace?.remoteUrl);
+    }
+    if (!repoSlug && prTaskId) repoSlug = this.getRepositorySlugForPRTask({ id: prTaskId });
+
+    return {
+      repoSlug: repoSlug || '',
+      projectFilter: explicitProject || repoSlug || '',
+      prTaskId: prTaskId || ''
+    };
+  }
+
   getRepositorySlugForPRTask(task) {
     const t = task && typeof task === 'object' ? task : {};
     const direct = String(t.repository || '').trim();
@@ -3603,10 +3673,7 @@ class ClaudeOrchestrator {
       const prTaskMatch = raw.match(/^pr:([^/]+\/[^#]+)#\d+$/i);
       if (prTaskMatch) return prTaskMatch[1];
 
-      const urlMatch = raw.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/\d+/i);
-      if (urlMatch) return `${urlMatch[1]}/${urlMatch[2]}`;
-
-      return '';
+      return this.extractGitHubRepoSlug(raw);
     };
 
     return parse(t.url) || parse(t.id) || '';
@@ -25782,6 +25849,7 @@ class ClaudeOrchestrator {
       const parts = raw.replace(/\\/g, '/').split('/').filter(Boolean);
       return parts[parts.length - 1] || raw;
     };
+    const extractRepoSlug = (value) => this.extractGitHubRepoSlug(value);
 
     const updateProjectFilterOptions = () => {
       if (!projectFilterEl) return;
@@ -25794,8 +25862,11 @@ class ClaudeOrchestrator {
         if (!label) continue;
         options.set(normalizeProjectKey(label), label);
       }
-      const sorted = Array.from(options.values()).sort((a, b) => String(a).localeCompare(String(b)));
       const current = normalizeProjectKey(state.projectFilter);
+      if (current && state.projectFilter && !options.has(current)) {
+        options.set(current, state.projectFilter);
+      }
+      const sorted = Array.from(options.values()).sort((a, b) => String(a).localeCompare(String(b)));
       projectFilterEl.innerHTML = `<option value="">All projects</option>` + sorted
         .map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`)
         .join('');
@@ -26352,6 +26423,8 @@ class ClaudeOrchestrator {
       url.searchParams.set('mode', state.mode);
       url.searchParams.set('state', 'open');
       url.searchParams.set('include', 'dependencySummary');
+      const repoSlug = extractRepoSlug(state.projectFilter);
+      if (repoSlug) url.searchParams.set('repo', repoSlug);
       const res = await fetch(url.toString());
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to load queue');
@@ -29262,9 +29335,14 @@ class ClaudeOrchestrator {
       if (state.selectedId) renderDetail(getTaskById(state.selectedId));
     });
 
-    projectFilterEl?.addEventListener('change', () => {
+    projectFilterEl?.addEventListener('change', async () => {
       state.projectFilter = String(projectFilterEl.value || '');
-      applyFiltersAndMaybeClampSelection();
+      try {
+        await fetchTasks();
+        if (state.selectedId) renderDetail(getTaskById(state.selectedId));
+      } catch (e) {
+        this.showToast(String(e?.message || e), 'error');
+      }
     });
 
 	    refreshBtn.addEventListener('click', async () => {
