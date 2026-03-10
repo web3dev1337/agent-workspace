@@ -9518,6 +9518,7 @@ class ClaudeOrchestrator {
 	      diagnostics: null,
 	      actions: [],
 	      currentStep: 0,
+	      hydratedPersistedStep: false,
 	      showWelcome: true,
 	      skippedActionIds: new Set(),
 	      actionRuns: new Map(),
@@ -10183,9 +10184,10 @@ class ClaudeOrchestrator {
 	        state.skippedActionIds = new Set(
 	          Array.from(persistedSkippedIds)
 	        );
-	        if (state.actions.length > 0) {
+	        if (state.actions.length > 0 && !state.hydratedPersistedStep) {
 	          const savedStep = Math.max(0, Number(persisted?.currentStep) || 0);
 	          setCurrentStep(savedStep, { persist: false });
+	          state.hydratedPersistedStep = true;
 	        }
 	        const view = render();
 	        applyOnboardingLockUI();
