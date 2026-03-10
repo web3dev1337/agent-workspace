@@ -864,6 +864,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  align-items: center;
 }
 
 .worktree-view-mode-label {
@@ -872,6 +873,7 @@ body {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  text-align: center;
 }
 
 .worktree-view-mode-group .button-secondary {
