@@ -8767,18 +8767,17 @@ class ClaudeOrchestrator {
       }
 
       const worktreeNumber = String(sessionId || '').replace(/-(claude|codex)$/, '').replace('work', '');
-        const isActive = this.sessionActivity.get(sessionId) === 'active';
+      const isActive = this.sessionActivity.get(sessionId) === 'active';
 
-        // Prefer active sessions, but include inactive ones as backup
-        if (isActive || session.status === 'waiting') {
-          reviewers.push({
-            sessionId,
-            session,
-            worktreeNumber,
-            status: session.status,
-            isActive
-          });
-        }
+      // Prefer active sessions, but include inactive ones as backup
+      if (isActive || session.status === 'waiting') {
+        reviewers.push({
+          sessionId,
+          session,
+          worktreeNumber,
+          status: session.status,
+          isActive
+        });
       }
     }
 
