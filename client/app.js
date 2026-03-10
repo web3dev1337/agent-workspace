@@ -949,8 +949,8 @@ class ClaudeOrchestrator {
           autoAdvance: false,
           reviewActive: false,
           prioritizeActive: true,
-          projectFilter: reviewContext.projectFilter || '',
-          repoScope: reviewContext.repoSlug || ''
+          projectFilter: '',
+          repoScope: ''
         };
         this.showQueuePanel({ selectedId: reviewContext.prTaskId || null });
       });
@@ -3174,6 +3174,7 @@ class ClaudeOrchestrator {
     const defaults = this.getReviewInboxDefaults(quick ? 'quickReview' : 'reviewInbox');
     const reviewContext = this.getCurrentReviewContext({ project });
     const projectFilter = String(reviewContext.projectFilter || defaults.project || '').trim();
+    const repoScope = projectFilter ? (reviewContext.repoSlug || '') : '';
     this.queuePanelPreset = {
       mode: defaults.mode,
       reviewTier: defaults.reviewTier,
@@ -3188,7 +3189,7 @@ class ClaudeOrchestrator {
       reviewRouteActive: false,
       kindFilter: defaults.kind,
       projectFilter: projectFilter || '',
-      repoScope: reviewContext.repoSlug || '',
+      repoScope: repoScope,
       prioritizeActive: defaults.prioritizeActive,
       quickReview: !!quick
     };
@@ -25317,14 +25318,14 @@ class ClaudeOrchestrator {
         <div class="tasks-toolbar">
           <input type="text" id="queue-search" class="search-input tasks-search" placeholder="Search PRs/worktrees/sessions…">
           <select id="queue-project-filter" class="tasks-select tasks-select-inline" title="Project filter" style="width: 180px;">
-            <option value="">All projects</option>
+            <option value="">Any project</option>
           </select>
           <div class="tasks-view-toggle" role="group" aria-label="Queue mode">
-            <button class="btn-secondary tasks-view-btn" id="queue-mode-mine" data-mode="mine" title="My PRs">Mine</button>
-            <button class="btn-secondary tasks-view-btn" id="queue-mode-all" data-mode="all" title="All PRs">All</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-mode-mine" data-mode="mine" title="Only PRs authored by me">My PRs</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-mode-all" data-mode="all" title="PRs from any author">Any Author</button>
           </div>
           <div class="tasks-view-toggle" role="group" aria-label="Review tier">
-            <button class="btn-secondary tasks-view-btn" id="queue-tier-all" data-tier="all" title="All tiers">All</button>
+            <button class="btn-secondary tasks-view-btn" id="queue-tier-all" data-tier="all" title="Show every tier">Any Tier</button>
             <button class="btn-secondary tasks-view-btn" id="queue-tier-1" data-tier="1" title="Tier 1">T1</button>
             <button class="btn-secondary tasks-view-btn" id="queue-tier-2" data-tier="2" title="Tier 2">T2</button>
             <button class="btn-secondary tasks-view-btn" id="queue-tier-3" data-tier="3" title="Tier 3">T3</button>
@@ -25442,7 +25443,7 @@ class ClaudeOrchestrator {
         projectFilterEl.value = String(state.projectFilter || '');
         projectFilterEl.title = state.repoScope
           ? `Project filter within ${state.repoScope}`
-          : 'Project filter';
+          : 'Filter the current PR list by repo or project';
       }
 
 	    const showPairingModal = async () => {
@@ -25551,10 +25552,10 @@ class ClaudeOrchestrator {
     const setMode = (mode) => {
       state.mode = mode === 'all' ? 'all' : 'mine';
       const hasRepoScope = !!String(state.repoScope || '').trim();
-      mineBtn.textContent = 'Mine';
-      mineBtn.title = hasRepoScope ? `My PRs in ${state.repoScope}` : 'My PRs across GitHub';
-      allBtn.textContent = hasRepoScope ? 'Repo' : 'All';
-      allBtn.title = hasRepoScope ? `All PRs in ${state.repoScope}` : 'All PRs across GitHub';
+      mineBtn.textContent = 'My PRs';
+      mineBtn.title = hasRepoScope ? `Only my PRs in ${state.repoScope}` : 'Only PRs authored by me';
+      allBtn.textContent = hasRepoScope ? 'This Repo' : 'Any Author';
+      allBtn.title = hasRepoScope ? `PRs from any author in ${state.repoScope}` : 'PRs from any author';
       mineBtn.classList.toggle('active', state.mode === 'mine');
       allBtn.classList.toggle('active', state.mode === 'all');
     };
@@ -25881,7 +25882,7 @@ class ClaudeOrchestrator {
         options.set(current, state.projectFilter);
       }
       const sorted = Array.from(options.values()).sort((a, b) => String(a).localeCompare(String(b)));
-      projectFilterEl.innerHTML = `<option value="">All projects</option>` + sorted
+      projectFilterEl.innerHTML = `<option value="">Any project</option>` + sorted
         .map((label) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`)
         .join('');
       if (current && options.has(current)) {
@@ -26006,54 +26007,89 @@ class ClaudeOrchestrator {
 
     const buildActiveIndex = () => {
       const activeSessionIds = new Set();
+      const openSessionIds = new Set();
       const activeWorktreeIds = new Set();
+      const openWorktreeIds = new Set();
       const activeWorktreePaths = new Set();
+      const openWorktreePaths = new Set();
       const activeRepoNames = new Set();
+      const openRepoNames = new Set();
       const activeRepoSlugs = new Set();
+      const openRepoSlugs = new Set();
 
       for (const [sid, session] of this.sessions) {
         if (!this.isAgentSession(sid)) continue;
         const status = String(session?.status || '').trim().toLowerCase();
         if (status === 'exited') continue;
+        openSessionIds.add(String(sid));
+
+        const worktreeId = String(session?.worktreeId || '').trim();
+        if (worktreeId) openWorktreeIds.add(worktreeId);
+
+        const worktreePath = String(session?.config?.cwd || '').trim();
+        if (worktreePath) openWorktreePaths.add(worktreePath);
+
+        const repoName = String(session?.repositoryName || '').trim();
+        if (repoName) openRepoNames.add(normalizeProjectKey(repoName));
+
+        const repoRoot = String(session?.repositoryRoot || '').trim();
+        const repoRootName = extractRepoName(repoRoot);
+        if (repoRootName) openRepoNames.add(normalizeProjectKey(repoRootName));
+
+        const repoSlug = String(session?.repositorySlug || '').trim();
+        if (repoSlug) openRepoSlugs.add(normalizeProjectKey(repoSlug));
+
         const hasActivity = this.sessionActivity.get(sid) === 'active' || status === 'busy' || status === 'waiting';
         if (!hasActivity) continue;
 
         activeSessionIds.add(String(sid));
 
-        const worktreeId = String(session?.worktreeId || '').trim();
         if (worktreeId) activeWorktreeIds.add(worktreeId);
 
-        const worktreePath = String(session?.config?.cwd || '').trim();
         if (worktreePath) activeWorktreePaths.add(worktreePath);
 
-        const repoName = String(session?.repositoryName || '').trim();
         if (repoName) activeRepoNames.add(normalizeProjectKey(repoName));
 
-        const repoRoot = String(session?.repositoryRoot || '').trim();
-        const repoRootName = extractRepoName(repoRoot);
         if (repoRootName) activeRepoNames.add(normalizeProjectKey(repoRootName));
 
-        const repoSlug = String(session?.repositorySlug || '').trim();
         if (repoSlug) activeRepoSlugs.add(normalizeProjectKey(repoSlug));
       }
 
-      return { activeSessionIds, activeWorktreeIds, activeWorktreePaths, activeRepoNames, activeRepoSlugs };
+      return {
+        activeSessionIds,
+        openSessionIds,
+        activeWorktreeIds,
+        openWorktreeIds,
+        activeWorktreePaths,
+        openWorktreePaths,
+        activeRepoNames,
+        openRepoNames,
+        activeRepoSlugs,
+        openRepoSlugs
+      };
     };
 
     const getActiveScoreForTask = (t, index) => {
       if (!index) return 0;
       if (t?.kind === 'session') {
         const sid = String(t?.sessionId || '').trim();
-        return (sid && index.activeSessionIds.has(sid)) ? 3 : 0;
+        if (sid && index.activeSessionIds.has(sid)) return 5;
+        return (sid && index.openSessionIds.has(sid)) ? 4 : 0;
       }
       if (t?.kind === 'worktree') {
         const path = String(t?.worktreePath || '').trim();
-        if (path && index.activeWorktreePaths.has(path)) return 2;
+        if (path && index.activeWorktreePaths.has(path)) return 4;
+        if (path && index.openWorktreePaths.has(path)) return 3;
         const worktreeId = String(t?.worktreeId || '').trim();
-        if (worktreeId && index.activeWorktreeIds.has(worktreeId)) return 2;
+        if (worktreeId && index.activeWorktreeIds.has(worktreeId)) return 4;
+        if (worktreeId && index.openWorktreeIds.has(worktreeId)) return 3;
         return 0;
       }
       if (t?.kind === 'pr') {
+        const linkedSessionIds = this.getLinkedSessionIdsForPrTask(t?.id);
+        if (linkedSessionIds.some((sid) => index.activeSessionIds.has(String(sid || '').trim()))) return 6;
+        if (linkedSessionIds.some((sid) => index.openSessionIds.has(String(sid || '').trim()))) return 5;
+
         const rec = (t?.record && typeof t.record === 'object') ? t.record : {};
         const worktreeIds = [
           rec.reviewerWorktreeId,
@@ -26061,14 +26097,17 @@ class ClaudeOrchestrator {
           rec.recheckWorktreeId,
           rec.overnightWorktreeId
         ].map((v) => String(v || '').trim()).filter(Boolean);
-        if (worktreeIds.some((id) => index.activeWorktreeIds.has(id))) return 3;
+        if (worktreeIds.some((id) => index.activeWorktreeIds.has(id))) return 4;
+        if (worktreeIds.some((id) => index.openWorktreeIds.has(id))) return 3;
 
         const repoSlug = normalizeProjectKey(t?.repository || '');
-        if (repoSlug && index.activeRepoSlugs.has(repoSlug)) return 2;
+        if (repoSlug && index.activeRepoSlugs.has(repoSlug)) return 3;
+        if (repoSlug && index.openRepoSlugs.has(repoSlug)) return 2;
 
         const repoName = normalizeProjectKey(extractRepoName(t?.repository || ''));
         const projectName = normalizeProjectKey(t?.project || '');
-        if ((repoName && index.activeRepoNames.has(repoName)) || (projectName && index.activeRepoNames.has(projectName))) return 2;
+        if ((repoName && index.activeRepoNames.has(repoName)) || (projectName && index.activeRepoNames.has(projectName))) return 3;
+        if ((repoName && index.openRepoNames.has(repoName)) || (projectName && index.openRepoNames.has(projectName))) return 2;
       }
       return 0;
     };
