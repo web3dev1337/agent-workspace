@@ -668,12 +668,32 @@ class ClaudeOrchestrator {
 
   openSidebar() {
     document.body.classList.add('sidebar-open');
+    this.updateSidebarToggleIcon();
     this.syncSidebarBackdrop();
   }
 
   closeSidebar() {
     document.body.classList.remove('sidebar-open');
+    this.updateSidebarToggleIcon();
     this.syncSidebarBackdrop();
+  }
+
+  updateSidebarToggleIcon() {
+    const toggle = document.getElementById('sidebar-toggle');
+    if (!toggle) return;
+
+    const isCollapsed = this.isMobileLayout()
+      ? !document.body.classList.contains('sidebar-open')
+      : document.body.classList.contains('sidebar-collapsed');
+    const shouldBeExpanded = !isCollapsed;
+    const label = shouldBeExpanded ? 'Collapse sidebar' : 'Expand sidebar';
+    const icon = toggle.querySelector('.sidebar-toggle-icon');
+
+    if (icon) icon.textContent = '◂';
+    toggle.classList.toggle('is-collapsed', isCollapsed);
+    toggle.title = label;
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('aria-expanded', String(shouldBeExpanded));
   }
 
   getSidebarDesktopCollapsedPref() {
@@ -689,6 +709,7 @@ class ClaudeOrchestrator {
   setSidebarDesktopCollapsed(collapsed) {
     const next = !!collapsed;
     document.body.classList.toggle('sidebar-collapsed', next);
+    this.updateSidebarToggleIcon();
     try {
       localStorage.setItem('sidebar-desktop-collapsed', next ? 'true' : 'false');
     } catch {
@@ -704,6 +725,7 @@ class ClaudeOrchestrator {
   applySidebarDesktopCollapsedFromPrefs() {
     try {
       document.body.classList.toggle('sidebar-collapsed', !!this.getSidebarDesktopCollapsedPref());
+      this.updateSidebarToggleIcon();
     } catch {
       // ignore
     }
@@ -2758,6 +2780,7 @@ class ClaudeOrchestrator {
     // Handle window resize to fix blank terminals
     let resizeTimeout;
 	    window.addEventListener('resize', () => {
+      this.updateSidebarToggleIcon();
 	      clearTimeout(resizeTimeout);
 	      resizeTimeout = setTimeout(() => {
 	        // Refit all visible terminals
@@ -4809,13 +4832,7 @@ class ClaudeOrchestrator {
 
 	    // Always update the button content
     const visibility = this.getUiVisibilityConfig().sidebar || {};
-    const showActiveFilter = visibility.activeFilter !== false;
     const showTierFilters = visibility.tierFilters !== false;
-    const activeBtn = showActiveFilter ? `
-      <button class="${this.showActiveOnly ? 'active' : ''}" onclick="window.orchestrator.toggleActivityFilter()">
-        ${this.showActiveOnly ? 'Show All' : 'Active Only'}
-      </button>
-    ` : '';
     const tierButtons = showTierFilters ? `
       <button class="${this.tierFilter === 'all' ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('all')" title="Show all tiers">All</button>
       <button class="${this.tierFilter === 1 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('1')" title="Tier 1">T1</button>
@@ -4826,8 +4843,8 @@ class ClaudeOrchestrator {
     ` : '';
 
     filterToggle.innerHTML = `
-      <div class="filter-toggle-row filter-toggle-row-compact" role="group" aria-label="Worktree filters">
-        ${activeBtn}
+      <div class="filter-toggle-label">Tier</div>
+      <div class="filter-toggle-row filter-toggle-row-compact" role="group" aria-label="Tier filter">
         ${tierButtons}
       </div>
     `;
