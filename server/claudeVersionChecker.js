@@ -14,26 +14,31 @@ const logger = winston.createLogger({
   ]
 });
 
+const IS_WIN = process.platform === 'win32';
+const CREATE_NO_WINDOW = 0x08000000;
+
 class ClaudeVersionChecker {
   static async checkVersion() {
     return new Promise((resolve) => {
-      const process = spawn('claude', ['--version'], {
+      const child = spawn('claude', ['--version'], {
         stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 5000
+        timeout: 5000,
+        windowsHide: true,
+        ...(IS_WIN ? { creationFlags: CREATE_NO_WINDOW } : {})
       });
 
       let stdout = '';
       let stderr = '';
 
-      process.stdout.on('data', (data) => {
+      child.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      process.stderr.on('data', (data) => {
+      child.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      process.on('close', (code) => {
+      child.on('close', (code) => {
         if (code === 0) {
           const versionMatch = stdout.match(/(\d+\.\d+\.\d+)/);
           const version = versionMatch ? versionMatch[1] : null;
@@ -70,7 +75,7 @@ class ClaudeVersionChecker {
         }
       });
 
-      process.on('error', (error) => {
+      child.on('error', (error) => {
         logger.error('Claude version check error', { error: error.message, stack: error.stack });
         resolve({
           version: null,
