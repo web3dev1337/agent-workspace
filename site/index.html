@@ -36,50 +36,30 @@
         </span>
       </a>
       <nav class="site-nav" aria-label="Primary">
-        <a href="#overview">Overview</a>
+        <a href="#top">Overview</a>
         <a href="#flow">Flow</a>
-        <a href="#compat">Plans</a>
+        <a href="#local">Local</a>
         <a href="#setup">Setup</a>
       </nav>
       <a class="nav-cta" href="https://github.com/web3dev1337/claude-orchestrator">View Repo</a>
     </header>
 
-    <main>
-      <section class="hero reveal" id="top">
-        <div class="hero-copy">
+    <main class="scene-stack">
+      <section class="scene hero-scene reveal" id="top">
+        <div class="scene-copy">
           <p class="eyebrow">Runs on your machine</p>
           <h1>All your agents in one workspace.</h1>
-          <p class="hero-kicker">All your projects in one workspace.</p>
-          <p class="lede">
-            See Claude and Codex side by side across repos, worktrees, and reviews.
+          <p class="scene-kicker">All your projects in one workspace.</p>
+          <p class="scene-note">
+            Run Claude and Codex side by side across repos, worktrees, and reviews.
           </p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#overview">See the UI</a>
+            <a class="button button-primary" href="#flow">How it works</a>
             <a class="button button-secondary" href="#setup">Quick start</a>
           </div>
-          <div class="signal-row" aria-label="Key product signals">
-            <span class="signal-pill-blue">Multiple agents</span>
-            <span class="signal-pill-cyan">Multiple projects</span>
-            <span class="signal-pill-green">Local terminals</span>
-            <span class="signal-pill-amber">Reviews in place</span>
-          </div>
-          <div class="compat-strip" id="compat">
-            <div class="logo-chip logo-chip-claude">
-              <img class="logo-monochrome" src="assets/claude-logo.png" alt="Claude logo">
-              <span>Claude</span>
-            </div>
-            <div class="logo-chip logo-chip-codex">
-              <img src="assets/codex-logo.png" alt="Codex logo">
-              <span>Codex</span>
-            </div>
-            <p class="compat-copy">Works with Claude Max and Codex plans.</p>
-          </div>
-          <p class="direct-note">
-            Use the providers you already have. Agent Workspace organizes local CLIs, worktrees, and repos without replacing them.
-          </p>
         </div>
 
-        <div class="hero-visual">
+        <div class="scene-visual">
           <figure class="ui-shot">
             <div class="ui-shot-label">Actual Agent Workspace UI</div>
             <img
@@ -90,95 +70,100 @@
         </div>
       </section>
 
-      <section class="section reveal" id="overview">
-        <div class="section-heading">
-          <p class="eyebrow">Overview</p>
-          <h2>One UI for every active agent session and project.</h2>
+      <section class="scene flow-scene reveal" id="flow">
+        <div class="scene-head">
+          <p class="eyebrow">How it works</p>
+          <h2>Pick repos. Launch agents. Review here.</h2>
+          <p class="scene-note">
+            One workspace for the whole run.
+          </p>
         </div>
 
-        <div class="intro-grid">
-          <article class="info-card">
-            <h3>Run many agents</h3>
-            <p>See Claude and Codex together instead of one session at a time.</p>
+        <div class="step-stage">
+          <article class="step-card">
+            <span>01</span>
+            <h3>Add repos</h3>
+            <p>Choose the projects you want open.</p>
           </article>
-          <article class="info-card">
-            <h3>Keep projects together</h3>
-            <p>Keep repos, worktrees, and branches together in one workspace.</p>
+          <article class="step-card">
+            <span>02</span>
+            <h3>Launch agents</h3>
+            <p>Start Claude or Codex in local terminals.</p>
           </article>
-          <article class="info-card">
-            <h3>Stay local</h3>
-            <p>Your terminals stay on your machine. This is the control surface around them.</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="section reveal" id="flow">
-        <div class="section-heading">
-          <p class="eyebrow">Flow</p>
-          <h2>Pick repos. Launch agents. Review in one place.</h2>
-        </div>
-
-        <div class="flow-grid">
-          <article class="flow-step">
-            <span class="flow-count">01</span>
-            <h3>Add repositories</h3>
-            <p>Point the workspace wizard at the repos you want open.</p>
-          </article>
-          <article class="flow-step">
-            <span class="flow-count">02</span>
-            <h3>Launch local agents</h3>
-            <p>Start Claude or Codex in local terminals and map them to worktrees.</p>
-          </article>
-          <article class="flow-step">
-            <span class="flow-count">03</span>
-            <h3>Track live work</h3>
-            <p>See branches, tasks, statuses, and reviews across projects in one place.</p>
-          </article>
-          <article class="flow-step">
-            <span class="flow-count">04</span>
-            <h3>Ship from one surface</h3>
-            <p>Use Commander, review tools, and diff flow without leaving the workspace.</p>
+          <article class="step-card">
+            <span>03</span>
+            <h3>Track and review</h3>
+            <p>See sessions, branches, and reviews together.</p>
           </article>
         </div>
       </section>
 
-      <section class="section reveal" id="setup">
-        <div class="section-heading">
-          <p class="eyebrow">Setup</p>
-          <h2>Use the plans you already have, then launch locally.</h2>
+      <section class="scene local-scene reveal" id="local">
+        <div class="scene-head">
+          <p class="eyebrow">Compatible plans</p>
+          <h2>Claude and Codex. Same workspace.</h2>
+          <p class="scene-note">
+            Built around local terminals, local repos, and local worktrees.
+          </p>
         </div>
 
-        <div class="setup-layout">
-          <div class="setup-steps">
-            <article class="setup-step">
+        <div class="compat-stage">
+          <article class="compat-node compat-node-claude">
+            <img class="logo-monochrome" src="assets/claude-logo.png" alt="Claude logo">
+            <strong>Claude</strong>
+            <span>Claude Max</span>
+          </article>
+
+          <article class="compat-core">
+            <span class="compat-core-label">Shared workspace</span>
+            <strong>Local terminals. Local repos.</strong>
+            <p>Agent Workspace stays around the tools you already use.</p>
+          </article>
+
+          <article class="compat-node compat-node-codex">
+            <img src="assets/codex-logo.png" alt="Codex logo">
+            <strong>Codex</strong>
+            <span>Codex plans</span>
+          </article>
+        </div>
+
+        <div class="scene-tags" aria-label="Local workspace details">
+          <span>Worktrees</span>
+          <span>Projects</span>
+          <span>Reviews</span>
+        </div>
+      </section>
+
+      <section class="scene setup-scene reveal" id="setup">
+        <div class="scene-copy">
+          <p class="eyebrow">Get started</p>
+          <h2>Start locally in a few commands.</h2>
+          <p class="scene-note">
+            Open the app. Create a workspace. Launch agents.
+          </p>
+
+          <div class="setup-list" aria-label="Getting started steps">
+            <article class="setup-line">
               <span>01</span>
-              <div>
-                <h3>Use your existing plans</h3>
-                <p>Bring your Claude Max or Codex access. Agent Workspace sits around local CLIs.</p>
-              </div>
+              <p>Use your existing Claude Max or Codex plan.</p>
             </article>
-            <article class="setup-step">
+            <article class="setup-line">
               <span>02</span>
-              <div>
-                <h3>Run the app locally</h3>
-                <p>Start the web UI or desktop shell, then create a workspace for the repos you want.</p>
-              </div>
+              <p>Run the app locally.</p>
             </article>
-            <article class="setup-step">
+            <article class="setup-line">
               <span>03</span>
-              <div>
-                <h3>Start agents and keep context</h3>
-                <p>Launch agents, add worktrees, and keep sessions, branches, and reviews visible together.</p>
-              </div>
+              <p>Create a workspace and launch agents.</p>
             </article>
           </div>
+        </div>
 
-          <div class="code-panel">
-            <div class="code-panel-header">
-              <span>Quick start</span>
-              <span>Web mode</span>
-            </div>
-            <pre><code>git clone https://github.com/web3dev1337/claude-orchestrator.git
+        <div class="code-panel">
+          <div class="code-panel-header">
+            <span>Quick start</span>
+            <span>Web mode</span>
+          </div>
+          <pre><code>git clone https://github.com/web3dev1337/claude-orchestrator.git
 cd claude-orchestrator
 
 cp .env.example .env
@@ -186,8 +171,7 @@ npm install
 cd diff-viewer && npm install && cd ..
 
 npm run dev</code></pre>
-            <p class="code-note">Open the local app and create your first workspace.</p>
-          </div>
+          <p class="code-note">Open the local app and create your first workspace.</p>
         </div>
       </section>
     </main>
