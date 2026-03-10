@@ -7609,22 +7609,47 @@ class ClaudeOrchestrator {
   }
 
   showClaudeUpdateRequired(updateInfo) {
-    // Create update banner
+    const existingBanner = document.getElementById('claude-update-banner');
+    existingBanner?.remove();
+
     const banner = document.createElement('div');
+    banner.id = 'claude-update-banner';
     banner.className = 'update-banner';
+    banner.setAttribute('role', 'status');
+
+    const title = this.escapeHtml(updateInfo?.title || 'Claude CLI Update Required');
+    const message = this.escapeHtml(updateInfo?.message || 'Claude CLI needs an update before new sessions can start.');
+    const instructions = Array.isArray(updateInfo?.instructions) ? updateInfo.instructions : [];
+    const instructionMarkup = instructions
+      .map((line) => {
+        const escaped = this.escapeHtml(line);
+        if (!escaped) {
+          return '<div class="update-instruction-spacer" aria-hidden="true"></div>';
+        }
+        return `<div class="update-instruction">${escaped}</div>`;
+      })
+      .join('');
+
     banner.innerHTML = `
       <div class="update-content">
-        <h3>⚠️ ${updateInfo.title}</h3>
-        <p>${updateInfo.message}</p>
-        <div class="update-instructions">
-          ${updateInfo.instructions.map(line => `<div>${line}</div>`).join('')}
+        <div class="update-copy">
+          <div class="update-title-row">
+            <h3>⚠️ ${title}</h3>
+            <button type="button" class="dismiss-btn update-banner-dismiss">Dismiss</button>
+          </div>
+          <p>${message}</p>
+          <div class="update-instructions">
+            ${instructionMarkup}
+          </div>
         </div>
-        <button onclick="this.parentElement.parentElement.remove()" class="dismiss-btn">Dismiss</button>
       </div>
     `;
 
-    // Add to top of page
-    document.body.insertBefore(banner, document.body.firstChild);
+    banner.querySelector('.update-banner-dismiss')?.addEventListener('click', () => {
+      banner.remove();
+    });
+
+    document.body.appendChild(banner);
 
     // Also show in console
     console.warn('Claude Update Required:', updateInfo);
