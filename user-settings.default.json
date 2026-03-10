@@ -279,6 +279,11 @@
             "autoSpawnReviewer": true,
             "autoFeedbackToAuthor": true,
             "autoSpawnFixer": false,
+            "notifyOnReviewerSpawn": true,
+            "notifyOnReviewCompleted": true,
+            "approvedDeliveryAction": "notify",
+            "commentedDeliveryAction": "notify",
+            "needsFixFeedbackAction": "paste_and_notify",
             "maxConcurrentReviewers": 3,
             "repos": []
           }

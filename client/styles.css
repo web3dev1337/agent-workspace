@@ -6037,6 +6037,25 @@ body.dependency-onboarding-active #dependency-setup-modal {
   border-color: var(--accent-primary-hover);
 }
 
+.control-btn.pr-review-status-btn.pending {
+  background: color-mix(in srgb, var(--accent-warning) 18%, var(--bg-tertiary));
+  border-color: color-mix(in srgb, var(--accent-warning) 50%, var(--border-primary));
+  color: var(--accent-warning);
+}
+
+.control-btn.pr-review-status-btn.ready,
+.control-btn.pr-review-paste-btn {
+  background: color-mix(in srgb, var(--accent-primary) 14%, var(--bg-tertiary));
+  border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-primary));
+  color: var(--accent-primary);
+}
+
+.control-btn.pr-review-status-btn.ready:hover,
+.control-btn.pr-review-paste-btn:hover {
+  background: color-mix(in srgb, var(--accent-primary) 22%, var(--bg-tertiary));
+  border-color: var(--accent-primary);
+}
+
 .terminal-controls {
   position: relative;
 }

@@ -57,10 +57,22 @@ describe('TaskRecordService', () => {
       promptChars: 123,
       reviewerSpawnedAt: '2026-01-25T00:00:11Z',
       reviewerWorktreeId: 'work9',
+      reviewerSessionId: 'demo-work9-claude',
+      reviewerAgent: 'CLAUDE',
+      reviewSourceSessionId: 'demo-work1-claude',
+      reviewSourceWorktreeId: 'work1',
       fixerSpawnedAt: '2026-01-25T00:00:12Z',
       fixerWorktreeId: 'work10',
       recheckSpawnedAt: '2026-01-25T00:00:13Z',
-      recheckWorktreeId: 'work11'
+      recheckWorktreeId: 'work11',
+      latestReviewSummary: 'Fix the edge case.',
+      latestReviewBody: 'Fix the edge case. Add a regression test.',
+      latestReviewOutcome: 'NEEDS_FIX',
+      latestReviewUser: 'review-bot',
+      latestReviewUrl: 'https://github.com/acme/demo/pull/1#pullrequestreview-1',
+      latestReviewSubmittedAt: '2026-01-25T00:00:14Z',
+      latestReviewAgent: 'CODEX',
+      latestReviewDeliveredAt: '2026-01-25T00:00:15Z'
     });
 
     expect(rec.reviewStartedAt).toBe('2026-01-25T00:00:00.000Z');
@@ -69,10 +81,22 @@ describe('TaskRecordService', () => {
     expect(rec.promptChars).toBe(123);
     expect(rec.reviewerSpawnedAt).toBe('2026-01-25T00:00:11.000Z');
     expect(rec.reviewerWorktreeId).toBe('work9');
+    expect(rec.reviewerSessionId).toBe('demo-work9-claude');
+    expect(rec.reviewerAgent).toBe('claude');
+    expect(rec.reviewSourceSessionId).toBe('demo-work1-claude');
+    expect(rec.reviewSourceWorktreeId).toBe('work1');
     expect(rec.fixerSpawnedAt).toBe('2026-01-25T00:00:12.000Z');
     expect(rec.fixerWorktreeId).toBe('work10');
     expect(rec.recheckSpawnedAt).toBe('2026-01-25T00:00:13.000Z');
     expect(rec.recheckWorktreeId).toBe('work11');
+    expect(rec.latestReviewSummary).toBe('Fix the edge case.');
+    expect(rec.latestReviewBody).toBe('Fix the edge case. Add a regression test.');
+    expect(rec.latestReviewOutcome).toBe('needs_fix');
+    expect(rec.latestReviewUser).toBe('review-bot');
+    expect(rec.latestReviewUrl).toBe('https://github.com/acme/demo/pull/1#pullrequestreview-1');
+    expect(rec.latestReviewSubmittedAt).toBe('2026-01-25T00:00:14.000Z');
+    expect(rec.latestReviewAgent).toBe('codex');
+    expect(rec.latestReviewDeliveredAt).toBe('2026-01-25T00:00:15.000Z');
   });
 
   test('upsert supports prompt repo location fields', async () => {

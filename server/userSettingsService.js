@@ -374,6 +374,32 @@ class UserSettingsService {
 		                  closeIfNoDoneList: false,
 		                  pollMs: 60_000
 		                }
+		              },
+		              prReview: {
+		                enabled: false,
+		                pollEnabled: true,
+		                pollMs: 60_000,
+		                webhookEnabled: true,
+		                reviewerAgent: 'claude',
+		                reviewerMode: 'fresh',
+		                reviewerProvider: 'anthropic',
+		                reviewerClaudeModel: '',
+		                reviewerSkipPermissions: true,
+		                reviewerCodexModel: '',
+		                reviewerCodexReasoning: '',
+		                reviewerCodexVerbosity: '',
+		                reviewerCodexFlags: ['yolo'],
+		                reviewerTier: 3,
+		                autoSpawnReviewer: true,
+		                autoFeedbackToAuthor: true,
+		                autoSpawnFixer: false,
+		                notifyOnReviewerSpawn: true,
+		                notifyOnReviewCompleted: true,
+		                approvedDeliveryAction: 'notify',
+		                commentedDeliveryAction: 'notify',
+		                needsFixFeedbackAction: 'paste_and_notify',
+		                maxConcurrentReviewers: 3,
+		                repos: []
 		              }
 		            },
             kanban: {
@@ -812,6 +838,10 @@ class UserSettingsService {
                   ...((defaultsAutomations.trello || {}).onPrMerged || {}),
                   ...(((next.trello || {}).onPrMerged) || {})
                 }
+              },
+              prReview: {
+                ...(defaultsAutomations.prReview || {}),
+                ...(next.prReview || {})
               }
             };
           }

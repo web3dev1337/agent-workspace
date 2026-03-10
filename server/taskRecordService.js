@@ -140,6 +140,12 @@ const normalizeReviewerPostAction = (v) => {
   return s === 'auto_fix' ? 'auto_fix' : 'feedback';
 };
 
+const normalizeAgentId = (v) => {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return null;
+  return s === 'codex' ? 'codex' : (s === 'claude' ? 'claude' : null);
+};
+
 const normalizeDateTime = (v) => {
   if (v === null || v === '') return null;
   const dt = new Date(v);
@@ -451,6 +457,39 @@ class TaskRecordService {
       }
     }
 
+    if (p.reviewerSessionId !== undefined) {
+      if (p.reviewerSessionId === null || p.reviewerSessionId === '') {
+        clear.add('reviewerSessionId');
+      } else {
+        next.reviewerSessionId = String(p.reviewerSessionId || '').trim().slice(0, 240);
+      }
+    }
+
+    if (p.reviewerAgent !== undefined) {
+      if (p.reviewerAgent === null || p.reviewerAgent === '') {
+        clear.add('reviewerAgent');
+      } else {
+        const agentId = normalizeAgentId(p.reviewerAgent);
+        if (agentId !== null) next.reviewerAgent = agentId;
+      }
+    }
+
+    if (p.reviewSourceSessionId !== undefined) {
+      if (p.reviewSourceSessionId === null || p.reviewSourceSessionId === '') {
+        clear.add('reviewSourceSessionId');
+      } else {
+        next.reviewSourceSessionId = String(p.reviewSourceSessionId || '').trim().slice(0, 240);
+      }
+    }
+
+    if (p.reviewSourceWorktreeId !== undefined) {
+      if (p.reviewSourceWorktreeId === null || p.reviewSourceWorktreeId === '') {
+        clear.add('reviewSourceWorktreeId');
+      } else {
+        next.reviewSourceWorktreeId = String(p.reviewSourceWorktreeId || '').trim().slice(0, 120);
+      }
+    }
+
     if (p.fixerSpawnedAt !== undefined) {
       const dt = normalizeDateTime(p.fixerSpawnedAt);
       if (dt) next.fixerSpawnedAt = dt;
@@ -491,6 +530,68 @@ class TaskRecordService {
       } else {
         next.overnightWorktreeId = String(p.overnightWorktreeId || '').trim();
       }
+    }
+
+    if (p.latestReviewBody !== undefined) {
+      if (p.latestReviewBody === null || p.latestReviewBody === '') {
+        clear.add('latestReviewBody');
+      } else {
+        next.latestReviewBody = String(p.latestReviewBody || '').trim().slice(0, 20_000);
+      }
+    }
+
+    if (p.latestReviewSummary !== undefined) {
+      if (p.latestReviewSummary === null || p.latestReviewSummary === '') {
+        clear.add('latestReviewSummary');
+      } else {
+        next.latestReviewSummary = String(p.latestReviewSummary || '').trim().slice(0, 4_000);
+      }
+    }
+
+    if (p.latestReviewOutcome !== undefined) {
+      if (p.latestReviewOutcome === null || p.latestReviewOutcome === '') {
+        clear.add('latestReviewOutcome');
+      } else {
+        const outcome = normalizeReviewOutcome(p.latestReviewOutcome);
+        if (outcome !== null) next.latestReviewOutcome = outcome;
+      }
+    }
+
+    if (p.latestReviewUser !== undefined) {
+      if (p.latestReviewUser === null || p.latestReviewUser === '') {
+        clear.add('latestReviewUser');
+      } else {
+        next.latestReviewUser = String(p.latestReviewUser || '').trim().slice(0, 240);
+      }
+    }
+
+    if (p.latestReviewUrl !== undefined) {
+      if (p.latestReviewUrl === null || p.latestReviewUrl === '') {
+        clear.add('latestReviewUrl');
+      } else {
+        next.latestReviewUrl = String(p.latestReviewUrl || '').trim().slice(0, 600);
+      }
+    }
+
+    if (p.latestReviewSubmittedAt !== undefined) {
+      const dt = normalizeDateTime(p.latestReviewSubmittedAt);
+      if (dt) next.latestReviewSubmittedAt = dt;
+      else clear.add('latestReviewSubmittedAt');
+    }
+
+    if (p.latestReviewAgent !== undefined) {
+      if (p.latestReviewAgent === null || p.latestReviewAgent === '') {
+        clear.add('latestReviewAgent');
+      } else {
+        const agentId = normalizeAgentId(p.latestReviewAgent);
+        if (agentId !== null) next.latestReviewAgent = agentId;
+      }
+    }
+
+    if (p.latestReviewDeliveredAt !== undefined) {
+      const dt = normalizeDateTime(p.latestReviewDeliveredAt);
+      if (dt) next.latestReviewDeliveredAt = dt;
+      else clear.add('latestReviewDeliveredAt');
     }
 
     // Optional external ticket/task link (v1: Trello)
