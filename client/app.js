@@ -4809,13 +4809,7 @@ class ClaudeOrchestrator {
 
 	    // Always update the button content
     const visibility = this.getUiVisibilityConfig().sidebar || {};
-    const showActiveFilter = visibility.activeFilter !== false;
     const showTierFilters = visibility.tierFilters !== false;
-    const activeBtn = showActiveFilter ? `
-      <button class="${this.showActiveOnly ? 'active' : ''}" onclick="window.orchestrator.toggleActivityFilter()">
-        ${this.showActiveOnly ? 'Show All' : 'Active Only'}
-      </button>
-    ` : '';
     const tierButtons = showTierFilters ? `
       <button class="${this.tierFilter === 'all' ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('all')" title="Show all tiers">All</button>
       <button class="${this.tierFilter === 1 ? 'active' : ''}" onclick="window.orchestrator.setTierFilter('1')" title="Tier 1">T1</button>
@@ -4827,7 +4821,6 @@ class ClaudeOrchestrator {
 
     filterToggle.innerHTML = `
       <div class="filter-toggle-row filter-toggle-row-compact" role="group" aria-label="Worktree filters">
-        ${activeBtn}
         ${tierButtons}
       </div>
     `;
