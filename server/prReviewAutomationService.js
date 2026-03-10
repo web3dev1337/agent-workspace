@@ -2,6 +2,7 @@
 
 const path = require('path');
 const winston = require('winston');
+const { collectDiagnostics } = require('./diagnosticsService');
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -12,6 +13,25 @@ const logger = winston.createLogger({
 });
 
 const CONFIG_PATH = 'global.ui.tasks.automations.prReview';
+const AGENT_CLI_CACHE_TTL_MS = 30_000;
+
+const normalizeOptionalCliValue = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return undefined;
+  const normalized = raw.toLowerCase();
+  if (normalized === 'default' || normalized === 'latest') return undefined;
+  return raw;
+};
+
+const normalizeReviewerMode = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'resume') {
+    // Automated reviewer/fixer spawns do not have a resume id, so picker-style
+    // resume would block the workflow instead of launching directly.
+    return 'continue';
+  }
+  return raw === 'continue' || raw === 'fresh' ? raw : 'fresh';
+};
 
 const normalizeReviewerPostAction = (v) => {
   const s = String(v || '').trim().toLowerCase();
@@ -26,10 +46,11 @@ const DEFAULT_CONFIG = {
   reviewerAgent: 'claude',
   reviewerMode: 'fresh',
   reviewerProvider: 'anthropic',
+  reviewerClaudeModel: '',
   reviewerSkipPermissions: true,
-  reviewerCodexModel: 'gpt-5-codex',
-  reviewerCodexReasoning: 'high',
-  reviewerCodexVerbosity: 'high',
+  reviewerCodexModel: '',
+  reviewerCodexReasoning: '',
+  reviewerCodexVerbosity: '',
   reviewerCodexFlags: ['yolo'],
   reviewerTier: 3,
   autoSpawnReviewer: true,
@@ -48,12 +69,17 @@ class PrReviewAutomationService {
     this.workspaceManager = deps.workspaceManager || null;
     this.ensureWorkspaceMixedWorktree = deps.ensureWorkspaceMixedWorktree || null;
     this.io = deps.io || null;
+    this.collectDiagnostics = deps.collectDiagnostics || collectDiagnostics;
 
     this.lastPollAt = null;
     this.activeReviewers = new Map();
     this.processedPrKeys = new Set();
     this.activeFixers = new Map();
     this.pollTimer = null;
+    this.agentCliAvailabilityCache = {
+      at: 0,
+      value: null
+    };
   }
 
   static getInstance(deps = {}) {
@@ -96,21 +122,20 @@ class PrReviewAutomationService {
   _resolveReviewerConfig(cfg = {}) {
     const rawAgent = String(cfg.reviewerAgent || 'claude').trim().toLowerCase();
     const agentId = rawAgent === 'codex' ? 'codex' : 'claude';
-    const modeRaw = String(cfg.reviewerMode || 'fresh').trim().toLowerCase();
-    const mode = (modeRaw === 'resume' || modeRaw === 'continue' || modeRaw === 'fresh') ? modeRaw : 'fresh';
+    const mode = normalizeReviewerMode(cfg.reviewerMode || 'fresh');
 
     if (agentId === 'codex') {
-      const model = String(cfg.reviewerCodexModel || '').trim() || undefined;
+      const model = normalizeOptionalCliValue(cfg.reviewerCodexModel);
 
-      const reasoningRaw = String(cfg.reviewerCodexReasoning || 'high').trim().toLowerCase();
-      const reasoning = (reasoningRaw === 'low' || reasoningRaw === 'medium' || reasoningRaw === 'high')
+      const reasoningRaw = String(cfg.reviewerCodexReasoning || '').trim().toLowerCase();
+      const reasoning = (reasoningRaw === 'low' || reasoningRaw === 'medium' || reasoningRaw === 'high' || reasoningRaw === 'xhigh')
         ? reasoningRaw
-        : 'high';
+        : undefined;
 
-      const verbosityRaw = String(cfg.reviewerCodexVerbosity || 'high').trim().toLowerCase();
+      const verbosityRaw = String(cfg.reviewerCodexVerbosity || '').trim().toLowerCase();
       const verbosity = (verbosityRaw === 'low' || verbosityRaw === 'medium' || verbosityRaw === 'high')
         ? verbosityRaw
-        : 'high';
+        : undefined;
 
       const providedFlags = Array.isArray(cfg.reviewerCodexFlags) ? cfg.reviewerCodexFlags : [];
       const validFlags = new Set(['yolo', 'workspaceWrite', 'readOnly', 'neverAsk', 'askOnRequest']);
@@ -129,14 +154,67 @@ class PrReviewAutomationService {
     }
 
     const provider = String(cfg.reviewerProvider || 'anthropic').trim() || 'anthropic';
+    const model = normalizeOptionalCliValue(cfg.reviewerClaudeModel);
     const reviewerSkipPermissions = cfg.reviewerSkipPermissions === undefined ? true : !!cfg.reviewerSkipPermissions;
 
     return {
       agentId,
       mode,
       provider,
+      model,
       flags: reviewerSkipPermissions ? ['skipPermissions'] : []
     };
+  }
+
+  async _getInstalledAgentCliAvailability() {
+    const now = Date.now();
+    if (this.agentCliAvailabilityCache.value && (now - this.agentCliAvailabilityCache.at) < AGENT_CLI_CACHE_TTL_MS) {
+      return this.agentCliAvailabilityCache.value;
+    }
+
+    const diagnostics = await this.collectDiagnostics();
+    const tools = Array.isArray(diagnostics?.tools) ? diagnostics.tools : [];
+    const availability = {
+      claude: tools.some((tool) => tool?.id === 'claude' && !!tool?.ok),
+      codex: tools.some((tool) => tool?.id === 'codex' && !!tool?.ok)
+    };
+
+    this.agentCliAvailabilityCache = {
+      at: now,
+      value: availability
+    };
+    return availability;
+  }
+
+  async _resolveRunnableReviewerConfig(cfg = {}) {
+    const requested = this._resolveReviewerConfig(cfg);
+    try {
+      const availability = await this._getInstalledAgentCliAvailability();
+      if (availability[requested.agentId]) {
+        return requested;
+      }
+
+      const fallbackAgentId = requested.agentId === 'codex' ? 'claude' : 'codex';
+      if (availability[fallbackAgentId]) {
+        logger.warn('Requested reviewer agent CLI unavailable; falling back to installed alternative', {
+          requestedAgent: requested.agentId,
+          fallbackAgent: fallbackAgentId
+        });
+        return this._resolveReviewerConfig({ ...cfg, reviewerAgent: fallbackAgentId });
+      }
+
+      logger.warn('No supported reviewer agent CLI is installed', {
+        requestedAgent: requested.agentId,
+        availability
+      });
+      return null;
+    } catch (error) {
+      logger.warn('Failed to detect reviewer agent CLI availability; using requested agent config', {
+        requestedAgent: requested.agentId,
+        error: error.message
+      });
+      return requested;
+    }
   }
 
   _resolvePostReviewAction(prId, cfg = {}) {
@@ -562,8 +640,13 @@ class PrReviewAutomationService {
     }
 
     // Find an available worktree in the active workspace
-    const reviewerConfig = this._resolveReviewerConfig(cfg);
-    const assignment = await this._findAvailableWorktree(pr, cfg);
+    const reviewerConfig = await this._resolveRunnableReviewerConfig(cfg);
+    if (!reviewerConfig) {
+      logger.warn('Cannot spawn reviewer - no supported agent CLI available', { prId: pr.prId });
+      return false;
+    }
+
+    const assignment = await this._findAvailableWorktree(pr, reviewerConfig);
 
     const worktreeId = assignment?.worktreeId;
     if (!worktreeId) {
@@ -638,8 +721,13 @@ class PrReviewAutomationService {
       return false;
     }
 
-    const fixerConfig = this._resolveReviewerConfig(cfg);
-    const assignment = await this._findAvailableWorktree(pr, cfg);
+    const fixerConfig = await this._resolveRunnableReviewerConfig(cfg);
+    if (!fixerConfig) {
+      logger.warn('Cannot spawn fixer - no supported agent CLI available', { prId: pr.prId });
+      return false;
+    }
+
+    const assignment = await this._findAvailableWorktree(pr, fixerConfig);
 
     const worktreeId = assignment?.worktreeId;
     if (!worktreeId) {
@@ -765,12 +853,17 @@ class PrReviewAutomationService {
 
     const workspace = this.workspaceManager.getWorkspaceById?.(wsId);
     if (!workspace) return null;
-    const reviewerConfig = this._resolveReviewerConfig(cfg);
+    const reviewerConfig = cfg?.agentId ? cfg : this._resolveReviewerConfig(cfg);
     const fallbackRepo = String(pr?.repo || '').trim() || 'review';
 
-    const preferredSuffixes = [`-${reviewerConfig.agentId}`];
-    if (reviewerConfig.agentId !== 'claude') preferredSuffixes.push('-claude');
-    if (reviewerConfig.agentId !== 'codex') preferredSuffixes.push('-codex');
+    const preferredSessionIdsForWorktree = (repoPrefix, worktreeId) => {
+      const ids = [
+        `${repoPrefix}-${worktreeId}-${reviewerConfig.agentId}`,
+        `${repoPrefix}-${worktreeId}-claude`,
+        `${repoPrefix}-${worktreeId}-codex`
+      ];
+      return [...new Set(ids)];
+    };
 
     // Find worktrees that aren't currently used by active reviewers
     const usedWorktrees = new Set(
@@ -786,21 +879,15 @@ class PrReviewAutomationService {
       // Check if the session in this worktree is idle/exited
       const repoName = terminal.repository?.name || terminal.repositoryName || '';
       const repoPrefix = String(repoName || fallbackRepo).trim();
-      for (const suffix of preferredSuffixes) {
-        const candidateSessionId = `${repoPrefix}-${wId}${suffix}`;
+      for (const candidateSessionId of preferredSessionIdsForWorktree(repoPrefix, wId)) {
         const session = this.sessionManager?.getSessionById?.(candidateSessionId);
-        if (!session || session.status === 'exited' || session.status === 'idle') {
+        if (session && (session.status === 'exited' || session.status === 'idle')) {
           return {
             worktreeId: wId,
             sessionId: candidateSessionId
           };
         }
       }
-
-      return {
-        worktreeId: wId,
-        sessionId: `${repoPrefix}-${wId}-${reviewerConfig.agentId}`
-      };
     }
 
     return null;

@@ -267,10 +267,11 @@
             "reviewerAgent": "claude",
             "reviewerMode": "fresh",
             "reviewerProvider": "anthropic",
+            "reviewerClaudeModel": "",
             "reviewerSkipPermissions": true,
-            "reviewerCodexModel": "gpt-5-codex",
-            "reviewerCodexReasoning": "high",
-            "reviewerCodexVerbosity": "high",
+            "reviewerCodexModel": "",
+            "reviewerCodexReasoning": "",
+            "reviewerCodexVerbosity": "",
             "reviewerCodexFlags": [
               "yolo"
             ],

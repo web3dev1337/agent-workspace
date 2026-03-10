@@ -299,10 +299,11 @@ user-settings.default.json         - Default user settings template
 - `reviewerAgent`: `claude` | `codex`
 - `reviewerMode`: `fresh` | `continue` | `resume`
 - `reviewerProvider`: provider string (Claude-only)
+- `reviewerClaudeModel`: optional Claude CLI `--model` value such as `opus`, `sonnet`, or a full model id
 - `reviewerSkipPermissions`: boolean (Claude-only)
-- `reviewerCodexModel`: string
-- `reviewerCodexReasoning`: `low` | `medium` | `high` (Codex-only)
-- `reviewerCodexVerbosity`: `low` | `medium` | `high` (Codex-only)
+- `reviewerCodexModel`: optional Codex CLI `-m` model override (blank uses the local Codex default/config)
+- `reviewerCodexReasoning`: `low` | `medium` | `high` | `xhigh` (Codex-only; blank uses the local Codex default/config)
+- `reviewerCodexVerbosity`: `low` | `medium` | `high` (Codex-only; blank uses the local Codex default/config)
 - `reviewerCodexFlags`: array of Codex flags
 - `reviewerTier`: number
 - `autoSpawnReviewer`: boolean
