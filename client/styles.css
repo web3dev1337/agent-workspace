@@ -1359,149 +1359,49 @@ header {
   box-shadow: 0 0 8px rgba(240, 136, 62, 0.3);
 }
 
-/* Terminal Grid */
+/* Terminal Grid — driven by JS-set --grid-cols / --grid-rows custom properties.
+   Pairs stack top-to-bottom; within each pair terminals sit side-by-side. */
 .terminal-grid {
-  padding: var(--space-md);
+  padding: var(--space-xs);
   overflow: hidden;
   display: grid;
-  gap: var(--space-md);
-  /* Dynamic grid - automatically adjusts based on visible terminals */
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(4, 1fr);  /* Default 4x4 grid */
-  /* Fill the remaining viewport via flex instead of hardcoded viewport math. */
+  gap: var(--space-xs);
+  grid-template-columns: repeat(var(--grid-cols, 1), minmax(0, 1fr));
+  grid-template-rows:    repeat(var(--grid-rows, 1), minmax(0, 1fr));
   flex: 1 1 auto;
   min-height: 0;
   height: auto;
   contain: layout;
 }
 
+/* Each worktree pair: agent + server side-by-side */
 .terminal-pair {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
+  flex-direction: row;
+  gap: var(--space-xs);
   min-height: 0;
-  height: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .terminal-pair > .terminal-wrapper {
   flex: 1 1 0;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .terminal-pair.terminal-pair-single {
   gap: 0;
 }
 
-/* Dynamic layouts for different terminal counts - Pair-aware (Claude + Server) */
-
-/* Single terminal (shouldn't happen often) */
-.terminal-grid[data-visible-count="1"] {
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr;
-}
-
-/* 1 pair (2 terminals): Side by side */
-.terminal-grid[data-visible-count="2"] {
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: 1fr;
-}
-
-/* Odd terminal (3) - probably 1 pair + 1 solo */
-.terminal-grid[data-visible-count="3"] {
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: 1fr;
-}
-
-/* 2 pairs (4 terminals): 2x2 grid */
-.terminal-grid[data-visible-count="4"] {
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-}
-
-/* 5 terminals - 2 pairs + 1 solo */
-.terminal-grid[data-visible-count="5"] {
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-}
-
-/* 3 pairs (6 terminals): Stack 3 pairs vertically */
-.terminal-grid[data-visible-count="6"] {
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-}
-
-/* 7 terminals - 3 pairs + 1 solo */
-.terminal-grid[data-visible-count="7"] {
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-}
-
-/* 4 pairs (8 terminals): Stack 4 pairs vertically */
-.terminal-grid[data-visible-count="8"] {
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(4, 1fr);
-}
-
-/* 9 terminals */
-.terminal-grid[data-visible-count="9"] {
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-}
-
-/* 5 pairs (10 terminals): 4x2 grid with last pair spanning bottom */
-.terminal-grid[data-visible-count="10"] {
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-}
-/* Make LAST 2 terminals span the bottom row (using nth-last-child for flexibility) */
-.terminal-grid[data-visible-count="10"] > :nth-last-child(2) {
-  grid-column: 1 / span 2;
-}
-.terminal-grid[data-visible-count="10"] > :nth-last-child(1) {
-  grid-column: 3 / span 2;
-}
-
-/* 11 terminals - odd case */
-.terminal-grid[data-visible-count="11"] {
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-}
-
-/* 6 pairs (12 terminals): 4 columns x 3 rows works perfectly */
-.terminal-grid[data-visible-count="12"] {
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-}
-
-/* 7 pairs (14 terminals): 4x4 grid with last pair spanning bottom */
-.terminal-grid[data-visible-count="13"],
-.terminal-grid[data-visible-count="14"] {
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(4, 1fr);
-}
-/* Make LAST 2 terminals span the bottom row (using nth-last-child for flexibility) */
-.terminal-grid[data-visible-count="14"] > :nth-last-child(2) {
-  grid-column: 1 / span 2;
-}
-.terminal-grid[data-visible-count="14"] > :nth-last-child(1) {
-  grid-column: 3 / span 2;
-}
-
-/* 8 pairs (16 terminals) */
-.terminal-grid[data-visible-count="15"],
-.terminal-grid[data-visible-count="16"] {
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(4, 1fr);
-}
-
-/* If the user has more than 16 visible terminals, allow scrolling and use
-   fixed-ish row heights so additional terminals don't become inaccessible. */
+/* Scrollable fallback for very large grids (>16 pairs) */
 .terminal-grid.terminal-grid-scrollable {
   overflow-y: auto;
   overflow-x: hidden;
   align-content: stretch;
-  grid-template-rows: minmax(260px, auto);
-  grid-auto-rows: minmax(260px, auto);
+  grid-template-rows: minmax(200px, auto);
+  grid-auto-rows: minmax(200px, auto);
 }
 
 /* Terminal Container */
@@ -1520,11 +1420,13 @@ header {
 
 .terminal-header {
   background: var(--bg-secondary);
-  padding: 2px var(--space-md);
+  padding: 2px var(--space-sm);
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 2px;
   border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
+  min-width: 0;
 }
 
 .terminal-intent-haiku {
@@ -1556,11 +1458,24 @@ header {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 2px;
   min-width: 0;
 }
 
+.terminal-display-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 6em;
+  flex-shrink: 1;
+}
+
 .terminal-branch {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 6em;
+  flex-shrink: 3;
   font-size: 0.95rem;
   color: var(--accent-primary);
   font-family: var(--font-mono);
@@ -1679,9 +1594,75 @@ header {
 
 .terminal-controls {
   display: flex;
-  gap: var(--space-xs);
+  gap: 0;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+/* Collapse adjacent borders so buttons truly touch */
+.terminal-controls > *:not(:first-child) {
+  margin-left: -1px;
+}
+
+/* Keep hover borders visible above neighbours */
+.terminal-controls > *:hover {
+  z-index: 1;
+  position: relative;
+}
+
+/* Toggle button — hidden when there's enough space */
+.terminal-controls-toggle {
+  display: none;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 1;
+  transition: opacity 0.15s;
+  font-size: 20px;
+}
+
+.terminal-controls-toggle:hover {
+  opacity: 0.7;
+}
+
+.controls-toggle-icon {
+  display: inline-flex;
+  letter-spacing: 1px;
+}
+
+/* Collapsed state: hide buttons, show toggle, branch stays visible */
+.terminal-header.controls-collapsed .terminal-controls > *:not(.terminal-controls-toggle) {
+  display: none;
+}
+
+.terminal-header.controls-collapsed .terminal-controls-toggle {
+  display: inline-flex;
+}
+
+/* Collapsed state: dots just show as-is */
+
+/* Expanded state: show buttons, hide branch, arrow rotates */
+.terminal-header.controls-expanded .terminal-controls > * {
+  display: initial;
+}
+
+.terminal-header.controls-expanded .terminal-controls-toggle {
+  display: inline-flex;
+}
+
+/* Expanded state: dots stay the same (no rotation for dots) */
+
+.terminal-header.controls-expanded .terminal-branch,
+.terminal-header.controls-expanded .terminal-branch-refresh,
+.terminal-header.controls-expanded .terminal-ticket {
+  display: none;
 }
 
 .terminal-ticket {
@@ -5739,12 +5720,6 @@ body.dependency-onboarding-active #dependency-setup-modal {
   background: rgba(37, 99, 235, 0.24);
 }
 
-.terminal-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
 .terminal-controls label {
   font-size: 0.9em;
   margin: 0;
@@ -6335,10 +6310,10 @@ body.dependency-onboarding-active #dependency-setup-modal {
   }
 }
 
-/* Responsive - ONLY apply if data-visible-count is not set */
+/* Responsive - fallback if JS hasn't set --grid-cols yet */
 @media (max-width: 1200px) {
   .terminal-grid:not([data-visible-count]) {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -6406,7 +6381,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
   }
 
   .terminal-grid:not([data-visible-count]) {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -9033,11 +9008,7 @@ body.dependency-onboarding-active #dependency-setup-modal {
 /* Smaller desktop screens and landscape tablets */
 @media (max-height: 900px) {
   .terminal-grid {
-    grid-template-rows: repeat(2, minmax(250px, 1fr));  /* Reduced min height */
-  }
-
-  .terminal-wrapper {
-    min-height: 250px;  /* Match grid min height */
+    gap: var(--space-sm);
   }
 
   .startup-ui-compact {
@@ -9068,13 +9039,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
   }
 
   .terminal-grid {
-    grid-template-rows: repeat(2, minmax(220px, 1fr));
     padding: var(--space-sm);
     gap: var(--space-sm);
-  }
-
-  .terminal-wrapper {
-    min-height: 220px;
   }
 
   .terminal-header {
@@ -9118,13 +9084,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
   }
 
   .terminal-grid {
-    grid-template-rows: repeat(2, minmax(200px, 1fr));
     padding: 6px;
     gap: 6px;
-  }
-
-  .terminal-wrapper {
-    min-height: 200px;
   }
 
   .terminal-header {
@@ -9179,11 +9140,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
 /* Ultra-compact for very constrained heights */
 @media (max-height: 480px) {
   .terminal-grid {
-    grid-template-rows: repeat(2, minmax(180px, 1fr));
-  }
-
-  .terminal-wrapper {
-    min-height: 180px;
+    gap: 4px;
+    padding: 4px;
   }
 
   .startup-ui-compact {
