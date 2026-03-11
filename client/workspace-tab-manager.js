@@ -75,6 +75,9 @@ class WorkspaceTabManager {
       visibleTerminals: new Set(),
       sessionActivity: new Map(),
       showActiveOnly: false,
+      viewMode: 'all',
+      tierFilter: 'all',
+      workflowMode: 'all',
 
       // Per-workspace UI state (must not leak across tabs)
       githubLinks: new Map(),
@@ -314,18 +317,15 @@ class WorkspaceTabManager {
     });
     console.log(`Restored ${targetTab.sessions.size} sessions to orchestrator`);
 
+    this.restoreTabUIState(targetTab, {
+      skipRender: suppressUiRestore,
+      skipSidebar: suppressUiRestore
+    });
+
     if (suppressUiRestore) {
       console.log(`Switched to tab ${tabId} (${targetTab.displayName}) with deferred UI restore`);
       return;
     }
-
-    // Rebuild sidebar for new workspace
-    if (this.orchestrator.buildSidebar) {
-      this.orchestrator.buildSidebar();
-    }
-
-    // Restore UI/filter state and update terminal grid
-    this.restoreTabUIState(targetTab);
 
     console.log(`Switched to tab ${tabId} (${targetTab.displayName})`);
   }
@@ -1076,6 +1076,9 @@ class WorkspaceTabManager {
       visibleTerminals: pruneSet(visibleTerminals),
       sessionActivity: pruneMap(sessionActivity),
       showActiveOnly: !!showActiveOnly,
+      viewMode: String(this.orchestrator.viewMode || 'all'),
+      tierFilter: this.orchestrator.tierFilter ?? 'all',
+      workflowMode: String(this.orchestrator.workflowMode || 'all'),
 
       githubLinks: pruneMap(this.orchestrator.githubLinks),
       githubLinkLogs: pruneMap(this.orchestrator.githubLinkLogs),
@@ -1091,7 +1094,7 @@ class WorkspaceTabManager {
   /**
    * Restore UI/filter state for a tab and redraw the terminal grid
    */
-  restoreTabUIState(tabState) {
+  restoreTabUIState(tabState, { skipRender = false, skipSidebar = false } = {}) {
     if (!tabState || !this.orchestrator) return;
 
     const orchestrator = this.orchestrator;
@@ -1129,6 +1132,9 @@ class WorkspaceTabManager {
 
     orchestrator.visibleTerminals = nextVisible || new Set();
     orchestrator.showActiveOnly = !!(tabState.uiState && tabState.uiState.showActiveOnly);
+    orchestrator.viewMode = String(tabState.uiState?.viewMode || orchestrator.viewMode || 'all');
+    orchestrator.tierFilter = tabState.uiState?.tierFilter ?? orchestrator.tierFilter ?? 'all';
+    orchestrator.workflowMode = String(tabState.uiState?.workflowMode || orchestrator.workflowMode || 'all');
 
     if (tabState.uiState?.sessionActivity) {
       orchestrator.sessionActivity = filterMapToSessions(tabState.uiState.sessionActivity);
@@ -1146,7 +1152,11 @@ class WorkspaceTabManager {
     orchestrator.autoStartApplied = filterSetToSessions(tabState.uiState?.autoStartApplied);
     orchestrator.worktreeConfigs = filterMapToSessions(tabState.uiState?.worktreeConfigs);
 
-    if (typeof orchestrator.updateTerminalGrid === 'function') {
+    if (!skipSidebar && typeof orchestrator.buildSidebar === 'function') {
+      orchestrator.buildSidebar();
+    }
+
+    if (!skipRender && typeof orchestrator.updateTerminalGrid === 'function') {
       orchestrator.updateTerminalGrid();
     }
   }
