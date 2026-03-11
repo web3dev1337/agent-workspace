@@ -23,9 +23,15 @@
 	    <!-- Sidebar -->
 	    <aside class="sidebar" id="worktree-sidebar">
 	        <div class="sidebar-header">
-	            <h2>Worktrees</h2>
-	            <button id="view-presets" class="icon-button sidebar-header-presets" title="View Presets" data-ui-visibility="sidebar.viewPresets">📋</button>
-            <button id="sidebar-toggle" class="icon-button sidebar-toggle" title="Collapse sidebar" aria-label="Collapse sidebar" aria-controls="worktree-sidebar" aria-expanded="true"><span class="sidebar-toggle-icon" aria-hidden="true">◂</span></button>
+	            <div class="sidebar-title-line">
+	                <h1 class="sidebar-title">Agent Workspace</h1>
+	            </div>
+	            <div class="sidebar-divider" aria-hidden="true"></div>
+	            <div class="sidebar-worktrees-line">
+                    <h2>Worktrees</h2>
+                    <button id="view-presets" class="icon-button sidebar-header-presets" title="View Presets" data-ui-visibility="sidebar.viewPresets">📋</button>
+                </div>
+                <button id="sidebar-toggle" class="icon-button sidebar-toggle" title="Collapse sidebar" aria-label="Collapse sidebar" aria-controls="worktree-sidebar" aria-expanded="true"><span class="sidebar-toggle-icon" aria-hidden="true">◂</span></button>
 	        </div>
 	        <div class="sidebar-footer">
 	            <button id="add-worktree" class="button-primary button-success" onclick="window.orchestrator.showAddWorktreeModal()" title="Add New Worktree">+ Add Worktree</button>
@@ -49,10 +55,7 @@
 	    <div class="main-container">
 	        <!-- Header -->
 	        <header>
-	            <div class="header-content">
-	                <h1>Agent Workspace</h1>
-	            </div>
-	            <div class="header-actions">
+            <div class="header-actions">
                 <button id="dashboard-btn" class="header-btn" title="Dashboard" data-ui-visibility="header.dashboard">
                     🏠 Dashboard
                 </button>
