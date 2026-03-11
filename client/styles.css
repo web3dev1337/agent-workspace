@@ -1359,7 +1359,7 @@ header {
 
 .terminal-pair {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: var(--space-md);
   min-height: 0;
   height: 100%;
@@ -1368,6 +1368,7 @@ header {
 .terminal-pair > .terminal-wrapper {
   flex: 1 1 0;
   min-height: 0;
+  min-width: 0;
 }
 
 .terminal-pair.terminal-pair-single {
