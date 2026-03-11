@@ -17,6 +17,7 @@ FRONTEND:   client/app.js, client/terminal.js        - Web client
 NATIVE:     src-tauri/src/main.rs                    - Native desktop app
 CONFIG:     config.json, package.json                - Configuration files
 DIFF:       diff-viewer/                             - Advanced diff viewer component
+SITE:       site/                                    - Standalone showcase site for future GitHub Pages publishing
 PLANS:      PLANS/                                   - Date-stamped planning + implementation notes
 ```
 
@@ -306,6 +307,17 @@ scripts/public-release-audit.js    - Public-release safety audit automation
 └─ Optional: full-history gitleaks scan (`--history-secrets`)
 
 scripts/create-project.js          - Taxonomy-driven project scaffold generator (template/project-kit source resolution, optional post-create hooks, git init, optional GitHub remote, worktree bootstrap via WorktreeHelper)
+scripts/preview-site.js            - Tiny local preview server for the standalone `site/` showcase
+```
+
+### Standalone Showcase Site
+```
+site/                              - Concise product/showcase site kept separate from internal docs for future GitHub Pages deployment
+├─ index.html                      - Single-page product overview and quick-start narrative
+├─ styles.css                      - Showcase visual system, layout, and motion
+├─ script.js                       - Small reveal-on-scroll enhancement
+├─ assets/                         - Favicon, provider logos, generated Open Graph preview, and real UI screenshot
+└─ README.md                       - Local preview and future publishing notes
 ```
 
 ## Advanced Diff Viewer Component
