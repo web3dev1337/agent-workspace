@@ -1748,6 +1748,7 @@ header {
 .control-btn.terminal-session-close-btn {
   font-weight: 700;
   line-height: 1;
+  display: none !important; /* remove-worktree button hidden from terminal headers */
 }
 
 .control-btn.terminal-process-close-btn {

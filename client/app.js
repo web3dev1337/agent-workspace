@@ -6682,7 +6682,7 @@ class ClaudeOrchestrator {
 					    const session = this.sessions.get(sid);
               const visibility = this.getTerminalVisibilityConfig();
               const showClose = visibility.closeProcess !== false;
-              const showRemove = visibility.removeWorktree !== false;
+              const showRemove = false; // permanently hidden — use sidebar or API to remove worktrees
               const sidArg = this.escapeOnclickArg(sid);
 					    const stopBtn = showClose
                 ? `<button class="control-btn terminal-process-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.requestCloseSession(${sidArg})" title="Close terminal process (kills agent/server for this worktree, keeps worktree in workspace)">×</button>`
