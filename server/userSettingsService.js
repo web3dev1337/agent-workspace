@@ -177,7 +177,7 @@ class UserSettingsService {
               notifications: false,
               commander: true,
               recommendations: false,
-              settings: true,
+              settings: false,
               connectionStatus: true
             },
             sidebar: {
@@ -228,7 +228,7 @@ class UserSettingsService {
               workspacesActive: true,
               workspacesAll: true,
               reviewSection: true,
-              quickLinks: true,
+              quickLinks: false,
               runningServices: true,
               createSection: true
             },
@@ -498,6 +498,26 @@ class UserSettingsService {
           changed = true;
         }
         uiMigrations.headerPortsDefaultOn = true;
+        ui.migrations = uiMigrations;
+        changed = true;
+      }
+      if (!uiMigrations.dashboardQuickLinksDefaultOff) {
+        const visibility = (ui.visibility && typeof ui.visibility === 'object') ? { ...ui.visibility } : {};
+        const dashboard = (visibility.dashboard && typeof visibility.dashboard === 'object') ? { ...visibility.dashboard } : {};
+        const header = (visibility.header && typeof visibility.header === 'object') ? { ...visibility.header } : {};
+        if (dashboard.quickLinks !== false) {
+          dashboard.quickLinks = false;
+          visibility.dashboard = dashboard;
+          ui.visibility = visibility;
+          changed = true;
+        }
+        if (header.settings !== false) {
+          header.settings = false;
+          visibility.header = header;
+          ui.visibility = visibility;
+          changed = true;
+        }
+        uiMigrations.dashboardQuickLinksDefaultOff = true;
         ui.migrations = uiMigrations;
         changed = true;
       }

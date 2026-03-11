@@ -175,7 +175,7 @@ class ClaudeOrchestrator {
         notifications: false,
         commander: true,
         recommendations: false,
-        settings: true,
+        settings: false,
         connectionStatus: true
       },
       sidebar: {
@@ -226,7 +226,7 @@ class ClaudeOrchestrator {
         workspacesActive: true,
         workspacesAll: true,
         reviewSection: true,
-        quickLinks: true,
+        quickLinks: false,
         runningServices: true,
         createSection: true
       },
