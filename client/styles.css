@@ -826,6 +826,12 @@ body {
   max-width: 430px;
 }
 
+.text-input-dialog.modal {
+  background: color-mix(in srgb, #000 38%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
 .text-input-dialog .modal-body {
   display: flex;
   flex-direction: column;

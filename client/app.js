@@ -16353,7 +16353,7 @@ class ClaudeOrchestrator {
 
       const dialog = document.createElement('div');
       dialog.id = 'text-input-dialog';
-      dialog.className = 'modal';
+      dialog.className = 'modal text-input-dialog';
 
       const escapeHtml = (value = '') => {
         return String(value)
@@ -16370,7 +16370,7 @@ class ClaudeOrchestrator {
       const safePlaceholder = escapeHtml(String(placeholder));
 
       dialog.innerHTML = `
-        <div class="modal-content confirmation-dialog text-input-dialog">
+        <div class="modal-content confirmation-dialog text-input-dialog-content">
           <div class="modal-header">
             <h3>${safeTitle}</h3>
             <button type="button" class="close-btn" data-text-input-close>×</button>
