@@ -1407,6 +1407,8 @@ header {
   align-items: center;
   gap: 2px;
   border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
+  min-width: 0;
 }
 
 .terminal-intent-haiku {
@@ -1574,9 +1576,22 @@ header {
 
 .terminal-controls {
   display: flex;
-  gap: 1px;
+  gap: 0;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Collapse adjacent borders so buttons truly touch */
+.terminal-controls > *:not(:first-child) {
+  margin-left: -1px;
+}
+
+/* Keep hover borders visible above neighbours */
+.terminal-controls > *:hover {
+  z-index: 1;
+  position: relative;
 }
 
 .terminal-ticket {
