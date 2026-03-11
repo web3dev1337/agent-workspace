@@ -172,7 +172,7 @@ class UserSettingsService {
               focusTier2: false,
               focusSwap: false,
               tasks: true,
-              ports: false,
+              ports: true,
               voice: false,
               notifications: false,
               commander: true,
@@ -485,6 +485,19 @@ class UserSettingsService {
           changed = true;
         }
         uiMigrations.headerTasksDefaultOn = true;
+        ui.migrations = uiMigrations;
+        changed = true;
+      }
+      if (!uiMigrations.headerPortsDefaultOn) {
+        const visibility = (ui.visibility && typeof ui.visibility === 'object') ? { ...ui.visibility } : {};
+        const header = (visibility.header && typeof visibility.header === 'object') ? { ...visibility.header } : {};
+        if (header.ports !== true) {
+          header.ports = true;
+          visibility.header = header;
+          ui.visibility = visibility;
+          changed = true;
+        }
+        uiMigrations.headerPortsDefaultOn = true;
         ui.migrations = uiMigrations;
         changed = true;
       }
