@@ -171,9 +171,10 @@ class ClaudeOrchestrator {
         focusSwap: false,
         tasks: false,
         ports: false,
+        voice: false,
+        notifications: false,
         commander: true,
         recommendations: false,
-        notifications: true,
         settings: true,
         connectionStatus: true
       },
@@ -192,7 +193,7 @@ class ClaudeOrchestrator {
         closeProcess: false,
         removeWorktree: true,
         reviewConsole: true,
-        showOnlyWorktree: true,
+        showOnlyWorktree: false,
         startAgentOptions: true,
         startClaudeWithSettings: false,
         createNewProject: false,
@@ -208,6 +209,7 @@ class ClaudeOrchestrator {
         startServerDev: false,
         forceKill: true,
         launchSettings: false,
+        serverLaunchMenu: false,
         startServer: true
       },
       dashboard: {
@@ -4116,6 +4118,7 @@ class ClaudeOrchestrator {
     const isRunning = this.serverStatuses.get(sessionId) === 'running';
     const visibility = this.getTerminalVisibilityConfig();
     const showLaunchSettings = visibility.launchSettings !== false;
+    const showServerLaunchMenu = visibility.serverLaunchMenu !== false;
 
     // Start with server control (start/stop/launch)
     let html = '';
@@ -4123,15 +4126,22 @@ class ClaudeOrchestrator {
     if (isRunning) {
       html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>`;
     } else {
-      html += `<div class="server-launch-group">
-        <select class="control-btn env-select" id="server-env-${sessionId}" name="server-env-${sessionId}"
-                onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
-          <option value="">▶</option>
-          ${this.getDynamicLaunchOptions(sessionId)}
-          <option value="custom" selected>Custom...</option>
-        </select>
-        ${showLaunchSettings ? `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>` : ''}
-      </div>`;
+      if (showServerLaunchMenu) {
+        html += `<div class="server-launch-group">
+          <select class="control-btn env-select" id="server-env-${sessionId}" name="server-env-${sessionId}"
+                  onchange="window.orchestrator.toggleServer('${sessionId}', this.value); this.value='custom';" title="Start Server">
+            <option value="">▶</option>
+            ${this.getDynamicLaunchOptions(sessionId)}
+            <option value="custom" selected>Custom...</option>
+          </select>
+          ${showLaunchSettings ? `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>` : ''}
+        </div>`;
+      } else {
+        html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Start Server">▶</button>`;
+        if (showLaunchSettings) {
+          html += `<button class="control-btn" onclick="window.orchestrator.showServerLaunchSettings('${sessionId}')" title="Launch Settings">⚙️</button>`;
+        }
+      }
     }
 
     // Add dynamic buttons from config

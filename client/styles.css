@@ -1057,9 +1057,10 @@ header {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   padding: 0 var(--space-lg);
+  gap: var(--space-md);
 }
 
 .sidebar-toggle {
@@ -1125,6 +1126,14 @@ header {
   display: flex;
   align-items: center;
   gap: var(--space-md);
+  justify-content: flex-end;
+  margin-left: auto;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .process-banner {

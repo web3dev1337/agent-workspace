@@ -173,9 +173,10 @@ class UserSettingsService {
               focusSwap: false,
               tasks: true,
               ports: false,
+              voice: false,
+              notifications: false,
               commander: true,
               recommendations: false,
-              notifications: true,
               settings: true,
               connectionStatus: true
             },
@@ -194,7 +195,7 @@ class UserSettingsService {
               closeProcess: false,
               removeWorktree: true,
               reviewConsole: true,
-              showOnlyWorktree: true,
+              showOnlyWorktree: false,
               startAgentOptions: true,
               startClaudeWithSettings: false,
               createNewProject: false,
@@ -210,6 +211,7 @@ class UserSettingsService {
               startServerDev: false,
               forceKill: true,
               launchSettings: false,
+              serverLaunchMenu: false,
               startServer: true
             },
             dashboard: {
@@ -459,6 +461,20 @@ class UserSettingsService {
       }
 
       const uiMigrations = (ui.migrations && typeof ui.migrations === 'object') ? { ...ui.migrations } : {};
+      if (!uiMigrations.headerNotificationsVoiceDefaultOff) {
+        const visibility = (ui.visibility && typeof ui.visibility === 'object') ? { ...ui.visibility } : {};
+        const header = (visibility.header && typeof visibility.header === 'object') ? { ...visibility.header } : {};
+        if (header.notifications !== false || header.voice !== false) {
+          header.notifications = false;
+          header.voice = false;
+          visibility.header = header;
+          ui.visibility = visibility;
+          changed = true;
+        }
+        uiMigrations.headerNotificationsVoiceDefaultOff = true;
+        ui.migrations = uiMigrations;
+        changed = true;
+      }
       if (!uiMigrations.headerTasksDefaultOn) {
         const visibility = (ui.visibility && typeof ui.visibility === 'object') ? { ...ui.visibility } : {};
         const header = (visibility.header && typeof visibility.header === 'object') ? { ...visibility.header } : {};

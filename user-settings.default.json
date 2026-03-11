@@ -118,9 +118,10 @@
           "focusSwap": false,
           "tasks": true,
           "ports": false,
+          "voice": false,
+          "notifications": false,
           "commander": true,
           "recommendations": false,
-          "notifications": true,
           "settings": true,
           "connectionStatus": true
         },
@@ -139,7 +140,7 @@
           "closeProcess": false,
           "removeWorktree": true,
           "reviewConsole": true,
-          "showOnlyWorktree": true,
+          "showOnlyWorktree": false,
           "startAgentOptions": true,
           "startClaudeWithSettings": false,
           "createNewProject": false,
@@ -155,6 +156,7 @@
           "startServerDev": false,
           "forceKill": true,
           "launchSettings": false,
+          "serverLaunchMenu": false,
           "startServer": true
         },
         "dashboard": {
