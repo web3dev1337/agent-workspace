@@ -5143,24 +5143,29 @@ class ClaudeOrchestrator {
     if (!grid) return;
     const headers = grid.querySelectorAll('.terminal-header');
     headers.forEach((header) => {
-      // Skip if user has force-expanded this header
       if (header.classList.contains('controls-expanded')) return;
       const title = header.querySelector('.terminal-title');
       const controls = header.querySelector('.terminal-controls');
       if (!title || !controls) return;
-      // Temporarily uncollapse to measure natural sizes
-      const wasCollapsed = header.classList.contains('controls-collapsed');
+
+      // Uncollapse and remove overflow clipping so we can measure natural widths
       header.classList.remove('controls-collapsed');
+      const prevOverflow = controls.style.overflow;
+      const prevWhiteSpace = controls.style.whiteSpace;
+      controls.style.overflow = 'visible';
+      controls.style.whiteSpace = 'nowrap';
+
       const headerW = header.clientWidth;
-      const titleW = title.scrollWidth;
-      const controlsW = controls.scrollWidth;
-      // If both don't fit and the title gets less than 30% of header, collapse
-      if (controlsW + titleW > headerW * 0.95 && titleW < headerW * 0.35) {
-        header.classList.add('controls-collapsed');
-      } else if (wasCollapsed) {
-        // Re-check if still needed
-        header.classList.remove('controls-collapsed');
-      }
+      const controlsNatural = controls.scrollWidth;
+      const titleNatural = title.scrollWidth;
+
+      // Restore
+      controls.style.overflow = prevOverflow;
+      controls.style.whiteSpace = prevWhiteSpace;
+
+      // Collapse when both can't fit — title is getting squeezed
+      const fits = (controlsNatural + titleNatural + 8) <= headerW;
+      header.classList.toggle('controls-collapsed', !fits);
     });
   }
 
