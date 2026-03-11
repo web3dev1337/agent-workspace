@@ -43,7 +43,7 @@ class WorkspaceTabManager {
     tabsContainer.className = 'workspace-tabs-container';
     tabsContainer.innerHTML = `
       <button id="dashboard-btn" class="header-btn workspace-dashboard-btn" title="Dashboard" data-ui-visibility="header.dashboard">
-        🏠 Agent Workspace
+        🏠 Dashboard
       </button>
       <div class="workspace-tabs" id="workspace-tabs"></div>
     `;
