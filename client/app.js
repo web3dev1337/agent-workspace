@@ -175,7 +175,7 @@ class ClaudeOrchestrator {
         notifications: false,
         commander: true,
         recommendations: false,
-        settings: false,
+        settings: true,
         connectionStatus: true
       },
       sidebar: {

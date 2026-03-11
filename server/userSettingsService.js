@@ -177,7 +177,7 @@ class UserSettingsService {
               notifications: false,
               commander: true,
               recommendations: false,
-              settings: false,
+              settings: true,
               connectionStatus: true
             },
             sidebar: {
@@ -504,16 +504,9 @@ class UserSettingsService {
       if (!uiMigrations.dashboardQuickLinksDefaultOff) {
         const visibility = (ui.visibility && typeof ui.visibility === 'object') ? { ...ui.visibility } : {};
         const dashboard = (visibility.dashboard && typeof visibility.dashboard === 'object') ? { ...visibility.dashboard } : {};
-        const header = (visibility.header && typeof visibility.header === 'object') ? { ...visibility.header } : {};
         if (dashboard.quickLinks !== false) {
           dashboard.quickLinks = false;
           visibility.dashboard = dashboard;
-          ui.visibility = visibility;
-          changed = true;
-        }
-        if (header.settings !== false) {
-          header.settings = false;
-          visibility.header = header;
           ui.visibility = visibility;
           changed = true;
         }
