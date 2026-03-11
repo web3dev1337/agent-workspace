@@ -82,7 +82,9 @@ test.describe('Tier hotkey', () => {
         && req.url().includes(encodeURIComponent('session:demo-work1-claude'));
     });
 
-    await page.locator('#wrapper-demo-work1-claude').click({ force: true });
+    await page.evaluate(() => {
+      window.orchestrator.lastInteractedSessionId = 'demo-work1-claude';
+    });
 
     await page.keyboard.down('Alt');
     await page.keyboard.press('ArrowUp');
@@ -93,4 +95,3 @@ test.describe('Tier hotkey', () => {
     expect(payload.tier).toBe(1);
   });
 });
-

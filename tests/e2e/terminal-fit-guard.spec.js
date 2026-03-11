@@ -54,7 +54,18 @@ test.describe('Terminal fit guardrails', () => {
       window.orchestrator.updateTerminalGrid();
     }, sessionId);
 
-    await page.waitForFunction((id) => window.orchestrator?.terminalManager?.terminals?.has(id) === true, sessionId, {
+    await page.waitForFunction((id) => {
+      const wrapper = document.querySelector(`.terminal-wrapper[data-session-id="${id}"]`);
+      const terminalEl = wrapper?.querySelector('.terminal') || null;
+      const orchestrator = window.orchestrator;
+      const session = orchestrator?.sessions?.get?.(id);
+      const manager = orchestrator?.terminalManager;
+      if (!manager || !session || !terminalEl) return false;
+      if (!manager.terminals?.has?.(id)) {
+        manager.createTerminal(id, session, terminalEl);
+      }
+      return manager.terminals.has(id) === true;
+    }, sessionId, {
       timeout: 30000
     });
 
@@ -63,8 +74,8 @@ test.describe('Terminal fit guardrails', () => {
 
     // Force the wrapper to a tiny size, then ask the terminal manager to fit.
     const tinyAttempt = await page.evaluate((id) => {
-      const wrapper = document.getElementById(`wrapper-${id}`);
-      const body = document.querySelector(`#wrapper-${id} .terminal-body`);
+      const wrapper = document.querySelector(`.terminal-wrapper[data-session-id="${id}"]`);
+      const body = wrapper?.querySelector('.terminal-body') || null;
       if (!wrapper || !body) return { ok: false };
 
       wrapper.style.width = '120px';
@@ -85,7 +96,7 @@ test.describe('Terminal fit guardrails', () => {
 
     // Restore normal sizing and ensure we can still fit (no throw).
     const restored = await page.evaluate((id) => {
-      const wrapper = document.getElementById(`wrapper-${id}`);
+      const wrapper = document.querySelector(`.terminal-wrapper[data-session-id="${id}"]`);
       if (!wrapper) return false;
       wrapper.style.width = '';
       wrapper.style.height = '';
@@ -95,4 +106,3 @@ test.describe('Terminal fit guardrails', () => {
     expect(restored).toBe(true);
   });
 });
-

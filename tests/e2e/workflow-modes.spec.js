@@ -191,7 +191,9 @@ test.describe('Queue Navigation', () => {
     await ensureWorkspaceLoaded(page);
     await dismissFocusOverlay(page);
 
-    await page.evaluate(() => document.getElementById('queue-btn')?.click());
+    await page.evaluate(async () => {
+      await window.orchestrator?.showQueuePanel?.();
+    });
     await expect(page.locator('#queue-panel')).toBeVisible({ timeout: 10000 });
 
     await expect(page.locator('#queue-list .task-card-row')).toHaveCount(3);

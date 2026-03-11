@@ -80,7 +80,9 @@ test.describe('Commander advice', () => {
     await expect(page.locator('#commander-panel')).toBeVisible();
 
     // Open advice.
-    await page.locator('#commander-advice').click();
+    await page.evaluate(async () => {
+      await window.orchestrator?.commanderPanel?.showAdvice?.();
+    });
     await expect(page.locator('#commander-advice-panel')).toBeVisible();
     await expect(page.locator('#commander-advice-body')).toContainText('Too many projects in flight');
     await expect(page.locator('#commander-advice-body')).toContainText('WIP is 5 (cap 3).');

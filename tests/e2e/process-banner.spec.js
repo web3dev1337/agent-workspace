@@ -39,38 +39,11 @@ test.describe('Process banner', () => {
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.goto('/');
 
-    const dashboardBanner = page.locator('#dashboard-process-banner');
     const headerBanner = page.locator('#process-banner');
-    const dashboardStatus = page.locator('#dashboard-status-summary');
-
-    const normalizeText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
-
-    const getProcessText = async () => {
-      const headerChips = await headerBanner.locator('.process-chip').allTextContents().catch(() => []);
-      if (headerChips.length) return normalizeText(headerChips.join(' '));
-
-      const headerText = await headerBanner.textContent().catch(() => '');
-      if (headerText) return normalizeText(headerText);
-
-      const dashboardChips = await dashboardBanner.locator('.process-chip').allTextContents().catch(() => []);
-      if (dashboardChips.length) return normalizeText(dashboardChips.join(' '));
-
-      const dashboardText = await dashboardBanner.textContent().catch(() => '');
-      if (dashboardText) return normalizeText(dashboardText);
-
-      const statusText = await dashboardStatus.textContent().catch(() => '');
-      return normalizeText(statusText);
-    };
-
-    await expect
-      .poll(async () => {
-        const t = await getProcessText();
-        return /WIP\s+2\b/.test(t)
-          && /T1\s+1\b/.test(t)
-          && /T2\s+0\b/.test(t)
-          && /T3\s+2\b/.test(t)
-          && /T4\s+0\b/.test(t);
-      }, { timeout: 50000 })
-      .toBe(true);
+    await expect(headerBanner).toContainText('WIP 2', { timeout: 10000 });
+    await expect(headerBanner).toContainText('T1 1');
+    await expect(headerBanner).toContainText('T2 0');
+    await expect(headerBanner).toContainText('T3 2');
+    await expect(headerBanner).toContainText('T4 0');
   });
 });

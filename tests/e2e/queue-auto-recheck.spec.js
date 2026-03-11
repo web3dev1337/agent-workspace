@@ -108,6 +108,8 @@ test.describe('Queue auto recheck', () => {
       }
     });
 
+    await page.locator('#queue-automation-menu summary').click();
+    await expect(page.locator('#queue-auto-recheck')).toBeVisible();
     await page.locator('#queue-auto-recheck').click();
     await page.locator('.task-card-row[data-queue-id="pr:web3dev1337/mock-repo#12"]').click();
 

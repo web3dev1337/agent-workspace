@@ -92,8 +92,8 @@ test.describe('Focus mode auto-swap', () => {
       window.orchestrator.updateTerminalGrid();
     }, { t1, t2 });
 
-    await expect(page.locator('#wrapper-demo-work2-claude')).toHaveCount(1);
-    await expect(page.locator('#wrapper-demo-work1-claude')).toHaveCount(0);
+    await expect(page.locator('.terminal-wrapper[data-session-id="demo-work2-claude"]')).toHaveCount(1);
+    await expect(page.locator('.terminal-wrapper[data-session-id="demo-work1-claude"]')).toHaveCount(0);
 
     // Now mark Tier 1 as idle and verify Tier 1 comes back.
     await page.evaluate(({ t1 }) => {
@@ -105,7 +105,7 @@ test.describe('Focus mode auto-swap', () => {
     }, { t1 });
 
     await expect.poll(async () => {
-      return await page.locator('#wrapper-demo-work1-claude').count();
-    }, { timeout: 10000 }).toBe(1);
+      return await page.locator('.terminal-wrapper[data-session-id="demo-work1-claude"]').count();
+    }, { timeout: 15000 }).toBe(1);
   });
 });

@@ -2450,8 +2450,10 @@ class SessionManager extends EventEmitter {
     let session = null;
     let sessionMap = null;
     if (ws) {
-      if (this.workspace?.id === ws && this.sessions.has(sid)) {
-        session = this.sessions.get(sid);
+      const active = this.sessions.get(sid);
+      const activeWorkspaceId = String(active?.workspace || this.workspace?.id || '').trim();
+      if (active && (!activeWorkspaceId || activeWorkspaceId === ws)) {
+        session = active;
         sessionMap = this.sessions;
       } else {
         const scopedMap = this.workspaceSessionMaps.get(ws);
@@ -2584,9 +2586,10 @@ class SessionManager extends EventEmitter {
 
     const ws = String(workspaceId || '').trim();
     if (ws) {
-      if (this.workspace?.id === ws) {
-        const active = this.sessions.get(sid);
-        if (active) return active;
+      const active = this.sessions.get(sid);
+      if (active) {
+        const activeWorkspaceId = String(active.workspace || this.workspace?.id || '').trim();
+        if (!activeWorkspaceId || activeWorkspaceId === ws) return active;
       }
       const scopedMap = this.workspaceSessionMaps.get(ws);
       if (scopedMap?.has?.(sid)) return scopedMap.get(sid);

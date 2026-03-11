@@ -51,7 +51,7 @@ test.describe('Claude Orchestrator', () => {
 
   test('should load the main page', async ({ page }) => {
     // Check page title
-    await expect(page).toHaveTitle(/Agent Orchestrator/);
+    await expect(page).toHaveTitle(/Agent Workspace/);
   });
 
   test('should show sidebar with worktree list', async ({ page }) => {
