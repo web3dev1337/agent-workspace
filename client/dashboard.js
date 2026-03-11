@@ -112,9 +112,10 @@ class Dashboard {
 		      const bTime = b.lastAccess ? new Date(b.lastAccess).getTime() : 0;
 		      return bTime - aTime;
 		    };
+        const safeWorkspaces = Array.isArray(this.workspaces) ? this.workspaces : [];
         const projectInfo = this.getDashboardProjectInfo(this.orchestrator.currentWorkspace);
-		    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws)).sort(sortByLastAccess);
-		    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws)).sort(sortByLastAccess);
+		    const activeWorkspaces = safeWorkspaces.filter(ws => this.isWorkspaceActive(ws)).sort(sortByLastAccess);
+		    const inactiveWorkspaces = safeWorkspaces.filter(ws => !this.isWorkspaceActive(ws)).sort(sortByLastAccess);
 		    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
         const visibility = this.orchestrator.getUiVisibilityConfig()?.dashboard || {};
         const showProcessBanner = visibility.processBanner !== false;
