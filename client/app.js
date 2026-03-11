@@ -192,7 +192,7 @@ class ClaudeOrchestrator {
         closeProcess: false,
         removeWorktree: true,
         reviewConsole: true,
-        showOnlyWorktree: true,
+        showOnlyWorktree: false,
         startAgentOptions: true,
         startClaudeWithSettings: false,
         createNewProject: false,
