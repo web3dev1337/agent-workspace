@@ -137,6 +137,7 @@ class VoiceControl {
     const container = document.createElement('div');
     container.id = 'voice-control';
     container.className = 'voice-control';
+    container.dataset.uiVisibility = 'header.voice';
     container.innerHTML = `
       <button id="voice-btn" class="voice-btn" title="Loading voice commands...">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">

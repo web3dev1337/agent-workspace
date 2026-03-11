@@ -173,9 +173,10 @@ class UserSettingsService {
               focusSwap: false,
               tasks: true,
               ports: false,
+              voice: false,
+              notifications: false,
               commander: true,
               recommendations: false,
-              notifications: true,
               settings: true,
               connectionStatus: true
             },
