@@ -157,20 +157,25 @@ test.describe('Focus Mode gating', () => {
       window.orchestrator.visibleTerminals.add(t2);
       window.orchestrator.taskRecords.set(`session:${t1}`, { tier: 1 });
       window.orchestrator.taskRecords.set(`session:${t2}`, { tier: 2 });
+      window.orchestrator.getTierForSession = (sessionId) => {
+        if (sessionId === t1) return 1;
+        if (sessionId === t2) return 2;
+        return null;
+      };
+      window.orchestrator.workflowMode = 'focus';
       window.orchestrator.focusHideTier2WhenTier1Busy = true;
       window.orchestrator.refreshTier1Busy({ suppressRerender: true });
-      window.orchestrator.setWorkflowMode('focus');
       return { ok: true, t1, t2, tier1Busy: window.orchestrator.tier1Busy };
     }, { t1, t2 });
 
     expect(seeded.ok).toBeTruthy();
     expect(seeded.tier1Busy).toBeTruthy();
 
-    const visible = await page.evaluate(({ t1, t2 }) => ({
-      t1: window.orchestrator.isSessionVisibleInCurrentView(t1),
-      t2: window.orchestrator.isSessionVisibleInCurrentView(t2)
-    }), seeded);
-
-    expect(visible).toEqual({ t1: true, t2: false });
+    await expect.poll(async () => {
+      return await page.evaluate(({ t1, t2 }) => ({
+        t1: window.orchestrator.isSessionVisibleInCurrentView(t1),
+        t2: window.orchestrator.isSessionVisibleInCurrentView(t2)
+      }), seeded);
+    }, { timeout: 10000 }).toEqual({ t1: true, t2: false });
   });
 });

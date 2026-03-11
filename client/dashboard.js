@@ -3735,7 +3735,7 @@ class Dashboard {
           // Do nothing: proceed to open workspace with no recovery.
         } else if (recoveryMode === 'auto') {
           // Auto-recover all sessions
-          this.pendingRecovery = { mode: 'all', sessions: recoveryInfo.sessions };
+          this.pendingRecovery = { workspaceId, mode: 'all', sessions: recoveryInfo.sessions };
           console.log('Auto-recovering all sessions');
         } else if (recoveryMode === 'ask') {
           // Show recovery dialog and wait for user choice
@@ -3743,7 +3743,9 @@ class Dashboard {
           if (shouldRecover === 'cancel') {
             return; // User cancelled
           }
-          this.pendingRecovery = shouldRecover;
+          this.pendingRecovery = shouldRecover && typeof shouldRecover === 'object'
+            ? { workspaceId, ...shouldRecover }
+            : shouldRecover;
         }
         // If mode === 'skip', don't set pendingRecovery
       }
@@ -3770,26 +3772,6 @@ class Dashboard {
 
     // Emit workspace switch event
     this.orchestrator.socket.emit('switch-workspace', { workspaceId });
-
-    // Wait for workspace-changed event
-    this.orchestrator.socket.once('workspace-changed', ({ workspace, sessions }) => {
-      console.log('Workspace switched to:', workspace.name);
-
-      // Hide dashboard
-      this.hide();
-
-      // Show main content
-      const mainContainer = document.querySelector('.main-container');
-      const sidebar = document.querySelector('.sidebar');
-      if (mainContainer) mainContainer.classList.remove('hidden');
-      if (sidebar) sidebar.classList.remove('hidden');
-
-      // Update orchestrator with new workspace
-      this.orchestrator.currentWorkspace = workspace;
-
-      // Trigger UI rebuild with new sessions
-      this.orchestrator.handleInitialSessions(sessions);
-    });
   }
 
   showCreateWorkspaceWizard(options = {}) {

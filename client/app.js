@@ -624,9 +624,26 @@ class ClaudeOrchestrator {
     return key;
   }
 
-  getSessionDomId(prefix, sessionId) {
+  getSessionDomScopeKey(scopeHint = null) {
+    const scopeSource = scopeHint
+      || this.currentTabId
+      || this.tabManager?.activeTabId
+      || this.currentWorkspace?.id
+      || this.lastSessionsWorkspaceId
+      || 'default';
+    return this.getDomSafeIdPart(scopeSource);
+  }
+
+  getSessionDomId(prefix, sessionId, scopeHint = null) {
     const key = this.getSessionDomKey(sessionId);
-    return key ? `${prefix}-${key}` : `${prefix}-`;
+    const scopeKey = this.getSessionDomScopeKey(scopeHint);
+    return key ? `${prefix}-${scopeKey}-${key}` : `${prefix}-${scopeKey}-`;
+  }
+
+  getScopedDomId(prefix, rawValue, scopeHint = null) {
+    const key = this.getDomSafeIdPart(rawValue);
+    const scopeKey = this.getSessionDomScopeKey(scopeHint);
+    return key ? `${prefix}-${scopeKey}-${key}` : `${prefix}-${scopeKey}-`;
   }
 
   cssEscape(value) {
@@ -644,21 +661,76 @@ class ClaudeOrchestrator {
     const sid = String(sessionId || '').trim();
     if (!sid) return null;
     const wrapperId = this.getSessionDomId('wrapper', sid);
-    let wrapper = document.getElementById(wrapperId);
+    const grid = this.getTerminalGrid?.() || document;
+    let wrapper = null;
+    try {
+      wrapper = grid.querySelector(`#${this.cssEscape(wrapperId)}`);
+    } catch {
+      wrapper = null;
+    }
     if (wrapper) return wrapper;
 
     // Back-compat: older DOM nodes may have non-DOM-safe ids (e.g. `wrapper-owner/repo-claude`).
-    // Find them via data attr and then re-id them to the safe id.
-    const grid = this.getTerminalGrid?.() || document;
+    // Find them via data attr in the active grid first, then re-id them to the scoped safe id.
     try {
       wrapper = grid.querySelector(`.terminal-wrapper[data-session-id="${this.cssEscape(sid)}"]`);
     } catch {
       wrapper = null;
     }
+    if (!wrapper) {
+      wrapper = document.getElementById(wrapperId);
+    }
     if (wrapper && wrapper.id !== wrapperId) {
       try { wrapper.id = wrapperId; } catch {}
     }
     return wrapper || null;
+  }
+
+  getSessionWorkspaceId(sessionId, sessionState = null, workspaceIdHint = null) {
+    const sid = String(sessionId || '').trim();
+    const hintedWorkspaceId = String(workspaceIdHint || sessionState?.workspace || this.sessions.get(sid)?.workspace || '').trim();
+    if (hintedWorkspaceId) return hintedWorkspaceId;
+
+    if (this.tabManager?.tabs && this.tabManager.tabs instanceof Map) {
+      const matches = new Set();
+      for (const [, tab] of this.tabManager.tabs) {
+        const tabSession = tab?.sessions?.get?.(sid);
+        const tabWorkspaceId = String(tabSession?.workspace || tab?.workspaceId || '').trim();
+        if (tabWorkspaceId) matches.add(tabWorkspaceId);
+      }
+      if (matches.size === 1) {
+        return Array.from(matches)[0];
+      }
+    }
+
+    return null;
+  }
+
+  getTabForWorkspaceId(workspaceId) {
+    const wsId = String(workspaceId || '').trim();
+    if (!wsId || !this.tabManager) return null;
+    if (typeof this.tabManager.findTabByWorkspaceId === 'function') {
+      return this.tabManager.findTabByWorkspaceId(wsId);
+    }
+    for (const [, tab] of this.tabManager.tabs || []) {
+      if (String(tab?.workspaceId || '').trim() === wsId) return tab;
+    }
+    return null;
+  }
+
+  getTabForSession(sessionId, { sessionState = null, workspaceId = null } = {}) {
+    if (!this.tabManager) return null;
+
+    const resolvedWorkspaceId = this.getSessionWorkspaceId(sessionId, sessionState, workspaceId);
+    if (resolvedWorkspaceId) {
+      return this.getTabForWorkspaceId(resolvedWorkspaceId);
+    }
+
+    const sid = String(sessionId || '').trim();
+    for (const [, tab] of this.tabManager.tabs || []) {
+      if (tab?.sessions?.has?.(sid)) return tab;
+    }
+    return null;
   }
 
   syncSidebarBackdrop() {
@@ -1108,19 +1180,15 @@ class ClaudeOrchestrator {
         this.buildSidebar();
       });
 
-      this.socket.on('terminal-output', ({ sessionId, data }) => {
+      this.socket.on('terminal-output', ({ sessionId, data, workspaceId }) => {
         this.terminalManager.handleOutput(sessionId, data);
 
         // Notify inactive tabs if tab manager is enabled
         if (this.tabManager && this.currentTabId) {
-          const activeTab = this.tabManager.getActiveTab();
-          // If this session belongs to an inactive tab, show notification
-          for (const [tabId, tab] of this.tabManager.tabs) {
-            if (tab.sessions.has(sessionId) && tabId !== this.currentTabId) {
-              const eventType = data.includes('[Error]') || data.includes('error') ? 'error' : 'output';
-              this.tabManager.notifyTab(tabId, eventType);
-              break;
-            }
+          const targetTab = this.getTabForSession(sessionId, { workspaceId });
+          if (targetTab && targetTab.id !== this.currentTabId) {
+            const eventType = data.includes('[Error]') || data.includes('error') ? 'error' : 'output';
+            this.tabManager.notifyTab(targetTab.id, eventType);
           }
         }
 
@@ -1181,21 +1249,20 @@ class ClaudeOrchestrator {
         this.handleSessionRestart(sessionId);
       });
 
-      this.socket.on('session-closed', ({ sessionId }) => {
+      this.socket.on('session-closed', ({ sessionId, workspaceId }) => {
         console.log(`Session closed by server: ${sessionId}`);
         // Best-effort: if the session was explicitly closed/removed, it should not keep appearing in recovery prompts.
         try {
           const sid = String(sessionId || '').trim();
-          const session = this.sessions.get(sid);
-          const workspaceId = String(session?.workspace || this.currentWorkspace?.id || '').trim();
-          if (workspaceId && sid) {
-            fetch(`/api/recovery/${encodeURIComponent(workspaceId)}/${encodeURIComponent(sid)}`, { method: 'DELETE' })
+          const resolvedWorkspaceId = String(workspaceId || this.getSessionWorkspaceId(sid) || this.currentWorkspace?.id || '').trim();
+          if (resolvedWorkspaceId && sid) {
+            fetch(`/api/recovery/${encodeURIComponent(resolvedWorkspaceId)}/${encodeURIComponent(sid)}`, { method: 'DELETE' })
               .catch(() => {});
           }
         } catch {
           // ignore
         }
-        this.removeSessionFromClientState(sessionId, { rebuildUi: true });
+        this.removeSessionFromClientState(sessionId, { rebuildUi: true, workspaceId });
       });
 
       // ============ COMMANDER UI CONTROL ============
@@ -1206,54 +1273,67 @@ class ClaudeOrchestrator {
       });
 
       // Handle new worktree sessions being added without destroying existing ones
-      this.socket.on('worktree-sessions-added', ({ worktreeId, sessions, startTier }) => {
+      this.socket.on('worktree-sessions-added', ({ worktreeId, sessions, startTier, workspaceId }) => {
         console.log('New worktree sessions added:', worktreeId, sessions);
 
         const isBackground = this.pendingBackgroundWorktrees?.has?.(worktreeId);
         if (isBackground) this.pendingBackgroundWorktrees.delete(worktreeId);
+        const resolvedWorkspaceId = String(workspaceId || this.currentWorkspace?.id || '').trim() || null;
+        const targetTab = this.getTabForWorkspaceId(resolvedWorkspaceId);
+        const activeWorkspaceId = String(this.currentWorkspace?.id || '').trim() || null;
+        const shouldApplyToActiveWorkspace = !resolvedWorkspaceId || !activeWorkspaceId || resolvedWorkspaceId === activeWorkspaceId || !this.tabManager;
 
         // Add the new sessions to our sessions map (don't clear existing!)
         for (const [sessionId, sessionState] of Object.entries(sessions)) {
-          this.sessions.set(sessionId, {
+          const sessionData = {
             sessionId,
             ...sessionState,
+            workspace: sessionState?.workspace || resolvedWorkspaceId,
             hasUserInput: false,
             backgroundLaunch: !!isBackground
-          });
+          };
+
+          if (shouldApplyToActiveWorkspace) {
+            this.sessions.set(sessionId, sessionData);
+          }
 
           // If there's an existing PR, add it to GitHub links
-          if (sessionState.existingPR) {
+          if (sessionState.existingPR && shouldApplyToActiveWorkspace) {
             const links = this.githubLinks.get(sessionId) || {};
             links.pr = sessionState.existingPR;
             this.githubLinks.set(sessionId, links);
           }
 
           // Mark new sessions as active (active-only filter should treat background work as active too).
-          this.sessionActivity.set(sessionId, 'active');
+          if (shouldApplyToActiveWorkspace) {
+            this.sessionActivity.set(sessionId, 'active');
+          }
 
           // Background launches intentionally do not auto-show in Review/Focus.
-          if (!isBackground) {
+          if (!isBackground && shouldApplyToActiveWorkspace) {
             this.visibleTerminals.add(sessionId);
           }
 
-          // Register with current tab if tab manager is enabled
-          if (this.tabManager && this.currentTabId) {
-            const tab = this.tabManager.getTab(this.currentTabId);
-            if (tab) {
-              tab.sessions.set(sessionId, this.sessions.get(sessionId));
+          if (targetTab) {
+            targetTab.sessions.set(sessionId, sessionData);
+            targetTab.uiState?.sessionActivity?.set?.(sessionId, 'active');
+            if (!isBackground) {
+              targetTab.uiState?.visibleTerminals?.add?.(sessionId);
             }
           }
         }
 
-        // Rebuild sidebar to show new worktree
-        this.buildSidebar();
+        if (shouldApplyToActiveWorkspace) {
+          // Rebuild sidebar to show new worktree
+          this.buildSidebar();
 
-        // Update terminal grid to display new terminals
-        this.updateTerminalGrid();
+          // Update terminal grid to display new terminals
+          this.updateTerminalGrid();
+        }
 
         // Apply selected start tier (Quick Work) to new Agent sessions.
         const tier = Number(startTier);
-        if (tier >= 1 && tier <= 4) {
+        if (shouldApplyToActiveWorkspace && tier >= 1 && tier <= 4) {
           const sessionIds = Object.keys(sessions || {});
           this.applyStartTierToNewSessions(sessionIds, tier);
         }
@@ -1282,14 +1362,14 @@ class ClaudeOrchestrator {
 
         // Auto-start Claude after a delay to let terminals initialize.
         // Background launches intentionally skip this.
-        if (!isBackground) {
+        if (shouldApplyToActiveWorkspace && !isBackground) {
           setTimeout(() => {
             this.checkAndApplyAutoStart();
           }, 2000);
         }
 
         // If this worktree was launched from a task card, start agent + auto-send prompt (best-effort).
-        const pending = this.pendingWorktreeLaunches.get(worktreeId);
+        const pending = shouldApplyToActiveWorkspace ? this.pendingWorktreeLaunches.get(worktreeId) : null;
         if (pending) {
           this.pendingWorktreeLaunches.delete(worktreeId);
           const sessionIds = Object.keys(sessions || {});
@@ -1497,10 +1577,11 @@ class ClaudeOrchestrator {
           if (existingTab) {
             // Switch to existing tab
             console.log(`Workspace ${workspace.name} already open, switching to tab`);
+            this.tabManager.syncTabSessionSnapshot?.(existingTab.id, sessions);
             // Set current workspace FIRST so tab manager doesn't re-request the backend switch
             this.currentWorkspace = workspace;
             this.isDashboardMode = false;
-            await this.tabManager.switchTab(existingTab.id);
+            await this.tabManager.switchTab(existingTab.id, { suppressUiRestore: true });
             this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, existingTab.id);
 
             // Ensure the active tab view is refreshed with the latest sessions for this workspace
@@ -1535,7 +1616,7 @@ class ClaudeOrchestrator {
 	            this.currentTabId = tabId;
 
 	            // Switch to the new tab so it becomes active
-	            await this.tabManager.switchTab(tabId);
+	            await this.tabManager.switchTab(tabId, { suppressUiRestore: true });
 	            this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, tabId);
 
 	            // Pre-fetch worktree-specific configs for all terminals
@@ -3668,6 +3749,34 @@ class ClaudeOrchestrator {
     const preserveVisibility = !!(currentWorkspaceId && previousWorkspaceId && currentWorkspaceId === previousWorkspaceId);
     const previousSessionIds = new Set(this.sessions.keys());
     const previousVisibleSessionIds = new Set(this.visibleTerminals);
+    const nextSessionIds = new Set(Object.keys(sessionStates || {}));
+    const removedSessionIds = Array.from(previousSessionIds).filter((sessionId) => !nextSessionIds.has(sessionId));
+
+    if (this.tabManager && this.currentTabId) {
+      this.tabManager.syncTabSessionSnapshot?.(this.currentTabId, sessionStates);
+    }
+
+    if (removedSessionIds.length > 0) {
+      const grid = this.getTerminalGrid?.() || document;
+      removedSessionIds.forEach((sessionId) => {
+        if (this.terminalManager?.terminals?.has?.(sessionId)) {
+          this.terminalManager.destroyTerminal(sessionId);
+        }
+        const wrapper = this.getSessionWrapperElement(sessionId);
+        if (wrapper && (!grid.contains || grid.contains(wrapper))) {
+          wrapper.remove();
+        }
+      });
+      try {
+        Array.from(grid.querySelectorAll('.terminal-wrapper[data-session-id]')).forEach((wrapper) => {
+          const sessionId = String(wrapper?.dataset?.sessionId || '').trim();
+          if (!sessionId || nextSessionIds.has(sessionId) || wrapper.classList.contains('review-console-terminal')) return;
+          wrapper.remove();
+        });
+      } catch {
+        // ignore
+      }
+    }
 
     // Clear existing sessions and activity tracking
     this.sessions.clear();
@@ -3682,14 +3791,6 @@ class ClaudeOrchestrator {
         hasUserInput: false
       };
       this.sessions.set(sessionId, sessionData);
-
-      // Register session with current tab if tab manager is enabled
-      if (this.tabManager && this.currentTabId) {
-        const tab = this.tabManager.getTab(this.currentTabId);
-        if (tab) {
-          tab.sessions.set(sessionId, sessionData);
-        }
-      }
 
       // If there's an existing PR, add it to GitHub links automatically
       if (state.existingPR) {
@@ -3740,10 +3841,12 @@ class ClaudeOrchestrator {
     }, 2000);
 
     // Apply session recovery if pending
-    if (this.dashboard?.pendingRecovery && this.dashboard.pendingRecovery.mode !== 'skip') {
+    const pendingRecovery = this.dashboard?.pendingRecovery;
+    const pendingWorkspaceId = String(pendingRecovery?.workspaceId || '').trim();
+    if (pendingRecovery && pendingRecovery.mode !== 'skip' && (!pendingWorkspaceId || pendingWorkspaceId === currentWorkspaceId)) {
+      this.dashboard.pendingRecovery = null;
       setTimeout(() => {
-        this.applySessionRecovery(this.dashboard.pendingRecovery);
-        this.dashboard.pendingRecovery = null;
+        this.applySessionRecovery(pendingRecovery);
       }, 1000);
     }
 
@@ -3761,7 +3864,8 @@ class ClaudeOrchestrator {
     for (const [sessionId, session] of this.sessions) {
       if (sessionId.includes('-claude')) {
         // Skip if this session was recovered
-        if (this.recoveredSessions && this.recoveredSessions.has(sessionId)) {
+        const recoveryKey = this.getWorkspaceScopedSessionKey(sessionId);
+        if (this.recoveredSessions && this.recoveredSessions.has(recoveryKey)) {
           console.log(`Skipping auto-start for ${sessionId} - already recovered`);
           continue;
         }
@@ -3794,6 +3898,12 @@ class ClaudeOrchestrator {
         }
       }
     }
+  }
+
+  getWorkspaceScopedSessionKey(sessionId, workspaceId = null) {
+    const sid = String(sessionId || '').trim();
+    const wid = String(workspaceId || this.currentWorkspace?.id || '').trim() || 'global';
+    return `${wid}::${sid}`;
   }
 
   extractRepositoryName(sessionId) {
@@ -4326,6 +4436,7 @@ class ClaudeOrchestrator {
     if (!worktreeList) return;
 
     const previousScrollTop = worktreeList.scrollTop;
+    const preservedProjectShortcuts = document.getElementById('sidebar-project-shortcuts')?.cloneNode(true) || null;
     const sidebarVisibility = this.getUiVisibilityConfig().sidebar || {};
 
     // Always ensure filter toggle exists and is updated FIRST
@@ -4507,10 +4618,12 @@ class ClaudeOrchestrator {
       worktreeList.appendChild(item);
     }
 
-    const shortcuts = document.createElement('div');
+    const shortcuts = preservedProjectShortcuts || document.createElement('div');
     shortcuts.id = 'sidebar-project-shortcuts';
     shortcuts.className = 'sidebar-project-shortcuts';
-    shortcuts.innerHTML = `<div class="sidebar-project-shortcuts-loading">Loading projects…</div>`;
+    if (!preservedProjectShortcuts) {
+      shortcuts.innerHTML = `<div class="sidebar-project-shortcuts-loading">Loading projects…</div>`;
+    }
     worktreeList.appendChild(shortcuts);
     this.scheduleSidebarProjectShortcutsRender();
 
@@ -5186,6 +5299,13 @@ class ClaudeOrchestrator {
       return;
     }
 
+    const sessionIdSet = new Set(sessionIds.map((sessionId) => String(sessionId || '').trim()).filter(Boolean));
+    Array.from(grid.querySelectorAll('.terminal-wrapper[data-session-id]')).forEach((wrapper) => {
+      const sessionId = String(wrapper?.dataset?.sessionId || '').trim();
+      if (!sessionId || sessionIdSet.has(sessionId) || wrapper.classList.contains('review-console-terminal')) return;
+      wrapper.remove();
+    });
+
     const visibleSet = new Set(this.activeView);
     const groupMap = new Map();
 
@@ -5208,16 +5328,20 @@ class ClaudeOrchestrator {
       if (type === 'codex' || String(sid || '').endsWith('-codex')) return 1;
       return 0;
     };
-    const safePairId = (key) => {
-      if (typeof this.getDomSafeIdPart === 'function') {
-        return `terminal-pair-${this.getDomSafeIdPart(key)}`;
-      }
-      return `terminal-pair-${String(key || '').replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-    };
+    const safePairId = (key) => this.getScopedDomId(
+      'terminal-pair',
+      key,
+      grid?.dataset?.tabId || this.currentTabId || this.currentWorkspace?.id || null
+    );
     const ensurePairContainer = (key) => {
       const id = safePairId(key);
-      let container = document.getElementById(id);
-      if (!container || !grid.contains(container)) {
+      let container = null;
+      try {
+        container = grid.querySelector(`#${this.cssEscape(id)}`);
+      } catch {
+        container = null;
+      }
+      if (!container) {
         container = document.createElement('div');
         container.id = id;
         container.className = 'terminal-pair';
@@ -5260,12 +5384,21 @@ class ClaudeOrchestrator {
               container.appendChild(wrapper);
               console.log(`✅ Appended terminal to grid: ${sessionId}`);
 
-              // Initialize terminal for newly created element (scope query to wrapper/grid to avoid cross-tab collisions)
+              // Initialize or reattach terminal for newly created element.
               setTimeout(() => {
-                const terminalId = this.getSessionDomId('terminal', sessionId);
-                const terminalEl = document.getElementById(terminalId);
-                if (terminalEl && wrapper && wrapper.contains(terminalEl) && !this.terminalManager.terminals.has(sessionId)) {
-                  this.terminalManager.createTerminal(sessionId, session);
+                const terminalEl = wrapper?.querySelector('.terminal');
+                if (!terminalEl || !wrapper?.isConnected) return;
+
+                if (this.terminalManager.terminals.has(sessionId)) {
+                  const term = this.terminalManager.terminals.get(sessionId);
+                  if (term) {
+                    terminalEl.innerHTML = '';
+                    term.open(terminalEl);
+                    this.terminalManager.fitTerminal(sessionId);
+                    try { term.refresh(0, term.rows - 1); } catch {}
+                  }
+                } else {
+                  this.terminalManager.createTerminal(sessionId, session, terminalEl);
                 }
               }, 50);
             }
@@ -5286,19 +5419,21 @@ class ClaudeOrchestrator {
           }
           visibleCount += 1;
         } else if (wrapper && !docked) {
-          // Hide wrapper if not visible
-          wrapper.style.display = 'none';
-          if (wrapper.parentElement !== container) {
-            container.appendChild(wrapper);
-          }
+          // Remove hidden wrappers from the grid so collapsed worktrees do not leave
+          // behind stale grid items or layout artifacts in secondary workspace tabs.
+          wrapper.remove();
         } else if (wrapper && docked && session) {
           this.updateTerminalTicketLabel(sessionId);
         }
       });
 
       container.classList.toggle('terminal-pair-single', visibleCount <= 1);
-      container.style.display = visibleCount ? '' : 'none';
-      if (visibleCount) activeGroupKeys.add(group.key);
+      if (visibleCount) {
+        container.style.display = '';
+        activeGroupKeys.add(group.key);
+      } else {
+        container.remove();
+      }
     });
 
     // Remove stale pair containers (worktrees removed)
@@ -5417,7 +5552,8 @@ class ClaudeOrchestrator {
       const session = this.sessions.get(sessionId);
       if (session) {
 	        setTimeout(() => {
-	          const terminalEl = document.getElementById(this.getSessionDomId('terminal', sessionId));
+	          const wrapper = this.getSessionWrapperElement(sessionId);
+	          const terminalEl = wrapper?.querySelector('.terminal');
 	          if (!terminalEl) return;
 
           if (this.terminalManager.terminals.has(sessionId)) {
@@ -5435,7 +5571,7 @@ class ClaudeOrchestrator {
             term.refresh(0, term.rows - 1);
           } else {
             // Create new terminal only if it doesn't exist
-            this.terminalManager.createTerminal(sessionId, session);
+            this.terminalManager.createTerminal(sessionId, session, terminalEl);
           }
 
           // Don't auto-start Claude - let user choose via modal or button
@@ -11394,7 +11530,7 @@ class ClaudeOrchestrator {
             // Attach or create the xterm instance.
             setTimeout(() => {
               try {
-                const terminalEl = document.getElementById(this.getSessionDomId('terminal', sid));
+                const terminalEl = wrapper?.querySelector('.terminal');
                 if (!terminalEl) return;
 
                 if (this.terminalManager?.terminals?.has?.(sid)) {
@@ -11406,7 +11542,7 @@ class ClaudeOrchestrator {
                     try { term.refresh(0, term.rows - 1); } catch {}
                   }
                 } else {
-                  this.terminalManager?.createTerminal?.(sid, session);
+                  this.terminalManager?.createTerminal?.(sid, session, terminalEl);
                 }
               } catch {
                 // ignore
@@ -14323,9 +14459,9 @@ class ClaudeOrchestrator {
 			                  grid.appendChild(wrapper);
 			                  setTimeout(() => {
 			                    try {
-			                      const terminalEl = document.getElementById(this.getSessionDomId('terminal', sid));
-			                      if (terminalEl && wrapper && wrapper.contains(terminalEl) && !this.terminalManager.terminals.has(sid)) {
-			                        this.terminalManager.createTerminal(sid, session);
+			                      const terminalEl = wrapper?.querySelector('.terminal');
+			                      if (terminalEl && wrapper?.isConnected && !this.terminalManager.terminals.has(sid)) {
+			                        this.terminalManager.createTerminal(sid, session, terminalEl);
 			                      }
 			                    } catch {
 			                      // ignore
@@ -15652,8 +15788,12 @@ class ClaudeOrchestrator {
       return fallback;
     };
 
-    // Track which sessions we're recovering so auto-start skips them
-    this.recoveredSessions = new Set();
+    // Track which sessions we're recovering so auto-start skips them.
+    // Keep this workspace-scoped set across tab switches so identical worktree ids
+    // in different workspaces do not collide.
+    if (!(this.recoveredSessions instanceof Set)) {
+      this.recoveredSessions = new Set();
+    }
 
     for (const session of recovery.sessions) {
       const { sessionId, lastCwd, lastAgent, lastConversationId, lastMode } = session;
@@ -15666,7 +15806,7 @@ class ClaudeOrchestrator {
       }
 
       // Mark this session as recovered to prevent auto-start
-      this.recoveredSessions.add(sessionId);
+      this.recoveredSessions.add(this.getWorkspaceScopedSessionKey(sessionId, this.currentWorkspace?.id || null));
 
       console.log(`Recovering session ${sessionId}:`, { lastCwd, lastAgent, lastConversationId });
 
@@ -15716,7 +15856,7 @@ class ClaudeOrchestrator {
         if (recoveryCwd) {
           config.cwd = recoveryCwd;
         }
-        await this.startAgentWithConfig(sessionId, config);
+        await this.startAgentWithConfig(sessionId, config, { skipLaunchGate: true });
         await new Promise(resolve => setTimeout(resolve, 200));
       }
     }
@@ -15829,16 +15969,18 @@ class ClaudeOrchestrator {
   /**
    * Start agent with configuration (agent-agnostic)
    */
-  async startAgentWithConfig(sessionId, config) {
+  async startAgentWithConfig(sessionId, config, { skipLaunchGate = false } = {}) {
     if (!this.socket || !this.socket.connected) {
       this.showError('Not connected to server');
       return;
     }
 
-    const allowed = await this.ensureLaunchAllowedForSession(sessionId);
-    if (!allowed) {
-      this.showToast('Launch blocked by workload gate', 'warning');
-      return;
+    if (!skipLaunchGate) {
+      const allowed = await this.ensureLaunchAllowedForSession(sessionId);
+      if (!allowed) {
+        this.showToast('Launch blocked by workload gate', 'warning');
+        return;
+      }
     }
 
     console.log(`Starting agent ${config.agentId} for ${sessionId} with config:`, config);
@@ -16204,15 +16346,15 @@ class ClaudeOrchestrator {
 	    return ids;
 	  }
 
-	  removeSessionFromAllTabStates(sessionId) {
+	  removeSessionFromAllTabStates(sessionId, { workspaceId = null } = {}) {
 	    const sid = String(sessionId || '').trim();
+	    const targetWorkspaceId = String(workspaceId || '').trim();
 	    if (!sid || !this.tabManager?.tabs || !(this.tabManager.tabs instanceof Map)) return;
-
-	    const wrapperId = this.getSessionDomId('wrapper', sid);
-	    const terminalId = this.getSessionDomId('terminal', sid);
 
 	    for (const [, tab] of this.tabManager.tabs) {
 	      if (!tab) continue;
+	      const tabWorkspaceId = String(tab?.workspaceId || '').trim();
+	      if (targetWorkspaceId && tabWorkspaceId && tabWorkspaceId !== targetWorkspaceId) continue;
 	      tab.sessions?.delete?.(sid);
 	      tab.uiState?.visibleTerminals?.delete?.(sid);
 	      tab.uiState?.sessionActivity?.delete?.(sid);
@@ -16235,61 +16377,88 @@ class ClaudeOrchestrator {
 
 	      const container = tab.containerElement || null;
 	      if (container) {
-	        let wrapper = document.getElementById(wrapperId);
-	        if (wrapper && !container.contains(wrapper)) wrapper = null;
+	        let wrapper = null;
+	        try {
+	          wrapper = container.querySelector(`.terminal-wrapper[data-session-id="${this.cssEscape(sid)}"]`);
+	        } catch {
+	          wrapper = null;
+	        }
 	        if (wrapper) wrapper.remove();
-
-	        let terminalEl = document.getElementById(terminalId);
-	        if (terminalEl && !container.contains(terminalEl)) terminalEl = null;
-	        if (terminalEl) terminalEl.remove();
 	      }
 	    }
 	  }
 
-	  removeSessionFromClientState(sessionId, { rebuildUi = true } = {}) {
+	  removeSessionFromClientState(sessionId, { rebuildUi = true, workspaceId = null } = {}) {
 	    const sid = String(sessionId || '').trim();
 	    if (!sid) return;
+      const targetWorkspaceId = String(workspaceId || this.getSessionWorkspaceId(sid) || '').trim();
+      const activeWorkspaceId = String(this.currentWorkspace?.id || '').trim();
+      const affectsActiveWorkspace = !targetWorkspaceId || !activeWorkspaceId || targetWorkspaceId === activeWorkspaceId || !this.tabManager;
 
-	    this.removeSessionFromAllTabStates(sid);
+      if (this.recoveredSessions instanceof Set) {
+        if (targetWorkspaceId) {
+          this.recoveredSessions.delete(this.getWorkspaceScopedSessionKey(sid, targetWorkspaceId));
+        } else {
+          this.recoveredSessions.delete(this.getWorkspaceScopedSessionKey(sid));
+        }
+        if (!targetWorkspaceId && this.tabManager?.tabs && this.tabManager.tabs instanceof Map) {
+          for (const [, tab] of this.tabManager.tabs) {
+            const workspaceId = String(tab?.workspaceId || '').trim();
+            if (workspaceId) {
+              this.recoveredSessions.delete(this.getWorkspaceScopedSessionKey(sid, workspaceId));
+            }
+          }
+        }
+      }
 
-	    this.sessions.delete(sid);
-	    this.visibleTerminals.delete(sid);
-	    this.sessionActivity.delete(sid);
-	    this.githubLinks.delete(sid);
-	    this.githubLinkLogs.delete(sid);
-	    this.serverStatuses.delete(sid);
-	    this.serverPorts.delete(sid);
-	    this.dismissedStartupUI.delete(sid);
-	    this.sessionAgentPreferences.delete(sid);
-	    this.autoStartApplied.delete(sid);
-	    this.worktreeConfigs.delete(sid);
+	    this.removeSessionFromAllTabStates(sid, { workspaceId: targetWorkspaceId });
+
+      if (affectsActiveWorkspace) {
+	      this.sessions.delete(sid);
+	      this.visibleTerminals.delete(sid);
+	      this.sessionActivity.delete(sid);
+	      this.githubLinks.delete(sid);
+	      this.githubLinkLogs.delete(sid);
+	      this.serverStatuses.delete(sid);
+	      this.serverPorts.delete(sid);
+	      this.dismissedStartupUI.delete(sid);
+	      this.sessionAgentPreferences.delete(sid);
+	      this.autoStartApplied.delete(sid);
+	      this.worktreeConfigs.delete(sid);
+      }
     this.intentHaikuBySession.delete(sid);
     this.intentHaikuInFlight.delete(sid);
     this.intentHaikuLastFetchedAt.delete(sid);
     this.intentHaikuPolicyBySession.delete(sid);
-    this.clearSessionVisibilityOverride(sid, { allWorkspaces: true });
+    if (targetWorkspaceId) {
+      this.setSessionVisibilityOverride(sid, null, { workspaceId: targetWorkspaceId });
+    } else {
+      this.clearSessionVisibilityOverride(sid, { allWorkspaces: true });
+    }
     const intentTimer = this.intentHaikuTimers.get(sid);
       if (intentTimer) clearTimeout(intentTimer);
       this.intentHaikuTimers.delete(sid);
 
-	    const grid = this.getTerminalGrid();
-	    const wrapperId = this.getSessionDomId('wrapper', sid);
-	    let wrapper = document.getElementById(wrapperId);
-	    if (wrapper && grid && !grid.contains(wrapper)) wrapper = null;
-	    if (wrapper) {
-	      wrapper.remove();
-	    } else {
-	      const terminalId = this.getSessionDomId('terminal', sid);
-	      let terminalElement = document.getElementById(terminalId);
-	      if (terminalElement && grid && !grid.contains(terminalElement)) terminalElement = null;
-	      if (terminalElement) terminalElement.remove();
-	    }
+      if (affectsActiveWorkspace) {
+	      const grid = this.getTerminalGrid();
+	      const wrapperId = this.getSessionDomId('wrapper', sid);
+	      let wrapper = document.getElementById(wrapperId);
+	      if (wrapper && grid && !grid.contains(wrapper)) wrapper = null;
+	      if (wrapper) {
+	        wrapper.remove();
+	      } else {
+	        const terminalId = this.getSessionDomId('terminal', sid);
+	        let terminalElement = document.getElementById(terminalId);
+	        if (terminalElement && grid && !grid.contains(terminalElement)) terminalElement = null;
+	        if (terminalElement) terminalElement.remove();
+	      }
 
-	    if (this.terminalManager) {
-	      this.terminalManager.destroyTerminal(sid);
-	    }
+	      if (this.terminalManager) {
+	        this.terminalManager.destroyTerminal(sid);
+	      }
+      }
 
-	    if (!rebuildUi) return;
+	    if (!rebuildUi || !affectsActiveWorkspace) return;
 
 	    this.buildSidebar();
 	    this.updateTerminalGrid();

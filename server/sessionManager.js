@@ -820,7 +820,8 @@ class SessionManager extends EventEmitter {
         if (isActive) {
           this.io.emit('terminal-output', {
             sessionId,
-            data
+            data,
+            workspaceId: session.workspace || this.workspace?.id || null
           });
           session.deliveredBufferLength = session.buffer.length;
         }
@@ -856,7 +857,8 @@ class SessionManager extends EventEmitter {
           this.io.emit('session-exited', {
             sessionId,
             exitCode,
-            signal
+            signal,
+            workspaceId: session.workspace || this.workspace?.id || null
           });
         }
         
@@ -896,7 +898,10 @@ class SessionManager extends EventEmitter {
               this.createSession(sessionId, restartConfig);
               
               // After creating the bash session, emit restart event
-              this.io.emit('session-restarted', { sessionId });
+              this.io.emit('session-restarted', {
+                sessionId,
+                workspaceId: session.workspace || this.workspace?.id || null
+              });
               
               logger.info('Claude session restarted as interactive bash', { sessionId });
             } catch (error) {
@@ -1965,7 +1970,14 @@ class SessionManager extends EventEmitter {
 
           logger.debug('Branch update', { sessionId, oldBranch, newBranch: branch });
 
-          this.io.emit('branch-update', { sessionId, branch, remoteUrl, defaultBranch, existingPR });
+          this.io.emit('branch-update', {
+            sessionId,
+            branch,
+            remoteUrl,
+            defaultBranch,
+            existingPR,
+            workspaceId: session.workspace || this.workspace?.id || null
+          });
         }
       });
     } catch (error) {
@@ -2124,7 +2136,12 @@ class SessionManager extends EventEmitter {
   emitStatusUpdate(sessionId, status) {
     // Only emit status updates for sessions in the active workspace map.
     if (!this.sessions.has(sessionId)) return;
-    this.io.emit('status-update', { sessionId, status });
+    const session = this.sessions.get(sessionId);
+    this.io.emit('status-update', {
+      sessionId,
+      status,
+      workspaceId: session?.workspace || this.workspace?.id || null
+    });
   }
 
   getUndeliveredOutputAndMarkDelivered(maxBytesPerSession = 100000) {
@@ -2156,6 +2173,7 @@ class SessionManager extends EventEmitter {
         worktreeId: session.worktreeId,
         repositoryName: session.repositoryName,  // For mixed-repo workspaces
         repositoryType: session.repositoryType,  // For dynamic launch options
+        workspace: session.workspace || this.workspace?.id || null,
         agent: recovery?.lastAgentActive === false ? null : (recovery?.lastAgent || null),
         agentMode: recovery?.lastMode || null,
         lastActivity: session.lastActivity
@@ -2194,7 +2212,8 @@ class SessionManager extends EventEmitter {
 	        type: currentSession.type,
 	        worktreeId: currentSession.worktreeId,
 	        repositoryName: currentSession.repositoryName,
-	        repositoryType: currentSession.repositoryType
+	        repositoryType: currentSession.repositoryType,
+	        workspace: currentSession.workspace || this.workspace?.id || null
 	      };
 	    };
 
@@ -2424,22 +2443,41 @@ class SessionManager extends EventEmitter {
     });
   }
   
-  terminateSession(sessionId) {
+  terminateSession(sessionId, { workspaceId = null } = {}) {
     // Terminate across both active and stashed workspaces.
-    let session = this.sessions.get(sessionId);
-    let sessionMap = this.sessions;
-    if (!session) {
-      for (const map of this.workspaceSessionMaps.values()) {
-        if (map.has(sessionId)) {
-          session = map.get(sessionId);
-          sessionMap = map;
-          break;
+    const sid = String(sessionId || '').trim();
+    const ws = String(workspaceId || '').trim();
+    let session = null;
+    let sessionMap = null;
+    if (ws) {
+      const active = this.sessions.get(sid);
+      const activeWorkspaceId = String(active?.workspace || this.workspace?.id || '').trim();
+      if (active && (!activeWorkspaceId || activeWorkspaceId === ws)) {
+        session = active;
+        sessionMap = this.sessions;
+      } else {
+        const scopedMap = this.workspaceSessionMaps.get(ws);
+        if (scopedMap?.has?.(sid)) {
+          session = scopedMap.get(sid);
+          sessionMap = scopedMap;
+        }
+      }
+    } else {
+      session = this.sessions.get(sid);
+      sessionMap = this.sessions;
+      if (!session) {
+        for (const map of this.workspaceSessionMaps.values()) {
+          if (map.has(sid)) {
+            session = map.get(sid);
+            sessionMap = map;
+            break;
+          }
         }
       }
     }
     if (!session) return;
 
-    logger.info('Terminating session', { sessionId });
+    logger.info('Terminating session', { sessionId: sid, workspaceId: session.workspace || ws || null });
 
     // Clear the inactivity timer to prevent infinite loops
     if (session.inactivityTimer) {
@@ -2471,7 +2509,7 @@ class SessionManager extends EventEmitter {
         session.pty.kill();
       } catch (error) {
         logger.error('Failed to kill PTY', {
-          sessionId,
+          sessionId: sid,
           error: error.message
         });
       }
@@ -2479,10 +2517,10 @@ class SessionManager extends EventEmitter {
 
     // Best-effort process tree cleanup to avoid orphaned agent subprocesses
     // after terminals are closed/removed.
-    this.bestEffortKillProcessTree(ptyPid, { sessionId });
+    this.bestEffortKillProcessTree(ptyPid, { sessionId: sid });
 
     // Remove from sessions map
-    sessionMap.delete(sessionId);
+    sessionMap.delete(sid);
   }
 
   bestEffortKillProcessTree(pid, { sessionId = null } = {}) {
@@ -2542,12 +2580,26 @@ class SessionManager extends EventEmitter {
     }
   }
 
-  getSessionById(sessionId) {
-    if (!sessionId) return null;
-    const direct = this.sessions.get(sessionId);
+  getSessionById(sessionId, { workspaceId = null } = {}) {
+    const sid = String(sessionId || '').trim();
+    if (!sid) return null;
+
+    const ws = String(workspaceId || '').trim();
+    if (ws) {
+      const active = this.sessions.get(sid);
+      if (active) {
+        const activeWorkspaceId = String(active.workspace || this.workspace?.id || '').trim();
+        if (!activeWorkspaceId || activeWorkspaceId === ws) return active;
+      }
+      const scopedMap = this.workspaceSessionMaps.get(ws);
+      if (scopedMap?.has?.(sid)) return scopedMap.get(sid);
+      return null;
+    }
+
+    const direct = this.sessions.get(sid);
     if (direct) return direct;
     for (const map of this.workspaceSessionMaps.values()) {
-      const s = map.get(sessionId);
+      const s = map.get(sid);
       if (s) return s;
     }
     return null;
@@ -2560,10 +2612,11 @@ class SessionManager extends EventEmitter {
 
     const pushEntry = (sessionId, session, fallbackWorkspaceId = null) => {
       const sid = String(sessionId || '').trim();
-      if (!sid || seen.has(sid) || !session) return;
       const sessionWorkspaceId = String(session.workspace || fallbackWorkspaceId || '').trim() || null;
+      const seenKey = wsFilter ? sid : `${sessionWorkspaceId || 'unknown'}::${sid}`;
+      if (!sid || seen.has(seenKey) || !session) return;
       if (wsFilter && sessionWorkspaceId !== wsFilter) return;
-      seen.add(sid);
+      seen.add(seenKey);
       entries.push([sid, session, sessionWorkspaceId]);
     };
 
@@ -2636,7 +2689,7 @@ class SessionManager extends EventEmitter {
     const sid = String(sessionId || '').trim();
     if (!sid) return [];
 
-    const session = this.getSessionById(sid);
+    const session = this.getSessionById(sid, { workspaceId });
     if (!session) return [sid];
 
     const ws = String(workspaceId || session?.workspace || '').trim() || null;
@@ -2659,16 +2712,16 @@ class SessionManager extends EventEmitter {
     return Array.from(group).sort((a, b) => a.localeCompare(b));
   }
 
-  closeSession(sessionId, { clearRecovery = false } = {}) {
-    const session = this.getSessionById(sessionId);
+  closeSession(sessionId, { clearRecovery = false, workspaceId = null } = {}) {
+    const session = this.getSessionById(sessionId, { workspaceId });
     if (!session) return false;
 
-    const workspaceId = session.workspace || null;
-    this.terminateSession(sessionId);
+    const targetWorkspaceId = session.workspace || null;
+    this.terminateSession(sessionId, { workspaceId: targetWorkspaceId || workspaceId || null });
 
-    if (clearRecovery && workspaceId) {
+    if (clearRecovery && targetWorkspaceId) {
       try {
-        sessionRecoveryService.clearSession(workspaceId, sessionId);
+        sessionRecoveryService.clearSession(targetWorkspaceId, sessionId);
       } catch {
         // best-effort
       }
@@ -2728,7 +2781,10 @@ class SessionManager extends EventEmitter {
     setTimeout(() => {
       try {
         this.createSession(sessionId, config);
-        this.io.emit('session-restarted', { sessionId });
+        this.io.emit('session-restarted', {
+          sessionId,
+          workspaceId: session.workspace || null
+        });
         logger.info('Session restarted successfully', { sessionId });
         return true;
       } catch (error) {

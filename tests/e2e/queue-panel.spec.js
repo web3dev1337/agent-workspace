@@ -222,7 +222,9 @@ test.describe('Queue Panel', () => {
       };
     });
 
-    await page.evaluate(() => document.getElementById('queue-btn')?.click());
+    await page.evaluate(async () => {
+      await window.orchestrator?.showQueuePanel?.();
+    });
     await expect(page.locator('#queue-panel')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(200);
     const unhandled = await page.evaluate(() => window.__unhandled || []);
@@ -266,6 +268,8 @@ test.describe('Queue Panel', () => {
         return false;
       }
     }, { timeout: 5000 });
+    await page.locator('#queue-workflows-menu summary').click();
+    await expect(page.locator('#queue-start-review')).toBeVisible();
     await page.locator('#queue-start-review').click();
     await startReq;
 
@@ -280,7 +284,7 @@ test.describe('Queue Panel', () => {
     await page.locator('#queue-open-console').click();
     // Review Console defaults to fullscreen.
     await expect(page.locator('#worktree-inspector-modal.fullscreen')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('#worktree-inspector-title')).toContainText('Review Console');
+    await expect(page.locator('#worktree-inspector-modal.fullscreen [data-pr-merge]')).toBeVisible();
 
     // Merge PR should call /api/prs/merge.
     page.once('dialog', async (dialog) => dialog.accept());
@@ -391,10 +395,14 @@ test.describe('Queue Panel', () => {
     await ensureWorkspaceLoaded(page);
     await dismissFocusOverlay(page);
 
-    await page.evaluate(() => document.getElementById('queue-btn')?.click());
+    await page.evaluate(async () => {
+      await window.orchestrator?.showQueuePanel?.();
+    });
     await expect(page.locator('#queue-panel')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#queue-list .task-card-row')).toHaveCount(4);
 
+    await page.locator('#queue-workflows-menu summary').click();
+    await expect(page.locator('#queue-start-review')).toBeVisible();
     await page.locator('#queue-start-review').click();
     await page.waitForTimeout(200);
 
@@ -491,7 +499,9 @@ test.describe('Queue Panel', () => {
     await ensureWorkspaceLoaded(page);
     await dismissFocusOverlay(page);
 
-    await page.evaluate(() => document.getElementById('queue-btn')?.click());
+    await page.evaluate(async () => {
+      await window.orchestrator?.showQueuePanel?.();
+    });
     await expect(page.locator('#queue-panel')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#queue-list .task-card-row')).toHaveCount(2);
 

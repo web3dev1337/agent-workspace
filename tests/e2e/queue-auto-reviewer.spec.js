@@ -117,6 +117,8 @@ test.describe('Queue auto reviewer', () => {
       }
     });
 
+    await page.locator('#queue-automation-menu summary').click();
+    await expect(page.locator('#queue-auto-reviewer')).toBeVisible();
     await page.locator('#queue-auto-reviewer').click();
     await page.locator('.task-card-row[data-queue-id="pr:web3dev1337/mock-repo#12"]').click();
 
@@ -134,4 +136,3 @@ test.describe('Queue auto reviewer', () => {
     expect(last.startTier).toBe(3);
   });
 });
-
