@@ -3378,11 +3378,6 @@ class Dashboard {
 
   generateWorkspaceCard(workspace, isActive) {
     const lastUsed = this.getLastUsed(workspace);
-    const activityCount = this.getActivityCount(workspace.id);
-    const terminalPairs = Array.isArray(workspace.terminals)
-      ? Math.floor(workspace.terminals.length / 2)
-      : (workspace.terminals?.pairs ?? 0);
-	    const access = (workspace.access || 'unknown').toLowerCase();
 	    const health = workspace?.health && typeof workspace.health === 'object' ? workspace.health : null;
 	    const staleCount = Number(health?.staleCandidates?.length || 0);
 	    const removedCount = Number(health?.removedTerminals?.length || 0);
@@ -3405,20 +3400,8 @@ class Dashboard {
 	        </div>
 
 	        <div class="workspace-card-body">
-	          <div class="workspace-stats">
-            <div class="stat">
-              <span class="stat-value">${activityCount}</span>
-              <span class="stat-label">active</span>
-            </div>
-            <div class="stat">
-              <span class="stat-value">${terminalPairs}</span>
-              <span class="stat-label">terminals</span>
-            </div>
-          </div>
-
 	          <div class="workspace-meta">
 	            <p class="last-used">${lastUsed}</p>
-	            <p class="access-level">${this.getAccessLevelIcon(access)} ${access}</p>
 	          </div>
 
 	          ${warnCount ? `
@@ -3999,12 +3982,6 @@ class Dashboard {
     return `Last used: ${timeAgo}`;
   }
 
-  getActivityCount(workspaceId) {
-    // Placeholder - in future, track actual active sessions
-    if (workspaceId === 'hyfire2') return '3/8';
-    return '0/4';
-  }
-
   /**
    * Format timestamp as relative time (shared with QuickLinks)
    */
@@ -4037,16 +4014,6 @@ class Dashboard {
       'ruby-rails': 'Ruby on Rails'
     };
     return typeLabels[type] || type;
-  }
-
-  getAccessLevelIcon(access) {
-    const icons = {
-      'private': '🔒',
-      'team': '👥',
-      'public': '🌍',
-      'unknown': '❔'
-    };
-    return icons[access] || '🔒';
   }
 
   confirmDeleteWorkspace(workspace) {
