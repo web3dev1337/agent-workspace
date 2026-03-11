@@ -832,6 +832,11 @@ body {
   gap: 10px;
 }
 
+.text-input-dialog .modal-content {
+  background: color-mix(in srgb, var(--bg-secondary) 82%, var(--bg-tertiary) 18%);
+  border: 1px solid var(--border-color);
+}
+
 .text-input-dialog-message {
   white-space: pre-line;
   line-height: 1.5;
