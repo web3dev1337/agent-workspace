@@ -170,7 +170,7 @@ class ClaudeOrchestrator {
         focusTier2: false,
         focusSwap: false,
         tasks: false,
-        ports: false,
+        ports: true,
         voice: false,
         notifications: false,
         commander: true,
