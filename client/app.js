@@ -2201,6 +2201,60 @@ class ClaudeOrchestrator {
       });
     }
 
+    // Trello credentials setup
+    const trelloSaveBtn = document.getElementById('trello-save-creds');
+    if (trelloSaveBtn) {
+      const trelloStatusEl = document.getElementById('trello-status');
+      const trelloSaveStatusEl = document.getElementById('trello-save-status');
+      fetch('/api/tasks/trello/status').then(r => r.json()).then(data => {
+        if (trelloStatusEl) {
+          trelloStatusEl.innerHTML = data.configured
+            ? `<span style="color: var(--success-color, #3fb950);">Connected</span> <small>(source: ${data.source || 'env'})</small>`
+            : `<span style="color: var(--warning-color, #d29922);">Not configured</span>`;
+        }
+      }).catch(() => {});
+
+      const trelloSaveOnlyBtn = document.getElementById('trello-save-only');
+
+      const doTrelloSave = async (testFirst) => {
+        const apiKey = String(document.getElementById('trello-api-key')?.value || '').trim();
+        const token = String(document.getElementById('trello-token')?.value || '').trim();
+        if (!apiKey || !token) {
+          if (trelloSaveStatusEl) trelloSaveStatusEl.textContent = 'Both fields required';
+          return;
+        }
+        trelloSaveBtn.disabled = true;
+        if (trelloSaveOnlyBtn) trelloSaveOnlyBtn.disabled = true;
+        if (trelloSaveStatusEl) trelloSaveStatusEl.textContent = testFirst ? 'Testing…' : 'Saving…';
+        try {
+          const endpoint = testFirst ? '/api/tasks/trello/credentials' : '/api/tasks/trello/credentials/save-only';
+          const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey, token })
+          });
+          const data = await resp.json();
+          if (resp.ok && data.ok) {
+            const label = data.username ? `Connected as ${data.username}` : 'Saved';
+            if (trelloSaveStatusEl) trelloSaveStatusEl.innerHTML = `<span style="color: var(--success-color, #3fb950);">${label}</span>`;
+            if (trelloStatusEl) trelloStatusEl.innerHTML = `<span style="color: var(--success-color, #3fb950);">Connected</span> <small>(saved to ${data.source})</small>`;
+            document.getElementById('trello-api-key').value = '';
+            document.getElementById('trello-token').value = '';
+          } else {
+            if (trelloSaveStatusEl) trelloSaveStatusEl.innerHTML = `<span style="color: var(--error-color, #ff7b72);">${data.error || 'Failed'}</span>`;
+          }
+        } catch (err) {
+          if (trelloSaveStatusEl) trelloSaveStatusEl.innerHTML = `<span style="color: var(--error-color, #ff7b72);">Error: ${err.message}</span>`;
+        } finally {
+          trelloSaveBtn.disabled = false;
+          if (trelloSaveOnlyBtn) trelloSaveOnlyBtn.disabled = false;
+        }
+      };
+
+      trelloSaveBtn.addEventListener('click', () => doTrelloSave(true));
+      if (trelloSaveOnlyBtn) trelloSaveOnlyBtn.addEventListener('click', () => doTrelloSave(false));
+    }
+
     const diffViewerThemeSelect = document.getElementById('diff-viewer-theme');
     if (diffViewerThemeSelect) {
       diffViewerThemeSelect.addEventListener('change', (e) => {
