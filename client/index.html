@@ -59,8 +59,8 @@
                 🎖️ Commander
             </button>
             <div class="header-actions">
-                <button id="projects-board-btn" class="header-btn" title="Projects kanban board" data-ui-visibility="header.projectsBoard">
-                    🗂 Projects
+                <button id="projects-board-btn" class="header-btn header-nav-btn" title="Projects kanban board" data-ui-visibility="header.projectsBoard">
+                    <span class="header-nav-icon">🗂</span> Projects
                 </button>
                 <button id="greenfield-btn" class="header-btn" title="Create new project" data-ui-visibility="header.newProject">
                     ➕ New Project
@@ -71,7 +71,8 @@
                 <button id="prs-btn" class="header-btn" title="Browse pull requests" data-ui-visibility="header.prs">
                     🔀 PRs
                 </button>
-                <button id="queue-btn" class="header-btn" title="Review inbox (PRs + queue)" data-ui-visibility="header.queue">
+                <!-- FLAGGED: Review Inbox hidden to save header space -->
+                <button id="queue-btn" class="header-btn" title="Review inbox (PRs + queue)" data-ui-visibility="header.queue" style="display:none">
                     📥 Review Inbox
                 </button>
                 <button id="project-chats-btn" class="header-btn" title="Simple projects + chats shell (Alt+P)" data-ui-visibility="header.chats">
@@ -106,14 +107,12 @@
                 <button id="workflow-focus-tier2" class="header-btn" title="Focus: hide Tier 2 while Tier 1 is busy" data-ui-visibility="header.focusTier2">T2 Auto</button>
                 <button id="workflow-focus-autoswap" class="header-btn" title="Focus: auto-swap to Tier 2 while Tier 1 is busy" data-ui-visibility="header.focusSwap">Swap T2</button>
                 <div id="process-banner-holder" data-ui-visibility="processBanner"><div id="process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div></div>
-                <button id="tasks-btn" class="header-btn" title="Browse tasks (Trello)" data-ui-visibility="header.tasks">
-                    ✅ Tasks
+                <button id="tasks-btn" class="header-btn header-nav-btn" title="Browse tasks (Trello)" data-ui-visibility="header.tasks">
+                    <span class="header-nav-icon">✅</span> Tasks
                 </button>
-                <button id="rename-workspace-btn" class="icon-button" title="Rename current workspace">
-                    ✎
-                </button>
-                <button id="ports-btn" class="header-btn" title="View running services" data-ui-visibility="header.ports">
-                    🔌 Ports
+                <!-- Moved to Settings panel -->
+                <button id="ports-btn" class="header-btn header-nav-btn" title="View running services" data-ui-visibility="header.ports">
+                    <span class="header-nav-icon">🔌</span> Ports
                 </button>
                 <button id="recommendations-toggle" class="icon-button" title="System Recommendations" onclick="window.recommendationsUI && window.recommendationsUI.toggle()" data-ui-visibility="header.recommendations">
                     <span class="notification-badge recommendations-badge" id="recommendations-badge" style="display:none">0</span>
@@ -300,6 +299,13 @@
                     </button>
                 </div>
                 <p class="setting-description">Theme gallery: click a swatch to switch skins instantly.</p>
+            </div>
+
+            <div class="setting-section">
+                <h4>Workspace</h4>
+                <div class="setting-group">
+                    <button id="rename-workspace-btn" class="header-btn" style="width:auto">Rename current workspace</button>
+                </div>
             </div>
 
             <div class="setting-section">
