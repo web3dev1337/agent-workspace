@@ -5,8 +5,8 @@
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: stretch;
-  height: 48px;
-  flex: 0 0 48px;
+  height: var(--workspace-tab-strip-height);
+  flex: 0 0 var(--workspace-tab-strip-height);
   position: relative;
   z-index: 100;
   overflow-x: auto;
