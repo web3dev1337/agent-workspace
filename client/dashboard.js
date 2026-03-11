@@ -129,12 +129,6 @@ class Dashboard {
         const showProjectsCard = visibility.projectsCard !== false;
         const showAdviceCard = visibility.adviceCard !== false;
         const showReadinessCard = visibility.readinessCard !== false;
-        const workspaceCandidates = Array.isArray(this.workspaces) ? this.workspaces : [];
-        const activeWorkspace = workspaceCandidates.find((ws) => this.isWorkspaceActive?.(ws));
-        const currentWorkspace = this.orchestrator?.currentWorkspace || activeWorkspace || workspaceCandidates[0] || null;
-        const workspaceTitle = String(currentWorkspace?.name || currentWorkspace?.projectName || currentWorkspace?.title || currentWorkspace?.label || '').trim();
-        const currentWorkspaceLabel = workspaceTitle || 'Agent Workspace';
-
         const processCards = [
           showStatusCard ? `
             <div class="dashboard-summary-card">
@@ -275,7 +269,7 @@ class Dashboard {
         ` : '';
 
 		    return `
-			      <div class="dashboard-topbar">
+		      <div class="dashboard-topbar">
 		        ${canReturnToWorkspaces ? `
 		          <button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to Workspaces</button>
 		        ` : `<div></div>`}
@@ -283,12 +277,8 @@ class Dashboard {
 		      </div>
 		      <div class="dashboard-header">
 		        <div class="dashboard-title-block">
-		          <h1>Dashboard <span class="dashboard-title-accent">• ${escapeHtml(currentWorkspaceLabel)}</span></h1>
+		          <h1 class="dashboard-app-title">Agent Workspace</h1>
 		          <p>Select a workspace to begin development</p>
-		        </div>
-		        <div class="dashboard-project-title" title="Current project">
-		          <span class="dashboard-project-title-label">Current project</span>
-		          <span class="dashboard-project-title-name">${escapeHtml(currentWorkspaceLabel)}</span>
 		        </div>
 		      </div>
 

@@ -7839,56 +7839,17 @@ body.dependency-onboarding-active #dependency-setup-modal {
   min-width: 0;
 }
 
-.dashboard-title-accent {
-  color: var(--accent-primary);
-  white-space: nowrap;
-  font-size: 0.9em;
-  font-weight: 700;
-}
-
-.dashboard-project-title {
-  align-self: flex-start;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.2rem;
-  padding: 0.45rem 0.65rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-}
-
-.dashboard-project-title-label {
-  font-size: 0.68rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-}
-
-.dashboard-project-title-name {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  max-width: 320px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.dashboard-app-title {
+  background: linear-gradient(90deg, #7dd3fc, #93c5fd 55%, #d8b4fe);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 @media (max-width: 720px) {
   .dashboard-header {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .dashboard-project-title {
-    align-items: flex-start;
-    max-width: 100%;
-  }
-
-  .dashboard-project-title-name {
-    max-width: 100%;
   }
 }
 
