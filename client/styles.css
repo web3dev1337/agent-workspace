@@ -6388,14 +6388,12 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 /* Code Review Dropdown */
 .review-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
+  position: fixed;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-soft);
-  z-index: 1000;
+  z-index: 10000;
   min-width: 200px;
   padding: var(--space-sm);
 }

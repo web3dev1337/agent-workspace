@@ -9039,17 +9039,28 @@ class ClaudeOrchestrator {
     // Close any existing dropdowns
     document.querySelectorAll('.review-dropdown').forEach(dropdown => dropdown.remove());
 
-    // Get the terminal controls container
-	    const terminalWrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
-	    const controlsContainer = terminalWrapper.querySelector('.terminal-controls');
+    const terminalWrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
+    if (!terminalWrapper) return;
+
+    // Find the review button that was clicked to anchor the dropdown
+    const reviewBtn = terminalWrapper.querySelector('.control-btn[title="Assign Code Review"]');
 
     // Create dropdown
     const dropdown = document.createElement('div');
     dropdown.className = 'review-dropdown';
     dropdown.innerHTML = this.buildReviewerDropdownHTML(sessionId);
 
-    // Position and add to DOM
-    controlsContainer.appendChild(dropdown);
+    // Append to body with fixed positioning so overflow:hidden on
+    // .terminal-controls / .terminal-header / .terminal-wrapper can't clip it.
+    document.body.appendChild(dropdown);
+
+    // Position below the review button (or top-right of wrapper as fallback)
+    const anchor = reviewBtn || terminalWrapper;
+    const rect = anchor.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.top = `${rect.bottom + 4}px`;
+    dropdown.style.right = `${document.documentElement.clientWidth - rect.right}px`;
+    dropdown.style.left = 'auto';
 
     // Close dropdown when clicking outside
     const closeDropdown = (e) => {
