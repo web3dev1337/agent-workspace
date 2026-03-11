@@ -257,7 +257,7 @@ class WorkspaceTabManager {
   /**
    * Switch to a different tab
    */
-  async switchTab(tabId) {
+  async switchTab(tabId, { suppressUiRestore = false } = {}) {
     const targetTab = this.tabs.get(tabId);
     if (!targetTab) {
       console.error(`Tab ${tabId} not found`);
@@ -313,6 +313,11 @@ class WorkspaceTabManager {
       this.orchestrator.sessions.set(sessionId, sessionData);
     });
     console.log(`Restored ${targetTab.sessions.size} sessions to orchestrator`);
+
+    if (suppressUiRestore) {
+      console.log(`Switched to tab ${tabId} (${targetTab.displayName}) with deferred UI restore`);
+      return;
+    }
 
     // Rebuild sidebar for new workspace
     if (this.orchestrator.buildSidebar) {

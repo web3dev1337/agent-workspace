@@ -1520,7 +1520,7 @@ class ClaudeOrchestrator {
             // Set current workspace FIRST so tab manager doesn't re-request the backend switch
             this.currentWorkspace = workspace;
             this.isDashboardMode = false;
-            await this.tabManager.switchTab(existingTab.id);
+            await this.tabManager.switchTab(existingTab.id, { suppressUiRestore: true });
             this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, existingTab.id);
 
             // Ensure the active tab view is refreshed with the latest sessions for this workspace
@@ -1555,7 +1555,7 @@ class ClaudeOrchestrator {
 	            this.currentTabId = tabId;
 
 	            // Switch to the new tab so it becomes active
-	            await this.tabManager.switchTab(tabId);
+	            await this.tabManager.switchTab(tabId, { suppressUiRestore: true });
 	            this.tabManager.pruneDuplicateWorkspaceTabs(workspace.id, tabId);
 
 	            // Pre-fetch worktree-specific configs for all terminals
@@ -3719,10 +3719,12 @@ class ClaudeOrchestrator {
     }, 2000);
 
     // Apply session recovery if pending
-    if (this.dashboard?.pendingRecovery && this.dashboard.pendingRecovery.mode !== 'skip') {
+    const pendingRecovery = this.dashboard?.pendingRecovery;
+    const pendingWorkspaceId = String(pendingRecovery?.workspaceId || '').trim();
+    if (pendingRecovery && pendingRecovery.mode !== 'skip' && (!pendingWorkspaceId || pendingWorkspaceId === currentWorkspaceId)) {
+      this.dashboard.pendingRecovery = null;
       setTimeout(() => {
-        this.applySessionRecovery(this.dashboard.pendingRecovery);
-        this.dashboard.pendingRecovery = null;
+        this.applySessionRecovery(pendingRecovery);
       }, 1000);
     }
 
@@ -3740,7 +3742,8 @@ class ClaudeOrchestrator {
     for (const [sessionId, session] of this.sessions) {
       if (sessionId.includes('-claude')) {
         // Skip if this session was recovered
-        if (this.recoveredSessions && this.recoveredSessions.has(sessionId)) {
+        const recoveryKey = this.getWorkspaceScopedSessionKey(sessionId);
+        if (this.recoveredSessions && this.recoveredSessions.has(recoveryKey)) {
           console.log(`Skipping auto-start for ${sessionId} - already recovered`);
           continue;
         }
@@ -3773,6 +3776,12 @@ class ClaudeOrchestrator {
         }
       }
     }
+  }
+
+  getWorkspaceScopedSessionKey(sessionId, workspaceId = null) {
+    const sid = String(sessionId || '').trim();
+    const wid = String(workspaceId || this.currentWorkspace?.id || '').trim() || 'global';
+    return `${wid}::${sid}`;
   }
 
   extractRepositoryName(sessionId) {
@@ -15603,8 +15612,12 @@ class ClaudeOrchestrator {
       return fallback;
     };
 
-    // Track which sessions we're recovering so auto-start skips them
-    this.recoveredSessions = new Set();
+    // Track which sessions we're recovering so auto-start skips them.
+    // Keep this workspace-scoped set across tab switches so identical worktree ids
+    // in different workspaces do not collide.
+    if (!(this.recoveredSessions instanceof Set)) {
+      this.recoveredSessions = new Set();
+    }
 
     for (const session of recovery.sessions) {
       const { sessionId, lastCwd, lastAgent, lastConversationId, lastMode } = session;
@@ -15617,7 +15630,7 @@ class ClaudeOrchestrator {
       }
 
       // Mark this session as recovered to prevent auto-start
-      this.recoveredSessions.add(sessionId);
+      this.recoveredSessions.add(this.getWorkspaceScopedSessionKey(sessionId, this.currentWorkspace?.id || null));
 
       console.log(`Recovering session ${sessionId}:`, { lastCwd, lastAgent, lastConversationId });
 
@@ -15667,7 +15680,7 @@ class ClaudeOrchestrator {
         if (recoveryCwd) {
           config.cwd = recoveryCwd;
         }
-        await this.startAgentWithConfig(sessionId, config);
+        await this.startAgentWithConfig(sessionId, config, { skipLaunchGate: true });
         await new Promise(resolve => setTimeout(resolve, 200));
       }
     }
@@ -15780,16 +15793,18 @@ class ClaudeOrchestrator {
   /**
    * Start agent with configuration (agent-agnostic)
    */
-  async startAgentWithConfig(sessionId, config) {
+  async startAgentWithConfig(sessionId, config, { skipLaunchGate = false } = {}) {
     if (!this.socket || !this.socket.connected) {
       this.showError('Not connected to server');
       return;
     }
 
-    const allowed = await this.ensureLaunchAllowedForSession(sessionId);
-    if (!allowed) {
-      this.showToast('Launch blocked by workload gate', 'warning');
-      return;
+    if (!skipLaunchGate) {
+      const allowed = await this.ensureLaunchAllowedForSession(sessionId);
+      if (!allowed) {
+        this.showToast('Launch blocked by workload gate', 'warning');
+        return;
+      }
     }
 
     console.log(`Starting agent ${config.agentId} for ${sessionId} with config:`, config);
@@ -16197,6 +16212,18 @@ class ClaudeOrchestrator {
 	  removeSessionFromClientState(sessionId, { rebuildUi = true } = {}) {
 	    const sid = String(sessionId || '').trim();
 	    if (!sid) return;
+
+      if (this.recoveredSessions instanceof Set) {
+        this.recoveredSessions.delete(this.getWorkspaceScopedSessionKey(sid));
+        if (this.tabManager?.tabs && this.tabManager.tabs instanceof Map) {
+          for (const [, tab] of this.tabManager.tabs) {
+            const workspaceId = String(tab?.workspaceId || '').trim();
+            if (workspaceId) {
+              this.recoveredSessions.delete(this.getWorkspaceScopedSessionKey(sid, workspaceId));
+            }
+          }
+        }
+      }
 
 	    this.removeSessionFromAllTabStates(sid);
 
