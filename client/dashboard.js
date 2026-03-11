@@ -112,6 +112,7 @@ class Dashboard {
 		      const bTime = b.lastAccess ? new Date(b.lastAccess).getTime() : 0;
 		      return bTime - aTime;
 		    };
+        const projectInfo = this.getDashboardProjectInfo(this.orchestrator.currentWorkspace);
 		    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws)).sort(sortByLastAccess);
 		    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws)).sort(sortByLastAccess);
 		    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
@@ -266,15 +267,28 @@ class Dashboard {
         ` : '';
 
 			    return `
-			      <div class="dashboard-topbar">
+		      <div class="dashboard-topbar">
 		        ${canReturnToWorkspaces ? `
 		          <button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to Workspaces</button>
 		        ` : `<div></div>`}
             ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div>` : `<div></div>`}
 		      </div>
 		      <div class="dashboard-header">
-		        <h1>Dashboard</h1>
-		        <p>Select a workspace to begin development</p>
+            <p class="dashboard-kicker">Agent Workspace</p>
+            <div class="dashboard-project-hero">
+              <div>
+                <h1>Dashboard</h1>
+                <p class="dashboard-project-hero-title">${escapeHtml(projectInfo.title)}</p>
+              </div>
+              <div class="dashboard-project-identity">
+                <span class="dashboard-project-id-icon" aria-hidden="true">📌</span>
+                <div class="dashboard-project-id-meta">
+                  <div class="dashboard-project-id-label">Project title</div>
+                  <div class="dashboard-project-id-value">${escapeHtml(projectInfo.subtitle || 'No additional project context yet')}</div>
+                </div>
+              </div>
+            </div>
+            <p>${projectInfo.isPlaceholder ? 'Select a workspace to begin development' : `Current focus: ${escapeHtml(projectInfo.title)}`}</p>
 		      </div>
 
           ${processSection}
@@ -4037,6 +4051,39 @@ class Dashboard {
       'ruby-rails': 'Ruby on Rails'
     };
     return typeLabels[type] || type;
+  }
+
+  getDashboardProjectInfo(workspace) {
+    if (!workspace || typeof workspace !== 'object') {
+      return {
+        title: 'No Project Selected',
+        subtitle: 'Select a workspace to begin',
+        isPlaceholder: true
+      };
+    }
+
+    const workspaceName = String(workspace.name || '').trim();
+    const repoName = String(workspace.repository?.name || '').trim();
+    const repoPath = String(workspace.repository?.path || '').trim();
+    const title = repoName || workspaceName || 'Current Project';
+    const typeLabel = this.getWorkspaceTypeLabel(workspace.type || '').trim();
+    const subtitleParts = [];
+
+    if (workspaceName && workspaceName !== title) {
+      subtitleParts.push(workspaceName);
+    }
+    if (repoPath) {
+      subtitleParts.push(repoPath);
+    }
+    if (typeLabel) {
+      subtitleParts.push(typeLabel);
+    }
+
+    return {
+      title,
+      subtitle: subtitleParts.length ? subtitleParts.join(' · ') : 'Workspace ready',
+      isPlaceholder: false
+    };
   }
 
   getAccessLevelIcon(access) {
