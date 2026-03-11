@@ -355,17 +355,22 @@ class WorkspaceTabManager {
 
     console.log(`Hiding workspace ${tabState.displayName}`);
 
-    // Persist UI/filter state (visible terminals, filters, etc.) for later restoration
-    this.saveTabUIState(tabState);
-
     // CRITICAL: Save session data from orchestrator to this tab
     // This prevents session data from being lost when switching tabs
-    const currentSessionIds = new Set(this.orchestrator.sessions.keys());
+    const tabWorkspaceId = String(tabState.workspaceId || '').trim();
+    const currentSessionEntries = Array.from(this.orchestrator.sessions.entries()).filter(([, sessionData]) => {
+      const sessionWorkspaceId = String(sessionData?.workspace || this.orchestrator.currentWorkspace?.id || '').trim();
+      return !tabWorkspaceId || !sessionWorkspaceId || sessionWorkspaceId === tabWorkspaceId;
+    });
+    const currentSessionIds = new Set(currentSessionEntries.map(([sessionId]) => sessionId));
     tabState.sessions.clear();
-    this.orchestrator.sessions.forEach((sessionData, sessionId) => {
+    currentSessionEntries.forEach(([sessionId, sessionData]) => {
       tabState.sessions.set(sessionId, sessionData);
     });
     console.log(`Saved ${tabState.sessions.size} sessions from orchestrator to tab`);
+
+    // Persist UI/filter state (visible terminals, filters, etc.) for later restoration
+    this.saveTabUIState(tabState);
 
     for (const [sessionId, termData] of Array.from(tabState.terminals.entries())) {
       if (currentSessionIds.has(sessionId)) continue;
@@ -697,6 +702,7 @@ class WorkspaceTabManager {
     console.log(`Closing tab ${tabId} (${tab.displayName})`);
 
     // Dispose all XTerm instances
+    const sessionIds = Array.from(tab.terminals.keys());
     tab.terminals.forEach((termData, sessionId) => {
       if (termData.xtermInstance) {
         try {
@@ -715,8 +721,11 @@ class WorkspaceTabManager {
 
     // Tell backend to close all sessions for this tab
     if (this.orchestrator.socket) {
-      const sessionIds = Array.from(tab.terminals.keys());
-      this.orchestrator.socket.emit('close-tab', { tabId: tabId, sessionIds });
+      this.orchestrator.socket.emit('close-tab', {
+        tabId: tabId,
+        sessionIds,
+        workspaceId: tab.workspaceId || null
+      });
     }
 
     // Remove DOM elements
@@ -1037,6 +1046,23 @@ class WorkspaceTabManager {
     if (!tabState || !this.orchestrator) return;
 
     const { visibleTerminals, sessionActivity, showActiveOnly } = this.orchestrator;
+    const allowedSessionIds = new Set(tabState.sessions ? tabState.sessions.keys() : []);
+    const pruneSet = (value) => {
+      const next = new Set();
+      if (!value || typeof value[Symbol.iterator] !== 'function') return next;
+      for (const sessionId of value) {
+        if (allowedSessionIds.has(sessionId)) next.add(sessionId);
+      }
+      return next;
+    };
+    const pruneMap = (value) => {
+      const next = new Map();
+      if (!value || typeof value.entries !== 'function') return next;
+      for (const [sessionId, item] of value.entries()) {
+        if (allowedSessionIds.has(sessionId)) next.set(sessionId, item);
+      }
+      return next;
+    };
 
     // Cancel any pending startup UI timers; they can fire while hidden and resurrect overlays.
     if (this.orchestrator.startupUIDebounce) {
@@ -1047,18 +1073,18 @@ class WorkspaceTabManager {
     }
 
     tabState.uiState = {
-      visibleTerminals: visibleTerminals ? new Set(visibleTerminals) : new Set(),
-      sessionActivity: sessionActivity ? new Map(sessionActivity) : new Map(),
+      visibleTerminals: pruneSet(visibleTerminals),
+      sessionActivity: pruneMap(sessionActivity),
       showActiveOnly: !!showActiveOnly,
 
-      githubLinks: this.orchestrator.githubLinks ? new Map(this.orchestrator.githubLinks) : new Map(),
-      githubLinkLogs: this.orchestrator.githubLinkLogs ? new Map(this.orchestrator.githubLinkLogs) : new Map(),
-      serverStatuses: this.orchestrator.serverStatuses ? new Map(this.orchestrator.serverStatuses) : new Map(),
-      serverPorts: this.orchestrator.serverPorts ? new Map(this.orchestrator.serverPorts) : new Map(),
-      dismissedStartupUI: this.orchestrator.dismissedStartupUI ? new Map(this.orchestrator.dismissedStartupUI) : new Map(),
-      sessionAgentPreferences: this.orchestrator.sessionAgentPreferences ? new Map(this.orchestrator.sessionAgentPreferences) : new Map(),
-      autoStartApplied: this.orchestrator.autoStartApplied ? new Set(this.orchestrator.autoStartApplied) : new Set(),
-      worktreeConfigs: this.orchestrator.worktreeConfigs ? new Map(this.orchestrator.worktreeConfigs) : new Map()
+      githubLinks: pruneMap(this.orchestrator.githubLinks),
+      githubLinkLogs: pruneMap(this.orchestrator.githubLinkLogs),
+      serverStatuses: pruneMap(this.orchestrator.serverStatuses),
+      serverPorts: pruneMap(this.orchestrator.serverPorts),
+      dismissedStartupUI: pruneMap(this.orchestrator.dismissedStartupUI),
+      sessionAgentPreferences: pruneMap(this.orchestrator.sessionAgentPreferences),
+      autoStartApplied: pruneSet(this.orchestrator.autoStartApplied),
+      worktreeConfigs: pruneMap(this.orchestrator.worktreeConfigs)
     };
   }
 
@@ -1071,12 +1097,28 @@ class WorkspaceTabManager {
     const orchestrator = this.orchestrator;
     const savedVisible = tabState.uiState?.visibleTerminals;
     const fallbackVisible = new Set(tabState.sessions ? tabState.sessions.keys() : []);
+    const filterSetToSessions = (value) => {
+      const next = new Set();
+      if (!value || typeof value[Symbol.iterator] !== 'function') return next;
+      for (const sessionId of value) {
+        if (fallbackVisible.has(sessionId)) next.add(sessionId);
+      }
+      return next;
+    };
+    const filterMapToSessions = (value) => {
+      const next = new Map();
+      if (!value || typeof value.entries !== 'function') return next;
+      for (const [sessionId, item] of value.entries()) {
+        if (fallbackVisible.has(sessionId)) next.set(sessionId, item);
+      }
+      return next;
+    };
 
     let nextVisible;
     if (savedVisible instanceof Set) {
-      nextVisible = new Set(savedVisible);
+      nextVisible = filterSetToSessions(savedVisible);
     } else if (savedVisible && typeof savedVisible[Symbol.iterator] === 'function') {
-      nextVisible = new Set(savedVisible);
+      nextVisible = filterSetToSessions(savedVisible);
     } else {
       nextVisible = fallbackVisible;
     }
@@ -1089,20 +1131,20 @@ class WorkspaceTabManager {
     orchestrator.showActiveOnly = !!(tabState.uiState && tabState.uiState.showActiveOnly);
 
     if (tabState.uiState?.sessionActivity) {
-      orchestrator.sessionActivity = new Map(tabState.uiState.sessionActivity);
+      orchestrator.sessionActivity = filterMapToSessions(tabState.uiState.sessionActivity);
     } else {
       orchestrator.sessionActivity = new Map();
     }
 
     // Restore per-workspace UI state (prevents cross-tab leakage)
-    orchestrator.githubLinks = tabState.uiState?.githubLinks ? new Map(tabState.uiState.githubLinks) : new Map();
-    orchestrator.githubLinkLogs = tabState.uiState?.githubLinkLogs ? new Map(tabState.uiState.githubLinkLogs) : new Map();
-    orchestrator.serverStatuses = tabState.uiState?.serverStatuses ? new Map(tabState.uiState.serverStatuses) : new Map();
-    orchestrator.serverPorts = tabState.uiState?.serverPorts ? new Map(tabState.uiState.serverPorts) : new Map();
-    orchestrator.dismissedStartupUI = tabState.uiState?.dismissedStartupUI ? new Map(tabState.uiState.dismissedStartupUI) : new Map();
-    orchestrator.sessionAgentPreferences = tabState.uiState?.sessionAgentPreferences ? new Map(tabState.uiState.sessionAgentPreferences) : new Map();
-    orchestrator.autoStartApplied = tabState.uiState?.autoStartApplied ? new Set(tabState.uiState.autoStartApplied) : new Set();
-    orchestrator.worktreeConfigs = tabState.uiState?.worktreeConfigs ? new Map(tabState.uiState.worktreeConfigs) : new Map();
+    orchestrator.githubLinks = filterMapToSessions(tabState.uiState?.githubLinks);
+    orchestrator.githubLinkLogs = filterMapToSessions(tabState.uiState?.githubLinkLogs);
+    orchestrator.serverStatuses = filterMapToSessions(tabState.uiState?.serverStatuses);
+    orchestrator.serverPorts = filterMapToSessions(tabState.uiState?.serverPorts);
+    orchestrator.dismissedStartupUI = filterMapToSessions(tabState.uiState?.dismissedStartupUI);
+    orchestrator.sessionAgentPreferences = filterMapToSessions(tabState.uiState?.sessionAgentPreferences);
+    orchestrator.autoStartApplied = filterSetToSessions(tabState.uiState?.autoStartApplied);
+    orchestrator.worktreeConfigs = filterMapToSessions(tabState.uiState?.worktreeConfigs);
 
     if (typeof orchestrator.updateTerminalGrid === 'function') {
       orchestrator.updateTerminalGrid();

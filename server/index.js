@@ -929,7 +929,11 @@ io.on('connection', (socket) => {
       if (backlog && typeof backlog === 'object') {
         for (const [sessionId, data] of Object.entries(backlog)) {
           if (!data) continue;
-          socket.emit('terminal-output', { sessionId, data });
+          socket.emit('terminal-output', {
+            sessionId,
+            data,
+            workspaceId: newWorkspace?.id || null
+          });
         }
       }
 
@@ -1105,6 +1109,7 @@ io.on('connection', (socket) => {
       socket.emit('worktree-sessions-added', {
         worktreeId,
         sessions: newSessions,
+        workspaceId: activeWorkspace?.id || null,
         startTier: (tier >= 1 && tier <= 4) ? tier : undefined
       });
 
@@ -1131,9 +1136,10 @@ io.on('connection', (socket) => {
   });
 
   // Handle tab closure - cleanup all sessions for the tab
-  socket.on('close-tab', ({ tabId, sessionIds }) => {
+  socket.on('close-tab', ({ tabId, sessionIds, workspaceId }) => {
     try {
-      logger.info('Tab close requested', { tabId });
+      const wsId = String(workspaceId || '').trim() || null;
+      logger.info('Tab close requested', { tabId, workspaceId: wsId });
 
       // We don't track tabId on the backend; the client passes the sessions for that tab.
       const ids = Array.isArray(sessionIds) ? sessionIds.map(String).filter(Boolean) : [];
@@ -1141,6 +1147,7 @@ io.on('connection', (socket) => {
       const toClose = new Set();
       for (const sessionId of ids) {
         const groupIds = sessionManager.getSessionGroupIds(sessionId, {
+          workspaceId: wsId,
           sessionTypes: ['claude', 'codex', 'server']
         });
         groupIds.forEach((id) => {
@@ -1150,10 +1157,13 @@ io.on('connection', (socket) => {
       }
 
       for (const sessionId of toClose) {
-        const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
+        const ok = sessionManager.closeSession(sessionId, {
+          clearRecovery: true,
+          workspaceId: wsId
+        });
         if (!ok) continue;
         closed += 1;
-        io.emit('session-closed', { sessionId });
+        io.emit('session-closed', { sessionId, workspaceId: wsId });
       }
 
       logger.info('Tab closed', { tabId, closed });
@@ -1197,10 +1207,15 @@ io.on('connection', (socket) => {
 
       let closed = 0;
       closeIds.forEach((sid) => {
-        const ok = sessionManager.closeSession(sid, { clearRecovery: true });
+        const closingSession = sessionManager.getSessionById(sid);
+        const closingWorkspaceId = closingSession?.workspace || null;
+        const ok = sessionManager.closeSession(sid, {
+          clearRecovery: true,
+          workspaceId: closingWorkspaceId
+        });
         if (!ok) return;
         closed += 1;
-        io.emit('session-closed', { sessionId: sid });
+        io.emit('session-closed', { sessionId: sid, workspaceId: closingWorkspaceId });
       });
 
       activityFeed.track('session.closed', { sessionId: id, ok: closed > 0, closed, socketId: socket.id });
@@ -2896,6 +2911,7 @@ async function ensureWorkspaceMixedWorktree({
     const payload = {
       worktreeId: worktree,
       sessions,
+      workspaceId,
       startTier: (tier >= 1 && tier <= 4) ? tier : undefined
     };
     if (socketId && io.sockets.sockets.get(socketId)) io.to(socketId).emit('worktree-sessions-added', payload);
@@ -3034,8 +3050,13 @@ function closeThreadSessions(sessionIds = []) {
     });
   }
   for (const sessionId of toClose) {
-    const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
-    if (ok) io.emit('session-closed', { sessionId });
+    const closingSession = sessionManager.getSessionById(sessionId);
+    const closingWorkspaceId = closingSession?.workspace || null;
+    const ok = sessionManager.closeSession(sessionId, {
+      clearRecovery: true,
+      workspaceId: closingWorkspaceId
+    });
+    if (ok) io.emit('session-closed', { sessionId, workspaceId: closingWorkspaceId });
   }
 }
 
@@ -3395,8 +3416,13 @@ app.post('/api/workspaces/remove-worktree', requirePolicyAction('destructive'), 
     }
 
     uniqueSessionIds.forEach((sessionId) => {
-      const ok = sessionManager.closeSession(sessionId, { clearRecovery: true });
-      if (ok) io.emit('session-closed', { sessionId });
+      const closingSession = sessionManager.getSessionById(sessionId);
+      const closingWorkspaceId = closingSession?.workspace || null;
+      const ok = sessionManager.closeSession(sessionId, {
+        clearRecovery: true,
+        workspaceId: closingWorkspaceId
+      });
+      if (ok) io.emit('session-closed', { sessionId, workspaceId: closingWorkspaceId });
     });
 
     const removedSessionIdSet = new Set(
