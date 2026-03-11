@@ -1516,6 +1516,7 @@ class ClaudeOrchestrator {
           if (existingTab) {
             // Switch to existing tab
             console.log(`Workspace ${workspace.name} already open, switching to tab`);
+            this.tabManager.syncTabSessionSnapshot?.(existingTab.id, sessions);
             // Set current workspace FIRST so tab manager doesn't re-request the backend switch
             this.currentWorkspace = workspace;
             this.isDashboardMode = false;
@@ -3626,6 +3627,34 @@ class ClaudeOrchestrator {
     const preserveVisibility = !!(currentWorkspaceId && previousWorkspaceId && currentWorkspaceId === previousWorkspaceId);
     const previousSessionIds = new Set(this.sessions.keys());
     const previousVisibleSessionIds = new Set(this.visibleTerminals);
+    const nextSessionIds = new Set(Object.keys(sessionStates || {}));
+    const removedSessionIds = Array.from(previousSessionIds).filter((sessionId) => !nextSessionIds.has(sessionId));
+
+    if (this.tabManager && this.currentTabId) {
+      this.tabManager.syncTabSessionSnapshot?.(this.currentTabId, sessionStates);
+    }
+
+    if (removedSessionIds.length > 0) {
+      const grid = this.getTerminalGrid?.() || document;
+      removedSessionIds.forEach((sessionId) => {
+        if (this.terminalManager?.terminals?.has?.(sessionId)) {
+          this.terminalManager.destroyTerminal(sessionId);
+        }
+        const wrapper = this.getSessionWrapperElement(sessionId);
+        if (wrapper && (!grid.contains || grid.contains(wrapper))) {
+          wrapper.remove();
+        }
+      });
+      try {
+        Array.from(grid.querySelectorAll('.terminal-wrapper[data-session-id]')).forEach((wrapper) => {
+          const sessionId = String(wrapper?.dataset?.sessionId || '').trim();
+          if (!sessionId || nextSessionIds.has(sessionId) || wrapper.classList.contains('review-console-terminal')) return;
+          wrapper.remove();
+        });
+      } catch {
+        // ignore
+      }
+    }
 
     // Clear existing sessions and activity tracking
     this.sessions.clear();
@@ -3640,14 +3669,6 @@ class ClaudeOrchestrator {
         hasUserInput: false
       };
       this.sessions.set(sessionId, sessionData);
-
-      // Register session with current tab if tab manager is enabled
-      if (this.tabManager && this.currentTabId) {
-        const tab = this.tabManager.getTab(this.currentTabId);
-        if (tab) {
-          tab.sessions.set(sessionId, sessionData);
-        }
-      }
 
       // If there's an existing PR, add it to GitHub links automatically
       if (state.existingPR) {
@@ -5135,6 +5156,13 @@ class ClaudeOrchestrator {
       console.error('Terminal grid not found!');
       return;
     }
+
+    const sessionIdSet = new Set(sessionIds.map((sessionId) => String(sessionId || '').trim()).filter(Boolean));
+    Array.from(grid.querySelectorAll('.terminal-wrapper[data-session-id]')).forEach((wrapper) => {
+      const sessionId = String(wrapper?.dataset?.sessionId || '').trim();
+      if (!sessionId || sessionIdSet.has(sessionId) || wrapper.classList.contains('review-console-terminal')) return;
+      wrapper.remove();
+    });
 
     const visibleSet = new Set(this.activeView);
     const groupMap = new Map();

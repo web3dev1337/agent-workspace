@@ -355,10 +355,22 @@ class WorkspaceTabManager {
 
     // CRITICAL: Save session data from orchestrator to this tab
     // This prevents session data from being lost when switching tabs
+    const currentSessionIds = new Set(this.orchestrator.sessions.keys());
+    tabState.sessions.clear();
     this.orchestrator.sessions.forEach((sessionData, sessionId) => {
       tabState.sessions.set(sessionId, sessionData);
     });
     console.log(`Saved ${tabState.sessions.size} sessions from orchestrator to tab`);
+
+    for (const [sessionId, termData] of Array.from(tabState.terminals.entries())) {
+      if (currentSessionIds.has(sessionId)) continue;
+      try {
+        termData?.xtermInstance?.dispose?.();
+      } catch (err) {
+        console.warn(`Error disposing stale hidden terminal ${sessionId}:`, err);
+      }
+      tabState.terminals.delete(sessionId);
+    }
 
     // CRITICAL: Save terminal instances from global manager to this tab
     // This prevents them from being overwritten when another tab loads
@@ -564,6 +576,18 @@ class WorkspaceTabManager {
       return;
     }
 
+    if (!tab.sessions.has(sessionId)) {
+      const fallbackSession = tabId === this.activeTabId
+        ? this.orchestrator?.sessions?.get?.(sessionId)
+        : null;
+      if (fallbackSession) {
+        tab.sessions.set(sessionId, fallbackSession);
+      } else {
+        console.warn(`Skipping terminal registration for ${sessionId} on tab ${tabId} - session not in tab snapshot`);
+        return;
+      }
+    }
+
     tab.terminals.set(sessionId, {
       xtermInstance: xtermInstance,
       fitAddon: fitAddon,
@@ -756,6 +780,93 @@ class WorkspaceTabManager {
    */
   getTab(tabId) {
     return this.tabs.get(tabId);
+  }
+
+  syncTabSessionSnapshot(tabId, sessions) {
+    const tab = this.tabs.get(tabId);
+    if (!tab) return new Set();
+
+    const nextSessions = new Map();
+    if (sessions && typeof sessions === 'object' && !Array.isArray(sessions) && !(sessions instanceof Map)) {
+      for (const [sessionId, state] of Object.entries(sessions)) {
+        nextSessions.set(sessionId, { sessionId, ...state, hasUserInput: false });
+      }
+    } else if (sessions instanceof Map) {
+      for (const [sessionId, state] of sessions.entries()) {
+        nextSessions.set(sessionId, state?.sessionId ? state : { sessionId, ...state, hasUserInput: false });
+      }
+    } else if (Array.isArray(sessions)) {
+      for (const item of sessions) {
+        if (!item) continue;
+        if (typeof item === 'string') {
+          nextSessions.set(item, { sessionId: item, hasUserInput: false });
+        } else if (item.sessionId) {
+          nextSessions.set(item.sessionId, item.hasUserInput === undefined ? { ...item, hasUserInput: false } : item);
+        }
+      }
+    }
+
+    const nextSessionIds = new Set(nextSessions.keys());
+    tab.sessions.clear();
+    nextSessions.forEach((sessionData, sessionId) => {
+      tab.sessions.set(sessionId, sessionData);
+    });
+
+    const pruneSet = (value) => {
+      const next = new Set();
+      if (!value || typeof value[Symbol.iterator] !== 'function') return next;
+      for (const sessionId of value) {
+        if (nextSessionIds.has(sessionId)) next.add(sessionId);
+      }
+      return next;
+    };
+    const pruneMap = (value) => {
+      const next = new Map();
+      if (!value || typeof value.entries !== 'function') return next;
+      for (const [sessionId, mapValue] of value.entries()) {
+        if (nextSessionIds.has(sessionId)) next.set(sessionId, mapValue);
+      }
+      return next;
+    };
+
+    if (tab.uiState) {
+      tab.uiState.visibleTerminals = pruneSet(tab.uiState.visibleTerminals);
+      tab.uiState.sessionActivity = pruneMap(tab.uiState.sessionActivity);
+      tab.uiState.githubLinks = pruneMap(tab.uiState.githubLinks);
+      tab.uiState.githubLinkLogs = pruneMap(tab.uiState.githubLinkLogs);
+      tab.uiState.serverStatuses = pruneMap(tab.uiState.serverStatuses);
+      tab.uiState.serverPorts = pruneMap(tab.uiState.serverPorts);
+      tab.uiState.dismissedStartupUI = pruneMap(tab.uiState.dismissedStartupUI);
+      tab.uiState.sessionAgentPreferences = pruneMap(tab.uiState.sessionAgentPreferences);
+      tab.uiState.worktreeConfigs = pruneMap(tab.uiState.worktreeConfigs);
+      tab.uiState.autoStartApplied = pruneSet(tab.uiState.autoStartApplied);
+    }
+
+    for (const [sessionId, termData] of Array.from(tab.terminals.entries())) {
+      if (nextSessionIds.has(sessionId)) continue;
+      if (tab.id !== this.activeTabId) {
+        try {
+          termData?.xtermInstance?.dispose?.();
+        } catch (err) {
+          console.warn(`Error disposing stale terminal ${sessionId}:`, err);
+        }
+      }
+      tab.terminals.delete(sessionId);
+    }
+
+    const container = tab.containerElement;
+    if (container) {
+      Array.from(container.querySelectorAll('.terminal-wrapper[data-session-id]')).forEach((wrapper) => {
+        const sessionId = String(wrapper?.dataset?.sessionId || '').trim();
+        if (!sessionId || nextSessionIds.has(sessionId) || wrapper.classList.contains('review-console-terminal')) return;
+        wrapper.remove();
+      });
+      Array.from(container.querySelectorAll('.terminal-pair')).forEach((pair) => {
+        if (!pair.querySelector('.terminal-wrapper')) pair.remove();
+      });
+    }
+
+    return nextSessionIds;
   }
 
   /**
