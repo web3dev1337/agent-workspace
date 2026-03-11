@@ -505,10 +505,10 @@ body {
 
 .sidebar-worktrees-line h2 {
   margin: 0;
-  max-width: 240px;
   font-size: 1.1rem;
   font-weight: 600;
   white-space: nowrap;
+  line-height: 1.2;
   transition: opacity 0.18s ease, transform 0.2s ease, max-width 0.2s ease;
 }
 
@@ -523,7 +523,6 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
 }
 
 .worktree-list {
