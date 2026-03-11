@@ -496,13 +496,13 @@ body {
   height: 18px;
   border-radius: 50%;
   background: conic-gradient(from 180deg at 50% 50%, #52d3ff 0deg, #4b92ff 180deg, #52d3ff 360deg);
-  box-shadow: 0 0 12px #52d3ff;
   flex-shrink: 0;
   margin-right: 8px;
+  animation: sidebar-logo-spin 4s linear infinite paused;
 }
 
 .sidebar-title-line:hover .sidebar-logo {
-  animation: sidebar-logo-spin 4s linear infinite;
+  animation-play-state: running;
 }
 
 @keyframes sidebar-logo-spin {
