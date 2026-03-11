@@ -112,6 +112,10 @@ class Dashboard {
 		      const bTime = b.lastAccess ? new Date(b.lastAccess).getTime() : 0;
 		      return bTime - aTime;
 		    };
+        const escapeHtml = (value) => String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
 		    const activeWorkspaces = this.workspaces.filter(ws => this.isWorkspaceActive(ws)).sort(sortByLastAccess);
 		    const inactiveWorkspaces = this.workspaces.filter(ws => !this.isWorkspaceActive(ws)).sort(sortByLastAccess);
 		    const canReturnToWorkspaces = !!(this.orchestrator.tabManager?.tabs?.size);
@@ -125,6 +129,8 @@ class Dashboard {
         const showProjectsCard = visibility.projectsCard !== false;
         const showAdviceCard = visibility.adviceCard !== false;
         const showReadinessCard = visibility.readinessCard !== false;
+        const workspaceTitle = String(this.orchestrator?.currentWorkspace?.name || '').trim();
+        const currentWorkspaceLabel = workspaceTitle || String(this.workspaces?.[0]?.name || '').trim() || 'Agent Workspace';
 
         const processCards = [
           showStatusCard ? `
@@ -265,7 +271,7 @@ class Dashboard {
           </div>
         ` : '';
 
-			    return `
+		    return `
 			      <div class="dashboard-topbar">
 		        ${canReturnToWorkspaces ? `
 		          <button class="dashboard-topbar-btn" id="dashboard-back-btn" title="Back to workspaces">← Back to Workspaces</button>
@@ -273,8 +279,14 @@ class Dashboard {
             ${showProcessBanner ? `<div id="dashboard-process-banner" class="process-banner" title="WIP and queue status (click to open Queue)"></div>` : `<div></div>`}
 		      </div>
 		      <div class="dashboard-header">
-		        <h1>Dashboard</h1>
-		        <p>Select a workspace to begin development</p>
+		        <div class="dashboard-title-block">
+		          <h1>Dashboard</h1>
+		          <p>Select a workspace to begin development</p>
+		        </div>
+		        <div class="dashboard-project-title" title="Current project">
+		          <span class="dashboard-project-title-label">Current project</span>
+		          <span class="dashboard-project-title-name">${escapeHtml(currentWorkspaceLabel)}</span>
+		        </div>
 		      </div>
 
           ${processSection}
