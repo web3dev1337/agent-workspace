@@ -4306,7 +4306,7 @@ class ClaudeOrchestrator {
   getServerControlsHTML(sessionId) {
     const isRunning = this.serverStatuses.get(sessionId) === 'running';
     const visibility = this.getTerminalVisibilityConfig();
-    const showStartServer = visibility.startServer !== false;
+    const showStartServer = visibility.startServer === true;
     const showLaunchSettings = visibility.launchSettings !== false;
     const showServerLaunchMenu = visibility.serverLaunchMenu !== false;
 
@@ -4377,13 +4377,16 @@ class ClaudeOrchestrator {
     if (!serverSessionId) return '';
 
     const visibility = this.getTerminalVisibilityConfig();
-    if (visibility.startServerDev === false) return '';
-
     const isRunning = this.serverStatuses.get(serverSessionId) === 'running';
+
+    // Only show stop button; start is gated behind explicit opt-in
     if (isRunning) {
       return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}')" title="Stop Server">⏹S</button>`;
     }
-    return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}', 'development')" title="Start Server (dev)">▶S</button>`;
+    if (visibility.startServerDev === true) {
+      return `<button class="control-btn" onclick="window.orchestrator.toggleServer('${serverSessionId}', 'development')" title="Start Server (dev)">▶S</button>`;
+    }
+    return '';
   }
 
   getSessionWorktreeKey(sessionId, session = null) {
@@ -6600,6 +6603,12 @@ class ClaudeOrchestrator {
 			    const controlsDiv = wrapper.querySelector('.terminal-controls');
 		    if (!controlsDiv) return;
 
+      // Reset collapse state — will be re-evaluated after render
+      const header = wrapper.querySelector('.terminal-header');
+      if (header) {
+        header.classList.remove('controls-collapsed', 'controls-expanded');
+      }
+
       const sessionType = String(this.sessions?.get?.(sessionId)?.type || '').trim().toLowerCase();
       const isAgentSession = /-(claude|codex)$/.test(String(sessionId || '')) || sessionType === 'claude' || sessionType === 'codex';
 	    if (isAgentSession) {
@@ -6622,6 +6631,9 @@ class ClaudeOrchestrator {
 			      ${this.getTerminalVisibilityConfig().serverReviewConsole !== false ? this.getWorktreeInspectorButtonHTML(sessionId) : ''}
 			      ${this.getSessionCloseButtonHTML(sessionId)}
 			    `;
+
+      // Re-check collapse after controls content changed
+      requestAnimationFrame(() => this.updateControlsCollapse());
 			  }
 
 					  getWorktreeInspectorButtonHTML(sessionId) {

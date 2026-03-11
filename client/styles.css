@@ -1598,20 +1598,20 @@ header {
 /* Toggle button — hidden when there's enough space */
 .terminal-controls-toggle {
   display: none;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: var(--radius-sm);
-  padding: 2px 4px;
+  padding: 2px 3px;
   line-height: 1;
   flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 0.15s;
 }
 
 .terminal-controls-toggle:hover {
-  background: var(--accent-primary);
-  color: white;
-  border-color: var(--accent-primary);
+  opacity: 1;
+  color: var(--text-primary);
 }
 
 .controls-toggle-icon {
