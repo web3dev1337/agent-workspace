@@ -77,7 +77,7 @@ class WorkspaceSwitcher {
             <button class="workspace-option dashboard-option" data-action="dashboard">
               <span class="workspace-option-icon">🏠</span>
               <span class="workspace-option-info">
-                <span class="workspace-option-name">Dashboard</span>
+                <span class="workspace-option-name">Agent Workspace</span>
                 <span class="workspace-option-type">All workspaces</span>
               </span>
             </button>
@@ -190,7 +190,7 @@ class WorkspaceSwitcher {
             <button class="workspace-option dashboard-option" data-action="dashboard">
               <span class="workspace-option-icon">🏠</span>
               <span class="workspace-option-info">
-                <span class="workspace-option-name">Dashboard</span>
+                <span class="workspace-option-name">Agent Workspace</span>
                 <span class="workspace-option-type">All workspaces</span>
               </span>
             </button>
