@@ -240,24 +240,12 @@ class Dashboard {
           <div class="dashboard-section dashboard-create">
             <h2>Create</h2>
             <div class="dashboard-create-actions">
-              <button class="btn-primary workspace-create-btn">New Workspace</button>
-              <button class="btn-secondary workspace-create-empty-btn">Empty Workspace</button>
-              <button class="btn-secondary workspace-import-btn" title="Import a workspace config (JSON)">Import Workspace</button>
-              <button class="btn-primary workspace-create-project-btn">New Project</button>
-              <button class="btn-secondary" id="dashboard-commander-toggle">Commander: …</button>
+              <button id="dashboard-add-workspace-btn" class="btn-primary workspace-create-empty-btn">Add Workspace</button>
             </div>
           </div>
         ` : '';
 
-        const reviewSection = (visibility.reviewSection !== false) ? `
-          <div class="dashboard-section dashboard-review">
-            <h2>Review</h2>
-            <div class="dashboard-create-actions dashboard-review-actions">
-              <button class="btn-primary" id="dashboard-review-inbox">Review Inbox</button>
-              <button class="btn-secondary" id="dashboard-quick-review">Quick Review</button>
-            </div>
-          </div>
-        ` : '';
+        const reviewSection = '';
 
         const quickLinksSection = (visibility.quickLinks !== false) ? `
           <div class="dashboard-section dashboard-half">
@@ -3599,55 +3587,11 @@ class Dashboard {
       });
     });
 
-    // Create workspace button
-    const createBtn = document.querySelector('.workspace-create-btn');
-    if (createBtn) {
-      createBtn.addEventListener('click', () => {
-        this.showCreateWorkspaceWizard();
-      });
-    }
-
-    const createEmptyBtn = document.querySelector('.workspace-create-empty-btn');
+    const createEmptyBtn = document.getElementById('dashboard-add-workspace-btn');
     if (createEmptyBtn) {
       createEmptyBtn.addEventListener('click', () => {
         this.createEmptyWorkspaceQuick();
       });
-    }
-
-    const importBtn = document.querySelector('.workspace-import-btn');
-    if (importBtn) {
-      importBtn.addEventListener('click', () => {
-        this.importWorkspaceFromFile();
-      });
-    }
-
-    const createProjectBtn = document.querySelector('.workspace-create-project-btn');
-    if (createProjectBtn) {
-      createProjectBtn.addEventListener('click', () => {
-        this.showCreateProjectWizard();
-      });
-    }
-
-    const reviewInboxBtn = document.getElementById('dashboard-review-inbox');
-    if (reviewInboxBtn) {
-      reviewInboxBtn.addEventListener('click', () => {
-        this.orchestrator.openReviewInbox();
-      });
-    }
-
-    const quickReviewBtn = document.getElementById('dashboard-quick-review');
-    if (quickReviewBtn) {
-      quickReviewBtn.addEventListener('click', () => {
-        this.orchestrator.openReviewInbox({ quick: true });
-      });
-    }
-
-    const commanderToggleBtn = document.getElementById('dashboard-commander-toggle');
-    if (commanderToggleBtn) {
-      commanderToggleBtn.addEventListener('click', () => {
-        this.toggleCommanderFromDashboard();
-      });
-      this.updateCommanderToggle();
     }
 
     // ESC: return to tabbed workspaces if dashboard was opened from there
