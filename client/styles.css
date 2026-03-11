@@ -7816,10 +7816,8 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .dashboard-header {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 1rem;
+  display: block;
+  text-align: center;
   margin-bottom: 1.1rem;
 }
 
@@ -7840,17 +7838,17 @@ body.dependency-onboarding-active #dependency-setup-modal {
 }
 
 .dashboard-app-title {
+  font-size: 1.5rem;
+  font-weight: 700;
   background: linear-gradient(90deg, #7dd3fc, #93c5fd 55%, #d8b4fe);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  margin-bottom: 0.2rem;
 }
 
-@media (max-width: 720px) {
-  .dashboard-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
+.dashboard-title-block h1 {
+  margin-bottom: 0.3rem;
 }
 
 .dashboard-section {

@@ -277,7 +277,8 @@ class Dashboard {
 		      </div>
 		      <div class="dashboard-header">
 		        <div class="dashboard-title-block">
-		          <h1 class="dashboard-app-title">Agent Workspace</h1>
+		          <div class="dashboard-app-title">Agent Workspace</div>
+		          <h1>Dashboard</h1>
 		          <p>Select a workspace to begin development</p>
 		        </div>
 		      </div>
