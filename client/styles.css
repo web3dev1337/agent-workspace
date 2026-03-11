@@ -6444,10 +6444,9 @@ body.dependency-onboarding-active #dependency-setup-modal {
   background: var(--text-tertiary);
 }
 
-.control-btn.review-btn {
-  background: var(--accent-primary);
-  color: var(--text-on-accent);
-  border-color: var(--accent-primary);
+.control-btn.review-btn,
+.control-btn[title="Assign Code Review"] {
+  display: none !important; /* assign code review button hidden from terminal headers */
 }
 
 .control-btn.review-btn:hover {
