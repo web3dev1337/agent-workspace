@@ -5238,10 +5238,20 @@ class ClaudeOrchestrator {
               container.appendChild(wrapper);
               console.log(`✅ Appended terminal to grid: ${sessionId}`);
 
-              // Initialize terminal for newly created element (scope query to wrapper/grid to avoid cross-tab collisions)
+              // Initialize or reattach terminal for newly created element.
               setTimeout(() => {
                 const terminalEl = wrapper?.querySelector('.terminal');
-                if (terminalEl && wrapper?.isConnected && !this.terminalManager.terminals.has(sessionId)) {
+                if (!terminalEl || !wrapper?.isConnected) return;
+
+                if (this.terminalManager.terminals.has(sessionId)) {
+                  const term = this.terminalManager.terminals.get(sessionId);
+                  if (term) {
+                    terminalEl.innerHTML = '';
+                    term.open(terminalEl);
+                    this.terminalManager.fitTerminal(sessionId);
+                    try { term.refresh(0, term.rows - 1); } catch {}
+                  }
+                } else {
                   this.terminalManager.createTerminal(sessionId, session, terminalEl);
                 }
               }, 50);
@@ -5263,19 +5273,21 @@ class ClaudeOrchestrator {
           }
           visibleCount += 1;
         } else if (wrapper && !docked) {
-          // Hide wrapper if not visible
-          wrapper.style.display = 'none';
-          if (wrapper.parentElement !== container) {
-            container.appendChild(wrapper);
-          }
+          // Remove hidden wrappers from the grid so collapsed worktrees do not leave
+          // behind stale grid items or layout artifacts in secondary workspace tabs.
+          wrapper.remove();
         } else if (wrapper && docked && session) {
           this.updateTerminalTicketLabel(sessionId);
         }
       });
 
       container.classList.toggle('terminal-pair-single', visibleCount <= 1);
-      container.style.display = visibleCount ? '' : 'none';
-      if (visibleCount) activeGroupKeys.add(group.key);
+      if (visibleCount) {
+        container.style.display = '';
+        activeGroupKeys.add(group.key);
+      } else {
+        container.remove();
+      }
     });
 
     // Remove stale pair containers (worktrees removed)
