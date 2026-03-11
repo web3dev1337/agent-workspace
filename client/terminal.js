@@ -347,9 +347,19 @@ class TerminalManager {
       });
     });
     
-    // Focus terminal when clicked
+    // Focus terminal when clicked or hovered (auto-focus)
     terminalElement.addEventListener('click', () => {
       terminal.focus();
+    });
+    
+    // Use the parent wrapper for more reliable auto-focus
+    const wrapper = terminalElement.closest('.terminal-wrapper') || terminalElement;
+    wrapper.addEventListener('mousemove', () => {
+      // Only focus if there's no selection, to avoid interrupting copy operations.
+      // Also check if we aren't already focused to avoid overhead.
+      if (!terminal.hasSelection() && document.activeElement !== terminal.textarea) {
+        terminal.focus();
+      }
     });
     
     // Auto-focus if it's a Claude session

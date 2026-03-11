@@ -5346,6 +5346,11 @@ class ClaudeOrchestrator {
         container.id = id;
         container.className = 'terminal-pair';
         container.dataset.worktreeKey = String(key || '');
+        
+        const header = document.createElement('div');
+        header.className = 'terminal-pair-header';
+        container.appendChild(header);
+        
         grid.appendChild(container);
       } else {
         grid.appendChild(container);
@@ -5427,6 +5432,140 @@ class ClaudeOrchestrator {
         }
       });
 
+      if (visibleCount > 0 && ordered.length > 0) {
+        const firstSessionId = ordered[0];
+        const firstSession = this.sessions.get(firstSessionId);
+        if (firstSession) {
+          const repositoryName = this.extractRepositoryName(firstSessionId);
+          const worktreeId = firstSession.worktreeId || group.key;
+          const displayName = repositoryName ? `${repositoryName}/${worktreeId}` : worktreeId.replace('work', '');
+          const branchMeta = this.formatBranchLabel(firstSession.branch || '', { context: 'terminal' });
+          const branchRefreshId = encodeURIComponent(String(firstSessionId || ''));
+          const terminalVisibility = this.getTerminalVisibilityConfig();
+          const showBranchRefresh = terminalVisibility.branchRefresh !== false;
+          
+          const agentSid = ordered.find(sid => !String(sid).endsWith('-server'));
+          const serverSid = ordered.find(sid => String(sid).endsWith('-server'));
+          
+          const agentBtnClass = agentSid && visibleSet.has(agentSid) ? 'active' : 'inactive';
+          const serverBtnClass = serverSid && visibleSet.has(serverSid) ? 'active' : 'inactive';
+          
+          const header = container.querySelector('.terminal-pair-header');
+          if (header) {
+            header.innerHTML = `
+              <div class="terminal-pair-title" style="flex: 1 1 auto; min-width: 0;">
+                <span class="terminal-pair-name" style="word-break: break-word;">📁 ${displayName}</span>
+                <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
+                ${showBranchRefresh ? `<button type="button" class="terminal-branch-refresh" data-branch-refresh="${this.escapeHtml(branchRefreshId)}" title="Refresh branch label">↻</button>` : ''}
+              </div>
+              <div class="terminal-pair-right-controls" style="display: flex; gap: 8px; align-items: center; flex: 0 0 auto; white-space: nowrap;">
+                <div class="terminal-pair-ticket-container"></div>
+                <div class="terminal-pair-visibility-toggles" style="display: flex; gap: 4px;">
+                  ${agentSid ? `<button class="header-btn toggle-visibility-btn ${agentBtnClass}" data-sid="${this.escapeHtml(agentSid)}" data-type="agent" title="Toggle Agent Terminal" style="padding: 2px 6px; font-size: 14px; opacity: ${agentBtnClass==='active'?'1':'0.4'}">🤖</button>` : ''}
+                  ${serverSid ? `<button class="header-btn toggle-visibility-btn ${serverBtnClass}" data-sid="${this.escapeHtml(serverSid)}" data-type="server" title="Toggle Server Terminal" style="padding: 2px 6px; font-size: 14px; opacity: ${serverBtnClass==='active'?'1':'0.4'}">💻</button>` : ''}
+                </div>
+              </div>
+            `;
+            
+            // Attach events
+            header.querySelectorAll('.toggle-visibility-btn').forEach(btn => {
+              btn.addEventListener('click', (e) => {
+                const sid = e.currentTarget.dataset.sid;
+                const type = e.currentTarget.dataset.type;
+                const isHiding = e.currentTarget.classList.contains('active');
+                
+                if (isHiding) {
+                  // Check if the other one is also inactive (or going to be)
+                  const otherType = type === 'agent' ? 'server' : 'agent';
+                  const otherBtn = header.querySelector(`.toggle-visibility-btn[data-type="${otherType}"]`);
+                  const isOtherHidden = !otherBtn || otherBtn.classList.contains('inactive');
+                  
+                  if (isOtherHidden) {
+                    // Both will be hidden -> fully hide worktree
+                    this.toggleWorktreeVisibility(worktreeId, false);
+                    return;
+                  }
+                }
+                
+                this.toggleSessionVisibility(sid);
+              });
+            });
+          }
+        }
+      }
+
+      // Manage splitter
+      if (visibleCount > 1) {
+        const wrappers = Array.from(container.querySelectorAll('.terminal-wrapper')).filter(el => el.style.display !== 'none');
+        if (wrappers.length === 2) {
+          let splitter = container.querySelector('.terminal-splitter');
+          if (!splitter) {
+            splitter = document.createElement('div');
+            splitter.className = 'terminal-splitter';
+            container.insertBefore(splitter, wrappers[1]);
+            
+            let isDragging = false;
+            let startX = 0;
+            let startWidthLeft = 0;
+            let startWidthRight = 0;
+            
+            const onMouseMove = (e) => {
+              if (!isDragging) return;
+              e.preventDefault();
+              const deltaX = e.clientX - startX;
+              
+              const newLeftWidth = Math.max(150, startWidthLeft + deltaX);
+              const newRightWidth = Math.max(150, startWidthRight - deltaX);
+              
+              const totalWidth = newLeftWidth + newRightWidth;
+              const leftRatio = newLeftWidth / totalWidth;
+              const rightRatio = newRightWidth / totalWidth;
+              
+              // We use CSS Grid now! Update grid-template-columns directly on the pair.
+              container.style.gridTemplateColumns = `${leftRatio}fr auto ${rightRatio}fr`;
+              
+              // Trigger resize for xterm
+              if (this.terminalManager) {
+                wrappers.forEach(w => {
+                  const sid = w.dataset.sessionId;
+                  if (sid) requestAnimationFrame(() => this.terminalManager.fitTerminal(sid));
+                });
+              }
+            };
+            
+            const onMouseUp = () => {
+              isDragging = false;
+              splitter.classList.remove('dragging');
+              document.removeEventListener('mousemove', onMouseMove);
+              document.removeEventListener('mouseup', onMouseUp);
+              document.body.style.cursor = '';
+            };
+            
+            splitter.addEventListener('mousedown', (e) => {
+              isDragging = true;
+              startX = e.clientX;
+              
+              const leftWrapper = container.querySelector('.terminal-wrapper[data-session-type="claude"]') || wrappers[0];
+              const rightWrapper = container.querySelector('.terminal-wrapper[data-session-type="server"]') || wrappers[1];
+              
+              startWidthLeft = leftWrapper.getBoundingClientRect().width;
+              startWidthRight = rightWrapper.getBoundingClientRect().width;
+              
+              splitter.classList.add('dragging');
+              document.body.style.cursor = 'col-resize';
+              document.addEventListener('mousemove', onMouseMove);
+              document.addEventListener('mouseup', onMouseUp);
+            });
+          }
+        }
+      } else {
+        const splitter = container.querySelector('.terminal-splitter');
+        if (splitter) splitter.remove();
+        
+        // Reset grid columns if only 1 is visible
+        container.style.gridTemplateColumns = '';
+      }
+
       container.classList.toggle('terminal-pair-single', visibleCount <= 1);
       if (visibleCount) {
         container.style.display = '';
@@ -5445,10 +5584,9 @@ class ClaudeOrchestrator {
     // Set the data attribute for dynamic layout based on visible count
     const visibleCount = activeGroupKeys.size;
     grid.setAttribute('data-visible-count', visibleCount);
-    // If the user has more than 16 visible terminals, fall back to a scrollable grid
+    // If the user has more than 4 visible terminals, fall back to a scrollable grid
     // instead of clipping extra rows (which shows up as tiny “slivers” at the bottom).
-    grid.classList.toggle('terminal-grid-scrollable', visibleCount > 16);
-
+    
     // Force a resize after everything is rendered to ensure terminals fit properly
     setTimeout(() => {
       this.resizeAllVisibleTerminals();
@@ -5854,7 +5992,14 @@ class ClaudeOrchestrator {
 		    const wrapper = this.getSessionWrapperElement(sid);
 		    if (!wrapper) return;
 
-	    const titleRow = wrapper.querySelector('.terminal-title');
+	    let titleRow = wrapper.querySelector('.terminal-title');
+        const pairContainer = wrapper.closest('.terminal-pair');
+        if (pairContainer) {
+          const pairTicketContainer = pairContainer.querySelector('.terminal-pair-ticket-container');
+          if (pairTicketContainer) {
+            titleRow = pairTicketContainer;
+          }
+        }
 	    if (!titleRow) return;
 
 	    const existing = titleRow.querySelector('.terminal-ticket');
@@ -5958,10 +6103,7 @@ class ClaudeOrchestrator {
 			      <div class="terminal-header">
 			        <div class="terminal-title">
 		          <span class="status-indicator ${session.status}" id="${this.getSessionDomId('status', sessionId)}"></span>
-		          <span>${isAgentSession ? '🤖 Agent' : '💻 Server'} ${displayName}</span>
-		          <span class="terminal-branch ${this.escapeHtml(branchMeta.className)}" title="${this.escapeHtml(branchMeta.title)}">${this.escapeHtml(branchMeta.text || '')}</span>
-		          ${showBranchRefresh ? `<button type="button" class="terminal-branch-refresh" data-branch-refresh="${this.escapeHtml(branchRefreshId)}" title="Refresh branch label">↻</button>` : ''}
-		          ${ticketChip}
+		          <span>${isAgentSession ? '🤖 Agent' : '💻 Server'}</span>
 			        </div>
 		        <div class="terminal-controls">
 		          ${isAgentSession ? `
@@ -15597,7 +15739,7 @@ class ClaudeOrchestrator {
       const isAgentSession = /-(claude|codex)$/.test(String(sessionId || ''));
       const worktreeNumber = sessionId.split('-')[0].replace('work', '');
 
-      if (focusedTitle) focusedTitle.textContent = `${isAgentSession ? '🤖 Agent' : '💻 Server'} ${worktreeNumber}`;
+      if (focusedTitle) focusedTitle.textContent = `${isAgentSession ? '🤖' : '💻'} ${worktreeNumber}`;
       if (focusedBranch) focusedBranch.textContent = this.formatBranchLabel(session.branch || '', { context: 'terminal' }).text || '';
       if (focusedStatus) focusedStatus.className = `status-indicator ${session.status || 'idle'}`;
 
