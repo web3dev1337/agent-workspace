@@ -2905,6 +2905,20 @@ class ClaudeOrchestrator {
       });
     }
 
+    // Handle terminal controls toggle (collapse/expand)
+    document.addEventListener('click', (e) => {
+      const toggle = e.target.closest('.terminal-controls-toggle');
+      if (toggle) {
+        const header = toggle.closest('.terminal-header');
+        if (header) {
+          const isExpanded = header.classList.contains('controls-expanded');
+          header.classList.toggle('controls-expanded', !isExpanded);
+          header.classList.toggle('controls-collapsed', isExpanded);
+          toggle.title = isExpanded ? 'Show controls' : 'Hide controls';
+        }
+      }
+    });
+
     // Handle startup option button clicks
     document.addEventListener('click', (e) => {
       if (e.target.closest('.startup-option-btn')) {
@@ -2936,6 +2950,7 @@ class ClaudeOrchestrator {
             term.refresh(0, term.rows - 1);
           }
         });
+        this.updateControlsCollapse();
 	      }, 250);
 	    });
 
@@ -5120,6 +5135,33 @@ class ClaudeOrchestrator {
         }
       }
     });
+    this.updateControlsCollapse();
+  }
+
+  updateControlsCollapse() {
+    const grid = this.getTerminalGrid();
+    if (!grid) return;
+    const headers = grid.querySelectorAll('.terminal-header');
+    headers.forEach((header) => {
+      // Skip if user has force-expanded this header
+      if (header.classList.contains('controls-expanded')) return;
+      const title = header.querySelector('.terminal-title');
+      const controls = header.querySelector('.terminal-controls');
+      if (!title || !controls) return;
+      // Temporarily uncollapse to measure natural sizes
+      const wasCollapsed = header.classList.contains('controls-collapsed');
+      header.classList.remove('controls-collapsed');
+      const headerW = header.clientWidth;
+      const titleW = title.scrollWidth;
+      const controlsW = controls.scrollWidth;
+      // If both don't fit and the title gets less than 30% of header, collapse
+      if (controlsW + titleW > headerW * 0.95 && titleW < headerW * 0.35) {
+        header.classList.add('controls-collapsed');
+      } else if (wasCollapsed) {
+        // Re-check if still needed
+        header.classList.remove('controls-collapsed');
+      }
+    });
   }
 
   showOnlyWorktree(worktreeIdOrKey) {
@@ -5988,6 +6030,7 @@ class ClaudeOrchestrator {
 		          ${ticketChip}
 			        </div>
 		        <div class="terminal-controls">
+		          <button type="button" class="terminal-controls-toggle" title="Show controls">⋯</button>
 		          ${isAgentSession ? `
 		            ${this.getTierDropdownHTML(sessionId)}
 	            ${this.getServerQuickControlsHTMLForClaude(sessionId)}
@@ -6556,6 +6599,7 @@ class ClaudeOrchestrator {
       const isAgentSession = /-(claude|codex)$/.test(String(sessionId || '')) || sessionType === 'claude' || sessionType === 'codex';
 	    if (isAgentSession) {
 	      controlsDiv.innerHTML = `
+	        <button type="button" class="terminal-controls-toggle" title="Show controls">⋯</button>
 	        ${this.getTierDropdownHTML(sessionId)}
 		      ${this.getServerQuickControlsHTMLForClaude(sessionId)}
 		      ${this.getWorktreeInspectorButtonHTML(sessionId)}
@@ -6568,6 +6612,7 @@ class ClaudeOrchestrator {
 
 			    // Server terminals: keep the existing launch controls.
 			    controlsDiv.innerHTML = `
+			      <button type="button" class="terminal-controls-toggle" title="Show controls">⋯</button>
 			      ${this.getServerControlsHTML(sessionId)}
 			      ${this.getTerminalVisibilityConfig().serverReviewConsole !== false ? this.getWorktreeInspectorButtonHTML(sessionId) : ''}
 			      ${this.getSessionCloseButtonHTML(sessionId)}

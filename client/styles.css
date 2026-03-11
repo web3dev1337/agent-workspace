@@ -1581,6 +1581,7 @@ header {
   flex-wrap: nowrap;
   overflow: hidden;
   min-width: 0;
+  flex-shrink: 0;
 }
 
 /* Collapse adjacent borders so buttons truly touch */
@@ -1592,6 +1593,43 @@ header {
 .terminal-controls > *:hover {
   z-index: 1;
   position: relative;
+}
+
+/* Toggle button — hidden when there's enough space */
+.terminal-controls-toggle {
+  display: none;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.terminal-controls-toggle:hover {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+
+/* Collapsed state: hide all buttons, show toggle */
+.terminal-header.controls-collapsed .terminal-controls > *:not(.terminal-controls-toggle) {
+  display: none;
+}
+
+.terminal-header.controls-collapsed .terminal-controls-toggle {
+  display: inline-flex;
+}
+
+/* Force-expanded overrides collapsed (user clicked toggle) */
+.terminal-header.controls-expanded .terminal-controls > * {
+  display: initial;
+}
+
+.terminal-header.controls-expanded .terminal-controls-toggle {
+  display: inline-flex;
 }
 
 .terminal-ticket {
