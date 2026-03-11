@@ -622,9 +622,20 @@ class ClaudeOrchestrator {
     return key;
   }
 
-  getSessionDomId(prefix, sessionId) {
+  getSessionDomScopeKey(scopeHint = null) {
+    const scopeSource = scopeHint
+      || this.currentTabId
+      || this.tabManager?.activeTabId
+      || this.currentWorkspace?.id
+      || this.lastSessionsWorkspaceId
+      || 'default';
+    return this.getDomSafeIdPart(scopeSource);
+  }
+
+  getSessionDomId(prefix, sessionId, scopeHint = null) {
     const key = this.getSessionDomKey(sessionId);
-    return key ? `${prefix}-${key}` : `${prefix}-`;
+    const scopeKey = this.getSessionDomScopeKey(scopeHint);
+    return key ? `${prefix}-${scopeKey}-${key}` : `${prefix}-${scopeKey}-`;
   }
 
   cssEscape(value) {
@@ -642,16 +653,24 @@ class ClaudeOrchestrator {
     const sid = String(sessionId || '').trim();
     if (!sid) return null;
     const wrapperId = this.getSessionDomId('wrapper', sid);
-    let wrapper = document.getElementById(wrapperId);
+    const grid = this.getTerminalGrid?.() || document;
+    let wrapper = null;
+    try {
+      wrapper = grid.querySelector(`#${this.cssEscape(wrapperId)}`);
+    } catch {
+      wrapper = null;
+    }
     if (wrapper) return wrapper;
 
     // Back-compat: older DOM nodes may have non-DOM-safe ids (e.g. `wrapper-owner/repo-claude`).
-    // Find them via data attr and then re-id them to the safe id.
-    const grid = this.getTerminalGrid?.() || document;
+    // Find them via data attr in the active grid first, then re-id them to the scoped safe id.
     try {
       wrapper = grid.querySelector(`.terminal-wrapper[data-session-id="${this.cssEscape(sid)}"]`);
     } catch {
       wrapper = null;
+    }
+    if (!wrapper) {
+      wrapper = document.getElementById(wrapperId);
     }
     if (wrapper && wrapper.id !== wrapperId) {
       try { wrapper.id = wrapperId; } catch {}
@@ -5193,10 +5212,9 @@ class ClaudeOrchestrator {
 
               // Initialize terminal for newly created element (scope query to wrapper/grid to avoid cross-tab collisions)
               setTimeout(() => {
-                const terminalId = this.getSessionDomId('terminal', sessionId);
-                const terminalEl = document.getElementById(terminalId);
-                if (terminalEl && wrapper && wrapper.contains(terminalEl) && !this.terminalManager.terminals.has(sessionId)) {
-                  this.terminalManager.createTerminal(sessionId, session);
+                const terminalEl = wrapper?.querySelector('.terminal');
+                if (terminalEl && wrapper?.isConnected && !this.terminalManager.terminals.has(sessionId)) {
+                  this.terminalManager.createTerminal(sessionId, session, terminalEl);
                 }
               }, 50);
             }
@@ -5348,7 +5366,8 @@ class ClaudeOrchestrator {
       const session = this.sessions.get(sessionId);
       if (session) {
 	        setTimeout(() => {
-	          const terminalEl = document.getElementById(this.getSessionDomId('terminal', sessionId));
+	          const wrapper = this.getSessionWrapperElement(sessionId);
+	          const terminalEl = wrapper?.querySelector('.terminal');
 	          if (!terminalEl) return;
 
           if (this.terminalManager.terminals.has(sessionId)) {
@@ -5366,7 +5385,7 @@ class ClaudeOrchestrator {
             term.refresh(0, term.rows - 1);
           } else {
             // Create new terminal only if it doesn't exist
-            this.terminalManager.createTerminal(sessionId, session);
+            this.terminalManager.createTerminal(sessionId, session, terminalEl);
           }
 
           // Don't auto-start Claude - let user choose via modal or button
@@ -11322,7 +11341,7 @@ class ClaudeOrchestrator {
             // Attach or create the xterm instance.
             setTimeout(() => {
               try {
-                const terminalEl = document.getElementById(this.getSessionDomId('terminal', sid));
+                const terminalEl = wrapper?.querySelector('.terminal');
                 if (!terminalEl) return;
 
                 if (this.terminalManager?.terminals?.has?.(sid)) {
@@ -11334,7 +11353,7 @@ class ClaudeOrchestrator {
                     try { term.refresh(0, term.rows - 1); } catch {}
                   }
                 } else {
-                  this.terminalManager?.createTerminal?.(sid, session);
+                  this.terminalManager?.createTerminal?.(sid, session, terminalEl);
                 }
               } catch {
                 // ignore
@@ -14215,9 +14234,9 @@ class ClaudeOrchestrator {
 			                  grid.appendChild(wrapper);
 			                  setTimeout(() => {
 			                    try {
-			                      const terminalEl = document.getElementById(this.getSessionDomId('terminal', sid));
-			                      if (terminalEl && wrapper && wrapper.contains(terminalEl) && !this.terminalManager.terminals.has(sid)) {
-			                        this.terminalManager.createTerminal(sid, session);
+			                      const terminalEl = wrapper?.querySelector('.terminal');
+			                      if (terminalEl && wrapper?.isConnected && !this.terminalManager.terminals.has(sid)) {
+			                        this.terminalManager.createTerminal(sid, session, terminalEl);
 			                      }
 			                    } catch {
 			                      // ignore
@@ -16100,9 +16119,6 @@ class ClaudeOrchestrator {
 	    const sid = String(sessionId || '').trim();
 	    if (!sid || !this.tabManager?.tabs || !(this.tabManager.tabs instanceof Map)) return;
 
-	    const wrapperId = this.getSessionDomId('wrapper', sid);
-	    const terminalId = this.getSessionDomId('terminal', sid);
-
 	    for (const [, tab] of this.tabManager.tabs) {
 	      if (!tab) continue;
 	      tab.sessions?.delete?.(sid);
@@ -16127,13 +16143,13 @@ class ClaudeOrchestrator {
 
 	      const container = tab.containerElement || null;
 	      if (container) {
-	        let wrapper = document.getElementById(wrapperId);
-	        if (wrapper && !container.contains(wrapper)) wrapper = null;
+	        let wrapper = null;
+	        try {
+	          wrapper = container.querySelector(`.terminal-wrapper[data-session-id="${this.cssEscape(sid)}"]`);
+	        } catch {
+	          wrapper = null;
+	        }
 	        if (wrapper) wrapper.remove();
-
-	        let terminalEl = document.getElementById(terminalId);
-	        if (terminalEl && !container.contains(terminalEl)) terminalEl = null;
-	        if (terminalEl) terminalEl.remove();
 	      }
 	    }
 	  }

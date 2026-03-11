@@ -112,8 +112,34 @@ class TerminalManager {
     return `${prefix}-${sid}`;
   }
 
+  getElementByScopedId(container, elementId) {
+    if (!container || !elementId) return null;
+    try {
+      const escapedId = window.CSS?.escape ? window.CSS.escape(elementId) : String(elementId);
+      return container.querySelector(`#${escapedId}`);
+    } catch {
+      return null;
+    }
+  }
+
+  getTerminalElement(sessionId) {
+    const terminalId = this.getDomId('terminal', sessionId);
+    const activeContainer = this.orchestrator?.getTerminalGrid?.() || null;
+    const scopedElement = this.getElementByScopedId(activeContainer, terminalId);
+    if (scopedElement) return scopedElement;
+    return document.getElementById(terminalId);
+  }
+
+  getWrapperElement(sessionId) {
+    const wrapperId = this.getDomId('wrapper', sessionId);
+    const activeContainer = this.orchestrator?.getTerminalGrid?.() || null;
+    const scopedElement = this.getElementByScopedId(activeContainer, wrapperId);
+    if (scopedElement) return scopedElement;
+    return document.getElementById(wrapperId);
+  }
+
   getContainerElement(sessionId) {
-    const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
+    const terminalElement = this.getTerminalElement(sessionId);
     if (!terminalElement) return null;
     return terminalElement.closest('.terminal-body') || terminalElement.closest('.terminal-wrapper') || terminalElement;
   }
@@ -256,14 +282,16 @@ class TerminalManager {
     document.head.appendChild(style);
   }
 
-  createTerminal(sessionId, sessionInfo) {
+  createTerminal(sessionId, sessionInfo, terminalElementOverride = null) {
     // Skip if already exists
     if (this.terminals.has(sessionId)) {
       console.warn(`Terminal ${sessionId} already exists, skipping creation`);
       return this.terminals.get(sessionId);
     }
     
-    const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
+    const terminalElement = terminalElementOverride && terminalElementOverride.isConnected
+      ? terminalElementOverride
+      : this.getTerminalElement(sessionId);
     if (!terminalElement) {
       console.error(`Terminal element not found for ${sessionId}`);
       return null;
@@ -650,12 +678,12 @@ class TerminalManager {
   }
 
   setupResizeObserver(sessionId) {
-    const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
+    const terminalElement = this.getTerminalElement(sessionId);
     if (!terminalElement) return;
 
     // Observe the element whose size actually changes with layout.
     // In practice, the `.terminal-body` resizes with grid/sidebar/tab changes.
-    const wrapper = document.getElementById(this.getDomId('wrapper', sessionId));
+    const wrapper = this.getWrapperElement(sessionId);
     const observeTarget = wrapper || terminalElement.closest('.terminal-body') || terminalElement;
 
     const resizeObserver = new ResizeObserver(() => {
@@ -688,7 +716,7 @@ class TerminalManager {
         if (!terminal || terminal._core?.disposed) return;
 
         // Check that container has valid dimensions before fitting
-        const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
+        const terminalElement = this.getTerminalElement(sessionId);
         if (!terminalElement) {
           // Terminal DOM may not be mounted yet (e.g., tab switching before wrappers are rendered).
           // Avoid fitting (and noisy retries) until the element exists.
@@ -702,7 +730,7 @@ class TerminalManager {
           return;
         }
         const terminalBody = terminalElement?.closest('.terminal-body');
-        const wrapper = document.getElementById(this.getDomId('wrapper', sessionId));
+        const wrapper = this.getWrapperElement(sessionId);
 
         // If the terminal isn't visible (hidden tab/dashboard, hidden worktree, etc), NEVER fit.
         // Fitting while hidden can shrink the PTY to tiny dimensions and cause hard-wrapped output.
@@ -838,7 +866,7 @@ class TerminalManager {
     const terminal = this.terminals.get(sessionId);
     if (!terminal) {
       // Check if DOM element exists before trying to create terminal
-      const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
+      const terminalElement = this.getTerminalElement(sessionId);
       if (!terminalElement) {
         // Buffer early output instead of ignoring it
         if (!this.pendingOutput) this.pendingOutput = new Map();
@@ -1359,7 +1387,7 @@ class TerminalManager {
     this.webLinksAddons.delete(sessionId);
     
     // Clean up resize observer
-    const terminalElement = document.getElementById(this.getDomId('terminal', sessionId));
+    const terminalElement = this.getTerminalElement(sessionId);
     if (terminalElement) {
       // Disconnect any observer (may be stored on terminal body or on terminal element)
       const terminalBody = terminalElement.closest('.terminal-body');
