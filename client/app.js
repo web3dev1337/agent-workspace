@@ -16340,6 +16340,114 @@ class ClaudeOrchestrator {
     });
   }
 
+  showTextInputDialog(title, {
+    message = '',
+    initialValue = '',
+    placeholder = 'Enter value',
+    confirmText = 'Save',
+    cancelText = 'Cancel'
+  } = {}) {
+    return new Promise((resolve) => {
+      const existing = document.getElementById('text-input-dialog');
+      if (existing) existing.remove();
+
+      const dialog = document.createElement('div');
+      dialog.id = 'text-input-dialog';
+      dialog.className = 'modal';
+
+      const escapeHtml = (value = '') => {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      };
+
+      const safeTitle = escapeHtml(String(title || 'Input').trim());
+      const safeMessage = escapeHtml(String(message || ''));
+      const safeInitialValue = escapeHtml(String(initialValue));
+      const safePlaceholder = escapeHtml(String(placeholder));
+
+      dialog.innerHTML = `
+        <div class="modal-content confirmation-dialog text-input-dialog">
+          <div class="modal-header">
+            <h3>${safeTitle}</h3>
+            <button type="button" class="close-btn" data-text-input-close>×</button>
+          </div>
+          <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+            ${safeMessage ? `<p style="white-space: pre-line; line-height: 1.5; margin-bottom: 8px;">${safeMessage}</p>` : ''}
+            <input id="text-input-dialog-field" class="text-input" type="text" value="${safeInitialValue}" placeholder="${safePlaceholder}" autocomplete="off" style="width:100%; box-sizing:border-box; padding:8px 10px; border-radius:6px; border:1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);" />
+          </div>
+          <div class="modal-actions">
+            <button id="text-input-save" class="button-success">${confirmText}</button>
+            <button id="text-input-cancel" class="button-secondary">${cancelText}</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(dialog);
+
+      const inputEl = dialog.querySelector('#text-input-dialog-field');
+      const saveBtn = dialog.querySelector('#text-input-save');
+      const cancelBtn = dialog.querySelector('#text-input-cancel');
+      const closeBtn = dialog.querySelector('[data-text-input-close]');
+
+      const cleanup = () => {
+        if (dialog && dialog.parentElement) {
+          dialog.remove();
+        }
+        document.removeEventListener('keydown', handleEsc);
+      };
+
+      const finish = (value = null) => {
+        cleanup();
+        resolve(value === null ? null : String(value));
+      };
+
+      saveBtn?.addEventListener('click', () => {
+        finish(inputEl?.value ?? '');
+      });
+
+      cancelBtn?.addEventListener('click', () => {
+        finish(null);
+      });
+
+      closeBtn?.addEventListener('click', () => {
+        finish(null);
+      });
+
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) {
+          finish(null);
+        }
+      });
+
+      const submit = (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        finish(inputEl?.value ?? '');
+      };
+
+      inputEl?.addEventListener('keydown', submit);
+
+      const handleEsc = (event) => {
+        if (event.key === 'Escape') {
+          finish(null);
+        }
+      };
+
+      document.addEventListener('keydown', handleEsc);
+
+      setTimeout(() => {
+        if (inputEl) {
+          inputEl.focus();
+          inputEl.select();
+        }
+      }, 0);
+    });
+  }
+
   updateYoloState(sessionId, checked) {
     // Update button styles to show YOLO is active
     const buttons = [
@@ -17561,13 +17669,20 @@ class ClaudeOrchestrator {
     return updated;
   }
 
-  promptRenameCurrentWorkspace() {
+  async promptRenameCurrentWorkspace() {
     if (!this.currentWorkspace?.id) {
       this.showToast?.('No active workspace to rename', 'warning');
       return;
     }
 
-    const nextName = window.prompt('Rename workspace', String(this.currentWorkspace.name || '').trim() || this.currentWorkspace.id);
+    const nextName = await this.showTextInputDialog('Rename workspace', {
+      message: 'Enter a new name for the current workspace.',
+      initialValue: String(this.currentWorkspace.name || '').trim() || this.currentWorkspace.id,
+      placeholder: 'Workspace name',
+      confirmText: 'Rename',
+      cancelText: 'Cancel'
+    });
+
     if (nextName === null) return;
 
     const cleanName = String(nextName).trim();

@@ -3876,7 +3876,14 @@ class Dashboard {
   async promptRenameWorkspace(workspace) {
     if (!workspace || !workspace.id) return;
 
-    const nextName = window.prompt('Rename workspace', String(workspace.name || '').trim() || 'Workspace');
+    const nextName = await this.orchestrator.showTextInputDialog('Rename workspace', {
+      message: 'Enter a new name for this workspace.',
+      initialValue: String(workspace.name || '').trim() || 'Workspace',
+      placeholder: 'Workspace name',
+      confirmText: 'Rename',
+      cancelText: 'Cancel'
+    });
+
     if (nextName === null) return;
     const cleanName = String(nextName).trim();
     if (!cleanName) {
