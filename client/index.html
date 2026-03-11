@@ -28,10 +28,12 @@
 	            </div>
 	            <div class="sidebar-divider" aria-hidden="true"></div>
 	            <div class="sidebar-worktrees-line">
-                    <h2>Worktrees</h2>
-                    <button id="view-presets" class="icon-button sidebar-header-presets" title="View Presets" data-ui-visibility="sidebar.viewPresets">📋</button>
+	                    <h2>Worktrees</h2>
+	                    <div class="sidebar-worktrees-actions">
+	                        <button id="view-presets" class="icon-button sidebar-header-presets" title="View Presets" data-ui-visibility="sidebar.viewPresets">📋</button>
+	                        <button id="sidebar-toggle" class="icon-button sidebar-toggle" title="Collapse sidebar" aria-label="Collapse sidebar" aria-controls="worktree-sidebar" aria-expanded="true"><span class="sidebar-toggle-icon" aria-hidden="true">◂</span></button>
+	                    </div>
                 </div>
-                <button id="sidebar-toggle" class="icon-button sidebar-toggle" title="Collapse sidebar" aria-label="Collapse sidebar" aria-controls="worktree-sidebar" aria-expanded="true"><span class="sidebar-toggle-icon" aria-hidden="true">◂</span></button>
 	        </div>
 	        <div class="sidebar-footer">
 	            <button id="add-worktree" class="button-primary button-success" onclick="window.orchestrator.showAddWorktreeModal()" title="Add New Worktree">+ Add Worktree</button>
