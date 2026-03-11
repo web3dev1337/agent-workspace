@@ -16376,8 +16376,15 @@ class ClaudeOrchestrator {
             <button type="button" class="close-btn" data-text-input-close>×</button>
           </div>
           <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
-            ${safeMessage ? `<p style="white-space: pre-line; line-height: 1.5; margin-bottom: 8px;">${safeMessage}</p>` : ''}
-            <input id="text-input-dialog-field" class="text-input" type="text" value="${safeInitialValue}" placeholder="${safePlaceholder}" autocomplete="off" style="width:100%; box-sizing:border-box; padding:8px 10px; border-radius:6px; border:1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);" />
+            ${safeMessage ? `<p class="text-input-dialog-message">${safeMessage}</p>` : ''}
+            <input
+              id="text-input-dialog-field"
+              class="text-input"
+              type="text"
+              value="${safeInitialValue}"
+              placeholder="${safePlaceholder}"
+              autocomplete="off"
+            />
           </div>
           <div class="modal-actions">
             <button id="text-input-save" class="button-success">${confirmText}</button>

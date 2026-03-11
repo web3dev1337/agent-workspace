@@ -3778,7 +3778,13 @@ class Dashboard {
       const nextNumber = existingNumbers.length ? Math.max(...existingNumbers) + 1 : 1;
       const proposedName = `Workspace ${nextNumber}`;
 
-      const requestedName = window.prompt('Enter workspace name', proposedName);
+      const requestedName = await this.orchestrator.showTextInputDialog('Add workspace', {
+        message: 'Choose a name for the new workspace.',
+        initialValue: proposedName,
+        placeholder: 'Workspace name',
+        confirmText: 'Create',
+        cancelText: 'Cancel'
+      });
       if (requestedName === null) return;
 
       const name = String(requestedName).trim() || proposedName;
@@ -3869,7 +3875,7 @@ class Dashboard {
       this.orchestrator.showTemporaryMessage(`Empty workspace "${name}" created`, 'success');
     } catch (error) {
       console.error('Failed to create empty workspace:', error);
-      alert('Failed to create empty workspace: ' + error.message);
+      this.orchestrator.showTemporaryMessage(`Failed to create empty workspace: ${error.message}`, 'error');
     }
   }
 
