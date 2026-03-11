@@ -6035,7 +6035,7 @@ class ClaudeOrchestrator {
 		          ${ticketChip}
 			        </div>
 		        <div class="terminal-controls">
-		          <button type="button" class="terminal-controls-toggle" title="Show controls">⋯</button>
+		          <button type="button" class="terminal-controls-toggle" title="Show controls"><svg class="controls-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
 		          ${isAgentSession ? `
 		            ${this.getTierDropdownHTML(sessionId)}
 	            ${this.getServerQuickControlsHTMLForClaude(sessionId)}
@@ -6604,7 +6604,7 @@ class ClaudeOrchestrator {
       const isAgentSession = /-(claude|codex)$/.test(String(sessionId || '')) || sessionType === 'claude' || sessionType === 'codex';
 	    if (isAgentSession) {
 	      controlsDiv.innerHTML = `
-	        <button type="button" class="terminal-controls-toggle" title="Show controls">⋯</button>
+	        <button type="button" class="terminal-controls-toggle" title="Show controls"><svg class="controls-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
 	        ${this.getTierDropdownHTML(sessionId)}
 		      ${this.getServerQuickControlsHTMLForClaude(sessionId)}
 		      ${this.getWorktreeInspectorButtonHTML(sessionId)}
@@ -6617,7 +6617,7 @@ class ClaudeOrchestrator {
 
 			    // Server terminals: keep the existing launch controls.
 			    controlsDiv.innerHTML = `
-			      <button type="button" class="terminal-controls-toggle" title="Show controls">⋯</button>
+			      <button type="button" class="terminal-controls-toggle" title="Show controls"><svg class="controls-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
 			      ${this.getServerControlsHTML(sessionId)}
 			      ${this.getTerminalVisibilityConfig().serverReviewConsole !== false ? this.getWorktreeInspectorButtonHTML(sessionId) : ''}
 			      ${this.getSessionCloseButtonHTML(sessionId)}
