@@ -4021,7 +4021,7 @@ class ClaudeOrchestrator {
     const tierValue = tier ? String(tier) : '';
     return `
       <select class="tier-dropdown" data-session-id="${sessionId}" aria-label="Tier" title="Tier" onchange="window.orchestrator.setTierForSession('${sessionId}', this.value)">
-        <option value="" ${tierValue === '' ? 'selected' : ''}>None</option>
+        <option value="" ${tierValue === '' ? 'selected' : ''}>Tier</option>
         <option value="1" ${tierValue === '1' ? 'selected' : ''}>T1</option>
         <option value="2" ${tierValue === '2' ? 'selected' : ''}>T2</option>
         <option value="3" ${tierValue === '3' ? 'selected' : ''}>T3</option>
