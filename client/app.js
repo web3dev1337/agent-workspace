@@ -11520,9 +11520,9 @@ class ClaudeOrchestrator {
 		      const rcShowCommits = !reviewConsole || rcSections.commits !== false;
 		      const rcShowDiff = reviewConsole && rcSections.diff !== false;
 
-		      const prText = pr?.hasPR && pr?.number ? `PR #${Number(pr.number)}` : 'No PR';
-		      const prState = pr?.hasPR ? String(pr?.state || '').toLowerCase() : '';
-		      const prUrl = pr?.hasPR && pr?.url ? String(pr.url) : '';
+		      let prText = pr?.hasPR && pr?.number ? `PR #${Number(pr.number)}` : 'No PR';
+		      let prState = pr?.hasPR ? String(pr?.state || '').toLowerCase() : '';
+		      let prUrl = pr?.hasPR && pr?.url ? String(pr.url) : '';
 		      const getDiffViewerPathForGitHubUrl = (githubUrl) => {
 		        const url = String(githubUrl || '').trim();
 		        if (!url) return '';
@@ -11541,7 +11541,7 @@ class ClaudeOrchestrator {
 
 		        return '';
 		      };
-		      const diffViewerPath = prUrl ? getDiffViewerPathForGitHubUrl(prUrl) : '';
+		      let diffViewerPath = prUrl ? getDiffViewerPathForGitHubUrl(prUrl) : '';
 
 		      const header = (() => {
 		        const branch = gitDetected ? escapeHtml(summary?.branch || '?') : '?';
@@ -12243,15 +12243,49 @@ class ClaudeOrchestrator {
 			          return baseUrl;
 			        };
 
+		        // Retry PR detection if we didn't find one on first load.
+		        const retryPrDetection = async () => {
+		          if (prUrl) return true;
+		          try {
+		            const freshSummary = await this.fetchWorktreeGitSummary(p, { maxFiles: 0, maxCommits: 0 });
+		            const freshPr = freshSummary?.pr || {};
+		            if (freshPr?.hasPR && freshPr?.url) {
+		              prUrl = String(freshPr.url);
+		              prState = String(freshPr?.state || '').toLowerCase();
+		              prText = freshPr?.number ? `PR #${Number(freshPr.number)}` : prText;
+		              diffViewerPath = getDiffViewerPathForGitHubUrl(prUrl);
+		              // Update header PR link if present
+		              const prLinkEl = bodyEl.querySelector('[data-pr-link]');
+		              if (prLinkEl) {
+		                prLinkEl.textContent = prText;
+		                prLinkEl.href = prUrl;
+		                prLinkEl.style.display = '';
+		              }
+		              return true;
+		            }
+		          } catch {}
+		          return false;
+		        };
+
 		        const embedDiff = async ({ showToast = false } = {}) => {
 		          if (!diffIframeEl || !diffStatusEl) return;
 		          if (!diffEmbedEnabled) return;
 		          if (currentSections.diff === false) return;
 		          if (diffLoadPromise) return diffLoadPromise;
 
+		          // If no PR yet, retry detection a couple of times before giving up.
+		          if (!prUrl) {
+		            diffStatusEl.textContent = 'No PR detected — checking…';
+		            for (let attempt = 0; attempt < 3; attempt++) {
+		              await new Promise(r => setTimeout(r, 2000));
+		              if (await retryPrDetection()) break;
+		            }
+		          }
+
 		          const targetPath = prUrl ? diffViewerPath : '';
-		          if (prUrl && !targetPath) {
-		            diffStatusEl.textContent = 'Unable to embed: PR URL is not parseable by the Diff Viewer.';
+		          if (!targetPath) {
+		            diffStatusEl.textContent = 'No PR detected for this worktree. Push your branch and create a PR, then re-open.';
+		            if (diffIframeEl) diffIframeEl.classList.add('hidden');
 		            return;
 		          }
 
