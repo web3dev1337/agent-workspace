@@ -874,11 +874,17 @@ body {
   margin-top: var(--space-sm);
 }
 
+.text-input-dialog .button-success,
+.text-input-dialog .button-secondary {
+  width: auto;
+}
+
 .text-input-dialog-confirm {
   min-width: 120px;
   padding: 0.65rem 1.15rem;
   font-size: 0.95rem;
   font-weight: 600;
+  color: #111827;
 }
 
 .text-input-dialog-cancel {
