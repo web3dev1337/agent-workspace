@@ -505,6 +505,14 @@ class ProjectsBoardUI {
     const direct = event.target?.closest?.('.projects-board-column');
     if (direct) return direct;
 
+    if (typeof event.composedPath === 'function') {
+      for (const node of event.composedPath() || []) {
+        if (!node || node.nodeType !== 1) continue;
+        const col = node.closest?.('.projects-board-column');
+        if (col) return col;
+      }
+    }
+
     const byPoint = this.getColumnFromPoint(event.clientX, event.clientY);
     if (byPoint) return byPoint;
 
