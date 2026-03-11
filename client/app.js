@@ -4291,7 +4291,7 @@ class ClaudeOrchestrator {
   getServerControlsHTML(sessionId) {
     const isRunning = this.serverStatuses.get(sessionId) === 'running';
     const visibility = this.getTerminalVisibilityConfig();
-    if (visibility.startServer === false) return '';
+    const showStartServer = visibility.startServer !== false;
     const showLaunchSettings = visibility.launchSettings !== false;
     const showServerLaunchMenu = visibility.serverLaunchMenu !== false;
 
@@ -4300,7 +4300,7 @@ class ClaudeOrchestrator {
 
     if (isRunning) {
       html += `<button class="control-btn" onclick="window.orchestrator.toggleServer('${sessionId}')" title="Stop Server">⏹</button>`;
-    } else {
+    } else if (showStartServer) {
       if (showServerLaunchMenu) {
         html += `<div class="server-launch-group">
           <select class="control-btn env-select" id="server-env-${sessionId}" name="server-env-${sessionId}"
