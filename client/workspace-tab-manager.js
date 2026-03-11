@@ -42,8 +42,8 @@ class WorkspaceTabManager {
     tabsContainer.id = 'workspace-tabs-container';
     tabsContainer.className = 'workspace-tabs-container';
     tabsContainer.innerHTML = `
-      <button id="dashboard-btn" class="header-btn workspace-dashboard-btn" title="Home" data-ui-visibility="header.dashboard">
-        🏠 Home
+      <button id="dashboard-btn" class="header-btn workspace-dashboard-btn" title="Dashboard" data-ui-visibility="header.dashboard">
+        🏠 Dashboard
       </button>
       <div class="workspace-tabs" id="workspace-tabs"></div>
     `;
