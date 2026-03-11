@@ -526,7 +526,9 @@ body {
   white-space: nowrap;
   line-height: 1.2;
   min-width: 0;
-  max-width: 200px;
+  flex: 1;
+  text-align: center;
+  padding-left: 36px;
   overflow: hidden;
   text-overflow: ellipsis;
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1594,17 +1596,12 @@ header {
 
 .terminal-controls {
   display: flex;
-  gap: 0;
+  gap: 3px;
   align-items: center;
   flex-wrap: nowrap;
   overflow: hidden;
   min-width: 0;
   flex-shrink: 0;
-}
-
-/* Collapse adjacent borders so buttons truly touch */
-.terminal-controls > *:not(:first-child) {
-  margin-left: -1px;
 }
 
 /* Keep hover borders visible above neighbours */
@@ -1696,10 +1693,9 @@ header {
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  padding: 2px 8px;
+  padding: 0 2px;
   font-size: 0.875rem;
-  line-height: 1.4;
-  height: 26px;
+  height: 24px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
 }
 
@@ -1715,10 +1711,16 @@ header {
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  padding: 2px 8px;
+  padding: 0;
+  width: 28px;
+  height: 24px;
   font-size: 0.875rem;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .control-btn:hover {
@@ -1748,6 +1750,7 @@ header {
 .control-btn.terminal-session-close-btn {
   font-weight: 700;
   line-height: 1;
+  display: none !important; /* remove-worktree button hidden from terminal headers */
 }
 
 .control-btn.terminal-process-close-btn {
@@ -6387,14 +6390,12 @@ body.dependency-onboarding-active #dependency-setup-modal {
 
 /* Code Review Dropdown */
 .review-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
+  position: fixed;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-soft);
-  z-index: 1000;
+  z-index: 10000;
   min-width: 200px;
   padding: var(--space-sm);
 }

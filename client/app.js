@@ -5479,7 +5479,7 @@ class ClaudeOrchestrator {
               });
             }
           }
-          if (wrapper && wrapper.parentElement !== container) {
+          if (wrapper) {
             container.appendChild(wrapper);
           }
           visibleCount += 1;
@@ -6682,7 +6682,7 @@ class ClaudeOrchestrator {
 					    const session = this.sessions.get(sid);
               const visibility = this.getTerminalVisibilityConfig();
               const showClose = visibility.closeProcess !== false;
-              const showRemove = visibility.removeWorktree !== false;
+              const showRemove = false; // permanently hidden — use sidebar or API to remove worktrees
               const sidArg = this.escapeOnclickArg(sid);
 					    const stopBtn = showClose
                 ? `<button class="control-btn terminal-process-close-btn" onclick="(typeof event !== 'undefined' && event && event.stopPropagation ? event.stopPropagation() : null); window.orchestrator.requestCloseSession(${sidArg})" title="Close terminal process (kills agent/server for this worktree, keeps worktree in workspace)">×</button>`
@@ -9036,20 +9036,35 @@ class ClaudeOrchestrator {
 	  }
 
 	  showCodeReviewDropdown(sessionId) {
-    // Close any existing dropdowns
-    document.querySelectorAll('.review-dropdown').forEach(dropdown => dropdown.remove());
+    // Toggle: if a dropdown is already open, just close it
+    const existing = document.querySelector('.review-dropdown');
+    if (existing) {
+      existing.remove();
+      return;
+    }
 
-    // Get the terminal controls container
-	    const terminalWrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
-	    const controlsContainer = terminalWrapper.querySelector('.terminal-controls');
+    const terminalWrapper = document.getElementById(this.getSessionDomId('wrapper', sessionId));
+    if (!terminalWrapper) return;
+
+    // Find the review button that was clicked to anchor the dropdown
+    const reviewBtn = terminalWrapper.querySelector('.control-btn[title="Assign Code Review"]');
 
     // Create dropdown
     const dropdown = document.createElement('div');
     dropdown.className = 'review-dropdown';
     dropdown.innerHTML = this.buildReviewerDropdownHTML(sessionId);
 
-    // Position and add to DOM
-    controlsContainer.appendChild(dropdown);
+    // Append to body with fixed positioning so overflow:hidden on
+    // .terminal-controls / .terminal-header / .terminal-wrapper can't clip it.
+    document.body.appendChild(dropdown);
+
+    // Position below the review button (or top-right of wrapper as fallback)
+    const anchor = reviewBtn || terminalWrapper;
+    const rect = anchor.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.top = `${rect.bottom + 4}px`;
+    dropdown.style.right = `${document.documentElement.clientWidth - rect.right}px`;
+    dropdown.style.left = 'auto';
 
     // Close dropdown when clicking outside
     const closeDropdown = (e) => {
@@ -11468,6 +11483,9 @@ class ClaudeOrchestrator {
     modal.classList.remove('docked');
     modal.classList.remove('fullscreen');
     modal.classList.add('hidden');
+    // Re-apply view mode filters so terminals hidden by Agent Only / Servers Only
+    // don't leak back into the grid after being undocked.
+    this.updateTerminalGrid();
   }
 
   restoreReviewConsoleDockedTerminals() {
