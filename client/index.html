@@ -55,6 +55,9 @@
         <div class="main-container">
 	        <!-- Header -->
 	        <header>
+            <button id="commander-toggle" class="header-btn commander-btn" title="Commander (Top-Level AI)" data-ui-visibility="header.commander">
+                🎖️ Commander
+            </button>
             <div class="header-actions">
                 <button id="projects-board-btn" class="header-btn" title="Projects kanban board" data-ui-visibility="header.projectsBoard">
                     🗂 Projects
@@ -108,9 +111,6 @@
                 </button>
                 <button id="ports-btn" class="header-btn" title="View running services" data-ui-visibility="header.ports">
                     🔌 Ports
-                </button>
-                <button id="commander-toggle" class="header-btn commander-btn" title="Commander (Top-Level AI)" data-ui-visibility="header.commander">
-                    🎖️ Commander
                 </button>
                 <button id="recommendations-toggle" class="icon-button" title="System Recommendations" onclick="window.recommendationsUI && window.recommendationsUI.toggle()" data-ui-visibility="header.recommendations">
                     <span class="notification-badge recommendations-badge" id="recommendations-badge" style="display:none">0</span>
